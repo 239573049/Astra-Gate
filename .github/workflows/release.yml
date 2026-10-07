@@ -341,14 +341,18 @@ jobs:
         # Primary desktop distribution: the official website stores the files
         # under /app/data/client-releases and serves the download page plus
         # the electron-updater feed from them. Requires the docs deployment
-        # to run with CLIENT_UPLOAD_TOKEN set.
+        # to run with CLIENT_UPLOAD_TOKEN set; the repo secret may use either
+        # name. Missing secrets warn instead of silently skipping.
         env:
           DOCS_RELEASE_URL: ${{ secrets.DOCS_RELEASE_URL }}
-          DOCS_RELEASE_TOKEN: ${{ secrets.DOCS_RELEASE_TOKEN }}
-        if: env.DOCS_RELEASE_URL != '' && env.DOCS_RELEASE_TOKEN != ''
+          DOCS_RELEASE_TOKEN: ${{ secrets.DOCS_RELEASE_TOKEN || secrets.CLIENT_UPLOAD_TOKEN }}
         run: |
           set -euo pipefail
           shopt -s nullglob
+          if [ -z "$DOCS_RELEASE_URL" ] || [ -z "$DOCS_RELEASE_TOKEN" ]; then
+            echo "::warning::Not uploading to the docs site: set the DOCS_RELEASE_URL and DOCS_RELEASE_TOKEN (or CLIENT_UPLOAD_TOKEN) secrets."
+            exit 0
+          fi
           for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip \
                    out/artifacts/Astra-*-setup.exe out/artifacts/Astra-*.AppImage; do
             # electron-builder names: Astra-<ver>-<arch>[-setup].<ext>, where

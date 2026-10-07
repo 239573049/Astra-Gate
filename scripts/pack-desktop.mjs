@@ -88,13 +88,20 @@ if (isMac) {
     console.error(`No unpacked output found under ${outRoot} (expected ${os}-unpacked or ${os}-${arch}-unpacked).`);
     process.exit(1);
   }
+  // The npm desktop package runs against the CLI-managed server recorded in
+  // install.json, so the server bundled for the standalone installers
+  // (resources/server) is left out — with it the tarball exceeds npm's size
+  // limit (E413). macOS keeps it: Resources are sealed by the code signature.
+  const bundledServer = path.join(unpacked, 'resources', 'server');
+  const keep = (src) => src !== bundledServer && !src.startsWith(bundledServer + path.sep);
   for (const entry of fs.readdirSync(unpacked, { withFileTypes: true })) {
     fs.cpSync(path.join(unpacked, entry.name), path.join(appDir, entry.name), {
       recursive: true,
       verbatimSymlinks: true,
+      filter: keep,
     });
   }
-  console.log(`Copied ${path.basename(unpacked)}/ → npm/${desktopDir}/app/`);
+  console.log(`Copied ${path.basename(unpacked)}/ → npm/${desktopDir}/app/ (without resources/server)`);
 }
 
 const size = (dir) => {

@@ -190,7 +190,9 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   fallback; install.json loses to the bundled server when its `serverVersion` is older). The
   standalone installers (dmg / NSIS / AppImage) ship the server under `resources/server`:
   `release.yml` stages `npm/server-*/bin` into `desktop/server-bundle`, which
-  `electron-builder.yml` copies via `extraResources`. After an
+  `electron-builder.yml` copies via `extraResources`. `scripts/pack-desktop.mjs` drops it from
+  the Windows/Linux npm desktop packages (npm rejects tarballs over ~200 MB with E413; the npm
+  track uses the CLI-managed server); the signed macOS `.app` keeps it. After an
   update, the executor repoints `install.json` at the managed binary
   (`~/.astra/server/astra-server-<version>`), which is what makes both sides pick it up — keep
   that invariant when touching either resolver.
