@@ -15,22 +15,22 @@ importers:
         version: 12.1.0
     optionalDependencies:
       '@aidotnet/server-darwin-arm64':
-        specifier: 0.2.1
+        specifier: 0.2.2
         version: link:../npm/server-darwin-arm64
       '@aidotnet/server-darwin-x64':
-        specifier: 0.2.1
+        specifier: 0.2.2
         version: link:../npm/server-darwin-x64
       '@aidotnet/server-linux-arm64':
-        specifier: 0.2.1
+        specifier: 0.2.2
         version: link:../npm/server-linux-arm64
       '@aidotnet/server-linux-x64':
-        specifier: 0.2.1
+        specifier: 0.2.2
         version: link:../npm/server-linux-x64
       '@aidotnet/server-win32-arm64':
-        specifier: 0.2.1
+        specifier: 0.2.2
         version: link:../npm/server-win32-arm64
       '@aidotnet/server-win32-x64':
-        specifier: 0.2.1
+        specifier: 0.2.2
         version: link:../npm/server-win32-x64
     devDependencies:
       '@aidotnet/update-core':
