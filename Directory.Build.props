@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Authors>Astra</Authors>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
