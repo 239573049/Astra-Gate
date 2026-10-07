@@ -124,8 +124,9 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 ## Linked updates — things that must change together
 
 1. **Version bump**: one version everywhere — `cli/package.json` is the source of truth; every
-   `npm/*/package.json`, the cli `optionalDependencies` pins, and `<Version>` in
-   `Directory.Build.props` must match. Run `node scripts/sync-versions.mjs` (write mode) instead
+   `npm/*/package.json`, `desktop/package.json` (electron-builder stamps it into the app — the
+   installers' version and electron-updater's compare), the cli `optionalDependencies` pins, and
+   `<Version>` in `Directory.Build.props` must match. Run `node scripts/sync-versions.mjs` (write mode) instead
    of editing them by hand, then `pnpm install` (the lockfile records the cli's platform-package
    specifiers); `release.yml` fails the publish if any drift or a tag/version mismatch remains.
    Add a `## [x.y.z] - date` section to `CHANGELOG.md` in the same change: pushing the bump to

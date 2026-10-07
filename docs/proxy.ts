@@ -30,3 +30,11 @@ export default function proxy(request: NextRequest) {
 
   return NextResponse.next();
 }
+
+// Keep the proxy off /api: a request that passes through it has its body
+// buffered and cut at Next's 10 MB proxy limit, which silently truncated
+// desktop installers sent to /api/client-releases/upload. The proxy only
+// rewrites docs pages anyway.
+export const config = {
+  matcher: ['/((?!api/).*)'],
+};

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Keep one version across cli/package.json, every npm/* platform package, the
- * cli's optionalDependencies pins and the .NET Directory.Build.props.
+ * Keep one version across cli/package.json, every npm/* platform package,
+ * desktop/package.json (the Electron app version), the cli's
+ * optionalDependencies pins and the .NET Directory.Build.props.
  *
  * Usage:
  *   node scripts/sync-versions.mjs [--version <semver>] [--check]
@@ -38,24 +39,29 @@ const npmDir = path.join(root, 'npm');
 const targets = fs
   .readdirSync(npmDir)
   .filter((d) => fs.existsSync(path.join(npmDir, d, 'package.json')))
+  .map((d) => `npm/${d}`)
   .sort();
+// desktop/package.json is what electron-builder stamps into the app
+// (app.getVersion(), installer names, electron-updater's version compare) —
+// left behind, every installer and desktop npm package reports a stale version.
+if (fs.existsSync(path.join(root, 'desktop', 'package.json'))) targets.push('desktop');
 
 let mismatch = false;
 let cliDirty = false;
 
 for (const dir of targets) {
-  const pkgPath = path.join(npmDir, dir, 'package.json');
+  const pkgPath = path.join(root, dir, 'package.json');
   const pkg = readJson(pkgPath);
   if (pkg.version !== version) {
     if (checkOnly) {
-      console.error(`version mismatch: npm/${dir} has ${pkg.version}, expected ${version}`);
+      console.error(`version mismatch: ${dir} has ${pkg.version}, expected ${version}`);
       mismatch = true;
       continue;
     }
     const old = pkg.version;
     pkg.version = version;
     writeJson(pkgPath, pkg);
-    console.log(`npm/${dir}: ${old} -> ${version}`);
+    console.log(`${dir}: ${old} -> ${version}`);
   }
 }
 
