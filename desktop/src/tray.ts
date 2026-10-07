@@ -1,79 +1,73 @@
-import { Menu, Tray, nativeImage } from 'electron';
-import type { MenuItemConstructorOptions } from 'electron';
+import { Menu, Notification, Tray, nativeImage } from 'electron';
 import * as path from 'node:path';
 
-import type { GatewayClient, GatewayProvider } from './shared/types';
+import {
+  buildTrayMenuTemplate,
+  trayStateKey,
+  trayTooltip,
+  type TrayCallbacks,
+  type TrayMenuEnv,
+  type TrayState,
+} from './shared/trayMenu';
 
-export interface TrayState {
-  running: boolean;
-  port: number | null;
-  apiVersionMismatch: boolean;
-  clients: GatewayClient[];
-  providers: GatewayProvider[];
-  /** Non-null when an update check found something newer. */
-  updateAvailable: string | null;
-}
+export type { TrayCallbacks, TrayState } from './shared/trayMenu';
 
-export interface TrayCallbacks {
-  onStartService(): void;
-  onStopService(): void;
-  onOpenWindow(): void;
-  onSwitchProvider(clientKind: string, providerId: string): void;
-  onCheckUpdates(): void;
-  onQuit(): void;
-}
-
-/** Pure menu-template builder (unit-testable without Electron runtime). */
-export function buildMenuTemplate(state: TrayState, cb: TrayCallbacks): MenuItemConstructorOptions[] {
-  const mismatchSuffix = state.apiVersionMismatch ? ' — API version mismatch, run "astra update"' : '';
-  const statusLabel = state.running ? `Service running on port ${state.port ?? '?'}` : 'Service not running';
-  const template: MenuItemConstructorOptions[] = [
-    { label: `Astra${mismatchSuffix}`, enabled: false },
-    { label: statusLabel, enabled: false },
-    ...(state.updateAvailable ? [{ label: 'Update available — check for details', enabled: false }] : []),
-    { type: 'separator' },
-    { label: 'Check for Updates…', click: () => cb.onCheckUpdates() },
-    { label: 'Start Service', enabled: !state.running, click: () => cb.onStartService() },
-    { label: 'Stop Service', enabled: state.running, click: () => cb.onStopService() },
-    { type: 'separator' },
-    { label: 'Open Astra', click: () => cb.onOpenWindow() },
-  ];
-  const enabledClients = state.clients.filter((c) => c.enabled);
-  for (const client of enabledClients) {
-    const items: MenuItemConstructorOptions[] = state.providers.map((p) => ({
-      label: p.enabled ? p.name : `${p.name} (disabled)`,
-      type: 'radio',
-      checked: client.providerId != null && client.providerId === p.id,
-      click: () => cb.onSwitchProvider(client.kind, p.id),
-    }));
-    if (items.length === 0) items.push({ label: 'No providers configured', enabled: false });
-    template.push({ label: client.name, submenu: items });
-  }
-  if (enabledClients.length > 0) template.push({ type: 'separator' });
-  template.push({ label: 'Quit', click: () => cb.onQuit() });
-  return template;
-}
-
+/**
+ * Owns the tray / menu-bar icon. Platform behavior:
+ * - macOS: template icon in the menu bar; any click opens the menu (the native convention).
+ * - Windows: left click opens the window, right click opens the menu.
+ * - Linux: most desktops (AppIndicator) only show the menu; click events may never arrive, so the
+ *   menu carries "Open Astra" too.
+ */
 export class TrayController {
   private tray: Tray | null = null;
+  private lastKey: string | null = null;
 
-  constructor(private readonly assetsDir: string) {}
+  constructor(
+    private readonly assetsDir: string,
+    private readonly env: TrayMenuEnv,
+    private readonly onActivate: () => void,
+  ) {}
 
   ensure(): Tray {
     if (this.tray) return this.tray;
-    const file = process.platform === 'darwin' ? 'trayTemplate.png' : 'tray.png';
-    const icon = nativeImage.createFromPath(path.join(this.assetsDir, file));
+    const mac = this.env.platform === 'darwin';
+    // trayTemplate.png + @2x: macOS tints "Template" images for light/dark menu bars.
+    const icon = nativeImage.createFromPath(path.join(this.assetsDir, mac ? 'trayTemplate.png' : 'tray.png'));
+    if (mac) icon.setTemplateImage(true);
     this.tray = new Tray(icon);
     this.tray.setToolTip('Astra');
+    // Windows: primary click opens the window. Linux: fires only where the desktop supports
+    // activation; harmless elsewhere. macOS: setContextMenu makes every click open the menu.
+    if (!mac) this.tray.on('click', () => this.onActivate());
     return this.tray;
   }
 
-  update(state: TrayState, cb: TrayCallbacks): void {
-    this.ensure().setContextMenu(Menu.buildFromTemplate(buildMenuTemplate(state, cb)));
+  /**
+   * Rebuilds the menu when the state changed. `force` rebuilds anyway — needed after a radio /
+   * checkbox click whose action failed, because the native item already toggled itself.
+   */
+  update(state: TrayState, cb: TrayCallbacks, force = false): void {
+    const tray = this.ensure();
+    const key = trayStateKey(state);
+    if (!force && key === this.lastKey) return;
+    this.lastKey = key;
+    tray.setToolTip(trayTooltip(state, this.env.locale));
+    tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate(state, cb, this.env)));
+  }
+
+  /** One-off hint (e.g. "still running in the tray"); balloon on Windows, notification elsewhere. */
+  notify(title: string, body: string): void {
+    if (this.env.platform === 'win32' && this.tray) {
+      this.tray.displayBalloon({ title, content: body, iconType: 'info' });
+      return;
+    }
+    if (Notification.isSupported()) new Notification({ title, body, silent: true }).show();
   }
 
   destroy(): void {
     this.tray?.destroy();
     this.tray = null;
+    this.lastKey = null;
   }
 }

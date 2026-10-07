@@ -7,6 +7,14 @@
 export const NAV_ORDER = ['overview', 'requests', 'clients', 'providers', 'models', 'settings'] as const;
 export type NavTarget = (typeof NAV_ORDER)[number];
 
+/**
+ * Hash route for a nav target (the desktop renderer uses HashRouter; see web/src/App.tsx). Used to
+ * open a not-yet-created window directly on a page.
+ */
+export function navHash(target: NavTarget): string {
+  return target === 'overview' ? '#/' : `#/${target}`;
+}
+
 /** Commands the native menu (or main process) sends to the renderer via `onMenuCommand`. */
 export type MenuCommand =
   | `nav:${NavTarget}`

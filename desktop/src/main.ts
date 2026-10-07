@@ -1,6 +1,8 @@
 import {
   app,
+  autoUpdater as nativeAutoUpdater,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
@@ -10,28 +12,33 @@ import {
   systemPreferences,
   type MenuItemConstructorOptions,
 } from 'electron';
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { handleAppRequest } from './appProtocol';
 import { fetchClients, fetchProviders, fetchVersion, putBinding } from './api';
 import { ServiceManager, StartupError, type RunningService } from './service';
-import { TrayController, type TrayState } from './tray';
+import { TrayController, type TrayCallbacks, type TrayState } from './tray';
 import { UpdateController } from './update';
 import {
   NAV_ORDER,
   isThemeSource,
   menuLabels,
+  navHash,
   normalizeAccentColor,
   overlaySymbolColor,
   sanitizeContextMenuItems,
   themeBackground,
   windowChromeOptions,
   type MenuCommand,
+  type NavTarget,
 } from './shared/chrome';
 import { astraPaths, type AstraPaths } from './shared/paths';
 import { apiBase } from './shared/port';
+import { parsePrefs, type DesktopPrefs } from './shared/prefs';
 import { bundledServerBinaryPath } from './shared/resolveServerBinary';
+import { trayLabels, type ServiceActivity } from './shared/trayMenu';
 import { EXPECTED_API_MAJOR } from './shared/version';
 import type { GatewayClient, GatewayProvider } from './shared/types';
 
@@ -45,6 +52,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const DEV_RENDERER_URL = process.env.ASTRA_RENDERER_URL?.trim() || '';
+/** Passed by the Windows login item: start in the tray without opening the window. */
+const HIDDEN_ARG = '--hidden';
+const IS_MAC = process.platform === 'darwin';
 
 let paths: AstraPaths | null = null;
 let service: ServiceManager | null = null;
@@ -52,7 +62,10 @@ let tray: TrayController | null = null;
 let updater: UpdateController | null = null;
 let mainWindow: BrowserWindow | null = null;
 let quitting = false;
+/** Set when Squirrel's quitAndInstall closes the windows ahead of before-quit. */
+let closingForUpdate = false;
 let mismatchDialogShown = false;
+let prefs: DesktopPrefs | null = null;
 let trayState: TrayState = {
   running: false,
   port: null,
@@ -60,6 +73,8 @@ let trayState: TrayState = {
   clients: [],
   providers: [],
   updateAvailable: null,
+  activity: null,
+  openAtLogin: null,
 };
 let lastBoot = { apiBase: apiBase(17321), apiVersionMismatch: false };
 
@@ -104,15 +119,15 @@ async function main(): Promise<void> {
     },
     log: (line) => console.log(`[astra] ${line}`),
   });
-  tray = new TrayController(path.join(appRoot, 'assets'));
-
   app.on('second-instance', () => {
     void showMainWindow();
   });
+  // macOS: re-opening the app (Finder, Launchpad, Spotlight) while it lives in the menu bar.
   app.on('activate', () => {
     void showMainWindow();
   });
-  // Tray app: closing the window only hides it; quitting happens via the tray.
+  // Tray app: closing the window only hides it (and drops the Dock / taskbar entry); the process
+  // keeps running in the tray / menu bar until Quit.
   app.on('window-all-closed', () => {});
   app.on('before-quit', (event) => {
     if (quitting) return;
@@ -123,14 +138,28 @@ async function main(): Promise<void> {
       .catch((err) => console.error('[astra] shutdown error:', err))
       .finally(() => app.quit());
   });
+  if (IS_MAC) {
+    // quitAndInstall closes every window before before-quit fires; let those closes through.
+    nativeAutoUpdater.on('before-quit-for-update', () => {
+      closingForUpdate = true;
+    });
+  }
   process.on('unhandledRejection', (err) => console.error('[astra] unhandled rejection:', err));
 
   registerIpc();
 
   await app.whenReady();
+  tray = new TrayController(
+    path.join(appRoot, 'assets'),
+    { platform: process.platform, locale: app.getLocale(), version: app.getVersion() },
+    () => void showMainWindow(),
+  );
+  // Launched at login: stay in the tray / menu bar, no window and no Dock icon.
+  const startHidden = launchedAtLogin();
+  if (startHidden && IS_MAC) app.dock?.hide();
   // macOS gets a native menu (shortcuts → renderer commands); on Windows/Linux the
   // renderer handles Ctrl+ shortcuts itself and the window has no menu bar.
-  if (process.platform === 'darwin') Menu.setApplicationMenu(buildAppMenu());
+  if (IS_MAC) Menu.setApplicationMenu(buildAppMenu());
   else Menu.setApplicationMenu(null);
   watchSystemAppearance();
 
@@ -156,7 +185,7 @@ async function main(): Promise<void> {
   // Background update checks (12h cadence, first one shortly after boot).
   updater!.start();
 
-  await showMainWindow();
+  if (!startHidden) await showMainWindow();
 }
 
 /** Start (or adopt) the service, looping on a retry dialog on failure. Null = user chose Quit. */
@@ -169,6 +198,7 @@ async function ensureServiceWithDialogs(): Promise<RunningService | null> {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const logPath = err instanceof StartupError ? err.logPath : null;
+      bringAppToFront();
       const { response } = await dialog.showMessageBox({
         type: 'error',
         title: 'Astra',
@@ -205,7 +235,8 @@ async function showMismatchDialog(apiVersion: string | null): Promise<void> {
   });
 }
 
-async function refreshTray(): Promise<void> {
+/** Re-probes the service and rebuilds the tray. `force` rebuilds even when nothing changed. */
+async function refreshTray(force = false): Promise<void> {
   const svc = service!;
   const probed = await svc.probe(2000);
   let clients: GatewayClient[] = [];
@@ -226,32 +257,69 @@ async function refreshTray(): Promise<void> {
     clients,
     providers,
     updateAvailable: updater!.hasUpdate ? 'yes' : null,
+    // Owned by runServiceAction; a poll finishing mid-transition must not clear it.
+    activity: trayState.activity,
+    openAtLogin: readOpenAtLogin(),
   };
-  tray!.update(trayState, trayCallbacks());
+  tray!.update(trayState, trayCallbacks(), force);
 }
 
-function trayCallbacks() {
+/** Runs one start/stop/restart from the tray, showing progress in the menu meanwhile. */
+function runServiceAction(activity: ServiceActivity, action: () => Promise<unknown>): void {
+  if (trayState.activity) return;
+  trayState = { ...trayState, activity };
+  tray!.update(trayState, trayCallbacks());
+  void action()
+    .catch((err) => showServiceError(err))
+    .finally(() => {
+      trayState = { ...trayState, activity: null };
+      void refreshTray();
+    });
+}
+
+function showServiceError(err: unknown): void {
+  bringAppToFront();
+  void dialog.showMessageBox({
+    type: 'error',
+    title: 'Astra',
+    message: 'Failed to start the Astra service',
+    detail:
+      err instanceof StartupError && err.logPath
+        ? `${err.message}\n\nLog file:\n${err.logPath}`
+        : String(err instanceof Error ? err.message : err),
+    buttons: ['OK'],
+    noLink: true,
+  });
+}
+
+function trayCallbacks(): TrayCallbacks {
   return {
-    onStartService: () => {
-      void service!
-        .ensureRunning()
-        .then(() => refreshTray())
-        .catch((err) => {
-          void dialog.showMessageBox({
-            type: 'error',
-            title: 'Astra',
-            message: 'Failed to start the Astra service',
-            detail: err instanceof StartupError && err.logPath ? `${err.message}\n\nLog file:\n${err.logPath}` : String(err instanceof Error ? err.message : err),
-            buttons: ['OK'],
-            noLink: true,
-          });
-        });
-    },
-    onStopService: () => {
-      void service!.stopService().then(() => refreshTray());
-    },
     onOpenWindow: () => {
       void showMainWindow();
+    },
+    onNavigate: (target) => {
+      void showMainWindow(target);
+    },
+    onStartService: () => {
+      runServiceAction('starting', () => service!.ensureRunning());
+    },
+    onStopService: () => {
+      runServiceAction('stopping', () => service!.stopService());
+    },
+    onRestartService: () => {
+      runServiceAction('restarting', async () => {
+        await service!.stopService();
+        await service!.ensureRunning();
+      });
+    },
+    onCopyApiAddress: () => {
+      if (trayState.port !== null) clipboard.writeText(apiBase(trayState.port));
+    },
+    onOpenInBrowser: () => {
+      if (trayState.port !== null) void shell.openExternal(`${apiBase(trayState.port)}/`);
+    },
+    onOpenLogs: () => {
+      void shell.openPath(paths!.logsDir);
     },
     onSwitchProvider: (clientKind: string, providerId: string) => {
       void (async () => {
@@ -261,6 +329,7 @@ function trayCallbacks() {
         try {
           await putBinding(apiBase(trayState.port), clientKind, providerId, runtime?.runtimeToken ?? null);
         } catch (err) {
+          bringAppToFront();
           void dialog.showMessageBox({
             type: 'error',
             title: 'Astra',
@@ -270,10 +339,15 @@ function trayCallbacks() {
             noLink: true,
           });
         }
-        await refreshTray();
+        // Forced: on failure the native radio item has already moved to the clicked provider.
+        await refreshTray(true);
       })();
     },
+    onToggleOpenAtLogin: (enabled: boolean) => {
+      void setOpenAtLogin(enabled).finally(() => refreshTray(true));
+    },
     onCheckUpdates: () => {
+      bringAppToFront();
       void updater!
         .checkInteractive()
         .catch((err) => console.error('[astra] update error:', err))
@@ -286,7 +360,119 @@ function trayCallbacks() {
   };
 }
 
-function createWindow(): BrowserWindow {
+/** Login items need a stable, packaged executable; Linux has no Electron API for them. */
+function loginItemSupported(): boolean {
+  return app.isPackaged && (process.platform === 'darwin' || process.platform === 'win32');
+}
+
+/** Windows registers the run key with HIDDEN_ARG; queries must pass the same args to match it. */
+function loginItemArgs(): { args?: string[] } {
+  return process.platform === 'win32' ? { args: [HIDDEN_ARG] } : {};
+}
+
+function readOpenAtLogin(): boolean | null {
+  if (!loginItemSupported()) return null;
+  try {
+    return app.getLoginItemSettings(loginItemArgs()).openAtLogin;
+  } catch {
+    return null;
+  }
+}
+
+async function setOpenAtLogin(enabled: boolean): Promise<void> {
+  if (!loginItemSupported()) return;
+  try {
+    app.setLoginItemSettings({ openAtLogin: enabled, ...loginItemArgs() });
+  } catch (err) {
+    console.error('[astra] login item update failed:', err);
+    return;
+  }
+  // macOS 13+: the user may have to allow the login item in System Settings first.
+  if (IS_MAC && enabled && app.getLoginItemSettings().status === 'requires-approval') {
+    const t = trayLabels(app.getLocale());
+    bringAppToFront();
+    const { response } = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Astra',
+      message: t.loginApprovalTitle,
+      detail: t.loginApprovalDetail,
+      buttons: [t.openSystemSettings, t.ok],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (response === 0) void shell.openExternal('x-apple.systempreferences:com.apple.LoginItems-Settings.extension');
+  }
+}
+
+/** True when this process was started by the login item (Windows arg, macOS launch reason). */
+function launchedAtLogin(): boolean {
+  if (process.argv.includes(HIDDEN_ARG)) return true;
+  if (!IS_MAC || !app.isPackaged) return false;
+  try {
+    return app.getLoginItemSettings().wasOpenedAtLogin;
+  } catch {
+    return false;
+  }
+}
+
+/** macOS: a menu-bar-only app is not frontmost, so its dialogs would open behind other apps. */
+function bringAppToFront(): void {
+  if (IS_MAC) app.focus({ steal: true });
+}
+
+function prefsPath(): string {
+  return path.join(app.getPath('userData'), 'desktop-prefs.json');
+}
+
+function loadPrefs(): DesktopPrefs {
+  if (prefs) return prefs;
+  let text: string | null = null;
+  try {
+    text = fs.readFileSync(prefsPath(), 'utf8');
+  } catch {
+    text = null;
+  }
+  prefs = parsePrefs(text);
+  return prefs;
+}
+
+function savePrefs(next: DesktopPrefs): void {
+  prefs = next;
+  try {
+    fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
+    fs.writeFileSync(prefsPath(), JSON.stringify(next, null, 2));
+  } catch (err) {
+    console.error('[astra] could not save desktop prefs:', err);
+  }
+}
+
+/** The first close explains where the app went (the window and its Dock/taskbar entry vanish). */
+function showCloseHintOnce(): void {
+  const current = loadPrefs();
+  if (current.closeHintShown) return;
+  savePrefs({ ...current, closeHintShown: true });
+  const t = trayLabels(app.getLocale());
+  tray?.notify(t.closedToTrayTitle, t.closedToTray(process.platform));
+}
+
+/**
+ * Close-to-tray: hide the window and drop it from the Dock / taskbar. Hidden windows have no
+ * taskbar button on Windows/Linux; macOS additionally hides the Dock icon (accessory app).
+ */
+function hideToTray(win: BrowserWindow): void {
+  // macOS: hiding a full-screen window leaves an empty black Space behind; leave full screen first.
+  if (win.isFullScreen()) {
+    win.once('leave-full-screen', () => hideToTray(win));
+    win.setFullScreen(false);
+    return;
+  }
+  win.hide();
+  if (IS_MAC) app.dock?.hide();
+  showCloseHintOnce();
+}
+
+function createWindow(nav?: NavTarget): BrowserWindow {
   const appRoot = app.getAppPath();
   const dark = nativeTheme.shouldUseDarkColors;
   const win = new BrowserWindow({
@@ -322,32 +508,37 @@ function createWindow(): BrowserWindow {
   });
   // Close-to-tray: hide instead of closing while the app keeps running.
   win.on('close', (event) => {
-    if (!quitting) {
-      event.preventDefault();
-      win.hide();
-    }
+    if (quitting || closingForUpdate) return;
+    event.preventDefault();
+    hideToTray(win);
   });
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null;
   });
 
+  const hash = nav ? navHash(nav) : '';
   if (DEV_RENDERER_URL) {
-    void win.loadURL(DEV_RENDERER_URL);
+    void win.loadURL(`${DEV_RENDERER_URL}${hash}`);
     win.webContents.openDevTools({ mode: 'detach' });
   } else {
-    void win.loadURL('app://astra/');
+    void win.loadURL(`app://astra/${hash}`);
   }
   return win;
 }
 
-async function showMainWindow(): Promise<void> {
+/** Shows (creating if needed) the main window, optionally on a page; restores the Dock icon on macOS. */
+async function showMainWindow(nav?: NavTarget): Promise<void> {
+  if (IS_MAC) await app.dock?.show();
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
-    return;
+    if (nav) mainWindow.webContents.send('astra:menu-command', `nav:${nav}` satisfies MenuCommand);
+  } else {
+    mainWindow = createWindow(nav);
   }
-  mainWindow = createWindow();
+  // Coming back from accessory (menu-bar-only) mode the app is not active; bring it forward.
+  bringAppToFront();
 }
 
 function registerIpc(): void {
@@ -420,10 +611,11 @@ function broadcast(channel: string, ...args: unknown[]): void {
 function sendMenuCommand(command: MenuCommand): void {
   const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
   if (!win) {
-    void showMainWindow();
+    // A fresh window cannot receive commands yet; nav commands become its initial route.
+    void showMainWindow(command.startsWith('nav:') ? (command.slice(4) as NavTarget) : undefined);
     return;
   }
-  if (!win.isVisible()) win.show();
+  if (!win.isVisible()) void showMainWindow();
   win.webContents.send('astra:menu-command', command);
 }
 
