@@ -405,14 +405,32 @@ jobs:
           shopt -s nullglob
           # Idempotent: a re-run after a partial failure skips what is already
           # on npm (npm refuses to republish a version).
+          platform_ids=()
           publish() {
             local id
             id=$(tar -xzOf "$1" package/package.json | node -p "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); j.name+'@'+j.version")
+            platform_ids+=("$id")
             if [ -n "$(npm view "$id" version 2>/dev/null)" ]; then
               echo "$id is already on npm — skipping."
             else
               npm publish "$1" --access public
             fi
+          }
+          # npm keeps a fresh publish "being processed" for a while — large
+          # platform packages for tens of minutes, the tiny CLI for seconds. A
+          # CLI that becomes `latest` first installs without its server (the
+          # optionalDependency silently fails), so wait until every platform
+          # package is installable.
+          wait_for() {
+            local id=$1 deadline=$((SECONDS + 5400))
+            until [ -n "$(npm view "$id" version --prefer-online 2>/dev/null)" ]; do
+              if [ "$SECONDS" -ge "$deadline" ]; then
+                echo "::error::$id is still not available on npm after 90 minutes; re-run this job to publish the CLI."
+                return 1
+              fi
+              echo "Waiting for $id to become available on npm…"
+              sleep 60
+            done
           }
           # @aidotnet/server-* must exist before `astragate` / `@aidotnet/astra-gate`
           # resolve their optionalDependencies.
@@ -422,6 +440,9 @@ jobs:
           done
           for f in out/artifacts/aidotnet-desktop-*.tgz; do
             publish "$f"
+          done
+          for id in "${platform_ids[@]}"; do
+            wait_for "$id"
           done
           npm pack ./cli --pack-destination out/artifacts
           for f in out/artifacts/astragate-[0-9]*.tgz; do

@@ -22,7 +22,7 @@ export {
   type UpdateState,
 } from './state.js';
 export { managedServerBinaryPath, updatePaths, type UpdatePaths } from './paths.js';
-export { npmInstallIntoPrefix, npmView, locateNpm, type LocateNpmOptions, type NpmCommand, type NpmRunnerOptions } from './npm-runner.js';
+export { npmChildEnv, npmInstallIntoPrefix, npmView, locateNpm, type LocateNpmOptions, type NpmCommand, type NpmRunnerOptions } from './npm-runner.js';
 export { readInstallInfo, writeInstallInfo, applyServerInfo, type InstallInfo } from './install-info.js';
 export { sha256File, stageServerBinary, type StagedServerBinary, type StageServerBinaryOptions } from './staging.js';
 export {

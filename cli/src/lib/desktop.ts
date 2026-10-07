@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { locateNpm } from '@aidotnet/update-core';
+import { locateNpm, npmChildEnv } from '@aidotnet/update-core';
 import { PACKAGE_NAME } from '../version.js';
 
 // Desktop-app install/launch helpers now live in the shared update engine
@@ -23,6 +23,7 @@ export async function npmInstallGlobal(): Promise<{ code: number | null; stderr:
   return new Promise((resolve, reject) => {
     const child = spawn(npm.command, full, {
       stdio: 'inherit',
+      env: npmChildEnv(),
       windowsHide: true,
       shell: usesShell(npm.command),
     });

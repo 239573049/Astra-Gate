@@ -56,6 +56,20 @@ function usesShell(command: string, platform: string): boolean {
   return platform === 'win32' && command.endsWith('.cmd');
 }
 
+/**
+ * Settings a parent npm / npx exports to its children as npm_config_* and that
+ * break a nested `npm install --prefix`: npm 12 reads env config like CLI
+ * flags, and refuses `allow-scripts` in project-scoped installs (EALLOWSCRIPTS
+ * whenever the user has allowScripts configured and runs us through npx).
+ * `call` / `package` only describe the npx invocation itself.
+ */
+const PARENT_NPM_KEYS = /^npm_config_(allow[-_]scripts|call|package)$/i;
+
+/** The child npm's environment: inherited, minus the parent-npm keys above. */
+export function npmChildEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !PARENT_NPM_KEYS.test(key)));
+}
+
 export interface RunCaptureOptions {
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
@@ -124,7 +138,7 @@ export async function npmInstallIntoPrefix(prefix: string, spec: string, o: NpmR
   const r = await runCapture(
     npm.command,
     [...npm.args, 'install', '--prefix', prefix, '--no-audit', '--no-fund', '--loglevel', 'error', spec],
-    { env: o.env, platform: o.platform, timeoutMs: o.installTimeoutMs ?? 600_000 },
+    { env: npmChildEnv(o.env), platform: o.platform, timeoutMs: o.installTimeoutMs ?? 600_000 },
   );
   if (r.code !== 0) {
     throw new Error(`Failed to install ${spec}: ${r.stderr.trim() || `npm exited with code ${r.code}`}`);
@@ -135,7 +149,7 @@ export async function npmInstallIntoPrefix(prefix: string, spec: string, o: NpmR
 export async function npmView(pkg: string, field: string, o: NpmRunnerOptions = {}): Promise<string> {
   const npm = npmCommand(o);
   const r = await runCapture(npm.command, [...npm.args, 'view', pkg, field, '--loglevel', 'error'], {
-    env: o.env,
+    env: npmChildEnv(o.env),
     platform: o.platform,
     timeoutMs: 60_000,
   });

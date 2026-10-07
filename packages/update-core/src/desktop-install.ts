@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { npmInstallIntoPrefix, type NpmRunnerOptions } from './npm-runner.js';
@@ -125,7 +126,10 @@ function runCapture(command: string, args: readonly string[], timeoutMs: number)
   });
 }
 
-/** Symlink (macOS) / shortcut (Windows) / .desktop file (Linux) pointing at the installed app. */
+/**
+ * Symlink (macOS) / shortcut (Windows) / .desktop file (Linux) pointing at the
+ * installed app. `home` is the user's home directory, not the Astra data dir.
+ */
 export async function createLauncher(
   entry: DesktopEntry,
   platform: SupportedPlatform,
@@ -178,7 +182,14 @@ export interface InstalledDesktop {
 }
 
 export interface InstallDesktopClientOptions {
+  /** Astra data dir (~/.astra): the npm prefix lives in <home>/desktop. */
   home: string;
+  /**
+   * The user's home directory, where launchers go (~/Applications,
+   * ~/.local/share/applications). Not the Astra data dir. Defaults to
+   * os.homedir().
+   */
+  userHome?: string;
   version: string;
   desktopPackage: string;
   platform: SupportedPlatform;
@@ -194,7 +205,7 @@ export async function installDesktopClient(o: InstallDesktopClientOptions): Prom
   await npmInstallIntoPrefix(prefix, spec, o.npm);
   const pkgDir = path.join(prefix, 'node_modules', ...o.desktopPackage.split('/'));
   const entry = findDesktopEntry(path.join(pkgDir, 'app'), o.platform);
-  const launcher = await createLauncher(entry, o.platform, o.home, o.npm?.env);
+  const launcher = await createLauncher(entry, o.platform, o.userHome ?? os.homedir(), o.npm?.env);
   let version = o.version;
   try {
     const pkg = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf8')) as { version?: string };

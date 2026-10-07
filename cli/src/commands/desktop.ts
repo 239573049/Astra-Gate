@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import {
   applyServerUpdate,
   checkForServerUpdate,
@@ -55,7 +56,10 @@ export async function runUninstallClient(): Promise<void> {
     console.log('The desktop app is not installed.');
     return;
   }
-  removeLauncher(platformInfo().platform, home);
+  const platform = platformInfo().platform;
+  removeLauncher(platform, os.homedir());
+  // Releases up to 0.2.1 put the launcher under the Astra data dir by mistake.
+  removeLauncher(platform, home);
   fs.rmSync(homePaths(home).desktopPrefix, { recursive: true, force: true });
   writeInstallJson(home, clearDesktopInfo(readInstallJson(home)));
   success('Astra desktop app uninstalled.');
