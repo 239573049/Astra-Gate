@@ -24,7 +24,7 @@ import { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
  *
  * The track rule lives in shared/updateTrack.ts; Windows and Linux npm
  * installs are npm-track but cannot replace their own running files, so their
- * desktop updates are delegated to `astra update --client`; the server update
+ * desktop updates are delegated to `astra update --desktop`; the server update
  * flow works everywhere. Unpackaged dev runs never self-update.
  */
 export { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
@@ -138,7 +138,7 @@ export class UpdateController {
           return {
             message:
               parts.join('\n') +
-              '\n\nThe desktop app itself must be updated with `astra update --client` (its files are in use).',
+              '\n\nThe desktop app itself must be updated with `astra update --desktop` (its files are in use).',
             action: 'server',
           };
         }
@@ -229,7 +229,7 @@ export class UpdateController {
     if (!manifest) throw new Error('No pending desktop update — check for updates first.');
     const platform = this.o.platform ?? process.platform;
     if (platform !== 'darwin') {
-      throw new Error('The desktop app on this platform must be updated with `astra update --client`.');
+      throw new Error('The desktop app on this platform must be updated with `astra update --desktop`.');
     }
     const blocked = this.gate(manifest);
     if (blocked) throw new Error(blocked);

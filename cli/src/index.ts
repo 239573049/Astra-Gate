@@ -85,26 +85,33 @@ autostart
 program
   .command('install')
   .description('Install optional Astra components')
-  .option('--client', 'Install the Astra desktop app for this platform')
-  .action((opts: { client?: boolean }) => runInstall(opts));
+  .option('--desktop', 'Install the Astra desktop app for this platform')
+  .option('--client', 'Alias of --desktop')
+  .action((opts: { desktop?: boolean; client?: boolean }) =>
+    runInstall({ client: opts.desktop || opts.client }),
+  );
 
 program
   .command('uninstall')
   .description('Uninstall Astra (restore client configs, stop the server)')
-  .option('--client', 'Only uninstall the desktop app')
+  .option('--desktop', 'Only uninstall the desktop app')
+  .option('--client', 'Alias of --desktop')
   .option('--purge', 'Also delete the Astra data directory (~/.astra)')
-  .action((opts: { client?: boolean; purge?: boolean }) => {
-    if (opts.client) return runUninstallClient();
+  .action((opts: { desktop?: boolean; client?: boolean; purge?: boolean }) => {
+    if (opts.desktop || opts.client) return runUninstallClient();
     return runUninstall({ purge: opts.purge });
   });
 
 program
   .command('update')
   .description('Update astra (and the desktop app when installed), then restart the server')
-  .option('--client', 'Only update the desktop app')
+  .option('--desktop', 'Only update the desktop app')
+  .option('--client', 'Alias of --desktop')
   .option('--check', 'Only check for updates, do not install')
   .option('--retry', 'Retry even after repeated update failures')
-  .action((opts: { client?: boolean; check?: boolean; retry?: boolean }) => runUpdate(opts));
+  .action((opts: { desktop?: boolean; client?: boolean; check?: boolean; retry?: boolean }) =>
+    runUpdate({ client: opts.desktop || opts.client, check: opts.check, retry: opts.retry }),
+  );
 
 const client = program.command('client').description('Manage AI clients (Codex, Claude Code, …)');
 client

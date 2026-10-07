@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { AstraError } from '../errors.js';
+import { PACKAGE_NAME } from '../version.js';
 import { platformInfo } from './platform.js';
 
 export interface ServerCommand {
@@ -59,10 +60,7 @@ function defaultResolveFrom(baseDir: string, request: string): string {
 export function resolveServerBinary(options: ResolveServerBinaryOptions = {}): ServerCommand {
   const env = options.env ?? process.env;
   const exists = options.existsSync ?? ((p: string) => fs.existsSync(p));
-  const readText =
-    options.readFileSync ?? ((p: string, _enc: 'utf8') => fs.readFileSync(p, 'utf8'));
   const cwd = options.cwd ?? process.cwd();
-  const baseDir = options.baseDir ?? path.dirname(fileURLToPath(import.meta.url));
   const plat = platformInfo(options.platform ?? process.platform, options.arch ?? process.arch);
 
   // 1. explicit override
@@ -91,28 +89,39 @@ export function resolveServerBinary(options: ResolveServerBinaryOptions = {}): S
   }
 
   // 4. installed platform package
+  const packaged = findPackagedServerBinary(options);
+  if ('path' in packaged) {
+    return { command: packaged.path, args: [], serverPath: packaged.path, source: 'package' };
+  }
+
+  throw new AstraError(
+    `Could not find the Astra server binary. ${packaged.error}`,
+    `Reinstall the CLI (\`npm install -g ${PACKAGE_NAME}\`), or point ASTRA_SERVER_BIN at the server binary.`,
+  );
+}
+
+/**
+ * Step 4 of resolveServerBinary on its own: the binary shipped in the
+ * installed @aidotnet/server-<platform> package next to this CLI.
+ */
+export function findPackagedServerBinary(
+  options: ResolveServerBinaryOptions = {},
+): { path: string } | { error: string } {
+  const exists = options.existsSync ?? ((p: string) => fs.existsSync(p));
+  const readText =
+    options.readFileSync ?? ((p: string, _enc: 'utf8') => fs.readFileSync(p, 'utf8'));
+  const baseDir = options.baseDir ?? path.dirname(fileURLToPath(import.meta.url));
+  const plat = platformInfo(options.platform ?? process.platform, options.arch ?? process.arch);
   const resolveFrom = options.resolveFrom ?? defaultResolveFrom;
-  let packageError: string;
   try {
     const pkgJsonPath = resolveFrom(baseDir, `${plat.serverPackage}/package.json`);
     const pkg = JSON.parse(readText(pkgJsonPath, 'utf8')) as { bin?: Record<string, string> };
     const binRel = pkg.bin?.['astra-server'];
-    if (binRel) {
-      const binPath = path.resolve(path.dirname(pkgJsonPath), binRel);
-      if (exists(binPath)) {
-        return { command: binPath, args: [], serverPath: binPath, source: 'package' };
-      }
-      packageError = `${plat.serverPackage} is installed but its binary is missing (${binPath}).`;
-    } else {
-      packageError = `${plat.serverPackage} has no 'astra-server' bin entry.`;
-    }
-  } catch (err) {
-    if (err instanceof AstraError) throw err;
-    packageError = `${plat.serverPackage} is not installed.`;
+    if (!binRel) return { error: `${plat.serverPackage} has no 'astra-server' bin entry.` };
+    const binPath = path.resolve(path.dirname(pkgJsonPath), binRel);
+    if (exists(binPath)) return { path: binPath };
+    return { error: `${plat.serverPackage} is installed but its binary is missing (${binPath}).` };
+  } catch {
+    return { error: `${plat.serverPackage} is not installed.` };
   }
-
-  throw new AstraError(
-    `Could not find the Astra server binary. ${packageError}`,
-    'Reinstall the CLI (`npm install -g astragate`), or point ASTRA_SERVER_BIN at the server binary.',
-  );
 }

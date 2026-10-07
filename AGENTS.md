@@ -13,7 +13,8 @@ Astra (`astragate`) — a local AI gateway. One product, two toolchains:
   `astra-server`, an ASP.NET Core host published as a self-contained single file. The other
   `src/Astra.*` projects are its libraries. Tests live in `tests/Astra.*.Tests` (xunit).
 - **pnpm workspace** (`pnpm@9.15.0`, `pnpm-workspace.yaml`; Node >= 18 per `cli`, CI runs Node 24):
-  `cli/` (npm package `astragate`, bin `astra`), `web/` (`@aidotnet/web`, Vite + React admin UI),
+  `cli/` (npm package `astragate`, bin `astra`; `release.yml` also rebuilds and publishes it as
+  `@aidotnet/astra-gate`, whose self-update targets its own baked-in name), `web/` (`@aidotnet/web`, Vite + React admin UI),
   `desktop/` (`@aidotnet/desktop`, Electron shell), `docs/` (`@aidotnet/docs`, Next.js/Fumadocs
   documentation site), `npm/*` (platform packages `@aidotnet/server-*` / `@aidotnet/desktop-*`),
   `packages/update-core` (shared update engine).
@@ -187,7 +188,7 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   `src/index.ts`). Consumers must bundle it (tsup/esbuild), not import it as compiled JS — both
   cli and desktop do this today via their devDependency.
 - Release publish order matters: `@aidotnet/server-*` and `@aidotnet/desktop-*` packages must
-  be on npm before the `astragate` CLI tarball, because the CLI's `optionalDependencies` resolve
+  be on npm before the `astragate` / `@aidotnet/astra-gate` CLI tarballs, because the CLI's `optionalDependencies` resolve
   at install time (`.github/workflows/release.yml`). Scoped tarballs are named without `@`/`+`
   (`aidotnet-server-*.tgz`) and the workflow globs rely on that.
 - Update flow ownership: the server only checks the feed (`UpdateCheckWorker`,

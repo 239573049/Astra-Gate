@@ -5,7 +5,7 @@ import { npmInstallIntoPrefix, type NpmRunnerOptions } from './npm-runner.js';
 
 /**
  * Desktop-app installs for the npm track (Windows, Linux, and macOS installs
- * managed by `astra install --client`): an npm prefix under ~/.astra/desktop
+ * managed by `astra install --desktop`): an npm prefix under ~/.astra/desktop
  * holds @aidotnet/desktop-<platform>, and a per-OS launcher points at it.
  * Ported from the CLI's lib/desktop.ts so the desktop app can run the very
  * same flow when it drives updates itself.

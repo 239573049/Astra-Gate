@@ -10,9 +10,10 @@ import {
   type ServerControl,
   type UpdateManifest,
 } from '@aidotnet/update-core';
-import { info, style, success } from '../ui.js';
+import { info, style, success, warn } from '../ui.js';
 import { astraHome, homePaths } from '../lib/paths.js';
 import { npmInstallGlobal } from '../lib/desktop.js';
+import { ensureDesktopServer } from '../lib/desktop-server.js';
 import { platformInfo } from '../lib/platform.js';
 import { apiRequest, baseUrlFor } from '../lib/http.js';
 import { confirmPrompt } from '../lib/prompt.js';
@@ -23,15 +24,27 @@ import {
   writeInstallJson,
 } from '../lib/install-json.js';
 import { currentRuntime, probeRunning, serverStatus, startServer, stopServer } from '../lib/server-lifecycle.js';
-import { VERSION } from '../version.js';
+import { PACKAGE_NAME, VERSION } from '../version.js';
 
 export async function runInstall(opts: { client?: boolean }): Promise<void> {
   if (!opts.client) {
     console.log('The Astra server is installed automatically with the npm package.');
-    console.log(`To install the desktop app, run ${style.cyan('astra install --client')}.`);
+    console.log(`To install the desktop app, run ${style.cyan('astra install --desktop')}.`);
     return;
   }
-  await installDesktopAt(astraHome(), VERSION);
+  const home = astraHome();
+  await installDesktopAt(home, VERSION);
+  // The desktop app needs a durable serverPath in install.json (it has no
+  // platform-package fallback) — essential when running via npx.
+  const server = ensureDesktopServer({ home, version: VERSION, platform: platformInfo().platform });
+  if (server.action === 'missing') {
+    warn(
+      `The desktop app cannot find an Astra server: ${server.reason} ` +
+        `Install the CLI (\`npm i -g ${PACKAGE_NAME}\`) and run \`astra start\` once, or set ASTRA_SERVER_BIN.`,
+    );
+  } else if (server.action === 'copied') {
+    success(`Astra server ${VERSION} installed to ${server.serverPath}.`);
+  }
   info('Launch it from your applications, or run `astra open` for the web UI.');
 }
 
@@ -78,10 +91,10 @@ export async function runUpdate(opts: UpdateArgs): Promise<void> {
     // CLI self-update: the staged/verified flow above covers the server
     // binary; the npm global package carries the CLI code itself.
     if (isNewerVersion(manifest.version, VERSION)) {
-      console.log('Updating the astragate CLI (npm install -g astragate@latest)…');
+      console.log(`Updating the Astra CLI (npm install -g ${PACKAGE_NAME}@latest)…`);
       const r = await npmInstallGlobal();
       if (r.code !== 0) {
-        info('npm install -g astragate@latest failed — the server is updated; run `npm i -g astragate` for the CLI.');
+        info(`npm install -g ${PACKAGE_NAME}@latest failed — the server is updated; run \`npm i -g ${PACKAGE_NAME}\` for the CLI.`);
       } else {
         success('The new CLI version is used the next time you run `astra`.');
       }

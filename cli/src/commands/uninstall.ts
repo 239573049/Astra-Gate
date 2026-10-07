@@ -9,6 +9,7 @@ import { exitCodeOf } from '../lib/process-utils.js';
 import { stopServer } from '../lib/server-lifecycle.js';
 import { runAutostart } from './autostart.js';
 import { runUninstallClient } from './desktop.js';
+import { PACKAGE_NAME } from '../version.js';
 
 async function restoreAllOffline(purge: boolean): Promise<void> {
   const command = resolveServerBinary();
@@ -69,5 +70,5 @@ export async function runUninstall(opts: { purge?: boolean }): Promise<void> {
     success(`Deleted ${home}.`);
   }
 
-  success('Astra uninstalled. Remove the npm package with `npm uninstall -g astragate`.');
+  success(`Astra uninstalled. Remove the npm package with \`npm uninstall -g ${PACKAGE_NAME}\`.`);
 }
