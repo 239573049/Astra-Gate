@@ -1,13 +1,19 @@
 {
   "name": "@aidotnet/server-linux-arm64",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Astra self-contained server binary for Linux (arm64).",
   "license": "MIT",
-  "os": ["linux"],
-  "cpu": ["arm64"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
   "bin": {
     "astra-server": "bin/astra-server"
   },
-  "files": ["bin/"],
+  "files": [
+    "bin/"
+  ],
   "preferUnplugged": true
 }

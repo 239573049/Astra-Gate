@@ -1,10 +1,16 @@
 {
   "name": "@aidotnet/desktop-darwin-arm64",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Astra desktop app for macOS (Apple silicon).",
   "license": "MIT",
-  "os": ["darwin"],
-  "cpu": ["arm64"],
-  "files": ["app/"],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "app/"
+  ],
   "preferUnplugged": true
 }

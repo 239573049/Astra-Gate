@@ -1,13 +1,19 @@
 {
   "name": "@aidotnet/server-darwin-x64",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Astra self-contained server binary for macOS (Intel).",
   "license": "MIT",
-  "os": ["darwin"],
-  "cpu": ["x64"],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
   "bin": {
     "astra-server": "bin/astra-server"
   },
-  "files": ["bin/"],
+  "files": [
+    "bin/"
+  ],
   "preferUnplugged": true
 }
