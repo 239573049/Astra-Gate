@@ -52,7 +52,7 @@ const LOCAL_LOGO_ICONS = new Set(['routin']);
 afterEach(cleanup);
 
 describe('client brand icons', () => {
-  // Vendor marks from @lobehub/icons; the two Claude clients share a mark and differ by a corner badge.
+  // Vendor marks from @lobehub/icons; clients sharing a vendor mark (Claude, Copilot) differ by a corner badge.
   const expected: Record<string, { brand: string; mark: string; badge: boolean }> = {
     codex: { brand: 'openai', mark: 'mono', badge: false },
     'claude-code': { brand: 'claude', mark: 'color', badge: true },
@@ -63,7 +63,8 @@ describe('client brand icons', () => {
     pi: { brand: 'pi', mark: 'mono', badge: false },
     'hermes-agent': { brand: 'hermes-agent', mark: 'mono', badge: false },
     'minimax-code': { brand: 'minimax', mark: 'color', badge: false },
-    'copilot-cli': { brand: 'github-copilot', mark: 'mono', badge: false },
+    'copilot-cli': { brand: 'github-copilot', mark: 'mono', badge: true },
+    'vscode-copilot': { brand: 'github-copilot', mark: 'mono', badge: true },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

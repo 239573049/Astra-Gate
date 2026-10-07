@@ -59,7 +59,7 @@ export function ClientsPage() {
 }
 
 /** Clients whose config lists the bound provider's models (ClientKinds.WithModelList on the server). */
-const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>(['opencode', 'pi', 'minimax-code', 'copilot-cli']);
+const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>(['opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot']);
 
 /** Fixed client tabs (cc-switch style): official logo, name and an enabled mark. */
 function ClientTabs({ clients }: { clients: Map<ClientKind, ClientInfo> }) {

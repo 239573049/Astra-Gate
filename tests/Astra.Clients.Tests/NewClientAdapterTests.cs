@@ -362,3 +362,111 @@ public class CopilotCliClientAdapterTests : IDisposable
 
     public void Dispose() => _home.Dispose();
 }
+
+/// <summary>VS Code Copilot Chat: a Custom Endpoint group in the user's chatLanguageModels.json (a JSON array).</summary>
+public class VsCodeCopilotClientAdapterTests : IDisposable
+{
+    // The shape VS Code writes (tabs, a user's own BYOK group, per-vendor settings entries).
+    private const string UserFile = "[\n\t{\n\t\t\"name\": \"Mine\",\n\t\t\"vendor\": \"customendpoint\",\n\t\t\"apiType\": \"responses\",\n"
+        + "\t\t\"models\": [\n\t\t\t{\n\t\t\t\t\"id\": \"gpt-x\",\n\t\t\t\t\"name\": \"GPT X\",\n\t\t\t\t\"url\": \"https://example.com/v1/responses\",\n"
+        + "\t\t\t\t\"toolCalling\": true,\n\t\t\t\t\"vision\": true,\n\t\t\t\t\"maxOutputTokens\": 32000\n\t\t\t}\n\t\t]\n\t},\n"
+        + "\t{\n\t\t\"name\": \"Copilot CLI\",\n\t\t\"vendor\": \"copilot\",\n\t\t\"settings\": {\n\t\t\t\"gpt-5-mini\": {\n\t\t\t\t\"reasoningEffort\": \"high\"\n\t\t\t}\n\t\t}\n\t}\n]";
+
+    private readonly TestHome _home = new();
+    private readonly InMemoryClientConfigStateStore _store = new();
+    private readonly ClientConfigApplier _applier;
+    private readonly VsCodeCopilotClientAdapter _adapter;
+    private readonly string _config;
+
+    public VsCodeCopilotClientAdapterTests()
+    {
+        _applier = new ClientConfigApplier(_store, _home.Env, _home.BackupRoot);
+        _adapter = new VsCodeCopilotClientAdapter(_home.Env, _store);
+        _config = _home.File("Library", "Application Support", "Code", "User", "chatLanguageModels.json");
+    }
+
+    private static EnableContext Ctx(string key, params string[] ids)
+    {
+        var extras = Models.Extra(ids);
+        extras["models"]![ids[0]]!["contextWindow"] = 200000;
+        extras["models"]![ids[0]]!["maxOutputTokens"] = 32000;
+        extras["models"]![ids[0]]!["vision"] = true;
+        extras["models"]![ids[0]]!["reasoning"] = true;
+        return TestGateway.Context(key, null, extras);
+    }
+
+    [Fact]
+    public void Enable_AppendsGroupBesideUserGroups_DisableRestoresBytes()
+    {
+        _home.WriteFile(_config, UserFile);
+        var original = _home.ReadFileBytes(_config);
+        _applier.Apply(_adapter.PlanEnable(Ctx("astra-vsc-1", "gpt-5.1", "glm-5")));
+
+        var groups = JsonNode.Parse(_home.ReadFile(_config))!.AsArray(); // still strict JSON
+        Assert.Equal(3, groups.Count);
+        Assert.Equal("Mine", groups[0]!["name"]!.GetValue<string>());
+        var ours = groups[2]!;
+        Assert.Equal("Astra", ours["name"]!.GetValue<string>());
+        Assert.Equal("customendpoint", ours["vendor"]!.GetValue<string>());
+        Assert.Equal("chat-completions", ours["apiType"]!.GetValue<string>());
+        Assert.Null(ours["apiKey"]); // a literal apiKey would be read as a secret-storage reference
+        var first = ours["models"]![0]!;
+        Assert.Equal("gpt-5.1", first["id"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1/chat/completions", first["url"]!.GetValue<string>());
+        Assert.Equal("Bearer astra-vsc-1", first["requestHeaders"]!["Authorization"]!.GetValue<string>());
+        Assert.True(first["toolCalling"]!.GetValue<bool>());
+        Assert.True(first["vision"]!.GetValue<bool>());
+        Assert.True(first["thinking"]!.GetValue<bool>());
+        Assert.Equal(168000, first["maxInputTokens"]!.GetValue<long>());
+        Assert.Equal(32000, first["maxOutputTokens"]!.GetValue<long>());
+        var second = ours["models"]![1]!;
+        Assert.Equal(VsCodeCopilotClientAdapter.DefaultContextWindow,
+            second["maxInputTokens"]!.GetValue<long>() + second["maxOutputTokens"]!.GetValue<long>());
+        Assert.False(second["vision"]!.GetValue<bool>());
+        Assert.True(_adapter.Inspect().Enabled);
+
+        Assert.False(_applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, _home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void SettingsVsCodeStoresInOurGroup_AreNotDrift_AndGoWithTheGroup()
+    {
+        _home.WriteFile(_config, UserFile);
+        var original = _home.ReadFileBytes(_config);
+        _applier.Apply(_adapter.PlanEnable(Ctx("astra-vsc-2", "gpt-5.1")));
+        var withSettings = JsoncEditor.Selector(("vendor", "customendpoint"), ("name", "Astra")) + ".settings";
+        _home.WriteFile(_config, new JsoncEditor(_home.ReadFile(_config))
+            .SetRaw(withSettings, "{\"gpt-5.1\":{\"reasoningEffort\":\"high\"}}").Text);
+
+        var status = _adapter.Inspect();
+        Assert.True(status.Enabled);
+        Assert.Empty(status.DriftedKeys);
+        Assert.False(_applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, _home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void FileOriginallyAbsent_CreatedAsArray_ThenDeleted()
+    {
+        _applier.Apply(_adapter.PlanEnable(Ctx("astra-vsc-3", "m1")));
+        Assert.Single(JsonNode.Parse(_home.ReadFile(_config))!.AsArray());
+        var report = _applier.Disable(_adapter.PlanDisable());
+        Assert.False(report.HasDrift);
+        Assert.Contains(_config, report.DeletedFiles);
+    }
+
+    [Fact]
+    public void ModelListChange_RewritesOnlyOurModels()
+    {
+        _home.WriteFile(_config, UserFile);
+        _applier.Apply(_adapter.PlanEnable(Ctx("astra-vsc-4", "a", "b")));
+        _applier.Apply(_adapter.PlanEnable(Ctx("astra-vsc-4", "c")));
+        var groups = JsonNode.Parse(_home.ReadFile(_config))!.AsArray();
+        Assert.Equal(["c"], groups[2]!["models"]!.AsArray().Select(m => m!["id"]!.GetValue<string>()));
+        Assert.Equal("gpt-x", groups[0]!["models"]![0]!["id"]!.GetValue<string>());
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+    }
+
+    public void Dispose() => _home.Dispose();
+}

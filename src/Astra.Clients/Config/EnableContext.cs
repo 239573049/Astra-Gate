@@ -19,8 +19,9 @@ public sealed class EnableContext
 
     /// <summary>
     /// Client-specific extras (JSON object). Known keys: claude-code "smallFastModel";
-    /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode, pi, minimax-code and copilot-cli
-    /// "models" ({"…": {"id":…,"name":…}}, the bound provider's enabled models).
+    /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode, pi, minimax-code, copilot-cli and
+    /// vscode-copilot "models" ({"…": {"id":…,"name":…, optional "contextWindow", "maxOutputTokens", "vision",
+    /// "reasoning"}}, the bound provider's enabled models).
     /// </summary>
     public JsonObject? Extras { get; init; }
 
@@ -50,12 +51,15 @@ public enum ConfigFileFormat
     Yaml,
 }
 
-/// <summary>Whether a config change targets a plain key or a whole TOML table.</summary>
+/// <summary>Whether a config change targets a plain key or a whole container (TOML table, owned JSON element).</summary>
 public enum ConfigChangeKind
 {
     Key,
 
-    /// <summary>TOML only: the key path names a table header such as [model_providers.astra].</summary>
+    /// <summary>
+    /// The key path names a container Astra creates and owns as a whole: a TOML table header such as
+    /// [model_providers.astra], or a JSON array element such as a VS Code model group. Reads as "true"/null.
+    /// </summary>
     Table,
 }
 

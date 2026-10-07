@@ -22,6 +22,7 @@ public sealed class ClientAdapterRegistry
         new HermesAgentClientAdapter(env, store),
         new MiniMaxCodeClientAdapter(env, store),
         new CopilotCliClientAdapter(env, store),
+        new VsCodeCopilotClientAdapter(env, store),
     ]);
 
     public IReadOnlyList<IClientAdapter> All { get; }

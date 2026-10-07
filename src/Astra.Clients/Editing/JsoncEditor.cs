@@ -20,8 +20,15 @@ public sealed class JsoncEditor
 
     private readonly byte[] _data;
 
-    /// <summary>Creates an editor over JSON/JSONC text. Blank text is treated as an empty object.</summary>
-    public JsoncEditor(string text) : this(Encoding.UTF8.GetBytes(string.IsNullOrWhiteSpace(text) ? "{}" : text)) { }
+    /// <summary>True when the editor was created over blank text (no document yet).</summary>
+    private readonly bool _blank;
+
+    /// <summary>
+    /// Creates an editor over JSON/JSONC text. Blank text is treated as an empty object — or as an empty
+    /// array when the first write addresses a root array element (a path starting with a selector).
+    /// </summary>
+    public JsoncEditor(string text) : this(Encoding.UTF8.GetBytes(string.IsNullOrWhiteSpace(text) ? "{}" : text))
+        => _blank = string.IsNullOrWhiteSpace(text);
 
     private JsoncEditor(byte[] data) => _data = data;
 
@@ -65,7 +72,7 @@ public sealed class JsoncEditor
             ?? throw new EditorException($"Raw JSON text for '{path}' is not a valid JSON value.");
 
         var segments = SplitPath(path);
-        var data = _data;
+        var data = _blank && IsSelector(segments[0]) ? "[]"u8.ToArray() : _data;
         for (var i = 0; i < segments.Length - 1; i++)
         {
             if (IsSelector(segments[i]))

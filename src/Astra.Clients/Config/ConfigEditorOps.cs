@@ -13,7 +13,7 @@ internal abstract class ConfigEditorOps
 {
     public abstract string Text { get; }
 
-    /// <summary>Current value source text (null = absent; "true"/null for TOML tables).</summary>
+    /// <summary>Current value source text (null = absent; "true"/null for tables — TOML tables, JSON containers owned whole).</summary>
     public abstract string? Read(ConfigChange change);
 
     public abstract void Apply(ConfigChange change, List<string> warnings);
@@ -81,7 +81,11 @@ internal abstract class ConfigEditorOps
 
         public override string Text => _editor.Text;
 
-        public override string? Read(ConfigChange change) => _editor.Get(change.KeyPath)?.ToJsonString();
+        // A "table" in JSON is a container Astra owns as a whole (e.g. an array element it created): like a TOML
+        // table it reads as "true"/null, so keys the client adds inside it later never count as drift.
+        public override string? Read(ConfigChange change) => change.Kind == ConfigChangeKind.Table
+            ? _editor.Has(change.KeyPath) ? "true" : null
+            : _editor.Get(change.KeyPath)?.ToJsonString();
 
         public override void Apply(ConfigChange change, List<string> warnings)
         {

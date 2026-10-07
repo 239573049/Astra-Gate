@@ -33,6 +33,7 @@ const clients = [
   'Hermes Agent',
   'MiniMax Code',
   'Copilot CLI',
+  'VS Code Copilot',
 ];
 
 const providers = [

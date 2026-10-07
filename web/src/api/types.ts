@@ -176,7 +176,7 @@ export interface ProviderModel {
 // ---------- clients ----------
 export type ClientKind =
   | "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build"
-  | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli";
+  | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot";
 export interface ClientInfo {
   kind: ClientKind; name: string; protocol: ApiProtocol;
   availability: "available" | "coming_soon"; availabilityReason?: string | null; mode: "switch" | "coexist";

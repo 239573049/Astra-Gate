@@ -55,6 +55,7 @@ export const CLIENT_KINDS = [
   'hermes-agent',
   'minimax-code',
   'copilot-cli',
+  'vscode-copilot',
 ] as const;
 
 export type ClientKind = (typeof CLIENT_KINDS)[number];

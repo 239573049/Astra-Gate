@@ -13,12 +13,13 @@ public static class ClientKinds
     public const string HermesAgent = "hermes-agent";
     public const string MiniMaxCode = "minimax-code";
     public const string CopilotCli = "copilot-cli";
+    public const string VsCodeCopilot = "vscode-copilot";
 
     public static readonly IReadOnlyList<string> All =
-        [Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli];
+        [Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot];
 
     /// <summary>Clients whose configuration lists the bound provider's models (kept current when that list changes).</summary>
-    public static readonly IReadOnlyList<string> WithModelList = [OpenCode, Pi, MiniMaxCode, CopilotCli];
+    public static readonly IReadOnlyList<string> WithModelList = [OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot];
 
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch

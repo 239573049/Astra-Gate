@@ -245,7 +245,14 @@ public sealed class ClientService(
             foreach (var pm in await db.Providers.ListModelsAsync(provider.Id, ct))
             {
                 var effective = await models.ResolveAsync(provider, pm, ct);
-                if (effective.Enabled) list[pm.ModelId] = new JsonObject { ["id"] = pm.ModelId, ["name"] = effective.DisplayName };
+                if (!effective.Enabled) continue;
+                var entry = new JsonObject { ["id"] = pm.ModelId, ["name"] = effective.DisplayName };
+                // Capability hints for clients that declare per-model limits (VS Code Copilot); omitted when unknown.
+                if (effective.ContextWindow is { } context) entry["contextWindow"] = context;
+                if (effective.MaxOutputTokens is { } maxOut) entry["maxOutputTokens"] = maxOut;
+                if (effective.Capabilities.Vision is { } vision) entry["vision"] = vision;
+                if (effective.Capabilities.Reasoning is { } reasoning) entry["reasoning"] = reasoning;
+                list[pm.ModelId] = entry;
             }
             extras["models"] = list;
         }
@@ -388,7 +395,7 @@ public sealed class ClientService(
         ClientKinds.Codex => "Codex", ClientKinds.ClaudeCode => "Claude Code", ClientKinds.GeminiCli => "Gemini CLI",
         ClientKinds.OpenCode => "OpenCode", ClientKinds.ClaudeDesktop => "Claude Desktop", ClientKinds.GrokBuild => "Grok Build",
         ClientKinds.Pi => "Pi", ClientKinds.HermesAgent => "Hermes Agent", ClientKinds.MiniMaxCode => "MiniMax Code",
-        ClientKinds.CopilotCli => "Copilot CLI",
+        ClientKinds.CopilotCli => "Copilot CLI", ClientKinds.VsCodeCopilot => "VS Code Copilot",
         _ => kind,
     };
 }

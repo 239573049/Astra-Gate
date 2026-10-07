@@ -1,7 +1,7 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
 import { Claude, GithubCopilot, Grok, HermesAgent, OpenCode, Pi } from '@lobehub/icons';
-import { Monitor, SquareTerminal, type LucideIcon } from 'lucide-react';
+import { Code, Monitor, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { ClientKind } from '../api/types';
 // Vendors without a @lobehub/icons brand component ship their own downloaded mark.
@@ -19,18 +19,19 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'hermes-agent': { name: 'Hermes Agent' },
   'minimax-code': { name: 'MiniMax Code' },
   'copilot-cli': { name: 'Copilot CLI' },
+  'vscode-copilot': { name: 'VS Code Copilot' },
 };
 
 export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
-  'pi', 'hermes-agent', 'minimax-code', 'copilot-cli',
+  'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
 
 // Client marks come from @lobehub/icons and show the vendor's brand mark (as cc-switch does): product
-// mascots such as the Claude Code crab or the Codex cloud read as noise at toolbar size. The two Claude
-// clients share the Claude mark and are told apart by a corner badge (terminal vs. desktop app).
+// mascots such as the Claude Code crab or the Codex cloud read as noise at toolbar size. Clients that share a
+// vendor mark (the two Claude clients, the two Copilot clients) are told apart by a corner badge.
 const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType<IconAvatarProps>; badge?: LucideIcon }> = {
   codex: { Mark: OpenAI, Avatar: OpenAI.Avatar },
   'claude-code': { Mark: Claude.Color, Avatar: Claude.Avatar, badge: SquareTerminal },
@@ -41,7 +42,8 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   pi: { Mark: Pi, Avatar: Pi.Avatar },
   'hermes-agent': { Mark: HermesAgent, Avatar: HermesAgent.Avatar },
   'minimax-code': { Mark: Minimax.Color, Avatar: Minimax.Avatar },
-  'copilot-cli': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar },
+  'copilot-cli': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar, badge: SquareTerminal },
+  'vscode-copilot': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar, badge: Code },
 };
 
 function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {
