@@ -1,58 +1,9 @@
-import { Download, PackageOpen } from 'lucide-react';
+import { PackageOpen } from 'lucide-react';
 
-import { DEFAULT_CHANNEL, latestVersion, readIndex, type ReleaseFile } from '@/lib/releases';
+import { DownloadPanel } from '@/components/download/download-panel';
+import { DEFAULT_CHANNEL, latestVersion, readIndex } from '@/lib/releases';
 
 export const dynamic = 'force-dynamic';
-
-const PLATFORM_LABELS: Record<string, string> = {
-  'darwin-arm64': 'macOS · Apple 芯片 (M 系列及以上)',
-  'darwin-x64': 'macOS · Intel 芯片',
-  'win32-x64': 'Windows · x64',
-  'win32-arm64': 'Windows · ARM',
-  'linux-x64': 'Linux · x64',
-  'linux-arm64': 'Linux · ARM',
-};
-
-/** Downloadable kinds, in display order. Anything else (e.g. the server-update
- * manifest, kind "json") is feed plumbing and stays off the page. */
-const KIND_LABELS: Record<string, string> = {
-  dmg: '安装镜像',
-  exe: '安装程序',
-  appimage: 'AppImage（免安装，直接运行）',
-  zip: '压缩包（自动更新用）',
-};
-
-const PLATFORM_ORDER = Object.keys(PLATFORM_LABELS);
-const KIND_ORDER = Object.keys(KIND_LABELS);
-
-function rank(order: string[], value: string): number {
-  const i = order.indexOf(value);
-  return i === -1 ? order.length : i;
-}
-
-/** Installer files only, grouped by platform (table order) then kind. */
-function downloadableFiles(files: ReleaseFile[]): ReleaseFile[] {
-  return files
-    .filter((f) => f.kind in KIND_LABELS)
-    .sort(
-      (a, b) =>
-        rank(PLATFORM_ORDER, a.platform) - rank(PLATFORM_ORDER, b.platform) ||
-        rank(KIND_ORDER, a.kind) - rank(KIND_ORDER, b.kind),
-    );
-}
-
-function formatSize(bytes: number): string {
-  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function platformLabel(platform: string): string {
-  return PLATFORM_LABELS[platform] ?? platform;
-}
-
-function fileBadge(file: ReleaseFile): string {
-  return KIND_LABELS[file.kind] ?? file.kind.toUpperCase();
-}
 
 export default async function DownloadPage() {
   const index = await readIndex(DEFAULT_CHANNEL);
@@ -74,25 +25,8 @@ export default async function DownloadPage() {
         )}
 
         {latest && (
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {downloadableFiles(latest.files).map((file) => (
-              <a
-                key={file.name}
-                href={`/api/client-releases/stable/v/${latest.version}/${file.name}`}
-                className="group rounded-xl border border-fd-border bg-fd-card p-5 transition-colors hover:border-fd-primary"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{platformLabel(file.platform)}</span>
-                  <Download className="size-4 text-fd-muted-foreground transition-colors group-hover:text-fd-primary" />
-                </div>
-                <p className="mt-1 text-sm text-fd-muted-foreground">
-                  {fileBadge(file)} · {formatSize(file.size)}
-                </p>
-                <p className="mt-3 truncate font-mono text-xs text-fd-muted-foreground" title={file.name}>
-                  {file.name}
-                </p>
-              </a>
-            ))}
+          <div className="mt-8">
+            <DownloadPanel version={latest.version} files={latest.files} hrefBase={`/api/client-releases/stable/v/${latest.version}`} />
           </div>
         )}
 
