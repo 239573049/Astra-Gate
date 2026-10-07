@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\*.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
+  </ItemGroup>
+</Project>

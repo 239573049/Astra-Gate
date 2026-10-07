@@ -1,0 +1,61 @@
+{
+  "model": "gpt-5.1-codex",
+  "instructions": "You are Codex, a coding agent.",
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [ { "type": "input_text", "text": "List the files in src/" } ]
+    },
+    {
+      "type": "reasoning",
+      "id": "rs_prev_1",
+      "summary": [ { "type": "summary_text", "text": "Inspect the repository layout first." } ],
+      "encrypted_content": "gAAAAABprev123"
+    },
+    {
+      "type": "function_call",
+      "call_id": "call_ls",
+      "name": "shell",
+      "arguments": "{\"cmd\":[\"ls\",\"src\"]}"
+    },
+    {
+      "type": "function_call_output",
+      "call_id": "call_ls",
+      "output": [
+        { "type": "input_text", "text": "Astra.Gateway\nAstra.Core" }
+      ]
+    },
+    {
+      "type": "message",
+      "role": "developer",
+      "content": [ { "type": "input_text", "text": "Be terse." } ]
+    },
+    {
+      "type": "web_search_call",
+      "status": "completed"
+    }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "name": "shell",
+      "description": "Runs a shell command",
+      "parameters": {
+        "type": "object",
+        "properties": { "cmd": { "type": "array", "items": { "type": "string" } } },
+        "required": ["cmd"]
+      },
+      "strict": false
+    },
+    { "type": "web_search" }
+  ],
+  "tool_choice": "auto",
+  "parallel_tool_calls": false,
+  "reasoning": { "effort": "high", "summary": "auto" },
+  "store": false,
+  "include": ["reasoning.encrypted_content"],
+  "prompt_cache_key": "codex-session-1",
+  "stream": true,
+  "temperature": 0.2
+}

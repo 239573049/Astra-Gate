@@ -1,0 +1,32 @@
+{
+  "id": "resp_json1",
+  "object": "response",
+  "created_at": 1791432300,
+  "status": "completed",
+  "model": "gpt-5.1",
+  "output": [
+    {
+      "id": "rs_j1",
+      "type": "reasoning",
+      "summary": [ { "type": "summary_text", "text": "Need the capital of France." } ],
+      "encrypted_content": "gAAAAAjson456"
+    },
+    {
+      "id": "msg_j2",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [
+        { "type": "output_text", "text": "Paris is the capital of France.", "annotations": [] }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 90,
+    "input_tokens_details": { "cached_tokens": 0 },
+    "output_tokens": 40,
+    "output_tokens_details": { "reasoning_tokens": 8 },
+    "total_tokens": 130
+  },
+  "service_tier": "flex"
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@aidotnet/update-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared update engine for the Astra CLI and desktop app: manifest checks, staged npm installs, sha256 verification, atomic swap and rollback.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  }
+}

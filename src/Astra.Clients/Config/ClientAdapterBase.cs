@@ -1,0 +1,108 @@
+using Astra.Clients.Editing;
+using Astra.Core.Clients;
+
+namespace Astra.Clients.Config;
+
+/// <summary>Shared plumbing for client adapters: config file IO, plan building with diffs, and inspection.</summary>
+public abstract class ClientAdapterBase : IClientAdapter
+{
+    protected ClientAdapterBase(ClientEnvironment env, IClientConfigStateStore store)
+    {
+        Env = env;
+        Store = store;
+    }
+
+    protected ClientEnvironment Env { get; }
+
+    protected IClientConfigStateStore Store { get; }
+
+    public abstract string Kind { get; }
+
+    public abstract ClientMode Mode { get; }
+
+    public abstract ClientAvailability Availability { get; }
+
+    public virtual string? UnavailableReason => null;
+
+    public abstract ClientDetection Detect();
+
+    public abstract IReadOnlyList<string> ConfigPaths();
+
+    public abstract ConfigChangePlan PlanEnable(EnableContext ctx);
+
+    public abstract ConfigChangePlan PlanDisable();
+
+    public abstract ConfigChangePlan PlanPurge();
+
+    public abstract ClientStatus Inspect();
+
+    // ---------------------------------------------------------------- helpers for subclasses
+
+    /// <summary>The primary config file path (first existing candidate, else the first candidate).</summary>
+    protected string PrimaryConfigPath(IReadOnlyList<string> candidates) =>
+        candidates.FirstOrDefault(Env.FileExists) ?? candidates[0];
+
+    protected (string Text, bool Bom) ReadFile(string path) => Env.ReadTextWithBom(path) ?? ("", false);
+
+    /// <summary>Builds the plan and computes a unified diff per affected file by simulating the changes.</summary>
+    protected ConfigChangePlan BuildPlan(IReadOnlyList<ConfigChange> changes)
+    {
+        var diffs = new List<FileDiff>();
+        var warnings = new List<string>();
+        foreach (var group in changes.GroupBy(c => c.File))
+        {
+            var ops = ConfigEditorOps.Create(group.First().Format, ReadFile(group.Key).Text);
+            var before = ops.Text;
+            foreach (var change in group) ops.Apply(change, warnings);
+            if (ops.Text != before)
+                diffs.Add(new FileDiff(group.Key, DiffTool.Unified(group.Key, before, ops.Text)));
+        }
+        return new ConfigChangePlan(Kind, changes, diffs);
+    }
+
+    /// <summary>Current value of a key through the same machinery the applier uses.</summary>
+    protected string? CurrentValue(string file, ConfigFileFormat format, string keyPath, ConfigChangeKind kind = ConfigChangeKind.Key)
+    {
+        var ops = ConfigEditorOps.Create(format, ReadFile(file).Text);
+        return ops.Read(new ConfigChange(file, format, keyPath, null, null, kind));
+    }
+
+    /// <summary>TOML key paths that were recorded as table entries (subclasses with table entries override this).</summary>
+    protected virtual bool IsTableKeyPath(string keyPath) => false;
+
+    /// <summary>The file format of a config file, derived from its name.</summary>
+    protected static ConfigFileFormat FormatOfPath(string path) =>
+        path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ? ConfigFileFormat.Toml
+        : path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".jsonc", StringComparison.OrdinalIgnoreCase)
+            ? ConfigFileFormat.Json
+            : path.Contains(".env", StringComparison.Ordinal) ? ConfigFileFormat.Env
+            : ConfigFileFormat.Json;
+
+    /// <summary>Builds the status card: enabled as given, drifted keys from state comparisons.</summary>
+    protected ClientStatus BuildStatus(ClientDetection detection, bool enabled, IReadOnlyList<string> warnings)
+    {
+        var drifted = new List<string>();
+        var appliedKeys = new List<string>();
+        foreach (var entry in Store.List(Kind))
+        {
+            var format = FormatOfPath(entry.FilePath);
+            var kind = IsTableKeyPath(entry.KeyPath) ? ConfigChangeKind.Table : ConfigChangeKind.Key;
+            var current = CurrentValue(entry.FilePath, format, entry.KeyPath, kind);
+            var matches = ConfigValueCodec.EqualsValue(format, current, entry.AppliedValueJson);
+            if (matches) appliedKeys.Add(entry.KeyPath);
+            else drifted.Add(entry.KeyPath);
+        }
+        return new ClientStatus
+        {
+            ClientKind = Kind,
+            Detection = detection,
+            Enabled = enabled,
+            DriftedKeys = drifted,
+            AppliedKeys = appliedKeys,
+            Warnings = warnings,
+        };
+    }
+
+    /// <summary>Shorthand for a .NET string as JSON text.</summary>
+    protected static string JsonString(string value) => System.Text.Json.JsonSerializer.Serialize(value);
+}

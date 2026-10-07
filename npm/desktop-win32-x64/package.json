@@ -1,0 +1,10 @@
+{
+  "name": "@aidotnet/desktop-win32-x64",
+  "version": "0.1.0",
+  "description": "Astra desktop app for Windows (x64).",
+  "license": "MIT",
+  "os": ["win32"],
+  "cpu": ["x64"],
+  "files": ["app/"],
+  "preferUnplugged": true
+}

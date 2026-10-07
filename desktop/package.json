@@ -1,0 +1,33 @@
+{
+  "name": "@aidotnet/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Astra desktop app (Electron shell around the Astra web UI and local server)",
+  "author": {
+    "name": "Astra"
+  },
+  "license": "UNLICENSED",
+  "main": "dist/main.js",
+  "scripts": {
+    "copy-web": "node scripts/copy-web.mjs",
+    "icons": "node scripts/gen-icons.mjs",
+    "build": "node scripts/copy-web.mjs && node scripts/build.mjs",
+    "dev": "node scripts/copy-web.mjs --optional && node scripts/build.mjs && electron .",
+    "dist:dir": "pnpm run build && electron-builder --dir",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@aidotnet/update-core": "workspace:*",
+    "@types/node": "^26.6.4",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "electron-updater": "^6.6.2",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.12.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1",
+    "vitest": "^5.0.3"
+  }
+}

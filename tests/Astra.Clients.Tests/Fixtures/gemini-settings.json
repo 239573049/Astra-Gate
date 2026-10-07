@@ -1,0 +1,19 @@
+{
+  // Gemini CLI settings
+  "theme": "auto",
+  "selectedAuthType": "oauth-personal",
+  "model": {
+    "name": "gemini-2.5-pro"
+  },
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/Users/token/code"]
+    }
+  },
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  },
+}

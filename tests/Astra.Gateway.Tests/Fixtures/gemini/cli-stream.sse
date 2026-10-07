@@ -1,0 +1,11 @@
+data: {"candidates":[{"content":{"parts":[{"text":"Thinking about the weather request.","thought":true}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":120,"cachedContentTokenCount":40,"thoughtsTokenCount":6},"modelVersion":"gemini-2.5-flash","responseId":"resp-abc123"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"I should call the tool.","thought":true}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":120,"cachedContentTokenCount":40,"thoughtsTokenCount":11},"modelVersion":"gemini-2.5-flash","responseId":"resp-abc123"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"It is currently "}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":120,"cachedContentTokenCount":40,"thoughtsTokenCount":11,"candidatesTokenCount":4},"modelVersion":"gemini-2.5-flash","responseId":"resp-abc123"}
+
+data: {"candidates":[{"content":{"parts":[{"text":"22C and sunny in Tokyo."}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":120,"cachedContentTokenCount":40,"thoughtsTokenCount":11,"candidatesTokenCount":13},"modelVersion":"gemini-2.5-flash","responseId":"resp-abc123"}
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"get_weather","args":{"city":"Tokyo"}},"thoughtSignature":"sig-xyz789"}],"role":"model"},"index":0}],"usageMetadata":{"promptTokenCount":120,"cachedContentTokenCount":40,"thoughtsTokenCount":11,"candidatesTokenCount":26},"modelVersion":"gemini-2.5-flash","responseId":"resp-abc123"}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":""}]},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":120,"cachedContentTokenCount":40,"candidatesTokenCount":26,"thoughtsTokenCount":11,"totalTokenCount":157},"modelVersion":"gemini-2.5-flash","responseId":"resp-abc123"}

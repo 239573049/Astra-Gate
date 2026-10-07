@@ -1,0 +1,13 @@
+{
+  "candidates": [{
+    "content": { "role": "model", "parts": [
+      { "text": "Let me check the forecast.", "thought": true, "thoughtSignature": "sig-thought-1" },
+      { "text": "The weather is 22C and sunny." }
+    ]},
+    "finishReason": "STOP",
+    "index": 0
+  }],
+  "usageMetadata": { "promptTokenCount": 50, "candidatesTokenCount": 12, "thoughtsTokenCount": 5, "totalTokenCount": 67 },
+  "modelVersion": "gemini-2.5-flash",
+  "responseId": "resp-nonstream-1"
+}

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
+    <ProjectReference Include="..\Astra.Data\Astra.Data.csproj" />
+    <ProjectReference Include="..\Astra.Providers\Astra.Providers.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,269 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      build_only:
+        description: 'Build only (skip npm publish and the update feed)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    # macOS notarization waits in Apple's queue per artifact (dir + dmg + zip
+    # per job); 60 min keeps the mac rows safe without slowing the others.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: osx-arm64, os: macos-14 }
+          - { rid: osx-x64, os: macos-13 }
+          - { rid: linux-x64, os: ubuntu-latest }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          - { rid: win-x64, os: windows-latest }
+          - { rid: win-arm64, os: windows-11-arm }
+    env:
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Check macOS signing credentials
+        # Fail before the (long) build when a secret is missing: unsigned mac
+        # artifacts pass CI but break Gatekeeper and Squirrel.Mac's designated
+        # requirement check on the user's machine — the most expensive failure.
+        if: startsWith(matrix.rid, 'osx')
+        env:
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        shell: bash
+        run: |
+          missing=''
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing"
+            exit 1
+          fi
+          echo "macOS signing credentials present."
+
+      - name: Install dependencies
+        shell: bash
+        # electron-builder's node-gyp step downloads Electron headers from
+        # www.electronjs.org, which has a short connect timeout and fails
+        # transiently — retry instead of burning a whole release run.
+        run: |
+          for attempt in 1 2 3; do
+            if [ -f pnpm-lock.yaml ]; then
+              pnpm install --frozen-lockfile && exit 0
+            else
+              pnpm install && exit 0
+            fi
+            echo "::warning::pnpm install attempt ${attempt} failed, retrying"
+            sleep $((attempt * 20))
+          done
+          exit 1
+
+      - name: Build web UI
+        if: hashFiles('web/package.json') != ''
+        shell: bash
+        run: pnpm --filter @aidotnet/web build
+
+      - name: Publish server binary (self-contained, single file)
+        shell: bash
+        run: >-
+          dotnet publish src/Astra.Server -c Release -r "$RID"
+          --self-contained true -p:PublishSingleFile=true -o out/publish
+
+      - name: Verify versions are in sync
+        shell: bash
+        run: node scripts/sync-versions.mjs --check
+
+      - name: Hash the server binary into a manifest partial
+        shell: bash
+        run: >-
+          node scripts/gen-manifest.mjs partial --rid "$RID"
+          --binary "out/publish/astra-server${{ startsWith(matrix.rid, 'win') && '.exe' || '' }}"
+          --out "out/feed/partial-$RID.json"
+
+      - name: Pack server platform package
+        shell: bash
+        run: node scripts/pack-platform.mjs --rid "$RID" --publish-dir out/publish --web-dist web/dist
+
+      - name: Build desktop app
+        if: hashFiles('desktop/package.json') != ''
+        shell: bash
+        # mac rows build the full target set from electron-builder.yml
+        # (dir + signed/notarized dmg + zip); other rows stay unpacked.
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(matrix.rid, 'osx') && 'true' || 'false' }}
+          # Only mac rows get the certificate: a mac p12 must not reach the
+          # Windows signing path.
+          CSC_LINK: ${{ startsWith(matrix.rid, 'osx') && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ startsWith(matrix.rid, 'osx') && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_TEAM_ID || '' }}
+          ASTRA_FEED_URL: ${{ startsWith(matrix.rid, 'osx') && secrets.ASTRA_FEED_URL || '' }}
+        run: |
+          pnpm --filter @aidotnet/desktop build
+          if [[ "$RID" == osx-* ]]; then
+            ARCH=$([ "$RID" = "osx-arm64" ] && echo "--arm64" || echo "--x64")
+            pnpm --filter @aidotnet/desktop exec electron-builder --mac "$ARCH" --config.directories.output=../../out/desktop
+          else
+            pnpm --filter @aidotnet/desktop exec electron-builder --dir --config.directories.output=../../out/desktop
+          fi
+
+      - name: Collect desktop app into platform package
+        if: hashFiles('desktop/package.json') != ''
+        shell: bash
+        run: node scripts/pack-desktop.mjs --rid "$RID" --builder-dir out/desktop
+
+      - name: npm pack platform packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/pkg
+          server_dir=$(node -e "import('./scripts/rid-map.mjs').then(m => console.log(m.ridToServerDir(process.argv[1])))" "$RID")
+          (cd "npm/$server_dir" && npm pack --pack-destination ../../out/pkg)
+          desktop_dir=$(node -e "import('./scripts/rid-map.mjs').then(m => console.log(m.ridToDesktopDir(process.argv[1])))" "$RID")
+          if [ -d "npm/$desktop_dir/app" ] && [ -n "$(ls -A "npm/$desktop_dir/app" 2>/dev/null)" ]; then
+            (cd "npm/$desktop_dir" && npm pack --pack-destination ../../out/pkg)
+          else
+            echo "No desktop app produced for $RID — skipping the desktop package."
+          fi
+
+      - name: Upload platform packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.rid }}
+          path: out/pkg/*.tgz
+          if-no-files-found: error
+
+      - name: Upload feed inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/feed-upload
+          cp out/feed/partial-*.json out/feed-upload/
+          if [[ "$RID" == osx-* ]]; then
+            cp out/desktop/*.dmg out/feed-upload/
+            cp out/desktop/*.zip out/feed-upload/
+            cp out/desktop/latest-mac.yml out/feed-upload/
+          fi
+          ls -la out/feed-upload
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: feed-${{ matrix.rid }}
+          path: out/feed-upload/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm and the update feed
+    needs: build
+    # Only tag pushes publish; workflow_dispatch runs are build-only.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: |
+          if [ -f pnpm-lock.yaml ]; then
+            pnpm install --frozen-lockfile
+          else
+            pnpm install
+          fi
+
+      - name: Build CLI
+        run: pnpm --filter astragate build
+
+      - name: Verify tag matches the CLI version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VER=$(node -p "require('./cli/package.json').version")
+          if [ "$TAG" != "$VER" ]; then
+            echo "Tag v$TAG does not match cli/package.json version $VER"
+            exit 1
+          fi
+
+      - name: Download all platform packages
+        uses: actions/download-artifact@v4
+        with:
+          path: out/artifacts
+          merge-multiple: true
+
+      - name: Assemble the update feed
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir -p out/feed/stable
+          partials=()
+          for f in out/artifacts/partial-*.json; do
+            partials+=(--partial "$f")
+          done
+          node scripts/gen-manifest.mjs merge \
+            --version "${GITHUB_REF_NAME#v}" \
+            "${partials[@]}" \
+            --out out/feed/stable/latest.json
+          cp out/artifacts/*.dmg out/feed/stable/
+          cp out/artifacts/*.zip out/feed/stable/
+          cp out/artifacts/latest-mac.yml out/feed/stable/
+          ls -la out/feed/stable
+
+      - name: Publish to the update feed
+        if: secrets.FEED_UPLOAD_TARGET != ''
+        env:
+          FEED_UPLOAD_TARGET: ${{ secrets.FEED_UPLOAD_TARGET }}
+        run: node scripts/publish-feed.mjs --dir out/feed --dest "$FEED_UPLOAD_TARGET"
+
+      - name: Publish platform packages first, then the CLI
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          # @aidotnet/server-* must exist before `astragate` resolves its optionalDependencies.
+          # npm pack names a scoped tarball "aidotnet-server-...tgz" (no @ or +).
+          for f in out/artifacts/aidotnet-server-*.tgz; do
+            npm publish "$f" --access public
+          done
+          for f in out/artifacts/aidotnet-desktop-*.tgz; do
+            npm publish "$f" --access public
+          done
+          npm pack ./cli --pack-destination out/artifacts
+          for f in out/artifacts/astragate-[0-9]*.tgz; do
+            npm publish "$f" --access public
+          done

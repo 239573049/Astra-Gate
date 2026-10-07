@@ -1,0 +1,53 @@
+---
+title: 客户端与提供商
+description: client / provider / restore-all 子命令
+---
+
+## 管理客户端
+
+与控制台「客户端」页等价的终端操作：
+
+```bash
+astra client list                       # 列出全部客户端与接管状态
+astra client status claude-code         # 查看单个客户端详情
+astra client enable codex --provider deepseek --model deepseek-chat
+astra client disable codex              # 停用并还原配置
+```
+
+客户端标识：`codex`、`claude-code`、`gemini-cli`、`opencode`、`claude-desktop`、`grok-build`。
+
+启用流程与控制台一致：先备份（首次修改前的备份永久保留），再写入网关地址与本地密钥。`--provider` 使用提供商的 ID（`astra provider list` 可查）。
+
+<Callout type="info" title="禁用即还原">
+  `disable` 会撤销 Astra 写入的配置项。若某些项在接管后被你手动改过（漂移），
+  命令会列出它们并要求确认是否强制还原——与控制台行为一致。
+</Callout>
+
+## 管理提供商
+
+```bash
+astra provider list
+astra provider templates                 # 查看可用模板 id
+astra provider add --template deepseek --key sk-xxx --name 我的DeepSeek
+astra provider add --template openrouter --variant cn --key sk-or-xxx
+astra provider remove <id>
+```
+
+`--template` 与 `--variant` 取值见 `astra provider templates`。更细的配置（价格表、倍率、代理、请求头、订阅账号）请用控制台。
+
+## 离线还原：restore-all
+
+```bash
+astra restore-all
+astra restore-all --purge   # 同时把 Astra 残留在客户端配置里的条目整个删掉
+```
+
+这是唯一**不需要服务在运行**的管理命令：它直接读取 `~/.astra` 里记录的接管状态，把每个被接管客户端的配置恢复为启用前的样子。典型场景：
+
+- 卸载前确保客户端恢复原状（`astra uninstall` 内部就是先做这件事）；
+- 服务无法启动、控制台打不开时的兜底手段。
+
+<Callout type="warn" title="--purge 不可逆">
+  不加 `--purge` 时，Astra 写入的配置项会恢复为原值；加了之后连 Astra 的条目痕迹一起清掉。
+  两者的「首次修改前备份」都仍保留在 `~/.astra/backups/client-configs/`。
+</Callout>

@@ -1,0 +1,44 @@
+---
+title: 命令总览
+description: astra 命令行结构一览
+---
+
+`astra`（npm 包名 `astragate`）是 Astra 的命令行入口：安装、启动、停止服务，接管客户端，以及卸载还原。
+
+```bash
+npm install -g astragate
+astra --help
+```
+
+## 命令地图
+
+| 命令 | 作用 |
+| --- | --- |
+| `astra start` | 启动服务（默认后台）；`--port` / `--host` / `--foreground` / `--open` |
+| `astra stop` | 停止运行中的服务 |
+| `astra restart` | 重启服务（接受 start 的全部选项） |
+| `astra status` | 查看服务是否在运行及详情 |
+| `astra logs` | 查看最近日志；`-f` 持续输出 |
+| `astra open` | 在默认浏览器打开控制台 |
+| `astra autostart enable\|disable\|status` | 开机自启（LaunchAgent / systemd --user / schtasks） |
+| `astra client list\|status\|enable\|disable` | 管理本机 AI 客户端的接管 |
+| `astra provider list\|add\|remove` | 管理上游提供商 |
+| `astra config set-password` | 设置管理密码（对外监听前必须） |
+| `astra install --client` | 安装桌面端 |
+| `astra update` | 更新 CLI 与桌面端，然后重启服务 |
+| `astra uninstall` | 卸载：还原客户端配置、停止服务；`--purge` 连数据目录一起删 |
+| `astra restore-all` | 离线还原所有被接管客户端的配置（无需服务在运行） |
+
+## 约定
+
+- **默认地址** `127.0.0.1:17321`；实际端口以 `~/.astra/runtime.json` 为准（冲突时自动顺延）；
+- **数据目录** `~/.astra`，可用 `ASTRA_HOME` 环境变量覆盖；
+- 大多数管理命令通过本机 Admin API 与服务通信，服务未运行时会给出明确提示。
+
+本节各页：
+
+<Cards>
+  <Card title="服务管理" href="/docs/cli/service" description="start / stop / status / logs / autostart" />
+  <Card title="客户端与提供商" href="/docs/cli/clients" description="client / provider / restore-all" />
+  <Card title="安装与卸载" href="/docs/cli/maintain" description="install / update / uninstall / set-password" />
+</Cards>

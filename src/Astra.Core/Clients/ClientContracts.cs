@@ -1,0 +1,92 @@
+namespace Astra.Core.Clients;
+
+/// <summary>Supported client kinds (fixed set shown in the client tabs).</summary>
+public static class ClientKinds
+{
+    public const string Codex = "codex";
+    public const string ClaudeCode = "claude-code";
+    public const string GeminiCli = "gemini-cli";
+    public const string OpenCode = "opencode";
+    public const string ClaudeDesktop = "claude-desktop";
+    public const string GrokBuild = "grok-build";
+
+    public static readonly IReadOnlyList<string> All = [Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild];
+
+    /// <summary>The inbound protocol each client speaks to the gateway.</summary>
+    public static ApiProtocol ProtocolOf(string kind) => kind switch
+    {
+        Codex or GrokBuild => ApiProtocol.OpenAIResponses,
+        ClaudeCode or ClaudeDesktop => ApiProtocol.Anthropic,
+        GeminiCli => ApiProtocol.Gemini,
+        _ => ApiProtocol.OpenAIChat,
+    };
+}
+
+/// <summary>A client known to Astra (row of the <c>clients</c> table).</summary>
+public sealed class ClientRecord
+{
+    public string Kind { get; set; } = "";
+    public bool Enabled { get; set; }
+    public string? LocalKeyEnc { get; set; }
+    public string? LocalKeyHash { get; set; }
+    public string? LocalKeyPrefix { get; set; }
+    public string? SelectedModel { get; set; }
+
+    /// <summary>Client-specific extras (Claude Code small model, Claude Desktop role map …) as JSON.</summary>
+    public string? ExtraJson { get; set; }
+
+    public DateTimeOffset? AppliedAt { get; set; }
+}
+
+public sealed class ClientBinding
+{
+    public string ClientKind { get; set; } = "";
+    public string ProviderId { get; set; } = "";
+
+    /// <summary>0 = primary. Higher values reserved for future failover.</summary>
+    public int Priority { get; set; }
+
+    /// <summary>
+    /// Pins a concrete subscription account of the bound provider; null = the provider's default
+    /// (first active) account. Only meaningful for providers with scheme "oauth-subscription".
+    /// </summary>
+    public string? AccountId { get; set; }
+}
+
+/// <summary>
+/// The original and applied value of one key Astra wrote into a client config file.
+/// Values are JSON text; <see cref="OriginalAbsent"/> means the key did not exist before we wrote it.
+/// </summary>
+public sealed class ClientConfigStateEntry
+{
+    public string ClientKind { get; set; } = "";
+    public string FilePath { get; set; } = "";
+
+    /// <summary>Dotted key path inside the file, e.g. "env.ANTHROPIC_BASE_URL" or "model_providers.astra".</summary>
+    public string KeyPath { get; set; } = "";
+
+    public bool OriginalAbsent { get; set; }
+    public string? OriginalValueJson { get; set; }
+    public string? AppliedValueJson { get; set; }
+    public DateTimeOffset AppliedAt { get; set; }
+}
+
+/// <summary>Persistence for <see cref="ClientConfigStateEntry"/> (implemented with Dapper in Astra.Data).</summary>
+public interface IClientConfigStateStore
+{
+    IReadOnlyList<ClientConfigStateEntry> List(string clientKind);
+    ClientConfigStateEntry? Get(string clientKind, string filePath, string keyPath);
+
+    /// <summary>Insert or update by (client_kind, file_path, key_path).</summary>
+    void Upsert(ClientConfigStateEntry entry);
+
+    void Delete(string clientKind, string filePath, string keyPath);
+    void DeleteAll(string clientKind);
+}
+
+/// <summary>Encrypts secrets at rest (API keys, local client keys). Implemented with ASP.NET DataProtection in the server.</summary>
+public interface ISecretProtector
+{
+    string Protect(string plaintext);
+    string Unprotect(string protectedValue);
+}

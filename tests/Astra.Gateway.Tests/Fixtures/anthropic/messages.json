@@ -1,0 +1,21 @@
+{
+  "id": "msg_01XFDUDYJgAACzvnptvVoYEL",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-sonnet-4-5",
+  "content": [
+    { "type": "thinking", "thinking": "The user greeted me. A haiku fits.", "signature": "sig-xyz-123" },
+    { "type": "text", "text": "Hello!" },
+    { "type": "tool_use", "id": "toolu_01WrCIpKvyjMSUyVcB9eHMbN", "name": "get_weather", "input": { "city": "Paris", "unit": "celsius" } }
+  ],
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 55,
+    "cache_creation_input_tokens": 100,
+    "cache_creation": { "ephemeral_5m_input_tokens": 80, "ephemeral_1h_input_tokens": 20 },
+    "cache_read_input_tokens": 7,
+    "output_tokens": 503,
+    "service_tier": "standard"
+  }
+}

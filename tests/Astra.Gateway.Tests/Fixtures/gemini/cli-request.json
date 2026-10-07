@@ -1,0 +1,39 @@
+{
+  "contents": [
+    { "role": "user", "parts": [
+      { "text": "What's the weather in Tokyo? The photo shows the sky here." },
+      { "inlineData": { "mimeType": "image/png", "data": "aGVsbG8=" } }
+    ]},
+    { "role": "model", "parts": [
+      { "text": "Checking the forecast first.", "thought": true },
+      { "functionCall": { "name": "get_weather", "args": { "city": "Tokyo" }, "id": "call_42" }, "thoughtSignature": "sig-abc123" }
+    ]},
+    { "role": "user", "parts": [
+      { "functionResponse": { "name": "get_weather", "response": { "output": "22C, sunny" } } }
+    ]},
+    { "role": "model", "parts": [ { "text": "It is 22C and sunny in Tokyo." } ]},
+    { "role": "user", "parts": [ { "text": "Thanks! And in Osaka?" } ]}
+  ],
+  "tools": [
+    { "functionDeclarations": [
+      { "name": "get_weather", "description": "Get current weather for a city",
+        "parameters": { "type": "OBJECT", "properties": { "city": { "type": "STRING" } }, "required": ["city"] } }
+    ]},
+    { "googleSearch": {} }
+  ],
+  "toolConfig": { "functionCallingConfig": { "mode": "ANY", "allowedFunctionNames": ["get_weather"] } },
+  "generationConfig": {
+    "temperature": 0.7,
+    "topP": 0.9,
+    "topK": 40,
+    "maxOutputTokens": 2048,
+    "stopSequences": ["DONE"],
+    "responseMimeType": "application/json",
+    "responseSchema": { "type": "object", "properties": { "summary": { "type": "string" } } },
+    "thinkingConfig": { "thinkingBudget": 4096, "includeThoughts": true },
+    "seed": 7
+  },
+  "safetySettings": [ { "category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE" } ],
+  "labels": { "env": "test" },
+  "systemInstruction": { "parts": [ { "text": "You are a weather assistant." } ] }
+}

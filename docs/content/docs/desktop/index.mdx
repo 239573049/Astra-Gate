@@ -1,0 +1,46 @@
+---
+title: 桌面端
+description: Astra 桌面应用——把控制台与常驻服务装进一个原生窗口
+---
+
+桌面端（`@aidotnet/desktop`）是控制台的 Electron 封装：同一个管理界面，外加原生集成的便利。
+
+## 安装
+
+```bash
+astra install --client
+```
+
+或从发布页下载对应平台的安装包（dmg / AppImage / 安装器）。
+
+## 它多了什么
+
+| 能力 | 说明 |
+| --- | --- |
+| **独立窗口** | 控制台跑在原生窗口里，不依赖浏览器 |
+| **服务生命周期** | 服务未运行时可直接在界面点「启动服务」，不必开终端 |
+| **开机自启** | 设置里一键开关（与 `astra autostart` 同一机制） |
+| **菜单栏入口** | macOS 菜单栏快捷查看服务状态、启动 / 停止 |
+| **离线渲染** | 界面资源内置于应用中，启动即用 |
+
+桌面端复用同一份 `~/.astra` 数据与同一个 astra-server——在桌面端与浏览器里看到的内容完全一致，`astra` CLI 管理的服务就是桌面端跑的服务。
+
+## 服务二进制解析顺序
+
+桌面端按以下顺序定位服务端二进制：
+
+1. `~/.astra/install.json` 中记录的安装位置；
+2. 环境变量 `ASTRA_SERVER_BIN`（开发调试用）；
+3. 开发构建（仅源码运行时）。
+
+## 更新与卸载
+
+```bash
+astra update --client    # 只更新桌面端
+astra uninstall --client # 只卸载桌面端
+```
+
+<Callout type="info" title="端口显示以 runtime.json 为准">
+  与浏览器版相同：桌面端展示的监听地址来自 `~/.astra/runtime.json` 的实际值，
+  不会假设配置里的端口仍然可用。
+</Callout>

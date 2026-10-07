@@ -1,0 +1,15 @@
+{
+  "downloadedAt": "2026-10-07T16:05:00.000Z",
+  "usage": "Marks are used solely to identify supported providers. Copyright and trademarks remain with their respective owners; bundling them does not imply endorsement or grant trademark rights.",
+  "sources": {
+    "routin": {
+      "file": "routin.png",
+      "source": "https://routin.ai/favicon.png",
+      "website": "https://routin.ai",
+      "mark": "Routin",
+      "kind": "vendor",
+      "note": "Official Routin favicon, downloaded from the vendor site and served locally; no @lobehub/icons brand component exists for this provider.",
+      "sha256": "4490b315e33874cfc3edb78e58f4ef4a8fd6589e450a7614ad94d0e4634dbc3f"
+    }
+  }
+}

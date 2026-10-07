@@ -1,0 +1,52 @@
+{
+  "name": "astragate",
+  "version": "0.1.0",
+  "description": "Astra — a local AI gateway. Install, start, stop and manage the astra-server from the terminal.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "astra": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "astra",
+    "ai",
+    "gateway",
+    "llm",
+    "proxy"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "optionalDependencies": {
+    "@aidotnet/server-darwin-arm64": "0.1.0",
+    "@aidotnet/server-darwin-x64": "0.1.0",
+    "@aidotnet/server-linux-arm64": "0.1.0",
+    "@aidotnet/server-linux-x64": "0.1.0",
+    "@aidotnet/server-win32-arm64": "0.1.0",
+    "@aidotnet/server-win32-x64": "0.1.0"
+  },
+  "devDependencies": {
+    "@aidotnet/update-core": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^3.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

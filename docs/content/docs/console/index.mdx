@@ -1,0 +1,49 @@
+---
+title: 控制台总览
+description: 打开控制台的几种方式，以及界面布局
+---
+
+管理控制台是 Astra 的可视化界面：概览统计、提供商与模型管理、客户端接管、请求日志、隐私护栏和设置都在这里完成。
+
+## 打开方式
+
+| 方式 | 操作 |
+| --- | --- |
+| 桌面端 | 启动 Astra 桌面应用即是控制台（推荐） |
+| 浏览器 | 运行 `astra open`，或访问 `http://127.0.0.1:17321`（以 `runtime.json` 中的实际端口为准） |
+| 启动时打开 | `astra start --open` |
+
+## 登录
+
+监听在环回地址（`127.0.0.1`）时，本机访问**免密码**。只有把服务显式监听到局域网地址（`astra start --host 0.0.0.0`，需先用 `astra config set-password` 设置管理密码）后，才要求登录：
+
+<Screenshot src="/screenshots/login.png" alt="登录页：居中的玻璃卡片，提示输入管理密码" title="Astra — 登录" caption="对外监听时的登录页；环回访问无需登录" />
+
+<Callout type="warn" title="安全边界">
+  即使在本机，所有「修改」类接口也要求请求头 `X-Astra-Admin: 1`（Web 控制台已自动携带）；
+  对外监听时还有 Host 白名单（防 DNS 重绑定）与会话 cookie 保护。不要把端口暴露到不受信任的网络。
+</Callout>
+
+## 界面布局
+
+左侧是玻璃质感的侧边栏，底部常驻服务状态卡（绿点 + 实际监听地址）：
+
+- **概览 / 请求日志** — 统计与明细
+- **配置**：客户端、提供商、模型、隐私护栏
+- **系统**：设置
+
+右侧内容区随页面切换，后续章节逐页讲解。
+
+<Screenshot src="/screenshots/overview.png" alt="控制台全景：侧边栏 + 概览页的指标卡与趋势图" title="Astra — 概览" caption="控制台全景（概览页）" />
+
+## 模块导航
+
+<Cards>
+  <Card title="概览" href="/docs/console/overview" description="费用、请求数、Token、缓存命中率、TTFT" />
+  <Card title="提供商" href="/docs/console/providers" description="添加模板、API Key、价格表与倍率、测试连接" />
+  <Card title="模型" href="/docs/console/models" description="模型目录、三级价格体系、同步 models.dev" />
+  <Card title="客户端" href="/docs/console/clients" description="一键启用 / 禁用还原、切换提供商、备份与密钥" />
+  <Card title="请求日志" href="/docs/console/requests" description="筛选、请求详情、逐项计费" />
+  <Card title="隐私护栏" href="/docs/console/privacy" description="检测类别、拦截 / 脱敏、试用检测" />
+  <Card title="设置" href="/docs/console/settings" description="外观、网关信息、记录策略" />
+</Cards>

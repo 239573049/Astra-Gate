@@ -1,0 +1,60 @@
+{
+  "downloadedAt": "2026-10-06T19:04:29.974Z",
+  "usage": "Marks are used solely to identify supported clients. Copyright and trademarks remain with their respective owners; bundling them does not imply endorsement or grant trademark rights.",
+  "sources": {
+    "codex": {
+      "file": "openai.png",
+      "source": "https://developers.openai.com/favicon.png",
+      "website": "https://developers.openai.com/codex/",
+      "mark": "OpenAI",
+      "kind": "vendor",
+      "note": "Official OpenAI icon; no standalone Codex logo was found at a public official URL.",
+      "sha256": "8d5575ee667ff715cd3e3074d5296edc68d5aadd89720d203e13131b68b22a04"
+    },
+    "claude-code": {
+      "file": "claude-code.png",
+      "source": "https://code.claude.com/docs/_mintlify/favicons/claude-code/pLsy-mRpNksna2sx/_generated/favicon-dark/android-chrome-192x192.png",
+      "website": "https://code.claude.com/docs/",
+      "mark": "Claude Code",
+      "kind": "product",
+      "note": "Icon served by the official Claude Code documentation.",
+      "sha256": "d4e5e8e9990ac52f147a74ae80b9e69cdc612264b84a76cdb5c43b53b73a1707"
+    },
+    "gemini-cli": {
+      "file": "gemini.svg",
+      "source": "https://ai.google.dev/_static/googledevai/images/gemini-api-logo.svg",
+      "website": "https://github.com/google-gemini/gemini-cli",
+      "mark": "Gemini",
+      "kind": "vendor",
+      "note": "Original official Gemini API lockup. CSS displays its left-hand sparkle without modifying the downloaded SVG. Not a dedicated Gemini CLI logo.",
+      "sha256": "807904a9ec0098fe5d2e29811ff5e99944b7f49308964447644abc6d57dee1b4"
+    },
+    "opencode": {
+      "file": "opencode.svg",
+      "source": "https://raw.githubusercontent.com/anomalyco/opencode/dev/packages/ui/src/assets/favicon/favicon-v3.svg",
+      "website": "https://opencode.ai/",
+      "mark": "OpenCode",
+      "kind": "product",
+      "note": "Downloaded from the official OpenCode repository (MIT). Brand rights remain with the owner.",
+      "sha256": "e29bbe33380ad1c1ada9134b52f229d30e9776d60481512c9d81f2bb6f37def9"
+    },
+    "claude-desktop": {
+      "file": "claude.svg",
+      "source": "https://claude.com/favicon.svg",
+      "website": "https://claude.com/",
+      "mark": "Claude",
+      "kind": "vendor",
+      "note": "Official Claude brand mark used to identify Claude Desktop.",
+      "sha256": "b150888bc7257af83e3b85d3c2be4294f88986026f8168f6c12fc1fde6697350"
+    },
+    "grok-build": {
+      "file": "grok.png",
+      "source": "https://grok.com/images/apple-touch-icon.png",
+      "website": "https://docs.x.ai/build/overview",
+      "mark": "Grok",
+      "kind": "vendor",
+      "note": "Official Grok brand icon; not a separate Grok Build lockup.",
+      "sha256": "a3487e9bfbe49df853c51c5bdbf980bfb3bec782bfdd398a9bf333bb648b832f"
+    }
+  }
+}

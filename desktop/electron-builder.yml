@@ -1,0 +1,40 @@
+appId: io.astra.desktop
+productName: Astra
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/**
+  - renderer/**
+  - assets/**
+  - package.json
+asar: true
+npmRebuild: false
+compression: normal
+# Update feed for electron-updater (macOS DMG installs). ASTRA_FEED_URL is set
+# in CI to the stable channel root, e.g. https://feed.example.com/astra/stable.
+# Local builds only produce unpacked output and do not need it.
+publish:
+  provider: generic
+  url: ${env.ASTRA_FEED_URL}
+  channel: latest-mac.yml
+# macOS: dir stays for the npm platform-package track; dmg + zip are the
+# signed/notarized artifacts electron-updater consumes (zip is the update
+# payload, dmg the first-install carrier). Signing is driven entirely by CI
+# env (CSC_LINK / APPLE_ID / …, CSC_IDENTITY_AUTO_DISCOVERY=true on the mac
+# rows); without credentials electron-builder skips signing with a warning,
+# which keeps ad-hoc local builds working.
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dir
+    - target: dmg
+    - target: zip
+  icon: assets/icon.png
+win:
+  target: dir
+  icon: assets/icon.png
+linux:
+  target: dir
+  icon: assets/icon.png
+  category: Development

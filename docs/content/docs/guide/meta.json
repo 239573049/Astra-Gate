@@ -1,0 +1,7 @@
+{
+  "title": "快速开始",
+  "description": "认识 Astra，安装并发出第一个请求",
+  "icon": "Rocket",
+  "root": true,
+  "pages": ["index", "install", "first-request"]
+}

@@ -1,0 +1,48 @@
+---
+title: 服务管理
+description: start / stop / status / logs / autostart
+---
+
+## 启动与停止
+
+```bash
+astra start                 # 后台启动，监听 127.0.0.1:17321
+astra start --port 18000    # 指定端口
+astra start --host 0.0.0.0  # 对外监听（需先 set-password）
+astra start --foreground    # 前台运行，日志直接打到终端
+astra start --open          # 启动后打开控制台
+astra stop
+astra restart
+```
+
+<Callout type="warn" title="对外监听前必须设置密码">
+  `--host` 为非环回地址时，服务要求已通过 `astra config set-password` 设置管理密码，
+  否则拒绝启动。任何有密码的人都能通过你的网关消耗上游额度——不要在不可信网络监听。
+</Callout>
+
+## 状态
+
+```bash
+astra status
+```
+
+输出服务是否在运行、实际监听地址与端口、pid、API 版本。端口冲突时 Astra 自动顺延，**以这里输出的实际端口为准**（同样写入 `~/.astra/runtime.json`）。
+
+## 日志
+
+```bash
+astra logs          # 最近日志
+astra logs -f       # 持续输出（类似 tail -f）
+```
+
+日志文件在 `~/.astra/logs/`。
+
+## 开机自启
+
+```bash
+astra autostart enable    # macOS: LaunchAgent · Linux: systemd --user · Windows: schtasks
+astra autostart status
+astra autostart disable
+```
+
+启用后登录系统即自动拉起服务。桌面端有等价开关（见[桌面端](/docs/desktop)），两者操作同一套机制。

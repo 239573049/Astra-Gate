@@ -1,0 +1,173 @@
+[
+  {
+    "id": "openai", "version": 1, "name": "OpenAI", "category": "official", "icon": "openai",
+    "website": "https://platform.openai.com", "apiKeyUrl": "https://platform.openai.com/api-keys", "docsUrl": "https://platform.openai.com/docs/api-reference",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.openai.com/v1" }, { "protocol": "openai-responses", "baseUrl": "https://api.openai.com/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"], "auth": { "scheme": "bearer" }, "requiresApiKey": true,
+    "modelVendor": "openai", "priceKey": "openai", "adapter": "openai", "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "anthropic", "version": 1, "name": "Anthropic", "category": "official", "icon": "anthropic",
+    "website": "https://console.anthropic.com", "apiKeyUrl": "https://console.anthropic.com/settings/keys", "docsUrl": "https://docs.anthropic.com/en/api/messages",
+    "endpoints": [{ "protocol": "anthropic", "baseUrl": "https://api.anthropic.com/v1" }],
+    "preferredUpstreamProtocols": ["anthropic"], "auth": { "scheme": "x-api-key" }, "requiresApiKey": true,
+    "modelVendor": "anthropic", "priceKey": "anthropic", "adapter": "anthropic", "defaultHeaders": { "anthropic-version": "2023-06-01" },
+    "modelListEndpoint": { "protocol": "anthropic", "path": "/models" }, "settings": { "auto_cache_control": true }
+  },
+  {
+    "id": "google", "version": 1, "name": "Google Gemini", "category": "official", "icon": "gemini",
+    "website": "https://aistudio.google.com", "apiKeyUrl": "https://aistudio.google.com/apikey", "docsUrl": "https://ai.google.dev/gemini-api/docs",
+    "endpoints": [{ "protocol": "gemini", "baseUrl": "https://generativelanguage.googleapis.com/v1beta" }],
+    "preferredUpstreamProtocols": ["gemini"], "auth": { "scheme": "x-goog-api-key" }, "requiresApiKey": true,
+    "modelVendor": "google", "priceKey": "google", "adapter": "gemini", "modelListEndpoint": { "protocol": "gemini", "path": "/models" }
+  },
+  {
+    "id": "xai", "version": 1, "name": "xAI", "category": "official", "icon": "grok",
+    "website": "https://console.x.ai", "apiKeyUrl": "https://console.x.ai", "docsUrl": "https://docs.x.ai/docs/overview",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.x.ai/v1" }, { "protocol": "openai-responses", "baseUrl": "https://api.x.ai/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"], "auth": { "scheme": "bearer" }, "requiresApiKey": true,
+    "modelVendor": "xai", "priceKey": "xai", "adapter": "openai", "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "deepseek", "version": 2, "name": "DeepSeek", "category": "cn", "icon": "deepseek",
+    "website": "https://platform.deepseek.com", "apiKeyUrl": "https://platform.deepseek.com/api_keys", "docsUrl": "https://api-docs.deepseek.com",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://api.deepseek.com/v1" }, { "protocol": "openai-chat", "baseUrl": "https://api.deepseek.com/v1" }, { "protocol": "anthropic", "baseUrl": "https://api.deepseek.com/anthropic" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat", "anthropic"], "auth": { "scheme": "bearer" }, "requiresApiKey": true,
+    "modelVendor": "deepseek", "priceKey": "deepseek", "adapter": "deepseek", "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "moonshot", "version": 2, "name": "Moonshot Kimi", "category": "cn", "icon": "kimi",
+    "website": "https://platform.moonshot.cn", "apiKeyUrl": "https://platform.moonshot.cn/console/api-keys", "docsUrl": "https://platform.moonshot.cn/docs",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://api.moonshot.cn/v1" }, { "protocol": "openai-chat", "baseUrl": "https://api.moonshot.cn/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"],
+    "auth": { "scheme": "bearer" }, "requiresApiKey": true, "modelVendor": "moonshot", "priceKey": "moonshot", "adapter": "kimi",
+    "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" },
+    "variants": [{ "id": "intl", "name": "International", "priceKey": "moonshotai", "endpointsOverride": [{ "protocol": "openai-responses", "baseUrl": "https://api.moonshot.ai/v1" }, { "protocol": "openai-chat", "baseUrl": "https://api.moonshot.ai/v1" }] }]
+  },
+  {
+    "id": "zhipuai", "version": 2, "name": "Zhipu GLM", "category": "cn", "icon": "glm",
+    "website": "https://open.bigmodel.cn", "apiKeyUrl": "https://open.bigmodel.cn/usercenter/proj-mgmt/apikeys", "docsUrl": "https://docs.bigmodel.cn",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://open.bigmodel.cn/api/v1" }, { "protocol": "openai-chat", "baseUrl": "https://open.bigmodel.cn/api/paas/v4" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"],
+    "auth": { "scheme": "bearer" }, "requiresApiKey": true, "modelVendor": "zhipuai", "priceKey": "zhipuai", "adapter": "glm",
+    "variants": [{ "id": "intl", "name": "Z.ai", "priceKey": "zai", "endpointsOverride": [{ "protocol": "openai-responses", "baseUrl": "https://api.z.ai/api/v1" }, { "protocol": "openai-chat", "baseUrl": "https://api.z.ai/api/paas/v4" }] }]
+  },
+  {
+    "id": "alibaba", "version": 2, "name": "Alibaba Qwen", "category": "cn", "icon": "qwen",
+    "website": "https://bailian.console.aliyun.com", "apiKeyUrl": "https://bailian.console.aliyun.com", "docsUrl": "https://help.aliyun.com/zh/model-studio/developer-reference/use-qwen-by-calling-api",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" }, { "protocol": "openai-chat", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"],
+    "auth": { "scheme": "bearer" }, "requiresApiKey": true, "modelVendor": "alibaba", "priceKey": "alibaba-cn", "adapter": "qwen",
+    "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" },
+    "variants": [{ "id": "intl", "name": "International", "priceKey": "alibaba", "endpointsOverride": [{ "protocol": "openai-responses", "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" }, { "protocol": "openai-chat", "baseUrl": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1" }] }]
+  },
+  {
+    "id": "minimax", "version": 1, "name": "MiniMax", "category": "cn", "icon": "minimax",
+    "website": "https://platform.minimax.io", "apiKeyUrl": "https://platform.minimax.io/user-center/basic-information/interface-key", "docsUrl": "https://platform.minimax.io/docs",
+    "endpoints": [{ "protocol": "anthropic", "baseUrl": "https://api.minimax.io/anthropic" }, { "protocol": "openai-chat", "baseUrl": "https://api.minimax.io/v1" }],
+    "preferredUpstreamProtocols": ["anthropic", "openai-chat"], "auth": { "scheme": "bearer" }, "requiresApiKey": true,
+    "modelVendor": "minimax", "priceKey": "minimax", "adapter": "anthropic",
+    "variants": [{ "id": "cn", "name": "China", "priceKey": "minimax-cn", "endpointsOverride": [{ "protocol": "anthropic", "baseUrl": "https://api.minimaxi.com/anthropic" }, { "protocol": "openai-chat", "baseUrl": "https://api.minimaxi.com/v1" }] }]
+  },
+  {
+    "id": "volcengine", "version": 1, "name": "Volcengine Ark", "category": "cn", "icon": "volcengine",
+    "website": "https://console.volcengine.com/ark", "apiKeyUrl": "https://console.volcengine.com/ark", "docsUrl": "https://www.volcengine.com/docs/82379/1330310",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3" }],
+    "auth": { "scheme": "bearer" }, "requiresApiKey": true, "modelVendor": "volcengine", "priceKey": "volcengine", "adapter": "openai"
+  },
+  {
+    "id": "openrouter", "version": 2, "name": "OpenRouter", "category": "aggregator", "icon": "openrouter",
+    "website": "https://openrouter.ai", "apiKeyUrl": "https://openrouter.ai/settings/keys", "docsUrl": "https://openrouter.ai/docs/quickstart",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://openrouter.ai/api/v1" }, { "protocol": "openai-chat", "baseUrl": "https://openrouter.ai/api/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"],
+    "auth": { "scheme": "bearer" }, "requiresApiKey": true, "priceKey": "openrouter", "adapter": "openrouter",
+    "defaultHeaders": { "HTTP-Referer": "http://localhost", "X-Title": "Astra" }, "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "siliconflow", "version": 1, "name": "SiliconFlow", "category": "aggregator", "icon": "siliconflow",
+    "website": "https://cloud.siliconflow.com", "apiKeyUrl": "https://cloud.siliconflow.com/account/ak", "docsUrl": "https://docs.siliconflow.com",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.siliconflow.com/v1" }],
+    "auth": { "scheme": "bearer" }, "requiresApiKey": true, "priceKey": "siliconflow", "adapter": "openai",
+    "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" },
+    "variants": [{ "id": "cn", "name": "China", "priceKey": "siliconflow-cn", "endpointsOverride": [{ "protocol": "openai-chat", "baseUrl": "https://api.siliconflow.cn/v1" }] }]
+  },
+  {
+    "id": "ollama", "version": 2, "name": "Ollama", "category": "local", "icon": "ollama", "website": "https://ollama.com", "docsUrl": "https://docs.ollama.com/openai",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "http://127.0.0.1:11434/v1" }, { "protocol": "openai-chat", "baseUrl": "http://127.0.0.1:11434/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"],
+    "auth": { "scheme": "none" }, "requiresApiKey": false, "priceKey": "ollama", "adapter": "ollama", "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "lm-studio", "version": 2, "name": "LM Studio", "category": "local", "icon": "lm-studio", "website": "https://lmstudio.ai", "docsUrl": "https://lmstudio.ai/docs/developer/openai-compat",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "http://127.0.0.1:1234/v1" }, { "protocol": "openai-chat", "baseUrl": "http://127.0.0.1:1234/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "openai-chat"],
+    "auth": { "scheme": "none" }, "requiresApiKey": false, "priceKey": "lm-studio", "adapter": "openai", "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "routin", "version": 1, "name": "Routin", "category": "aggregator", "icon": "routin",
+    "website": "https://routin.ai", "apiKeyUrl": "https://routin.ai/plans", "docsUrl": "https://docs.routin.ai",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://api.routin.ai/plan/v1" }, { "protocol": "anthropic", "baseUrl": "https://api.routin.ai/plan/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses", "anthropic"], "auth": { "scheme": "bearer" }, "requiresApiKey": true,
+    "priceKey": "routin", "adapter": "openai",
+    "modelListEndpoint": { "protocol": "openai-responses", "path": "/models" }
+  },
+  {
+    "id": "claude-subscription", "version": 1, "name": "Claude 订阅（Pro/Max）", "category": "subscription", "icon": "anthropic",
+    "website": "https://claude.ai", "docsUrl": "https://support.claude.com/en/articles/10080088-using-claude-code-with-your-pro-or-max-plan",
+    "endpoints": [{ "protocol": "anthropic", "baseUrl": "https://api.anthropic.com/v1" }],
+    "preferredUpstreamProtocols": ["anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
+    "models": ["claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-4-5"], "priceKey": "anthropic", "adapter": "anthropic",
+    "defaultHeaders": { "anthropic-version": "2023-06-01" },
+    "settings": { "auto_cache_control": true, "subscription_oauth": { "verified": true } }
+  },
+  {
+    "id": "openai-subscription", "version": 2, "name": "ChatGPT 订阅（Codex）", "category": "subscription", "icon": "openai",
+    "website": "https://chatgpt.com/codex", "docsUrl": "https://developers.openai.com/codex/local",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://chatgpt.com/backend-api/codex" }],
+    "preferredUpstreamProtocols": ["openai-responses"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
+    "models": ["gpt-5-codex", "gpt-5"], "priceKey": "openai", "adapter": "openai",
+    "defaultHeaders": { "originator": "codex_cli_rs", "OpenAI-Beta": "responses=experimental" }
+  },
+  {
+    "id": "grok-subscription", "version": 2, "name": "Grok 订阅", "category": "subscription", "icon": "grok",
+    "website": "https://grok.com", "docsUrl": "https://github.com/xai-org/grok-build",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://cli-chat-proxy.grok.com/v1" }],
+    "preferredUpstreamProtocols": ["openai-responses"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
+    "models": ["grok-4", "grok-code-fast-1"], "priceKey": "xai", "adapter": "openai",
+    "defaultHeaders": { "x-grok-client-identifier": "xai-grok-cli", "x-grok-client-version": "0.2.93" },
+    "modelListEndpoint": { "protocol": "openai-responses", "path": "/models" }
+  },
+  {
+    "id": "kimi-subscription", "version": 1, "name": "Kimi 订阅（Coding Plan）", "category": "subscription", "icon": "kimi",
+    "website": "https://www.kimi.com/code", "docsUrl": "https://www.kimi.com/code/docs/en/",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.kimi.com/coding/v1" }, { "protocol": "anthropic", "baseUrl": "https://api.kimi.com/coding" }],
+    "preferredUpstreamProtocols": ["openai-chat", "anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
+    "models": ["k3", "k3-256k", "kimi-for-coding", "kimi-for-coding-highspeed"], "priceKey": "moonshot", "adapter": "kimi",
+    "defaultHeaders": { "User-Agent": "kimi-code-cli/0.42.0", "X-Msh-Platform": "kimi_code_cli", "X-Msh-Version": "0.42.0" },
+    "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
+  },
+  {
+    "id": "zcode-subscription", "version": 1, "name": "ZCode 订阅（GLM Coding Plan · Z.AI）", "category": "subscription", "icon": "glm",
+    "website": "https://z.ai", "docsUrl": "https://docs.z.ai/devpack/quick-start",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.z.ai/api/coding/paas/v4" }, { "protocol": "anthropic", "baseUrl": "https://api.z.ai/api/anthropic" }],
+    "preferredUpstreamProtocols": ["openai-chat", "anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
+    "models": ["glm-5.3", "glm-5.3-flash"], "priceKey": "zai", "adapter": "glm",
+    "defaultHeaders": { "User-Agent": "ZCode/3.10.2", "http-referer": "https://zcode.z.ai" }
+  },
+  {
+    "id": "custom-chat", "version": 1, "name": "OpenAI Chat compatible", "category": "custom", "icon": "custom",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "http://127.0.0.1:8000/v1" }], "auth": { "scheme": "bearer" }, "requiresApiKey": false, "adapter": "openai"
+  },
+  {
+    "id": "custom-responses", "version": 1, "name": "OpenAI Responses compatible", "category": "custom", "icon": "custom",
+    "endpoints": [{ "protocol": "openai-responses", "baseUrl": "http://127.0.0.1:8000/v1" }], "auth": { "scheme": "bearer" }, "requiresApiKey": false, "adapter": "openai"
+  },
+  {
+    "id": "custom-anthropic", "version": 1, "name": "Anthropic compatible", "category": "custom", "icon": "custom",
+    "endpoints": [{ "protocol": "anthropic", "baseUrl": "http://127.0.0.1:8000/v1" }], "auth": { "scheme": "x-api-key" }, "requiresApiKey": false, "adapter": "anthropic"
+  },
+  {
+    "id": "custom-gemini", "version": 1, "name": "Gemini compatible", "category": "custom", "icon": "custom",
+    "endpoints": [{ "protocol": "gemini", "baseUrl": "http://127.0.0.1:8000/v1beta" }], "auth": { "scheme": "x-goog-api-key" }, "requiresApiKey": false, "adapter": "gemini"
+  }
+]

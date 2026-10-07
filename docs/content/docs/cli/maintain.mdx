@@ -1,0 +1,47 @@
+---
+title: 安装与卸载
+description: install / update / uninstall / set-password
+---
+
+## 安装桌面端
+
+```bash
+astra install --client
+```
+
+下载并安装当前平台的 Astra 桌面应用（Electron）。详见[桌面端](/docs/desktop)。
+
+## 更新
+
+```bash
+astra update             # 更新 CLI；若装了桌面端也一并更新，最后重启服务
+astra update --client    # 只更新桌面端
+```
+
+<Callout type="info" title="版本一致性">
+  CLI、服务端与控制台界面共用同一版本号。如果控制台顶部提示「服务端 API 版本与界面不一致」，
+  运行 `astra update` 并重启服务即可对齐。
+</Callout>
+
+## 管理密码
+
+```bash
+astra config set-password
+```
+
+交互式输入并保存管理密码（用于对外监听时的控制台登录）。密码验证后才能把服务监听到非环回地址；忘记密码重新执行本命令即可重设。
+
+## 卸载
+
+```bash
+astra uninstall                # 停止服务 + 还原所有被接管客户端 + 移除自启动
+astra uninstall --client       # 只卸载桌面端
+astra uninstall --purge        # 连 ~/.astra 数据目录一起删除
+```
+
+卸载顺序：先按 `restore-all` 的逻辑还原客户端配置（漂移项会先询问），再停止服务、移除 LaunchAgent / systemd / schtasks 条目。
+
+<Callout type="warn" title="--purge 删除全部本机数据">
+  `--purge` 会删除 `~/.astra`（请求记录、模型与提供商配置、客户端备份、密钥）。其中「首次修改前」的
+  客户端配置备份也会一并消失——执行前请确认不再需要。
+</Callout>

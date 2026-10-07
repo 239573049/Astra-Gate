@@ -1,0 +1,7 @@
+packages:
+  - cli
+  - web
+  - desktop
+  - docs
+  - npm/*
+  - packages/*

@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <EmbeddedResource Include="Seed\models.json" LogicalName="Astra.Core.Seed.models.json" />
+  </ItemGroup>
+</Project>

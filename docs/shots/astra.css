@@ -1,0 +1,268 @@
+/* Shared mockup styles replicating the Astra admin UI (web/src/styles/index.css tokens, light theme).
+   Used only by `scripts/snap.mjs` to render docs/public/screenshots/*.png — never shipped. */
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --accent: #007aff;
+  --accent-2: #36c3ff;
+  --label: rgb(0 0 0 / 0.88);
+  --label-2: rgb(0 0 0 / 0.55);
+  --label-3: rgb(0 0 0 / 0.3);
+  --separator: rgb(0 0 0 / 0.09);
+  --surface: #ffffff;
+  --canvas: #eef0f5;
+  --fill: rgb(120 120 128 / 0.14);
+  --fill-2: rgb(120 120 128 / 0.07);
+  --green: #34c759;
+  --orange: #ff9500;
+  --red: #ff3b30;
+  --sidebar-w: 224px;
+  --radius-surface: 22px;
+}
+
+html, body { width: 1440px; height: 900px; overflow: hidden; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Helvetica Neue', sans-serif;
+  font-size: 13px;
+  color: var(--label);
+  background:
+    radial-gradient(55% 50% at 6% 12%, color-mix(in oklab, var(--accent) 34%, transparent), transparent 72%),
+    radial-gradient(45% 45% at 14% 92%, color-mix(in oklab, var(--accent-2) 26%, transparent), transparent 72%),
+    radial-gradient(40% 40% at 96% 4%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 72%),
+    var(--canvas);
+  -webkit-font-smoothing: antialiased;
+}
+
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+
+/* ---------- shell ---------- */
+.app { position: relative; width: 100%; height: 100vh; }
+
+.sidebar {
+  position: absolute; top: 8px; left: 8px; bottom: 8px; width: var(--sidebar-w);
+  display: flex; flex-direction: column;
+  background-color: color-mix(in oklab, #ffffff 55%, transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid rgb(255 255 255 / 0.65);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 8px 30px rgb(0 0 0 / 0.12);
+  border-radius: 18px; overflow: hidden; z-index: 2;
+}
+.side-head { height: 52px; display: flex; align-items: center; gap: 8px; padding-left: 14px; flex-shrink: 0; }
+.logo {
+  width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0;
+  background: linear-gradient(135deg, #0a84ff, #64d2ff);
+  color: #fff; font-weight: 700; font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.side-title { font-size: 14px; font-weight: 600; }
+.side-nav { flex: 1; padding: 0 8px 8px; overflow: hidden; }
+.nav-group-title {
+  position: relative; height: 24px; margin-top: 8px;
+  font-size: 11px; font-weight: 500; color: color-mix(in oklab, var(--label) 46%, transparent);
+  display: flex; align-items: flex-end; padding: 0 4px 3px 12px;
+}
+.nav-item {
+  position: relative; display: flex; align-items: center; gap: 10px;
+  height: 32px; margin: 1px 0; padding: 0 10px; border-radius: 999px;
+  font-size: 13px; color: var(--label); cursor: default; white-space: nowrap;
+}
+.nav-item.active { background: color-mix(in oklab, var(--accent) 18%, transparent); }
+.nav-item.active svg { color: var(--accent); }
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; color: var(--label-2); }
+.service {
+  margin: 8px; flex-shrink: 0; border-radius: 12px; padding: 8px 12px;
+  background: color-mix(in oklab, #ffffff 45%, transparent);
+  font-size: 11px; color: var(--label-2);
+}
+.service .line { display: flex; align-items: center; gap: 6px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+.dot.gray { background: #a1a1a6; }
+.service .addr { margin-top: 3px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10.5px; color: var(--label-3); }
+
+.content {
+  position: absolute; top: 8px; right: 8px; bottom: 8px; left: 240px;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+
+/* ---------- page ---------- */
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 14px 28px 12px; flex-shrink: 0; gap: 16px;
+}
+.page-head h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.2px; }
+.page-head .sub { margin-top: 2px; font-size: 13px; color: var(--label-2); }
+.page-actions { display: flex; gap: 8px; align-items: center; padding-top: 3px; }
+.page-body { flex: 1; min-height: 0; padding: 0 28px 24px; overflow: hidden; }
+.narrow { max-width: 860px; }
+
+/* ---------- controls ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px;
+  border-radius: 10px; border: 0.5px solid var(--separator);
+  background: var(--surface); font-size: 13px; font-weight: 500; color: var(--label);
+}
+.btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.btn.small { height: 28px; padding: 0 11px; font-size: 12px; border-radius: 8px; }
+.btn.danger { color: var(--red); }
+.btn svg { width: 14px; height: 14px; }
+
+.seg { display: inline-flex; background: var(--fill); border-radius: 9px; padding: 2px; gap: 2px; }
+.seg span { padding: 4px 12px; border-radius: 7px; font-size: 12.5px; color: var(--label-2); }
+.seg span.on { background: var(--surface); color: var(--label); font-weight: 500; box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
+
+.badge {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px;
+  font-size: 10.5px; font-weight: 500;
+  background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent);
+}
+.badge.green { background: color-mix(in oklab, var(--green) 16%, transparent); color: color-mix(in oklab, var(--green) 72%, black); }
+.badge.orange { background: color-mix(in oklab, var(--orange) 16%, transparent); color: color-mix(in oklab, var(--orange) 70%, black); }
+.badge.red { background: color-mix(in oklab, var(--red) 14%, transparent); color: var(--red); }
+.badge.gray { background: var(--fill); color: var(--label-2); }
+
+.card {
+  background-color: color-mix(in oklab, var(--surface) 84%, transparent);
+  border: 0.5px solid var(--separator); border-radius: 14px; overflow: hidden;
+}
+
+.search {
+  display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px;
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  border: 0.5px solid var(--separator); border-radius: 10px;
+  font-size: 13px; color: var(--label-3); min-width: 230px;
+}
+.search svg { width: 14px; height: 14px; }
+
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > label { font-size: 12px; font-weight: 500; color: var(--label-2); }
+.input {
+  display: flex; align-items: center; height: 34px; padding: 0 11px;
+  background: var(--fill-2); border: 0.5px solid var(--separator); border-radius: 10px;
+  font-size: 13px; color: var(--label);
+}
+.input.placeholder { color: var(--label-3); }
+.hint { font-size: 11.5px; color: var(--label-3); }
+
+.switch { width: 38px; height: 22px; border-radius: 999px; background: var(--green); position: relative; flex-shrink: 0; }
+.switch::after { content: ''; position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
+.switch.off { background: rgb(120 120 128 / 0.32); }
+.switch.off::after { right: auto; left: 2px; }
+
+/* rows / lists */
+.row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; }
+.row + .row { border-top: 0.5px solid var(--separator); }
+.row-icon {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 14px; font-weight: 600;
+}
+.row-main { flex: 1; min-width: 0; }
+.row-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 500; }
+.row-detail { margin-top: 2px; font-size: 12px; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chev { width: 16px; height: 16px; color: var(--label-3); flex-shrink: 0; }
+
+/* table */
+table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl th {
+  text-align: left; font-weight: 500; font-size: 11.5px; color: var(--label-2);
+  padding: 9px 14px; border-bottom: 0.5px solid var(--separator); background: color-mix(in oklab, var(--label) 3%, transparent);
+}
+.tbl th.r, .tbl td.r { text-align: right; }
+.tbl td { padding: 9px 14px; border-bottom: 0.5px solid color-mix(in oklab, var(--separator) 60%, transparent); }
+.tbl tr:last-child td { border-bottom: none; }
+.tbl .dim { color: var(--label-2); }
+
+.section-title { display: flex; align-items: center; justify-content: space-between; margin: 18px 2px 10px; }
+.section-title h2 { font-size: 15px; font-weight: 600; }
+
+/* metrics (overview) */
+.metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.metric { border-radius: var(--radius-surface); border: 0.5px solid var(--separator); background: color-mix(in oklab, var(--surface) 84%, transparent); padding: 20px 22px; }
+.metric .m-label { font-size: 13px; color: var(--label-2); margin-bottom: 26px; }
+.metric .m-value { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.metric .m-value small { font-size: 20px; font-weight: 600; color: var(--label-2); }
+.metric .m-ctx { margin-top: 12px; font-size: 13px; color: var(--label-3); }
+
+/* chart */
+.chart { display: flex; align-items: flex-end; gap: 6px; height: 190px; padding: 10px 6px 0; }
+.chart .bar { flex: 1; border-radius: 4px 4px 2px 2px; background: color-mix(in oklab, var(--accent) 78%, white); min-height: 3px; }
+.chart .bar.hot { background: var(--accent); }
+.chart-x { display: flex; justify-content: space-between; padding: 6px 6px 0; font-size: 10.5px; color: var(--label-3); }
+
+/* sheet / dialog */
+.overlay { position: absolute; inset: 0; background: rgb(0 0 0 / 0.22); z-index: 10; display: flex; align-items: center; justify-content: center; }
+.sheet {
+  width: 720px; max-height: 640px; border-radius: 18px; overflow: hidden; display: flex; flex-direction: column;
+  background: color-mix(in oklab, #ffffff 90%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 0.5px solid rgb(255 255 255 / 0.65);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 24px 70px rgb(0 0 0 / 0.35);
+}
+.sheet-head { padding: 18px 22px 0; }
+.sheet-title { font-size: 17px; font-weight: 600; }
+.sheet-sub { margin-top: 3px; font-size: 12.5px; color: var(--label-2); }
+.sheet-body { flex: 1; min-height: 0; overflow: hidden; padding: 14px 22px; }
+.sheet-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 22px 16px; }
+
+.stepper { display: flex; align-items: center; gap: 8px; margin-top: 14px; }
+.stepper .st { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--label-3); }
+.stepper .st.on { color: var(--label); font-weight: 500; }
+.stepper .st i { width: 18px; height: 18px; border-radius: 50%; background: var(--fill); color: var(--label-2); font-style: normal; font-size: 11px; display: flex; align-items: center; justify-content: center; }
+.stepper .st.on i { background: var(--accent); color: #fff; }
+.stepper .arrow { color: var(--label-3); }
+
+.chips { display: flex; gap: 6px; margin: 12px 0; }
+.chips span { padding: 4px 12px; border-radius: 999px; font-size: 12px; background: var(--fill-2); color: var(--label-2); }
+.chips span.on { background: color-mix(in oklab, var(--accent) 14%, transparent); color: var(--accent); font-weight: 500; }
+
+.tpl-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tpl { border: 0.5px solid var(--separator); border-radius: 12px; background: color-mix(in oklab, var(--surface) 80%, transparent); padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.tpl.sel { border: 1.5px solid var(--accent); }
+.tpl .t-icon { width: 30px; height: 30px; border-radius: 8px; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.tpl .t-name { font-size: 12.5px; font-weight: 500; }
+.tpl .t-desc { font-size: 10.5px; color: var(--label-3); }
+
+.tabs { display: flex; gap: 2px; border-bottom: 0.5px solid var(--separator); padding: 0 28px; flex-shrink: 0; }
+.tabs span { padding: 8px 14px 10px; font-size: 13px; color: var(--label-2); position: relative; }
+.tabs span.on { color: var(--label); font-weight: 500; }
+.tabs span.on::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -0.5px; height: 2px; border-radius: 2px; background: var(--accent); }
+
+.status-pill { display: inline-flex; align-items: center; height: 19px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
+.status-pill.success { background: color-mix(in oklab, var(--green) 15%, transparent); color: color-mix(in oklab, var(--green) 68%, black); }
+.status-pill.error { background: color-mix(in oklab, var(--red) 13%, transparent); color: var(--red); }
+.status-pill.warn { background: color-mix(in oklab, var(--orange) 15%, transparent); color: color-mix(in oklab, var(--orange) 68%, black); }
+
+/* login */
+.login-wrap { height: 100vh; display: flex; align-items: center; justify-content: center; }
+.login-card {
+  width: 340px; border-radius: 20px; padding: 30px 28px 26px; text-align: center;
+  background: color-mix(in oklab, #ffffff 62%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 0.5px solid rgb(255 255 255 / 0.65);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.85), 0 18px 50px rgb(0 0 0 / 0.18);
+}
+.login-card .logo { margin: 0 auto; width: 44px; height: 44px; border-radius: 12px; font-size: 24px; }
+.login-card h1 { margin-top: 12px; font-size: 18px; font-weight: 600; }
+.login-card .sub { margin-top: 5px; font-size: 12.5px; color: var(--label-2); }
+.login-card .input { margin-top: 18px; text-align: left; background: color-mix(in oklab, #ffffff 60%, transparent); }
+.login-card .btn { width: 100%; justify-content: center; margin-top: 12px; height: 34px; }
+
+.form-card { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-sec { font-size: 12px; font-weight: 600; color: var(--label-3); letter-spacing: 0.3px; margin-bottom: -6px; }
+
+.settings-block { margin-bottom: 14px; }
+.set-row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; }
+.set-row + .set-row { border-top: 0.5px solid var(--separator); }
+.set-label { font-size: 13px; }
+.set-desc { font-size: 11.5px; color: var(--label-3); margin-top: 1px; }
+.set-ctl { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--label-2); }
+
+.code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.65;
+  background: color-mix(in oklab, var(--label) 4%, var(--surface)); border: 0.5px solid var(--separator);
+  border-radius: 10px; padding: 12px 14px; white-space: pre; overflow: hidden; color: var(--label);
+}

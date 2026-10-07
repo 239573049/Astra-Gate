@@ -1,0 +1,304 @@
+@import 'tailwindcss';
+
+/* ---------- design tokens (plan §9.1: macOS 26 liquid glass) ---------- */
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-label: var(--label);
+  --color-label-2: var(--label-2);
+  --color-label-3: var(--label-3);
+  --color-separator: var(--separator);
+  --color-surface: var(--surface);
+  --color-fill: var(--fill);
+  --color-fill-2: var(--fill-2);
+  --color-green: var(--green);
+  --color-orange: var(--orange);
+  --color-red: var(--red);
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI Variable', 'Segoe UI',
+    'Microsoft YaHei UI', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+:root {
+  --accent: #007aff;
+  --on-accent: #ffffff;
+  --accent-2: oklch(from var(--accent) l c calc(h + 70));
+  --label: rgb(0 0 0 / 0.88);
+  --label-2: rgb(0 0 0 / 0.55);
+  --label-3: rgb(0 0 0 / 0.3);
+  --separator: rgb(0 0 0 / 0.09);
+  --surface: #ffffff;
+  --canvas: #eef0f5;
+  --fill: rgb(120 120 128 / 0.14);
+  --fill-2: rgb(120 120 128 / 0.07);
+  --glass-tint: #ffffff;
+  --glass-alpha: 55%;
+  --glass-edge: rgb(255 255 255 / 0.65);
+  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-shadow: rgb(0 0 0 / 0.12);
+  --green: #34c759;
+  --orange: #ff9500;
+  --red: #ff3b30;
+  --sidebar-w: 224px;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --label: rgb(255 255 255 / 0.9);
+  --label-2: rgb(255 255 255 / 0.56);
+  --label-3: rgb(255 255 255 / 0.3);
+  --separator: rgb(255 255 255 / 0.1);
+  --surface: #2a2a2d;
+  --canvas: #161618;
+  --fill: rgb(120 120 128 / 0.28);
+  --fill-2: rgb(120 120 128 / 0.14);
+  --glass-tint: #3a3a3e;
+  --glass-alpha: 52%;
+  --glass-edge: rgb(255 255 255 / 0.14);
+  --glass-highlight: rgb(255 255 255 / 0.2);
+  --glass-shadow: rgb(0 0 0 / 0.45);
+  --green: #30d158;
+  --orange: #ff9f0a;
+  --red: #ff453a;
+  color-scheme: dark;
+}
+
+/*
+ * Arc tokens (src/components/arc/foundation.css, imported first in main.tsx) mapped onto Astra's macOS
+ * palette and desktop density. `[data-theme]` matches Arc's own `:root[data-theme="dark"]` specificity, and
+ * this file loads later, so these values win in both themes. The accent comes from the system (inline
+ * `--accent` on <html>), so Arc's derived accent tokens are recomputed from it.
+ */
+:root[data-theme] {
+  --font-body: var(--font-sans);
+  --font-display: var(--font-sans);
+  --background: var(--canvas);
+  --surface-raised: var(--surface);
+  --surface-muted: color-mix(in oklab, var(--label) 6%, var(--surface));
+  --foreground: var(--label);
+  --text-secondary: var(--label-2);
+  --text-muted: color-mix(in oklab, var(--label) 46%, transparent);
+  --border: var(--separator);
+  --border-subtle: color-mix(in oklab, var(--separator) 60%, transparent);
+  --border-strong: color-mix(in oklab, var(--label) 22%, transparent);
+  --accent-strong: color-mix(in oklab, var(--accent) 82%, black);
+  --accent-subtle: color-mix(in oklab, var(--accent) 14%, transparent);
+  --accent-foreground: var(--on-accent);
+  --control-on: var(--accent);
+  --control-fill: var(--accent);
+  --control-glyph: var(--on-accent);
+  --control-thumb-on: #ffffff;
+  --success: var(--green);
+  --warning: var(--orange);
+  --danger: var(--red);
+  /* macOS control metrics: 28 / 32 / 36px controls, 13px body text. */
+  --control-height-sm: 1.75rem;
+  --control-height-md: 2rem;
+  --control-height-lg: 2.25rem;
+  --radius-control: 0.625rem;
+  --radius-panel: 0.875rem;
+  --radius-surface: 1.375rem;
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-lg: 0.9375rem;
+  --text-xl: 1.125rem;
+  --text-2xl: 1.375rem;
+  --text-3xl: 1.625rem;
+  --tracking-body: 0em;
+  --tracking-display: -0.01em;
+}
+
+/* Visually hides the label of an Arc field that sits in a toolbar or table (it stays the accessible name). */
+.astra-label-hidden label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Base and component rules live in cascade layers so Tailwind utilities (layer "utilities") always win. */
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    color: var(--label);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+    background-color: var(--canvas);
+  }
+
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 30%, transparent);
+  }
+
+  /* No focus rings (Arc foundation removes outlines); controls answer focus with their border color. */
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* The "wallpaper": soft accent-derived color fields that the glass layer refracts. */
+  .wallpaper {
+    background:
+      radial-gradient(55% 50% at 6% 12%, color-mix(in oklab, var(--accent) 34%, transparent), transparent 72%),
+      radial-gradient(45% 45% at 14% 92%, color-mix(in oklab, var(--accent-2) 26%, transparent), transparent 72%),
+      radial-gradient(40% 40% at 96% 4%, color-mix(in oklab, var(--accent) 18%, transparent), transparent 72%),
+      var(--canvas);
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* App chrome is not selectable (native feel); content opts back in with .selectable. */
+  .chrome {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .selectable {
+    user-select: text;
+    -webkit-user-select: text;
+  }
+
+  /* ---------- glass ---------- */
+
+  .glass {
+    background-color: color-mix(in oklab, var(--glass-tint) var(--glass-alpha), transparent);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 0.5px solid var(--glass-edge);
+    box-shadow:
+      inset 0 1px 0 var(--glass-highlight),
+      0 8px 30px var(--glass-shadow);
+  }
+  .glass-strong {
+    --glass-alpha: 80%;
+  }
+  /* Dialogs carry dense text: keep the glass but mute what shows through. */
+  .glass-sheet {
+    --glass-alpha: 90%;
+  }
+  .glass-flat {
+    box-shadow: inset 0 1px 0 var(--glass-highlight);
+  }
+  /* Chromium only (Electron, Chrome, Edge): light refraction through an SVG displacement filter. */
+  :root.refract .glass:not(.no-refract) {
+    backdrop-filter: url(#astra-refract) blur(24px) saturate(180%);
+  }
+
+  /* Content layer: lists, tables, forms. More opaque than glass for readability. */
+  .card {
+    background-color: color-mix(in oklab, var(--surface) 84%, transparent);
+    border: 0.5px solid var(--separator);
+    border-radius: 14px;
+    /* Rounded rows need clipping, but a Combobox popover is positioned inside the card (no portal), so an open
+       one would be cut off at the card's lower edge (the 价格表 row in a provider). Card rules come from the
+       utilities layer, so this one states the whole rule and the variant states it again. */
+    overflow: hidden;
+  }
+  .card:has([role='combobox'][aria-expanded='true']) {
+    overflow: visible;
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass,
+    :root.refract .glass:not(.no-refract) {
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      background-color: var(--surface);
+    }
+    .card {
+      background-color: var(--surface);
+    }
+  }
+
+  /* ---------- desktop window chrome ---------- */
+
+  :root[data-shell='desktop'][data-platform='darwin'] .drag,
+  :root[data-shell='desktop'][data-platform='win32'] .drag {
+    -webkit-app-region: drag;
+  }
+  :root[data-shell='desktop'] .no-drag,
+  :root[data-shell='desktop'] .drag button,
+  :root[data-shell='desktop'] .drag input,
+  :root[data-shell='desktop'] .drag a,
+  :root[data-shell='desktop'] .drag [role='button'] {
+    -webkit-app-region: no-drag;
+  }
+
+  /* ---------- fields ---------- */
+
+  .field {
+    height: 28px;
+    border-radius: 8px;
+    padding: 0 10px;
+    background: color-mix(in oklab, var(--surface) 70%, transparent);
+    border: 0.5px solid var(--separator);
+    box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.06);
+    outline: none;
+    min-width: 0;
+  }
+  textarea.field {
+    height: auto;
+    padding: 8px 10px;
+    line-height: 1.5;
+  }
+  .field:focus {
+    border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+  }
+  .field[aria-invalid='true'] {
+    border-color: var(--red);
+  }
+
+  /* thin overlay-style scrollbars */
+  .scroll {
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--label-3) transparent;
+  }
+  .scroll::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .scroll::-webkit-scrollbar-thumb {
+    background: var(--label-3);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: content-box;
+  }
+
+  /* Scroll edge effect: content fades out under the floating toolbar. */
+  .scroll-edge {
+    mask-image: linear-gradient(to bottom, transparent 0, #000 18px);
+  }
+}

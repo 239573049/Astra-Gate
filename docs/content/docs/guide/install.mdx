@@ -1,0 +1,63 @@
+---
+title: 安装
+description: 通过 npm 安装 Astra，或一并安装桌面端
+---
+
+## 系统要求
+
+- Node.js **≥ 18**（通过 npm 安装 CLI 时需要）
+- macOS / Linux / Windows
+
+## 安装 CLI
+
+```bash
+npm install -g astragate
+```
+
+安装包会按当前平台自动选择对应的 `@aidotnet/server-*` 二进制（darwin/linux/win32 × arm64/x64），不需要单独安装 .NET 运行时。
+
+安装完成后验证：
+
+```bash
+astra --version
+```
+
+<Callout type="idea" title="不想全局安装？">
+  也可以用 `npx astragate <命令>` 直接运行，效果相同。
+</Callout>
+
+## 安装桌面端（可选）
+
+桌面端是一个 Electron 壳，把控制台包成了独立应用，并支持菜单栏快捷操作与开机自启：
+
+```bash
+astra install --client
+```
+
+详见[桌面端](/docs/desktop)。
+
+## 数据放在哪里
+
+Astra 的所有状态都在 `~/.astra`（可用环境变量 `ASTRA_HOME` 覆盖）：
+
+| 路径 | 内容 |
+| --- | --- |
+| `~/.astra/config.json` | 启动配置（端口、监听地址等） |
+| `~/.astra/runtime.json` | 实际运行状态（pid / 端口 / apiVersion） |
+| `~/.astra/astra.db` | SQLite 数据库（请求记录、模型、提供商、设置） |
+| `~/.astra/keys/` | 加密密钥（权限已限制为当前用户） |
+| `~/.astra/logs/` | 服务日志 |
+| `~/.astra/backups/client-configs/` | 接管客户端前的配置备份 |
+
+## 升级与卸载
+
+```bash
+astra update            # 更新 CLI（及已装的桌面端），然后重启服务
+astra uninstall         # 停止服务并还原所有被接管的客户端配置
+astra uninstall --purge # 连 ~/.astra 数据目录一起删除
+```
+
+<Callout type="warn" title="卸载前会自动还原">
+  `astra uninstall` 会先用 `restore-all` 的逻辑把每个被接管客户端的配置恢复为启用前的样子，再停止服务——
+  客户端不会因为 Astra 卸载而失联。
+</Callout>

@@ -1,0 +1,29 @@
+# Codex configuration
+# Written by hand; keep the comments.
+
+model = "gpt-5.1-codex"
+model_reasoning_effort = "high"
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+
+# My preferred shell environment
+[shell_environment_policy]
+inherit = "core"
+ignore = ["AWS_*", "AZURE_*"]
+
+[projects."/Users/token/code/astra"]
+trust_level = "trusted"
+
+[sandbox_workspace_write]
+network_access = true
+
+# Third-party providers live here
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+env_key = "OPENROUTER_API_KEY"
+wire_api = "responses"
+
+[profiles.fast]
+model_provider = "openrouter"
+model = "openai/gpt-5.1"

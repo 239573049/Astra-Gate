@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+html {
+  scrollbar-gutter: stable;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+:root {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'Segoe UI Variable', 'Segoe UI',
+    'Microsoft YaHei UI', system-ui, sans-serif;
+}
+
+/* Screenshot window frame */
+.shot-frame {
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.12);
+  background: #fff;
+}
+
+.shot-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}

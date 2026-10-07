@@ -1,0 +1,46 @@
+---
+title: 什么是 Astra
+description: 一个跑在本机的 AI 网关——聚合服务商、接管客户端、统计费用、保护隐私
+---
+
+Astra 是一个运行在你自己电脑上的 **AI 网关**（local AI gateway）。它在你的 AI 客户端（Codex、Claude Code、Gemini CLI 等）与 AI 服务商（Anthropic、OpenAI、DeepSeek、OpenRouter 等）之间放了一个本机中转层：
+
+```
+Codex ─┐                                    ┌─ Anthropic
+Claude Code ─┤   Astra 网关 (127.0.0.1:17321)  ├─ OpenAI
+Gemini CLI ─┤    协议转换 · 计费 · 隐私护栏      ├─ DeepSeek
+OpenCode ─┘                                    └─ OpenRouter / 自定义…
+```
+
+## 它解决什么问题
+
+- **一键接管客户端** — 不用手动改 `~/.codex/config.toml`、`~/.claude/settings.json` 等配置文件。在控制台里点一下「启用」，Astra 代写配置并自动备份；「禁用并还原」随时回到原样。
+- **协议自动转换** — 客户端说 OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini 任意一种协议，Astra 都能翻译成上游接口的协议，客户端与服务商不必同构。
+- **用量与费用看得见** — 每次请求的输入 / 输出 / 缓存 / 推理 token 与费用逐项入库，概览页按时间范围汇总，请求日志可查到单次请求的计费明细。
+- **隐私护栏** — 请求发往服务商之前，在本机检测 API 密钥、邮箱、内网地址等敏感信息，可警告、拦截或脱敏（用占位符替换、返回时还原），原值永不出本机。
+- **多账号与订阅** — 同一服务商可添加多个提供商条目与订阅账号，客户端一键切换，无需重新配置。
+
+## 核心概念
+
+| 概念 | 说明 |
+| --- | --- |
+| **服务（astra-server）** | 本机常驻的网关进程，默认监听 `127.0.0.1:17321`，由 `astra` 命令管理 |
+| **客户端（Client）** | 本机的 AI 工具，如 Codex、Claude Code；Astra 可以「接管」它们的配置 |
+| **提供商（Provider）** | 一个上游 AI 服务入口：接口地址 + 协议 + API Key（或订阅账号） |
+| **模型（Model）** | 系统级模型目录：参数（上下文长度、能力）与价格；提供商的模型引用它 |
+| **价格表（Price Key）** | 同一模型在不同服务商价格不同，价格表决定用哪一套价 |
+| **隐私护栏** | 请求发出前的敏感信息检测器，支持警告 / 拦截 / 脱敏三种动作 |
+
+## 文档结构
+
+<Cards>
+  <Card title="安装" href="/docs/guide/install" description="npm 安装 CLI，或一并装上桌面端" />
+  <Card title="第一个请求" href="/docs/guide/first-request" description="启动服务、添加提供商、跑通第一条请求" />
+  <Card title="管理控制台" href="/docs/console" description="每个页面的截图教程" />
+  <Card title="CLI 参考" href="/docs/cli" description="astra 全部子命令" />
+</Cards>
+
+<Callout title="本机优先">
+  Astra 的设计前提是「数据不出本机」：API Key 用 DataProtection 加密存储在 `~/.astra/keys`，
+  请求体与费用明细存在本机 SQLite（`~/.astra/astra.db`），不依赖任何云端账号。
+</Callout>
