@@ -79,10 +79,13 @@ if (isMac) {
     console.log(`Copied ${path.basename(bundle)} → npm/${desktopDir}/app/`);
   }
 } else {
-  const unpacked =
-    findUnpackedDir(rid.startsWith('win') ? 'win-unpacked' : 'linux-unpacked');
+  // electron-builder adds the arch for non-x64 builds: win-arm64-unpacked,
+  // linux-arm64-unpacked.
+  const os = rid.startsWith('win') ? 'win' : 'linux';
+  const arch = rid.split('-')[1];
+  const unpacked = findUnpackedDir(`${os}-unpacked`) ?? findUnpackedDir(`${os}-${arch}-unpacked`);
   if (!unpacked) {
-    console.error(`No unpacked output found under ${outRoot} (expected win-unpacked or linux-unpacked).`);
+    console.error(`No unpacked output found under ${outRoot} (expected ${os}-unpacked or ${os}-${arch}-unpacked).`);
     process.exit(1);
   }
   for (const entry of fs.readdirSync(unpacked, { withFileTypes: true })) {

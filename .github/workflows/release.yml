@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     tags: ['v*']
+    # Bumping the version on main (node scripts/sync-versions.mjs --version
+    # x.y.z rewrites cli/package.json) releases too, and tags v<version> when
+    # done. Path filters only apply to the branch push, not to tags. Pushes
+    # whose version is already on npm stop after the `version` job.
+    branches: [main]
+    paths: ['cli/package.json']
   workflow_dispatch:
     inputs:
       build_only:
@@ -14,9 +20,55 @@ on:
 permissions:
   contents: read
 
+# Publishing runs are serialized: a bump on main and a manual tag for the same
+# version must not publish concurrently (the later run then sees the version
+# on npm and skips). Build-only dispatches run independently.
+concurrency:
+  group: ${{ github.event_name == 'workflow_dispatch' && format('release-dispatch-{0}', github.run_id) || 'release-publish' }}
+  cancel-in-progress: false
+
 jobs:
+  version:
+    name: Resolve the release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - id: v
+        run: |
+          set -euo pipefail
+          VER=$(node -p "require('./cli/package.json').version")
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            echo "workflow_dispatch: build only."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "${GITHUB_REF_NAME#v}" != "$VER" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match cli/package.json version $VER"
+            exit 1
+          fi
+          # @aidotnet/astra-gate is published last, so its presence means this
+          # version was released completely.
+          if [ -n "$(npm view "@aidotnet/astra-gate@$VER" version 2>/dev/null)" ]; then
+            echo "$VER is already on npm — nothing to release."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "Releasing $VER."
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build ${{ matrix.rid }}
+    needs: version
+    if: needs.version.outputs.publish == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     # macOS notarization waits in Apple's queue per artifact (dir + dmg + zip
     # per job); 60 min keeps the mac rows safe without slowing the others.
@@ -205,10 +257,16 @@ jobs:
 
   publish:
     name: Publish to npm and the update feed
-    needs: build
-    # Only tag pushes publish; workflow_dispatch runs are build-only.
-    if: github.event_name == 'push'
+    needs: [version, build]
+    # Tag pushes and version bumps on main publish; workflow_dispatch runs are
+    # build-only, and already-published versions were stopped by `version`.
+    if: needs.version.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      # Pushes the v<version> tag after a release triggered from main.
+      contents: write
+    env:
+      VER: ${{ needs.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -231,15 +289,6 @@ jobs:
       - name: Build CLI
         run: pnpm --filter astragate build
 
-      - name: Verify tag matches the CLI version
-        run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          VER=$(node -p "require('./cli/package.json').version")
-          if [ "$TAG" != "$VER" ]; then
-            echo "Tag v$TAG does not match cli/package.json version $VER"
-            exit 1
-          fi
-
       - name: Download all platform packages
         uses: actions/download-artifact@v4
         with:
@@ -256,7 +305,7 @@ jobs:
             partials+=(--partial "$f")
           done
           node scripts/gen-manifest.mjs merge \
-            --version "${GITHUB_REF_NAME#v}" \
+            --version "$VER" \
             "${partials[@]}" \
             --out out/feed/stable/latest.json
           cp out/artifacts/*.dmg out/feed/stable/
@@ -284,7 +333,6 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          VER="${GITHUB_REF_NAME#v}"
           for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip \
                    out/artifacts/Astra-*-setup.exe out/artifacts/Astra-*.AppImage; do
             # electron-builder names: Astra-<ver>-<arch>[-setup].<ext>, where
@@ -333,18 +381,29 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+          # Idempotent: a re-run after a partial failure skips what is already
+          # on npm (npm refuses to republish a version).
+          publish() {
+            local id
+            id=$(tar -xzOf "$1" package/package.json | node -p "const j=JSON.parse(require('fs').readFileSync(0,'utf8')); j.name+'@'+j.version")
+            if [ -n "$(npm view "$id" version 2>/dev/null)" ]; then
+              echo "$id is already on npm — skipping."
+            else
+              npm publish "$1" --access public
+            fi
+          }
           # @aidotnet/server-* must exist before `astragate` / `@aidotnet/astra-gate`
           # resolve their optionalDependencies.
           # npm pack names a scoped tarball "aidotnet-server-...tgz" (no @ or +).
           for f in out/artifacts/aidotnet-server-*.tgz; do
-            npm publish "$f" --access public
+            publish "$f"
           done
           for f in out/artifacts/aidotnet-desktop-*.tgz; do
-            npm publish "$f" --access public
+            publish "$f"
           done
           npm pack ./cli --pack-destination out/artifacts
           for f in out/artifacts/astragate-[0-9]*.tgz; do
-            npm publish "$f" --access public
+            publish "$f"
           done
           # Same CLI, also published as @aidotnet/astra-gate. Rebuild after the
           # rename: tsup inlines package.json, and the CLI's self-update uses
@@ -353,5 +412,18 @@ jobs:
           pnpm --dir cli run build
           npm pack ./cli --pack-destination out/artifacts
           for f in out/artifacts/aidotnet-astra-gate-[0-9]*.tgz; do
-            npm publish "$f" --access public
+            publish "$f"
           done
+
+      - name: Tag the release
+        # Releases triggered by a version bump on main record v<version>. The
+        # tag is pushed with GITHUB_TOKEN, which does not start another run.
+        if: github.ref_type == 'branch'
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VER" >/dev/null; then
+            echo "Tag v$VER already exists."
+          else
+            git tag "v$VER" "$GITHUB_SHA"
+            git push origin "v$VER"
+          fi

@@ -61,5 +61,8 @@ linux:
     - target: AppImage
   icon: assets/icon.png
   category: Development
+  # Linux defaults to the npm package name ("@aidotnet/desktop"), which
+  # AppImage rejects; macOS / Windows default to productName.
+  executableName: astra
 appImage:
   artifactName: ${productName}-${version}-${arch}.${ext}
