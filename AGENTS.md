@@ -126,8 +126,12 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 1. **Version bump**: one version everywhere — `cli/package.json` is the source of truth; every
    `npm/*/package.json`, the cli `optionalDependencies` pins, and `<Version>` in
    `Directory.Build.props` must match. Run `node scripts/sync-versions.mjs` (write mode) instead
-   of editing them by hand; `release.yml` fails the publish if any drift or a tag/version
-   mismatch remains. `ServerOptions.ApiVersion` ("1.0") is deliberately **not** synced — it is a
+   of editing them by hand, then `pnpm install` (the lockfile records the cli's platform-package
+   specifiers); `release.yml` fails the publish if any drift or a tag/version mismatch remains.
+   Add a `## [x.y.z] - date` section to `CHANGELOG.md` in the same change: pushing the bump to
+   `main` triggers `release.yml`, which refuses to publish without it and uses it as the GitHub
+   Release, download-page and update-manifest notes. `ServerOptions.ApiVersion` ("1.0") is
+   deliberately **not** synced — it is a
    protocol version, and bumping its major breaks the desktop handshake
    (`desktop/src/shared/version.ts`, `EXPECTED_API_MAJOR`).
 2. **New admin endpoint**: `Astra.Server/Api/*Endpoints.cs` (`MapXxxEndpoints` + register in
