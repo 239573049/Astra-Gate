@@ -111,8 +111,8 @@ public class ModelSyncApiTests
 
         var (status, preview) = await host.SendAsync(HttpMethod.Post, "/api/models/sync/preview");
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(["https://models.dev/api.json"], handler.Requests);
-        Assert.Equal("https://models.dev/api.json", preview!["source"]!.GetValue<string>());
+        Assert.Equal([ModelSyncService.SourceUrl], handler.Requests);
+        Assert.Equal(ModelSyncService.SourceUrl, preview!["source"]!.GetValue<string>());
         Assert.True(DateTimeOffset.Parse(preview["fetchedAt"]!.GetValue<string>()) > DateTimeOffset.UtcNow.AddMinutes(-5));
 
         var changes = preview["changes"]!.AsArray();
