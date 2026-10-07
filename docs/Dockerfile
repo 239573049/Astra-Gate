@@ -35,11 +35,16 @@ FROM node:24-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3000 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    DATA_DIR=/app/data
+# Client-release storage (upload API + download feed); mount a volume so
+# releases survive image upgrades:  docker run -v /srv/astra:/app/data …
+RUN mkdir -p /app/data
 # Next detects the workspace root (/repo), so the standalone tree mirrors it:
 # server.js lives at docs/server.js with hoisted node_modules beside it.
 COPY --from=build /repo/docs/.next/standalone ./
 COPY --from=build /repo/docs/.next/static ./docs/.next/static
 COPY --from=build /repo/docs/public ./docs/public
 EXPOSE 3000
+VOLUME ["/app/data"]
 CMD ["node", "docs/server.js"]

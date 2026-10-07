@@ -4,10 +4,10 @@ using Astra.Gateway.Pipeline;
 
 namespace Astra.Server.Hosting;
 
-/// <summary>Built-in update feed location; overridable (or disabled) via the updateFeedUrl setting.</summary>
+/// <summary>Update feed on the official website (astra-gate.si); overridable (or disabled) via the updateFeedUrl setting.</summary>
 public static class UpdateFeed
 {
-    public const string DefaultUrl = "https://feed.astra.dev/astra";
+    public const string DefaultUrl = "https://astra-gate.si/api/client-releases";
 }
 
 /// <summary>latest.json on the feed. camelCase JSON, shared contract with the desktop app and CLI.</summary>

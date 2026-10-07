@@ -71,7 +71,9 @@ public sealed record SyncApplyResult(int Applied);
 public sealed class ModelSyncService(AstraDatabase db, IHttpClientFactory factory)
 {
     public const string HttpClientName = "model-sync";
-    public const string SourceUrl = "https://models.dev/api.json";
+    // The model catalog lives on the official website (astra-gate.si, maintained
+    // under docs/public/api, refreshed from models.dev by docs/scripts/refresh-model-catalog.mjs).
+    public const string SourceUrl = "https://astra-gate.si/api/models-catalog.json";
 
     internal const string KindNewModel = "new_model";
     internal const string KindField = "field";

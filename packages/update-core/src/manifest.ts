@@ -23,7 +23,7 @@ export interface UpdateManifest {
 }
 
 /** Built-in feed location; overridable via the server's updateFeedUrl setting. */
-export const DEFAULT_FEED_URL = 'https://feed.astra.dev/astra';
+export const DEFAULT_FEED_URL = 'https://astra-gate.si/api/client-releases';
 
 export const DEFAULT_CHANNEL = 'stable';
 

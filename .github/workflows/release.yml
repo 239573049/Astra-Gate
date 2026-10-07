@@ -251,13 +251,63 @@ jobs:
         if: env.FEED_UPLOAD_TARGET != ''
         run: node scripts/publish-feed.mjs --dir out/feed --dest "$FEED_UPLOAD_TARGET"
 
+      - name: Upload desktop artifacts to the docs site
+        # Primary desktop distribution: the official website stores the files
+        # under /app/data/client-releases and serves the download page plus
+        # the electron-updater feed from them. Requires the docs deployment
+        # to run with CLIENT_UPLOAD_TOKEN set.
+        env:
+          DOCS_RELEASE_URL: ${{ secrets.DOCS_RELEASE_URL }}
+          DOCS_RELEASE_TOKEN: ${{ secrets.DOCS_RELEASE_TOKEN }}
+        if: env.DOCS_RELEASE_URL != '' && env.DOCS_RELEASE_TOKEN != ''
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          VER="${GITHUB_REF_NAME#v}"
+          for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip; do
+            case "$f" in
+              *arm64*) platform=darwin-arm64 ;;
+              *x64*) platform=darwin-x64 ;;
+              *) echo "::warning::skip $f (unknown platform)"; continue ;;
+            esac
+            case "$f" in
+              *.dmg) kind=dmg ;;
+              *.zip) kind=zip ;;
+            esac
+            echo "Uploading $(basename "$f") ($platform/$kind)…"
+            curl --fail --silent --show-error -X POST \
+              "${DOCS_RELEASE_URL%/}/api/client-releases/upload" \
+              -H "Authorization: Bearer ${DOCS_RELEASE_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              -H "x-astra-version: ${VER}" \
+              -H "x-astra-platform: ${platform}" \
+              -H "x-astra-kind: ${kind}" \
+              --data-binary "@${f}"
+            echo
+          done
+          # Server-update manifest (update-core / UpdateCheckService fetch
+          # ${FEED}/<channel>/latest.json from the docs site).
+          if [ -f out/feed/stable/latest.json ]; then
+            echo "Uploading server-update manifest (latest.json)…"
+            curl --fail --silent --show-error -X POST \
+              "${DOCS_RELEASE_URL%/}/api/client-releases/upload" \
+              -H "Authorization: Bearer ${DOCS_RELEASE_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              -H "x-astra-version: ${VER}" \
+              -H "x-astra-platform: manifest" \
+              -H "x-astra-kind: json" \
+              --data-binary "@out/feed/stable/latest.json"
+            echo
+          fi
+
       - name: Publish platform packages first, then the CLI
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           shopt -s nullglob
-          # @aidotnet/server-* must exist before `astragate` resolves its optionalDependencies.
+          # @aidotnet/server-* must exist before `astragate` / `@aidotnet/astra-gate`
+          # resolve their optionalDependencies.
           # npm pack names a scoped tarball "aidotnet-server-...tgz" (no @ or +).
           for f in out/artifacts/aidotnet-server-*.tgz; do
             npm publish "$f" --access public
@@ -267,5 +317,14 @@ jobs:
           done
           npm pack ./cli --pack-destination out/artifacts
           for f in out/artifacts/astragate-[0-9]*.tgz; do
+            npm publish "$f" --access public
+          done
+          # Same CLI, also published as @aidotnet/astra-gate. Rebuild after the
+          # rename: tsup inlines package.json, and the CLI's self-update uses
+          # the baked-in name to update the package the user installed.
+          node -e "const fs=require('fs');const p='cli/package.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));j.name='@aidotnet/astra-gate';fs.writeFileSync(p,JSON.stringify(j,null,2)+'\n')"
+          pnpm --dir cli run build
+          npm pack ./cli --pack-destination out/artifacts
+          for f in out/artifacts/aidotnet-astra-gate-[0-9]*.tgz; do
             npm publish "$f" --access public
           done
