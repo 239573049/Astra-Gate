@@ -8,8 +8,10 @@ description: Astra 桌面应用——把控制台与常驻服务装进一个原�
 ## 安装
 
 ```bash
-astra install --client
+npx @aidotnet/astra-gate install --desktop
 ```
+
+无需全局安装 CLI；已全局安装的话用 `astra install --desktop` 即可。
 
 或从发布页下载对应平台的安装包（dmg / AppImage / 安装器）。
 
@@ -36,8 +38,8 @@ astra install --client
 ## 更新与卸载
 
 ```bash
-astra update --client    # 只更新桌面端
-astra uninstall --client # 只卸载桌面端
+astra update --desktop    # 只更新桌面端
+astra uninstall --desktop # 只卸载桌面端
 ```
 
 <Callout type="info" title="端口显示以 runtime.json 为准">

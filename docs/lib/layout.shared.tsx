@@ -1,17 +1,34 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared';
-import { appName } from './shared';
+import { AstraLogo } from '@/components/astra-logo';
+import { homeMessages, type HomeLang } from '@/components/home/messages';
+import { appName, githubUrl } from './shared';
 
 export function baseOptions(): BaseLayoutProps {
   return {
+    githubUrl,
     nav: {
       title: (
         <span className="inline-flex items-center gap-2 font-semibold">
-          <span className="inline-flex size-6 items-center justify-center rounded-md bg-[var(--color-blue-500)] text-xs font-bold text-white">
-            A
-          </span>
+          <AstraLogo className="size-6 rounded-[6px] border border-black/10" />
           {appName}
         </span>
       ),
     },
+  };
+}
+
+/** Website (HomeLayout) options: localized top links plus a language switch (`/` = zh, `/en` = en). */
+export function homeOptions(lang: HomeLang): BaseLayoutProps {
+  const base = baseOptions();
+  const t = homeMessages[lang].nav;
+  return {
+    ...base,
+    nav: { ...base.nav, url: lang === 'en' ? '/en' : '/', transparentMode: 'top' },
+    links: [
+      { text: t.docs, url: '/docs/guide', active: 'nested-url' },
+      { text: t.cli, url: '/docs/cli', active: 'nested-url' },
+      { text: t.download, url: '/download', active: 'url' },
+      { text: t.switchLang, url: t.switchLangUrl },
+    ],
   };
 }

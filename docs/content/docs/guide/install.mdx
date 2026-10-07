@@ -11,8 +11,10 @@ description: 通过 npm 安装 Astra，或一并安装桌面端
 ## 安装 CLI
 
 ```bash
-npm install -g astragate
+npm install -g @aidotnet/astra-gate
 ```
+
+`astragate` 是同一个包的另一个名字（`npm install -g astragate` 效果相同），二者装出的都是 `astra` 命令，选一个即可，不要同时全局安装。
 
 安装包会按当前平台自动选择对应的 `@aidotnet/server-*` 二进制（darwin/linux/win32 × arm64/x64），不需要单独安装 .NET 运行时。
 
@@ -23,18 +25,24 @@ astra --version
 ```
 
 <Callout type="idea" title="不想全局安装？">
-  也可以用 `npx astragate <命令>` 直接运行，效果相同。
+  也可以用 `npx @aidotnet/astra-gate <命令>` 直接运行，效果相同。
 </Callout>
 
 ## 安装桌面端（可选）
 
-桌面端是一个 Electron 壳，把控制台包成了独立应用，并支持菜单栏快捷操作与开机自启：
+桌面端是一个 Electron 壳，把控制台包成了独立应用，并支持菜单栏快捷操作与开机自启。不需要全局安装 CLI，一条命令即可装好：
 
 ```bash
-astra install --client
+npx @aidotnet/astra-gate install --desktop
 ```
 
-详见[桌面端](/docs/desktop)。
+已全局安装 CLI 的话，等价于：
+
+```bash
+astra install --desktop
+```
+
+通过 npx 安装时，服务端二进制会被复制到 `~/.astra/server/`，桌面端不依赖 npx 缓存。详见[桌面端](/docs/desktop)。
 
 ## 数据放在哪里
 
@@ -45,6 +53,7 @@ Astra 的所有状态都在 `~/.astra`（可用环境变量 `ASTRA_HOME` 覆盖�
 | `~/.astra/config.json` | 启动配置（端口、监听地址等） |
 | `~/.astra/runtime.json` | 实际运行状态（pid / 端口 / apiVersion） |
 | `~/.astra/astra.db` | SQLite 数据库（请求记录、模型、提供商、设置） |
+| `~/.astra/server/` | 托管的服务端二进制与界面资源（`astra update` 或 npx 安装桌面端时写入） |
 | `~/.astra/keys/` | 加密密钥（权限已限制为当前用户） |
 | `~/.astra/logs/` | 服务日志 |
 | `~/.astra/backups/client-configs/` | 接管客户端前的配置备份 |

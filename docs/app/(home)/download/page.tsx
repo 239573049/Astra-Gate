@@ -87,10 +87,12 @@ export default async function DownloadPage() {
             <p>此页面仅提供桌面客户端下载。装好桌面端后，更新会通过应用内自动更新进行。</p>
             <p className="mt-1">
               服务端与命令行通过 npm 安装：
-              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">npm install -g astragate</code>
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">npm install -g @aidotnet/astra-gate</code>
               安装后运行
-              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">astra install --client</code>
-              即可装好桌面端并接管本地客户端配置。
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">astra install --desktop</code>
+              即可装好桌面端并接管本地客户端配置。也可以不全局安装，直接运行
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">npx @aidotnet/astra-gate install --desktop</code>
+              。
             </p>
           </div>
         </div>

@@ -31,3 +31,83 @@ html > body[data-scroll-locked] {
   width: 100%;
   height: auto;
 }
+
+/* ---------- Landing page: the admin UI's liquid-glass tokens (web/src/styles/index.css) ---------- */
+.astra-home {
+  --accent: #007aff;
+  --accent-2: #36c3ff;
+  --canvas: #eef0f5;
+  --glass-tint: #ffffff;
+  --glass-alpha: 55%;
+  --glass-edge: rgb(255 255 255 / 0.65);
+  --glass-highlight: rgb(255 255 255 / 0.85);
+  --glass-shadow: rgb(0 0 0 / 0.1);
+  background:
+    radial-gradient(60% 40% at 8% 0%, color-mix(in oklab, var(--accent) 30%, transparent), transparent 72%),
+    radial-gradient(45% 30% at 96% 6%, color-mix(in oklab, var(--accent-2) 26%, transparent), transparent 72%),
+    radial-gradient(50% 30% at 4% 55%, color-mix(in oklab, var(--accent-2) 16%, transparent), transparent 72%),
+    radial-gradient(50% 30% at 100% 80%, color-mix(in oklab, var(--accent) 16%, transparent), transparent 72%),
+    var(--canvas);
+}
+
+.dark .astra-home {
+  --accent: #0a84ff;
+  --accent-2: #64d2ff;
+  --canvas: #161618;
+  --glass-tint: #3a3a3e;
+  --glass-alpha: 52%;
+  --glass-edge: rgb(255 255 255 / 0.14);
+  --glass-highlight: rgb(255 255 255 / 0.2);
+  --glass-shadow: rgb(0 0 0 / 0.45);
+}
+
+.astra-home .glass {
+  background-color: color-mix(in oklab, var(--glass-tint) var(--glass-alpha), transparent);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 0.5px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--glass-highlight),
+    0 8px 30px var(--glass-shadow);
+}
+
+.astra-home .glass-strong {
+  --glass-alpha: 80%;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .astra-home .glass {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: var(--glass-tint);
+  }
+}
+
+/* Pulsing glow at the point where the hero's light streams converge (behind the logo). */
+.astra-core {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--accent) 45%, transparent),
+    color-mix(in oklab, var(--accent-2) 18%, transparent) 55%,
+    transparent
+  );
+  animation: astra-pulse 4s ease-in-out infinite;
+}
+
+@keyframes astra-pulse {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .astra-core {
+    animation: none;
+  }
+}

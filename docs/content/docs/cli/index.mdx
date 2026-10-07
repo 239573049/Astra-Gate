@@ -3,10 +3,10 @@ title: 命令总览
 description: astra 命令行结构一览
 ---
 
-`astra`（npm 包名 `astragate`）是 Astra 的命令行入口：安装、启动、停止服务，接管客户端，以及卸载还原。
+`astra`（npm 包名 `@aidotnet/astra-gate`，也以 `astragate` 发布）是 Astra 的命令行入口：安装、启动、停止服务，接管客户端，以及卸载还原。
 
 ```bash
-npm install -g astragate
+npm install -g @aidotnet/astra-gate
 astra --help
 ```
 
@@ -24,7 +24,7 @@ astra --help
 | `astra client list\|status\|enable\|disable` | 管理本机 AI 客户端的接管 |
 | `astra provider list\|add\|remove` | 管理上游提供商 |
 | `astra config set-password` | 设置管理密码（对外监听前必须） |
-| `astra install --client` | 安装桌面端 |
+| `astra install --desktop` | 安装桌面端（`--client` 为旧写法） |
 | `astra update` | 更新 CLI 与桌面端，然后重启服务 |
 | `astra uninstall` | 卸载：还原客户端配置、停止服务；`--purge` 连数据目录一起删 |
 | `astra restore-all` | 离线还原所有被接管客户端的配置（无需服务在运行） |

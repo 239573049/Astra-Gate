@@ -1,6 +1,8 @@
 import { createGetUrl } from 'fumadocs-core/source';
 
-export const appName = 'Astra 文档';
+export const appName = 'Astra Gate';
+export const githubUrl = 'https://github.com/239573049/Astra-Gate';
+export const releasesUrl = `${githubUrl}/releases`;
 export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 export const docsContentRoute = '/llms.mdx/docs';
