@@ -113,11 +113,24 @@ jobs:
         shell: bash
         run: node scripts/pack-platform.mjs --rid "$RID" --publish-dir out/publish --web-dist web/dist
 
+      - name: Stage the server for the desktop installers
+        if: hashFiles('desktop/package.json') != ''
+        shell: bash
+        # electron-builder ships desktop/server-bundle as resources/server
+        # (extraResources), so the standalone installers run without the CLI.
+        run: |
+          set -euo pipefail
+          server_dir=$(node -e "import('./scripts/rid-map.mjs').then(m => console.log(m.ridToServerDir(process.argv[1])))" "$RID")
+          rm -rf desktop/server-bundle
+          cp -R "npm/$server_dir/bin" desktop/server-bundle
+          ls -la desktop/server-bundle
+
       - name: Build desktop app
         if: hashFiles('desktop/package.json') != ''
         shell: bash
-        # mac rows build the full target set from electron-builder.yml
-        # (dir + signed/notarized dmg + zip); other rows stay unpacked.
+        # Every row builds the full target set from electron-builder.yml:
+        # dir (npm platform package) + the standalone installers — signed and
+        # notarized dmg + zip on mac, NSIS on Windows, AppImage on Linux.
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(matrix.rid, 'osx') && 'true' || 'false' }}
           # Only mac rows get the certificate: a mac p12 must not reach the
@@ -127,15 +140,19 @@ jobs:
           APPLE_ID: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_TEAM_ID || '' }}
-          ASTRA_FEED_URL: ${{ startsWith(matrix.rid, 'osx') && secrets.ASTRA_FEED_URL || '' }}
+          # Baked into app-update.yml for every updatable target; only the mac
+          # DMG track consumes it today. Defaults to the official site's feed.
+          ASTRA_FEED_URL: ${{ secrets.ASTRA_FEED_URL || 'https://astra-gate.si/api/client-releases/stable' }}
         run: |
+          set -euo pipefail
           pnpm --filter @aidotnet/desktop build
-          if [[ "$RID" == osx-* ]]; then
-            ARCH=$([ "$RID" = "osx-arm64" ] && echo "--arm64" || echo "--x64")
-            pnpm --filter @aidotnet/desktop exec electron-builder --mac "$ARCH" --config.directories.output=../../out/desktop
-          else
-            pnpm --filter @aidotnet/desktop exec electron-builder --dir --config.directories.output=../../out/desktop
-          fi
+          ARCH=$([[ "$RID" == *-arm64 ]] && echo "--arm64" || echo "--x64")
+          case "$RID" in
+            osx-*) OS=--mac ;;
+            win-*) OS=--win ;;
+            *) OS=--linux ;;
+          esac
+          pnpm --filter @aidotnet/desktop exec electron-builder "$OS" "$ARCH" --publish never --config.directories.output=../out/desktop
 
       - name: Collect desktop app into platform package
         if: hashFiles('desktop/package.json') != ''
@@ -173,6 +190,10 @@ jobs:
             cp out/desktop/*.dmg out/feed-upload/
             cp out/desktop/*.zip out/feed-upload/
             cp out/desktop/latest-mac.yml out/feed-upload/
+          elif [[ "$RID" == win-* ]]; then
+            cp out/desktop/Astra-*-setup.exe out/feed-upload/
+          else
+            cp out/desktop/Astra-*.AppImage out/feed-upload/
           fi
           ls -la out/feed-upload
 
@@ -264,16 +285,22 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           VER="${GITHUB_REF_NAME#v}"
-          for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip; do
+          for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip \
+                   out/artifacts/Astra-*-setup.exe out/artifacts/Astra-*.AppImage; do
+            # electron-builder names: Astra-<ver>-<arch>[-setup].<ext>, where
+            # an AppImage spells x64 as x86_64.
             case "$f" in
-              *arm64*) platform=darwin-arm64 ;;
-              *x64*) platform=darwin-x64 ;;
-              *) echo "::warning::skip $f (unknown platform)"; continue ;;
+              *.dmg) os=darwin kind=dmg ;;
+              *.zip) os=darwin kind=zip ;;
+              *.exe) os=win32 kind=exe ;;
+              *.AppImage) os=linux kind=appimage ;;
             esac
             case "$f" in
-              *.dmg) kind=dmg ;;
-              *.zip) kind=zip ;;
+              *arm64*) arch=arm64 ;;
+              *x64*|*x86_64*) arch=x64 ;;
+              *) echo "::warning::skip $f (unknown arch)"; continue ;;
             esac
+            platform="$os-$arch"
             echo "Uploading $(basename "$f") ($platform/$kind)…"
             curl --fail --silent --show-error -X POST \
               "${DOCS_RELEASE_URL%/}/api/client-releases/upload" \

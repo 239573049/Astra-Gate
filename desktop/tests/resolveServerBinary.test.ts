@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as path from 'node:path';
 
-import { devServerBinaryPath, resolveServerBinary } from '../src/shared/resolveServerBinary';
+import { bundledServerBinaryPath, devServerBinaryPath, resolveServerBinary } from '../src/shared/resolveServerBinary';
 
 const repoRoot = '/repo';
 const devPath = path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net10.0', 'astra-server');
@@ -65,5 +65,64 @@ describe('resolveServerBinary', () => {
         exists: exists([]),
       }),
     ).toBeNull();
+  });
+
+  describe('bundled server (standalone installers)', () => {
+    const bundled = { path: '/app/resources/server/astra-server', version: '0.3.0' };
+
+    it('is used when nothing else is configured, ahead of the dev build', () => {
+      expect(resolveServerBinary({ bundled, repoRoot, exists: exists([bundled.path, devPath]) })).toEqual({
+        path: bundled.path,
+        source: 'bundled',
+      });
+    });
+
+    it('loses to install.json when that server is at least as new', () => {
+      for (const installServerVersion of ['0.3.0', '0.4.0', null]) {
+        expect(
+          resolveServerBinary({
+            installServerPath: '/home/.astra/server/astra-server-x',
+            installServerVersion,
+            bundled,
+            exists: exists(['/home/.astra/server/astra-server-x', bundled.path]),
+          }),
+        ).toEqual({ path: '/home/.astra/server/astra-server-x', source: 'install' });
+      }
+    });
+
+    it('beats a stale install.json server after an installer upgrade', () => {
+      expect(
+        resolveServerBinary({
+          installServerPath: '/home/.astra/server/astra-server-0.2.0',
+          installServerVersion: '0.2.0',
+          bundled,
+          exists: exists(['/home/.astra/server/astra-server-0.2.0', bundled.path]),
+        }),
+      ).toEqual({ path: bundled.path, source: 'bundled' });
+    });
+
+    it('keeps ASTRA_SERVER_BIN ahead of the bundled server', () => {
+      expect(
+        resolveServerBinary({
+          envServerBin: '/env/astra-server',
+          bundled,
+          exists: exists(['/env/astra-server', bundled.path]),
+        }),
+      ).toEqual({ path: '/env/astra-server', source: 'env' });
+    });
+
+    it('is skipped when the app ships without one', () => {
+      expect(resolveServerBinary({ bundled, repoRoot, exists: exists([devPath]) })).toEqual({
+        path: devPath,
+        source: 'dev',
+      });
+    });
+  });
+});
+
+describe('bundledServerBinaryPath', () => {
+  it('points at resources/server with .exe only on Windows', () => {
+    expect(bundledServerBinaryPath('/r', 'darwin')).toBe(path.join('/r', 'server', 'astra-server'));
+    expect(bundledServerBinaryPath('/r', 'win32')).toBe(path.join('/r', 'server', 'astra-server.exe'));
   });
 });

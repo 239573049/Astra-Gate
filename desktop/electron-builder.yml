@@ -8,22 +8,33 @@ files:
   - renderer/**
   - assets/**
   - package.json
+# The standalone installers (dmg / NSIS / AppImage) must run without the CLI,
+# so the server binary and its wwwroot ship under resources/server. CI stages
+# them into desktop/server-bundle (release.yml); a local build without that
+# directory ships no bundled server (dev runs use the repo build instead).
+extraResources:
+  - from: server-bundle
+    to: server
 asar: true
 npmRebuild: false
 compression: normal
 # Update feed for electron-updater (macOS DMG installs). ASTRA_FEED_URL is set
 # in CI to the stable channel root, e.g. https://feed.example.com/astra/stable.
-# Local builds only produce unpacked output and do not need it.
+# Local builds only produce unpacked output and do not need it. The channel
+# stays the default ("latest"): electron-updater appends the platform suffix
+# itself and requests latest-mac.yml.
 publish:
   provider: generic
   url: ${env.ASTRA_FEED_URL}
-  channel: latest-mac.yml
 # macOS: dir stays for the npm platform-package track; dmg + zip are the
 # signed/notarized artifacts electron-updater consumes (zip is the update
 # payload, dmg the first-install carrier). Signing is driven entirely by CI
 # env (CSC_LINK / APPLE_ID / …, CSC_IDENTITY_AUTO_DISCOVERY=true on the mac
 # rows); without credentials electron-builder skips signing with a warning,
 # which keeps ad-hoc local builds working.
+# Installer names always carry the arch (an explicit artifactName turns off
+# electron-builder's "omit x64" default), so release.yml can map each merged
+# file back to its platform.
 mac:
   category: public.app-category.developer-tools
   target:
@@ -31,10 +42,24 @@ mac:
     - target: dmg
     - target: zip
   icon: assets/icon.png
+  artifactName: ${productName}-${version}-${arch}.${ext}
+# Windows / Linux: dir feeds the npm platform package; NSIS / AppImage are the
+# standalone installers on the download page (no in-app self-update yet).
 win:
-  target: dir
+  target:
+    - target: dir
+    - target: nsis
   icon: assets/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-${arch}-setup.${ext}
 linux:
-  target: dir
+  target:
+    - target: dir
+    - target: AppImage
   icon: assets/icon.png
   category: Development
+appImage:
+  artifactName: ${productName}-${version}-${arch}.${ext}

@@ -36,18 +36,36 @@ describe('resolveUpdateTrack', () => {
     ).toBe('npm');
   });
 
-  it('windows and linux are always the npm track when packaged', () => {
+  it('windows and linux installer installs are the installer track', () => {
     expect(
       resolveUpdateTrack({
         isPackaged: true,
         realExePath: 'C:\\Users\\demo\\AppData\\Local\\Programs\\Astra\\Astra.exe',
         platform: 'win32',
       }),
+    ).toBe('installer');
+    expect(
+      resolveUpdateTrack({
+        isPackaged: true,
+        realExePath: '/tmp/.mount_AstraXyz/astra',
+        platform: 'linux',
+      }),
+    ).toBe('installer');
+  });
+
+  it('windows and linux installs from the CLI stay on the npm track', () => {
+    expect(
+      resolveUpdateTrack({
+        isPackaged: true,
+        realExePath:
+          'C:\\Users\\demo\\.astra\\desktop\\node_modules\\@aidotnet\\desktop-win32-x64\\app\\Astra.exe',
+        platform: 'win32',
+      }),
     ).toBe('npm');
     expect(
       resolveUpdateTrack({
         isPackaged: true,
-        realExePath: '/opt/Astra/astra',
+        realExePath: '/home/demo/.astra/desktop/node_modules/@aidotnet/desktop-linux-x64/app/astra',
         platform: 'linux',
       }),
     ).toBe('npm');

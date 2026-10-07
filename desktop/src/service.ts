@@ -10,7 +10,7 @@ import { isPidAlive } from './shared/pid';
 import { apiBase } from './shared/port';
 import { resolveServerBinary } from './shared/resolveServerBinary';
 import { isRuntimeStale, parseRuntimeJson } from './shared/runtime';
-import { STARTED_BY, type RuntimeInfo } from './shared/types';
+import { STARTED_BY, type InstallInfo, type RuntimeInfo } from './shared/types';
 import { EXPECTED_API_MAJOR, isApiVersionCompatible } from './shared/version';
 
 const START_TIMEOUT_MS = 20_000;
@@ -49,6 +49,8 @@ export type StopResult = 'stopped' | 'notRunning' | 'failed';
 export interface ServiceManagerOptions {
   paths: AstraPaths;
   repoRoot: string;
+  /** Server shipped inside the packaged app (standalone installers); null in dev. */
+  bundledServer?: { path: string; version: string } | null;
   platform?: NodeJS.Platform;
   env?: NodeJS.ProcessEnv;
   expectedApiMajor?: number;
@@ -67,6 +69,7 @@ export class ServiceManager {
   private child: ChildProcess | null = null;
   private readonly paths: AstraPaths;
   private readonly repoRoot: string;
+  private readonly bundledServer: { path: string; version: string } | null;
   private readonly platform: NodeJS.Platform;
   private readonly env: NodeJS.ProcessEnv;
   private readonly expectedApiMajor: number;
@@ -75,6 +78,7 @@ export class ServiceManager {
   constructor(opts: ServiceManagerOptions) {
     this.paths = opts.paths;
     this.repoRoot = opts.repoRoot;
+    this.bundledServer = opts.bundledServer ?? null;
     this.platform = opts.platform ?? process.platform;
     this.env = opts.env ?? process.env;
     this.expectedApiMajor = opts.expectedApiMajor ?? EXPECTED_API_MAJOR;
@@ -181,9 +185,12 @@ export class ServiceManager {
     const port = config.port;
     const todayLog = this.paths.logFile(new Date());
 
+    const install = await this.readInstall();
     const binary = resolveServerBinary({
-      installServerPath: await this.readInstallServerPath(),
+      installServerPath: serverPathFromInstall(install),
+      installServerVersion: install?.serverVersion ?? null,
       envServerBin: this.env.ASTRA_SERVER_BIN ?? null,
+      bundled: this.bundledServer,
       repoRoot: this.repoRoot,
       platform: this.platform,
       exists: (p) => {
@@ -197,9 +204,9 @@ export class ServiceManager {
     if (!binary) {
       throw new StartupError(
         'Astra server binary not found. Looked at install.json serverPath, ' +
-          'ASTRA_SERVER_BIN, and the dev build path ' +
+          'ASTRA_SERVER_BIN, the server bundled with this app, and the dev build path ' +
           '(<repo>/src/Astra.Server/bin/Debug/net10.0/astra-server). ' +
-          'Run "astra update" or build the server first.',
+          'Reinstall the desktop app from the download page, run "astra update", or build the server first.',
         todayLog,
       );
     }
@@ -270,9 +277,9 @@ export class ServiceManager {
     }
   }
 
-  private async readInstallServerPath(): Promise<string | null> {
+  private async readInstall(): Promise<InstallInfo | null> {
     try {
-      return serverPathFromInstall(parseInstallJson(await fsp.readFile(this.paths.installFile, 'utf8')));
+      return parseInstallJson(await fsp.readFile(this.paths.installFile, 'utf8'));
     } catch {
       return null;
     }

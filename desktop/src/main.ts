@@ -31,6 +31,7 @@ import {
 } from './shared/chrome';
 import { astraPaths, type AstraPaths } from './shared/paths';
 import { apiBase } from './shared/port';
+import { bundledServerBinaryPath } from './shared/resolveServerBinary';
 import { EXPECTED_API_MAJOR } from './shared/version';
 import type { GatewayClient, GatewayProvider } from './shared/types';
 
@@ -68,6 +69,11 @@ async function main(): Promise<void> {
   service = new ServiceManager({
     paths,
     repoRoot: path.resolve(appRoot, '..'),
+    // Installers ship the server under resources/server (electron-builder
+    // extraResources); it is built from the same release as the app.
+    bundledServer: app.isPackaged
+      ? { path: bundledServerBinaryPath(process.resourcesPath, process.platform), version: app.getVersion() }
+      : null,
     platform: process.platform,
     env: process.env,
     expectedApiMajor: EXPECTED_API_MAJOR,

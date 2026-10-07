@@ -5,11 +5,14 @@
  * - disabled: unpackaged dev run — never self-update.
  * - dmg: macOS install living outside the npm prefix (signed, notarized
  *   artifacts via electron-updater).
- * - npm: everything installed under ~/.astra/desktop by the CLI, plus all
- *   Windows/Linux installs (the ~/Applications entry on macOS is a symlink,
- *   so the running exe's realpath exposes node_modules).
+ * - npm: everything installed under ~/.astra/desktop by the CLI (the
+ *   ~/Applications entry on macOS is a symlink, so the running exe's realpath
+ *   exposes node_modules).
+ * - installer: Windows / Linux installs from the NSIS / AppImage installers on
+ *   the download page — no in-app desktop self-update yet; users install the
+ *   newer installer over the old one.
  */
-export type UpdateTrack = 'dmg' | 'npm' | 'disabled';
+export type UpdateTrack = 'dmg' | 'npm' | 'installer' | 'disabled';
 
 export function resolveUpdateTrack(o: {
   isPackaged: boolean;
@@ -19,8 +22,9 @@ export function resolveUpdateTrack(o: {
 }): UpdateTrack {
   if (!o.isPackaged) return 'disabled';
   const platform = o.platform ?? process.platform;
-  if (platform !== 'darwin') return 'npm';
-  if (o.realExePath.includes('node_modules')) return 'npm';
-  if (o.installDesktopPath && o.realExePath.startsWith(o.installDesktopPath)) return 'npm';
-  return 'dmg';
+  const npmManaged =
+    o.realExePath.includes('node_modules') ||
+    (!!o.installDesktopPath && o.realExePath.startsWith(o.installDesktopPath));
+  if (npmManaged) return 'npm';
+  return platform === 'darwin' ? 'dmg' : 'installer';
 }

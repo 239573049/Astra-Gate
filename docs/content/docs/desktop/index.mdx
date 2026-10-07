@@ -7,13 +7,15 @@ description: Astra 桌面应用——把控制台与常驻服务装进一个原�
 
 ## 安装
 
+**安装包**：从[下载页](/download)下载对应平台的安装包——macOS `.dmg`、Windows 安装程序（`.exe`）、Linux `AppImage`。安装包内置服务端，不需要 Node.js 或 CLI。
+
+**通过 npm**：
+
 ```bash
 npx @aidotnet/astra-gate install --desktop
 ```
 
 无需全局安装 CLI；已全局安装的话用 `astra install --desktop` 即可。
-
-或从发布页下载对应平台的安装包（dmg / AppImage / 安装器）。
 
 ## 它多了什么
 
@@ -31,11 +33,16 @@ npx @aidotnet/astra-gate install --desktop
 
 桌面端按以下顺序定位服务端二进制：
 
-1. `~/.astra/install.json` 中记录的安装位置；
+1. `~/.astra/install.json` 中记录的安装位置（若其版本比安装包内置的服务端旧，则改用内置的）；
 2. 环境变量 `ASTRA_SERVER_BIN`（开发调试用）；
-3. 开发构建（仅源码运行时）。
+3. 安装包内置的服务端；
+4. 开发构建（仅源码运行时）。
 
 ## 更新与卸载
+
+- **macOS 安装包**：应用内自动更新。
+- **Windows / Linux 安装包**：从[下载页](/download)下载新版本覆盖安装。
+- **通过 npm 安装的**：
 
 ```bash
 astra update --desktop    # 只更新桌面端

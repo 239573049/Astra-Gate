@@ -13,11 +13,33 @@ const PLATFORM_LABELS: Record<string, string> = {
   'linux-arm64': 'Linux · ARM',
 };
 
+/** Downloadable kinds, in display order. Anything else (e.g. the server-update
+ * manifest, kind "json") is feed plumbing and stays off the page. */
 const KIND_LABELS: Record<string, string> = {
   dmg: '安装镜像',
-  zip: '压缩包（自动更新用）',
   exe: '安装程序',
+  appimage: 'AppImage（免安装，直接运行）',
+  zip: '压缩包（自动更新用）',
 };
+
+const PLATFORM_ORDER = Object.keys(PLATFORM_LABELS);
+const KIND_ORDER = Object.keys(KIND_LABELS);
+
+function rank(order: string[], value: string): number {
+  const i = order.indexOf(value);
+  return i === -1 ? order.length : i;
+}
+
+/** Installer files only, grouped by platform (table order) then kind. */
+function downloadableFiles(files: ReleaseFile[]): ReleaseFile[] {
+  return files
+    .filter((f) => f.kind in KIND_LABELS)
+    .sort(
+      (a, b) =>
+        rank(PLATFORM_ORDER, a.platform) - rank(PLATFORM_ORDER, b.platform) ||
+        rank(KIND_ORDER, a.kind) - rank(KIND_ORDER, b.kind),
+    );
+}
 
 function formatSize(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
@@ -53,7 +75,7 @@ export default async function DownloadPage() {
 
         {latest && (
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {latest.files.map((file) => (
+            {downloadableFiles(latest.files).map((file) => (
               <a
                 key={file.name}
                 href={`/api/client-releases/stable/v/${latest.version}/${file.name}`}
@@ -84,7 +106,9 @@ export default async function DownloadPage() {
         <div className="mt-10 flex items-start gap-3 rounded-xl border border-fd-border bg-fd-muted/40 p-5">
           <PackageOpen className="mt-0.5 size-5 shrink-0 text-fd-muted-foreground" />
           <div className="text-sm text-fd-muted-foreground">
-            <p>此页面仅提供桌面客户端下载。装好桌面端后，更新会通过应用内自动更新进行。</p>
+            <p>
+              安装包内置服务端，无需 Node.js。macOS 版通过应用内自动更新；Windows / Linux 版有新版本时，从本页下载新的安装包覆盖安装即可。
+            </p>
             <p className="mt-1">
               服务端与命令行通过 npm 安装：
               <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">npm install -g @aidotnet/astra-gate</code>

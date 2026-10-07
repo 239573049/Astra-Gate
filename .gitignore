@@ -18,4 +18,5 @@ TestResults/
 *.tgz
 .eslintcache
 desktop/renderer/
+desktop/server-bundle/
 .plan/

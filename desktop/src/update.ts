@@ -24,10 +24,14 @@ import { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
  *
  * The track rule lives in shared/updateTrack.ts; Windows and Linux npm
  * installs are npm-track but cannot replace their own running files, so their
- * desktop updates are delegated to `astra update --desktop`; the server update
- * flow works everywhere. Unpackaged dev runs never self-update.
+ * desktop updates are delegated to `astra update --desktop`; Windows / Linux
+ * installer installs (NSIS / AppImage) are pointed at the download page. The
+ * server update flow works everywhere. Unpackaged dev runs never self-update.
  */
 export { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
+
+/** Where installer-track users get a newer desktop build. */
+const DOWNLOAD_PAGE_URL = 'https://astra-gate.si/download';
 
 export function isDesktopUpdateAvailable(manifest: UpdateManifest, currentVersion: string): boolean {
   return isNewerVersion(manifest.version, currentVersion);
@@ -139,6 +143,14 @@ export class UpdateController {
             message:
               parts.join('\n') +
               '\n\nThe desktop app itself must be updated with `astra update --desktop` (its files are in use).',
+            action: 'server',
+          };
+        }
+        if (this.track === 'installer') {
+          return {
+            message:
+              parts.join('\n') +
+              `\n\nTo update the desktop app itself, install the latest version from ${DOWNLOAD_PAGE_URL}.`,
             action: 'server',
           };
         }
