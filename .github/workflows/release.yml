@@ -244,9 +244,11 @@ jobs:
           ls -la out/feed/stable
 
       - name: Publish to the update feed
-        if: secrets.FEED_UPLOAD_TARGET != ''
+        # `secrets` is not available in step-level `if` expressions —
+        # evaluate the env copy instead.
         env:
           FEED_UPLOAD_TARGET: ${{ secrets.FEED_UPLOAD_TARGET }}
+        if: env.FEED_UPLOAD_TARGET != ''
         run: node scripts/publish-feed.mjs --dir out/feed --dest "$FEED_UPLOAD_TARGET"
 
       - name: Publish platform packages first, then the CLI
