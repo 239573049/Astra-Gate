@@ -1,6 +1,6 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
-import { Claude, Grok, OpenCode } from '@lobehub/icons';
+import { Claude, GithubCopilot, Grok, HermesAgent, OpenCode, Pi } from '@lobehub/icons';
 import { Monitor, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { ClientKind } from '../api/types';
@@ -15,9 +15,16 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   opencode: { name: 'OpenCode' },
   'claude-desktop': { name: 'Claude Desktop' },
   'grok-build': { name: 'Grok Build' },
+  pi: { name: 'Pi' },
+  'hermes-agent': { name: 'Hermes Agent' },
+  'minimax-code': { name: 'MiniMax Code' },
+  'copilot-cli': { name: 'Copilot CLI' },
 };
 
-export const CLIENT_ORDER: ClientKind[] = ['codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build'];
+export const CLIENT_ORDER: ClientKind[] = [
+  'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
+  'pi', 'hermes-agent', 'minimax-code', 'copilot-cli',
+];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
 
@@ -31,6 +38,10 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   opencode: { Mark: OpenCode, Avatar: OpenCode.Avatar },
   'claude-desktop': { Mark: Claude.Color, Avatar: Claude.Avatar, badge: Monitor },
   'grok-build': { Mark: Grok, Avatar: Grok.Avatar },
+  pi: { Mark: Pi, Avatar: Pi.Avatar },
+  'hermes-agent': { Mark: HermesAgent, Avatar: HermesAgent.Avatar },
+  'minimax-code': { Mark: Minimax.Color, Avatar: Minimax.Avatar },
+  'copilot-cli': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar },
 };
 
 function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {

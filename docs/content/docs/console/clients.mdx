@@ -16,7 +16,18 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 - **模型** — 启用时写入客户端配置的默认模型（修改后需要重新写入客户端配置）；
 - **维护** — 复制配置文件路径、配置备份、轮换本地密钥。
 
-支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop，以及即将支持的 Grok Build。
+支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI。
+
+后加入的四个客户端由 Astra 写入这些位置（括号内为可覆盖目录的环境变量）：
+
+| 客户端 | 配置文件 | Astra 写入的内容 |
+| --- | --- | --- |
+| **Pi** | `~/.pi/agent/models.json`、`settings.json`（`PI_CODING_AGENT_DIR`） | 新增 `astra` 提供商（含所绑定提供商的模型列表）；选了模型时设置 `defaultProvider` / `defaultModel` |
+| **Hermes Agent** | `~/.hermes/config.yaml`（`HERMES_HOME`；Windows 为 `%LOCALAPPDATA%\hermes`） | `model` 段：`provider: custom`、`base_url`、`api_key`，选了模型时写 `default` |
+| **MiniMax Code** | `~/.minimax/config.yaml`（`MINIMAX_DATA_DIR`） | 新增 `custom_provider.astra`（含模型列表）；选了模型时设置 `defaultModel` |
+| **Copilot CLI** | `~/.copilot/providers.json`、`settings.json`（`COPILOT_HOME`） | 在 BYOK 列表里新增 `astra` 提供商及其模型（不动你已有的条目）；选了模型时设置 `model` 为 `astra/<模型>` |
+
+Pi、MiniMax Code、Copilot CLI 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
 
 ## 启用
 

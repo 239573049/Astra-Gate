@@ -165,8 +165,8 @@ public sealed class ClientConfigApplier
                 if (state.OriginalAbsent)
                 {
                     ops.Remove(change);
-                    if (format == ConfigFileFormat.Json)
-                        PruneEmptyParents(ops, change, originalDocument ??= OriginalJson(plan.ClientKind, path, firstWriteEntry));
+                    if (ConfigValueCodec.IsJsonValued(format))
+                        PruneEmptyParents(ops, change, originalDocument ??= OriginalJson(plan.ClientKind, path, format, firstWriteEntry));
                 }
                 else if (change.Kind != ConfigChangeKind.Table)
                 {
@@ -205,7 +205,7 @@ public sealed class ClientConfigApplier
     /// <summary>The JSON document as it was before Astra's first write; <see cref="Known"/> is false when that cannot be told.</summary>
     private sealed record OriginalJsonDocument(bool Known, JsonNode? Root);
 
-    private OriginalJsonDocument OriginalJson(string clientKind, string path, BackupFileEntry? firstWrite)
+    private OriginalJsonDocument OriginalJson(string clientKind, string path, ConfigFileFormat format, BackupFileEntry? firstWrite)
     {
         if (firstWrite is null) return new OriginalJsonDocument(false, null);
         if (!firstWrite.Existed) return new OriginalJsonDocument(true, new JsonObject()); // we created the file
@@ -214,26 +214,27 @@ public sealed class ClientConfigApplier
         if (bytes is null) return new OriginalJsonDocument(false, null);
         try
         {
-            return new OriginalJsonDocument(true, ParseTolerantJson(Encoding.UTF8.GetString(StripBom(bytes))));
+            var text = Encoding.UTF8.GetString(StripBom(bytes));
+            return new OriginalJsonDocument(true, format == ConfigFileFormat.Yaml ? YamlEditor.ParseToJson(text) : ParseTolerantJson(text));
         }
-        catch (JsonException)
+        catch (Exception e) when (e is JsonException or EditorException)
         {
             return new OriginalJsonDocument(false, null);
         }
     }
 
     /// <summary>
-    /// After removing a key Astra added, also removes the objects Astra had to create to hold it (e.g. "provider" for
-    /// "provider.astra") once they are empty — but only when they did not exist before Astra's first write.
+    /// After removing a key Astra added, also removes the objects (or arrays) Astra had to create to hold it (e.g.
+    /// "provider" for "provider.astra") once they are empty — but only when they did not exist before Astra's first write.
     /// </summary>
     private static void PruneEmptyParents(ConfigEditorOps ops, ConfigChange change, OriginalJsonDocument original)
     {
         if (!original.Known) return;
-        var segments = change.KeyPath.Split('.', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var segments = JsoncEditor.SplitKeyPath(change.KeyPath);
         for (var depth = segments.Length - 1; depth >= 1; depth--)
         {
             var parent = new ConfigChange(change.File, change.Format, string.Join('.', segments[..depth]), null, null);
-            if (ops.Read(parent) is not { } text || JsonNode.Parse(text) is not JsonObject { Count: 0 }) return;
+            if (ops.Read(parent) is not { } text || JsonNode.Parse(text) is not (JsonObject { Count: 0 } or JsonArray { Count: 0 })) return;
             if (ExistsIn(original.Root, segments[..depth])) return;
             ops.Remove(parent);
         }
@@ -244,6 +245,12 @@ public sealed class ClientConfigApplier
         var node = root;
         foreach (var segment in segments)
         {
+            if (JsoncEditor.IsSelector(segment))
+            {
+                if (node is not JsonArray a || a.FirstOrDefault(e => JsoncEditor.ElementMatches(e, segment)) is not { } match) return false;
+                node = match;
+                continue;
+            }
             if (node is not JsonObject o || !o.TryGetPropertyValue(segment, out node)) return false;
         }
         return true;
@@ -281,6 +288,7 @@ public sealed class ClientConfigApplier
             return format switch
             {
                 ConfigFileFormat.Json => JsonNode.DeepEquals(ParseTolerantJson(a), ParseTolerantJson(b)),
+                ConfigFileFormat.Yaml => JsonNode.DeepEquals(YamlEditor.ParseToJson(a), YamlEditor.ParseToJson(b)),
                 ConfigFileFormat.Toml => TomlCanonical(a) == TomlCanonical(b),
                 _ => false,
             };
@@ -317,6 +325,7 @@ public sealed class ClientConfigApplier
             {
                 ConfigFileFormat.Toml => TomlHasNoPairs(text),
                 ConfigFileFormat.Json => JsonIsEmpty(ParseTolerantJson(text)),
+                ConfigFileFormat.Yaml => JsonIsEmpty(YamlEditor.ParseToJson(text)),
                 _ => false,
             };
         }

@@ -174,7 +174,9 @@ export interface ProviderModel {
 // DELETE /api/providers/{id}/models/{pmId}
 
 // ---------- clients ----------
-export type ClientKind = "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build";
+export type ClientKind =
+  | "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build"
+  | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli";
 export interface ClientInfo {
   kind: ClientKind; name: string; protocol: ApiProtocol;
   availability: "available" | "coming_soon"; availabilityReason?: string | null; mode: "switch" | "coexist";
@@ -186,7 +188,7 @@ export interface ClientInfo {
   configOutdated?: boolean;
 }
 export interface EnableRequest { providerId?: string | null; model?: string | null; extras?: Record<string, unknown> | null }
-export interface ConfigChange { file: string; format: "toml" | "json" | "env"; keyPath: string; before?: string | null; after?: string | null }
+export interface ConfigChange { file: string; format: "toml" | "json" | "env" | "yaml"; keyPath: string; before?: string | null; after?: string | null }
 export interface ConfigPreview { changes: ConfigChange[]; diffs: { file: string; unifiedDiff: string }[]; warnings: string[] }
 export interface DisableResult { restored: string[]; drifted: string[]; client: ClientInfo }
 export interface BackupInfo { id: string; createdAt: string; files: string[]; firstWrite: boolean }

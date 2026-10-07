@@ -4,7 +4,7 @@ using Astra.Clients.Config;
 
 namespace Astra.Clients.Adapters;
 
-/// <summary>The six client adapters in <see cref="ClientKinds.All"/> order.</summary>
+/// <summary>The client adapters in <see cref="ClientKinds.All"/> order.</summary>
 public sealed class ClientAdapterRegistry
 {
     public ClientAdapterRegistry(IReadOnlyList<IClientAdapter> adapters) => All = adapters;
@@ -18,6 +18,10 @@ public sealed class ClientAdapterRegistry
         new OpenCodeClientAdapter(env, store),
         new ClaudeDesktopClientAdapter(env, store),
         new GrokBuildClientAdapter(env, store),
+        new PiClientAdapter(env, store),
+        new HermesAgentClientAdapter(env, store),
+        new MiniMaxCodeClientAdapter(env, store),
+        new CopilotCliClientAdapter(env, store),
     ]);
 
     public IReadOnlyList<IClientAdapter> All { get; }

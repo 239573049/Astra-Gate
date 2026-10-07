@@ -59,32 +59,38 @@ public sealed class ClientService(
                 ProviderId = providerId,
                 AccountId = pinned,
             }, ct);
-            if (kind == ClientKinds.OpenCode) await SyncOpenCodeModelsCoreAsync(null, ct);
+            if (ClientKinds.WithModelList.Contains(kind)) await SyncModelListCoreAsync(kind, null, ct);
             return await InfoAsync(adapter, ct);
         }, ct);
 
     /// <summary>
-    /// Plan §7.6: OpenCode lists the bound provider's models in <c>provider.astra.models</c>. Keeps that list current
-    /// when the provider's models change (<paramref name="providerId"/> = the changed provider; null = whatever is bound).
-    /// Never touches a config the user edited (drift). Returns true when the file was rewritten.
+    /// Plan §7.6: OpenCode (and the other <see cref="ClientKinds.WithModelList"/> clients: Pi, MiniMax Code, Copilot CLI)
+    /// list the bound provider's models in their config. Keeps those lists current when the provider's models change
+    /// (<paramref name="providerId"/> = the changed provider; null = whatever is bound). Never touches a config the user
+    /// edited (drift). Returns true when any file was rewritten.
     /// </summary>
-    public async Task<bool> SyncOpenCodeModelsAsync(string? providerId, CancellationToken ct) =>
-        await MutateAsync(() => SyncOpenCodeModelsCoreAsync(providerId, ct), ct);
+    public async Task<bool> SyncModelListsAsync(string? providerId, CancellationToken ct) =>
+        await MutateAsync(async () =>
+        {
+            var changed = false;
+            foreach (var kind in ClientKinds.WithModelList) changed |= await SyncModelListCoreAsync(kind, providerId, ct);
+            return changed;
+        }, ct);
 
-    private async Task<bool> SyncOpenCodeModelsCoreAsync(string? providerId, CancellationToken ct)
+    private async Task<bool> SyncModelListCoreAsync(string kind, string? providerId, CancellationToken ct)
     {
-        var adapter = Require(ClientKinds.OpenCode);
-        var record = await db.Clients.GetAsync(ClientKinds.OpenCode, ct);
+        var adapter = Require(kind);
+        var record = await db.Clients.GetAsync(kind, ct);
         if (record is not { Enabled: true, LocalKeyEnc: not null }) return false;
-        var binding = await db.Clients.GetBindingAsync(ClientKinds.OpenCode, ct);
+        var binding = await db.Clients.GetBindingAsync(kind, ct);
         if (binding is null || (providerId is not null && binding.ProviderId != providerId)) return false;
         if (await db.Providers.GetAsync(binding.ProviderId, ct) is not { Enabled: true }) return false;
         try
         {
             var status = adapter.Inspect();
             if (!status.Enabled || status.DriftedKeys.Count > 0) return false;
-            var context = await ContextAsync(ClientKinds.OpenCode, binding.ProviderId, record, secrets.Unprotect(record.LocalKeyEnc), ct);
-            var plan = adapter.PlanEnable(context); // rewrites provider.astra as a whole so its recorded applied value stays exact
+            var context = await ContextAsync(kind, binding.ProviderId, record, secrets.Unprotect(record.LocalKeyEnc), ct);
+            var plan = adapter.PlanEnable(context); // rewrites the Astra provider as a whole so its recorded applied value stays exact
             if (plan.Diffs.Count == 0) return false;
             _applier.Apply(plan);
             record.ExtraJson = context.Extras?.ToJsonString();
@@ -232,7 +238,7 @@ public sealed class ClientService(
     private async Task<EnableContext> ContextAsync(string kind, string? providerId, ClientRecord record, string key, CancellationToken ct)
     {
         var extras = Json.Deserialize<JsonObject>(record.ExtraJson) ?? new JsonObject();
-        if (kind == ClientKinds.OpenCode && providerId is not null)
+        if (ClientKinds.WithModelList.Contains(kind) && providerId is not null)
         {
             var provider = await RequireProviderAsync(providerId, ct);
             var list = new JsonObject();
@@ -256,6 +262,8 @@ public sealed class ClientService(
             ClientKinds.ClaudeCode => "env.ANTHROPIC_MODEL",
             ClientKinds.GeminiCli => "GEMINI_MODEL",
             ClientKinds.GrokBuild => "model.astra.model",
+            ClientKinds.Pi or ClientKinds.MiniMaxCode => "defaultModel",
+            ClientKinds.HermesAgent => "model.default",
             _ => "model",
         };
         var changes = plan.Changes.ToList();
@@ -334,7 +342,7 @@ public sealed class ClientService(
                 var binding = await db.Clients.GetBindingAsync(adapter.Kind, ct);
                 if (await OutdatedPlanAsync(adapter, record, binding, ct) is not { } plan) continue;
                 _applier.Apply(plan);
-                if (adapter.Kind == ClientKinds.OpenCode)
+                if (ClientKinds.WithModelList.Contains(adapter.Kind))
                 {
                     // Keep the stored model list in step with what was just written.
                     var context = await ContextAsync(adapter.Kind, binding!.ProviderId, record, secrets.Unprotect(record.LocalKeyEnc!), ct);
@@ -379,6 +387,8 @@ public sealed class ClientService(
     {
         ClientKinds.Codex => "Codex", ClientKinds.ClaudeCode => "Claude Code", ClientKinds.GeminiCli => "Gemini CLI",
         ClientKinds.OpenCode => "OpenCode", ClientKinds.ClaudeDesktop => "Claude Desktop", ClientKinds.GrokBuild => "Grok Build",
+        ClientKinds.Pi => "Pi", ClientKinds.HermesAgent => "Hermes Agent", ClientKinds.MiniMaxCode => "MiniMax Code",
+        ClientKinds.CopilotCli => "Copilot CLI",
         _ => kind,
     };
 }

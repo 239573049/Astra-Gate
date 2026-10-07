@@ -22,7 +22,18 @@ import { WindowFrame } from './window-frame';
 
 const installCommand = 'npm install -g @aidotnet/astra-gate';
 
-const clients = ['Codex', 'Claude Code', 'Gemini CLI', 'OpenCode', 'Claude Desktop', 'Grok Build'];
+const clients = [
+  'Codex',
+  'Claude Code',
+  'Gemini CLI',
+  'OpenCode',
+  'Claude Desktop',
+  'Grok Build',
+  'Pi',
+  'Hermes Agent',
+  'MiniMax Code',
+  'Copilot CLI',
+];
 
 const providers = [
   'OpenAI',

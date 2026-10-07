@@ -51,6 +51,10 @@ export const CLIENT_KINDS = [
   'opencode',
   'claude-desktop',
   'grok-build',
+  'pi',
+  'hermes-agent',
+  'minimax-code',
+  'copilot-cli',
 ] as const;
 
 export type ClientKind = (typeof CLIENT_KINDS)[number];

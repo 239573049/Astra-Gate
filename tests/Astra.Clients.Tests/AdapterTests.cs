@@ -580,16 +580,17 @@ public class GrokBuildClientAdapterTests : IDisposable
     public void Dispose() => _home.Dispose();
 }
 
-/// <summary>The default registry exposes all six clients with unique kinds.</summary>
+/// <summary>The default registry exposes every client kind, in order, with unique kinds.</summary>
 public class ClientAdapterRegistryTests
 {
     [Fact]
-    public void CreateDefault_ListsAllSixClients()
+    public void CreateDefault_ListsAllClients()
     {
         using var home = new TestHome();
         var registry = ClientAdapterRegistry.CreateDefault(home.Env, new InMemoryClientConfigStateStore());
+        Assert.Equal(Astra.Core.Clients.ClientKinds.All, registry.All.Select(a => a.Kind));
         var kinds = registry.All.Select(a => a.Kind).OrderBy(k => k, StringComparer.Ordinal).ToList();
-        Assert.Equal(6, kinds.Count);
+        Assert.Equal(10, kinds.Count);
         Assert.Equal(kinds, kinds.Distinct().OrderBy(k => k, StringComparer.Ordinal).ToList());
         Assert.NotNull(registry.Get("codex"));
         Assert.Null(registry.Get("nope"));

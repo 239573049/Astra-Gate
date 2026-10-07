@@ -104,7 +104,7 @@ public class JsoncEditorTests
     }
 
     [Fact]
-    public void Remove_LastMember_KeepsTrailingCommaDocumentValid()
+    public void Remove_LastMember_StrictDocument_DropsStrandedComma()
     {
         const string text = """
             {
@@ -113,14 +113,15 @@ public class JsoncEditorTests
             }
             """;
         var result = new JsoncEditor(text).Remove("b");
-        // The comma the removal strands before '}' is a valid JSONC trailing comma; keeping it lets a
-        // re-insert restore the original bytes exactly.
+        // A document without trailing commas may be read by a strict JSON parser, so the comma the
+        // removal strands before '}' goes too; re-inserting "b" still reproduces the original bytes.
         Assert.Equal(
             """
             {
-              "a": 1,
+              "a": 1
             }
             """, result.Text);
+        Assert.Equal(text, result.Set("b", JsonValue.Create(2)).Text);
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse("{\"a\": 1}"), JsonNode.Parse(result.Text,
             nodeOptions: new JsonNodeOptions(),
             documentOptions: new System.Text.Json.JsonDocumentOptions { AllowTrailingCommas = true })));

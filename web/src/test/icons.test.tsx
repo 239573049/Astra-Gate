@@ -24,7 +24,9 @@ vi.mock('@lobehub/icons', () => {
     DeepSeek: stub('deepseek'),
     Gemini: stub('gemini'),
     GeminiCLI: stub('gemini-cli'),
+    GithubCopilot: stub('github-copilot'),
     Grok: stub('grok'),
+    HermesAgent: stub('hermes-agent'),
     LmStudio: stub('lm-studio'),
     Minimax: stub('minimax'),
     Moonshot: stub('moonshot'),
@@ -32,6 +34,7 @@ vi.mock('@lobehub/icons', () => {
     OpenAI: stub('openai'),
     OpenCode: stub('opencode'),
     OpenRouter: stub('openrouter'),
+    Pi: stub('pi'),
     Qwen: stub('qwen'),
     SiliconCloud: stub('siliconcloud'),
     Volcengine: stub('volcengine'),
@@ -57,6 +60,10 @@ describe('client brand icons', () => {
     opencode: { brand: 'opencode', mark: 'mono', badge: false },
     'claude-desktop': { brand: 'claude', mark: 'color', badge: true },
     'grok-build': { brand: 'grok', mark: 'mono', badge: false },
+    pi: { brand: 'pi', mark: 'mono', badge: false },
+    'hermes-agent': { brand: 'hermes-agent', mark: 'mono', badge: false },
+    'minimax-code': { brand: 'minimax', mark: 'color', badge: false },
+    'copilot-cli': { brand: 'github-copilot', mark: 'mono', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

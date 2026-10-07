@@ -19,7 +19,8 @@ public sealed class EnableContext
 
     /// <summary>
     /// Client-specific extras (JSON object). Known keys: claude-code "smallFastModel";
-    /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode "models" ([{"id":…,"name":…}]) .
+    /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode, pi, minimax-code and copilot-cli
+    /// "models" ({"…": {"id":…,"name":…}}, the bound provider's enabled models).
     /// </summary>
     public JsonObject? Extras { get; init; }
 
@@ -44,6 +45,9 @@ public enum ConfigFileFormat
     Toml,
     Json,
     Env,
+
+    /// <summary>YAML block mapping; values are exchanged as JSON text, like <see cref="Json"/>.</summary>
+    Yaml,
 }
 
 /// <summary>Whether a config change targets a plain key or a whole TOML table.</summary>
@@ -61,7 +65,7 @@ public sealed class ConfigChange
     /// <param name="file">Absolute path of the config file.</param>
     /// <param name="format">File format.</param>
     /// <param name="keyPath">Dotted key path inside the file, e.g. "env.ANTHROPIC_BASE_URL".</param>
-    /// <param name="before">Value before the change as JSON text, or null when absent. For TOML/.env this is the JSON-encoded raw source text of the value; for JSON it is the JSON value text itself.</param>
+    /// <param name="before">Value before the change as JSON text, or null when absent. For TOML/.env this is the JSON-encoded raw source text of the value; for JSON and YAML it is the JSON value text itself.</param>
     /// <param name="after">Value after the change (same encoding), or null to remove the key.</param>
     public ConfigChange(string file, ConfigFileFormat format, string keyPath, string? before, string? after,
         ConfigChangeKind kind = ConfigChangeKind.Key)

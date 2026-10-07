@@ -58,6 +58,9 @@ export function ClientsPage() {
   );
 }
 
+/** Clients whose config lists the bound provider's models (ClientKinds.WithModelList on the server). */
+const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>(['opencode', 'pi', 'minimax-code', 'copilot-cli']);
+
 /** Fixed client tabs (cc-switch style): official logo, name and an enabled mark. */
 function ClientTabs({ clients }: { clients: Map<ClientKind, ClientInfo> }) {
   const { t } = useI18n();
@@ -124,7 +127,9 @@ function ClientPanel({ client }: { client: ClientInfo }) {
       { kind: client.kind, providerId: p.id },
       {
         onSuccess: () =>
-          toast(client.kind === 'opencode' && client.enabled ? t('clients.boundModelsSynced', { provider: p.name }) : t('clients.bound', { provider: p.name })),
+          toast(MODEL_LIST_CLIENTS.has(client.kind) && client.enabled
+            ? t('clients.boundModelsSynced', { provider: p.name, client: CLIENT_META[client.kind].name })
+            : t('clients.bound', { provider: p.name })),
         onError: (e) => toast(errorText(e), 'error'),
       },
     );

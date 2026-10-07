@@ -10,6 +10,9 @@ namespace Astra.Clients.Editing;
 /// produce tokens) and all mutations are surgical byte splices, so comments, formatting and ordering
 /// elsewhere in the file stay byte-identical. Every mutation re-parses and verifies the expected
 /// value, throwing <see cref="EditorException"/> instead of returning a corrupted document.
+/// Key paths are dotted member names; a segment written as <c>[key=value&amp;key2=value2]</c> selects the
+/// element of an array whose object has those string members (see <see cref="Selector"/>), e.g.
+/// <c>providers.[name=astra]</c>. Setting a selector path that matches nothing appends the element.
 /// </summary>
 public sealed class JsoncEditor
 {
@@ -64,7 +67,16 @@ public sealed class JsoncEditor
         var segments = SplitPath(path);
         var data = _data;
         for (var i = 0; i < segments.Length - 1; i++)
-            data = EnsureObject(data, segments[..(i + 1)]);
+        {
+            if (IsSelector(segments[i]))
+            {
+                // Array elements are never created implicitly: only whole elements are appended.
+                if (Navigate(Build(data), segments[..(i + 1)]) is null)
+                    throw new EditorException($"Cannot set '{path}': no array element matches '{segments[i]}'.");
+                continue;
+            }
+            data = EnsureContainer(data, segments[..(i + 1)], array: IsSelector(segments[i + 1]));
+        }
 
         var editor = new JsoncEditor(data);
         var model = editor.Build();
@@ -72,19 +84,26 @@ public sealed class JsoncEditor
         var parent = parentSegments.Length == 0
             ? model.Root
             : Navigate(model, parentSegments)?.Value ?? throw new EditorException($"Self-check failed: parent of '{path}' missing.");
-        if (parent.Kind != NodeKind.Object)
-            throw new EditorException($"Cannot set '{segments[^1]}' inside a non-object at '{string.Join(".", parentSegments)}'.");
+        var last = segments[^1];
+        var selector = IsSelector(last);
+        if (parent.Kind != (selector ? NodeKind.Array : NodeKind.Object))
+            throw new EditorException($"Cannot set '{last}' inside a non-{(selector ? "array" : "object")} at '{string.Join(".", parentSegments)}'.");
 
-        var idx = FindMember(model, parent, segments[^1]);
-        byte[] result;
-        if (idx >= 0)
+        Node? existing;
+        if (selector) existing = FindElement(model, parent, last);
+        else
         {
-            var m = parent.Members[idx];
-            result = Splice(editor._data, (int)m.Value.Start, (int)m.Value.End, Encoding.UTF8.GetBytes(rawJsonText));
+            var idx = FindMember(model, parent, last);
+            existing = idx >= 0 ? parent.Members[idx].Value : null;
+        }
+        byte[] result;
+        if (existing is not null)
+        {
+            result = Splice(editor._data, (int)existing.Start, (int)existing.End, Encoding.UTF8.GetBytes(rawJsonText));
         }
         else
         {
-            var (at, end, insert) = BuildInsert(model, parent, segments[^1], Encoding.UTF8.GetBytes(rawJsonText), editor._data);
+            var (at, end, insert) = BuildInsert(parent, selector ? null : last, Encoding.UTF8.GetBytes(rawJsonText), editor._data);
             result = Splice(editor._data, at, end, insert);
         }
 
@@ -109,14 +128,21 @@ public sealed class JsoncEditor
         // A member whose value is followed only by an optional comma and whitespace to the end of its
         // line owns that line: remove it whole. Any comma the removal strands before '}' is a trailing
         // comma, which JSONC allows — leaving it keeps restores byte-identical for files that use
-        // trailing-comma style.
+        // trailing-comma style. Files without any trailing comma may be read by strict JSON parsers
+        // (e.g. Copilot CLI's providers.json), so there the stranded comma is removed too.
         var lineEnd = LineEnd(_data, end);
         var afterValue = end;
         if (afterValue < lineEnd && _data[afterValue] == (byte)',') afterValue++;
+        var strandedComma = -1;
         if (AtLineContentStart(_data, start) && OnlyWhitespace(_data, afterValue, lineEnd))
         {
             start = LineStart(_data, start);
             end = lineEnd;
+            var before = SkipWsBackward(_data, start);
+            var next = SkipWsForward(_data, end);
+            if (before >= 0 && _data[before] == (byte)',' && next < _data.Length && _data[next] is (byte)'}' or (byte)']'
+                && !UsesTrailingCommas(_data))
+                strandedComma = before;
         }
         else
         {
@@ -129,48 +155,55 @@ public sealed class JsoncEditor
             }
         }
 
-        var verify = new JsoncEditor(Splice(_data, start, end, []));
+        var spliced = Splice(_data, start, end, []);
+        if (strandedComma >= 0) spliced = Splice(spliced, strandedComma, strandedComma + 1, []);
+        var verify = new JsoncEditor(spliced);
         if (verify.Has(path))
             throw new EditorException($"Self-check failed: '{path}' still present after remove.");
         _ = verify.Build(); // a successful full re-parse proves the commas are still balanced
         return verify;
     }
 
-    // ---------------------------------------------------------------- object scaffolding
+    // ---------------------------------------------------------------- container scaffolding
 
-    /// <summary>Guarantees that the object at <paramref name="segments"/> exists (creating it as <c>{}</c>).</summary>
-    private static byte[] EnsureObject(byte[] data, string[] segments)
+    /// <summary>Guarantees that the object (or array) at <paramref name="segments"/> exists (creating it as <c>{}</c> / <c>[]</c>).</summary>
+    private static byte[] EnsureContainer(byte[] data, string[] segments, bool array)
     {
+        var kind = array ? NodeKind.Array : NodeKind.Object;
         var model = Build(data);
         var parentSegments = segments[..^1];
         var parent = parentSegments.Length == 0 ? model.Root : Navigate(model, parentSegments)?.Value;
         if (parent is null || parent.Kind != NodeKind.Object)
             throw new EditorException($"Cannot create '{string.Join(".", segments)}': parent is missing or not an object.");
-        if (FindMember(model, parent, segments[^1]) >= 0)
+        var idx = FindMember(model, parent, segments[^1]);
+        if (idx >= 0)
         {
-            var existing = parent.Members[FindMember(model, parent, segments[^1])].Value;
-            if (existing.Kind != NodeKind.Object)
-                throw new EditorException($"'{string.Join(".", segments)}' already exists and is not an object.");
+            if (parent.Members[idx].Value.Kind != kind)
+                throw new EditorException($"'{string.Join(".", segments)}' already exists and is not an {(array ? "array" : "object")}.");
             return data;
         }
-        var (at, end, insert) = BuildInsert(model, parent, segments[^1], "{}"u8.ToArray(), data);
+        var (at, end, insert) = BuildInsert(parent, segments[^1], array ? "[]"u8.ToArray() : "{}"u8.ToArray(), data);
         return Splice(data, at, end, insert);
     }
 
-    /// <summary>Computes the splice region and text for appending a new member to an object.</summary>
-    private static (int At, int End, byte[] Text) BuildInsert(Model model, Node parent, string name, byte[] valueBytes, byte[] data)
+    /// <summary>
+    /// Computes the splice region and text for appending a new member to an object, or (with a null
+    /// <paramref name="name"/>) a new element to an array.
+    /// </summary>
+    private static (int At, int End, byte[] Text) BuildInsert(Node parent, string? name, byte[] valueBytes, byte[] data)
     {
         var nl = UsesCrlf(data) ? "\r\n" : "\n";
-        var memberSource = JsonSerializer.Serialize(name) + ": " + Encoding.UTF8.GetString(valueBytes);
+        var memberSource = (name is null ? "" : JsonSerializer.Serialize(name) + ": ") + Encoding.UTF8.GetString(valueBytes);
         var open = (int)parent.Start;
-        var close = (int)parent.End - 1; // index of '}'
-        var lastContent = SkipWsBackward(data, close); // last non-whitespace char before '}'
+        var close = (int)parent.End - 1; // index of '}' or ']'
+        var lastContent = SkipWsBackward(data, close); // last non-whitespace char before the closing bracket
         var multiline = ContainsNewline(data, open, close);
-        var memberIndent = parent.Members.Count > 0
-            ? IndentBefore(data, (int)parent.Members[0].NameStart)
+        var count = parent.Kind == NodeKind.Array ? parent.Elements.Count : parent.Members.Count;
+        var memberIndent = count > 0
+            ? IndentBefore(data, (int)(parent.Kind == NodeKind.Array ? parent.Elements[0].Start : parent.Members[0].NameStart))
             : IndentBefore(data, open) + DefaultUnit;
 
-        if (parent.Members.Count == 0)
+        if (count == 0)
         {
             // Replace the (possibly whitespace-only) interior of the empty object.
             var inner = multiline
@@ -200,6 +233,9 @@ public sealed class JsoncEditor
         public required long Start { get; init; }
         public long End { get; set; }
         public List<Member> Members { get; } = [];
+
+        /// <summary>Array elements (arrays only).</summary>
+        public List<Node> Elements { get; } = [];
     }
 
     private struct Member
@@ -255,7 +291,7 @@ public sealed class JsoncEditor
                 {
                     if (pos >= tokens.Count) throw new EditorException("Unterminated JSON array.");
                     if (tokens[pos].Kind == JsonTokenType.EndArray) { pos++; break; }
-                    _ = ParseValue(tokens, ref pos);
+                    node.Elements.Add(ParseValue(tokens, ref pos));
                 }
                 node.End = tokens[pos - 1].End;
                 return node;
@@ -302,6 +338,14 @@ public sealed class JsoncEditor
         (long, long, Node) result = default;
         for (var i = 0; i < segments.Count; i++)
         {
+            if (IsSelector(segments[i]))
+            {
+                // An array element has no member name: its "name" span is empty at the element start.
+                if (current.Kind != NodeKind.Array || FindElement(model, current, segments[i]) is not { } element) return null;
+                result = (element.Start, element.Start, element);
+                current = element;
+                continue;
+            }
             if (current.Kind != NodeKind.Object) return null;
             var idx = FindMember(model, current, segments[i]);
             if (idx < 0) return null;
@@ -310,6 +354,20 @@ public sealed class JsoncEditor
             current = m.Value;
         }
         return result;
+    }
+
+    /// <summary>The first object element of an array that matches a <c>[key=value&amp;…]</c> selector.</summary>
+    private static Node? FindElement(Model model, Node array, string selector)
+    {
+        foreach (var element in array.Elements)
+        {
+            if (element.Kind != NodeKind.Object) continue;
+            var slice = Encoding.UTF8.GetString(model.Data, (int)element.Start, checked((int)(element.End - element.Start)));
+            var node = JsonNode.Parse(slice, nodeOptions: new JsonNodeOptions(),
+                documentOptions: new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            if (ElementMatches(node, selector)) return element;
+        }
+        return null;
     }
 
     private static int FindMember(Model model, Node parent, string name)
@@ -335,12 +393,86 @@ public sealed class JsoncEditor
 
     private static string[] SplitPath(string path)
     {
-        var parts = path.Split('.', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var parts = SplitKeyPath(path);
         if (parts.Length == 0) throw new ArgumentException("Empty key path.", nameof(path));
         return parts;
     }
 
+    // ---------------------------------------------------------------- key paths and array selectors
+
+    /// <summary>Splits a dotted key path; dots inside a <c>[…]</c> selector segment do not split.</summary>
+    public static string[] SplitKeyPath(string path)
+    {
+        var parts = new List<string>();
+        var current = new StringBuilder();
+        var depth = 0;
+        foreach (var c in path)
+        {
+            if (c == '[') depth++;
+            else if (c == ']') depth = Math.Max(0, depth - 1);
+            if (c == '.' && depth == 0)
+            {
+                if (current.ToString().Trim() is { Length: > 0 } part) parts.Add(part);
+                current.Clear();
+                continue;
+            }
+            current.Append(c);
+        }
+        if (current.ToString().Trim() is { Length: > 0 } tail) parts.Add(tail);
+        return [.. parts];
+    }
+
+    /// <summary>
+    /// Builds an array-element selector segment such as <c>[provider=astra&amp;id=gpt-5]</c>. Keys and values
+    /// must not contain '[', ']', '=' or '&amp;'.
+    /// </summary>
+    public static string Selector(params (string Key, string Value)[] conditions)
+    {
+        if (conditions.Length == 0) throw new ArgumentException("A selector needs at least one condition.", nameof(conditions));
+        foreach (var (key, value) in conditions)
+        {
+            if (key.Length == 0 || key.IndexOfAny(SelectorReserved) >= 0 || value.IndexOfAny(SelectorReserved) >= 0)
+                throw new EditorException($"'{key}={value}' cannot be used in an array selector.");
+        }
+        return "[" + string.Join("&", conditions.Select(c => c.Key + "=" + c.Value)) + "]";
+    }
+
+    /// <summary>True when the path segment is an array-element selector.</summary>
+    public static bool IsSelector(string segment) => segment.Length >= 2 && segment[0] == '[' && segment[^1] == ']';
+
+    /// <summary>True when <paramref name="element"/> is an object whose string members satisfy the selector.</summary>
+    public static bool ElementMatches(JsonNode? element, string selector)
+    {
+        if (element is not JsonObject o) return false;
+        foreach (var condition in selector[1..^1].Split('&'))
+        {
+            var eq = condition.IndexOf('=');
+            if (eq <= 0) throw new EditorException($"Invalid array selector '{selector}'.");
+            var (key, value) = (condition[..eq], condition[(eq + 1)..]);
+            if (o[key] is not JsonValue v || !v.TryGetValue(out string? s) || !string.Equals(s, value, StringComparison.Ordinal))
+                return false;
+        }
+        return true;
+    }
+
+    private static readonly char[] SelectorReserved = ['[', ']', '=', '&'];
+
     // ---------------------------------------------------------------- byte helpers
+
+    /// <summary>True when the document contains at least one trailing comma (JSONC style).</summary>
+    private static bool UsesTrailingCommas(byte[] data)
+    {
+        var reader = new Utf8JsonReader(data, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = false });
+        try
+        {
+            while (reader.Read()) { }
+            return false;
+        }
+        catch (JsonException)
+        {
+            return true; // the document parses with trailing commas allowed, so they are the difference
+        }
+    }
 
     private static byte[] Splice(byte[] data, int start, int end, byte[] replacement)
     {

@@ -400,11 +400,12 @@ public static class ProviderEndpoints
             try { result = await next(context); }
             finally { _writes.Release(); }
 
-            // Plan §7.6: an enabled OpenCode lists the bound provider's models in its config; keep that list in step
-            // with whatever this write changed (models added/removed/renamed, provider enabled/disabled).
+            // Plan §7.6: enabled clients with a model list (OpenCode, Pi, MiniMax Code, Copilot CLI) list the bound
+            // provider's models in their config; keep those lists in step with whatever this write changed (models
+            // added/removed/renamed, provider enabled/disabled).
             if (context.HttpContext.GetRouteValue("id") is string id && result is not IStatusCodeHttpResult { StatusCode: >= 400 })
                 await context.HttpContext.RequestServices.GetRequiredService<ClientService>()
-                    .SyncOpenCodeModelsAsync(id, context.HttpContext.RequestAborted);
+                    .SyncModelListsAsync(id, context.HttpContext.RequestAborted);
             return result;
         }
     }

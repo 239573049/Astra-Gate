@@ -73,6 +73,8 @@ public abstract class ClientAdapterBase : IClientAdapter
     /// <summary>The file format of a config file, derived from its name.</summary>
     protected static ConfigFileFormat FormatOfPath(string path) =>
         path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ? ConfigFileFormat.Toml
+        : path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
+            ? ConfigFileFormat.Yaml
         : path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".jsonc", StringComparison.OrdinalIgnoreCase)
             ? ConfigFileFormat.Json
             : path.Contains(".env", StringComparison.Ordinal) ? ConfigFileFormat.Env
@@ -105,4 +107,37 @@ public abstract class ClientAdapterBase : IClientAdapter
 
     /// <summary>Shorthand for a .NET string as JSON text.</summary>
     protected static string JsonString(string value) => System.Text.Json.JsonSerializer.Serialize(value);
+
+    /// <summary>
+    /// The bound provider's models from the "models" extra (<c>{"…": {"id": …, "name": …}}</c>), in order and
+    /// without duplicates; the selected model is appended when the list does not contain it.
+    /// </summary>
+    protected static IReadOnlyList<(string Id, string? Name)> ModelEntries(EnableContext ctx)
+    {
+        var result = new List<(string Id, string? Name)>();
+        foreach (var (_, value) in ctx.ExtraObject("models") ?? new System.Text.Json.Nodes.JsonObject())
+        {
+            if (value is not System.Text.Json.Nodes.JsonObject m) continue;
+            var id = (m["id"] as System.Text.Json.Nodes.JsonValue)?.TryGetValue(out string? s) == true ? s : null;
+            if (string.IsNullOrEmpty(id) || result.Any(e => e.Id == id)) continue;
+            var name = (m["name"] as System.Text.Json.Nodes.JsonValue)?.TryGetValue(out string? n) == true ? n : null;
+            result.Add((id, string.IsNullOrEmpty(name) ? null : name));
+        }
+        if (!string.IsNullOrEmpty(ctx.Model) && result.All(e => e.Id != ctx.Model)) result.Add((ctx.Model, null));
+        return result;
+    }
+
+    /// <summary>The string a JSON value text holds, or null when it is absent or not a JSON string.</summary>
+    protected static string? StringOf(string? jsonText)
+    {
+        if (jsonText is null) return null;
+        try
+        {
+            return System.Text.Json.Nodes.JsonNode.Parse(jsonText) is System.Text.Json.Nodes.JsonValue v && v.TryGetValue(out string? s) ? s : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
 }

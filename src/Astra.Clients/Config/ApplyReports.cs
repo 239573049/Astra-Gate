@@ -7,28 +7,28 @@ namespace Astra.Clients.Config;
 public static class ConfigValueCodec
 {
     /// <summary>
-    /// Encodes a raw value source text as the JSON text stored in plans/state. For JSON files the value
-    /// text is already JSON and is returned as-is; for TOML/.env the raw source text is JSON-quoted.
+    /// Encodes a raw value source text as the JSON text stored in plans/state. For JSON and YAML files the
+    /// value text is already JSON and is returned as-is; for TOML/.env the raw source text is JSON-quoted.
     /// </summary>
     public static string? Encode(ConfigFileFormat format, string? rawSourceText)
     {
         if (rawSourceText is null) return null;
-        return format == ConfigFileFormat.Json ? rawSourceText : JsonSerializer.Serialize(rawSourceText);
+        return IsJsonValued(format) ? rawSourceText : JsonSerializer.Serialize(rawSourceText);
     }
 
     /// <summary>Decodes stored JSON text back into the raw value source text to splice into the file.</summary>
     public static string? DecodeToSource(ConfigFileFormat format, string? jsonText)
     {
         if (jsonText is null) return null;
-        return format == ConfigFileFormat.Json ? jsonText : JsonSerializer.Deserialize<string>(jsonText);
+        return IsJsonValued(format) ? jsonText : JsonSerializer.Deserialize<string>(jsonText);
     }
 
-    /// <summary>Compares the current value source text against the recorded JSON text (structure-aware for JSON).</summary>
+    /// <summary>Compares the current value source text against the recorded JSON text (structure-aware for JSON and YAML).</summary>
     public static bool EqualsValue(ConfigFileFormat format, string? currentSource, string? recordedJson)
     {
         if (recordedJson is null) return currentSource is null;
         if (currentSource is null) return false;
-        if (format == ConfigFileFormat.Json)
+        if (IsJsonValued(format))
         {
             var a = ParseNode(currentSource);
             var b = ParseNode(recordedJson);
@@ -36,6 +36,9 @@ public static class ConfigValueCodec
         }
         return string.Equals(currentSource, DecodeToSource(format, recordedJson), StringComparison.Ordinal);
     }
+
+    /// <summary>Formats whose editors exchange values as JSON text (JSON itself, and YAML through its JSON data model).</summary>
+    public static bool IsJsonValued(ConfigFileFormat format) => format is ConfigFileFormat.Json or ConfigFileFormat.Yaml;
 
     private static JsonNode? ParseNode(string text)
     {

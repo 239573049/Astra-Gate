@@ -236,6 +236,44 @@ public class ClientApiTests
     }
 
     [Fact]
+    public async Task Copilot_And_MiniMax_Model_Lists_Follow_The_Providers_Models()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        var providers = Path.Combine(host.ClientHome, ".copilot", "providers.json");
+        var minimax = Path.Combine(host.ClientHome, ".minimax", "config.yaml");
+        Directory.CreateDirectory(Path.GetDirectoryName(minimax)!);
+        const string minimaxOriginal = "logLevel: info\n";
+        await File.WriteAllTextAsync(minimax, minimaxOriginal);
+
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/copilot-cli/enable", new { providerId = provider.Id, model = "gpt-5" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/minimax-code/enable", new { providerId = provider.Id });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["gpt-5"], CopilotModels(providers));
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{provider.Id}/models", new { modelIds = new[] { "gpt-5-mini" } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["gpt-5", "gpt-5-mini"], CopilotModels(providers));
+        var yaml = Astra.Clients.Editing.YamlEditor.ParseToJson(await File.ReadAllTextAsync(minimax))!;
+        Assert.Equal(["gpt-5", "gpt-5-mini"], yaml["custom_provider"]!["astra"]!["models"]!.AsObject().Select(m => m.Key).Order(StringComparer.Ordinal));
+
+        foreach (var kind in new[] { "copilot-cli", "minimax-code" })
+        {
+            (status, var disabled) = await host.SendAsync(HttpMethod.Post, $"/api/clients/{kind}/disable");
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Empty(disabled!["drifted"]!.AsArray());
+        }
+        Assert.False(File.Exists(providers)); // created by Astra, removed again
+        Assert.Equal(minimaxOriginal, await File.ReadAllTextAsync(minimax));
+    }
+
+    private static List<string> CopilotModels(string providers) =>
+        JsonNode.Parse(File.ReadAllText(providers))!["models"]!.AsArray()
+            .Where(m => m!["provider"]!.GetValue<string>() == "astra")
+            .Select(m => m!["id"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToList();
+
+    [Fact]
     public async Task After_The_Port_Changes_Enabled_Clients_Are_Flagged_And_Rewritten_In_One_Go()
     {
         await using var host = await TestHost.StartAsync();

@@ -6,7 +6,7 @@ using Astra.Core;
 namespace Astra.Clients.Config;
 
 /// <summary>
-/// Uniform editor interface over the three formats, shared by the applier (execution) and the
+/// Uniform editor interface over the four formats, shared by the applier (execution) and the
 /// adapters (plan simulation and inspection).
 /// </summary>
 internal abstract class ConfigEditorOps
@@ -28,6 +28,7 @@ internal abstract class ConfigEditorOps
         ConfigFileFormat.Toml => new TomlOps(new TomlEditor(text)),
         ConfigFileFormat.Json => new JsonOps(new JsoncEditor(text)),
         ConfigFileFormat.Env => new EnvOps(new DotEnvEditor(text)),
+        ConfigFileFormat.Yaml => new YamlOps(new YamlEditor(text)),
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
 
@@ -111,6 +112,30 @@ internal abstract class ConfigEditorOps
             _editor = _editor.SetRaw(change.KeyPath, ConfigValueCodec.DecodeToSource(ConfigFileFormat.Env, change.After)!);
         }
 
+        public override void RestoreSource(ConfigChange change, string source) => _editor = _editor.SetRaw(change.KeyPath, source);
+
+        public override void Remove(ConfigChange change) => _editor = _editor.Remove(change.KeyPath);
+    }
+
+    private sealed class YamlOps : ConfigEditorOps
+    {
+        private YamlEditor _editor;
+
+        public YamlOps(YamlEditor editor) => _editor = editor;
+
+        public override string Text => _editor.Text;
+
+        public override string? Read(ConfigChange change) => _editor.GetJsonText(change.KeyPath);
+
+        public override void Apply(ConfigChange change, List<string> warnings)
+        {
+            _ = warnings;
+            if (change.After is null) { Remove(change); return; }
+            _editor = _editor.SetRaw(change.KeyPath, change.After);
+        }
+
+        // YAML values are restored from their JSON data model; ClientConfigApplier then puts the original
+        // bytes back once the document is semantically what it was before.
         public override void RestoreSource(ConfigChange change, string source) => _editor = _editor.SetRaw(change.KeyPath, source);
 
         public override void Remove(ConfigChange change) => _editor = _editor.Remove(change.KeyPath);

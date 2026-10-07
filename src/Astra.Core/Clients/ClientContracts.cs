@@ -9,8 +9,16 @@ public static class ClientKinds
     public const string OpenCode = "opencode";
     public const string ClaudeDesktop = "claude-desktop";
     public const string GrokBuild = "grok-build";
+    public const string Pi = "pi";
+    public const string HermesAgent = "hermes-agent";
+    public const string MiniMaxCode = "minimax-code";
+    public const string CopilotCli = "copilot-cli";
 
-    public static readonly IReadOnlyList<string> All = [Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild];
+    public static readonly IReadOnlyList<string> All =
+        [Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli];
+
+    /// <summary>Clients whose configuration lists the bound provider's models (kept current when that list changes).</summary>
+    public static readonly IReadOnlyList<string> WithModelList = [OpenCode, Pi, MiniMaxCode, CopilotCli];
 
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch
