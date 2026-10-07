@@ -34,13 +34,17 @@ class FakeControl implements ServerControl {
 }
 
 /** Writes a fake server package into the staging prefix with controllable bytes. */
-function fakeInstaller(binaryContent: () => string) {
+function fakeInstaller(binaryContent: () => string, indexHtml?: string) {
   return async (prefix: string, spec: string): Promise<void> => {
     const at = spec.lastIndexOf('@');
     const pkg = spec.slice(0, at);
     const bin = path.join(prefix, 'node_modules', ...pkg.split('/'), 'bin', 'astra-server');
     fs.mkdirSync(path.dirname(bin), { recursive: true });
     fs.writeFileSync(bin, binaryContent());
+    if (indexHtml !== undefined) {
+      fs.mkdirSync(path.join(path.dirname(bin), 'wwwroot'), { recursive: true });
+      fs.writeFileSync(path.join(path.dirname(bin), 'wwwroot', 'index.html'), indexHtml);
+    }
   };
 }
 
@@ -196,5 +200,43 @@ describe('applyServerUpdate', () => {
     await applyServerUpdate(h.opts);
     expect(h.control.stops).toBe(0);
     expect(h.control.starts).toBe(1);
+  });
+
+  it('installs the package wwwroot next to the managed binary', async () => {
+    const h = harness(tmp);
+    h.opts.installIntoPrefix = fakeInstaller(() => FAKE_BINARY, 'new-ui');
+    const { serverDir } = updatePaths(h.home);
+    fs.mkdirSync(path.join(serverDir, 'wwwroot'), { recursive: true });
+    fs.writeFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'old-ui');
+
+    await applyServerUpdate(h.opts);
+
+    expect(fs.readFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'utf8')).toBe('new-ui');
+    expect(fs.existsSync(path.join(serverDir, 'wwwroot.prev'))).toBe(false);
+  });
+
+  it('restores the previous wwwroot on rollback', async () => {
+    const h = harness(tmp);
+    h.opts.installIntoPrefix = fakeInstaller(() => FAKE_BINARY, 'new-ui');
+    h.control.versionToReport = '0.1.0';
+    const { serverDir } = updatePaths(h.home);
+    fs.mkdirSync(path.join(serverDir, 'wwwroot'), { recursive: true });
+    fs.writeFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'old-ui');
+
+    await expect(applyServerUpdate(h.opts)).rejects.toThrow(/reports 0.1.0/);
+
+    expect(fs.readFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'utf8')).toBe('old-ui');
+    expect(fs.existsSync(path.join(serverDir, 'wwwroot.prev'))).toBe(false);
+  });
+
+  it('leaves an existing wwwroot alone when the package ships none', async () => {
+    const h = harness(tmp);
+    const { serverDir } = updatePaths(h.home);
+    fs.mkdirSync(path.join(serverDir, 'wwwroot'), { recursive: true });
+    fs.writeFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'old-ui');
+
+    await applyServerUpdate(h.opts);
+
+    expect(fs.readFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'utf8')).toBe('old-ui');
   });
 });

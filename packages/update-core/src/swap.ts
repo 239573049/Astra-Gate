@@ -92,3 +92,40 @@ export function pruneManagedBinaries(serverDir: string, currentTarget: string, k
     }
   }
 }
+
+/**
+ * The server serves the web UI from `wwwroot` beside its own executable
+ * (AstraApp: AppContext.BaseDirectory), so a managed binary in serverDir needs
+ * serverDir/wwwroot. Replaces it with the copy shipped next to `binaryPath`
+ * (bin/wwwroot in the platform package); the previous copy is kept as
+ * wwwroot.prev until commitManagedWebRoot / restoreManagedWebRoot. Returns
+ * false, touching nothing, when the package ships no wwwroot.
+ */
+export function installManagedWebRoot(binaryPath: string, serverDir: string): boolean {
+  const src = path.join(path.dirname(binaryPath), 'wwwroot');
+  if (!fs.existsSync(src)) return false;
+  const dest = path.join(serverDir, 'wwwroot');
+  const tmp = `${dest}.tmp`;
+  const prev = `${dest}.prev`;
+  fs.mkdirSync(serverDir, { recursive: true });
+  fs.rmSync(tmp, { recursive: true, force: true });
+  fs.cpSync(src, tmp, { recursive: true });
+  fs.rmSync(prev, { recursive: true, force: true });
+  if (fs.existsSync(dest)) fs.renameSync(dest, prev);
+  fs.renameSync(tmp, dest);
+  return true;
+}
+
+/** Drops the wwwroot.prev kept by installManagedWebRoot once the update stuck. */
+export function commitManagedWebRoot(serverDir: string): void {
+  fs.rmSync(path.join(serverDir, 'wwwroot.prev'), { recursive: true, force: true });
+}
+
+/** Undoes installManagedWebRoot: puts wwwroot.prev back (no-op without one). */
+export function restoreManagedWebRoot(serverDir: string): void {
+  const dest = path.join(serverDir, 'wwwroot');
+  const prev = `${dest}.prev`;
+  if (!fs.existsSync(prev)) return;
+  fs.rmSync(dest, { recursive: true, force: true });
+  fs.renameSync(prev, dest);
+}

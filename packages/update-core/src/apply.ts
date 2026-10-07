@@ -16,7 +16,14 @@ import {
   type UpdateState,
 } from './state.js';
 import { stageServerBinary } from './staging.js';
-import { backupCurrentBinary, installManagedBinary, pruneManagedBinaries } from './swap.js';
+import {
+  backupCurrentBinary,
+  commitManagedWebRoot,
+  installManagedBinary,
+  installManagedWebRoot,
+  pruneManagedBinaries,
+  restoreManagedWebRoot,
+} from './swap.js';
 import { isApiVersionCompatible, isNewerVersion } from './version.js';
 
 export class UpdateError extends Error {
@@ -121,6 +128,7 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
 
   const previousInstall = readInstallInfo(o.home);
   let swapped = false;
+  let webRootSwapped = false;
   let backupPath: string | null = null;
 
   try {
@@ -162,6 +170,14 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
       log('Restarting the Astra server…');
       await o.control.stop();
     }
+    // The web UI is read from wwwroot beside the binary; swap it while the
+    // server is down (no open handles on Windows). Best effort: a failure
+    // leaves the previous UI in place rather than failing the update.
+    try {
+      webRootSwapped = installManagedWebRoot(staged.path, paths.serverDir);
+    } catch (err) {
+      log(`Could not update the web UI files: ${err instanceof Error ? err.message : String(err)}`);
+    }
     await o.control.start();
     const reported = await o.control.probeVersion();
     if (reported !== o.manifest.version) {
@@ -172,13 +188,14 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
 
     // Success: free the ~90 MB staging prefix immediately (it is wiped on the next run anyway).
     fs.rmSync(paths.stagingDir, { recursive: true, force: true });
+    if (webRootSwapped) commitManagedWebRoot(paths.serverDir);
     writeUpdateState(paths.stateFile, { ...initialState(now), phase: 'idle' }, now);
     log(`Astra updated to ${o.manifest.version}.`);
     return { from: o.currentVersion, to: o.manifest.version, serverPath };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     setState('rolling-back', 'rolling-back', message);
-    if (swapped) await rollback(o, previousInstall, backupPath, setState, log);
+    if (swapped) await rollback(o, previousInstall, backupPath, webRootSwapped, setState, log);
     const failed: UpdateState = {
       phase: 'failed',
       targetVersion: o.manifest.version,
@@ -196,6 +213,7 @@ async function rollback(
   o: ApplyServerUpdateOptions,
   previousInstall: InstallInfo | null,
   backupPath: string | null,
+  webRootSwapped: boolean,
   setState: (phase: UpdateState['phase'], step?: string, error?: string | null) => void,
   log: (line: string) => void,
 ): Promise<void> {
@@ -206,6 +224,7 @@ async function rollback(
       writeInstallInfo(o.home, applyServerInfo(previousInstall, { serverPath: restorePath }));
     }
     if (await o.control.isRunning()) await o.control.stop();
+    if (webRootSwapped) restoreManagedWebRoot(updatePaths(o.home).serverDir);
     await o.control.start();
   } catch (rollbackErr) {
     setState('failed', undefined, `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);

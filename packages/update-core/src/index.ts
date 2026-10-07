@@ -28,9 +28,12 @@ export { sha256File, stageServerBinary, type StagedServerBinary, type StageServe
 export {
   MAX_BACKUPS,
   backupCurrentBinary,
+  commitManagedWebRoot,
   installManagedBinary,
+  installManagedWebRoot,
   pruneBackups,
   pruneManagedBinaries,
+  restoreManagedWebRoot,
 } from './swap.js';
 export {
   UpdateError,
