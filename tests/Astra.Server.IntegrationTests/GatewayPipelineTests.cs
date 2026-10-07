@@ -639,12 +639,12 @@ public class GatewayPipelineTests
     {
         var anthropic = new RequestRecord();
         RequestReasoning.Capture(anthropic, ApiProtocol.Anthropic,
-            JsonNode.Parse($"""{"thinking":{"type":"enabled","budget_tokens":{{budgetJson}}}}""")!.AsObject());
+            JsonNode.Parse("{\"thinking\":{\"type\":\"enabled\",\"budget_tokens\":" + budgetJson + "}}")!.AsObject());
         Assert.Null(anthropic.ReasoningBudgetTokens);
 
         var gemini = new RequestRecord();
         RequestReasoning.Capture(gemini, ApiProtocol.Gemini,
-            JsonNode.Parse($"""{"generationConfig":{"thinkingConfig":{"thinkingBudget":{{budgetJson}}}}}""")!.AsObject());
+            JsonNode.Parse("{\"generationConfig\":{\"thinkingConfig\":{\"thinkingBudget\":" + budgetJson + "}}}")!.AsObject());
         Assert.Null(gemini.ReasoningBudgetTokens);
         Assert.Null(gemini.ReasoningMode);
     }

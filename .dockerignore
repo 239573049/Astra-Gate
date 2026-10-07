@@ -1,0 +1,17 @@
+# Docker build context excludes (context = repository root, docs/Dockerfile).
+# The docs image only needs: root workspace files, docs/, and the package.json
+# of every workspace member (pnpm-lock.yaml importers must all resolve) — so
+# sibling packages are kept but their heavy outputs are not.
+.git
+.github
+**/node_modules
+**/.next
+**/dist
+**/out
+**/release
+**/coverage
+src
+tests
+docs/shots
+npm/*/bin
+npm/*/app

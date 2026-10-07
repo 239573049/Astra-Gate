@@ -20,6 +20,9 @@ Astra (`astragate`) — a local AI gateway. One product, two toolchains:
 
 `docs/` is the fumadocs documentation site (`pnpm --filter @aidotnet/docs dev` / `build`; content in
 `docs/content/docs`, split into modules by root folders, each with a `meta.json` with `"root": true`).
+It doubles as the official website and ships as its own Docker image: `.github/workflows/docs.yml`
+builds `docs/Dockerfile` (Next standalone output; the build context is the repo root) and pushes to
+`ghcr.io/<owner>/<repo>/docs` on every `main` push that touches `docs/**` (or the lockfile / workflow).
 Tutorial screenshots in `docs/public/screenshots/` are captured from the live UI (`web` dev server on
 :5173 + a running astra-server) via `node docs/scripts/snap.mjs`; re-run it after UI changes instead of
 editing PNGs. `login.png` is the only mockup-rendered shot (`shots/login.html`, loopback never shows a
