@@ -305,8 +305,8 @@ function ReasoningBadge({ r }: { r: Pick<RequestSummary, 'reasoningEffort' | 're
   const parts = reasoningParts(r, t);
   if (parts.length === 0) return null;
   return (
-    <Badge tone="neutral" className="text-[10px] font-normal" title={t('requests.reasoning.hint')}>
-      {t('requests.reasoning')}: {parts.join(' · ')}
+    <Badge tone="neutral" className="max-w-44 text-[10px] font-normal" title={`${t('requests.reasoning.hint')} ${parts.join(' · ')}`}>
+      <span className="block max-w-40 truncate">{t('requests.reasoning')}: {parts.join(' · ')}</span>
     </Badge>
   );
 }

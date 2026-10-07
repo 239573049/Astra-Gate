@@ -496,6 +496,20 @@ describe('Requests list reasoning badge', () => {
     expect(screen.getByText('Reasoning: auto')).toBeInTheDocument();
   });
 
+  it('bounds long reasoning labels without losing their recorded value', () => {
+    const effort = 'custom-effort-'.repeat(100);
+    hookSpies.useRequests.mockReturnValue(hookResult(pageOf([
+      summary({ id: 'r-long-effort', reasoningEffort: effort }),
+    ])));
+    showPage();
+
+    const label = screen.getByText(`Reasoning: ${effort}`);
+    expect(label).toHaveClass('max-w-40', 'truncate');
+    const badge = label.closest('[title]')!;
+    expect(badge).toHaveClass('max-w-44');
+    expect(badge.getAttribute('title')).toContain(effort);
+  });
+
   it('displays off explicitly (none / disabled) and stays silent for unrecorded rows', () => {
     hookSpies.useRequests.mockReturnValue(
       hookResult(
