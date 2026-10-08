@@ -47,8 +47,11 @@ public class UpdateApiTests
 
         var (_, check) = await host.SendAsync(HttpMethod.Post, "/api/update/check");
         Assert.Null((string?)check!["error"]);
-        Assert.Equal("99.0.0", check["availableVersion"]!.GetValue<string>());
+        Assert.Equal("99.0.0", check["available"]!.GetValue<string>());
         Assert.Equal("big release", check["notes"]!.GetValue<string>());
+        // Same shape as /status — the web UI caches this response as the status.
+        Assert.Equal(ServerOptions.Version, check["current"]!.GetValue<string>());
+        Assert.True(check["feedConfigured"]!.GetValue<bool>());
 
         var status = await host.GetJsonAsync("/api/update/status");
         Assert.Equal("99.0.0", status["available"]!.GetValue<string>());
@@ -64,7 +67,7 @@ public class UpdateApiTests
 
         await host.SendAsync(HttpMethod.Patch, "/api/settings", new JsonObject { ["updateFeedUrl"] = "http://feed.test/astra" });
         var (_, check) = await host.SendAsync(HttpMethod.Post, "/api/update/check");
-        Assert.True(check!["availableVersion"] is null);
+        Assert.True(check!["available"] is null);
         Assert.True(check["notes"] is null);
         Assert.NotNull(check["lastCheckAt"]);
     }

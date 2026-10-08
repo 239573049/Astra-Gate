@@ -14,22 +14,29 @@ public static class UpdateEndpoints
         app.MapGet("/api/update/status", async (UpdateCheckService checks, SettingsService settings, AstraDatabase db, CancellationToken ct) =>
         {
             var state = await db.Settings.GetAsync<UpdateCheckState>(UpdateCheckService.StateKey, ct) ?? new UpdateCheckState();
-            var s = settings.Current;
-            return Results.Ok(new
-            {
-                current = ServerOptions.Version,
-                available = state.AvailableVersion,
-                lastCheckAt = state.LastCheckAt,
-                notes = state.Notes,
-                error = state.Error,
-                channel = s.UpdateChannel,
-                autoCheck = s.UpdateAutoCheck,
-                feedConfigured = checks.EffectiveFeedUrl is not null,
-            });
+            return Results.Ok(Status(state, checks, settings));
         });
 
         var g = app.MapGroup("/api/update").AddEndpointFilter<AdminApiErrorFilter>();
 
-        g.MapPost("/check", async (UpdateCheckService checks, CancellationToken ct) => Results.Ok(await checks.CheckAsync(ct)));
+        // Same shape as /status: the web UI stores the result in the status query cache.
+        g.MapPost("/check", async (UpdateCheckService checks, SettingsService settings, CancellationToken ct) =>
+            Results.Ok(Status(await checks.CheckAsync(ct), checks, settings)));
+    }
+
+    private static object Status(UpdateCheckState state, UpdateCheckService checks, SettingsService settings)
+    {
+        var s = settings.Current;
+        return new
+        {
+            current = ServerOptions.Version,
+            available = state.AvailableVersion,
+            lastCheckAt = state.LastCheckAt,
+            notes = state.Notes,
+            error = state.Error,
+            channel = s.UpdateChannel,
+            autoCheck = s.UpdateAutoCheck,
+            feedConfigured = checks.EffectiveFeedUrl is not null,
+        };
     }
 }
