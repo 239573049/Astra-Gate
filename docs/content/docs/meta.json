@@ -1,0 +1,5 @@
+{
+  "title": "Astra 文档",
+  "description": "Astra Gate 用户文档：快速开始、管理控制台、CLI 参考、桌面端与进阶原理",
+  "pages": ["guide", "console", "cli", "desktop", "advanced"]
+}

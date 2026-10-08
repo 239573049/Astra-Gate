@@ -19,10 +19,12 @@ import { stageServerBinary } from './staging.js';
 import {
   backupCurrentBinary,
   commitManagedWebRoot,
+  commitNativeCompanions,
   installManagedBinary,
   installManagedWebRoot,
   pruneManagedBinaries,
   restoreManagedWebRoot,
+  restoreNativeCompanions,
 } from './swap.js';
 import { isApiVersionCompatible, isNewerVersion } from './version.js';
 
@@ -157,6 +159,7 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
     if (backupPath) log(`Backed up the current binary to ${backupPath}`);
     const serverPath = installManagedBinary({
       stagedPath: staged.path,
+      nativeLibraries: staged.nativeLibraries,
       serverDir: paths.serverDir,
       version: o.manifest.version,
       platform: o.platform,
@@ -189,6 +192,9 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
     // Success: free the ~90 MB staging prefix immediately (it is wiped on the next run anyway).
     fs.rmSync(paths.stagingDir, { recursive: true, force: true });
     if (webRootSwapped) commitManagedWebRoot(paths.serverDir);
+    // No-op when this run swapped no companions (non-AOT package) — the .prev
+    // snapshots, if any, always belong to the swap that just succeeded.
+    commitNativeCompanions(paths.serverDir);
     writeUpdateState(paths.stateFile, { ...initialState(now), phase: 'idle' }, now);
     log(`Astra updated to ${o.manifest.version}.`);
     return { from: o.currentVersion, to: o.manifest.version, serverPath };
@@ -224,7 +230,11 @@ async function rollback(
       writeInstallInfo(o.home, applyServerInfo(previousInstall, { serverPath: restorePath }));
     }
     if (await o.control.isRunning()) await o.control.stop();
-    if (webRootSwapped) restoreManagedWebRoot(updatePaths(o.home).serverDir);
+    const serverDir = updatePaths(o.home).serverDir;
+    if (webRootSwapped) restoreManagedWebRoot(serverDir);
+    // Put the previous companion libraries back so a rolled-back AOT binary
+    // does not crash on its first database access (no-op without snapshots).
+    restoreNativeCompanions(serverDir);
     await o.control.start();
   } catch (rollbackErr) {
     setState('failed', undefined, `Rollback failed: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);

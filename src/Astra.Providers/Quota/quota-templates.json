@@ -1,0 +1,123 @@
+[
+  {
+    "id": "deepseek", "name": "DeepSeek", "kind": "balance",
+    "appliesTo": ["deepseek"], "hosts": ["api.deepseek.com"],
+    "request": { "method": "GET", "url": "{{origin}}/user/balance", "auth": "provider" },
+    "extract": {
+      "isValid": "is_available",
+      "plans": [ { "each": "balance_infos", "name": "currency", "unit": "currency", "remaining": "total_balance" } ]
+    }
+  },
+  {
+    "id": "openrouter", "name": "OpenRouter", "kind": "balance",
+    "appliesTo": ["openrouter"], "hosts": ["openrouter.ai"],
+    "request": { "method": "GET", "url": "{{origin}}/api/v1/credits", "auth": "provider" },
+    "extract": {
+      "unit": { "$const": "USD" },
+      "total": ["data.total_credits", "total_credits"],
+      "used": ["data.total_usage", "total_usage"],
+      "remaining": [
+        { "$sub": ["data.total_credits", "data.total_usage"] },
+        { "$sub": ["total_credits", "total_usage"] }
+      ]
+    }
+  },
+  {
+    "id": "siliconflow", "name": "SiliconFlow", "kind": "balance",
+    "appliesTo": ["siliconflow"], "hosts": ["api.siliconflow.cn", "api.siliconflow.com"],
+    "request": { "method": "GET", "url": "{{origin}}/v1/user/info", "auth": "provider" },
+    "extract": {
+      "unit": { "$case": { "on": { "$var": "host" }, "cases": { "api.siliconflow.cn": "CNY" }, "default": "USD" } },
+      "remaining": "data.totalBalance"
+    }
+  },
+  {
+    "id": "stepfun", "name": "StepFun", "kind": "balance",
+    "appliesTo": [], "hosts": ["api.stepfun.com", "api.stepfun.ai"],
+    "request": { "method": "GET", "url": "{{origin}}/v1/accounts", "auth": "provider" },
+    "extract": { "unit": { "$const": "CNY" }, "remaining": "balance" }
+  },
+  {
+    "id": "novita", "name": "Novita AI", "kind": "balance",
+    "appliesTo": [], "hosts": ["api.novita.ai"],
+    "request": { "method": "GET", "url": "{{origin}}/v3/user/balance", "auth": "provider" },
+    "extract": { "unit": { "$const": "USD" }, "remaining": { "$scale": "availableBalance", "by": 0.0001 } }
+  },
+  {
+    "id": "newapi", "name": "New API / One API", "kind": "balance",
+    "appliesTo": ["custom-chat", "custom-responses", "custom-anthropic", "custom-gemini"], "hosts": [],
+    "params": [ { "name": "userId", "required": true }, { "name": "accessToken", "secret": true, "required": true } ],
+    "request": {
+      "method": "GET", "url": "{{origin}}/api/user/self", "auth": "none",
+      "headers": { "Authorization": "Bearer {{accessToken}}", "New-Api-User": "{{userId}}" }
+    },
+    "extract": {
+      "isValid": "success", "invalidMessage": "message", "planLabel": "data.group",
+      "unit": { "$const": "USD" },
+      "remaining": { "$div": ["data.quota", 500000] },
+      "used": { "$div": ["data.used_quota", 500000] },
+      "total": { "$div": [{ "$add": ["data.quota", "data.used_quota"] }, 500000] }
+    }
+  },
+  {
+    "id": "kimi-coding", "name": "Kimi For Coding", "kind": "plan",
+    "appliesTo": [], "hosts": ["api.kimi.com"],
+    "request": { "method": "GET", "url": "https://api.kimi.com/coding/v1/usages", "auth": "provider" },
+    "extract": {
+      "plans": [
+        {
+          "each": "limits", "windowMinutes": 300,
+          "remaining": "detail.remaining", "total": "detail.limit",
+          "usedPercent": { "$pctUsed": { "used": { "$sub": ["detail.limit", "detail.remaining"] }, "total": "detail.limit" } },
+          "resetsAt": { "$time": "detail.resetTime" }
+        },
+        {
+          "windowMinutes": 10080,
+          "remaining": "usage.remaining", "total": "usage.limit",
+          "usedPercent": { "$pctUsed": { "used": { "$sub": ["usage.limit", "usage.remaining"] }, "total": "usage.limit" } },
+          "resetsAt": { "$time": "usage.resetTime" }
+        }
+      ]
+    }
+  },
+  {
+    "id": "glm-coding", "name": "GLM Coding Plan", "kind": "plan",
+    "appliesTo": ["zhipuai"], "hosts": ["open.bigmodel.cn", "api.z.ai"],
+    "request": {
+      "method": "GET", "url": "{{origin}}/api/monitor/usage/quota/limit", "auth": "none",
+      "headers": { "Authorization": "{{apiKey}}", "Accept-Language": "en-US,en" }
+    },
+    "extract": {
+      "isValid": "success", "invalidMessage": "msg", "planLabel": "data.level",
+      "plans": [
+        {
+          "each": "data.limits", "where": { "type": ["TOKENS_LIMIT", "CREDIT_LIMIT"], "unit": 3 }, "first": true,
+          "windowMinutes": 300, "usedPercent": "percentage", "resetsAt": { "$time": "nextResetTime" }
+        },
+        {
+          "each": "data.limits", "where": { "type": ["TOKENS_LIMIT", "CREDIT_LIMIT"], "unit": 6 }, "first": true,
+          "windowMinutes": 10080, "usedPercent": "percentage", "resetsAt": { "$time": "nextResetTime" }
+        }
+      ]
+    }
+  },
+  {
+    "id": "minimax-coding", "name": "MiniMax Coding Plan", "kind": "plan",
+    "appliesTo": ["minimax"], "hosts": ["api.minimax.io", "api.minimaxi.com"],
+    "request": { "method": "GET", "url": "{{origin}}/v1/api/openplatform/coding_plan/remains", "auth": "provider" },
+    "extract": {
+      "isValid": { "$eq": ["base_resp.status_code", 0] }, "invalidMessage": "base_resp.status_msg",
+      "plans": [
+        {
+          "each": "model_remains", "where": { "model_name": "general" }, "first": true, "windowMinutes": 300,
+          "usedPercent": { "$sub": [100, "current_interval_remaining_percent"] }, "resetsAt": { "$time": "end_time" }
+        },
+        {
+          "each": "model_remains", "where": { "model_name": "general" }, "first": true, "windowMinutes": 10080,
+          "when": { "$eq": ["current_weekly_status", 1] },
+          "usedPercent": { "$sub": [100, "current_weekly_remaining_percent"] }, "resetsAt": { "$time": "weekly_end_time" }
+        }
+      ]
+    }
+  }
+]

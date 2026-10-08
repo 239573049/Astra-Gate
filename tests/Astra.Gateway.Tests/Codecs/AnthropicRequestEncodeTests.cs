@@ -71,7 +71,7 @@ public class AnthropicRequestEncodeTests
     }
 
     [Fact]
-    public void Auto_Cache_Control_Hits_Last_System_Block_And_Last_Tool_Only()
+    public void Auto_Cache_Control_Hits_System_Tools_And_Message_Tail()
     {
         var r = Request(User(new TextPart("hi")));
         r.System.Add(new TextPart("s1"));
@@ -86,11 +86,69 @@ public class AnthropicRequestEncodeTests
         var tools = Assert.IsType<JsonArray>(on["tools"]);
         Assert.Null(Assert.IsType<JsonObject>(tools[0])["cache_control"]);
         Assert.Equal("ephemeral", Assert.IsType<JsonObject>(tools[1])["cache_control"]!["type"]!.GetValue<string>());
+        var messages = Assert.IsType<JsonArray>(on["messages"]);
+        var blocks = Assert.IsType<JsonArray>(Assert.IsType<JsonObject>(messages[0])!["content"]!);
+        Assert.Equal("ephemeral", Assert.IsType<JsonObject>(blocks[0])!["cache_control"]!["type"]!.GetValue<string>());
         Assert.True(CountCacheControls(on) <= 4);
-        Assert.Equal(2, CountCacheControls(on));
+        Assert.Equal(3, CountCacheControls(on));
 
         var off = Codec.EncodeRequest(r, Ctx(autoCache: false));
         Assert.Equal(0, CountCacheControls(off));
+    }
+
+    [Fact]
+    public void Auto_Cache_Control_Marks_Last_Two_Messages_Only()
+    {
+        var r = Request(
+            User(new TextPart("q1")),
+            Assistant(new TextPart("a1")),
+            User(new ToolResultPart("c1", null, [new TextPart("r1")])),
+            Assistant(new ReasoningPart("hmm", "sig", Origin: ApiProtocol.Anthropic), new TextPart("a2")),
+            User(new TextPart("q2")));
+
+        var body = Codec.EncodeRequest(r, Ctx());
+        var messages = Assert.IsType<JsonArray>(body["messages"]);
+
+        Assert.Equal(0, CountCacheControls(messages[0]));
+        Assert.Equal(0, CountCacheControls(messages[1]));
+        Assert.Equal(0, CountCacheControls(messages[2])); // only the last two messages are marked
+        // thinking cannot carry cache_control: the mark lands on the trailing text instead
+        var blocks = Assert.IsType<JsonArray>(Assert.IsType<JsonObject>(messages[3])!["content"]!);
+        Assert.Null(Assert.IsType<JsonObject>(blocks[0])!["cache_control"]);
+        Assert.NotNull(Assert.IsType<JsonObject>(blocks[1])!["cache_control"]);
+        Assert.Equal(1, CountCacheControls(messages[4]));
+        Assert.Equal(2, CountCacheControls(body));
+    }
+
+    [Fact]
+    public void Auto_Cache_Control_Skips_Empty_Text_And_Marks_Tool_Result()
+    {
+        // user tail: [tool_result, empty text] — the empty text cannot be cached, so the
+        // tool_result block gets the mark; assistant tail: thinking is skipped, text is marked.
+        var r = Request(
+            User(new ToolResultPart("c1", null, [new TextPart("r1")]), new TextPart("")),
+            Assistant(new ReasoningPart("hmm", "sig", Origin: ApiProtocol.Anthropic), new TextPart("a1")));
+
+        var body = Codec.EncodeRequest(r, Ctx());
+        var messages = Assert.IsType<JsonArray>(body["messages"]);
+
+        var userBlocks = Assert.IsType<JsonArray>(Assert.IsType<JsonObject>(messages[0])!["content"]!);
+        Assert.Null(Assert.IsType<JsonObject>(userBlocks[1])!["cache_control"]);
+        Assert.Equal("tool_result", (string?)Assert.IsType<JsonObject>(userBlocks[0])!["type"]);
+        Assert.NotNull(Assert.IsType<JsonObject>(userBlocks[0])!["cache_control"]);
+        Assert.Equal(2, CountCacheControls(body));
+    }
+
+    [Fact]
+    public void Auto_Cache_Control_Skips_Message_Without_Cacheable_Blocks()
+    {
+        var r = Request(
+            User(new TextPart("q")),
+            Assistant(new ReasoningPart("hmm", "sig", Origin: ApiProtocol.Anthropic))); // only thinking
+
+        var body = Codec.EncodeRequest(r, Ctx());
+
+        Assert.Equal(1, CountCacheControls(body)); // the thinking-only tail message is skipped
     }
 
     [Fact]

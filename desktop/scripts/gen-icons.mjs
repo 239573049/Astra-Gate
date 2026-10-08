@@ -186,16 +186,23 @@ function resample(src, sw, sh, dw, dh) {
 
 // ---------- canvas helpers ----------
 // White rounded tile with the art centred on it; 1px soft edge on the corner.
-function drawTile(size, art, artSize, radius) {
+// `margin` shrinks the tile inside the canvas: macOS does not scale an app icon to
+// its slot, so a full-bleed tile renders as the largest thing in the Dock / Launchpad
+// next to the standard (about 10% margin) icon grid.
+function drawTile(size, art, artSize, radius, margin = 0) {
   const rgba = Buffer.alloc(size * size * 4);
+  const tileSize = size - margin * 2;
+  const tileRadius = radius * (tileSize / size);
   const offset = Math.round((size - artSize) / 2);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       let tileAlpha = 1;
-      if (radius > 0) {
-        const cx = Math.min(Math.max(x + 0.5, radius), size - radius);
-        const cy = Math.min(Math.max(y + 0.5, radius), size - radius);
-        tileAlpha = Math.min(1, Math.max(0, radius + 0.5 - Math.hypot(x + 0.5 - cx, y + 0.5 - cy)));
+      if (tileRadius > 0) {
+        const cx = Math.min(Math.max(x + 0.5, margin + tileRadius), size - margin - tileRadius);
+        const cy = Math.min(Math.max(y + 0.5, margin + tileRadius), size - margin - tileRadius);
+        tileAlpha = Math.min(1, Math.max(0, tileRadius + 0.5 - Math.hypot(x + 0.5 - cx, y + 0.5 - cy)));
+      } else if (margin > 0) {
+        tileAlpha = Math.max(0, Math.min(x + 0.5 - margin, y + 0.5 - margin, size - margin - x - 0.5, size - margin - y - 0.5, 1));
       }
       const o = (y * size + x) * 4;
       rgba[o] = rgba[o + 1] = rgba[o + 2] = 255;
@@ -258,18 +265,22 @@ const art = (size) => ({ w: size, h: size, rgba: resample(square, side, side, si
 
 mkdirSync(appAssetsDir, { recursive: true });
 
-// App icon: white rounded tile, art inset 4%.
+// App icon: white rounded tile, art inset 4%. The tile keeps the margin macOS expects
+// (its Dock / Launchpad grid sits at ~88% of the slot), so the icon is not oversized there.
 {
   const size = 1024;
-  const artSize = Math.round(size * 0.92);
+  const margin = Math.round(size * 0.06);
+  const tileSize = size - margin * 2;
+  const artSize = Math.round(tileSize * 0.92);
   writeFileSync(
     path.join(appAssetsDir, 'icon.png'),
-    encodePng(size, size, drawTile(size, art(artSize), artSize, Math.round(size * 0.21))),
+    encodePng(size, size, drawTile(size, art(artSize), artSize, Math.round(size * 0.21), margin)),
   );
   console.log('[gen-icons] wrote icon.png (1024x1024)');
 }
 
 // Tray (Windows/Linux): small rounded tile so the mark reads on any tray theme.
+// Windows scales the tile to the taskbar's icon size, so filling the canvas there is right.
 {
   const size = 32;
   const artSize = Math.round(size * 0.94);
@@ -282,11 +293,15 @@ mkdirSync(appAssetsDir, { recursive: true });
 
 // macOS template images: black glyph + alpha only. 16px gets a stronger
 // contrast curve than 32px, because that is where lines start to average away.
+// macOS draws the image at its pixel size rather than scaling it to a slot, so the
+// mark keeps a couple of pixels of margin (neighbouring menu-bar icons sit around
+// 72–82% of their canvas) instead of filling it and reading as oversized.
+const MENU_BAR_FILL = 0.78;
 for (const [name, size, curve] of [
   ['trayTemplate.png', 16, [0.15, 2.2]],
   ['trayTemplate@2x.png', 32, [0.05, 1.4]],
 ]) {
-  const artSize = Math.round(size * 0.96);
+  const artSize = Math.round(size * MENU_BAR_FILL);
   writeFileSync(
     path.join(appAssetsDir, name),
     encodePng(size, size, drawInk(size, art(artSize), artSize, curve)),

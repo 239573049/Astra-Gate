@@ -14,6 +14,8 @@ import { ProviderDetailPage } from './pages/ProviderDetailPage';
 import { ProvidersPage } from './pages/ProvidersPage';
 import { RequestsPage } from './pages/RequestsPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { TokensPage } from './pages/TokensPage';
+import { TrayPanelPage } from './pages/TrayPanelPage';
 import { isDesktop } from './shell/bridge';
 
 // app:// has no server-side fallback for deep links, so the desktop uses hash routing.
@@ -24,9 +26,12 @@ export function App() {
     <Router>
       <AuthGate>
         <Routes>
+          {/* The desktop tray popover window: no app shell around it. */}
+          <Route path="tray" element={<TrayPanelPage />} />
           <Route element={<AppShell />}>
             <Route index element={<OverviewPage />} />
             <Route path="requests" element={<RequestsPage />} />
+            <Route path="tokens" element={<TokensPage />} />
             <Route path="clients" element={<ClientsPage />} />
             <Route path="clients/:kind" element={<ClientsPage />} />
             <Route path="providers" element={<ProvidersPage />} />
@@ -36,6 +41,7 @@ export function App() {
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="privacy/:tab" element={<PrivacyPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/:tab" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

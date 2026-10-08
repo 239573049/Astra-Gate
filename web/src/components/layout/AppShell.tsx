@@ -110,6 +110,9 @@ export function AppShell() {
           case 'toggle-sidebar':
             toggleSidebar();
             return;
+          case 'settings:tray':
+            navigate('/settings/tray');
+            return;
           case 'refresh':
             void qc.invalidateQueries();
             return;

@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Clients.Config;
 using Astra.Core;
+using Astra.Gateway.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Astra.Data;
 using Astra.Server.Hosting;
@@ -12,6 +13,18 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 
 namespace Astra.Server.IntegrationTests;
+
+/// <summary>One event of a streamed provider test.</summary>
+public sealed record TestEvent(string Event, JsonNode Data);
+
+/// <summary>The outcome of a provider test call: a JSON error, or the streamed events plus the "done" payload.</summary>
+public sealed record TestResult(HttpStatusCode Status, IReadOnlyList<TestEvent> Events, JsonNode? Body, string? Text)
+{
+    /// <summary>The "done" payload; null when the call failed validation before the stream started.</summary>
+    public JsonNode? Done => Body;
+
+    public IReadOnlyList<string> Names => Events.Select(e => e.Event).ToList();
+}
 
 /// <summary>A Astra server on TestServer with a fresh data directory.</summary>
 public sealed class TestHost : IAsyncDisposable
@@ -70,6 +83,25 @@ public sealed class TestHost : IAsyncDisposable
         var res = await Client.SendAsync(req);
         var text = await res.Content.ReadAsStringAsync();
         return (res.StatusCode, string.IsNullOrEmpty(text) ? null : JsonNode.Parse(text));
+    }
+
+    /// <summary>
+    /// Runs a provider connection test. A streamed run (<c>text/event-stream</c>) comes back as its events in order,
+    /// with <see cref="TestResult.Body"/> holding the "done" payload; a validation failure comes back as JSON.
+    /// </summary>
+    public async Task<TestResult> TestAsync(string providerId, object? body = null)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, $"/api/providers/{providerId}/test");
+        if (body is not null) req.Content = JsonContent.Create(body, options: JsonOptions);
+        using var res = await Client.SendAsync(req);
+        var text = await res.Content.ReadAsStringAsync();
+        if (res.Content.Headers.ContentType?.MediaType != "text/event-stream")
+        {
+            return new TestResult(res.StatusCode, [],
+                string.IsNullOrEmpty(text) ? null : JsonNode.Parse(text), string.IsNullOrEmpty(text) ? null : text);
+        }
+        var events = SseParser.ParseAll(text).Select(e => new TestEvent(e.Event ?? "", JsonNode.Parse(e.Data)!)).ToList();
+        return new TestResult(res.StatusCode, events, events.LastOrDefault(e => e.Event == "done")?.Data, text);
     }
 
     public async ValueTask DisposeAsync()

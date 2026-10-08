@@ -42,7 +42,7 @@ public static class RequestBilling
         };
         record.PriceKey = pricing.PriceKey;
         record.PricingSnapshotJson = bill.PricingSnapshot is null ? null : Json.Serialize(bill.PricingSnapshot);
-        record.BillingTraceJson = JsonSerializer.Serialize(bill.Trace, Json.Storage);
+        record.BillingTraceJson = JsonSerializer.Serialize(bill.Trace, JsonContexts.Info<List<BillingTraceStep>>(Json.Storage));
         record.BillingDescription = subscriptionEquivalent ? SubscriptionPrefix + bill.Description : bill.Description;
         record.UsageItems = bill.Items.Select(i => new RequestUsageItem
         {
@@ -54,7 +54,7 @@ public static class RequestBilling
             BaseUnitPrice = i.BaseUnitPrice.ToString(CultureInfo.InvariantCulture),
             TierApplied = i.Tier,
             PricedAs = i.PricedAs,
-            MultipliersJson = i.MultiplierSources.Count == 0 ? null : JsonSerializer.Serialize(i.MultiplierSources, Json.Storage),
+            MultipliersJson = i.MultiplierSources.Count == 0 ? null : JsonSerializer.Serialize(i.MultiplierSources, JsonContexts.Info<List<string>>(Json.Storage)),
             CostNanoUsd = i.CostNanos,
             Note = i.Note,
         }).ToList();

@@ -1,4 +1,4 @@
-import { ArrowLeft, CloudDownload, Copy, Ellipsis, Plug, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, CloudDownload, Copy, Ellipsis, FlaskConical, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -15,7 +15,6 @@ import {
   useProviderModels,
   useRemoteModels,
   useTemplateUpdate,
-  useTestProvider,
   useUpdateProvider,
   useUpdateProviderModel,
 } from '../api/hooks';
@@ -29,12 +28,14 @@ import { PricingSourceBadge } from '../components/Billing';
 import { CLIENT_META } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { PricingEditor } from '../components/PricingEditor';
+import { ProviderTestDialog } from '../components/ProviderTestDialog';
+import { ProviderQuotaSection } from '../components/ProviderQuotaSection';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, Field, Group, Input, KV, NumberInput, Row, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
-import { formatContext, formatMs, priceSummary, pretty } from '../lib/format';
+import { formatContext, priceSummary, pretty } from '../lib/format';
 import { AUTH_OPTIONS, PROTOCOL_OPTIONS } from './ProvidersPage';
 import type { ClientKind } from '../api/types';
 
@@ -95,22 +96,10 @@ function HeaderActions({ p }: { p: Provider }) {
   const { t } = useI18n();
   const navigate = useNavigate();
   const { toast, confirm } = useFeedback();
-  const test = useTestProvider(p.id);
   const duplicate = useDuplicateProvider();
   const del = useDeleteProvider();
   const [updateOpen, setUpdateOpen] = useState(false);
-
-  const runTest = () =>
-    test.mutate(undefined, {
-      onSuccess: (r) =>
-        toast(
-          r.ok
-            ? t('providers.testOk', { ms: formatMs(r.latencyMs), model: r.model ?? '' })
-            : t('providers.testFail', { error: r.error ?? `HTTP ${r.httpStatus ?? '?'}` }),
-          r.ok ? 'success' : 'error',
-        ),
-      onError: (e) => toast(errorText(e), 'error'),
-    });
+  const [testOpen, setTestOpen] = useState(false);
 
   const remove = async () => {
     if (!(await confirm({ title: t('providers.deleteConfirm', { name: p.name }), detail: t('providers.deleteDetail'), destructive: true, confirmLabel: t('common.delete') }))) return;
@@ -128,7 +117,7 @@ function HeaderActions({ p }: { p: Provider }) {
 
   return (
     <>
-      <Button icon={<Plug className="size-3.5" />} loading={test.isPending} onClick={runTest}>
+      <Button icon={<FlaskConical className="size-3.5" />} onClick={() => setTestOpen(true)}>
         {t('providers.test')}
       </Button>
       <Menu
@@ -146,6 +135,7 @@ function HeaderActions({ p }: { p: Provider }) {
           ]}
         />
       <TemplateUpdateSheet open={updateOpen} onOpenChange={setUpdateOpen} provider={p} />
+      <ProviderTestDialog provider={p} open={testOpen} onOpenChange={setTestOpen} />
     </>
   );
 }
@@ -621,6 +611,7 @@ function SettingsTab({ provider }: { provider: Provider }) {
       </Group>
 
       <SubscriptionAccounts provider={provider} />
+      {provider.authScheme !== 'oauth-subscription' && <ProviderQuotaSection provider={provider} />}
 
       <Group
         title={t('providers.section.endpoints')}

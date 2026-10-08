@@ -22,6 +22,55 @@ export function rangeStart(range: Range, now = new Date()): Date | null {
   return days ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1)) : null;
 }
 
+/** The GitHub-style grid: weeks as columns (Monday first), 7 rows per week, plus the month each column opens. */
+export type ActivityGrid = {
+  /** One local "yyyy-MM-dd" per cell, oldest first, padded at both ends to whole weeks. */
+  days: string[];
+  /** Cell indexes per column, oldest column first: weeks[column][0..6] is Monday to Sunday. */
+  weeks: number[][];
+  /** One entry per column that opens a month, labelled 1-12. */
+  months: { index: number; label: number }[];
+  /** The month every column belongs to, for labelling a column the window opens inside of. */
+  monthLabels: { index: number; month: number; year: number }[];
+};
+
+/**
+ * Lays the last `days` local days out as calendar weeks, oldest first, padded at both ends to whole weeks (so
+ * the newest day is never alone in its own column). Day keys are local "yyyy-MM-dd"; which of them have data is
+ * the caller's lookup. A column carries a month label when it holds the first of a month, and `monthLabels`
+ * names the month every column belongs to — which is what a leading spacer column has to be labelled by.
+ */
+export function activityGrid(days = 365, now = new Date()): ActivityGrid {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const first = new Date(today.getFullYear(), today.getMonth(), today.getDate() - (days - 1));
+  // Weeks start on Monday (ISO), so a day's row is 0-6 with Sunday last; the grid backs up to the Monday of the window's first week.
+  const start = new Date(first.getFullYear(), first.getMonth(), first.getDate() - ((first.getDay() + 6) % 7));
+  // …and runs on to the Sunday of the current week.
+  const last = new Date(today.getFullYear(), today.getMonth(), today.getDate() + (6 - ((today.getDay() + 6) % 7)));
+  const keys: string[] = [];
+  for (let d = start; d <= last; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) keys.push(localDay(d));
+  const weeks: number[][] = [];
+  const monthLabels: { index: number; month: number; year: number }[] = [];
+  for (let i = 0; i < keys.length; i += 7) {
+    weeks.push(Array.from({ length: 7 }, (_, row) => i + row));
+    // Columns are padded to whole weeks on both sides, so a column's own first day is the day it opens with.
+    monthLabels.push({ index: weeks.length - 1, month: Number(keys[i]!.slice(5, 7)), year: Number(keys[i]!.slice(0, 4)) });
+  }
+  // A column is named by the month that *starts* in it, which is not the month it opens with when the 1st lands mid-week.
+  const months = weeks.flatMap((week, index) => {
+    const opens = week.find((at) => keys[at]!.slice(8) === '01');
+    return opens === undefined ? [] : [{ index, label: Number(keys[opens]!.slice(5, 7)) }];
+  });
+  return { days: keys, weeks, months, monthLabels };
+}
+
+/** Intensity of one heatmap cell, 0 (no activity) to 4 (the busiest day), from a day's count against the window's busiest. */
+export function activityLevel(count: number, peak: number): 0 | 1 | 2 | 3 | 4 {
+  if (count <= 0) return 0;
+  if (peak <= 0) return 1;
+  return Math.min(4, Math.max(1, Math.ceil((count / peak) * 4))) as 1 | 2 | 3 | 4;
+}
+
 /**
  * Every local bucket key of a range, oldest first, in the server's bucket format: the 24 hours of today
  * ("yyyy-MM-ddTHH:00") or one "yyyy-MM-dd" per day. Empty for "all", whose length is open-ended.

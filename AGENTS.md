@@ -20,7 +20,11 @@ Astra (`astragate`) — a local AI gateway. One product, two toolchains:
   `packages/update-core` (shared update engine).
 
 `docs/` is the fumadocs documentation site (`pnpm --filter @aidotnet/docs dev` / `build`; content in
-`docs/content/docs`, split into modules by root folders, each with a `meta.json` with `"root": true`).
+`docs/content/docs`, shown as a single grouped sidebar: the root `meta.json` orders the module
+folders, each folder's `meta.json` carries `title`/`description`/`icon`/`defaultOpen`, and
+`---[Icon]Name---` entries inside `pages` add sub-group separators — no `"root": true` tabs).
+Canonical/hreflang/sitemap/robots/llms URLs use the fixed origin `https://astra-gate.si`
+(the `siteUrl` constant in `docs/lib/shared.ts` — not env-driven; change it there to rebrand).
 It doubles as the official website and ships as its own Docker image: `.github/workflows/docs.yml`
 builds `docs/Dockerfile` (Next standalone output; the build context is the repo root) and pushes to
 `ghcr.io/<owner>/<repo>/docs` on every `main` push that touches `docs/**` (or the lockfile / workflow).

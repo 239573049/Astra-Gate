@@ -21,9 +21,11 @@ public sealed class ClientConfigStateStore : IClientConfigStateStore
     public IReadOnlyList<ClientConfigStateEntry> List(string clientKind)
     {
         using var conn = _factory.Open();
-        return conn.Query<ClientConfigStateEntry>(
+        // List<T> ctor, not .AsList()/.ToList(): AsList is vanilla Dapper (SqlMapper.AsList) and roots
+        // SqlMapper's static state into the Native AOT closure (IL3050/IL2070); DAP028 dislikes ToList.
+        return new List<ClientConfigStateEntry>(conn.Query<ClientConfigStateEntry>(
             $"{Select} WHERE client_kind = @client_kind ORDER BY file_path, key_path",
-            new { client_kind = clientKind }).AsList();
+            new { client_kind = clientKind }));
     }
 
     public ClientConfigStateEntry? Get(string clientKind, string filePath, string keyPath)

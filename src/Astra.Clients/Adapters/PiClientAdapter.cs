@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -55,7 +56,7 @@ public sealed class PiClientAdapter(ClientEnvironment env, IClientConfigStateSto
         {
             var model = new JsonObject { ["id"] = id };
             if (name is not null) model["name"] = name;
-            models.Add(model);
+            models.AddNode(model);
         }
         if (models.Count > 0) provider["models"] = models;
 

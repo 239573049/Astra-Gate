@@ -8,9 +8,20 @@ import type { Provider, ProviderAccount } from '../api/types';
 import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider } from '../i18n';
 
+// jsdom has no ResizeObserver; the account card's quota bars measure themselves on mount.
+class NoopResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal('ResizeObserver', NoopResizeObserver);
+
 const spies = vi.hoisted(() => ({
   start: vi.fn(),
   remove: vi.fn(),
+  importCodex: vi.fn(),
+  // Flipped per test: whether this machine already has a `codex login`.
+  localCodex: { available: false } as { available: boolean; accountEmail?: string; plan?: string; detail?: string },
 }));
 
 vi.mock('../api/hooks', () => ({
@@ -21,6 +32,11 @@ vi.mock('../api/hooks', () => ({
   useRefreshProviderAccount: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
   useDeleteProviderAccount: () => ({ mutate: spies.remove, isPending: false }),
   useFetchProviderAccountQuota: () => quotaSpies.fetch,
+  useLocalCodexLogin: () => ({ data: spies.localCodex, refetch: vi.fn() }),
+  useImportCodexAccount: () => ({ mutate: spies.importCodex, isPending: false }),
+  // Reset-credit cards are their own component; the account list only decides whether to render them.
+  useResetCredits: () => ({ data: { credits: [], available_count: 0 }, isLoading: false, isError: false }),
+  useConsumeResetCredit: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
 }));
 
 const quotaSpies = vi.hoisted(() => ({
@@ -56,6 +72,8 @@ const show = (ui: React.ReactNode) => {
 beforeEach(() => {
   spies.start.mockReset();
   spies.remove.mockReset();
+  spies.importCodex.mockReset();
+  spies.localCodex = { available: false };
   quotaSpies.fetch.mutate.mockReset();
   quotaSpies.fetch.isPending = false;
   quotaSpies.fetch.variables = undefined;
@@ -76,14 +94,16 @@ describe('SubscriptionAccounts', () => {
     expect(container.querySelector('.card')).toBeNull();
   });
 
-  it('lists accounts with status badges, refresh and logout actions', () => {
+  it('lists one card per account with identity, plan, status and per-account actions', () => {
     show(<SubscriptionAccounts provider={subscriptionProvider} />);
 
+    // 每个账号一张卡片：身份 + 套餐 + 状态 + 额度刷新按钮 + ⋯ 菜单
     expect(screen.getByText('me@example.com')).toBeInTheDocument();
+    expect(screen.getByText('claude_pro')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Expired')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Refresh token' })).toHaveLength(2);
-    expect(screen.getAllByRole('button', { name: 'Sign out & delete' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Refresh quota' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'More' })).toHaveLength(2);
   });
 
   it('starts a PKCE login: opens the authorization page and waits for the callback', async () => {
@@ -97,6 +117,33 @@ describe('SubscriptionAccounts', () => {
     expect(window.open).toHaveBeenCalledWith('https://claude.ai/oauth/authorize?x=1', '_blank', 'noopener');
     expect(screen.getByText('Waiting for authorization…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I've finished authorizing" })).toBeInTheDocument();
+  });
+
+  it('offers to import an existing local codex login for the ChatGPT subscription only', () => {
+    spies.localCodex = { available: true, accountEmail: 'codex@example.com', plan: 'promax' };
+    const codexProvider = {
+      id: 'p3', name: 'ChatGPT 订阅（Codex）', authScheme: 'oauth-subscription', templateId: 'openai-subscription',
+    } as unknown as Provider;
+
+    show(<SubscriptionAccounts provider={codexProvider} />);
+
+    // 找到本机登录态时显示导入入口与账号提示
+    expect(screen.getByText(/Found a local Codex sign-in: codex@example\.com/)).toBeInTheDocument();
+    const importButton = screen.getByRole('button', { name: /Import local Codex sign-in/ });
+    fireEvent.click(importButton);
+    expect(spies.importCodex).toHaveBeenCalledTimes(1);
+
+    // 没有本机登录态就不显示这个入口
+    cleanup();
+    spies.localCodex = { available: false };
+    show(<SubscriptionAccounts provider={codexProvider} />);
+    expect(screen.queryByRole('button', { name: /Import local Codex sign-in/ })).toBeNull();
+
+    // 非 ChatGPT 订阅（Claude）永远不显示这个入口
+    cleanup();
+    spies.localCodex = { available: true, accountEmail: 'codex@example.com' };
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.queryByRole('button', { name: /Import local Codex sign-in/ })).toBeNull();
   });
 
   it('surfaces the coming-soon hint when the provider flow is not verified yet', async () => {
@@ -113,7 +160,11 @@ describe('SubscriptionAccounts', () => {
   it('asks for confirmation before signing an account out', async () => {
     show(<SubscriptionAccounts provider={subscriptionProvider} />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Sign out & delete' })[0]);
+    // 退出登录在卡片的 ⋯ 菜单里（每个账号一个菜单）。菜单项必须带 detail 才能被 Radix 触发。
+    // Radix 的 DropdownMenu 在 jsdom 里要靠 pointerdown 才展开。
+    fireEvent.pointerDown(screen.getAllByRole('button', { name: 'More' })[0]!, { button: 0, ctrlKey: false });
+    const item = (await screen.findAllByRole('menuitem')).find((i) => i.textContent?.includes('Sign out & delete'))!;
+    fireEvent.click(item, { detail: 1 });
     expect(await screen.findByText(/Sign out account "me@example\.com"\?/)).toBeInTheDocument();
 
     // The sheet's confirm button (same label) is appended last.

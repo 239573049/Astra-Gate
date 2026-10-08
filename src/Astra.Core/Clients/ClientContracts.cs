@@ -36,9 +36,10 @@ public sealed class ClientRecord
 {
     public string Kind { get; set; } = "";
     public bool Enabled { get; set; }
-    public string? LocalKeyEnc { get; set; }
-    public string? LocalKeyHash { get; set; }
-    public string? LocalKeyPrefix { get; set; }
+
+    /// <summary>The token written into this client's configuration (as "&lt;token&gt;.&lt;kind&gt;"); null = the default token.</summary>
+    public string? TokenId { get; set; }
+
     public string? SelectedModel { get; set; }
 
     /// <summary>Client-specific extras (Claude Code small model, Claude Desktop role map …) as JSON.</summary>
@@ -93,7 +94,7 @@ public interface IClientConfigStateStore
     void DeleteAll(string clientKind);
 }
 
-/// <summary>Encrypts secrets at rest (API keys, local client keys). Implemented with ASP.NET DataProtection in the server.</summary>
+/// <summary>Encrypts secrets at rest (API keys, gateway tokens). Implemented with ASP.NET DataProtection in the server.</summary>
 public interface ISecretProtector
 {
     string Protect(string plaintext);

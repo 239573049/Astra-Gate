@@ -6,6 +6,8 @@ using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
+using Astra.Gateway.Protocol;
+using Astra.Providers.Quota;
 using Astra.Providers.Templates;
 
 namespace Astra.Server.Api;
@@ -15,10 +17,14 @@ public sealed record ProviderDto(
     string Category, List<ProviderEndpoint> Endpoints, List<ApiProtocol> PreferredUpstreamProtocols, string AuthScheme,
     bool HasApiKey, string? ApiKeyMasked, Dictionary<string, string> ExtraHeaders, string? HttpProxy, decimal PriceMultiplier,
     string? PriceKey, string? AdapterId, JsonObject Settings, bool Enabled, int SortOrder, string? Notes, string? Website,
-    int ModelCount, IReadOnlyList<string> BoundClients, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    int ModelCount, IReadOnlyList<string> BoundClients, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
+    ProviderQuotaConfigDto QuotaConfig, JsonObject? Quota, DateTimeOffset? QuotaCheckedAtUtc);
 
 public sealed record ModelOverridesDto(string? DisplayName, long? ContextWindow, long? MaxOutputTokens, ModelCapabilities? Capabilities, JsonNode? Pricing);
 public sealed record EffectiveModelDto(string DisplayName, long? ContextWindow, long? MaxOutputTokens, ModelCapabilities Capabilities);
+
+/// <summary>Diff between the provider's snapshot template version and the shipped one.</summary>
+public sealed record TemplateUpdateDto(int CurrentVersion, int LatestVersion, List<string> Changes);
 public sealed record ProviderModelDto(long Id, string ProviderId, string ModelId, string? SystemModelId, bool Enabled, int SortOrder,
     ModelOverridesDto Overrides, EffectiveModelDto Effective, Dictionary<string, string> Origins, string PricingSource,
     string? PriceKey, decimal Multiplier, JsonNode? EffectivePricing);
@@ -27,7 +33,7 @@ public static class ProviderEndpoints
 {
     public static void MapProviderEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/provider-templates", (ProviderTemplateCatalog catalog) => Results.Ok(catalog.All));
+        app.MapGet("/api/provider-templates", (ProviderTemplateCatalog catalog) => Results.Ok(catalog.All.ToList()));
         app.MapGet("/api/price-keys", async (ProviderTemplateCatalog catalog, AstraDatabase db, CancellationToken ct) =>
         {
             var keys = new Dictionary<string, PriceKeyInfo>(StringComparer.Ordinal);
@@ -38,7 +44,7 @@ public static class ProviderEndpoints
             }
             foreach (var key in await db.Models.ListPriceKeysAsync(ct))
                 if (!keys.ContainsKey(key)) keys[key] = new PriceKeyInfo(key, key, []);
-            return Results.Ok(keys.Values.OrderBy(k => k.Label));
+            return Results.Ok(keys.Values.OrderBy(k => k.Label).ToList());
 
             void Add(string key, string label, string templateId)
             {
@@ -50,17 +56,17 @@ public static class ProviderEndpoints
 
         var group = app.MapGroup("/api/providers").AddEndpointFilter<AdminApiErrorFilter>()
             .AddEndpointFilter(new ProviderWriteFilter());
-        group.MapGet("", async (AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, CancellationToken ct) =>
+        group.MapGet("", async (AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var result = new List<ProviderDto>();
-            foreach (var p in await db.Providers.ListAsync(ct)) result.Add(await ToDtoAsync(p, db, catalog, secrets, ct));
+            foreach (var p in await db.Providers.ListAsync(ct)) result.Add(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
             return Results.Ok(result);
         });
-        group.MapGet("/{id}", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, CancellationToken ct) =>
-            Results.Ok(await ToDtoAsync(await RequireAsync(db, id, ct), db, catalog, secrets, ct)));
+        group.MapGet("/{id}", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
+            Results.Ok(await ToDtoAsync(await RequireAsync(db, id, ct), db, catalog, secrets, quota, ct)));
 
         group.MapPost("", async (JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets,
-            CancellationToken ct) =>
+            ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var templateId = String(body, "templateId");
             var variantId = String(body, "variantId");
@@ -100,11 +106,11 @@ public static class ProviderEndpoints
             ValidateModelIds(modelIds);
             var initialModels = await PlanModelsAsync(db, provider, modelIds, ct);
             await db.Providers.InsertWithModelsAsync(provider, initialModels, ct);
-            return Results.Ok(await ToDtoAsync(provider, db, catalog, secrets, ct));
+            return Results.Ok(await ToDtoAsync(provider, db, catalog, secrets, quota, ct));
         });
 
         group.MapPatch("/{id}", async (string id, JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog,
-            ISecretProtector secrets, CancellationToken ct) =>
+            ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
             if (body.ContainsKey("name")) p.Name = String(body, "name") ?? "";
@@ -115,7 +121,14 @@ public static class ProviderEndpoints
             if (body.ContainsKey("httpProxy")) p.HttpProxy = String(body, "httpProxy");
             if (body.ContainsKey("priceMultiplier")) p.PriceMultiplier = Read<decimal>(body["priceMultiplier"]);
             if (body.ContainsKey("priceKey")) p.PriceKey = body["priceKey"] is null ? null : Read<string>(body["priceKey"]).Trim();
-            if (body.ContainsKey("settings")) p.Settings = Read<JsonObject>(body["settings"]);
+            if (body.ContainsKey("settings"))
+            {
+                // settings.quota holds encrypted secrets and has its own endpoint: a settings write never replaces it.
+                var settings = Read<JsonObject>(body["settings"]);
+                settings.Remove(QuotaConfig.SettingsKey);
+                if (p.Settings[QuotaConfig.SettingsKey] is { } stored) settings[QuotaConfig.SettingsKey] = stored.DeepClone();
+                p.Settings = settings;
+            }
             if (body.ContainsKey("enabled")) p.Enabled = Read<bool>(body["enabled"]);
             if (body.ContainsKey("notes")) p.Notes = String(body, "notes");
             Validate(p);
@@ -127,7 +140,7 @@ public static class ProviderEndpoints
                 p.ApiKeyEnc = key.Length == 0 ? null : secrets.Protect(key);
             }
             await db.Providers.UpdateAsync(p, ct);
-            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, ct));
+            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
 
         group.MapDelete("/{id}", async (string id, AstraDatabase db, CancellationToken ct) =>
@@ -140,7 +153,7 @@ public static class ProviderEndpoints
             }
             return Results.NoContent();
         });
-        group.MapPost("/{id}/duplicate", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, CancellationToken ct) =>
+        group.MapPost("/{id}/duplicate", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
             // 复制等于第二个实例：订阅类提供商只允许一个，账号在原提供商内添加。
@@ -151,7 +164,7 @@ public static class ProviderEndpoints
             p.SortOrder = (await db.Providers.ListAsync(ct)).Select(x => x.SortOrder).DefaultIfEmpty(-1).Max() + 1;
             foreach (var m in oldModels) { m.Id = 0; m.ProviderId = p.Id; }
             await db.Providers.InsertWithModelsAsync(p, oldModels, ct);
-            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, ct));
+            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
         group.MapPut("/order", async (JsonObject body, AstraDatabase db, CancellationToken ct) =>
         {
@@ -223,11 +236,11 @@ public static class ProviderEndpoints
         {
             var p = await RequireAsync(db, id, ct);
             var (old, latest, _) = Templates(p, catalog);
-            return Results.Ok(new { currentVersion = p.TemplateVersion ?? 0, latestVersion = latest?.Version ?? 0,
-                changes = latest is not null && latest.Version > (p.TemplateVersion ?? 0)
-                    ? TemplateChanges(old, latest) : [] });
+            return Results.Ok(new TemplateUpdateDto(
+                p.TemplateVersion ?? 0, latest?.Version ?? 0,
+                latest is not null && latest.Version > (p.TemplateVersion ?? 0) ? TemplateChanges(old, latest) : []));
         });
-        group.MapPost("/{id}/template-update", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, CancellationToken ct) =>
+        group.MapPost("/{id}/template-update", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
             var (old, latest, variantId) = Templates(p, catalog);
@@ -257,18 +270,103 @@ public static class ProviderEndpoints
                 Validate(p);
                 await db.Providers.UpdateWithModelsAsync(p, added, ct);
             }
-            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, ct));
+            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
-        group.MapPost("/{id}/test", async (string id, JsonObject? body, ProviderProbe probe, CancellationToken ct) =>
-            Results.Ok(await probe.TestAsync(id, body is null ? null : String(body, "modelId"), ct)));
+        // Server-sent events: the headers / first-token / delta / done events of one test run. Validation failures
+        // happen before the first byte and stay plain JSON errors; everything after that is a "done" event.
+        group.MapPost("/{id}/test", async (string id, JsonObject? body, ProviderProbe probe, HttpContext ctx,
+            ILogger<ProviderProbe> log, CancellationToken ct) =>
+        {
+            var options = TestOptions(body);
+            // Server-sent events, one JSON payload per event. Low-level writes on purpose: Results.* would buffer
+            // the whole test and hand the client a single JSON document instead of a live stream.
+            var run = await probe.PrepareTestAsync(id, options, ct);
+            ctx.Response.Headers.CacheControl = "no-cache";
+            ctx.Response.Headers["X-Accel-Buffering"] = "no";
+            ctx.Response.ContentType = "text/event-stream; charset=utf-8";
+            await WriteAsync(new ProviderTestEvent("start", new JsonObject
+            {
+                ["protocol"] = run.Protocol.ToId(),
+                ["model"] = run.ModelId,
+                ["stream"] = options.Stream,
+            }));
+            try
+            {
+                await probe.RunTestAsync(id, options, run, WriteAsync, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                // The client went away mid-test; the run is recorded as cancelled and there is nobody left to tell.
+            }
+            catch (Exception e)
+            {
+                log.LogError(e, "Provider test stream for {Provider} failed", id);
+                await SafeWriteAsync(new ProviderTestEvent("done", new JsonObject
+                {
+                    ["ok"] = false, ["error"] = "Connection test failed unexpectedly",
+                }));
+            }
+            return Results.Empty;
+
+            async Task WriteAsync(ProviderTestEvent e)
+            {
+                await ctx.Response.WriteAsync(SseWriter.Format(new SseEvent(e.Event, e.Payload.ToJsonString(Json.Api))), ct);
+                await ctx.Response.Body.FlushAsync(ct);
+            }
+
+            async Task SafeWriteAsync(ProviderTestEvent e)
+            {
+                try { await WriteAsync(e); }
+                catch (Exception ex) when (ex is IOException or OperationCanceledException) { }
+            }
+        });
         group.MapGet("/{id}/remote-models", async (string id, ProviderProbe probe, CancellationToken ct) =>
             Results.Ok(await probe.ModelsAsync(id, ct)));
+
+        // Balance / quota query (cc-switch style "usage query"). A failed query never changes the provider;
+        // it is stored next to the last good snapshot. Only an unusable configuration answers 400.
+        group.MapGet("/{id}/quota", async (string id, AstraDatabase db, ProviderQuotaManager quota, CancellationToken ct) =>
+            Results.Ok(quota.Dto(await RequireAsync(db, id, ct))));
+        group.MapPost("/{id}/quota", async (string id, AstraDatabase db, ProviderQuotaManager quota, CancellationToken ct) =>
+        {
+            var p = await RequireAsync(db, id, ct);
+            RequireApiKeyProvider(p);
+            var (updated, result) = await quota.FetchAsync(p, ct);
+            if (QuotaErrors.IsConfiguration(result.ErrorCode))
+                return ApiJson.Result(new ProviderQuotaErrorDto(result.Error ?? "Invalid quota configuration",
+                    new ProviderQuotaErrorDetailsDto(result.ErrorCode)), StatusCodes.Status400BadRequest);
+            return Results.Ok(quota.Dto(updated));
+        });
+        group.MapPost("/{id}/quota/test", async (string id, JsonObject? body, AstraDatabase db, ProviderQuotaManager quota, CancellationToken ct) =>
+        {
+            var p = await RequireAsync(db, id, ct);
+            RequireApiKeyProvider(p);
+            var config = quota.FromInput(body ?? new JsonObject(), QuotaConfig.From(p.Settings));
+            return Results.Ok(ProviderQuotaManager.TestDto(await quota.TestAsync(p, config, ct)));
+        });
+        group.MapPut("/{id}/quota/config", async (string id, JsonObject body, AstraDatabase db, ProviderQuotaManager quota, CancellationToken ct) =>
+        {
+            var p = await RequireAsync(db, id, ct);
+            RequireApiKeyProvider(p);
+            var config = quota.FromInput(body, QuotaConfig.From(p.Settings));
+            p.Settings[QuotaConfig.SettingsKey] = config.ToNode();
+            await db.Providers.UpdateAsync(p, ct);
+            return Results.Ok(quota.Dto(p));
+        });
+        app.MapGet("/api/provider-quota/templates", (QuotaTemplateCatalog catalog) => Results.Ok(catalog.All.ToList()));
+    }
+
+    private static void RequireApiKeyProvider(Provider p)
+    {
+        if (p.AuthScheme == AuthSchemes.OAuthSubscription)
+            throw new AdminApiException(400, "订阅提供商的额度在登录账号里查看");
     }
 
     internal static async Task<Provider> RequireAsync(AstraDatabase db, string id, CancellationToken ct) =>
         await db.Providers.GetAsync(id, ct) ?? throw new AdminApiException(404, "Provider not found");
 
-    private static async Task<ProviderDto> ToDtoAsync(Provider p, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, CancellationToken ct)
+    private static async Task<ProviderDto> ToDtoAsync(Provider p, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets,
+        ProviderQuotaManager quota, CancellationToken ct)
     {
         string? mask = null;
         if (p.ApiKeyEnc is not null)
@@ -280,8 +378,9 @@ public static class ProviderEndpoints
         return new ProviderDto(p.Id, p.TemplateId, p.TemplateVersion,
             p.TemplateId is not null && catalog.Get(p.TemplateId) is { } t && t.Version > (p.TemplateVersion ?? 0),
             p.Name, p.Icon, p.Category, p.Endpoints, p.PreferredUpstreamProtocols, p.AuthScheme, p.ApiKeyEnc is not null, mask,
-            p.ExtraHeaders, p.HttpProxy, p.PriceMultiplier, p.PriceKey, p.AdapterId, p.Settings, p.Enabled, p.SortOrder, p.Notes,
-            p.Website, (await db.Providers.ListModelsAsync(p.Id, ct)).Count, bound, p.CreatedAt, p.UpdatedAt);
+            p.ExtraHeaders, p.HttpProxy, p.PriceMultiplier, p.PriceKey, p.AdapterId, ProviderQuotaManager.PublicSettings(p.Settings), p.Enabled, p.SortOrder, p.Notes,
+            p.Website, (await db.Providers.ListModelsAsync(p.Id, ct)).Count, bound, p.CreatedAt, p.UpdatedAt,
+            quota.ConfigDto(p), p.Quota, p.QuotaCheckedAtUtc);
     }
 
     private static async Task<ProviderModelDto> ToModelDtoAsync(Provider p, ProviderModel m, EffectiveModelResolver resolver, CancellationToken ct)
@@ -393,7 +492,11 @@ public static class ProviderEndpoints
         public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
         {
             var request = context.HttpContext.Request;
-            if (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method) || request.Path.Value?.EndsWith("/test", StringComparison.Ordinal) == true)
+            var path = request.Path.Value ?? "";
+            // Upstream calls never hold the lock: the connection test and the quota query / test (a quota
+            // query writes only the quota columns, never the row read-modify-write the lock protects).
+            if (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method) || path.EndsWith("/test", StringComparison.Ordinal)
+                || (HttpMethods.IsPost(request.Method) && path.EndsWith("/quota", StringComparison.Ordinal)))
                 return await next(context);
             await _writes.WaitAsync(context.HttpContext.RequestAborted);
             object? result;
@@ -439,10 +542,27 @@ public static class ProviderEndpoints
             throw new AdminApiException(400, "Invalid model IDs (up to 2000 non-empty IDs, max 512 characters each)");
     }
 
+    /// <summary>Reads the optional body of a test run, applying the server-side defaults.</summary>
+    private static ProviderTestOptions TestOptions(JsonObject? body)
+    {
+        if (body is null) return new ProviderTestOptions(null, null, true, null, ProviderProbe.DefaultMaxOutputTokens);
+        var maxOutputTokens = body["maxOutputTokens"] is null ? ProviderProbe.DefaultMaxOutputTokens : Read<int>(body["maxOutputTokens"]);
+        if (maxOutputTokens is < 1 or > 4096) throw new AdminApiException(400, "maxOutputTokens must be between 1 and 4096");
+        var prompt = String(body, "prompt");
+        if (prompt is { Length: > ProviderProbe.MaxTestPromptChars })
+            throw new AdminApiException(400, $"prompt must be at most {ProviderProbe.MaxTestPromptChars} characters");
+        var protocol = body["protocol"] is null ? (ApiProtocol?)null : Read<ApiProtocol>(body["protocol"]);
+        // The body carries the protocol as an id ("openai-responses"), which the ApiProtocol converter accepts.
+        return new ProviderTestOptions(
+            String(body, "modelId"), protocol,
+            body["stream"] is null || Read<bool>(body["stream"]),
+            prompt, maxOutputTokens);
+    }
+
     private static T Read<T>(JsonNode? value)
     {
         if (value is null) throw new AdminApiException(400, "Required value is missing");
-        try { return value.Deserialize<T>(Json.Api) ?? throw new AdminApiException(400, "Invalid JSON value"); }
+        try { return value.Deserialize(JsonContexts.Info<T>(Json.Api)) ?? throw new AdminApiException(400, "Invalid JSON value"); }
         catch (InvalidOperationException) { throw new AdminApiException(400, "Invalid JSON value"); }
     }
     private static string? String(JsonObject o, string key) => o[key] is null ? null :

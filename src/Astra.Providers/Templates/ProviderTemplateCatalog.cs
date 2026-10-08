@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Models;
@@ -56,7 +55,7 @@ public sealed class ProviderTemplate
     /// <summary>Populate the default model IDs from the embedded system catalog (no network at startup).</summary>
     public string? ModelVendor { get; set; }
 
-    public ProviderTemplate Clone() => JsonSerializer.Deserialize<ProviderTemplate>(JsonSerializer.Serialize(this, Json.Api), Json.Api)!;
+    public ProviderTemplate Clone() => Json.Deserialize<ProviderTemplate>(Json.Serialize(this))!;
 
     public ProviderTemplate WithVariant(string? variantId)
     {
@@ -87,7 +86,7 @@ public sealed class ProviderTemplateCatalog
             var rows = node is JsonArray array ? array : new JsonArray(node.DeepClone());
             foreach (var row in rows)
             {
-                var template = row?.Deserialize<ProviderTemplate>(Json.Api);
+                var template = Json.DeserializeApi<ProviderTemplate>(row);
                 if (template is null || template.Id.Length == 0) continue;
                 if (result.Any(t => t.Id == template.Id)) throw new InvalidOperationException($"Duplicate provider template '{template.Id}'");
                 if (template.Name.Length == 0 || template.Version < 1 || template.Endpoints.Count == 0)

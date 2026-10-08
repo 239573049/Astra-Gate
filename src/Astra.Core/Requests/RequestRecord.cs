@@ -17,6 +17,16 @@ public sealed class RequestRecord
     public string Id { get; set; } = "";
     public DateTimeOffset StartedAtUtc { get; set; }
     public string? ClientKind { get; set; }
+
+    /// <summary>Token that authenticated the request; null when authentication failed.</summary>
+    public string? TokenId { get; set; }
+
+    /// <summary>
+    /// Token name: written as a snapshot at request time; queries return the token's current name and fall back to the
+    /// snapshot once the token was deleted.
+    /// </summary>
+    public string? TokenName { get; set; }
+
     public string? ProviderId { get; set; }
     public string? ProviderName { get; set; }
     public string InboundProtocol { get; set; } = "";

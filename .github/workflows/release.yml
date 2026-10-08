@@ -153,11 +153,16 @@ jobs:
         shell: bash
         run: pnpm --filter @aidotnet/web build
 
-      - name: Publish server binary (self-contained, single file)
+      # Native AOT publish: it emits a native companion library (e.g.
+      # libe_sqlite3.dylib) beside the binary, which scripts/pack-platform.mjs
+      # carries into the platform package. No -p:PublishSingleFile here — a
+      # command-line -p: overrides the csproj's conditional group and would
+      # re-enable single-file under AOT, breaking the build.
+      - name: Publish server binary (self-contained, Native AOT)
         shell: bash
         run: >-
           dotnet publish src/Astra.Server -c Release -r "$RID"
-          --self-contained true -p:PublishSingleFile=true -o out/publish
+          --self-contained true -p:PublishAot=true -o out/publish
 
       - name: Verify versions are in sync
         shell: bash

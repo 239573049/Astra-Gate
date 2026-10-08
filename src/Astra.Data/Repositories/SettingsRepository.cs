@@ -46,9 +46,12 @@ public sealed class SettingsRepository
         return rows.ToDictionary(r => r.Key, r => r.ValueJson);
     }
 
-    private sealed class SettingRow
-    {
-        public string Key { get; set; } = "";
-        public string ValueJson { get; set; } = "";
-    }
+}
+
+// Dapper.AOT only materializes rows into types it can see from outside the repository class; nested
+// private types are silently left on vanilla Dapper, which dies under Native AOT (see its FAQ).
+internal sealed class SettingRow
+{
+    public string Key { get; set; } = "";
+    public string ValueJson { get; set; } = "";
 }

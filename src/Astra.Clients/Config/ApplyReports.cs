@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Astra.Core;
 
 namespace Astra.Clients.Config;
 
@@ -13,14 +14,14 @@ public static class ConfigValueCodec
     public static string? Encode(ConfigFileFormat format, string? rawSourceText)
     {
         if (rawSourceText is null) return null;
-        return IsJsonValued(format) ? rawSourceText : JsonSerializer.Serialize(rawSourceText);
+        return IsJsonValued(format) ? rawSourceText : Json.EncodeString(rawSourceText);
     }
 
     /// <summary>Decodes stored JSON text back into the raw value source text to splice into the file.</summary>
     public static string? DecodeToSource(ConfigFileFormat format, string? jsonText)
     {
         if (jsonText is null) return null;
-        return IsJsonValued(format) ? jsonText : JsonSerializer.Deserialize<string>(jsonText);
+        return IsJsonValued(format) ? jsonText : Json.DecodeString(jsonText);
     }
 
     /// <summary>Compares the current value source text against the recorded JSON text (structure-aware for JSON and YAML).</summary>

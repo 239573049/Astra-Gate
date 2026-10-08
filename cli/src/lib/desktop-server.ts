@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import {
   commitManagedWebRoot,
+  commitNativeCompanions,
+  findNativeCompanions,
   installManagedBinary,
   installManagedWebRoot,
   isNewerVersion,
@@ -54,8 +56,9 @@ export interface EnsureDesktopServerOptions {
  * durable serverPath behind. A globally installed package path is recorded
  * as-is (the same path `astra start` records). A binary inside an npx cache is
  * copied into the updater's managed dir (~/.astra/server/astra-server-<version>)
- * together with wwwroot, because the server serves the web UI from the
- * directory of its own executable.
+ * together with wwwroot and the native companion libraries (SQLite under
+ * Native AOT), because the server loads and serves both from the directory of
+ * its own executable.
  */
 export function ensureDesktopServer(o: EnsureDesktopServerOptions): DesktopServerResult {
   const install = readInstallJson(o.home);
@@ -71,11 +74,13 @@ export function ensureDesktopServer(o: EnsureDesktopServerOptions): DesktopServe
     const { serverDir } = updatePaths(o.home);
     serverPath = installManagedBinary({
       stagedPath: packaged.path,
+      nativeLibraries: findNativeCompanions(packaged.path),
       serverDir,
       version: o.version,
       platform: o.platform,
     });
     if (installManagedWebRoot(packaged.path, serverDir)) commitManagedWebRoot(serverDir);
+    commitNativeCompanions(serverDir);
     pruneManagedBinaries(serverDir, serverPath);
     action = 'copied';
   }

@@ -393,7 +393,7 @@ public sealed class TomlEditor
     {
         try
         {
-            return TomlSerializer.Deserialize<TomlTable>(text, TomlSerializerOptions.Default)
+            return TomlSerializer.Deserialize(text, ClientTomlContext.Default.TomlTable)
                    ?? throw new EditorException("TOML document deserialized to null.");
         }
         catch (Exception e) when (e is not EditorException)

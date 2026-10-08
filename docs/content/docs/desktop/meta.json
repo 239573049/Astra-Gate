@@ -2,6 +2,6 @@
   "title": "桌面端",
   "description": "Astra 桌面应用（Electron）",
   "icon": "AppWindow",
-  "root": true,
+  "defaultOpen": true,
   "pages": ["index"]
 }

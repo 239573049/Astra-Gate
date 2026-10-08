@@ -7,8 +7,9 @@ namespace Astra.Clients.Adapters;
 /// <summary>
 /// Claude Code (Switch): writes <c>env.ANTHROPIC_BASE_URL</c> and <c>env.ANTHROPIC_AUTH_TOKEN</c> in
 /// <c>~/.claude/settings.json</c> (honoring CLAUDE_CONFIG_DIR), temporarily removes a present
-/// <c>env.ANTHROPIC_API_KEY</c> (recorded), and optionally pins ANTHROPIC_MODEL /
-/// ANTHROPIC_DEFAULT_HAIKU_MODEL. Warns on <c>apiKeyHelper</c>. Everything else is untouched.
+/// <c>env.ANTHROPIC_API_KEY</c> (recorded), and optionally pins the model selection env vars
+/// (<see cref="ClaudeCodeModels.Slots"/>, extras key "models"; the older "smallFastModel" extra still works).
+/// Warns on <c>apiKeyHelper</c>. Everything else is untouched.
 /// </summary>
 public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -22,8 +23,7 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
     [
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_AUTH_TOKEN",
-        "ANTHROPIC_MODEL",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        .. ClaudeCodeModels.Slots,
     ];
 
     private const string ApiKeyPath = "env.ANTHROPIC_API_KEY";
@@ -52,9 +52,14 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
             EnvKey(file, "ANTHROPIC_BASE_URL", ctx.GatewayBaseUrl),
             EnvKey(file, "ANTHROPIC_AUTH_TOKEN", ctx.LocalKey),
         };
-        if (!string.IsNullOrEmpty(ctx.Model)) changes.Add(EnvKey(file, "ANTHROPIC_MODEL", ctx.Model));
+        // Model slots are written only when a model was picked; an empty slot is never touched. The older
+        // single-key "smallFastModel" extra still sets the Haiku tier, unless the slot map already does.
+        var slots = ClaudeCodeModels.Parse(ctx.Extras);
+        foreach (var (slot, model) in slots)
+            changes.Add(EnvKey(file, slot, model));
         var smallFast = ctx.ExtraString("smallFastModel");
-        if (!string.IsNullOrEmpty(smallFast)) changes.Add(EnvKey(file, "ANTHROPIC_DEFAULT_HAIKU_MODEL", smallFast));
+        if (!string.IsNullOrEmpty(smallFast) && slots.All(s => s.Key != "ANTHROPIC_DEFAULT_HAIKU_MODEL"))
+            changes.Add(EnvKey(file, "ANTHROPIC_DEFAULT_HAIKU_MODEL", smallFast));
 
         // An existing ANTHROPIC_API_KEY would fight the gateway auth token: remove it (recorded, restored on disable).
         var apiKeyBefore = CurrentValue(file, ConfigFileFormat.Json, ApiKeyPath);

@@ -1,4 +1,4 @@
-import { Plug, Plus, Server } from 'lucide-react';
+import { FlaskConical, Plus, Server } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -7,7 +7,6 @@ import {
   usePriceKeys,
   useProviders,
   useTemplates,
-  useTestProvider,
   useTimeseries,
   useUpdateProvider,
 } from '../api/hooks';
@@ -20,11 +19,13 @@ import { Sparkline } from '../components/arc/sparkline/sparkline';
 import { Stepper } from '../components/arc/stepper/stepper';
 import { CLIENT_META, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
+import { ProviderQuotaLine } from '../components/ProviderQuotaSection';
+import { ProviderTestDialog } from '../components/ProviderTestDialog';
 import { Badge, Button, Dot, EmptyState, Field, Input, SearchField, Spinner, Switch } from '../components/ui/controls';
 import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
-import { formatMs, formatTokens, formatUsd } from '../lib/format';
+import { formatTokens, formatUsd } from '../lib/format';
 import { useCommandListener } from '../shell/commands';
 import type { ClientKind } from '../api/types';
 
@@ -66,6 +67,7 @@ export function ProvidersPage() {
   // One request for every card: per-provider daily buckets over the last week. The endpoint keys provider
   // series by the logged provider name (not id), so cards look their usage up by name.
   const series = useTimeseries('7d', 'day', 'provider');
+  const [testing, setTesting] = useState<Provider | null>(null);
   const usage = useMemo(() => {
     const days = lastDays(USAGE_DAYS);
     const byProvider = new Map<string, ProviderUsage>();
@@ -116,12 +118,16 @@ export function ProvidersPage() {
                 days={usage.days}
                 usage={usage.byProvider.get(p.name)}
                 onOpen={() => navigate(`/providers/${p.id}`)}
+                onTest={() => setTesting(p)}
               />
             ))}
           </div>
         )}
       </div>
       <AddProviderSheet open={adding} onOpenChange={setAdding} onCreated={(p) => navigate(`/providers/${p.id}`)} />
+      {/* Rendered outside the cards on purpose: a dialog portaled from inside a clickable card would still bubble
+          its clicks up React's tree and open the provider behind it. */}
+      {testing && <ProviderTestDialog provider={testing} open onOpenChange={(o) => !o && setTesting(null)} />}
     </Page>
   );
 }
@@ -155,12 +161,10 @@ function hostOf(url: string | undefined): string | null {
 /** Keeps clicks on a card's own controls (and their portaled menus) from also opening the provider. */
 const stopClick = (e: React.MouseEvent) => e.stopPropagation();
 
-function ProviderCard({ p, days, usage, onOpen }: { p: Provider; days: string[]; usage?: ProviderUsage; onOpen: () => void }) {
+function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: string[]; usage?: ProviderUsage; onOpen: () => void; onTest: () => void }) {
   const { t } = useI18n();
   const update = useUpdateProvider(p.id);
-  const test = useTestProvider(p.id);
   const { toast } = useFeedback();
-  const [testStatus, setTestStatus] = useState<string | null>(null);
 
   const protocols = [...new Set(p.endpoints.map((e) => e.protocol))];
   const missingKey = !p.hasApiKey && p.authScheme !== 'none' && p.authScheme !== 'oauth-subscription';
@@ -182,20 +186,6 @@ function ProviderCard({ p, days, usage, onOpen }: { p: Provider; days: string[];
       : { tone: 'green' as const, label: t('providers.card.active') };
   const requests = usage?.requests ?? days.map(() => 0);
   const totalRequests = requests.reduce((a, b) => a + b, 0);
-
-  const runTest = () => {
-    setTestStatus(t('providers.card.testing'));
-    test.mutate(undefined, {
-      onSuccess: (r) => {
-        setTestStatus(r.ok ? t('providers.card.testOk', { ms: formatMs(r.latencyMs) }) : t('providers.card.testFail'));
-        if (!r.ok) toast(t('providers.testFail', { error: r.error ?? `HTTP ${r.httpStatus ?? '?'}` }), 'error');
-      },
-      onError: (e) => {
-        setTestStatus(t('providers.card.testFail'));
-        toast(errorText(e), 'error');
-      },
-    });
-  };
 
   return (
     // The whole card opens the provider; like Row it holds its own controls, so it cannot be a <button>.
@@ -237,10 +227,17 @@ function ProviderCard({ p, days, usage, onOpen }: { p: Provider; days: string[];
         </div>
       }
       meta={<span className={cn(p.hasApiKey && p.authScheme !== 'oauth-subscription' && 'font-mono')}>{credential}</span>}
-      status={testStatus ?? (pricing || undefined)}
+      status={pricing || undefined}
       action={
         <div className="flex items-center gap-1" onClick={stopClick}>
-          <Button variant="plain" size="sm" icon={<Plug className="size-3.5" />} aria-label={t('providers.test')} title={t('providers.test')} loading={test.isPending} onClick={runTest} />
+          <Button
+            variant="plain"
+            size="sm"
+            icon={<FlaskConical className="size-3.5" />}
+            aria-label={t('providers.test')}
+            title={t('providers.test')}
+            onClick={onTest}
+          />
           <span className="ml-1 inline-flex">
             <Switch
               checked={p.enabled}
@@ -261,6 +258,10 @@ function ProviderCard({ p, days, usage, onOpen }: { p: Provider; days: string[];
           ))}
         </div>
       )}
+      {/* Balance / quota of the provider's usage query; its refresh button must not open the provider. */}
+      <div onClick={stopClick}>
+        <ProviderQuotaLine provider={p} />
+      </div>
       {/* Scrubbing the trend must not open the provider. */}
       <div className="mt-4" onClick={stopClick}>
         {totalRequests > 0 ? (

@@ -112,33 +112,34 @@
     "modelListEndpoint": { "protocol": "openai-responses", "path": "/models" }
   },
   {
-    "id": "claude-subscription", "version": 1, "name": "Claude 订阅（Pro/Max）", "category": "subscription", "icon": "anthropic",
+    "id": "claude-subscription", "version": 2, "name": "Claude 订阅（Pro/Max）", "category": "subscription", "icon": "anthropic",
     "website": "https://claude.ai", "docsUrl": "https://support.claude.com/en/articles/10080088-using-claude-code-with-your-pro-or-max-plan",
     "endpoints": [{ "protocol": "anthropic", "baseUrl": "https://api.anthropic.com/v1" }],
     "preferredUpstreamProtocols": ["anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
-    "models": ["claude-sonnet-4-5", "claude-opus-4-5", "claude-haiku-4-5"], "priceKey": "anthropic", "adapter": "anthropic",
+    "models": ["claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-sonnet-5", "claude-haiku-5-5", "claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"], "priceKey": "anthropic", "adapter": "anthropic",
     "defaultHeaders": { "anthropic-version": "2023-06-01" },
     "settings": { "auto_cache_control": true, "subscription_oauth": { "verified": true } }
   },
   {
-    "id": "openai-subscription", "version": 2, "name": "ChatGPT 订阅（Codex）", "category": "subscription", "icon": "openai",
+    "id": "openai-subscription", "version": 4, "name": "ChatGPT 订阅（Codex）", "category": "subscription", "icon": "openai",
     "website": "https://chatgpt.com/codex", "docsUrl": "https://developers.openai.com/codex/local",
     "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://chatgpt.com/backend-api/codex" }],
     "preferredUpstreamProtocols": ["openai-responses"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
-    "models": ["gpt-5-codex", "gpt-5"], "priceKey": "openai", "adapter": "openai",
-    "defaultHeaders": { "originator": "codex_cli_rs", "OpenAI-Beta": "responses=experimental" }
+    "models": ["gpt-5.3-codex", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-astra", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"], "priceKey": "openai", "adapter": "openai",
+    "defaultHeaders": { "originator": "codex_cli_rs", "OpenAI-Beta": "responses=experimental" },
+    "settings": { "force_stream": true }
   },
   {
-    "id": "grok-subscription", "version": 2, "name": "Grok 订阅", "category": "subscription", "icon": "grok",
+    "id": "grok-subscription", "version": 3, "name": "Grok 订阅", "category": "subscription", "icon": "grok",
     "website": "https://grok.com", "docsUrl": "https://github.com/xai-org/grok-build",
     "endpoints": [{ "protocol": "openai-responses", "baseUrl": "https://cli-chat-proxy.grok.com/v1" }],
     "preferredUpstreamProtocols": ["openai-responses"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
-    "models": ["grok-4", "grok-code-fast-1"], "priceKey": "xai", "adapter": "openai",
+    "models": ["grok-4.7", "grok-4.6", "grok-4.3", "grok-build-0.1"], "priceKey": "xai", "adapter": "openai",
     "defaultHeaders": { "x-grok-client-identifier": "xai-grok-cli", "x-grok-client-version": "0.2.93" },
     "modelListEndpoint": { "protocol": "openai-responses", "path": "/models" }
   },
   {
-    "id": "kimi-subscription", "version": 1, "name": "Kimi 订阅（Coding Plan）", "category": "subscription", "icon": "kimi",
+    "id": "kimi-subscription", "version": 2, "name": "Kimi 订阅（Coding Plan）", "category": "subscription", "icon": "kimi",
     "website": "https://www.kimi.com/code", "docsUrl": "https://www.kimi.com/code/docs/en/",
     "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.kimi.com/coding/v1" }, { "protocol": "anthropic", "baseUrl": "https://api.kimi.com/coding" }],
     "preferredUpstreamProtocols": ["openai-chat", "anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
@@ -147,12 +148,25 @@
     "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
   },
   {
-    "id": "zcode-subscription", "version": 1, "name": "ZCode 订阅（GLM Coding Plan · Z.AI）", "category": "subscription", "icon": "glm",
+    "id": "zcode-subscription", "version": 2, "name": "ZCode 订阅（GLM Coding Plan · Z.AI）", "category": "subscription", "icon": "glm",
     "website": "https://z.ai", "docsUrl": "https://docs.z.ai/devpack/quick-start",
     "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.z.ai/api/coding/paas/v4" }, { "protocol": "anthropic", "baseUrl": "https://api.z.ai/api/anthropic" }],
     "preferredUpstreamProtocols": ["openai-chat", "anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
-    "models": ["glm-5.3", "glm-5.3-flash"], "priceKey": "zai", "adapter": "glm",
+    "models": ["glm-5.3", "glm-5.3[1m]", "glm-5.3-flash", "glm-5.2", "glm-5.1", "glm-4.7", "glm-4.7-flash"], "priceKey": "zai", "adapter": "glm",
     "defaultHeaders": { "User-Agent": "ZCode/3.10.2", "http-referer": "https://zcode.z.ai" }
+  },
+  {
+    "id": "github-copilot-subscription", "version": 1, "name": "GitHub Copilot 订阅", "category": "subscription", "icon": "copilot",
+    "website": "https://github.com/features/copilot", "docsUrl": "https://docs.github.com/en/copilot",
+    "endpoints": [{ "protocol": "openai-chat", "baseUrl": "https://api.githubcopilot.com" }, { "protocol": "openai-responses", "baseUrl": "https://api.githubcopilot.com" }, { "protocol": "anthropic", "baseUrl": "https://api.githubcopilot.com" }],
+    "preferredUpstreamProtocols": ["openai-chat", "openai-responses", "anthropic"], "auth": { "scheme": "oauth-subscription" }, "requiresApiKey": false,
+    "models": ["gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "claude-sonnet-5", "claude-opus-5"],
+    "adapter": "openai",
+    "defaultHeaders": {
+      "User-Agent": "GitHubCopilotChat/0.26.7", "Editor-Version": "vscode/1.99.3", "Editor-Plugin-Version": "copilot-chat/0.26.7",
+      "Copilot-Integration-Id": "vscode-chat", "X-GitHub-Api-Version": "2024-12-15"
+    },
+    "modelListEndpoint": { "protocol": "openai-chat", "path": "/models" }
   },
   {
     "id": "custom-chat", "version": 1, "name": "OpenAI Chat compatible", "category": "custom", "icon": "custom",

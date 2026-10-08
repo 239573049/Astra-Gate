@@ -33,9 +33,12 @@ public static class ModelEndpoints
         {
             var models = await db.Models.ListAsync(search, ct);
             var keys = await db.Models.GetPriceKeysByModelAsync(ct);
+            // Materialized so the root is a List<ModelDto>, which ServerJsonContext registers;
+            // a LINQ iterator root would drag in every collection interface (AOT metadata gap).
             return Results.Ok(models
                 .Where(m => string.IsNullOrEmpty(vendor) || string.Equals(m.Vendor, vendor, StringComparison.OrdinalIgnoreCase))
-                .Select(m => ToDto(m, keys.GetValueOrDefault(m.Id) ?? [])));
+                .Select(m => ToDto(m, keys.GetValueOrDefault(m.Id) ?? []))
+                .ToList());
         });
 
         g.MapGet("/{id}", async (string id, AstraDatabase db, CancellationToken ct) =>
@@ -45,7 +48,7 @@ public static class ModelEndpoints
         {
             var id = input.Id?.Trim();
             if (string.IsNullOrEmpty(id)) return Bad("id is required");
-            if (await db.Models.GetAsync(id, ct) is not null) return Results.Json(new ErrorBody($"Model '{id}' already exists"), statusCode: 409);
+            if (await db.Models.GetAsync(id, ct) is not null) return ApiJson.Result(new ErrorBody($"Model '{id}' already exists"), 409);
             var model = new SystemModel { Id = id, Source = "user", Enabled = input.Enabled ?? true };
             if (Apply(model, input, trackChanges: false) is { } error) return Bad(error);
             await db.Models.InsertAsync(model, ct);
@@ -272,7 +275,7 @@ public static class ModelEndpoints
         return problems.Count == 0 ? null : "Invalid pricing: " + string.Join("; ", problems);
     }
 
-    internal static IResult NotFound(string what) => Results.Json(new ErrorBody($"Not found: {what}"), statusCode: 404);
+    internal static IResult NotFound(string what) => ApiJson.Result(new ErrorBody($"Not found: {what}"), 404);
 
-    internal static IResult Bad(string message) => Results.Json(new ErrorBody(message), statusCode: 400);
+    internal static IResult Bad(string message) => ApiJson.Result(new ErrorBody(message), 400);
 }

@@ -23,6 +23,7 @@ vi.mock('../api/hooks', () => ({
   useProviders: hookSpies.useProviders,
   useRequests: hookSpies.useRequests,
   useRequest: hookSpies.useRequest,
+  useTokens: () => ({ data: [] }),
 }));
 
 // Page reads the shell layout context that only the real AppShell provides.

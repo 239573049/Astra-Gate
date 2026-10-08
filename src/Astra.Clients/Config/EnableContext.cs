@@ -18,7 +18,9 @@ public sealed class EnableContext
     public string? Model { get; init; }
 
     /// <summary>
-    /// Client-specific extras (JSON object). Known keys: claude-code "smallFastModel";
+    /// Client-specific extras (JSON object). Known keys: claude-code "models" ({"&lt;env var&gt;": "&lt;model&gt;"},
+    /// typically <c>ANTHROPIC_MODEL</c> and the <c>ANTHROPIC_DEFAULT_*_MODEL</c> tiers — see
+    /// <c>ClaudeCodeModels.Slots</c>; an empty slot is never written) and the older single-key "smallFastModel";
     /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode, pi, minimax-code, copilot-cli and
     /// vscode-copilot "models" ({"…": {"id":…,"name":…, optional "contextWindow", "maxOutputTokens", "vision",
     /// "reasoning"}}, the bound provider's enabled models).

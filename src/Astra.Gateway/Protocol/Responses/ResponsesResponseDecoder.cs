@@ -18,6 +18,13 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
 
     public string? ResponseModel { get; private set; }
 
+    /// <summary>
+    /// The complete response object (from a non-streaming body or the terminal
+    /// <c>response.completed|incomplete|failed</c> event). Callers that must answer with a single JSON
+    /// body — e.g. an upstream that only speaks SSE — return this as-is.
+    /// </summary>
+    public JsonObject? FinalResponse { get; private set; }
+
     private int _nextBlock;
     private bool _started;
     private bool _stopped;
@@ -56,6 +63,7 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
     public IEnumerable<UnifiedStreamEvent> DecodeJson(JsonObject body)
     {
         if (ResponsesCodec.Str(body, "model") is { } model && !string.IsNullOrWhiteSpace(model)) ResponseModel = model;
+        FinalResponse = (JsonObject)body.DeepClone();
         var events = new List<UnifiedStreamEvent>();
         if (!_started)
         {
@@ -288,6 +296,8 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
     {
         if (_terminal)
             return;
+        // 记下完整响应对象：只发 SSE 的上游（codex backend）要靠它在非流式请求里拼出响应体。
+        FinalResponse = (JsonObject)response.DeepClone();
         if (!_started)
         {
             _started = true;

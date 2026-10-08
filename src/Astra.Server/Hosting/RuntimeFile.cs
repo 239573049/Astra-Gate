@@ -21,7 +21,11 @@ public sealed class RuntimeInfo
 
 public sealed class RuntimeFile(AstraPaths paths)
 {
-    private static readonly JsonSerializerOptions FileJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions FileJson = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true,
+        TypeInfoResolver = JsonContexts.Resolver,
+    };
 
     public RuntimeInfo? Current { get; private set; }
 
@@ -39,7 +43,7 @@ public sealed class RuntimeFile(AstraPaths paths)
             RuntimeToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(24)).ToLowerInvariant(),
         };
         var tmp = paths.RuntimeFile + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(info, FileJson));
+        File.WriteAllText(tmp, JsonSerializer.Serialize(info, JsonContexts.Info<RuntimeInfo>(FileJson)));
         AstraPaths.RestrictToOwner(tmp);
         File.Move(tmp, paths.RuntimeFile, overwrite: true);
         Current = info;
@@ -52,7 +56,7 @@ public sealed class RuntimeFile(AstraPaths paths)
         try
         {
             if (!File.Exists(paths.RuntimeFile)) return;
-            var existing = JsonSerializer.Deserialize<RuntimeInfo>(File.ReadAllText(paths.RuntimeFile), FileJson);
+            var existing = JsonSerializer.Deserialize(File.ReadAllText(paths.RuntimeFile), JsonContexts.Info<RuntimeInfo>(FileJson));
             if (existing?.Pid == Environment.ProcessId) File.Delete(paths.RuntimeFile);
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)

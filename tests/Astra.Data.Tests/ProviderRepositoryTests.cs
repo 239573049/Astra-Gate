@@ -132,4 +132,41 @@ public class ProviderRepositoryTests
         Assert.True(await db.Providers.DeleteAsync("p1"));
         Assert.Empty(await db.Providers.ListModelsAsync("p1"));
     }
+
+    [Fact]
+    public async Task Quota_Snapshot_Is_Written_Alone_And_Survives_Full_Updates()
+    {
+        var db = await TestDb.InitializeAsync();
+        var stamp = new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
+        var provider = new Provider
+        {
+            Id = "pq",
+            Name = "Quota",
+            Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://api.example.com/v1" }],
+            CreatedAt = stamp,
+            UpdatedAt = stamp,
+        };
+        await db.Providers.InsertAsync(provider);
+        Assert.Null((await db.Providers.GetAsync("pq"))!.Quota);
+
+        var checkedAt = new DateTimeOffset(2026, 10, 8, 9, 30, 0, 123, TimeSpan.Zero);
+        var snapshot = new JsonObject { ["fetchedAtUtc"] = "2026-10-08T09:30:00Z", ["plans"] = new JsonArray(new JsonObject { ["remaining"] = 12.5 }) };
+        Assert.True(await db.Providers.UpdateQuotaAsync("pq", snapshot, checkedAt));
+        Assert.False(await db.Providers.UpdateQuotaAsync("missing", snapshot, checkedAt));
+
+        var got = (await db.Providers.GetAsync("pq"))!;
+        Assert.Equal(checkedAt, got.QuotaCheckedAtUtc);
+        Assert.Equal(12.5, got.Quota!["plans"]![0]!["remaining"]!.GetValue<double>());
+        // The background refresh must not look like a user edit.
+        Assert.Equal(stamp, got.UpdatedAt);
+
+        // A full-row update (settings edit) leaves the snapshot alone.
+        got.Name = "Renamed";
+        got.Quota = null;
+        await db.Providers.UpdateAsync(got);
+        var after = (await db.Providers.GetAsync("pq"))!;
+        Assert.Equal("Renamed", after.Name);
+        Assert.NotNull(after.Quota);
+        Assert.Equal(checkedAt, after.QuotaCheckedAtUtc);
+    }
 }

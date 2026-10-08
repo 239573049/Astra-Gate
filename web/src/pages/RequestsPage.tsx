@@ -1,7 +1,7 @@
 import { ArrowRight, Check, RefreshCw, ScrollText } from 'lucide-react';
 import { useRef, useState } from 'react';
 
-import { useClients, useProviders, useRequest, useRequests, type RequestQuery } from '../api/hooks';
+import { useClients, useProviders, useRequest, useRequests, useTokens, type RequestQuery } from '../api/hooks';
 import type { ClientKind, RequestDetail, RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
 import { Alert } from '../components/arc/alert/alert';
@@ -43,13 +43,14 @@ const PRIVACY_ACTION_KEY: Record<string, MessageKey> = {
   redact: 'settings.privacy.action.redact',
 };
 
-type FilterId = 'client' | 'provider' | 'status';
+type FilterId = 'client' | 'token' | 'provider' | 'status';
 
 /** One table row; sortable columns hold plain values, the full record rides along for rendering. */
 type Row = {
   id: string;
   time: number;
   client: string;
+  token: string;
   model: string;
   provider: string;
   status: string;
@@ -63,13 +64,14 @@ type Row = {
 export function RequestsPage() {
   const { t, locale } = useI18n();
   const [model, setModel] = useState('');
-  const [filters, setFilters] = useState<Record<FilterId, string>>({ client: '', provider: '', status: '' });
+  const [filters, setFilters] = useState<Record<FilterId, string>>({ client: '', token: '', provider: '', status: '' });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debouncedModel = useDebounced(model.trim());
   const clients = useClients();
   const providers = useProviders();
+  const tokens = useTokens();
 
   const query: RequestQuery = { model: debouncedModel, ...filters, page, pageSize: PAGE_SIZE };
   const requests = useRequests(query, page === 1);
@@ -80,16 +82,18 @@ export function RequestsPage() {
     if (cmd === 'find') searchRef.current?.focus();
   });
 
-  const clientName = (kind: string | null | undefined) => (kind ? (CLIENT_META[kind as ClientKind]?.name ?? kind) : '—');
+  const clientName = (r: RequestSummary) => requestClientName(r, t);
 
   // Keep query ids separate from displayed labels, including providers with the same name.
   const fieldOptions: Record<FilterId, { value: string; label: string }[]> = {
     client: (clients.data ?? []).map((c) => ({ value: c.kind, label: c.name })),
+    token: (tokens.data ?? []).map((tk) => ({ value: tk.id, label: tk.name })),
     provider: (providers.data ?? []).map((p) => ({ value: p.id, label: p.name })),
     status: STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) })),
   };
   const fieldLabels: Record<FilterId, string> = {
     client: t('requests.col.client'),
+    token: t('requests.col.token'),
     provider: t('requests.col.provider'),
     status: t('requests.col.status'),
   };
@@ -107,7 +111,7 @@ export function RequestsPage() {
 
   const clearFilters = () => {
     setModel('');
-    setFilters({ client: '', provider: '', status: '' });
+    setFilters({ client: '', token: '', provider: '', status: '' });
     setPage(1);
   };
 
@@ -119,7 +123,8 @@ export function RequestsPage() {
   const rows: Row[] = (data?.items ?? []).map((r) => ({
     id: r.id,
     time: Date.parse(r.startedAtUtc),
-    client: clientName(r.clientKind),
+    client: clientName(r),
+    token: r.tokenName ?? '',
     model: r.requestedModel ?? '',
     provider: r.providerName ?? '',
     status: r.status,
@@ -151,8 +156,28 @@ export function RequestsPage() {
       ),
     },
     { key: 'client', label: t('requests.col.client'), width: 110 },
+    { key: 'token', label: t('requests.col.token'), width: 110, render: (v) => <span className="block truncate">{String(v || '—')}</span> },
     { key: 'provider', label: t('requests.col.provider'), width: 130, render: (v) => <span className="block truncate">{String(v || '—')}</span> },
-    { key: 'status', label: t('requests.col.status'), width: 104, render: (_, row) => <StatusBadge status={row.r.status} http={row.r.httpStatus} /> },
+    {
+      key: 'status',
+      label: t('requests.col.status'),
+      width: 104,
+      render: (_, row) => {
+        const failed = row.r.status !== 'success' && row.r.status !== 'client_cancelled';
+        if (!failed) return <StatusBadge status={row.r.status} http={row.r.httpStatus} />;
+        return (
+          <button
+            type="button"
+            className="cursor-pointer rounded-full text-left hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+            title={t('requests.viewError')}
+            aria-label={`${t(`status.${row.r.status}` as 'status.success')}: ${t('requests.viewError')}`}
+            onClick={() => setSelected(row.id)}
+          >
+            <StatusBadge status={row.r.status} http={row.r.httpStatus} hint={t('requests.viewError')} />
+          </button>
+        );
+      },
+    },
     {
       key: 'ttft',
       label: 'TTFT / TPS',
@@ -263,12 +288,18 @@ export function RequestsPage() {
   );
 }
 
-function StatusBadge({ status, http }: { status: string; http?: number | null }) {
+/** Client name; a request authenticated by a bare token (no client suffix) is a direct call. */
+function requestClientName(r: Pick<RequestSummary, 'clientKind' | 'tokenId'>, t: TFunction): string {
+  if (r.clientKind) return CLIENT_META[r.clientKind as ClientKind]?.name ?? r.clientKind;
+  return r.tokenId ? t('requests.direct') : '—';
+}
+
+function StatusBadge({ status, http, hint }: { status: string; http?: number | null; hint?: string }) {
   const { t } = useI18n();
   const tone = status === 'success' ? 'green' : status === 'client_cancelled' ? 'orange' : 'red';
   const key = `status.${status}` as 'status.success';
   return (
-    <Badge tone={tone} title={http ? `HTTP ${http}` : undefined}>
+    <Badge tone={tone} title={[http ? `HTTP ${http}` : '', hint].filter(Boolean).join(' · ') || undefined}>
       {t(key)}
     </Badge>
   );
@@ -410,7 +441,8 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
           <div className="grid gap-x-8 gap-y-5 sm:grid-cols-2">
             <DetailSection title={t('requests.detail.summary')} action={<StatusBadge status={r.status} http={r.httpStatus} />}>
               <KV label={t('requests.col.time')}>{formatDateTime(r.startedAtUtc, locale)}</KV>
-              <KV label={t('requests.col.client')}>{r.clientKind ? (CLIENT_META[r.clientKind as ClientKind]?.name ?? r.clientKind) : '—'}</KV>
+              <KV label={t('requests.col.client')}>{requestClientName(r, t)}</KV>
+              <KV label={t('requests.col.token')}>{r.tokenName ?? '—'}</KV>
               <KV label={t('requests.col.provider')}>{r.providerName ?? '—'}</KV>
               <KV label={t('requests.detail.protocol')}>
                 <ProtocolTag r={r} />

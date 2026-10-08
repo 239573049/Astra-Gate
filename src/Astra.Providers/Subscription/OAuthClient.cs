@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -28,7 +29,10 @@ public sealed class OAuthClient(IHttpClientFactory factory)
 
     public enum DevicePollKind { Success, Pending, SlowDown, Expired, Denied, Error }
 
-    public sealed record DevicePoll(DevicePollKind Kind, TokenResult? Token, string? Error, string? Description);
+    /// <param name="Token">标准设备码流程换到的令牌；非标准形态（deviceauth）为 null。</param>
+    /// <param name="Grant">deviceauth 形态轮询到的授权码 + 上游配对的 PKCE 对。</param>
+    public sealed record DevicePoll(DevicePollKind Kind, TokenResult? Token, string? Error, string? Description,
+        DeviceAuthGrant? Grant = null);
 
     private HttpClient Create() => factory.CreateClient(HttpClientName);
 
@@ -65,7 +69,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
             ["client_id"] = config.ClientId,
             ["redirect_uri"] = redirectUri,
         };
-        if (config.UsePkce) form["code_verifier"] = codeVerifier;
+        if (config.UsePkce || codeVerifier.Length > 0) form["code_verifier"] = codeVerifier;
         return await SendTokenRequestAsync(config, form, ct);
     }
 
@@ -82,6 +86,20 @@ public sealed class OAuthClient(IHttpClientFactory factory)
 
     public async Task<DeviceStart> StartDeviceAsync(SubscriptionOAuthConfig config, CancellationToken ct = default)
     {
+        // deviceauth（OpenAI）的设备码请求是 JSON body，且不要 scope；标准设备码是表单 + scope。
+        if (config.Style == "deviceauth")
+        {
+            var json = await PostJsonAsync(config, config.DeviceCodeUrl,
+                new JsonObject { ["client_id"] = config.ClientId }, ct);
+            return new DeviceStart(
+                Required(json, "device_auth_id"),
+                Required(json, "user_code"),
+                DeviceVerificationUrl(config),
+                null,
+                IntOr(json, "expires_in", 900),
+                IntOr(json, "interval", 5));
+        }
+
         var form = new Dictionary<string, string>
         {
             ["client_id"] = config.ClientId,
@@ -96,14 +114,129 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var response = await Create().SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
-        var json = Parse(body);
+        var payload = Parse(body);
         return new DeviceStart(
-            Required(json, "device_code"),
-            Required(json, "user_code"),
-            Optional(json, "verification_uri") ?? Optional(json, "verification_url"),
-            Optional(json, "verification_uri_complete"),
-            IntOr(json, "expires_in", 600),
-            IntOr(json, "interval", 5));
+            Required(payload, "device_code"),
+            Required(payload, "user_code"),
+            Optional(payload, "verification_uri") ?? Optional(payload, "verification_url"),
+            Optional(payload, "verification_uri_complete"),
+            IntOr(payload, "expires_in", 600),
+            IntOr(payload, "interval", 5));
+    }
+
+    /// <summary>
+    /// deviceauth 形态的轮询：POST 设备码申请端点返回的 id + user code，成功时拿到的是
+    /// <b>一次性授权码</b>（连同上游配对的 code_challenge / code_verifier），不是令牌。
+    /// 未授权时上游回 403/404（没有 RFC 8628 的 error 字段），一律当"继续等待"。
+    /// 来源：openai/codex device_code_auth.rs 的 poll_for_token。
+    /// </summary>
+    public async Task<DevicePoll> PollDeviceAuthAsync(
+        SubscriptionOAuthConfig config, string deviceAuthId, string userCode, CancellationToken ct = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, config.DeviceTokenUrl)
+            {
+                Content = new StringContent(Json.Serialize(new Dictionary<string, string>
+                {
+                    ["device_auth_id"] = deviceAuthId,
+                    ["user_code"] = userCode,
+                }), Encoding.UTF8, "application/json"),
+            };
+            ApplyExtraHeaders(request, config);
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            using var response = await Create().SendAsync(request, ct);
+            var body = await response.Content.ReadAsStringAsync(ct);
+            if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound
+                || response.StatusCode == (HttpStatusCode)429)
+                return new DevicePoll(DevicePollKind.Pending, null, null, null);
+            var payload = Parse(body);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = Optional(payload, "error");
+                var kind = error switch
+                {
+                    "expired_token" or "expired_device_code" => DevicePollKind.Expired,
+                    "access_denied" => DevicePollKind.Denied,
+                    _ => DevicePollKind.Error,
+                };
+                return new DevicePoll(kind, null, error ?? $"http_{(int)response.StatusCode}", Optional(payload, "error_description"));
+            }
+            var grant = new DeviceAuthGrant(
+                Required(payload, "authorization_code"),
+                Required(payload, "code_challenge"),
+                Required(payload, "code_verifier"));
+            return new DevicePoll(DevicePollKind.Success, null, null, null, grant);
+        }
+        catch (OAuthProtocolException e)
+        {
+            return new DevicePoll(DevicePollKind.Error, null, e.Error, e.Description);
+        }
+    }
+
+    /// <summary>deviceauth 的授权页：固定 <c>{issuer}/codex/device</c>（与 deviceauth 端点同 host）。</summary>
+    private static string? DeviceVerificationUrl(SubscriptionOAuthConfig config) =>
+        Uri.TryCreate(config.DeviceCodeUrl, UriKind.Absolute, out var url)
+            ? $"{url.Scheme}://{url.Authority}/codex/device"
+            : null;
+
+    /// <summary>POST 一个 JSON body 并解析 JSON 响应（deviceauth 的设备码申请走这个形状）。</summary>
+    private async Task<JsonObject> PostJsonAsync(
+        SubscriptionOAuthConfig config, string url, JsonObject body, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        ApplyExtraHeaders(request, config);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var response = await Create().SendAsync(request, ct);
+        var text = await response.Content.ReadAsStringAsync(ct);
+        var json = Parse(text);
+        if (!response.IsSuccessStatusCode)
+        {
+            var error = Optional(json, "error");
+            throw new OAuthProtocolException(error ?? $"http_{(int)response.StatusCode}",
+                Optional(json, "error_description") ?? (error is null && text.Length <= 300 ? text : null));
+        }
+        return json;
+    }
+
+    /// <summary>
+    /// ZCode CLI 链路（官方、headless 友好、无回调）：<c>POST {CliInitUrl}</c>（Bearer 本地随机
+    /// poll_token，body <c>{"provider":"zai"}</c>）→ <c>data.{flow_id, authorize_url, poll_token?}</c>；
+    /// 浏览器打开 authorize_url 授权后 <c>GET {CliPollUrl}/{flow_id}</c>（Bearer poll_token）
+    /// 轮询取 <c>data.accessToken</c>。来源：zcode2api docs/development/05-upstream-protocols.md §2.1。
+    /// </summary>
+    public async Task<ZcodeCliStart> StartZcodeCliAsync(
+        SubscriptionOAuthConfig config, string provider, string pollToken, CancellationToken ct = default)
+    {
+        var data = await SendZcodeEnvelopeAsync(config, HttpMethod.Post, config.CliInitUrl,
+            new Dictionary<string, object?> { ["provider"] = provider }, ct, $"Bearer {pollToken}");
+        return new ZcodeCliStart(
+            Required(data, "flow_id"),
+            Required(data, "authorize_url"),
+            Optional(data, "poll_token") ?? pollToken);
+    }
+
+    /// <summary>ZCode CLI 轮询：4xx 里的 code=3004 是会话过期，其余 4xx 是终态失败。</summary>
+    public async Task<ZcodeCliPoll> PollZcodeCliAsync(
+        SubscriptionOAuthConfig config, string flowId, string pollToken, CancellationToken ct = default)
+    {
+        try
+        {
+            var data = await SendZcodeEnvelopeAsync(config, HttpMethod.Get, $"{config.CliPollUrl}/{flowId}",
+                null, ct, $"Bearer {pollToken}");
+            return new ZcodeCliPoll(ZcodeCliPollKind.Done,
+                Optional(data, "accessToken") ?? Optional(data, "access_token"), null, null);
+        }
+        catch (OAuthProtocolException e)
+        {
+            // code=3004 = 会话过期（zcode2api 明确映射）；其余 4xx 终态失败。
+            return e.Error == "zcode_3004"
+                ? new ZcodeCliPoll(ZcodeCliPollKind.Expired, null, e.Error, e.Description)
+                : new ZcodeCliPoll(ZcodeCliPollKind.Error, null, e.Error, e.Description);
+        }
     }
 
     /// <summary>
@@ -132,6 +265,40 @@ public sealed class OAuthClient(IHttpClientFactory factory)
     }
 
     /// <summary>信封里的 access_token：先看渠道键（如 zai），再退回平铺形态。</summary>
+    /// <summary>
+    /// GitHub Copilot 的第二跳：拿 GitHub token（<c>token &lt;gho_…&gt;</c>）换 Copilot 短时令牌
+    /// <c>GET/POST https://api.github.com/copilot_internal/v2/token</c>。
+    /// 响应是 <c>{ token, expires_at, refresh_in, endpoints:{api,proxy}, sku, organization_list }</c>。
+    /// 来源：官方 copilot-language-server main.js（tokenURL + Editor-* 身份头）。
+    /// </summary>
+    public async Task<CopilotToken> CopilotTokenAsync(
+        SubscriptionOAuthConfig config, string githubToken, CancellationToken ct = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, config.BusinessLoginUrl);
+        request.Headers.TryAddWithoutValidation("Authorization", $"token {githubToken}");
+        ApplyExtraHeaders(request, config);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        using var response = await Create().SendAsync(request, ct);
+        var text = await response.Content.ReadAsStringAsync(ct);
+        var json = Parse(text);
+        if (!response.IsSuccessStatusCode)
+        {
+            // 401/403 → GitHub token 失效或没有 Copilot 订阅；403 也可能是没开 Copilot。
+            throw new OAuthProtocolException($"http_{(int)response.StatusCode}",
+                Optional(json, "message") ?? Optional(json, "error") ?? (text.Length <= 200 ? text : null));
+        }
+        var token = Required(json, "token");
+        var expiresAt = IntOptional(json, "expires_at");
+        var refreshIn = IntOptional(json, "refresh_in");
+        var apiBase = json["endpoints"] is JsonObject endpoints ? Optional(endpoints, "api") : null;
+        return new CopilotToken(
+            token,
+            expiresAt is { } epoch ? DateTimeOffset.FromUnixTimeSeconds(epoch) : null,
+            refreshIn,
+            apiBase,
+            Optional(json, "sku"));
+    }
+
     private static string? NestedAccessToken(JsonObject data, string provider)
     {
         if (data[provider] is JsonObject nested && Optional(nested, "access_token") is { } nestedToken) return nestedToken;
@@ -139,18 +306,26 @@ public sealed class OAuthClient(IHttpClientFactory factory)
     }
 
     private async Task<JsonObject> PostZcodeEnvelopeAsync(
-        SubscriptionOAuthConfig config, string url, Dictionary<string, object?> bodyFields, CancellationToken ct)
+        SubscriptionOAuthConfig config, string url, Dictionary<string, object?> bodyFields, CancellationToken ct) =>
+        await SendZcodeEnvelopeAsync(config, HttpMethod.Post, url, bodyFields, ct, authorization: null);
+
+    private async Task<JsonObject> SendZcodeEnvelopeAsync(
+        SubscriptionOAuthConfig config, HttpMethod method, string url, Dictionary<string, object?>? bodyFields,
+        CancellationToken ct, string? authorization)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
-        {
-            Content = new StringContent(Json.Serialize(bodyFields), Encoding.UTF8, "application/json"),
-        };
+        using var request = new HttpRequestMessage(method, url);
+        if (bodyFields is not null)
+            request.Content = new StringContent(Json.Serialize(bodyFields), Encoding.UTF8, "application/json");
+        if (authorization is not null) request.Headers.TryAddWithoutValidation("Authorization", authorization);
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var client = Create();
         using var response = await client.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         var json = Parse(body);
+        // 错误信封：非 2xx 也要按 code/msg 报出来（CLI 轮询的 3004 就藏在这里）。
+        if (!response.IsSuccessStatusCode && json["code"] is null && json["data"] is null)
+            throw new OAuthProtocolException($"http_{(int)response.StatusCode}", body is { Length: <= 300 } ? body : null);
         if (json["code"] is JsonValue codeNode && codeNode.TryGetValue<int>(out var code) && code != 0)
             throw new OAuthProtocolException($"zcode_{code}", Optional(json, "msg") ?? Optional(json, "message"));
         return json["data"] as JsonObject

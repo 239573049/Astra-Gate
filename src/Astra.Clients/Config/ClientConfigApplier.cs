@@ -304,9 +304,9 @@ public sealed class ClientConfigApplier
 
     private static string TomlCanonical(string text)
     {
-        var table = Tomlyn.TomlSerializer.Deserialize<Tomlyn.Model.TomlTable>(text, Tomlyn.TomlSerializerOptions.Default)
+        var table = Tomlyn.TomlSerializer.Deserialize(text, ClientTomlContext.Default.TomlTable)
             ?? throw new EditorException("TOML document deserialized to null.");
-        return Tomlyn.TomlSerializer.Serialize(table, Tomlyn.TomlSerializerOptions.Default);
+        return Tomlyn.TomlSerializer.Serialize(table, ClientTomlContext.Default.TomlTable);
     }
 
     private static bool OnlyTrailingNewlinesDiffer(string current, string original) =>
@@ -411,7 +411,7 @@ public sealed class ClientConfigApplier
         if (!_env.FileExists(path)) return null;
         try
         {
-            return JsonSerializer.Deserialize<BackupManifest>(_env.ReadTextOrNull(path) ?? "", Json.Storage);
+            return Json.Deserialize<BackupManifest>(_env.ReadTextOrNull(path) ?? "");
         }
         catch (JsonException)
         {
@@ -477,7 +477,7 @@ public sealed class ClientConfigApplier
     private void WriteManifest(string dir, BackupManifest manifest)
     {
         Directory.CreateDirectory(dir);
-        _env.WriteTextAtomic(Path.Combine(dir, "manifest.json"), JsonSerializer.Serialize(manifest, Json.Storage), bom: false);
+        _env.WriteTextAtomic(Path.Combine(dir, "manifest.json"), Json.Serialize(manifest), bom: false);
     }
 
     /// <summary>Writes the backup copy and returns the unique file name used.</summary>

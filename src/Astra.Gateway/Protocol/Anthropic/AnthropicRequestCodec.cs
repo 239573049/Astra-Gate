@@ -331,7 +331,7 @@ internal static class AnthropicRequestCodec
         {
             var blocks = new JsonArray();
             foreach (var part in system)
-                blocks.Add(new JsonObject { ["type"] = "text", ["text"] = part.Text });
+                blocks.AddNode(new JsonObject { ["type"] = "text", ["text"] = part.Text });
             if (ctx.AutoCacheControl)
                 ((JsonObject)blocks[^1]!)["cache_control"] = new JsonObject { ["type"] = "ephemeral" };
             root["system"] = blocks;
@@ -348,11 +348,11 @@ internal static class AnthropicRequestCodec
                     if (t.Description is { Length: > 0 } description) tool["description"] = description;
                     // Anthropic requires an input_schema object on custom tools.
                     tool["input_schema"] = t.InputSchema?.DeepClone() ?? new JsonObject { ["type"] = "object" };
-                    tools.Add(tool);
+                    tools.AddNode(tool);
                 }
                 else if (t.BuiltinOrigin == ApiProtocol.Anthropic && t.BuiltinRaw is { } raw)
                 {
-                    tools.Add(raw.DeepClone());
+                    tools.AddNode(raw.DeepClone());
                 }
                 else
                 {
@@ -361,8 +361,8 @@ internal static class AnthropicRequestCodec
             }
             if (tools.Count > 0)
             {
-                // One 5m breakpoint on the last tool (plus one on the last system block) stays within the
-                // 4-breakpoint limit; nothing else in the request carries cache_control.
+                // One 5m breakpoint on the last tool (plus system and the message tail below) fills the
+                // 4-breakpoint limit.
                 if (ctx.AutoCacheControl)
                     ((JsonObject)tools[^1]!)["cache_control"] = new JsonObject { ["type"] = "ephemeral" };
                 root["tools"] = tools;
@@ -388,14 +388,24 @@ internal static class AnthropicRequestCodec
             var blocks = new JsonArray();
             foreach (var part in parts)
                 if (PartBlock(part, warnings) is { } block)
-                    blocks.Add(block);
-            messages.Add(new JsonObject
+                    blocks.AddNode(block);
+            messages.AddNode(new JsonObject
             {
                 ["role"] = m.Role == MessageRole.User ? "user" : "assistant",
                 ["content"] = blocks,
             });
         }
         root["messages"] = messages;
+
+        // Incremental conversation caching: together with the system/tool marks above, the two
+        // message-tail marks fill the 4-breakpoint budget. Each request writes the growing history at
+        // the tail, so the next request reads it as a cache hit; the second-to-last mark gives
+        // Anthropic's 20-block lookback an earlier entry to find when one turn appends many blocks.
+        if (ctx.AutoCacheControl && messages.Count > 0)
+        {
+            if (messages.Count > 1) MarkLastCacheableBlock(messages[^2] as JsonObject);
+            MarkLastCacheableBlock(messages[^1] as JsonObject);
+        }
 
         if (r.ToolChoice is { } choice)
         {
@@ -447,7 +457,7 @@ internal static class AnthropicRequestCodec
         {
             var sequences = new JsonArray();
             foreach (var s in stop)
-                sequences.Add(JsonValue.Create(s));
+                sequences.AddNode(JsonValue.Create(s));
             root["stop_sequences"] = sequences;
         }
         if (r.User is { Length: > 0 } user)
@@ -491,6 +501,29 @@ internal static class AnthropicRequestCodec
             if (!signed) return true;
         }
         return false;
+    }
+
+    /// <summary>
+    /// Marks the last cacheable block of one message with a 5m cache_control breakpoint, walking back
+    /// past blocks Anthropic refuses to mark (thinking) or cannot cache (empty text). Skips the message
+    /// when none qualifies.
+    /// </summary>
+    private static void MarkLastCacheableBlock(JsonObject? message)
+    {
+        if (message?["content"] is not JsonArray blocks) return;
+        for (var i = blocks.Count - 1; i >= 0; i--)
+        {
+            if (blocks[i] is not JsonObject block) continue;
+            var cacheable = Str(block, "type") switch
+            {
+                "text" => (string?)block["text"] is { Length: > 0 }, // empty text blocks cannot be cached
+                "image" or "document" or "tool_use" or "tool_result" => true,
+                _ => false,
+            };
+            if (!cacheable) continue;
+            block["cache_control"] = new JsonObject { ["type"] = "ephemeral" };
+            return;
+        }
     }
 
     /// <summary>Anthropic combines consecutive same-role turns, so we merge them up front.</summary>
@@ -545,10 +578,10 @@ internal static class AnthropicRequestCodec
                             switch (c)
                             {
                                 case TextPart text:
-                                    content.Add(new JsonObject { ["type"] = "text", ["text"] = text.Text });
+                                    content.AddNode(new JsonObject { ["type"] = "text", ["text"] = text.Text });
                                     break;
                                 case ImagePart image when ImageBlock(image, warnings) is { } imageBlock:
-                                    content.Add(imageBlock);
+                                    content.AddNode(imageBlock);
                                     break;
                             }
                         }

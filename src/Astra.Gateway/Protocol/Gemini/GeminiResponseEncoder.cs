@@ -73,7 +73,7 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
     public JsonObject BuildJson()
     {
         var parts = new JsonArray();
-        foreach (var part in _aggregated) parts.Add(part.DeepClone());
+        foreach (var part in _aggregated) parts.AddNode(part.DeepClone());
         var candidate = new JsonObject
         {
             ["content"] = new JsonObject { ["role"] = "model", ["parts"] = parts },
@@ -130,7 +130,7 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
         {
             _pendingSignature = null;
             Track(SignaturePart(signature), signature);
-            parts.Add(SignaturePart(signature));
+            parts.AddNode(SignaturePart(signature));
         }
         return Chunk(parts, finish, UsageJson(_usage));
     }

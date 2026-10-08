@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
-import { api, enc, qs } from './client';
+import { api, apiStream, enc, qs, type SseMessage } from './client';
 import type {
   AuthStatus,
   BackupInfo,
@@ -10,7 +10,10 @@ import type {
   ClientKind,
   ConfigPreview,
   DisableResult,
+  DailyActivity,
   EnableRequest,
+  ImportedCodexAccount,
+  LocalCodexLogin,
   Model,
   ModelDetail,
   ModelField,
@@ -27,8 +30,14 @@ import type {
   ProviderAccount,
   ProviderCreate,
   ProviderModel,
+  ProviderQuotaConfigInput,
+  ProviderQuotaState,
+  ProviderQuotaTest,
+  QuotaTemplate,
+  ResetCreditList,
+  ResetCreditResult,
   ProviderTemplate,
-  ProviderTestResult,
+  ProviderTestRequest,
   ProviderUpdate,
   Range,
   RemoteModel,
@@ -40,6 +49,8 @@ import type {
   SubscriptionPollResult,
   SyncPreview,
   TimeseriesPoint,
+  Token,
+  TokenMutationResult,
   TopModel,
   UpdateStatus,
   VersionInfo,
@@ -57,18 +68,22 @@ export const keys = {
   model: (id: string) => ['model', id] as const,
   priceKeys: ['price-keys'] as const,
   templates: ['provider-templates'] as const,
+  quotaTemplates: ['provider-quota-templates'] as const,
   providers: ['providers'] as const,
   provider: (id: string) => ['provider', id] as const,
   providerModels: (id: string) => ['provider-models', id] as const,
   remoteModels: (id: string) => ['remote-models', id] as const,
   templateUpdate: (id: string) => ['template-update', id] as const,
   clients: ['clients'] as const,
+  tokens: ['tokens'] as const,
   clientModels: (kind: string) => ['client-models', kind] as const,
   backups: (kind: string) => ['backups', kind] as const,
   privacy: ['privacy'] as const,
   privacyEvents: (q: PrivacyEventQuery) => ['privacy-events', q] as const,
   privacyEventStats: (...args: unknown[]) => ['privacy-event-stats', ...args] as const,
   providerAccounts: (id: string) => ['provider-accounts', id] as const,
+  localCodexLogin: ['local-codex-login'] as const,
+  resetCredits: (accountId: string) => ['reset-credits', accountId] as const,
   requests: (q: RequestQuery) => ['requests', q] as const,
   request: (id: string) => ['request', id] as const,
   stats: (kind: string, ...args: unknown[]) => ['stats', kind, ...args] as const,
@@ -281,6 +296,48 @@ export function useDeleteProvider() {
   });
 }
 
+// ---------- provider balance / quota query ----------
+
+export const useQuotaTemplates = () =>
+  useQuery({
+    queryKey: keys.quotaTemplates,
+    queryFn: () => api<QuotaTemplate[]>('GET', '/api/provider-quota/templates'),
+    staleTime: Infinity,
+  });
+
+/** Writes a fresh quota state into the cached provider (detail and list) without refetching everything. */
+function applyQuotaState(qc: ReturnType<typeof useQueryClient>, id: string, state: ProviderQuotaState) {
+  const patch = (p: Provider): Provider =>
+    p.id === id ? { ...p, quotaConfig: state.config, quota: state.snapshot ?? null, quotaCheckedAtUtc: state.checkedAtUtc ?? null } : p;
+  qc.setQueryData<Provider>(keys.provider(id), (prev) => (prev ? patch(prev) : prev));
+  qc.setQueryData<Provider[]>(keys.providers, (prev) => prev?.map(patch));
+}
+
+/** Runs the provider's balance / quota query now and stores the snapshot. */
+export function useFetchProviderQuota() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<ProviderQuotaState>('POST', `/api/providers/${enc(id)}/quota`),
+    onSuccess: (state, id) => applyQuotaState(qc, id, state),
+    // A configuration error is also recorded on the snapshot: pick it up.
+    onError: (_e, id) => void qc.invalidateQueries({ queryKey: keys.provider(id) }),
+  });
+}
+
+export function useSaveProviderQuotaConfig(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProviderQuotaConfigInput) => api<ProviderQuotaState>('PUT', `/api/providers/${enc(id)}/quota/config`, body),
+    onSuccess: (state) => applyQuotaState(qc, id, state),
+  });
+}
+
+/** One unsaved run of a quota configuration (nothing is stored). */
+export const useTestProviderQuota = (id: string) =>
+  useMutation({
+    mutationFn: (body: ProviderQuotaConfigInput) => api<ProviderQuotaTest>('POST', `/api/providers/${enc(id)}/quota/test`, body),
+  });
+
 export function useDuplicateProvider() {
   const qc = useQueryClient();
   return useMutation({
@@ -297,11 +354,13 @@ export function useReorderProviders() {
   });
 }
 
-export const useTestProvider = (id: string) =>
-  useMutation({
-    mutationFn: (modelId?: string) =>
-      api<ProviderTestResult>('POST', `/api/providers/${enc(id)}/test`, { modelId: modelId || undefined }),
-  });
+/**
+ * Runs one provider connection test, reporting its progress as it arrives. Not a react-query mutation: the answer is
+ * a server-sent event stream, not one response body.
+ */
+export function runProviderTest(id: string, request: ProviderTestRequest, onEvent: (message: SseMessage) => void, signal?: AbortSignal): Promise<void> {
+  return apiStream(`/api/providers/${enc(id)}/test`, request, onEvent, signal);
+}
 
 export const useRemoteModels = (id: string, enabled: boolean) =>
   useQuery({
@@ -477,6 +536,46 @@ export const usePollProviderLogin = (providerId: string) =>
       api<SubscriptionPollResult>('POST', `/api/providers/${enc(providerId)}/accounts/login/${enc(state)}/poll`),
   });
 
+/** Whether this machine already has a usable `codex login` (~/.codex/auth.json). */
+export const useLocalCodexLogin = (enabled = true) =>
+  useQuery({
+    queryKey: keys.localCodexLogin,
+    queryFn: () => api<LocalCodexLogin>('GET', '/api/subscription/codex/local-login'),
+    enabled,
+    retry: false,
+  });
+
+/** Adopts the machine's codex login as a subscription account (no browser round-trip). */
+export function useImportCodexAccount(providerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<ImportedCodexAccount>('POST', `/api/providers/${enc(providerId)}/accounts/import-codex`, {}),
+    onSuccess: () => invalidateProviderAccounts(qc, providerId),
+  });
+}
+
+/** codex reset cards (live list — statuses change when a card is used or expires). */
+export const useResetCredits = (accountId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: keys.resetCredits(accountId ?? ''),
+    queryFn: () => api<ResetCreditList>('GET', `/api/provider-accounts/${enc(accountId!)}/reset-credits`),
+    enabled: Boolean(accountId) && enabled,
+    retry: false,
+  });
+
+/** Consumes one reset card; the response carries the refreshed quota snapshot. */
+export function useConsumeResetCredit(providerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { accountId: string; creditId: string }) =>
+      api<ResetCreditResult>('POST', `/api/provider-accounts/${enc(vars.accountId)}/reset-credits/${enc(vars.creditId)}/consume`, {}),
+    onSuccess: (_r, vars) => {
+      invalidateProviderAccounts(qc, providerId);
+      void qc.invalidateQueries({ queryKey: keys.resetCredits(vars.accountId) });
+    },
+  });
+}
+
 // ---------- clients ----------
 
 export const useClients = () =>
@@ -548,8 +647,47 @@ export const useRestoreBackup = () =>
     (v) => [keys.backups(v.kind)],
   );
 
-export const useRotateKey = () =>
-  useClientMutation((kind: ClientKind) => api<ClientInfo>('POST', `/api/clients/${kind}/rotate-key`));
+// ---------- tokens ----------
+
+export const useTokens = () =>
+  useQuery({
+    queryKey: keys.tokens,
+    queryFn: () => api<Token[]>('GET', '/api/tokens'),
+    refetchInterval: 15_000,
+  });
+
+function useTokenMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.tokens });
+      void qc.invalidateQueries({ queryKey: keys.clients });
+    },
+  });
+}
+
+export const useCreateToken = () =>
+  useTokenMutation((body: { name: string; providerId?: string | null; accountId?: string | null }) =>
+    api<Token>('POST', '/api/tokens', body),
+  );
+
+/** providerId: null clears direct calls; accountId: null / "" uses the provider's default account. */
+export const useUpdateToken = () =>
+  useTokenMutation((v: { id: string; name?: string; enabled?: boolean; providerId?: string | null; accountId?: string | null }) => {
+    const { id, ...body } = v;
+    return api<Token>('PATCH', `/api/tokens/${enc(id)}`, body);
+  });
+
+export const useResetToken = () =>
+  useTokenMutation((id: string) => api<TokenMutationResult>('POST', `/api/tokens/${enc(id)}/reset`));
+
+export const useDeleteToken = () =>
+  useTokenMutation((id: string) => api<TokenMutationResult>('DELETE', `/api/tokens/${enc(id)}`));
+
+/** The plaintext token, fetched only when the user copies it. */
+export const useRevealToken = () =>
+  useMutation({ mutationFn: (id: string) => api<{ token: string }>('POST', `/api/tokens/${enc(id)}/reveal`) });
 
 // ---------- requests & stats ----------
 
@@ -557,6 +695,7 @@ export interface RequestQuery {
   from?: string;
   to?: string;
   client?: string;
+  token?: string;
   provider?: string;
   model?: string;
   status?: string;
@@ -582,27 +721,43 @@ export const useRequest = (id: string | null) =>
 /** The viewer's UTC offset in minutes, so timeseries buckets follow local days and hours. */
 const tzOffset = () => -new Date().getTimezoneOffset();
 
-// `client` (a client kind) narrows stats to that client's requests; omitted means every request.
-export const useStatsSummary = (range: Range, client?: string) =>
+// `client` (a client kind) / `token` (a token id) narrow stats to those requests; omitted means every request.
+export const useStatsSummary = (range: Range, client?: string, token?: string) =>
   useQuery({
-    queryKey: keys.stats('summary', range, client ?? ''),
-    queryFn: () => api<StatsSummary>('GET', `/api/stats/summary${qs({ range, client })}`),
+    queryKey: keys.stats('summary', range, client ?? '', token ?? ''),
+    queryFn: () => api<StatsSummary>('GET', `/api/stats/summary${qs({ range, client, token })}`),
     refetchInterval: 15_000,
     placeholderData: (prev) => prev,
   });
 
-export const useTimeseries = (range: Range, groupBy: 'day' | 'hour', by: 'model' | 'provider' | 'client', client?: string) =>
+export const useTimeseries = (
+  range: Range,
+  groupBy: 'day' | 'hour',
+  by: 'model' | 'provider' | 'client' | 'token',
+  client?: string,
+  token?: string,
+) =>
   useQuery({
-    queryKey: keys.stats('timeseries', range, groupBy, by, client ?? '', tzOffset()),
-    queryFn: () => api<TimeseriesPoint[]>('GET', `/api/stats/timeseries${qs({ range, groupBy, by, client, tzOffset: tzOffset() })}`),
+    queryKey: keys.stats('timeseries', range, groupBy, by, client ?? '', token ?? '', tzOffset()),
+    queryFn: () =>
+      api<TimeseriesPoint[]>('GET', `/api/stats/timeseries${qs({ range, groupBy, by, client, token, tzOffset: tzOffset() })}`),
     refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
 
-export const useTopModels = (range: Range, client?: string, limit = 8) =>
+export const useTopModels = (range: Range, client?: string, limit = 8, token?: string) =>
   useQuery({
-    queryKey: keys.stats('top', range, client ?? '', limit),
-    queryFn: () => api<TopModel[]>('GET', `/api/stats/top-models${qs({ range, limit, client })}`),
+    queryKey: keys.stats('top', range, client ?? '', limit, token ?? ''),
+    queryFn: () => api<TopModel[]>('GET', `/api/stats/top-models${qs({ range, limit, client, token })}`),
     refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+
+/** Daily request counts for the activity heatmap; the window is its own (default 365 days), not the page's range. */
+export const useActivityHeatmap = (days = 365, client?: string, token?: string) =>
+  useQuery({
+    queryKey: keys.stats('activity', days, client ?? '', token ?? '', tzOffset()),
+    queryFn: () => api<DailyActivity[]>('GET', `/api/stats/activity-heatmap${qs({ days, client, token, tzOffset: tzOffset() })}`),
+    refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });

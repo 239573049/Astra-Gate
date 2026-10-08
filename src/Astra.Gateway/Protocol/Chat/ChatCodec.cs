@@ -418,7 +418,7 @@ public sealed class ChatCodec : IProtocolCodec
                 // Tool results precede the rest of the user message (tool calls must be answered first).
                 foreach (var part in message.Parts.OfType<ToolResultPart>())
                 {
-                    ((JsonArray)body["messages"]!).Add(new JsonObject
+                    ((JsonArray)body["messages"]!).AddNode(new JsonObject
                     {
                         ["role"] = "tool",
                         ["tool_call_id"] = part.CallId,
@@ -436,7 +436,7 @@ public sealed class ChatCodec : IProtocolCodec
                     if (content is JsonArray { Count: 0 })
                         warnings.Add("用户消息的内容全部无法映射到 Chat 协议，整条消息已跳过。");
                     else
-                        ((JsonArray)body["messages"]!).Add(new JsonObject { ["role"] = "user", ["content"] = content });
+                        ((JsonArray)body["messages"]!).AddNode(new JsonObject { ["role"] = "user", ["content"] = content });
                 }
                 break;
             case MessageRole.Assistant:
@@ -457,7 +457,7 @@ public sealed class ChatCodec : IProtocolCodec
                         ["function"] = new JsonObject { ["name"] = call.Name, ["arguments"] = call.ArgumentsJson },
                     }).ToArray());
                 }
-                ((JsonArray)body["messages"]!).Add(assistant);
+                ((JsonArray)body["messages"]!).AddNode(assistant);
                 break;
         }
     }
@@ -471,7 +471,7 @@ public sealed class ChatCodec : IProtocolCodec
             switch (part)
             {
                 case TextPart { Text: { } text }:
-                    array.Add(new JsonObject { ["type"] = "text", ["text"] = text });
+                    array.AddNode(new JsonObject { ["type"] = "text", ["text"] = text });
                     break;
                 case ImagePart image:
                     var url = image.Base64Data is { Length: > 0 } base64
@@ -485,7 +485,7 @@ public sealed class ChatCodec : IProtocolCodec
                     }
                     var imagePart = new JsonObject { ["url"] = url };
                     if (image.Detail is { Length: > 0 } detail) imagePart["detail"] = detail;
-                    array.Add(new JsonObject { ["type"] = "image_url", ["image_url"] = imagePart });
+                    array.AddNode(new JsonObject { ["type"] = "image_url", ["image_url"] = imagePart });
                     break;
                 case FilePart file:
                     var fileSpec = new JsonObject();
@@ -503,7 +503,7 @@ public sealed class ChatCodec : IProtocolCodec
                     else if (file.FileId is { } fileId) fileSpec["file_id"] = fileId;
                     if (fileSpec.Count == 0) break;
                     if (file.FileName is { Length: > 0 } name) fileSpec["filename"] = name;
-                    array.Add(new JsonObject { ["type"] = "file", ["file"] = fileSpec });
+                    array.AddNode(new JsonObject { ["type"] = "file", ["file"] = fileSpec });
                     break;
             }
         }
@@ -529,11 +529,11 @@ public sealed class ChatCodec : IProtocolCodec
                 if (tool.Description is { } description) function["description"] = description;
                 if (tool.InputSchema is { } schema) function["parameters"] = schema.DeepClone();
                 if (tool.Strict is { } strict) function["strict"] = strict;
-                array.Add(new JsonObject { ["type"] = "function", ["function"] = function });
+                array.AddNode(new JsonObject { ["type"] = "function", ["function"] = function });
             }
             else if (tool.BuiltinOrigin == ApiProtocol.OpenAIChat && tool.BuiltinRaw is { } raw)
             {
-                array.Add(raw.DeepClone());
+                array.AddNode(raw.DeepClone());
             }
             else
             {

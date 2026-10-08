@@ -4,22 +4,29 @@ using Dapper;
 using Astra.Core;
 using Microsoft.Data.Sqlite;
 
+// Dapper.AOT: enable build-time row mapping for this project, and route DateTimeOffset columns through
+// <see cref="DateTimeOffsetHandler"/> declaratively — the AOT-safe replacement for SqlMapper.AddTypeHandler,
+// which throws under Native AOT. Requires a public parameterless handler ctor (DAP054).
+// (Module-scoped attributes must precede every other element in the file.)
+[module: DapperAot]
+[module: TypeHandler(typeof(DateTimeOffset), typeof(global::Astra.Data.DateTimeOffsetHandler))]
+
 namespace Astra.Data;
 
 /// <summary>
-/// Opens SQLite connections for a given database file and configures Dapper's global mapping
-/// (snake_case columns, DateTimeOffset stored as ISO-8601 UTC text). Every opened connection gets
-/// <c>foreign_keys=ON</c>, <c>busy_timeout=5000</c> and WAL journal mode.
+/// Opens SQLite connections for a given database file. Every opened connection gets
+/// <c>foreign_keys=ON</c>, <c>busy_timeout=5000</c> and WAL journal mode. Row mapping and the
+/// DateTimeOffset handler come from Dapper.AOT's generated factories (module attributes above);
+/// the vanilla-Dapper globals this used to set are gone — they root vanilla Dapper's reflection
+/// machinery into the Native AOT closure (IL2104/IL3053) and are only needed by the test
+/// assemblies that opt out of interception (see their VanillaDapper module initializers).
 /// </summary>
 public sealed class SqliteConnectionFactory
 {
-    private static readonly Lazy<bool> Initialized = new(Configure);
-
     public SqliteConnectionFactory(string dbPath)
     {
         DbPath = Path.GetFullPath(dbPath);
         ConnectionString = new SqliteConnectionStringBuilder { DataSource = DbPath }.ToString();
-        _ = Initialized.Value;
     }
 
     public SqliteConnectionFactory(AstraPaths paths) : this(paths.Database)
@@ -62,13 +69,6 @@ public sealed class SqliteConnectionFactory
         await conn.ExecuteAsync("PRAGMA foreign_keys=ON;");
         await conn.ExecuteScalarAsync<string?>("PRAGMA journal_mode=WAL;");
     }
-
-    private static bool Configure()
-    {
-        DefaultTypeMap.MatchNamesWithUnderscores = true;
-        SqlMapper.AddTypeHandler(DateTimeOffsetHandler.Instance);
-        return true;
-    }
 }
 
 /// <summary>Stores DateTimeOffset as ISO-8601 UTC text with millisecond precision ("2026-10-06T12:00:00.000Z").</summary>
@@ -78,7 +78,8 @@ public sealed class DateTimeOffsetHandler : SqlMapper.TypeHandler<DateTimeOffset
 
     public const string StorageFormat = "yyyy-MM-dd'T'HH:mm:ss.fff'Z'";
 
-    private DateTimeOffsetHandler()
+    /// <summary>Public parameterless ctor is required for the <c>[module: TypeHandler]</c> declaration (DAP054); <see cref="Instance"/> remains the shared handler.</summary>
+    public DateTimeOffsetHandler()
     {
     }
 

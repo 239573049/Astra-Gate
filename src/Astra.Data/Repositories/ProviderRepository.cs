@@ -13,7 +13,7 @@ public sealed class ProviderRepository
         SELECT id, template_id, price_key, template_version, template_snapshot_json, name, icon, category,
                endpoints_json, preferred_upstream_protocols_json, auth_scheme, api_key_enc, extra_headers_json,
                http_proxy, price_multiplier, adapter_id, settings_json, enabled, sort_order, notes, website,
-               created_at, updated_at
+               created_at, updated_at, quota_json, quota_checked_at_utc
         FROM providers
         """;
 
@@ -50,7 +50,32 @@ public sealed class ProviderRepository
         if (provider.CreatedAt == default) provider.CreatedAt = now;
         if (provider.UpdatedAt == default) provider.UpdatedAt = now;
         await using var conn = await _factory.OpenAsync(ct);
-        await conn.ExecuteAsync(ProviderInsertSql, ProviderParams(provider));
+        await conn.ExecuteAsync(ProviderInsertSql, new
+        {
+            id = provider.Id,
+            template_id = provider.TemplateId,
+            price_key = provider.PriceKey,
+            template_version = provider.TemplateVersion,
+            template_snapshot_json = provider.TemplateSnapshotJson,
+            name = provider.Name,
+            icon = provider.Icon,
+            category = provider.Category,
+            endpoints_json = Json.Serialize(provider.Endpoints),
+            preferred_upstream_protocols_json = Json.Serialize(provider.PreferredUpstreamProtocols),
+            auth_scheme = provider.AuthScheme,
+            api_key_enc = provider.ApiKeyEnc,
+            extra_headers_json = Json.Serialize(provider.ExtraHeaders),
+            http_proxy = provider.HttpProxy,
+            price_multiplier = provider.PriceMultiplier.ToString(CultureInfo.InvariantCulture),
+            adapter_id = provider.AdapterId,
+            settings_json = Json.Serialize(provider.Settings),
+            enabled = provider.Enabled,
+            sort_order = provider.SortOrder,
+            notes = provider.Notes,
+            website = provider.Website,
+            created_at = DateTimeOffsetHandler.ToStorage(provider.CreatedAt),
+            updated_at = DateTimeOffsetHandler.ToStorage(provider.UpdatedAt),
+        });
     }
 
     /// <summary>Full update of every column; stamps <c>UpdatedAt</c>. Returns false when the id is unknown.</summary>
@@ -58,7 +83,32 @@ public sealed class ProviderRepository
     {
         provider.UpdatedAt = DateTimeOffset.UtcNow;
         await using var conn = await _factory.OpenAsync(ct);
-        return await conn.ExecuteAsync(ProviderUpdateSql, ProviderParams(provider)) > 0;
+        return await conn.ExecuteAsync(ProviderUpdateSql, new
+        {
+            id = provider.Id,
+            template_id = provider.TemplateId,
+            price_key = provider.PriceKey,
+            template_version = provider.TemplateVersion,
+            template_snapshot_json = provider.TemplateSnapshotJson,
+            name = provider.Name,
+            icon = provider.Icon,
+            category = provider.Category,
+            endpoints_json = Json.Serialize(provider.Endpoints),
+            preferred_upstream_protocols_json = Json.Serialize(provider.PreferredUpstreamProtocols),
+            auth_scheme = provider.AuthScheme,
+            api_key_enc = provider.ApiKeyEnc,
+            extra_headers_json = Json.Serialize(provider.ExtraHeaders),
+            http_proxy = provider.HttpProxy,
+            price_multiplier = provider.PriceMultiplier.ToString(CultureInfo.InvariantCulture),
+            adapter_id = provider.AdapterId,
+            settings_json = Json.Serialize(provider.Settings),
+            enabled = provider.Enabled,
+            sort_order = provider.SortOrder,
+            notes = provider.Notes,
+            website = provider.Website,
+            created_at = DateTimeOffsetHandler.ToStorage(provider.CreatedAt),
+            updated_at = DateTimeOffsetHandler.ToStorage(provider.UpdatedAt),
+        }) > 0;
     }
 
     /// <summary>Deletes the provider and (via cascade) its models and bindings. Returns false when absent.</summary>
@@ -84,12 +134,44 @@ public sealed class ProviderRepository
         provider.UpdatedAt = now;
         await using var conn = await _factory.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
-        var changed = await conn.ExecuteAsync(new CommandDefinition(insert ? ProviderInsertSql : ProviderUpdateSql,
-            ProviderParams(provider), transaction: tx, cancellationToken: ct));
+        var changed = await conn.ExecuteAsync(insert ? ProviderInsertSql : ProviderUpdateSql, new
+        {
+            id = provider.Id,
+            template_id = provider.TemplateId,
+            price_key = provider.PriceKey,
+            template_version = provider.TemplateVersion,
+            template_snapshot_json = provider.TemplateSnapshotJson,
+            name = provider.Name,
+            icon = provider.Icon,
+            category = provider.Category,
+            endpoints_json = Json.Serialize(provider.Endpoints),
+            preferred_upstream_protocols_json = Json.Serialize(provider.PreferredUpstreamProtocols),
+            auth_scheme = provider.AuthScheme,
+            api_key_enc = provider.ApiKeyEnc,
+            extra_headers_json = Json.Serialize(provider.ExtraHeaders),
+            http_proxy = provider.HttpProxy,
+            price_multiplier = provider.PriceMultiplier.ToString(CultureInfo.InvariantCulture),
+            adapter_id = provider.AdapterId,
+            settings_json = Json.Serialize(provider.Settings),
+            enabled = provider.Enabled,
+            sort_order = provider.SortOrder,
+            notes = provider.Notes,
+            website = provider.Website,
+            created_at = DateTimeOffsetHandler.ToStorage(provider.CreatedAt),
+            updated_at = DateTimeOffsetHandler.ToStorage(provider.UpdatedAt),
+        }, transaction: tx);
         if (changed == 0) throw new InvalidOperationException("Provider no longer exists");
         foreach (var model in models)
-            model.Id = await conn.ExecuteScalarAsync<long>(new CommandDefinition(ModelInsertSql,
-                ModelParams(model), transaction: tx, cancellationToken: ct));
+            model.Id = await conn.ExecuteScalarAsync<long>(ModelInsertSql, new
+            {
+                id = model.Id,
+                provider_id = model.ProviderId,
+                model_id = model.ModelId,
+                system_model_id = model.SystemModelId,
+                overrides_json = Json.Serialize(model.Overrides),
+                enabled = model.Enabled,
+                sort_order = model.SortOrder,
+            }, transaction: tx);
         await tx.CommitAsync(ct);
     }
 
@@ -97,10 +179,27 @@ public sealed class ProviderRepository
     public async Task<bool> DeleteIfUnboundAsync(string id, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        return await conn.ExecuteAsync(new CommandDefinition("""
+        return await conn.ExecuteAsync("""
             DELETE FROM providers WHERE id = @id
             AND NOT EXISTS (SELECT 1 FROM client_bindings WHERE provider_id = @id)
-            """, new { id }, cancellationToken: ct)) > 0;
+            """, new { id }) > 0;
+    }
+
+    /// <summary>
+    /// Stores a balance / quota snapshot and the time of the attempt. Touches only those two columns:
+    /// background refreshes must not bump <c>updated_at</c> or race a concurrent settings edit.
+    /// </summary>
+    public async Task<bool> UpdateQuotaAsync(string id, JsonObject? quota, DateTimeOffset checkedAtUtc, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return await conn.ExecuteAsync(
+            "UPDATE providers SET quota_json = @quota_json, quota_checked_at_utc = @checked_at WHERE id = @id",
+            new
+            {
+                id,
+                quota_json = quota is null ? null : Json.Serialize(quota),
+                checked_at = DateTimeOffsetHandler.ToStorage(checkedAtUtc),
+            }) > 0;
     }
 
     public async Task ReorderAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
@@ -109,9 +208,9 @@ public sealed class ProviderRepository
         await using var tx = await conn.BeginTransactionAsync(ct);
         var now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow);
         for (var i = 0; i < ids.Count; i++)
-            await conn.ExecuteAsync(new CommandDefinition(
+            await conn.ExecuteAsync(
                 "UPDATE providers SET sort_order = @sort_order, updated_at = @now WHERE id = @id",
-                new { sort_order = i, now, id = ids[i] }, transaction: tx, cancellationToken: ct));
+                new { sort_order = i, now, id = ids[i] }, transaction: tx);
         await tx.CommitAsync(ct);
     }
 
@@ -148,7 +247,16 @@ public sealed class ProviderRepository
     public async Task InsertModelAsync(ProviderModel model, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        model.Id = await conn.ExecuteScalarAsync<long>(ModelInsertSql, ModelParams(model));
+        model.Id = await conn.ExecuteScalarAsync<long>(ModelInsertSql, new
+        {
+            id = model.Id,
+            provider_id = model.ProviderId,
+            model_id = model.ModelId,
+            system_model_id = model.SystemModelId,
+            overrides_json = Json.Serialize(model.Overrides),
+            enabled = model.Enabled,
+            sort_order = model.SortOrder,
+        });
     }
 
     /// <summary>A batch add is all-or-nothing (including generated row ids).</summary>
@@ -158,8 +266,16 @@ public sealed class ProviderRepository
         await using var conn = await _factory.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         foreach (var model in models)
-            model.Id = await conn.ExecuteScalarAsync<long>(new CommandDefinition(ModelInsertSql,
-                ModelParams(model), transaction: tx, cancellationToken: ct));
+            model.Id = await conn.ExecuteScalarAsync<long>(ModelInsertSql, new
+            {
+                id = model.Id,
+                provider_id = model.ProviderId,
+                model_id = model.ModelId,
+                system_model_id = model.SystemModelId,
+                overrides_json = Json.Serialize(model.Overrides),
+                enabled = model.Enabled,
+                sort_order = model.SortOrder,
+            }, transaction: tx);
         await tx.CommitAsync(ct);
     }
 
@@ -171,7 +287,16 @@ public sealed class ProviderRepository
             UPDATE provider_models SET model_id = @model_id, system_model_id = @system_model_id,
                 overrides_json = @overrides_json, enabled = @enabled, sort_order = @sort_order
             WHERE id = @id
-            """, ModelParams(model)) > 0;
+            """, new
+        {
+            id = model.Id,
+            provider_id = model.ProviderId,
+            model_id = model.ModelId,
+            system_model_id = model.SystemModelId,
+            overrides_json = Json.Serialize(model.Overrides),
+            enabled = model.Enabled,
+            sort_order = model.SortOrder,
+        }) > 0;
     }
 
     public async Task<bool> DeleteModelAsync(long id, CancellationToken ct = default)
@@ -230,123 +355,95 @@ public sealed class ProviderRepository
                 @extra_headers_json, @http_proxy, @price_multiplier, @adapter_id, @settings_json, @enabled,
                 @sort_order, @notes, @website, @created_at, @updated_at)
         """;
+}
 
-    private static object ProviderParams(Provider p) => new
+// Dapper.AOT only materializes rows into types it can see from outside the repository class; nested
+// private types are silently left on vanilla Dapper, which dies under Native AOT (see its FAQ).
+internal sealed class ProviderRow
+{
+    public string Id { get; set; } = "";
+    public string? TemplateId { get; set; }
+    public string? PriceKey { get; set; }
+    public int? TemplateVersion { get; set; }
+    public string? TemplateSnapshotJson { get; set; }
+    public string Name { get; set; } = "";
+    public string? Icon { get; set; }
+    public string Category { get; set; } = "";
+    public string? EndpointsJson { get; set; }
+    public string? PreferredUpstreamProtocolsJson { get; set; }
+    public string AuthScheme { get; set; } = "";
+    public string? ApiKeyEnc { get; set; }
+    public string? ExtraHeadersJson { get; set; }
+    public string? HttpProxy { get; set; }
+
+    /// <summary>Invariant decimal string (exact TEXT storage).</summary>
+    public string PriceMultiplier { get; set; } = "1";
+
+    public string? AdapterId { get; set; }
+    public string? SettingsJson { get; set; }
+    public bool Enabled { get; set; }
+    public int SortOrder { get; set; }
+    public string? Notes { get; set; }
+    public string? Website { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public string? QuotaJson { get; set; }
+
+    /// <summary>Nullable timestamps travel as text (like <c>AccountRow</c>); parsed in <see cref="ToProvider"/>.</summary>
+    public string? QuotaCheckedAtUtc { get; set; }
+
+    public Provider ToProvider() => new()
     {
-        id = p.Id,
-        template_id = p.TemplateId,
-        price_key = p.PriceKey,
-        template_version = p.TemplateVersion,
-        template_snapshot_json = p.TemplateSnapshotJson,
-        name = p.Name,
-        icon = p.Icon,
-        category = p.Category,
-        endpoints_json = Json.Serialize(p.Endpoints),
-        preferred_upstream_protocols_json = Json.Serialize(p.PreferredUpstreamProtocols),
-        auth_scheme = p.AuthScheme,
-        api_key_enc = p.ApiKeyEnc,
-        extra_headers_json = Json.Serialize(p.ExtraHeaders),
-        http_proxy = p.HttpProxy,
-        price_multiplier = p.PriceMultiplier.ToString(CultureInfo.InvariantCulture),
-        adapter_id = p.AdapterId,
-        settings_json = Json.Serialize(p.Settings),
-        enabled = p.Enabled,
-        sort_order = p.SortOrder,
-        notes = p.Notes,
-        website = p.Website,
-        created_at = DateTimeOffsetHandler.ToStorage(p.CreatedAt),
-        updated_at = DateTimeOffsetHandler.ToStorage(p.UpdatedAt),
+        Id = Id,
+        TemplateId = TemplateId,
+        PriceKey = PriceKey,
+        TemplateVersion = TemplateVersion,
+        TemplateSnapshotJson = TemplateSnapshotJson,
+        Name = Name,
+        Icon = Icon,
+        Category = Category,
+        Endpoints = Json.Deserialize<List<ProviderEndpoint>>(EndpointsJson) ?? [],
+        PreferredUpstreamProtocols = Json.Deserialize<List<ApiProtocol>>(PreferredUpstreamProtocolsJson) ?? [],
+        AuthScheme = AuthScheme,
+        ApiKeyEnc = ApiKeyEnc,
+        ExtraHeaders = Json.Deserialize<Dictionary<string, string>>(ExtraHeadersJson) ?? [],
+        HttpProxy = HttpProxy,
+        PriceMultiplier = decimal.TryParse(PriceMultiplier, NumberStyles.Number, CultureInfo.InvariantCulture, out var m)
+            ? m
+            : 1m,
+        AdapterId = AdapterId,
+        Settings = Json.Deserialize<JsonObject>(SettingsJson) ?? new JsonObject(),
+        Enabled = Enabled,
+        SortOrder = SortOrder,
+        Notes = Notes,
+        Website = Website,
+        CreatedAt = CreatedAt,
+        UpdatedAt = UpdatedAt,
+        Quota = Json.Deserialize<JsonObject>(QuotaJson),
+        QuotaCheckedAtUtc = QuotaCheckedAtUtc is null
+            ? null
+            : DateTimeOffset.Parse(QuotaCheckedAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal),
     };
+}
 
-    private static object ModelParams(ProviderModel m) => new
+internal sealed class ProviderModelRow
+{
+    public long Id { get; set; }
+    public string ProviderId { get; set; } = "";
+    public string ModelId { get; set; } = "";
+    public string? SystemModelId { get; set; }
+    public string? OverridesJson { get; set; }
+    public bool Enabled { get; set; }
+    public int SortOrder { get; set; }
+
+    public ProviderModel ToProviderModel() => new()
     {
-        id = m.Id,
-        provider_id = m.ProviderId,
-        model_id = m.ModelId,
-        system_model_id = m.SystemModelId,
-        overrides_json = Json.Serialize(m.Overrides),
-        enabled = m.Enabled,
-        sort_order = m.SortOrder,
+        Id = Id,
+        ProviderId = ProviderId,
+        ModelId = ModelId,
+        SystemModelId = SystemModelId,
+        Overrides = Json.Deserialize<ModelOverrides>(OverridesJson) ?? new(),
+        Enabled = Enabled,
+        SortOrder = SortOrder,
     };
-
-    private sealed class ProviderRow
-    {
-        public string Id { get; set; } = "";
-        public string? TemplateId { get; set; }
-        public string? PriceKey { get; set; }
-        public int? TemplateVersion { get; set; }
-        public string? TemplateSnapshotJson { get; set; }
-        public string Name { get; set; } = "";
-        public string? Icon { get; set; }
-        public string Category { get; set; } = "";
-        public string? EndpointsJson { get; set; }
-        public string? PreferredUpstreamProtocolsJson { get; set; }
-        public string AuthScheme { get; set; } = "";
-        public string? ApiKeyEnc { get; set; }
-        public string? ExtraHeadersJson { get; set; }
-        public string? HttpProxy { get; set; }
-
-        /// <summary>Invariant decimal string (exact TEXT storage).</summary>
-        public string PriceMultiplier { get; set; } = "1";
-
-        public string? AdapterId { get; set; }
-        public string? SettingsJson { get; set; }
-        public bool Enabled { get; set; }
-        public int SortOrder { get; set; }
-        public string? Notes { get; set; }
-        public string? Website { get; set; }
-        public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset UpdatedAt { get; set; }
-
-        public Provider ToProvider() => new()
-        {
-            Id = Id,
-            TemplateId = TemplateId,
-            PriceKey = PriceKey,
-            TemplateVersion = TemplateVersion,
-            TemplateSnapshotJson = TemplateSnapshotJson,
-            Name = Name,
-            Icon = Icon,
-            Category = Category,
-            Endpoints = Json.Deserialize<List<ProviderEndpoint>>(EndpointsJson) ?? [],
-            PreferredUpstreamProtocols = Json.Deserialize<List<ApiProtocol>>(PreferredUpstreamProtocolsJson) ?? [],
-            AuthScheme = AuthScheme,
-            ApiKeyEnc = ApiKeyEnc,
-            ExtraHeaders = Json.Deserialize<Dictionary<string, string>>(ExtraHeadersJson) ?? [],
-            HttpProxy = HttpProxy,
-            PriceMultiplier = decimal.TryParse(PriceMultiplier, NumberStyles.Number, CultureInfo.InvariantCulture, out var m)
-                ? m
-                : 1m,
-            AdapterId = AdapterId,
-            Settings = Json.Deserialize<JsonObject>(SettingsJson) ?? new JsonObject(),
-            Enabled = Enabled,
-            SortOrder = SortOrder,
-            Notes = Notes,
-            Website = Website,
-            CreatedAt = CreatedAt,
-            UpdatedAt = UpdatedAt,
-        };
-    }
-
-    private sealed class ProviderModelRow
-    {
-        public long Id { get; set; }
-        public string ProviderId { get; set; } = "";
-        public string ModelId { get; set; } = "";
-        public string? SystemModelId { get; set; }
-        public string? OverridesJson { get; set; }
-        public bool Enabled { get; set; }
-        public int SortOrder { get; set; }
-
-        public ProviderModel ToProviderModel() => new()
-        {
-            Id = Id,
-            ProviderId = ProviderId,
-            ModelId = ModelId,
-            SystemModelId = SystemModelId,
-            Overrides = Json.Deserialize<ModelOverrides>(OverridesJson) ?? new(),
-            Enabled = Enabled,
-            SortOrder = SortOrder,
-        };
-    }
 }

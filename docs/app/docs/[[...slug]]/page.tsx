@@ -11,7 +11,7 @@ import { notFound } from 'next/navigation';
 import { getMDXComponents } from '@/components/mdx';
 import type { Metadata } from 'next';
 import { createRelativeLink } from 'fumadocs-ui/mdx';
-import { getPageImageUrl, getPageMarkdownUrl } from '@/lib/shared';
+import { appName, getPageImageUrl, getPageMarkdownUrl, siteUrl } from '@/lib/shared';
 
 export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
   const params = await props.params;
@@ -20,9 +20,31 @@ export default async function Page(props: PageProps<'/docs/[[...slug]]'>) {
 
   const MDX = page.data.body;
   const markdownUrl = getPageMarkdownUrl(page).url;
+  const imageUrl = new URL(getPageImageUrl(page).url, siteUrl).href;
+
+  // JSON-LD so search engines and answer engines get a structured summary of
+  // every page without parsing the layout.
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: page.data.title,
+    description: page.data.description,
+    url: new URL(page.url, siteUrl).href,
+    inLanguage: 'zh-CN',
+    image: imageUrl,
+    isPartOf: {
+      '@type': 'WebSite',
+      name: appName,
+      url: siteUrl,
+    },
+  };
 
   return (
     <DocsPage toc={page.data.toc} full={page.data.full}>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row gap-2 items-center border-b pb-6">
@@ -53,7 +75,15 @@ export async function generateMetadata(props: PageProps<'/docs/[[...slug]]'>): P
   return {
     title: page.data.title,
     description: page.data.description,
+    alternates: {
+      canonical: page.url,
+      languages: {
+        'zh-CN': page.url,
+        'x-default': page.url,
+      },
+    },
     openGraph: {
+      url: page.url,
       images: getPageImageUrl(page).url,
     },
   };

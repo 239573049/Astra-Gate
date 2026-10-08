@@ -397,7 +397,7 @@ internal static class GeminiRequests
         foreach (var part in req.System)
         {
             if (part is TextPart { Text: { Length: > 0 } text })
-                parts.Add(new JsonObject { ["text"] = text });
+                parts.AddNode(new JsonObject { ["text"] = text });
             else
                 req.Warnings.Add("Only text system parts can be sent to Gemini; non-text part dropped.");
         }
@@ -420,7 +420,7 @@ internal static class GeminiRequests
                 // Consecutive IR messages with the same role merge into one Gemini content.
                 currentParts = [];
                 currentRole = role;
-                contents.Add(new JsonObject { ["role"] = role, ["parts"] = currentParts });
+                contents.AddNode(new JsonObject { ["role"] = role, ["parts"] = currentParts });
             }
             var messageStart = currentParts.Count;
             string? pendingSignature = null;
@@ -442,7 +442,7 @@ internal static class GeminiRequests
                     wire["thoughtSignature"] = pendingSignature;
                     pendingSignature = null;
                 }
-                currentParts.Add(wire);
+                currentParts.AddNode(wire);
             }
             if (pendingSignature is { } leftover)
             {
@@ -451,7 +451,7 @@ internal static class GeminiRequests
                 if (currentParts.Count > messageStart)
                     ((JsonObject)currentParts[currentParts.Count - 1]!)["thoughtSignature"] = leftover;
                 else
-                    currentParts.Add(new JsonObject { ["thoughtSignature"] = leftover });
+                    currentParts.AddNode(new JsonObject { ["thoughtSignature"] = leftover });
             }
         }
 
@@ -562,7 +562,7 @@ internal static class GeminiRequests
                 var declaration = new JsonObject { ["name"] = tool.Name };
                 if (tool.Description is { Length: > 0 } description) declaration["description"] = description;
                 declaration["parametersJsonSchema"] = tool.InputSchema?.DeepClone() ?? new JsonObject { ["type"] = "object", ["properties"] = new JsonObject() };
-                functions.Add(declaration);
+                functions.AddNode(declaration);
             }
             else if (tool.BuiltinOrigin == ApiProtocol.Gemini && tool.BuiltinRaw is not null)
             {
@@ -574,8 +574,8 @@ internal static class GeminiRequests
             }
         }
         var tools = new JsonArray();
-        if (functions.Count > 0) tools.Add(new JsonObject { ["functionDeclarations"] = functions });
-        foreach (var builtin in builtins) tools.Add(builtin);
+        if (functions.Count > 0) tools.AddNode(new JsonObject { ["functionDeclarations"] = functions });
+        foreach (var builtin in builtins) tools.AddNode(builtin);
         if (tools.Count > 0) root["tools"] = tools;
     }
 

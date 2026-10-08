@@ -65,6 +65,89 @@ public class UpstreamAuthResolverTests
         public override DateTimeOffset GetUtcNow() => now;
     }
 
+    [Fact]
+    public async Task Chatgpt_Subscription_Tokens_Also_Resolve_The_Account_Header()
+    {
+        var db = await NewDb();
+        await InsertSubscriptionProviderAsync(db);
+        // codex 真实令牌把账号 id 放在命名空间 claim 里（https://api.openai.com/auth）。
+        await db.Accounts.InsertAsync(Account(
+            FakeJwt("""{"https://api.openai.com/auth":{"chatgpt_account_id":"ws-1"},"exp":9999999999}"""),
+            TimeSpan.FromHours(1)));
+        var (_, _, _, resolver) = Build(db, RefreshResponse);
+
+        var auth = await resolver.ResolveAsync("p-claude-sub", null);
+
+        Assert.Equal("chatgpt-account-id", auth!.ExtraHeaderName);
+        Assert.Equal("ws-1", auth.ExtraHeaderValue);
+    }
+
+    [Fact]
+    public async Task Chatgpt_Account_Header_Also_Accepts_The_Flat_Claim()
+    {
+        var db = await NewDb();
+        await InsertSubscriptionProviderAsync(db);
+        await db.Accounts.InsertAsync(Account(FakeJwt("""{"chatgpt_account_id":"ws-flat","exp":9999999999}"""), TimeSpan.FromHours(1)));
+        var (_, _, _, resolver) = Build(db, RefreshResponse);
+
+        var auth = await resolver.ResolveAsync("p-claude-sub", null);
+
+        Assert.Equal("ws-flat", auth!.ExtraHeaderValue);
+    }
+
+    /// <summary>
+    /// base64url 段长度 %4==3 时要补一个 '='（不是两个）：补错的实现会抛异常、claim 静默变 null
+    /// —— 大约四分之一的真实 JWT 段落落在这个余数上。两个 vector 分别是 %4==3 与 %4==2。
+    /// </summary>
+    [Theory]
+    [InlineData("eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoid3MtMSJ9LCJwYWQiOiJ4In0", "ws-1")]
+    [InlineData("eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoid3MtMSJ9LCJwYWQiOiIifQ", "ws-1")]
+    public async Task Chatgpt_Account_Header_Decodes_Every_Base64Url_Padding_Length(string payload, string accountId)
+    {
+        var db = await NewDb();
+        await InsertSubscriptionProviderAsync(db);
+        await db.Accounts.InsertAsync(Account($"eyJhbGciOiJub25lIn0.{payload}.sig", TimeSpan.FromHours(1)));
+        var (_, _, _, resolver) = Build(db, RefreshResponse);
+
+        var auth = await resolver.ResolveAsync("p-claude-sub", null);
+
+        Assert.Equal(accountId, auth!.ExtraHeaderValue);
+    }
+
+    [Fact]
+    public async Task Non_Chatgpt_Tokens_Carry_No_Account_Header()
+    {
+        var db = await NewDb();
+        await InsertSubscriptionProviderAsync(db);
+        await db.Accounts.InsertAsync(Account("at-OLD", TimeSpan.FromHours(1))); // opaque token, not a JWT
+        var (_, _, _, resolver) = Build(db, RefreshResponse);
+
+        var auth = await resolver.ResolveAsync("p-claude-sub", null);
+
+        Assert.Null(auth!.ExtraHeaderName);
+        Assert.Null(auth.ExtraHeaderValue);
+    }
+
+    [Fact]
+    public void Apply_Writes_The_Bearer_And_The_Account_Header()
+    {
+        var auth = new UpstreamAuth(AuthSchemes.Bearer, "Authorization", "Bearer jwt", null, null, "chatgpt-account-id", "ws-1");
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://chatgpt.com/backend-api/codex/responses");
+
+        auth.Apply(request);
+
+        Assert.Equal("Bearer jwt", request.Headers.GetValues("Authorization").Single());
+        Assert.Equal("ws-1", request.Headers.GetValues("chatgpt-account-id").Single());
+    }
+
+    /// <summary>A syntactically valid (unsigned) JWT; only the payload claims matter here.</summary>
+    private static string FakeJwt(string payloadJson)
+    {
+        static string Segment(string text) =>
+            Convert.ToBase64String(Encoding.UTF8.GetBytes(text)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return $"{Segment("""{"alg":"none"}""")}.{Segment(payloadJson)}.sig";
+    }
+
     private static async Task InsertSubscriptionProviderAsync(AstraDatabase db)
     {
         var provider = new Provider

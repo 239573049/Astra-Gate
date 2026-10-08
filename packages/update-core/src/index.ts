@@ -24,16 +24,25 @@ export {
 export { managedServerBinaryPath, updatePaths, type UpdatePaths } from './paths.js';
 export { npmChildEnv, npmInstallIntoPrefix, npmView, locateNpm, type LocateNpmOptions, type NpmCommand, type NpmRunnerOptions } from './npm-runner.js';
 export { readInstallInfo, writeInstallInfo, applyServerInfo, type InstallInfo } from './install-info.js';
-export { sha256File, stageServerBinary, type StagedServerBinary, type StageServerBinaryOptions } from './staging.js';
+export {
+  NATIVE_LIBRARY,
+  findNativeCompanions,
+  sha256File,
+  stageServerBinary,
+  type StagedServerBinary,
+  type StageServerBinaryOptions,
+} from './staging.js';
 export {
   MAX_BACKUPS,
   backupCurrentBinary,
   commitManagedWebRoot,
+  commitNativeCompanions,
   installManagedBinary,
   installManagedWebRoot,
   pruneBackups,
   pruneManagedBinaries,
   restoreManagedWebRoot,
+  restoreNativeCompanions,
 } from './swap.js';
 export {
   UpdateError,

@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const SEED_VERSION = 1;
+const SEED_VERSION = 2;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "src/Astra.Core/Seed/models.json");
 const source = process.argv[2] ?? "https://models.dev/api.json";
@@ -187,6 +187,25 @@ for (const providerId of THIRD_PARTY) {
       pricing,
     };
   }
+}
+
+// Hand-maintained aliases: ids that subscription / coding-plan templates use but models.dev
+// never lists under that name. Aliases make ModelIdMatcher auto-link them to the system model,
+// so the provider model inherits its context window and price instead of showing "unlinked".
+// Each value must be an id already present in this seed.
+const EXTRA_ALIASES = {
+  // Kimi Code (api.kimi.com/coding) model ids ← moonshotai platform ids.
+  "kimi-k3": ["k3"],
+  "kimi-k2.7-code": ["kimi-for-coding"],
+  "kimi-k2.7-code-highspeed": ["kimi-for-coding-highspeed"],
+  // GLM Coding Plan 1M-context variants advertise a "[1m]" suffix on the plain model id.
+  "glm-5.3": ["glm-5.3[1m]"],
+};
+
+for (const [id, aliases] of Object.entries(EXTRA_ALIASES)) {
+  const model = models.find((m) => m.id === id);
+  if (!model) throw new Error(`EXTRA_ALIASES references unknown model '${id}'`);
+  for (const alias of aliases) if (!model.aliases.includes(alias)) model.aliases.push(alias);
 }
 
 for (const m of models) delete m._vendorProvider;

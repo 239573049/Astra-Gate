@@ -11,6 +11,7 @@ import {
   shell,
   systemPreferences,
   type MenuItemConstructorOptions,
+  type WebPreferences,
 } from 'electron';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -20,6 +21,7 @@ import { handleAppRequest } from './appProtocol';
 import { fetchClients, fetchProviders, fetchVersion, putBinding } from './api';
 import { ServiceManager, StartupError, type RunningService } from './service';
 import { TrayController, type TrayCallbacks, type TrayState } from './tray';
+import { TrayPanel } from './trayPanel';
 import { UpdateController } from './update';
 import {
   NAV_ORDER,
@@ -30,15 +32,18 @@ import {
   overlaySymbolColor,
   sanitizeContextMenuItems,
   themeBackground,
+  TRAY_PANEL_HASH,
+  TRAY_SETTINGS_HASH,
   windowChromeOptions,
   type MenuCommand,
   type NavTarget,
 } from './shared/chrome';
 import { astraPaths, type AstraPaths } from './shared/paths';
 import { apiBase } from './shared/port';
-import { parsePrefs, type DesktopPrefs } from './shared/prefs';
+import { parsePrefs, parseTrayPrefs, type DesktopPrefs } from './shared/prefs';
 import { bundledServerBinaryPath } from './shared/resolveServerBinary';
 import { trayLabels, type ServiceActivity } from './shared/trayMenu';
+import { isTrayPanelCommand, sanitizeTrayTitle, type TrayPanelCommand, type TrayPanelState } from './shared/trayPanel';
 import { EXPECTED_API_MAJOR } from './shared/version';
 import type { GatewayClient, GatewayProvider } from './shared/types';
 
@@ -59,6 +64,7 @@ const IS_MAC = process.platform === 'darwin';
 let paths: AstraPaths | null = null;
 let service: ServiceManager | null = null;
 let tray: TrayController | null = null;
+let trayPanel: TrayPanel | null = null;
 let updater: UpdateController | null = null;
 let mainWindow: BrowserWindow | null = null;
 let quitting = false;
@@ -149,10 +155,13 @@ async function main(): Promise<void> {
   registerIpc();
 
   await app.whenReady();
+  // Dev runs (`electron .`) live inside the stock Electron.app bundle, so the Dock shows Electron's
+  // icon; packaged builds get assets/icon.png baked into the bundle as icon.icns (electron-builder.yml).
+  if (IS_MAC && !app.isPackaged) app.dock?.setIcon(path.join(appRoot, 'assets', 'icon.png'));
   tray = new TrayController(
     path.join(appRoot, 'assets'),
     { platform: process.platform, locale: app.getLocale(), version: app.getVersion() },
-    () => void showMainWindow(),
+    (bounds) => trayPanel?.toggle(bounds),
   );
   // Launched at login: stay in the tray / menu bar, no window and no Dock icon.
   const startHidden = launchedAtLogin();
@@ -176,6 +185,14 @@ async function main(): Promise<void> {
   currentApiOrigin = running.apiBase;
   lastBoot = { apiBase: running.apiBase, apiVersionMismatch: running.apiVersionMismatch };
   if (running.apiVersionMismatch) await showMismatchDialog(running.apiVersion);
+
+  // Created hidden right away: it opens instantly and keeps the menu-bar title current.
+  trayPanel = new TrayPanel({
+    platform: process.platform,
+    url: rendererUrl(TRAY_PANEL_HASH),
+    webPreferences: rendererWebPreferences,
+  });
+  trayPanel.ensure();
 
   await refreshTray();
   // Poll health + client/provider bindings every 10s to keep the tray current.
@@ -262,6 +279,27 @@ async function refreshTray(force = false): Promise<void> {
     openAtLogin: readOpenAtLogin(),
   };
   tray!.update(trayState, trayCallbacks(), force);
+  pushTrayPanelState();
+}
+
+function trayPanelState(): TrayPanelState {
+  return {
+    running: trayState.running,
+    port: trayState.port,
+    activity: trayState.activity,
+    apiVersionMismatch: trayState.apiVersionMismatch,
+    updateAvailable: trayState.updateAvailable,
+  };
+}
+
+let lastPanelStateKey = '';
+/** Sends the service state to the tray panel (and the Settings preview) when it changed. */
+function pushTrayPanelState(): void {
+  const state = trayPanelState();
+  const key = JSON.stringify(state);
+  if (key === lastPanelStateKey) return;
+  lastPanelStateKey = key;
+  broadcast('astra:tray-state-changed', state);
 }
 
 /** Runs one start/stop/restart from the tray, showing progress in the menu meanwhile. */
@@ -269,6 +307,7 @@ function runServiceAction(activity: ServiceActivity, action: () => Promise<unkno
   if (trayState.activity) return;
   trayState = { ...trayState, activity };
   tray!.update(trayState, trayCallbacks());
+  pushTrayPanelState();
   void action()
     .catch((err) => showServiceError(err))
     .finally(() => {
@@ -296,6 +335,9 @@ function trayCallbacks(): TrayCallbacks {
   return {
     onOpenWindow: () => {
       void showMainWindow();
+    },
+    onShowPanel: () => {
+      trayPanel?.show(tray?.getBounds() ?? null);
     },
     onNavigate: (target) => {
       void showMainWindow(target);
@@ -358,6 +400,56 @@ function trayCallbacks(): TrayCallbacks {
       app.quit();
     },
   };
+}
+
+/** Footer / header buttons of the tray panel. Window-opening actions close the panel first. */
+function runTrayPanelCommand(command: TrayPanelCommand): void {
+  const cb = trayCallbacks();
+  switch (command) {
+    case 'open':
+      trayPanel?.hide();
+      cb.onOpenWindow();
+      return;
+    case 'open-settings':
+      trayPanel?.hide();
+      void openTraySettings();
+      return;
+    case 'start':
+      cb.onStartService();
+      return;
+    case 'stop':
+      cb.onStopService();
+      return;
+    case 'restart':
+      cb.onRestartService();
+      return;
+    case 'check-updates':
+      trayPanel?.hide();
+      cb.onCheckUpdates();
+      return;
+    case 'menu':
+      trayPanel?.hide();
+      tray?.popUpMenu();
+      return;
+    case 'hide':
+      trayPanel?.hide();
+      return;
+    case 'quit':
+      cb.onQuit();
+      return;
+  }
+}
+
+/** Opens the main window on Settings › Tray panel. */
+async function openTraySettings(): Promise<void> {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    await showMainWindow();
+    mainWindow.webContents.send('astra:menu-command', 'settings:tray' satisfies MenuCommand);
+    return;
+  }
+  if (IS_MAC) await app.dock?.show();
+  mainWindow = createWindow(TRAY_SETTINGS_HASH);
+  bringAppToFront();
 }
 
 /** Login items need a stable, packaged executable; Linux has no Electron API for them. */
@@ -472,8 +564,29 @@ function hideToTray(win: BrowserWindow): void {
   showCloseHintOnce();
 }
 
-function createWindow(nav?: NavTarget): BrowserWindow {
-  const appRoot = app.getAppPath();
+/** Web preferences of every renderer window (main window and tray panel): same preload, same boot switches. */
+function rendererWebPreferences(): WebPreferences {
+  return {
+    preload: path.join(app.getAppPath(), 'dist', 'preload.js'),
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true,
+    spellcheck: false,
+    additionalArguments: [
+      `--astra-api-base=${lastBoot.apiBase}`,
+      `--astra-api-mismatch=${lastBoot.apiVersionMismatch ? '1' : '0'}`,
+      `--astra-version=${app.getVersion()}`,
+      `--astra-accent=${currentAccentColor() ?? ''}`,
+    ],
+  };
+}
+
+/** Renderer URL for a hash route ("" = overview): the Vite dev server in dev, app://astra otherwise. */
+function rendererUrl(hash: string): string {
+  return DEV_RENDERER_URL ? `${DEV_RENDERER_URL}${hash}` : `app://astra/${hash}`;
+}
+
+function createWindow(hash = ''): BrowserWindow {
   const dark = nativeTheme.shouldUseDarkColors;
   const win = new BrowserWindow({
     width: 1280,
@@ -484,19 +597,7 @@ function createWindow(nav?: NavTarget): BrowserWindow {
     title: 'Astra',
     autoHideMenuBar: true,
     ...windowChromeOptions(process.platform, dark),
-    webPreferences: {
-      preload: path.join(appRoot, 'dist', 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-      spellcheck: false,
-      additionalArguments: [
-        `--astra-api-base=${lastBoot.apiBase}`,
-        `--astra-api-mismatch=${lastBoot.apiVersionMismatch ? '1' : '0'}`,
-        `--astra-version=${app.getVersion()}`,
-        `--astra-accent=${currentAccentColor() ?? ''}`,
-      ],
-    },
+    webPreferences: rendererWebPreferences(),
   });
   win.once('ready-to-show', () => {
     win.show();
@@ -516,13 +617,8 @@ function createWindow(nav?: NavTarget): BrowserWindow {
     if (mainWindow === win) mainWindow = null;
   });
 
-  const hash = nav ? navHash(nav) : '';
-  if (DEV_RENDERER_URL) {
-    void win.loadURL(`${DEV_RENDERER_URL}${hash}`);
-    win.webContents.openDevTools({ mode: 'detach' });
-  } else {
-    void win.loadURL(`app://astra/${hash}`);
-  }
+  void win.loadURL(rendererUrl(hash));
+  if (DEV_RENDERER_URL) win.webContents.openDevTools({ mode: 'detach' });
   return win;
 }
 
@@ -535,7 +631,7 @@ async function showMainWindow(nav?: NavTarget): Promise<void> {
     mainWindow.focus();
     if (nav) mainWindow.webContents.send('astra:menu-command', `nav:${nav}` satisfies MenuCommand);
   } else {
-    mainWindow = createWindow(nav);
+    mainWindow = createWindow(nav ? navHash(nav) : '');
   }
   // Coming back from accessory (menu-bar-only) mode the app is not active; bring it forward.
   bringAppToFront();
@@ -572,7 +668,7 @@ function registerIpc(): void {
     const items = sanitizeContextMenuItems(rawItems);
     const win = BrowserWindow.fromWebContents(event.sender);
     if (!items || !win) return Promise.resolve(null);
-    return new Promise((resolve) => {
+    const chosen = new Promise<string | null>((resolve) => {
       let picked: string | null = null;
       const template: MenuItemConstructorOptions[] = items.map((item) =>
         item.type === 'separator'
@@ -589,6 +685,29 @@ function registerIpc(): void {
       );
       Menu.buildFromTemplate(template).popup({ window: win, callback: () => resolve(picked) });
     });
+    // A menu popped from the tray panel takes focus; the panel must stay open meanwhile.
+    return trayPanel?.isPanel(event.sender) ? trayPanel.holdOpen(chosen) : chosen;
+  });
+
+  // ----- tray panel -----
+  ipcMain.handle('astra:tray-prefs-get', () => loadPrefs().tray);
+  ipcMain.handle('astra:tray-prefs-set', (_event, raw: unknown) => {
+    const next = parseTrayPrefs(raw);
+    savePrefs({ ...loadPrefs(), tray: next });
+    broadcast('astra:tray-prefs-changed', next);
+    return next;
+  });
+  ipcMain.handle('astra:tray-state-get', () => trayPanelState());
+  ipcMain.handle('astra:tray-command', (_event, command: unknown) => {
+    if (isTrayPanelCommand(command)) runTrayPanelCommand(command);
+  });
+  ipcMain.on('astra:tray-title', (event, raw: unknown) => {
+    if (!trayPanel?.isPanel(event.sender)) return;
+    const title = sanitizeTrayTitle(raw);
+    if (title) tray?.setTitle(title.title, title.detail);
+  });
+  ipcMain.on('astra:tray-panel-resize', (event, height: unknown) => {
+    if (trayPanel?.isPanel(event.sender) && typeof height === 'number') trayPanel.setContentHeight(height);
   });
 }
 

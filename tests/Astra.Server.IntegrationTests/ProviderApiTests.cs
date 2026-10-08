@@ -1,9 +1,11 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Privacy;
 using Astra.Gateway.Pipeline;
 using Astra.Providers.Subscription;
 using Astra.Providers.Templates;
@@ -20,7 +22,7 @@ public class ProviderApiTests
     {
         await using var host = await TestHost.StartAsync();
         var templates = (await host.GetJsonAsync("/api/provider-templates")).AsArray();
-        Assert.Equal(24, templates.Count);
+        Assert.Equal(25, templates.Count); // + github-copilot-subscription
         var claudeSub = templates.Single(t => t!["id"]!.GetValue<string>() == "claude-subscription")!;
         Assert.Equal("oauth-subscription", claudeSub["authScheme"]!.GetValue<string>());
         Assert.False(claudeSub["requiresApiKey"]!.GetValue<bool>());
@@ -200,6 +202,283 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Codex_Subscription_Login_Uses_The_Browser_Pkce_Flow()
+    {
+        var requests = new List<(string Path, string Body, string? ContentType)>();
+        var handler = new StubHandler(async request =>
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
+            lock (requests) requests.Add((request.RequestUri!.AbsolutePath, body, request.Content?.Headers.ContentType?.MediaType));
+            return JsonResponse("""{"access_token":"at-1","refresh_token":"rt-1","expires_in":3600}""");
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "openai-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{providerId}",
+            new { settings = new { subscription_oauth = new { verified = true } } });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        // codex-cli 的默认登录：回环回调必须是它的白名单端口（1455/1457）+ /auth/callback，
+        // 授权页带它固定的三个额外参数与完整 scope 集合。
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.True(
+            status == HttpStatusCode.OK || status == HttpStatusCode.Conflict,
+            $"HTTP {(int)status}: {body?.ToJsonString()}");
+        if (status == HttpStatusCode.Conflict)
+            return; // 端口被本机上另一个 codex 占用：这不是失败，登录会要求改用 deviceauth。
+        Assert.Equal("pkce", body!["mode"]!.GetValue<string>());
+        var state = body["state"]!.GetValue<string>();
+        var authorizeUrl = body["authorizeUrl"]!.GetValue<string>();
+        Assert.StartsWith("https://auth.openai.com/oauth/authorize?", authorizeUrl);
+        Assert.Contains("redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback", authorizeUrl);
+        Assert.Contains("code_challenge_method=S256", authorizeUrl);
+        Assert.Contains("originator=codex_cli_rs", authorizeUrl);
+        Assert.Contains("codex_cli_simplified_flow=true", authorizeUrl);
+        Assert.Contains("id_token_add_organizations=true", authorizeUrl);
+        Assert.Contains("scope=" + Uri.EscapeDataString("openid profile email offline_access api.connectors.read api.connectors.invoke"), authorizeUrl);
+
+        // 上游把浏览器 302 到 codex 的回环端口；Astra 的接收器转给本机回调完成换码。
+        var receiver = new HttpClient();
+        var received = await receiver.GetAsync($"http://localhost:1455/auth/callback?code=the-code&state={state}");
+        Assert.Equal(HttpStatusCode.OK, received.StatusCode);
+
+        // 换码是异步转发的，轮询到落库为止。
+        for (var i = 0; i < 50 && requests.Count == 0; i++) await Task.Delay(100);
+        var exchange = Assert.Single(requests);
+        Assert.Equal("/oauth/token", exchange.Path);
+        Assert.Contains("grant_type=authorization_code", exchange.Body);
+        Assert.Contains("code=the-code", exchange.Body);
+        Assert.Contains("code_verifier=", exchange.Body);
+        Assert.Contains("redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback", exchange.Body);
+
+        for (var i = 0; i < 50 && (await host.Db.Accounts.ListAsync(providerId)).Count == 0; i++) await Task.Delay(100);
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal(AccountStatus.Active, account.Status);
+        Assert.NotNull(account.AccessTokenEnc);
+
+        // 回调完成后接收器释放端口，别的进程可以再用 codex 的默认端口。
+        using var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 1455);
+        probe.Start();
+        probe.Stop();
+    }
+
+    [Fact]
+    public async Task Codex_Login_Can_Be_Imported_From_The_Machines_Codex_Cli()
+    {
+        var handler = new StubHandler(_ => Task.FromResult(JsonResponse("""{"plan_type":"promax","rate_limit":{"primary_window":{"used_percent":12,"limit_window_seconds":604800,"reset_at":1791948516}}}""")));
+        await using var host = await TestHost.StartAsync(builder =>
+        {
+            builder.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ => Task.FromResult(JsonResponse("{}"))));
+        });
+        // 假 home：写入一份 codex 的登录文件，绝不碰真实 ~/.codex。
+        static string Segment(string json) => Convert.ToBase64String(Encoding.UTF8.GetBytes(json)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        var access = $"{Segment("""{"alg":"none"}""")}.{Segment("""{"https://api.openai.com/auth":{"chatgpt_account_id":"ws-1","chatgpt_plan_type":"promax"},"exp":4102444800}""")}.sig";
+        var idToken = $"{Segment("""{"alg":"none"}""")}.{Segment("""{"email":"me@example.com"}""")}.sig";
+        Directory.CreateDirectory(Path.Combine(host.Root, "client-home", ".codex"));
+        File.WriteAllText(Path.Combine(host.Root, "client-home", ".codex", "auth.json"),
+            """{"auth_mode":"chatgpt","tokens":{"id_token":"ID","access_token":"ACCESS","refresh_token":"rt-9","account_id":"ws-1"}}"""
+                .Replace("ID", idToken).Replace("ACCESS", access));
+
+        // 探测：只回展示信息，不出凭据。
+        var probe = await host.GetJsonAsync("/api/subscription/codex/local-login");
+        Assert.True(probe["available"]!.GetValue<bool>());
+        // 邮箱来自 id_token、套餐名来自 access_token 的命名空间 claim（payload 长度 %4==3 也必须解得出）。
+        Assert.Equal("me@example.com", probe["accountEmail"]!.GetValue<string>());
+        Assert.Equal("promax", probe["plan"]!.GetValue<string>());
+        Assert.DoesNotContain("rt-9", probe.ToJsonString());
+        Assert.DoesNotContain(access, probe.ToJsonString());
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "openai-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/import-codex", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("active", body!["account"]!["status"]!.GetValue<string>());
+        Assert.Equal("me@example.com", body["account"]!["accountEmail"]!.GetValue<string>());
+
+        // 两个令牌都加密入库：访问令牌 = 本机 access_token，刷新槽 = 本机 refresh_token。
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal(access, protector.Unprotect(account.AccessTokenEnc!));
+        Assert.Equal("rt-9", protector.Unprotect(account.RefreshTokenEnc!));
+        // 导入时顺手验一次：额度快照落库（wham 形态的窗口）。
+        Assert.Equal(12, account.Extra["quota"]!["session"]!["usedPercent"]!.GetValue<double>());
+    }
+
+    [Fact]
+    public async Task Import_Codex_Reports_A_Missing_Local_Login()
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "openai-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        // 空 home 里没有 .codex/auth.json。
+        Assert.False((await host.GetJsonAsync("/api/subscription/codex/local-login"))["available"]!.GetValue<bool>());
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/import-codex", new { });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.Contains("Codex", body!["error"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Copilot_Subscription_Login_Runs_The_Device_Flow_Then_Exchanges_A_Copilot_Token()
+    {
+        var requests = new List<(string Path, string Body)>();
+        var handler = new StubHandler(async request =>
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
+            var path = request.RequestUri!.AbsolutePath;
+            lock (requests) requests.Add((path, body));
+            return path switch
+            {
+                "/login/device/code" => JsonResponse("""{"device_code":"dc-1","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}"""),
+                "/login/oauth/access_token" => JsonResponse("""{"access_token":"gho_1","token_type":"bearer","scope":"repo workflow"}"""),
+                "/copilot_internal/v2/token" => JsonResponse("""{"token":"copilot-tok","expires_at":4102444800,"refresh_in":1800,"sku":"copilot_individual","endpoints":{"api":"https://api.githubcopilot.com"}}"""),
+                _ => JsonResponse("{}"),
+            };
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("device", body!["mode"]!.GetValue<string>());       // GitHub device flow
+        Assert.Equal("ABCD-1234", body["userCode"]!.GetValue<string>());
+        Assert.Equal("https://github.com/login/device", body["verificationUrl"]!.GetValue<string>());
+        var state = body["state"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login/{state}/poll", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("done", body!["status"]!.GetValue<string>());
+
+        // 设备码申请 → 换 GitHub token（form + client_id + scope）→ 换 Copilot 短时令牌
+        Assert.Equal(["/login/device/code", "/login/oauth/access_token", "/copilot_internal/v2/token"], requests.Select(r => r.Path));
+        Assert.Contains("client_id=Iv1.b507a08c87ecfe98", requests[0].Body);
+        Assert.Contains("scope=repo+workflow", requests[0].Body);
+        Assert.Contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code", requests[1].Body);
+
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal(AccountStatus.Active, account.Status);
+        Assert.Equal("copilot-tok", protector.Unprotect(account.AccessTokenEnc!));   // 访问令牌 = Copilot 短时令牌
+        Assert.Equal("gho_1", protector.Unprotect(account.RefreshTokenEnc!));        // 刷新槽 = GitHub token
+        Assert.Equal("copilot_individual", account.Plan);
+    }
+
+    [Fact]
+    public async Task Codex_Device_Code_Login_Stays_Available_For_The_Headless_Path()
+    {
+        var requests = new List<(string Path, string Body, string? ContentType)>();
+        var handler = new StubHandler(async request =>
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
+            var path = request.RequestUri!.AbsolutePath;
+            lock (requests) requests.Add((path, body, request.Content?.Headers.ContentType?.MediaType));
+            return path switch
+            {
+                "/api/accounts/deviceauth/usercode" => JsonResponse("""{"device_auth_id":"da-1","user_code":"ABCD-1234","interval":"5"}"""),
+                "/api/accounts/deviceauth/token" => JsonResponse("""{"authorization_code":"ac-1","code_challenge":"ch-1","code_verifier":"cv-1"}"""),
+                "/oauth/token" => JsonResponse("""{"access_token":"at-1","refresh_token":"rt-1","expires_in":3600}"""),
+                _ => JsonResponse("{}"),
+            };
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "openai-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+        // 切到 device code 备选：codex login --device-auth（headless 环境）。
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{providerId}",
+            new { settings = new { subscription_oauth = new { verified = true, style = "deviceauth", use_pkce = false } } });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("device", body!["mode"]!.GetValue<string>());
+        Assert.Equal("ABCD-1234", body["userCode"]!.GetValue<string>());
+        Assert.Equal("https://auth.openai.com/codex/device", body["verificationUrl"]!.GetValue<string>());
+        var state = body["state"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login/{state}/poll", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("done", body!["status"]!.GetValue<string>());
+
+        // 申请（JSON）→ 轮询（JSON）→ 用上游给的授权码 + verifier 走标准换码。
+        Assert.Equal(
+            ["/api/accounts/deviceauth/usercode", "/api/accounts/deviceauth/token", "/oauth/token"],
+            requests.Select(r => r.Path));
+        Assert.All(requests.Take(2), r => Assert.Equal("application/json", r.ContentType));
+        Assert.Contains("grant_type=authorization_code", requests[2].Body);
+        Assert.Contains("code_verifier=cv-1", requests[2].Body);
+
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal(AccountStatus.Active, account.Status);
+    }
+
+    [Fact]
+    public async Task Zcode_Subscription_Login_Uses_The_Server_Mediated_Cli_Flow()
+    {
+        var requests = new List<(string Method, string Path, string Body)>();
+        var handler = new StubHandler(async request =>
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
+            var path = request.RequestUri!.AbsolutePath;
+            lock (requests) requests.Add((request.Method.Method, path, body));
+            return path switch
+            {
+                "/api/v1/oauth/cli/init" => JsonResponse("""{"code":0,"data":{"flow_id":"flow-1","authorize_url":"https://chat.z.ai/api/oauth/authorize?client_id=x","poll_token":"poll-1"}}"""),
+                "/api/v1/oauth/cli/poll/flow-1" => JsonResponse("""{"code":0,"data":{"accessToken":"oauth-1"}}"""),
+                "/api/auth/z/login" => JsonResponse("""{"code":0,"data":{"access_token":"jwt-1"}}"""),
+                _ => JsonResponse("{}"),
+            };
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "zcode-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{providerId}",
+            new { settings = new { subscription_oauth = new { verified = true } } });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        // 发起：服务端调 CLI init，回一个上游给的授权链接（没有回调地址）。
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("cli", body!["mode"]!.GetValue<string>());
+        Assert.StartsWith("https://chat.z.ai/api/oauth/authorize", body["authorizeUrl"]!.GetValue<string>());
+        var state = body["state"]!.GetValue<string>();
+
+        // 轮询：拿 OAuth token → 第四跳换业务 JWT → 落库。
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login/{state}/poll", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("done", body!["status"]!.GetValue<string>());
+        Assert.Equal("active", body["account"]!["status"]!.GetValue<string>());
+
+        Assert.Equal(
+            [("POST", "/api/v1/oauth/cli/init"), ("GET", "/api/v1/oauth/cli/poll/flow-1"),
+             ("POST", "/api/auth/z/login"), ("GET", "/api/oauth/userinfo")],
+            requests.Select(r => (r.Method, r.Path)));
+        Assert.Contains("\"provider\":\"zai\"", requests[0].Body);
+
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal("jwt-1", protector.Unprotect(account.AccessTokenEnc!)); // 访问令牌 = 业务 JWT
+        Assert.Equal("oauth-1", protector.Unprotect(account.RefreshTokenEnc!)); // 刷新槽 = OAuth token
+    }
+
+    [Fact]
     public async Task Template_Variant_Preserves_Price_Key_And_Endpoint_On_Upgrade()
     {
         await using var host = await TestHost.StartAsync();
@@ -285,9 +564,9 @@ public class ProviderApiTests
             })));
         var id = await Create(host);
         await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/models", new { modelIds = new[] { "gpt-5" } });
-        var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/test", new { modelId = "gpt-5" });
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.True(result!["ok"]!.GetValue<bool>());
+        var result = await host.TestAsync(id, new { modelId = "gpt-5", stream = false });
+        Assert.Equal(HttpStatusCode.OK, result.Status);
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
         await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
         var records = await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id });
         var r = records.Items.Single();
@@ -317,9 +596,9 @@ public class ProviderApiTests
                 .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ => Task.FromResult(JsonResponse(upstreamBody.ToJsonString())))));
             var id = await CreateCustomAsync(host, protocol,
                 protocol == "gemini" ? "https://example.invalid/v1beta" : "https://example.invalid/v1", "none");
-            var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/test", new { modelId = "requested-alias" });
-            Assert.Equal(HttpStatusCode.OK, status);
-            Assert.True(result!["ok"]!.GetValue<bool>());
+            var result = await host.TestAsync(id, new { modelId = "requested-alias", stream = false });
+            Assert.Equal(HttpStatusCode.OK, result.Status);
+            Assert.True(result.Done!["ok"]!.GetValue<bool>());
             await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
             var records = await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id });
             var record = Assert.Single(records.Items);
@@ -511,29 +790,36 @@ public class ProviderApiTests
         var gemini = await CreateCustomAsync(host, "gemini", "https://example.invalid/v1beta", "x-goog-api-key", "gm-key-0004");
         var full = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/custom/endpoint?flag=1", "bearer", "sk-full-key-0005", fullUrl: true);
 
-        var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{chat}/test", new { modelId = "chat-model-x" });
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.True(result!["ok"]!.GetValue<bool>());
+        var result = await host.TestAsync(chat, new { modelId = "chat-model-x", stream = false });
+        Assert.Equal(HttpStatusCode.OK, result.Status);
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
         var r = sent.Single(s => s.Path == "/v1/chat/completions");
         Assert.Equal("https://example.invalid/v1/chat/completions", r.Url);
         Assert.Equal("Bearer sk-chat-key-0001", r.Authorization);
+        Assert.Equal("application/json", r.Accept);
         var body = JsonNode.Parse(r.Body!)!;
         Assert.Equal("chat-model-x", body["model"]!.GetValue<string>());
-        Assert.Equal(16, body["max_tokens"]!.GetValue<int>());
+        Assert.Equal(256, body["max_tokens"]!.GetValue<int>());
         Assert.Equal("user", body["messages"]![0]!["role"]!.GetValue<string>());
+        Assert.Equal("Reply with OK.", body["messages"]![0]!["content"]!.GetValue<string>());
 
-        (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{responses}/test", new { modelId = "resp-model-x" });
-        Assert.True(result!["ok"]!.GetValue<bool>());
+        result = await host.TestAsync(responses, new { modelId = "resp-model-x", stream = false });
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
         r = sent.Single(s => s.Path == "/v1/responses");
         Assert.Equal("Bearer sk-resp-key-0002", r.Authorization);
         body = JsonNode.Parse(r.Body!)!;
         Assert.Equal("resp-model-x", body["model"]!.GetValue<string>());
-        Assert.Equal("Say OK.", body["input"]!.GetValue<string>());
+        // The codex backend only accepts the array form of input (same shape GatewayPipeline forces);
+        // the probe sends a single user text message.
+        var input = Assert.Single(body["input"]!.AsArray())!;
+        Assert.Equal("user", input["role"]!.GetValue<string>());
+        var inputText = Assert.Single(input["content"]!.AsArray())!;
+        Assert.Equal("Reply with OK.", inputText["text"]!.GetValue<string>());
         Assert.False(body["store"]!.GetValue<bool>());
-        Assert.Equal(16, body["max_output_tokens"]!.GetValue<int>());
+        Assert.Equal(256, body["max_output_tokens"]!.GetValue<int>());
 
-        (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{anthropic}/test", new { modelId = "claude-model-x" });
-        Assert.True(result!["ok"]!.GetValue<bool>());
+        result = await host.TestAsync(anthropic, new { modelId = "claude-model-x", stream = false });
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
         r = sent.Single(s => s.Path == "/anthropic/v1/messages");
         Assert.Equal("https://example.invalid/anthropic/v1/messages", r.Url);
         Assert.Equal("sk-ant-key-0003", r.XApiKey);
@@ -541,22 +827,27 @@ public class ProviderApiTests
         Assert.Equal("2023-06-01", r.AnthropicVersion);
         body = JsonNode.Parse(r.Body!)!;
         Assert.Equal("claude-model-x", body["model"]!.GetValue<string>());
-        Assert.Equal(16, body["max_tokens"]!.GetValue<int>());
+        Assert.Equal(256, body["max_tokens"]!.GetValue<int>());
 
-        (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{gemini}/test", new { modelId = "gemini-test" });
-        Assert.True(result!["ok"]!.GetValue<bool>());
+        result = await host.TestAsync(gemini, new { modelId = "gemini-test", stream = false });
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
         r = sent.Single(s => s.Path == "/v1beta/models/gemini-test:generateContent");
         Assert.Equal("gm-key-0004", r.XGoogApiKey);
         body = JsonNode.Parse(r.Body!)!;
-        Assert.Equal("Say OK.", body["contents"]![0]!["parts"]![0]!["text"]!.GetValue<string>());
-        Assert.Equal(16, body["generationConfig"]!["maxOutputTokens"]!.GetValue<int>());
+        Assert.Equal("Reply with OK.", body["contents"]![0]!["parts"]![0]!["text"]!.GetValue<string>());
+        Assert.Equal(256, body["generationConfig"]!["maxOutputTokens"]!.GetValue<int>());
 
         // fullUrl endpoints are requested verbatim; no path is appended
-        (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{full}/test", new { modelId = "full-model-x" });
-        Assert.True(result!["ok"]!.GetValue<bool>());
+        result = await host.TestAsync(full, new { modelId = "full-model-x", stream = false });
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
         r = sent.Single(s => s.Url == "https://example.invalid/custom/endpoint?flag=1");
         Assert.Equal("full-model-x", JsonNode.Parse(r.Body!)!["model"]!.GetValue<string>());
         Assert.Equal(5, sent.Count);
+
+        // the explicit protocol wins over the preferred one: the very same provider is tested over Anthropic next
+        var compatible = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", "sk-chat-key-0001");
+        Assert.Equal("openai-chat", (await host.GetJsonAsync($"/api/providers/{compatible}"))["preferredUpstreamProtocols"]![0]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.BadRequest, (await host.TestAsync(compatible, new { modelId = "x", protocol = "gemini" })).Status);
     }
 
     [Fact]
@@ -707,12 +998,12 @@ public class ProviderApiTests
             })));
         var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", key);
 
-        var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/test", new { modelId = "gpt-5" });
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.False(result!["ok"]!.GetValue<bool>());
-        Assert.Equal(401, result["httpStatus"]!.GetValue<int>());
-        Assert.Contains("[redacted]", result["error"]!.GetValue<string>());
-        Assert.DoesNotContain(key, result.ToJsonString());
+        var result = await host.TestAsync(id, new { modelId = "gpt-5" });
+        Assert.Equal(HttpStatusCode.OK, result.Status);
+        Assert.False(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal(401, result.Done["httpStatus"]!.GetValue<int>());
+        Assert.Contains("[redacted]", result.Done["error"]!.GetValue<string>());
+        Assert.DoesNotContain(key, result.Text);
 
         await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
         var records = await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id });
@@ -765,11 +1056,11 @@ public class ProviderApiTests
             })));
         var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", "k");
 
-        var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/test", new { modelId = "gpt-5" });
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.False(result!["ok"]!.GetValue<bool>());
-        Assert.Equal(200, result["httpStatus"]!.GetValue<int>());
-        Assert.Contains("invalid JSON", result["error"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
+        var result = await host.TestAsync(id, new { modelId = "gpt-5" });
+        Assert.Equal(HttpStatusCode.OK, result.Status);
+        Assert.False(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal(200, result.Done["httpStatus"]!.GetValue<int>());
+        Assert.Contains("invalid JSON", result.Done["error"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
 
         await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
         var records = await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id });
@@ -991,8 +1282,261 @@ public class ProviderApiTests
         return body!["id"]!.GetValue<string>();
     }
 
+    // ---------- streamed connection test ----------
+
+    [Fact]
+    public async Task Connection_Test_Streams_Metrics_Deltas_And_Usage_Then_Logs_The_Run()
+    {
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(request =>
+            {
+                Assert.Equal("text/event-stream", request.Headers.Accept.Single().MediaType);
+                var body = JsonNode.Parse(request.Content!.ReadAsStringAsync().Result)!;
+                Assert.True(body["stream"]!.GetValue<bool>());
+                Assert.True(body["stream_options"]!["include_usage"]!.GetValue<bool>());
+                return Task.FromResult(SseResponse(
+                    """{"model":"gpt-5-2026-05-01","choices":[{"delta":{"role":"assistant"}}]}""",
+                    "",
+                    """{"choices":[{"delta":{"content":"O"}}]}""",
+                    """{"choices":[{"delta":{"content":"K"}}]}""",
+                    """{"choices":[],"usage":{"prompt_tokens":12,"completion_tokens":2}}"""));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", "sk-stream-key-1");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5", prompt = "Say OK." });
+
+        Assert.Equal(HttpStatusCode.OK, result.Status);
+        Assert.Equal(["start", "headers", "delta", "delta", "done"], result.Names);
+        var done = result.Done!;
+        Assert.True(done["ok"]!.GetValue<bool>());
+        Assert.Equal("OK", done["text"]!.GetValue<string>());
+        Assert.Equal("gpt-5-2026-05-01", done["responseModel"]!.GetValue<string>());
+        Assert.NotNull(done["httpMs"]);
+        Assert.True(done["ttftMs"]!.GetValue<long>() >= done["httpMs"]!.GetValue<long>());
+        Assert.Contains("data:", done["raw"]!.GetValue<string>());
+        Assert.Contains("[DONE]", done["raw"]!.GetValue<string>());
+        Assert.Equal(12, done["usage"]!["inputTokens"]!.GetValue<long>());
+        Assert.Equal(2, done["usage"]!["outputTokens"]!.GetValue<long>());
+
+        // The upstream response headers travel with the "headers" event and in the done payload.
+        var headers = result.Events[1].Data["headers"]!;
+        Assert.Contains("text/event-stream", headers["Content-Type"]!.GetValue<string>());
+        Assert.Contains("text/event-stream", done["headers"]!["Content-Type"]!.GetValue<string>());
+
+        await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
+        var record = (await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id })).Items.Single();
+        Assert.Equal("success", record.Status);
+        Assert.True(record.Stream);
+        Assert.NotNull(record.TtftMs);
+        Assert.Equal(12, record.TotalInputTokens);
+        Assert.Equal(2, record.TotalOutputTokens);
+        Assert.Equal("reported", record.UsageSource);
+    }
+
+    [Fact]
+    public async Task Connection_Test_Gemini_Streams_From_The_Alt_Sse_Url()
+    {
+        var urls = new List<string>();
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(request =>
+            {
+                urls.Add(request.RequestUri!.AbsoluteUri);
+                return Task.FromResult(SseResponse("""{"candidates":[{"content":{"parts":[{"text":"OK"}]}}],"modelVersion":"gemini-3-pro-001"}"""));
+            })));
+        var id = await CreateCustomAsync(host, "gemini", "https://example.invalid/v1beta", "query-key", "gm-key");
+
+        var result = await host.TestAsync(id, new { modelId = "gemini-test" });
+
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal("https://example.invalid/v1beta/models/gemini-test:streamGenerateContent?alt=sse&key=gm-key", urls.Single());
+        Assert.Equal("gemini-3-pro-001", result.Done["responseModel"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Connection_Test_Rejects_Bad_Parameters_Before_Streaming()
+    {
+        await using var host = await TestHost.StartAsync();
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+        foreach (var body in new object[]
+        {
+            new { modelId = "m", protocol = "gemini" },   // no such endpoint on this provider
+            new { modelId = "m", maxOutputTokens = 0 },
+            new { modelId = "m", maxOutputTokens = 4097 },
+            new { modelId = "m", prompt = new string('x', 4001) },
+        })
+        {
+            var result = await host.TestAsync(id, body);
+            Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+            Assert.Equal([], result.Names); // nothing streamed: the error is plain JSON
+            Assert.NotNull(result.Done!["error"]);
+        }
+    }
+
+    [Fact]
+    public async Task Connection_Test_Does_Not_Retry_On_Unauthorized()
+    {
+        var calls = 0;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ =>
+            {
+                calls++;
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                { Content = new StringContent("""{"error":{"message":"bad key"}}""", Encoding.UTF8, "application/json") });
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", "sk-retry-key-1");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5" });
+
+        Assert.Equal(1, calls);
+        Assert.False(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal(401, result.Done["httpStatus"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Connection_Test_Redacts_Echoed_Credentials_In_Response_Headers()
+    {
+        const string key = "sk-header-echo-key-9999";
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ =>
+            {
+                // Some gateways echo what they received (and the CORS-ish mirrors below) in their own headers.
+                var response = JsonResponse("""{"choices":[{"message":{"content":"OK"}}]}""");
+                response.Headers.TryAddWithoutValidation("x-echoed-authorization", $"Bearer {key}");
+                response.Headers.TryAddWithoutValidation("access-control-expose-headers", "authorization");
+                response.Headers.TryAddWithoutValidation("x-request-id", "req-42");
+                return Task.FromResult(response);
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", key);
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5", stream = false });
+
+        var headers = result.Done!["headers"]!;
+        Assert.Equal("req-42", headers["X-Request-ID"]!.GetValue<string>());
+        // A header echoing the credential we sent is redacted; header names are kept verbatim.
+        Assert.Equal("[redacted]", headers["x-echoed-authorization"]!.GetValue<string>());
+        Assert.Equal("authorization", headers["Access-Control-Expose-Headers"]!.GetValue<string>());
+        Assert.DoesNotContain(key, result.Text);
+    }
+
+    [Fact]
+    public async Task Connection_Test_Applies_The_Privacy_Guard_And_Reports_It_In_The_Request_Log()
+    {
+        var calls = 0;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(request =>
+            {
+                calls++;
+                var body = request.Content!.ReadAsStringAsync().Result;
+                // Redacted: the placeholder goes upstream instead of the card number.
+                Assert.DoesNotContain("4111111111111111", body);
+                Assert.Contains("[REDACTED:credit_card#1]", body);
+                return Task.FromResult(JsonResponse("""{"choices":[{"message":{"content":"[REDACTED:credit_card#1] seen"}}]}"""));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+        await EnablePrivacyAsync(host, PrivacyActions.Redact);
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5", stream = false, prompt = "card 4111111111111111" });
+
+        Assert.Equal(1, calls);
+        var done = result.Done!;
+        Assert.True(done["ok"]!.GetValue<bool>());
+        // The response is restored before it reaches the caller, and the raw view is the client-facing body too:
+        // the upstream itself only ever saw the placeholder (asserted in the stub above).
+        Assert.Equal("4111111111111111 seen", done["text"]!.GetValue<string>());
+        Assert.Contains("4111111111111111", done["raw"]!.GetValue<string>());
+
+        await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
+        var record = (await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id })).Items.Single();
+        Assert.NotNull(record.PrivacyJson);
+        Assert.Equal("success", record.Status);
+    }
+
+    [Fact]
+    public async Task Connection_Test_Is_Blocked_By_The_Privacy_Guard_Without_Calling_Upstream()
+    {
+        var calls = 0;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ =>
+            {
+                calls++;
+                return Task.FromResult(JsonResponse("""{"choices":[]}"""));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+        await EnablePrivacyAsync(host, PrivacyActions.Block);
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5", stream = false, prompt = "card 4111111111111111" });
+
+        Assert.Equal(0, calls);
+        Assert.Equal(JsonValueKind.Object, result.Done!.GetValueKind());
+        Assert.False(result.Done["ok"]!.GetValue<bool>());
+        Assert.Contains("privacy guard", result.Done["error"]!.GetValue<string>(), StringComparison.OrdinalIgnoreCase);
+
+        await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
+        var record = (await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id })).Items.Single();
+        Assert.Equal("blocked", record.Status);
+        Assert.NotNull(record.PrivacyJson);
+    }
+
+    [Fact]
+    public async Task Connection_Test_Decodes_A_Json_Body_When_The_Upstream_Ignores_The_Stream_Flag()
+    {
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ =>
+                Task.FromResult(JsonResponse("""{"model":"gpt-5-2026-05-01","choices":[{"message":{"content":"OK"}}]}""")))));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5" });
+
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal("OK", result.Done["text"]!.GetValue<string>());
+        Assert.Equal("gpt-5-2026-05-01", result.Done["responseModel"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Connection_Test_Truncates_A_Huge_Raw_Body()
+    {
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ => Task.FromResult(JsonResponse(
+                """{"choices":[{"message":{"content":"OK"}}],"padding":""" + "\"" + new string('x', 300 * 1024) + "\"}")))));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-5", stream = false });
+
+        var done = result.Done!;
+        Assert.True(done["ok"]!.GetValue<bool>());
+        Assert.True(done["rawTruncated"]!.GetValue<bool>());
+        Assert.True(done["raw"]!.GetValue<string>().Length < 270 * 1024);
+    }
+
+    /// <summary>Enables the privacy guard with one action applied to every category (built-in rules included).</summary>
+    private static async Task EnablePrivacyAsync(TestHost host, string action)
+    {
+        var (status, _) = await host.SendAsync(HttpMethod.Put, "/api/privacy", new
+        {
+            enabled = true,
+            dryRun = false,
+            restoreResponses = true,
+            recordSamples = false,
+            defaultAction = action,
+            categoryActions = new Dictionary<string, string>(),
+            clientDefaults = new Dictionary<string, string>(),
+            customRules = Array.Empty<object>(),
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+    }
+
     private static HttpResponseMessage JsonResponse(string body) => new(HttpStatusCode.OK)
     { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+    /// <summary>A streamed JSON-Lines fake upstream: one SSE frame per line (blank lines become the keep-alive comment).</summary>
+    private static HttpResponseMessage SseResponse(params string[] payloads)
+    {
+        var content = new StringBuilder();
+        foreach (var payload in payloads)
+            content.Append(payload.Length == 0 ? ": keep-alive\n\n" : "data: " + payload + "\n\n");
+        content.Append("data: [DONE]\n\n");
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(content.ToString(), Encoding.UTF8, "text/event-stream") };
+    }
 
     private sealed class StubHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> respond) : HttpMessageHandler
     {
@@ -1016,14 +1560,14 @@ public class ProviderApiTests
 
     /// <summary>The values of one upstream request, copied out before the message is disposed.</summary>
     private sealed record Sent(
-        HttpMethod Method, string Url, string Path, string Query,
+        HttpMethod Method, string Url, string Path, string Query, string? Accept,
         string? Authorization, string? XApiKey, string? XGoogApiKey, string? AnthropicVersion, string? Body);
 
     private static async Task<Sent> RecordAsync(HttpRequestMessage request)
     {
         string? Header(string name) => request.Headers.TryGetValues(name, out var values) ? string.Join(",", values) : null;
         return new Sent(request.Method, request.RequestUri!.AbsoluteUri, request.RequestUri.AbsolutePath, request.RequestUri.Query,
-            Header("Authorization"), Header("x-api-key"), Header("x-goog-api-key"), Header("anthropic-version"),
+            Header("Accept"), Header("Authorization"), Header("x-api-key"), Header("x-goog-api-key"), Header("anthropic-version"),
             request.Content is null ? null : await request.Content.ReadAsStringAsync());
     }
 

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Astra.Core;
 
 namespace Astra.Clients.Editing;
 
@@ -200,7 +201,7 @@ public sealed class JsoncEditor
     private static (int At, int End, byte[] Text) BuildInsert(Node parent, string? name, byte[] valueBytes, byte[] data)
     {
         var nl = UsesCrlf(data) ? "\r\n" : "\n";
-        var memberSource = (name is null ? "" : JsonSerializer.Serialize(name) + ": ") + Encoding.UTF8.GetString(valueBytes);
+        var memberSource = (name is null ? "" : Json.EncodeString(name) + ": ") + Encoding.UTF8.GetString(valueBytes);
         var open = (int)parent.Start;
         var close = (int)parent.End - 1; // index of '}' or ']'
         var lastContent = SkipWsBackward(data, close); // last non-whitespace char before the closing bracket
@@ -387,7 +388,7 @@ public sealed class JsoncEditor
             string decoded;
             try
             {
-                decoded = JsonSerializer.Deserialize<string>(nameText) ?? "";
+                decoded = Json.DecodeString(nameText) ?? "";
             }
             catch (JsonException)
             {

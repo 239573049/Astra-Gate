@@ -91,6 +91,33 @@ export function formatDateTime(iso: string | null | undefined, locale: string): 
   }).format(new Date(iso));
 }
 
+const intlLocale = (locale: string) => (locale === 'zh' ? 'zh-CN' : 'en-US');
+
+/** A local calendar day as a Date; "yyyy-MM-dd" is parsed by hand so it never shifts across a UTC boundary. */
+function dayDate(day: string): Date {
+  const [year, month, date] = day.split('-').map(Number);
+  return new Date(year, month - 1, date);
+}
+
+/** Tooltip of one heatmap cell: "Wed, Oct 8, 2026 · 4 requests", or "… · no activity" for a quiet day. */
+export function formatDayCount(day: string, count: number, locale: string, unit: string, empty: string): string {
+  const label = new Intl.DateTimeFormat(intlLocale(locale), { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }).format(dayDate(day));
+  return `${label} · ${count > 0 ? `${count} ${unit}` : empty}`;
+}
+
+/** Short calendar names for a heatmap header: a month 1-12, and a weekday row 0-6 counted from Monday. */
+export const monthName = (month: number, locale: string): string =>
+  new Intl.DateTimeFormat(intlLocale(locale), { month: 'short' }).format(new Date(2026, month - 1, 1));
+
+/** The same, for the first month of the window: it opens mid-month, so it reads as a start rather than a header. */
+export const monthStartName = (month: number, year: number, locale: string): string =>
+  new Intl.DateTimeFormat(intlLocale(locale), { month: 'short', year: 'numeric' }).format(new Date(year, month - 1, 1));
+
+
+/** Weekday names are read off a known Monday (Aug 3, 2026), so they carry no locale-specific first-day-of-week shift. */
+export const weekdayName = (row: number, locale: string): string =>
+  new Intl.DateTimeFormat(intlLocale(locale), { weekday: 'short' }).format(new Date(2026, 7, 3 + row));
+
 /** Short summary of a pricing schedule's base: "$3 / $15". */
 export function priceSummary(p: { base?: Record<string, unknown> } | null | undefined): string {
   if (!p?.base) return '—';

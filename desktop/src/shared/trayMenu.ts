@@ -1,7 +1,8 @@
 /**
  * Pure tray / menu-bar menu model (unit-testable without the Electron runtime). The app lives in the
- * tray: closing the window only hides it, so this menu is the primary surface while it is hidden —
- * status, window shortcuts, per-client provider switching, service control, and Quit.
+ * tray: closing the window only hides it. A click on the icon opens the tray panel (desktop/src/trayPanel.ts);
+ * this native menu is the secondary surface — right click (or the panel's "more" button), and the only one on
+ * Linux — with status, window shortcuts, per-client provider switching, service control, and Quit.
  */
 import type { MenuItemConstructorOptions } from 'electron';
 
@@ -27,6 +28,8 @@ export interface TrayState {
 
 export interface TrayCallbacks {
   onOpenWindow(): void;
+  /** Opens the tray panel; the menu offers it only on Linux, where icon clicks may never arrive. */
+  onShowPanel(): void;
   onNavigate(target: NavTarget): void;
   onStartService(): void;
   onStopService(): void;
@@ -60,6 +63,7 @@ export function trayLabels(locale: string) {
     mismatch: zh ? 'API 版本不匹配，请运行 "astra update"' : 'API version mismatch — run "astra update"',
     updateAvailable: zh ? '有可用更新…' : 'Update Available…',
     openWindow: zh ? '打开 Astra' : 'Open Astra',
+    showPanel: zh ? '显示托盘面板' : 'Show Tray Panel',
     goTo: zh ? '前往' : 'Go To',
     clients: zh ? '客户端提供商' : 'Client Providers',
     noProviders: zh ? '未配置提供商' : 'No providers configured',
@@ -135,14 +139,12 @@ export function buildTrayMenuTemplate(
   if (state.updateAvailable) template.push({ label: t.updateAvailable, click: () => cb.onCheckUpdates() });
 
   // Window.
-  template.push(
-    { type: 'separator' },
-    { label: t.openWindow, click: () => cb.onOpenWindow() },
-    {
-      label: t.goTo,
-      submenu: NAV_ORDER.map((target) => ({ label: nav[target], click: () => cb.onNavigate(target) })),
-    },
-  );
+  template.push({ type: 'separator' }, { label: t.openWindow, click: () => cb.onOpenWindow() });
+  if (env.platform === 'linux') template.push({ label: t.showPanel, click: () => cb.onShowPanel() });
+  template.push({
+    label: t.goTo,
+    submenu: NAV_ORDER.map((target) => ({ label: nav[target], click: () => cb.onNavigate(target) })),
+  });
 
   // Per-client provider switching (needs the server).
   const enabledClients = state.clients.filter((c) => c.enabled);

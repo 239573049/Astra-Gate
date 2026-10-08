@@ -18,6 +18,7 @@ public sealed class AstraDatabase
         Providers = new ProviderRepository(factory);
         Accounts = new ProviderAccountStore(factory);
         Clients = new ClientRepository(factory);
+        Tokens = new TokenRepository(factory);
         ClientConfigState = new ClientConfigStateStore(factory);
         Requests = new RequestRepository(factory);
         Migrations = new MigrationRunner(factory, paths);
@@ -31,6 +32,7 @@ public sealed class AstraDatabase
     public ProviderRepository Providers { get; }
     public ProviderAccountStore Accounts { get; }
     public ClientRepository Clients { get; }
+    public TokenRepository Tokens { get; }
     public ClientConfigStateStore ClientConfigState { get; }
     public RequestRepository Requests { get; }
     public MigrationRunner Migrations { get; }

@@ -21,7 +21,14 @@ export type MenuCommand =
   | 'find'
   | 'refresh'
   | 'new-provider'
-  | 'toggle-sidebar';
+  | 'toggle-sidebar'
+  /** Settings › Tray panel tab (the tray panel's gear button). */
+  | 'settings:tray';
+
+/** Hash route of the Settings › Tray panel tab, for a window that does not exist yet. */
+export const TRAY_SETTINGS_HASH = '#/settings/tray';
+/** Hash route the tray panel window renders (web/src/App.tsx). */
+export const TRAY_PANEL_HASH = '#/tray';
 
 export type ThemeSource = 'system' | 'light' | 'dark';
 

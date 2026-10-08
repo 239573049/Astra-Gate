@@ -61,6 +61,15 @@ public sealed class Provider
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
+    /// <summary>
+    /// Last balance / quota snapshot (column <c>quota_json</c>); written only through
+    /// <c>ProviderRepository.UpdateQuotaAsync</c>, never by the full-row update.
+    /// </summary>
+    public JsonObject? Quota { get; set; }
+
+    /// <summary>Last balance / quota query attempt, successful or not (column <c>quota_checked_at_utc</c>).</summary>
+    public DateTimeOffset? QuotaCheckedAtUtc { get; set; }
+
     public ProviderEndpoint? EndpointFor(ApiProtocol protocol) => Endpoints.FirstOrDefault(e => e.Protocol == protocol);
 
     public bool SettingFlag(string key, bool defaultValue) =>

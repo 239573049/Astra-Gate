@@ -17,9 +17,7 @@ public class ClientRepositoryTests
         {
             Kind = ClientKinds.Codex,
             Enabled = true,
-            LocalKeyEnc = "enc",
-            LocalKeyHash = "hash",
-            LocalKeyPrefix = "astra-codex-AB12",
+            TokenId = "default",
             SelectedModel = "gpt-5",
             ExtraJson = "{\"small_model\":\"gpt-5-mini\"}",
             AppliedAt = applied,
@@ -28,9 +26,7 @@ public class ClientRepositoryTests
 
         var got = (await db.Clients.GetAsync(ClientKinds.Codex))!;
         Assert.True(got.Enabled);
-        Assert.Equal("enc", got.LocalKeyEnc);
-        Assert.Equal("hash", got.LocalKeyHash);
-        Assert.Equal("astra-codex-AB12", got.LocalKeyPrefix);
+        Assert.Equal("default", got.TokenId);
         Assert.Equal("gpt-5", got.SelectedModel);
         Assert.Equal("{\"small_model\":\"gpt-5-mini\"}", got.ExtraJson);
         Assert.Equal(applied, got.AppliedAt);
@@ -43,6 +39,22 @@ public class ClientRepositoryTests
         Assert.Single(list);
         Assert.False(list[0].Enabled);
         Assert.Null(list[0].AppliedAt);
+    }
+
+    [Fact]
+    public async Task Clients_Are_Listed_And_Moved_By_Token()
+    {
+        var db = await TestDb.InitializeAsync();
+        await db.Clients.UpsertAsync(new ClientRecord { Kind = ClientKinds.Codex, Enabled = true, TokenId = "t1" });
+        await db.Clients.UpsertAsync(new ClientRecord { Kind = ClientKinds.OpenCode, Enabled = true, TokenId = "default" });
+        await db.Clients.UpsertAsync(new ClientRecord { Kind = ClientKinds.Pi, Enabled = false }); // null = default token
+
+        Assert.Equal([ClientKinds.Codex], (await db.Clients.ListByTokenAsync("t1", false)).Select(c => c.Kind));
+        Assert.Equal([ClientKinds.OpenCode, ClientKinds.Pi], (await db.Clients.ListByTokenAsync("default", true)).Select(c => c.Kind));
+
+        Assert.Equal([ClientKinds.Codex], await db.Clients.ReassignTokenAsync("t1", "default"));
+        Assert.Equal("default", (await db.Clients.GetAsync(ClientKinds.Codex))!.TokenId);
+        Assert.Empty(await db.Clients.ListByTokenAsync("t1", false));
     }
 
     [Fact]

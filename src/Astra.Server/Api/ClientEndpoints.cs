@@ -10,10 +10,12 @@ public static class ClientEndpoints
     public static void MapClientEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/clients").AddEndpointFilter<AdminApiErrorFilter>();
-        group.MapGet("", async (ClientService clients, CancellationToken ct) => Results.Ok(await clients.ListAsync(ct)));
+        // Materialized to List<ClientInfoDto>: an interface-typed root makes the serializer probe the
+        // interface graph for metadata (see ServerJsonContext).
+        group.MapGet("", async (ClientService clients, CancellationToken ct) => Results.Ok((await clients.ListAsync(ct)).ToList()));
         // Plan §7.1: after the gateway address changed, rewrite every enabled client that still points at the old one.
         group.MapPost("/reapply", async (ClientService clients, CancellationToken ct) =>
-            Results.Ok(new { updated = await clients.ReapplyOutdatedAsync(ct) }));
+            Results.Ok(new ReappliedDto(await clients.ReapplyOutdatedAsync(ct))));
         group.MapPut("/{kind}/binding", async (string kind, BindingInput body, ClientService clients, CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(body.ProviderId)) return ModelEndpoints.Bad("providerId is required");
@@ -27,11 +29,11 @@ public static class ClientEndpoints
             Results.Ok(await clients.DisableAsync(kind, false, ct)));
         group.MapPost("/{kind}/force-restore", async (string kind, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.DisableAsync(kind, true, ct)));
-        group.MapGet("/{kind}/backups", (string kind, ClientService clients) => Results.Ok(clients.Backups(kind)));
+        // Materialized to List<ClientBackupDto>: an interface-typed root makes the serializer probe the
+        // interface graph for metadata (see ServerJsonContext).
+        group.MapGet("/{kind}/backups", (string kind, ClientService clients) => Results.Ok(clients.Backups(kind).ToList()));
         group.MapPost("/{kind}/backups/{backupId}/restore", async (string kind, string backupId, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.RestoreBackupAsync(kind, backupId, ct)));
-        group.MapPost("/{kind}/rotate-key", async (string kind, ClientService clients, CancellationToken ct) =>
-            Results.Ok(await clients.RotateKeyAsync(kind, ct)));
         group.MapGet("/{kind}/models", async (string kind, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.ModelsAsync(kind, ct)));
     }

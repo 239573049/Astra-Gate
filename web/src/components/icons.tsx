@@ -109,6 +109,7 @@ export function initials(name: string): string {
 type BrandAvatar = ComponentType<IconAvatarProps>;
 const LOBE_PROVIDER_AVATARS: Record<string, BrandAvatar> = {
   openai: OpenAI.Avatar,
+  copilot: GithubCopilot.Avatar,
   anthropic: Anthropic.Avatar,
   gemini: Gemini.Avatar,
   grok: XAI.Avatar,

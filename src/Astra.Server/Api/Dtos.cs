@@ -17,6 +17,17 @@ public static class PricingJson
 
 public sealed record ErrorBody(string Error, object? Details = null);
 
+// Small envelopes shared by several endpoints. They replace anonymous objects so the payloads have
+// source-generated metadata (see ServerJsonContext) instead of a reflection fallback.
+public sealed record ErrorOnlyDto(string Error);
+public sealed record ErrorStatusDto(string Error, string Status);
+public sealed record ErrorVerificationDto(string Error, bool NeedsVerification);
+public sealed record RemovedDto(bool Removed);
+public sealed record ReappliedDto(IReadOnlyList<string> Updated);
+public sealed record StatusDto(string Status);
+public sealed record SignedInDto(bool SignedIn);
+public sealed record AuthStatusDto(bool Required, bool SignedIn);
+
 public class ModelDto
 {
     public string Id { get; init; } = "";

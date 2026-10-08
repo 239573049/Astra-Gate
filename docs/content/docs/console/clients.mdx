@@ -13,8 +13,9 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 
 - **状态行** — 「已启用」徽标 + 已写入的配置文件路径；右侧 **禁用并还原**；下方是最近一次写入配置的时间；
 - **使用的提供商** — 单选卡片，切换后**立即生效**，不需要修改客户端配置文件；
-- **模型** — 启用时写入客户端配置的默认模型（修改后需要重新写入客户端配置）；
-- **维护** — 复制配置文件路径、配置备份、轮换本地密钥。
+- **令牌** — 写入客户端配置的[令牌](/docs/console/tokens)，默认是「默认令牌」，多个客户端可以共用一个；
+- **模型** — 启用时写入客户端配置的默认模型。Claude Code 还提供 Opus / Sonnet / Haiku 三档选择，对应 `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`（Haiku 档兼作快速/后台模型）。所有模型选项默认留空，留空就不写入，配置文件里已有的同名设置也不会被改动；修改后需要重新写入客户端配置；
+- **维护** — 复制配置文件路径、配置备份。
 
 支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot。
 
@@ -26,7 +27,7 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 | **Hermes Agent** | `~/.hermes/config.yaml`（`HERMES_HOME`；Windows 为 `%LOCALAPPDATA%\hermes`） | `model` 段：`provider: custom`、`base_url`、`api_key`，选了模型时写 `default` |
 | **MiniMax Code** | `~/.minimax/config.yaml`（`MINIMAX_DATA_DIR`） | 新增 `custom_provider.astra`（含模型列表）；选了模型时设置 `defaultModel` |
 | **Copilot CLI** | `~/.copilot/providers.json`、`settings.json`（`COPILOT_HOME`） | 在 BYOK 列表里新增 `astra` 提供商及其模型（不动你已有的条目）；选了模型时设置 `model` 为 `astra/<模型>` |
-| **VS Code Copilot** | VS Code 用户目录下的 `chatLanguageModels.json`（macOS `~/Library/Application Support/Code/User`，Windows `%APPDATA%\Code\User`，Linux `~/.config/Code/User`） | 新增名为 `Astra` 的 Custom Endpoint 模型组（Chat Completions），列出所绑定提供商的模型；本地密钥写在每个模型的 `requestHeaders` 里。模型在 VS Code 的模型选择器中挑选 |
+| **VS Code Copilot** | VS Code 用户目录下的 `chatLanguageModels.json`（macOS `~/Library/Application Support/Code/User`，Windows `%APPDATA%\Code\User`，Linux `~/.config/Code/User`） | 新增名为 `Astra` 的 Custom Endpoint 模型组（Chat Completions），列出所绑定提供商的模型；令牌写在每个模型的 `requestHeaders` 里。模型在 VS Code 的模型选择器中挑选 |
 
 Pi、MiniMax Code、Copilot CLI、VS Code Copilot 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
 
@@ -38,9 +39,11 @@ Pi、MiniMax Code、Copilot CLI、VS Code Copilot 与 OpenCode 一样会列出�
 
 1. 展示将要写入的改动清单（只新增 / 修改 Astra 自己的配置项）；
 2. **首次修改前备份原文件**（这份备份永久保留）；
-3. 写入网关地址与本地访问密钥。
+3. 写入网关地址与所选令牌。
 
-启用后客户端需要重启一次使配置生效；之后切换提供商、模型都在控制台完成，客户端无需再动。
+写入客户端的密钥形如 `sk-astra-xxxx.codex`：前半是令牌本身，`.` 后面是客户端标识，网关据此识别是哪个客户端发来的请求，再按该客户端绑定的提供商转发。用量记在令牌名下。
+
+启用后客户端需要重启一次使配置生效；之后切换提供商、模型都在控制台完成，客户端无需再动。更换令牌需要重新写入配置：在「令牌」分区选择新令牌后点 **应用**，确认改动即可。
 
 ## 维护
 
@@ -48,7 +51,8 @@ Pi、MiniMax Code、Copilot CLI、VS Code Copilot 与 OpenCode 一样会列出�
 | --- | --- |
 | **复制配置文件路径** | 快速定位 Astra 代管的客户端配置文件 |
 | **配置备份** | 每次修改前自动备份，可随时恢复；首次修改前的备份永久保留，另有约 20 份滚动备份 |
-| **轮换本地密钥** | 生成新的本地访问密钥并写入客户端配置，旧密钥立即失效 |
+
+需要让密钥失效时，到[令牌页](/docs/console/tokens)**重置**对应令牌：使用它的已启用客户端会自动改写配置。
 
 <Callout type="info" title="Claude Desktop 与角色映射">
   Claude Desktop 只认 Sonnet / Opus / Haiku 这类「角色模型」。Astra 会把它们映射到你选择的提供商模型
@@ -62,6 +66,12 @@ Pi、MiniMax Code、Copilot CLI、VS Code Copilot 与 OpenCode 一样会列出�
 - 服务器已经卸载、控制台打不开？终端运行 `astra restore-all` 可以**离线**还原全部客户端配置（见 [CLI 参考](/docs/cli/clients)）。
 
 <Callout type="warn" title="密钥安全">
-  Astra 写入客户端的是一把**本地访问密钥**（不是上游 API Key）。它只对本机网关有效，
-  可随时在「维护」里轮换，使其立即失效重发。
+  Astra 写入客户端的是**令牌**（不是上游 API Key）。它只对本机网关有效，
+  可随时在「令牌」页重置，使旧值立即失效。
+</Callout>
+
+<Callout type="info" title="从旧版本升级">
+  旧版本给每个客户端各写一把 `astra-<客户端>-…` 本地密钥。升级后这些密钥立即失效，
+  Astra 会在启动时自动把已启用客户端改写为「默认令牌」；手动改过配置（漂移）的客户端会被跳过，
+  请在本页重新启用它们。
 </Callout>

@@ -652,9 +652,9 @@ public sealed class ModelSyncService(AstraDatabase db, IHttpClientFactory factor
         }
 
         if (problems.Count > 0)
-            return Results.Json(
+            return ApiJson.Result(
                 new ErrorBody("Selected changes conflict with the current catalog; nothing was applied", problems),
-                statusCode: StatusCodes.Status409Conflict);
+                StatusCodes.Status409Conflict);
 
         // Recheck these immutable observations inside the write transaction to close the preflight/write race.
         var expectedModels = modelCache.ToDictionary(kv => kv.Key, kv => Json.Deserialize<SystemModel>(Json.Serialize(kv.Value)), StringComparer.Ordinal);
@@ -704,7 +704,7 @@ public sealed class ModelSyncService(AstraDatabase db, IHttpClientFactory factor
         }
 
         if (!await db.Models.ApplySyncBatchAsync(newModels, updatedModels, upsertPrices, expectedModels, expectedPrices, ct))
-            return Results.Json(new ErrorBody("Catalog changed during sync; nothing was applied. Run preview again"), statusCode: 409);
+            return ApiJson.Result(new ErrorBody("Catalog changed during sync; nothing was applied. Run preview again"), 409);
         return Results.Ok(new SyncApplyResult(changes.Count));
     }
 
@@ -722,7 +722,7 @@ public sealed class ModelSyncService(AstraDatabase db, IHttpClientFactory factor
             case "maxOutputTokens": model.MaxOutputTokens = LongOrNull(after); break;
             case "capabilities":
                 if (after is not null)
-                    model.Capabilities = after.Deserialize<ModelCapabilities>(Json.Api) ?? model.Capabilities;
+                    model.Capabilities = Json.DeserializeApi<ModelCapabilities>(after) ?? model.Capabilities;
                 break;
             case "pricing": model.Pricing = after is null ? null : PricingJson.FromNode(after); break;
         }
@@ -759,7 +759,7 @@ public sealed class ModelSyncService(AstraDatabase db, IHttpClientFactory factor
     private static JsonNode? Node(string? value) => value is null ? null : JsonValue.Create(value);
     private static JsonNode? Node(long? value) => value is null ? null : JsonValue.Create(value);
     private static JsonNode Node(IReadOnlyList<string> values) => new JsonArray(values.Select(v => JsonValue.Create(v)).ToArray());
-    private static JsonNode? CapabilitiesNode(ModelCapabilities c) => JsonNode.Parse(JsonSerializer.Serialize(c, Json.Api));
+    private static JsonNode? CapabilitiesNode(ModelCapabilities c) => JsonNode.Parse(JsonSerializer.Serialize(c, JsonContexts.Info<ModelCapabilities>(Json.Api)));
     private static JsonNode? PricingNode(PricingSchedule? p) => PricingJson.ToNode(p);
     private static JsonNode? PriceNode(string? upstreamModelId, PricingSchedule? p) => new JsonObject
     {

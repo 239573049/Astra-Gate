@@ -6,6 +6,7 @@ using Astra.Data;
 using Astra.Gateway.Http;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Astra.Providers.Quota;
 using Astra.Providers.Subscription;
 using Astra.Providers.Templates;
 using Astra.Server.Api;
@@ -72,6 +73,8 @@ public static class AstraApp
         builder.Services.AddSingleton(database);
         builder.Services.AddSingleton(ClientEnvironment.Real);
         builder.Services.AddSingleton<ClientService>();
+        builder.Services.AddSingleton<TokenService>();
+        builder.Services.AddHostedService<TokenMigrationWorker>();
         builder.Services.AddSingleton<ProviderTemplateCatalog>();
         builder.Services.AddSingleton<ProviderProbe>();
         builder.Services.AddSingleton<ModelSyncService>();
@@ -96,28 +99,36 @@ public static class AstraApp
         builder.Services.AddSingleton<GatewayAuxiliary>();
         builder.Services.AddSingleton<PendingSubscriptionLogins>();
         builder.Services.AddHostedService<SubscriptionRefreshWorker>();
+        // Balance / quota queries of API-key providers: built-in templates, the query service, and its worker.
+        builder.Services.AddSingleton<QuotaTemplateCatalog>();
+        builder.Services.AddSingleton<ProviderQuotaService>();
+        builder.Services.AddSingleton<ProviderQuotaManager>();
+        builder.Services.AddHostedService<ProviderQuotaWorker>();
         builder.Services.AddSingleton<UpdateCheckService>();
         builder.Services.AddHostedService<UpdateCheckWorker>();
         builder.Services.AddSingleton<RuntimeFile>();
         builder.Services.AddSingleton<AdminSessions>();
         builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
         builder.Services.AddHttpClient();
-        builder.Services.AddHttpClient(ProviderProbe.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(15), AutomaticDecompression = DecompressionMethods.All,
-            }).RemoveAllLoggers();
+        // 订阅登录（OAuthClient 用默认客户端）、额度、模型列表、更新检查都走系统代理；
+        // NO_PROXY 里的地址（回环）自动豁免。
+        builder.Services.ConfigureHttpClientDefaults(b =>
+            b.ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15))));
+        builder.Services.AddHttpClient(ProviderProbe.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(130))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
         builder.Services.AddHttpClient(ModelSyncService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(15), AutomaticDecompression = DecompressionMethods.All,
-            }).RemoveAllLoggers();
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
         builder.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                AllowAutoRedirect = false, ConnectTimeout = TimeSpan.FromSeconds(15), AutomaticDecompression = DecompressionMethods.All,
-            }).RemoveAllLoggers();
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
+        // Per-query deadlines come from settings.quota.timeout_sec (≤ 60 s); this is only the outer bound.
+        builder.Services.AddHttpClient(ProviderQuotaService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(90))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
         builder.Services.AddHttpClient(UpdateCheckService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
         builder.Services.AddOpenApi();
         builder.Services.ConfigureHttpJsonOptions(j =>
@@ -125,6 +136,8 @@ public static class AstraApp
             j.SerializerOptions.PropertyNamingPolicy = Json.Api.PropertyNamingPolicy;
             j.SerializerOptions.DefaultIgnoreCondition = Json.Api.DefaultIgnoreCondition;
             j.SerializerOptions.Encoder = Json.Api.Encoder;
+            // Source-generated metadata for endpoint payloads; unregistered types fall back to reflection.
+            j.SerializerOptions.TypeInfoResolver = JsonContexts.Resolver;
         });
         builder.Services.AddCors(c => c.AddDefaultPolicy(p => p
             .WithOrigins(SecurityMiddleware.DesktopOrigin)
@@ -137,6 +150,8 @@ public static class AstraApp
         var app = builder.Build();
         app.Services.GetRequiredService<SettingsService>().LoadAsync().GetAwaiter().GetResult();
         app.Services.GetRequiredService<PrivacyGuardService>().LoadAsync().GetAwaiter().GetResult();
+        // Tokens: the 0006 migration inserts the default token without a key; generate it before the gateway serves.
+        app.Services.GetRequiredService<TokenService>().EnsureDefaultAsync().GetAwaiter().GetResult();
 
         app.UseCors();
         app.UseMiddleware<SecurityMiddleware>();
@@ -157,6 +172,7 @@ public static class AstraApp
         app.MapModelSyncEndpoints();
         app.MapRequestEndpoints();
         app.MapClientEndpoints();
+        app.MapTokenEndpoints();
         app.MapProviderEndpoints();
         app.MapPrivacyEndpoints();
         app.MapSubscriptionEndpoints();
@@ -171,7 +187,7 @@ public static class AstraApp
             if (p.StartsWithSegments("/api") || p.StartsWithSegments("/v1") || p.StartsWithSegments("/v1beta") || index is null || !File.Exists(index))
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-                await ctx.Response.WriteAsJsonAsync(new { error = $"Not found: {ctx.Request.Method} {p}" });
+                await ctx.Response.WriteAsJsonAsync(new Api.ErrorOnlyDto($"Not found: {ctx.Request.Method} {p}"), Api.ApiJson.Info<Api.ErrorOnlyDto>());
                 return;
             }
             ctx.Response.ContentType = "text/html; charset=utf-8";

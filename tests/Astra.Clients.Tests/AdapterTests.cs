@@ -23,7 +23,10 @@ public class ClaudeCodeClientAdapterTests : IDisposable
     }
 
     private static EnableContext Ctx(string key = "astra-claude-x", string? model = "claude-sonnet-4-5") =>
-        TestGateway.Context(key, model, new JsonObject { ["smallFastModel"] = "claude-haiku-4-5" });
+        TestGateway.Context(key, null, new JsonObject
+        {
+            ["models"] = new JsonObject { ["ANTHROPIC_MODEL"] = model, ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-haiku-4-5" },
+        });
 
     [Fact]
     public void Enable_WritesOnlyEnvKeys_JsoncFormattingPreserved()
@@ -44,6 +47,30 @@ public class ClaudeCodeClientAdapterTests : IDisposable
         Assert.Equal("claude-haiku-4-5", env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
         Assert.Equal("vim", env["EDITOR"]!.GetValue<string>());
         Assert.Null(node["env"]!["ANTHROPIC_API_KEY"]);
+    }
+
+    [Fact]
+    public void Enable_EmptyModelSlots_WriteNothing()
+    {
+        // Every slot defaults to empty: the file keeps only what it had, no model key is added.
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-claude-x")));
+        var node = JsonNode.Parse(_home.ReadFile(_settings), nodeOptions: new JsonNodeOptions(),
+            documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
+        var env = node["env"]!;
+        Assert.Null(env["ANTHROPIC_MODEL"]);
+        Assert.Null(env["ANTHROPIC_DEFAULT_OPUS_MODEL"]);
+        Assert.Null(env["ANTHROPIC_DEFAULT_SONNET_MODEL"]);
+        Assert.Null(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]);
+        Assert.Equal("astra-claude-x", env["ANTHROPIC_AUTH_TOKEN"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Enable_KeepsTheOlderSmallFastModelExtraWorking()
+    {
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-claude-x", null, new JsonObject { ["smallFastModel"] = "glm-4.5-air" })));
+        var node = JsonNode.Parse(_home.ReadFile(_settings), nodeOptions: new JsonNodeOptions(),
+            documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
+        Assert.Equal("glm-4.5-air", node["env"]!["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
     }
 
     [Fact]

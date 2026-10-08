@@ -6,6 +6,7 @@ using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Privacy;
 using Astra.Core.Requests;
+using Astra.Core.Tokens;
 using Astra.Gateway.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -41,20 +42,29 @@ public sealed class FakeUpstream(Func<FakeUpstream.Seen, HttpResponseMessage> re
         new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "text/event-stream") };
 }
 
-/// <summary>A gateway test environment: enabled client with a local key, bound to a fake-upstream provider.</summary>
+/// <summary>
+/// A gateway test environment: enabled client using the default token ("&lt;token&gt;.&lt;kind&gt;"), bound to a
+/// fake-upstream provider.
+/// </summary>
 public sealed class GatewayFixture : IAsyncDisposable
 {
-    private GatewayFixture(TestHost host, FakeUpstream upstream, Provider provider, string key)
+    private GatewayFixture(TestHost host, FakeUpstream upstream, Provider provider, string token, string key)
     {
         Host = host;
         Upstream = upstream;
         Provider = provider;
+        Token = token;
         Key = key;
     }
 
     public TestHost Host { get; }
     public FakeUpstream Upstream { get; }
     public Provider Provider { get; }
+
+    /// <summary>The bare default token (direct calls).</summary>
+    public string Token { get; }
+
+    /// <summary>The client key: <see cref="Token"/> plus the client suffix.</summary>
     public string Key { get; }
 
     public static async Task<GatewayFixture> StartAsync(
@@ -80,11 +90,11 @@ public sealed class GatewayFixture : IAsyncDisposable
             PreferredUpstreamProtocols = [upstreamProtocol],
         };
         await host.Db.Providers.InsertAsync(provider);
-        var client = new ClientRecord { Kind = clientKind, Enabled = true };
-        var key = LocalKeys.Rotate(client, protector);
+        var client = new ClientRecord { Kind = clientKind, Enabled = true, TokenId = TokenIds.Default };
+        var token = protector.Unprotect((await host.Db.Tokens.GetAsync(TokenIds.Default))!.KeyEnc!);
         await host.Db.Clients.UpsertAsync(client);
         await host.Db.Clients.SetBindingAsync(new ClientBinding { ClientKind = clientKind, ProviderId = provider.Id });
-        return new GatewayFixture(host, upstream, provider, key);
+        return new GatewayFixture(host, upstream, provider, token, GatewayTokens.ForClient(token, clientKind));
     }
 
     public static string BaseUrlFor(ApiProtocol p) => p switch
@@ -129,9 +139,52 @@ public class GatewayPipelineTests
         }
         var wrong = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[]}""", key: "sk-not-an-astra-key");
         Assert.Equal(HttpStatusCode.Unauthorized, wrong.StatusCode);
-        var rotated = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[]}""", key: gw.Key[..^4] + "zzzz");
+        var rotated = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[]}""", key: GatewayTokens.ForClient(gw.Token[..^4] + "zzzz", ClientKinds.OpenCode));
         Assert.Equal(HttpStatusCode.Unauthorized, rotated.StatusCode);
         Assert.Empty(gw.Upstream.Requests);
+    }
+
+    [Fact]
+    public async Task Legacy_Keys_Disabled_Tokens_And_Unknown_Clients_Are_Rejected()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        var legacy = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[]}""", key: "astra-opencode-0123456789abcdefghijABCDEFGHIJKL");
+        Assert.Equal(HttpStatusCode.Unauthorized, legacy.StatusCode);
+        Assert.Contains("旧版客户端密钥已失效", await legacy.Content.ReadAsStringAsync());
+
+        // A known client kind that is not enabled in Astra.
+        var other = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[]}""", key: GatewayTokens.ForClient(gw.Token, ClientKinds.Pi));
+        Assert.Equal(HttpStatusCode.Forbidden, other.StatusCode);
+
+        var token = (await gw.Host.Db.Tokens.GetAsync(TokenIds.Default))!;
+        token.Enabled = false;
+        await gw.Host.Db.Tokens.UpdateAsync(token);
+        var disabled = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[]}""");
+        Assert.Equal(HttpStatusCode.Forbidden, disabled.StatusCode);
+        Assert.Contains("已停用", await disabled.Content.ReadAsStringAsync());
+        Assert.Empty(gw.Upstream.Requests);
+    }
+
+    [Fact]
+    public async Task Bare_Tokens_Are_Direct_Calls_To_The_Tokens_Default_Provider()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        var body = """{"model":"gpt-5","messages":[{"role":"user","content":"hi"}]}""";
+        var unset = await gw.PostAsync("/v1/chat/completions", body, key: gw.Token);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, unset.StatusCode);
+        Assert.Contains("没有设置默认提供商", await unset.Content.ReadAsStringAsync());
+        Assert.Empty(gw.Upstream.Requests);
+
+        var token = (await gw.Host.Db.Tokens.GetAsync(TokenIds.Default))!;
+        token.ProviderId = gw.Provider.Id;
+        await gw.Host.Db.Tokens.UpdateAsync(token);
+        var response = await gw.PostAsync("/v1/chat/completions", body, key: gw.Token);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(gw.Upstream.Requests);
+        var record = await gw.RecordOfAsync(response);
+        Assert.Null(record.ClientKind);
+        Assert.Equal(TokenIds.Default, record.TokenId);
+        Assert.Equal(token.Name, record.TokenName);
     }
 
     [Fact]
@@ -174,6 +227,7 @@ public class GatewayPipelineTests
         Assert.Equal("openai-chat", record.InboundProtocol);
         Assert.Equal("openai-chat", record.UpstreamProtocol);
         Assert.Equal(ClientKinds.OpenCode, record.ClientKind);
+        Assert.Equal(TokenIds.Default, record.TokenId);
         Assert.Equal("gpt-5", record.RequestedModel);
         Assert.Equal("gpt-5", record.ResponseModel);
         Assert.Equal("req_upstream_1", record.UpstreamRequestId);

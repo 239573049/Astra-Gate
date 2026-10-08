@@ -50,11 +50,69 @@ description: 添加上游服务商、配置密钥与计费、测试连接
 | **认证** | API Key（加密存储，留空不修改；只显示掩码）、认证方式（Bearer / x-api-key / x-goog-api-key / query-key） |
 | **接口** | 每种协议一个地址；客户端协议与上游不同时 Astra 自动转换，转换时按「上游协议优先级」选择接口 |
 | **计费** | **价格表**（决定用哪套模型价格，如 `deepseek`、`openrouter`）与 **价格倍率**（中转站按官方价 ×1.1 计费的场景） |
+| **用量查询** | 查询余额或套餐用量（见下文「用量查询」）；订阅类提供商在账号区查看额度，没有这一分区 |
 | **高级** | 仅此提供商生效的 HTTP 代理、额外请求头、适配器设置（JSON） |
+
+## 用量查询
+
+API Key 类提供商可以在 **设置 → 用量查询** 里打开余额 / 套餐用量查询（参考 cc-switch 的同名功能）。打开后，结果显示在提供商卡片底部和托盘的「额度与余额」里，并按间隔在后台刷新。
+
+- **默认关闭**：同一个地址可能同时有余额接口和套餐接口，Astra 不替你猜，需要手动启用。
+- **凭据**：默认用提供商自己的 API Key 和认证方式（Bearer / x-api-key / query-key 等）发请求，不需要再填一遍。
+- **失败只显示，不影响使用**：查询失败（Key 无查询权限、限流、超时……）只在卡片上显示错误，并保留上一次成功的结果；提供商照常可用。
+- **自动查询间隔**：全局默认 30 分钟（**设置 → 通用 → 提供商用量查询**，0 = 关闭），单个提供商可以单独设置；连续失败 3 次后间隔自动放大到 4 倍，成功一次即恢复。
+
+内置模板（根据提供商模板或接口域名自动选中，也可以手动换）：
+
+| 模板 | 类型 | 请求 |
+| --- | --- | --- |
+| DeepSeek | 余额 | `GET {origin}/user/balance` |
+| OpenRouter | 余额 | `GET {origin}/api/v1/credits` |
+| SiliconFlow | 余额 | `GET {origin}/v1/user/info`（`.cn` 按人民币，`.com` 按美元） |
+| StepFun | 余额 | `GET {origin}/v1/accounts` |
+| Novita AI | 余额 | `GET {origin}/v3/user/balance` |
+| New API / One API | 余额 | `GET {origin}/api/user/self`，需要填 **用户 ID** 和 **系统访问令牌**（个人设置里生成，不是 `sk-` 开头的 API Key；令牌加密保存，界面只显示「已保存」） |
+| Kimi For Coding | 套餐用量 | `GET https://api.kimi.com/coding/v1/usages` |
+| GLM Coding Plan | 套餐用量 | `GET {origin}/api/monitor/usage/quota/limit`（open.bigmodel.cn / api.z.ai） |
+| MiniMax Coding Plan | 套餐用量 | `GET {origin}/v1/api/openplatform/coding_plan/remains` |
+
+`{origin}` 是提供商接口地址的协议 + 域名（例如 `https://api.deepseek.com`）。火山方舟的用量接口需要火山引擎 AK/SK 签名，暂不提供内置模板。
+
+### 自定义查询
+
+模板选「自定义」后，填写请求（方法、URL、认证方式、请求头）和**提取规则**。和 cc-switch 用 JavaScript 写提取函数不同，Astra 的提取规则是声明式 JSON：
+
+```json
+{
+  "isValid": "success",
+  "invalidMessage": "message",
+  "planLabel": "data.group",
+  "unit": { "$const": "USD" },
+  "remaining": { "$div": ["data.quota", 500000] },
+  "used": { "$div": ["data.used_quota", 500000] },
+  "total": { "$div": [{ "$add": ["data.quota", "data.used_quota"] }, 500000] }
+}
+```
+
+- 字符串是响应里的**路径**（`data.balance`、`items[0].total`），数字是常量；字符串常量要写成 `{ "$const": "USD" }`。
+- 数组表示候选：按顺序取第一个存在的值（相当于 `a || b`）。
+- 运算：`$add`、`$sub`、`$mul`、`$div`、`$scale`（配 `by`）、`$pctUsed`（`{used, total}` → 已用百分比）、`$eq`、`$not`、`$case`（`{on, cases, default}`）、`$var`（`host`、`origin`、`baseUrl` 等变量）、`$time`（秒 / 毫秒时间戳或日期字符串）。
+- 字段与 cc-switch 提取器的返回值一一对应：`isValid`、`invalidMessage`、`remaining`、`total`、`used`、`unit`、`planName`、`extra`；多个套餐 / 窗口用 `plans` 数组，每项可以用 `each` 遍历数组、`where` 过滤、`first` 只取第一个、`when` 条件显示，另有 `usedPercent`、`resetsAt`、`windowMinutes`。
+- 取不到的字段就是空的，**绝不会被当成 0**。
+- URL 和请求头里可以用占位符 `{{origin}}`、`{{baseUrl}}`、`{{host}}`、`{{apiKey}}`，以及 `{{userId}}`、`{{accessToken}}`（在表单里填写，令牌加密保存）。
+
+**测试查询** 用当前未保存的配置发一次真实请求，显示请求地址、HTTP 状态、提取结果和**已脱敏的原始响应**（其中的 Key 与令牌会被替换成 `••••`），方便对照响应结构写提取规则。
 
 ## 测试连接
 
-右上角 **测试连接** 会用当前配置向上游发一条真实请求，成功显示时延与所用模型（绿色徽标），失败显示上游错误原文——排查 Key 与地址问题最快的办法。
+右上角 **测试连接** 会打开测试弹窗，用当前配置向上游发**真实请求**——这是排查 Key、地址与额度问题最快的办法。
+
+- **单模型**：左侧选择测试模型（可选列表外的任意模型 ID）、测试协议（仅该提供商已配置的端点协议）、是否流式、最大输出 tokens 与提示词；右侧实时显示 **HTTP 响应 / 首字等待 / 首字总延迟 / 完整耗时** 四项指标，以及提供商回复的 **预览**（流式边生成边显示）与 **原文**（网关处理后的响应正文，凭据已脱敏，可复制）。
+- **批量模型**：勾选多个模型（最多 3 个并发测试），表格逐行显示状态与耗时；「停止后续」取消尚未开始的模型，进行中的请求跑完；点「查看」可看单个模型的详细结果。
+
+<Callout type="warn" title="测试会消耗额度">
+  每次测试都是一条真实请求：会应用隐私护栏、写入请求日志并计入用量与费用，且失败不会自动重试。需要多次尝试时请留意额度。
+</Callout>
 
 <Callout type="warn" title="删除提供商前">
   如果还有客户端绑定在这个提供商上，Astra 会拒绝删除并提示先为它们切换提供商，避免客户端突然失联。

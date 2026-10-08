@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import type { ContextMenuItem, MenuCommand, ThemeSource } from './shared/chrome';
+import type { TrayPrefs } from './shared/prefs';
+import type { TrayPanelCommand, TrayPanelState } from './shared/trayPanel';
 
 /**
  * The renderer needs apiBase synchronously at page load, so the values are
@@ -49,6 +51,21 @@ const bridge = {
   showContextMenu: (items: ContextMenuItem[]) =>
     ipcRenderer.invoke('astra:context-menu', items) as Promise<string | null>,
   onMenuCommand: (cb: (command: MenuCommand) => void) => subscribe('astra:menu-command', cb),
+  /** Tray panel: its configuration (Settings › Tray panel) and the panel window's link to the main process. */
+  tray: {
+    getPrefs: () => ipcRenderer.invoke('astra:tray-prefs-get') as Promise<TrayPrefs>,
+    /** Saves (after validation) and broadcasts to every window; resolves with what was stored. */
+    setPrefs: (prefs: TrayPrefs) => ipcRenderer.invoke('astra:tray-prefs-set', prefs) as Promise<TrayPrefs>,
+    onPrefsChanged: (cb: (prefs: TrayPrefs) => void) => subscribe('astra:tray-prefs-changed', cb),
+    getState: () => ipcRenderer.invoke('astra:tray-state-get') as Promise<TrayPanelState>,
+    onStateChanged: (cb: (state: TrayPanelState) => void) => subscribe('astra:tray-state-changed', cb),
+    command: (command: TrayPanelCommand) => ipcRenderer.invoke('astra:tray-command', command) as Promise<void>,
+    /** Panel window only: menu-bar title (macOS) and tooltip detail line. */
+    setTitle: (title: string, detail: string) => ipcRenderer.send('astra:tray-title', { title, detail }),
+    /** Panel window only: content height in CSS px, so the window fits it. */
+    resize: (height: number) => ipcRenderer.send('astra:tray-panel-resize', height),
+    onVisibilityChanged: (cb: (visible: boolean) => void) => subscribe('astra:tray-panel-visibility', cb),
+  },
 };
 
 export type AstraBridge = typeof bridge;

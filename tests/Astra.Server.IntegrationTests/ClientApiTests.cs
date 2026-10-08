@@ -4,9 +4,11 @@ using Astra.Clients.Config;
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Tokens;
 using Astra.Gateway.Pipeline;
 using Astra.Server.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Astra.Server.IntegrationTests;
 
@@ -61,10 +63,12 @@ public class ClientApiTests
         Assert.Contains("# user config", text);
         Assert.Equal("{\"user\":\"untouched\"}\n", await File.ReadAllTextAsync(authFile));
         var record = await host.Db.Clients.GetAsync("codex");
-        Assert.NotNull(record!.LocalKeyEnc);
-        Assert.NotNull(record.LocalKeyHash);
-        Assert.DoesNotContain(record.LocalKeyEnc!, enabled.ToJsonString());
-        Assert.DoesNotContain(record.LocalKeyHash!, enabled.ToJsonString());
+        Assert.Equal(TokenIds.Default, record!.TokenId);
+        Assert.Equal(TokenIds.Default, enabled["tokenId"]!.GetValue<string>());
+        // The config holds "<default token>.codex"; the API response never echoes the token.
+        var token = await DefaultTokenAsync(host);
+        Assert.Contains($"experimental_bearer_token = \"{token}.codex\"", text);
+        Assert.DoesNotContain(token, enabled.ToJsonString());
 
         var backups = (await host.GetJsonAsync("/api/clients/codex/backups")).AsArray();
         Assert.Contains(backups, b => b!["firstWrite"]!.GetValue<bool>());
@@ -88,38 +92,120 @@ public class ClientApiTests
         Assert.Equal(Original, await File.ReadAllTextAsync(config));
         await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { model = "gpt-5" });
         var applied = await File.ReadAllTextAsync(config);
-        var keyHash = (await host.Db.Clients.GetAsync("codex"))!.LocalKeyHash;
 
         (status, bound) = await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = second.Id });
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.True(bound!["enabled"]!.GetValue<bool>());
         Assert.Equal(second.Id, bound["providerId"]!.GetValue<string>());
         Assert.Equal(applied, await File.ReadAllTextAsync(config));
-        Assert.Equal(keyHash, (await host.Db.Clients.GetAsync("codex"))!.LocalKeyHash);
+        Assert.Equal(TokenIds.Default, (await host.Db.Clients.GetAsync("codex"))!.TokenId);
     }
 
     [Fact]
-    public async Task Rotate_Key_Changes_Only_Astra_Config_And_Updates_Key_Hash()
+    public async Task Enable_With_A_Chosen_Token_Writes_It_And_Rotate_Key_Is_Gone()
+    {
+        await using var host = await TestHost.StartAsync();
+        var p = await AddProvider(host);
+        var config = await WriteCodexConfig(host);
+        var (status, created) = await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Work" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var tokenId = created!["id"]!.GetValue<string>();
+        (status, var info) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = p.Id, tokenId });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(tokenId, info!["tokenId"]!.GetValue<string>());
+        var (_, secret) = await host.SendAsync(HttpMethod.Post, $"/api/tokens/{tokenId}/reveal");
+        Assert.Contains($"{secret!["token"]!.GetValue<string>()}.codex", await File.ReadAllTextAsync(config));
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { tokenId = "missing" });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/rotate-key");
+        Assert.NotEqual(HttpStatusCode.OK, status);
+    }
+
+    [Fact]
+    public async Task Token_Reset_Rewrites_Only_Astra_Config_Of_Its_Clients()
     {
         await using var host = await TestHost.StartAsync();
         var p = await AddProvider(host);
         var config = await WriteCodexConfig(host);
         await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = p.Id, model = "gpt-5" });
-        var before = await host.Db.Clients.GetAsync("codex");
-        var (status, info) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/rotate-key");
+        var before = await DefaultTokenAsync(host);
+        var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/tokens/{TokenIds.Default}/reset");
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal("enabled", info!["status"]!.GetValue<string>());
-        var after = await host.Db.Clients.GetAsync("codex");
-        Assert.NotEqual(before!.LocalKeyHash, after!.LocalKeyHash);
+        Assert.Equal(["codex"], result!["rewritten"]!.AsArray().Select(k => k!.GetValue<string>()));
+        var after = await DefaultTokenAsync(host);
+        Assert.NotEqual(before, after);
         var text = await File.ReadAllTextAsync(config);
+        Assert.Contains($"{after}.codex", text);
         Assert.Contains("# user config", text);
         Assert.Contains("trust_level = \"trusted\"", text);
+        Assert.Empty(await OutdatedKinds(host));
         await host.SendAsync(HttpMethod.Post, "/api/clients/codex/disable");
         Assert.Equal(Original, await File.ReadAllTextAsync(config));
     }
 
     [Fact]
-    public async Task Drifted_Config_Is_Not_Overwritten_On_Disable_Or_Key_Rotation()
+    public async Task Deleting_A_Token_Moves_Its_Clients_To_The_Default_Token()
+    {
+        await using var host = await TestHost.StartAsync();
+        var p = await AddProvider(host);
+        var config = await WriteCodexConfig(host);
+        var (_, created) = await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Temp" });
+        var tokenId = created!["id"]!.GetValue<string>();
+        await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = p.Id, tokenId });
+
+        var (status, _) = await host.SendAsync(HttpMethod.Delete, $"/api/tokens/{TokenIds.Default}");
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        (status, var result) = await host.SendAsync(HttpMethod.Delete, $"/api/tokens/{tokenId}");
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["codex"], result!["rewritten"]!.AsArray().Select(k => k!.GetValue<string>()));
+        Assert.Equal(TokenIds.Default, (await host.Db.Clients.GetAsync("codex"))!.TokenId);
+        Assert.Contains($"{await DefaultTokenAsync(host)}.codex", await File.ReadAllTextAsync(config));
+        Assert.Null(await host.Db.Tokens.GetAsync(tokenId));
+    }
+
+    [Fact]
+    public async Task Migration_Marker_Rewrites_Enabled_Clients_Once_And_Leaves_Drifted_Ones()
+    {
+        await using var host = await TestHost.StartAsync();
+        var p = await AddProvider(host);
+        var codex = await WriteCodexConfig(host);
+        var opencode = Path.Combine(host.ClientHome, ".config", "opencode", "opencode.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(opencode)!);
+        await File.WriteAllTextAsync(opencode, "{}\n");
+        await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = p.Id });
+        await host.SendAsync(HttpMethod.Post, "/api/clients/opencode/enable", new { providerId = p.Id });
+        // Simulate configs written before tokens existed: the old per-client key is what Astra recorded and wrote.
+        var token = await DefaultTokenAsync(host);
+        foreach (var file in new[] { codex, opencode })
+            await File.WriteAllTextAsync(file, (await File.ReadAllTextAsync(file)).Replace($"{token}.", "astra-legacy-"));
+        foreach (var e in host.Db.ClientConfigState.List("codex").Concat(host.Db.ClientConfigState.List("opencode")))
+        {
+            e.AppliedValueJson = e.AppliedValueJson?.Replace($"{token}.", "astra-legacy-");
+            host.Db.ClientConfigState.Upsert(e);
+        }
+        // The user edited OpenCode's Astra entry: it is drifted and must not be touched.
+        var drifted = (await File.ReadAllTextAsync(opencode)).Replace("\"Astra\"", "\"My Astra\"");
+        await File.WriteAllTextAsync(opencode, drifted);
+        await host.Db.Settings.SetAsync(TokenMigrationWorker.MarkerKey, new { pending = true });
+
+        var worker = host.App.Services.GetServices<IHostedService>().OfType<TokenMigrationWorker>().Single();
+        var result = await worker.RunAsync(CancellationToken.None);
+        Assert.Equal(["codex"], result!.Rewritten);
+        Assert.Equal(["opencode"], result.Skipped);
+        Assert.Contains($"{token}.codex", await File.ReadAllTextAsync(codex));
+        Assert.Equal(drifted, await File.ReadAllTextAsync(opencode));
+        Assert.Null(await worker.RunAsync(CancellationToken.None)); // marker cleared
+    }
+
+    private static async Task<string> DefaultTokenAsync(TestHost host)
+    {
+        var (_, secret) = await host.SendAsync(HttpMethod.Post, $"/api/tokens/{TokenIds.Default}/reveal");
+        return secret!["token"]!.GetValue<string>();
+    }
+
+    [Fact]
+    public async Task Drifted_Config_Is_Not_Overwritten_On_Disable_Or_Token_Reset()
     {
         await using var host = await TestHost.StartAsync();
         var p = await AddProvider(host);
@@ -127,8 +213,9 @@ public class ClientApiTests
         await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = p.Id });
         var edited = (await File.ReadAllTextAsync(config)).Replace("model_provider = \"astra\"", "model_provider = \"some-other-provider\"");
         await File.WriteAllTextAsync(config, edited);
-        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/rotate-key");
-        Assert.Equal(HttpStatusCode.Conflict, status);
+        var (status, reset) = await host.SendAsync(HttpMethod.Post, $"/api/tokens/{TokenIds.Default}/reset");
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["codex"], reset!["skipped"]!.AsArray().Select(k => k!.GetValue<string>()));
         Assert.Equal(edited, await File.ReadAllTextAsync(config));
         (status, var body) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/disable");
         Assert.Equal(HttpStatusCode.OK, status);
@@ -348,6 +435,57 @@ public class ClientApiTests
         var json = JsonNode.Parse(File.ReadAllText(config), documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
         return json["provider"]!["astra"]!["models"]!.AsObject().Select(m => m.Key).Order(StringComparer.Ordinal).ToList();
     }
+
+    /// <summary>Claude Code model slots: only the chosen ones are written, clearing one reverts it, and an empty
+    /// selection never touches the file (the "defaults to empty" contract of the client page).</summary>
+    [Fact]
+    public async Task Claude_Code_Model_Slots_Are_Optional_And_Clearing_One_Reverts_It()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        var settings = Path.Combine(host.ClientHome, ".claude", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
+        await File.WriteAllTextAsync(settings, """
+            {
+              "env": {
+                "EDITOR": "vim"
+              }
+            }
+            """);
+
+        var (status, info) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable",
+            EnableBody(provider.Id, new JsonObject { ["ANTHROPIC_MODEL"] = "gpt-5" }));
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("gpt-5", EnvOf(settings)["ANTHROPIC_MODEL"]!.GetValue<string>());
+        Assert.Null(EnvOf(settings)["ANTHROPIC_DEFAULT_HAIKU_MODEL"]); // an empty slot writes nothing
+        Assert.Equal("gpt-5", info!["extras"]!["models"]!["ANTHROPIC_MODEL"]!.GetValue<string>());
+
+        // Pick a tier and clear the default model at the same time.
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable",
+            EnableBody(null, new JsonObject { ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "gpt-5-mini" }));
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Null(EnvOf(settings)["ANTHROPIC_MODEL"]);
+        Assert.Equal("gpt-5-mini", EnvOf(settings)["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
+
+        // Unsetting the last slot leaves the file as it was before Astra touched it.
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable", EnableBody(null, new JsonObject()));
+        Assert.Equal(HttpStatusCode.OK, status);
+        var env = EnvOf(settings);
+        Assert.Null(env["ANTHROPIC_MODEL"]);
+        Assert.Null(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]);
+        Assert.Equal("vim", env["EDITOR"]!.GetValue<string>());
+    }
+
+    /// <summary>An enable body; the Claude Code model slots keep their exact env-var names, so they go in as JSON.</summary>
+    private static JsonObject EnableBody(string? providerId, JsonObject models)
+    {
+        var body = new JsonObject { ["extras"] = new JsonObject { ["models"] = models } };
+        if (providerId is not null) body["providerId"] = providerId;
+        return body;
+    }
+
+    private static JsonNode EnvOf(string settingsFile) =>
+        JsonNode.Parse(File.ReadAllText(settingsFile), documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!["env"]!;
 
     private static async Task<string> WriteCodexConfig(TestHost host)
     {

@@ -2,6 +2,8 @@
 
 [English](README.md) | 简体中文
 
+[![LINUX DO · 新的理想型社区](https://cdn3.ldstatic.com/original/4X/d/6/5/d65def8cc0c413f318bee2bcd1c774bc4ad109a8.png)](https://linux.do/)
+
 **Astra** 是一个运行在你自己电脑上的 **本地 AI 网关**（local AI gateway）。它在你的 AI
 客户端（Codex、Claude Code、Gemini CLI 等）与 AI 服务商（Anthropic、OpenAI、DeepSeek、
 OpenRouter 等）之间放了一个本机中转层：

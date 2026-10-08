@@ -165,19 +165,19 @@ public sealed class AnthropicResponseEncoder : IResponseEncoder
             switch (b.Kind)
             {
                 case BlockKind.Text:
-                    content.Add(new JsonObject { ["type"] = "text", ["text"] = b.Text.ToString() });
+                    content.AddNode(new JsonObject { ["type"] = "text", ["text"] = b.Text.ToString() });
                     break;
                 case BlockKind.Reasoning when b.Redacted:
-                    content.Add(new JsonObject { ["type"] = "redacted_thinking", ["data"] = b.Encrypted ?? "" });
+                    content.AddNode(new JsonObject { ["type"] = "redacted_thinking", ["data"] = b.Encrypted ?? "" });
                     break;
                 case BlockKind.Reasoning:
                     var thinking = new JsonObject { ["type"] = "thinking", ["thinking"] = b.Text.ToString() };
                     if (b.Signature is { Length: > 0 } signature)
                         thinking["signature"] = signature;
-                    content.Add(thinking);
+                    content.AddNode(thinking);
                     break;
                 case BlockKind.ToolCall:
-                    content.Add(new JsonObject
+                    content.AddNode(new JsonObject
                     {
                         ["type"] = "tool_use",
                         ["id"] = b.ToolCallId ?? "",

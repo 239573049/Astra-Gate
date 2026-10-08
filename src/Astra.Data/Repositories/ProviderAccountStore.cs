@@ -57,7 +57,22 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
             VALUES (@id, @provider_id, @display_name, @account_email, @plan, @access_token_enc,
                     @refresh_token_enc, @expires_at_utc, @status, @last_refresh_at_utc,
                     @extra_json, @created_at, @updated_at)
-            """, Params(account));
+            """, new
+        {
+            id = account.Id,
+            provider_id = account.ProviderId,
+            display_name = account.DisplayName,
+            account_email = account.AccountEmail,
+            plan = account.Plan,
+            access_token_enc = account.AccessTokenEnc,
+            refresh_token_enc = account.RefreshTokenEnc,
+            expires_at_utc = account.ExpiresAtUtc is { } exp ? DateTimeOffsetHandler.ToStorage(exp) : null,
+            status = account.Status,
+            last_refresh_at_utc = account.LastRefreshAtUtc is { } lr ? DateTimeOffsetHandler.ToStorage(lr) : null,
+            extra_json = Json.Serialize(account.Extra),
+            created_at = DateTimeOffsetHandler.ToStorage(account.CreatedAt),
+            updated_at = DateTimeOffsetHandler.ToStorage(account.UpdatedAt),
+        });
     }
 
     public async Task<bool> UpdateAsync(ProviderAccount account, CancellationToken ct = default)
@@ -71,7 +86,21 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
                 expires_at_utc = @expires_at_utc, status = @status, last_refresh_at_utc = @last_refresh_at_utc,
                 extra_json = @extra_json, updated_at = @updated_at
             WHERE id = @id
-            """, Params(account)) > 0;
+            """, new
+        {
+            id = account.Id,
+            provider_id = account.ProviderId,
+            display_name = account.DisplayName,
+            account_email = account.AccountEmail,
+            plan = account.Plan,
+            access_token_enc = account.AccessTokenEnc,
+            refresh_token_enc = account.RefreshTokenEnc,
+            expires_at_utc = account.ExpiresAtUtc is { } exp ? DateTimeOffsetHandler.ToStorage(exp) : null,
+            status = account.Status,
+            last_refresh_at_utc = account.LastRefreshAtUtc is { } lr ? DateTimeOffsetHandler.ToStorage(lr) : null,
+            extra_json = Json.Serialize(account.Extra),
+            updated_at = DateTimeOffsetHandler.ToStorage(account.UpdatedAt),
+        }) > 0;
     }
 
     public async Task<bool> UpdateTokensAsync(
@@ -110,57 +139,42 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
         await using var conn = await factory.OpenAsync(ct);
         return await conn.ExecuteAsync("DELETE FROM provider_accounts WHERE id = @id", new { id }) > 0;
     }
+}
 
-    private static object Params(ProviderAccount a) => new
+// Dapper.AOT only materializes rows into types it can see from outside the store class; nested
+// private types are silently left on vanilla Dapper, which dies under Native AOT (see its FAQ).
+internal sealed class AccountRow
+{
+    public string Id { get; set; } = "";
+    public string ProviderId { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string? AccountEmail { get; set; }
+    public string? Plan { get; set; }
+    public string? AccessTokenEnc { get; set; }
+    public string? RefreshTokenEnc { get; set; }
+    public string? ExpiresAtUtc { get; set; }
+    public string Status { get; set; } = "";
+    public string? LastRefreshAtUtc { get; set; }
+    public string? ExtraJson { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public ProviderAccount ToAccount() => new()
     {
-        id = a.Id,
-        provider_id = a.ProviderId,
-        display_name = a.DisplayName,
-        account_email = a.AccountEmail,
-        plan = a.Plan,
-        access_token_enc = a.AccessTokenEnc,
-        refresh_token_enc = a.RefreshTokenEnc,
-        expires_at_utc = a.ExpiresAtUtc is { } exp ? DateTimeOffsetHandler.ToStorage(exp) : null,
-        status = a.Status,
-        last_refresh_at_utc = a.LastRefreshAtUtc is { } lr ? DateTimeOffsetHandler.ToStorage(lr) : null,
-        extra_json = Json.Serialize(a.Extra),
-        created_at = DateTimeOffsetHandler.ToStorage(a.CreatedAt),
-        updated_at = DateTimeOffsetHandler.ToStorage(a.UpdatedAt),
+        Id = Id,
+        ProviderId = ProviderId,
+        DisplayName = DisplayName,
+        AccountEmail = AccountEmail,
+        Plan = Plan,
+        AccessTokenEnc = AccessTokenEnc,
+        RefreshTokenEnc = RefreshTokenEnc,
+        ExpiresAtUtc = ExpiresAtUtc is null ? null : DateTimeOffset.Parse(ExpiresAtUtc, CultureInfo.InvariantCulture),
+        Status = Status,
+        LastRefreshAtUtc = LastRefreshAtUtc is null
+            ? null
+            : DateTimeOffset.Parse(LastRefreshAtUtc, CultureInfo.InvariantCulture),
+        Extra = Json.Deserialize<JsonObject>(ExtraJson) ?? new JsonObject(),
+        CreatedAt = CreatedAt,
+        UpdatedAt = UpdatedAt,
     };
-
-    private sealed class AccountRow
-    {
-        public string Id { get; set; } = "";
-        public string ProviderId { get; set; } = "";
-        public string DisplayName { get; set; } = "";
-        public string? AccountEmail { get; set; }
-        public string? Plan { get; set; }
-        public string? AccessTokenEnc { get; set; }
-        public string? RefreshTokenEnc { get; set; }
-        public string? ExpiresAtUtc { get; set; }
-        public string Status { get; set; } = "";
-        public string? LastRefreshAtUtc { get; set; }
-        public string? ExtraJson { get; set; }
-        public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset UpdatedAt { get; set; }
-
-        public ProviderAccount ToAccount() => new()
-        {
-            Id = Id,
-            ProviderId = ProviderId,
-            DisplayName = DisplayName,
-            AccountEmail = AccountEmail,
-            Plan = Plan,
-            AccessTokenEnc = AccessTokenEnc,
-            RefreshTokenEnc = RefreshTokenEnc,
-            ExpiresAtUtc = ExpiresAtUtc is null ? null : DateTimeOffset.Parse(ExpiresAtUtc, CultureInfo.InvariantCulture),
-            Status = Status,
-            LastRefreshAtUtc = LastRefreshAtUtc is null
-                ? null
-                : DateTimeOffset.Parse(LastRefreshAtUtc, CultureInfo.InvariantCulture),
-            Extra = Json.Deserialize<JsonObject>(ExtraJson) ?? new JsonObject(),
-            CreatedAt = CreatedAt,
-            UpdatedAt = UpdatedAt,
-        };
-    }
 }

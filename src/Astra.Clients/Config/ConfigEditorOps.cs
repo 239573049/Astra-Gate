@@ -53,7 +53,7 @@ internal abstract class ConfigEditorOps
             if (change.Kind == ConfigChangeKind.Table)
             {
                 // The "after" of a table change is a JSON object mapping item keys to raw TOML value texts.
-                var items = JsonSerializer.Deserialize<JsonObject>(change.After, Json.Storage) ?? new JsonObject();
+                var items = JsonSerializer.Deserialize(change.After, JsonContexts.Info<JsonObject>(Json.Storage)) ?? new JsonObject();
                 _editor = _editor.InsertTable(change.KeyPath, items
                     .Select(p => new KeyValuePair<string, string>(p.Key, (p.Value as JsonValue)?.GetValue<string>()
                         ?? throw new EditorException($"Table change for '{change.KeyPath}' has a non-string item value for '{p.Key}'.")))

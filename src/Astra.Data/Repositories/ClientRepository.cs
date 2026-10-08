@@ -10,7 +10,7 @@ namespace Astra.Data.Repositories;
 public sealed class ClientRepository
 {
     private const string ClientSelect = """
-        SELECT kind, enabled, local_key_enc, local_key_hash, local_key_prefix, selected_model, extra_json, applied_at
+        SELECT kind, enabled, token_id, selected_model, extra_json, applied_at
         FROM clients
         """;
 
@@ -24,7 +24,7 @@ public sealed class ClientRepository
     public async Task<IReadOnlyList<ClientRecord>> ListAsync(CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        return (await conn.QueryAsync<ClientRecord>($"{ClientSelect} ORDER BY kind")).AsList();
+        return (await conn.QueryAsync<ClientRecord>($"{ClientSelect} ORDER BY kind")).ToList();
     }
 
     public async Task<ClientRecord?> GetAsync(string kind, CancellationToken ct = default)
@@ -38,13 +38,11 @@ public sealed class ClientRepository
     {
         await using var conn = await _factory.OpenAsync(ct);
         await conn.ExecuteAsync("""
-            INSERT INTO clients(kind, enabled, local_key_enc, local_key_hash, local_key_prefix, selected_model, extra_json, applied_at)
-            VALUES (@kind, @enabled, @local_key_enc, @local_key_hash, @local_key_prefix, @selected_model, @extra_json, @applied_at)
+            INSERT INTO clients(kind, enabled, token_id, selected_model, extra_json, applied_at)
+            VALUES (@kind, @enabled, @token_id, @selected_model, @extra_json, @applied_at)
             ON CONFLICT(kind) DO UPDATE SET
                 enabled = excluded.enabled,
-                local_key_enc = excluded.local_key_enc,
-                local_key_hash = excluded.local_key_hash,
-                local_key_prefix = excluded.local_key_prefix,
+                token_id = excluded.token_id,
                 selected_model = excluded.selected_model,
                 extra_json = excluded.extra_json,
                 applied_at = excluded.applied_at
@@ -52,13 +50,28 @@ public sealed class ClientRepository
         {
             kind = record.Kind,
             enabled = record.Enabled,
-            local_key_enc = record.LocalKeyEnc,
-            local_key_hash = record.LocalKeyHash,
-            local_key_prefix = record.LocalKeyPrefix,
+            token_id = record.TokenId,
             selected_model = record.SelectedModel,
             extra_json = record.ExtraJson,
             applied_at = record.AppliedAt is { } applied ? DateTimeOffsetHandler.ToStorage(applied) : null,
         });
+    }
+
+    /// <summary>Clients whose configuration uses the token (<c>token_id</c>; null rows count as the default token).</summary>
+    public async Task<IReadOnlyList<ClientRecord>> ListByTokenAsync(string tokenId, bool isDefault, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        var where = isDefault ? "token_id = @token_id OR token_id IS NULL" : "token_id = @token_id";
+        return (await conn.QueryAsync<ClientRecord>($"{ClientSelect} WHERE {where} ORDER BY kind", new { token_id = tokenId })).ToList();
+    }
+
+    /// <summary>Moves every client from one token to another (before deleting <paramref name="fromTokenId"/>). Returns the moved kinds.</summary>
+    public async Task<IReadOnlyList<string>> ReassignTokenAsync(string fromTokenId, string toTokenId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<string>(
+            "UPDATE clients SET token_id = @to WHERE token_id = @from RETURNING kind",
+            new { from = fromTokenId, to = toTokenId })).ToList();
     }
 
     /// <summary>Creates the client row when missing (not enabled) — used before writing bindings/state.</summary>
@@ -113,7 +126,7 @@ public sealed class ClientRepository
         await using var conn = await _factory.OpenAsync(ct);
         return (await conn.QueryAsync<ClientBinding>(
             $"{BindingSelect} WHERE client_kind = @client_kind ORDER BY priority",
-            new { client_kind = clientKind })).AsList();
+            new { client_kind = clientKind })).ToList();
     }
 
     /// <summary>Bindings pointing at the provider — check before deleting a bound provider.</summary>
@@ -122,7 +135,7 @@ public sealed class ClientRepository
         await using var conn = await _factory.OpenAsync(ct);
         return (await conn.QueryAsync<ClientBinding>(
             $"{BindingSelect} WHERE provider_id = @provider_id ORDER BY client_kind",
-            new { provider_id = providerId })).AsList();
+            new { provider_id = providerId })).ToList();
     }
 
     /// <summary>Removes the binding with the given priority; true when one was removed.</summary>

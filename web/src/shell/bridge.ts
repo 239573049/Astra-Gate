@@ -2,13 +2,15 @@
 // in a normal browser it is absent and the shell is "web".
 
 export type ThemeSource = 'system' | 'light' | 'dark';
-export type NavTarget = 'overview' | 'requests' | 'clients' | 'providers' | 'models' | 'privacy' | 'settings';
+export type NavTarget = 'overview' | 'requests' | 'clients' | 'tokens' | 'providers' | 'models' | 'privacy' | 'settings';
 export type MenuCommand =
   | `nav:${NavTarget}`
   | 'find'
   | 'refresh'
   | 'new-provider'
-  | 'toggle-sidebar';
+  | 'toggle-sidebar'
+  /** Settings › Tray panel tab (the tray panel's gear button). */
+  | 'settings:tray';
 
 export interface ContextMenuItem {
   id?: string;
@@ -17,6 +19,27 @@ export interface ContextMenuItem {
   checked?: boolean;
   type?: 'normal' | 'separator' | 'checkbox';
 }
+
+/** What the menu bar shows next to the tray icon. Mirrors desktop/src/shared/prefs.ts. */
+export const TRAY_TITLE_MODES = ['none', 'requests', 'tokens', 'cost', 'quota', 'alerts'] as const;
+export type TrayTitleMode = (typeof TRAY_TITLE_MODES)[number];
+/** Tray panel blocks, in display order. */
+export const TRAY_SECTIONS = ['overview', 'cost', 'chart', 'topModel', 'compareYesterday', 'cacheHitRate', 'quota', 'clients'] as const;
+export type TraySection = (typeof TRAY_SECTIONS)[number];
+export interface TrayPrefs {
+  title: TrayTitleMode;
+  sections: Record<TraySection, boolean>;
+}
+
+/** Service state the tray panel shows; pushed by the main process. Mirrors desktop/src/shared/trayPanel.ts. */
+export interface TrayPanelState {
+  running: boolean;
+  port: number | null;
+  activity: 'starting' | 'stopping' | 'restarting' | null;
+  apiVersionMismatch: boolean;
+  updateAvailable: string | null;
+}
+export type TrayPanelCommand = 'open' | 'open-settings' | 'start' | 'stop' | 'restart' | 'quit' | 'hide' | 'menu' | 'check-updates';
 
 /** Mirrors desktop/src/preload.ts. */
 export interface DesktopBridge {
@@ -35,6 +58,19 @@ export interface DesktopBridge {
   startService(): Promise<{ ok: boolean; error?: string | null }>;
   showContextMenu(items: ContextMenuItem[]): Promise<string | null>;
   onMenuCommand(cb: (command: MenuCommand) => void): () => void;
+  tray: {
+    getPrefs(): Promise<TrayPrefs>;
+    setPrefs(prefs: TrayPrefs): Promise<TrayPrefs>;
+    onPrefsChanged(cb: (prefs: TrayPrefs) => void): () => void;
+    getState(): Promise<TrayPanelState>;
+    onStateChanged(cb: (state: TrayPanelState) => void): () => void;
+    command(command: TrayPanelCommand): Promise<void>;
+    /** Panel window only: menu-bar title (macOS) and tooltip detail line. */
+    setTitle(title: string, detail: string): void;
+    /** Panel window only: content height in CSS px. */
+    resize(height: number): void;
+    onVisibilityChanged(cb: (visible: boolean) => void): () => void;
+  };
 }
 
 declare global {

@@ -39,14 +39,18 @@ public sealed class ServerOptions
         typeof(ServerOptions).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
             .Split('+')[0] ?? "0.0.0";
 
-    private static readonly JsonSerializerOptions FileJson = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions FileJson = new(JsonSerializerDefaults.Web)
+    {
+        WriteIndented = true,
+        TypeInfoResolver = JsonContexts.Resolver,
+    };
 
     public static ServerOptions Load(AstraPaths paths)
     {
         if (!File.Exists(paths.ConfigFile)) return new ServerOptions();
         try
         {
-            return JsonSerializer.Deserialize<ServerOptions>(File.ReadAllText(paths.ConfigFile), FileJson) ?? new ServerOptions();
+            return JsonSerializer.Deserialize(File.ReadAllText(paths.ConfigFile), JsonContexts.Info<ServerOptions>(FileJson)) ?? new ServerOptions();
         }
         catch (JsonException ex)
         {
@@ -56,7 +60,7 @@ public sealed class ServerOptions
 
     public void Save(AstraPaths paths)
     {
-        File.WriteAllText(paths.ConfigFile, JsonSerializer.Serialize(this, FileJson));
+        File.WriteAllText(paths.ConfigFile, JsonSerializer.Serialize(this, JsonContexts.Info<ServerOptions>(FileJson)));
         AstraPaths.RestrictToOwner(paths.ConfigFile);
     }
 

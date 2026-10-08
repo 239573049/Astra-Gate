@@ -37,18 +37,21 @@ astra status
 1. 点击右上角 **添加提供商**；
 2. 从模板中选择服务商（Anthropic / OpenAI / DeepSeek / OpenRouter…，或「自定义提供商」接入任意兼容接口）；
 3. 填入 API Key（加密保存在本机 `~/.astra/keys`），保存；
-4. 点 **测试连接**，显示「连接正常」即可。
+4. 点 **测试连接** 打开测试弹窗，点「开始测试」，显示「测试成功」与耗时即可。
 
 详细截图：[提供商页教程](/docs/console/providers)。
 
 ## 3. 发出请求
 
-网关对三种主流协议都开放了兼容端点，把客户端的 base URL 指向 Astra 即可：
+网关的每个请求都要带一个**令牌**。首次启动时 Astra 会自动生成「默认令牌」：在控制台的 **令牌** 页为它设置 **直连提供商**（选刚添加的提供商），再点复制按钮拿到令牌（形如 `sk-astra-…`）。
+
+网关对三种主流协议都开放了兼容端点，把 base URL 指向 Astra、带上令牌即可：
 
 <Tabs items={['OpenAI 兼容', 'Anthropic 兼容', 'Gemini 兼容']}>
   <Tab>
     ```bash
     curl http://127.0.0.1:17321/v1/chat/completions \
+      -H "Authorization: Bearer sk-astra-你的令牌" \
       -H "Content-Type: application/json" \
       -d '{
         "model": "deepseek-chat",
@@ -58,7 +61,9 @@ astra status
   </Tab>
   <Tab>
     ```bash
-    curl http://127.0.0.1:17321/anthropic/v1/messages \
+    curl http://127.0.0.1:17321/v1/messages \
+      -H "x-api-key: sk-astra-你的令牌" \
+      -H "anthropic-version: 2023-06-01" \
       -H "Content-Type: application/json" \
       -d '{
         "model": "claude-sonnet-4-5",
@@ -69,7 +74,8 @@ astra status
   </Tab>
   <Tab>
     ```bash
-    curl "http://127.0.0.1:17321/gemini/v1beta/models/gemini-2.5-pro:generateContent" \
+    curl "http://127.0.0.1:17321/v1beta/models/gemini-2.5-pro:generateContent" \
+      -H "x-goog-api-key: sk-astra-你的令牌" \
       -H "Content-Type: application/json" \
       -d '{
         "contents": [{ "parts": [{ "text": "你好，Astra" }] }]
@@ -78,7 +84,7 @@ astra status
   </Tab>
 </Tabs>
 
-请求里的模型名只要存在于模型目录（或在某个提供商下添加过），Astra 就会路由到对应的上游，并在协议不一致时自动转换。
+直接使用令牌的请求会发往该令牌的直连提供商；请求协议与提供商接口不一致时，Astra 会自动转换。没有设置直连提供商的令牌只能通过已启用的客户端使用。
 
 ## 4. 查看结果
 
@@ -92,4 +98,4 @@ astra status
 
 <Screenshot src="/screenshots/clients.png" alt="客户端页面：Codex 与 Claude Code 已启用，其余客户端可一键启用" title="Astra — 客户端" caption="客户端页：一键启用 / 禁用并还原" />
 
-在 **客户端** 页点「启用…」，Astra 会把网关地址与本地密钥写进客户端配置（首次修改前自动备份原文件）。之后切换提供商、切换模型都在控制台完成，客户端无需再动。详见[客户端教程](/docs/console/clients)。
+在 **客户端** 页点「启用…」，Astra 会把网关地址与令牌写进客户端配置（首次修改前自动备份原文件）。之后切换提供商、切换模型都在控制台完成，客户端无需再动。详见[客户端教程](/docs/console/clients)。

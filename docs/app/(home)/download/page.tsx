@@ -1,9 +1,19 @@
+import type { Metadata } from 'next';
 import { PackageOpen } from 'lucide-react';
 
 import { DownloadPanel } from '@/components/download/download-panel';
 import { DEFAULT_CHANNEL, latestVersion, readIndex } from '@/lib/releases';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: '下载桌面客户端',
+  description:
+    '下载 Astra 桌面客户端（macOS / Windows / Linux），安装包内置服务端，无需 Node.js；也可通过 npm 安装 CLI 后一行命令装好桌面端。',
+  alternates: {
+    canonical: '/download',
+  },
+};
 
 export default async function DownloadPage() {
   const index = await readIndex(DEFAULT_CHANNEL);

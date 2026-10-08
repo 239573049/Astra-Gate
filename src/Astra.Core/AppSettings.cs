@@ -28,6 +28,12 @@ public sealed class AppSettings
     /// <summary>Update feed base URL override; null = built-in default, empty = checks disabled.</summary>
     public string? UpdateFeedUrl { get; set; }
 
+    /// <summary>
+    /// Background balance / quota refresh for API-key providers, in minutes (ProviderQuotaWorker).
+    /// 0 turns the background refresh off; a provider's own <c>settings.quota.intervalMinutes</c> wins.
+    /// </summary>
+    public int QuotaAutoIntervalMinutes { get; set; } = 30;
+
     public AppSettings Clone() => Json.Deserialize<AppSettings>(Json.Serialize(this))!;
 }
 

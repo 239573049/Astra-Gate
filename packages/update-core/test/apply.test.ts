@@ -7,6 +7,7 @@ import { applyServerUpdate, UpdateError, type ApplyServerUpdateOptions, type Ser
 import { readInstallInfo, writeInstallInfo } from '../src/install-info.js';
 import { readUpdateState, updatePaths } from '../src/index.js';
 import type { UpdateManifest } from '../src/manifest.js';
+import { pruneBackups } from '../src/swap.js';
 
 const FAKE_BINARY = '#!/bin/sh\necho astra-server\n';
 const REAL_SHA = createHash('sha256').update(FAKE_BINARY).digest('hex');
@@ -34,7 +35,11 @@ class FakeControl implements ServerControl {
 }
 
 /** Writes a fake server package into the staging prefix with controllable bytes. */
-function fakeInstaller(binaryContent: () => string, indexHtml?: string) {
+function fakeInstaller(
+  binaryContent: () => string,
+  indexHtml?: string,
+  nativeLibraries?: Record<string, string>,
+) {
   return async (prefix: string, spec: string): Promise<void> => {
     const at = spec.lastIndexOf('@');
     const pkg = spec.slice(0, at);
@@ -44,6 +49,9 @@ function fakeInstaller(binaryContent: () => string, indexHtml?: string) {
     if (indexHtml !== undefined) {
       fs.mkdirSync(path.join(path.dirname(bin), 'wwwroot'), { recursive: true });
       fs.writeFileSync(path.join(path.dirname(bin), 'wwwroot', 'index.html'), indexHtml);
+    }
+    for (const [name, content] of Object.entries(nativeLibraries ?? {})) {
+      fs.writeFileSync(path.join(path.dirname(bin), name), content);
     }
   };
 }
@@ -122,6 +130,38 @@ describe('applyServerUpdate', () => {
     const backups = fs.readdirSync(backupDir);
     expect(backups).toHaveLength(1);
     expect(backups[0]).toContain('0.1.0');
+  });
+
+  it('snapshots the previous companion libraries with the rollback backup', async () => {
+    const h = harness(tmp);
+    fs.writeFileSync(path.join(path.dirname(h.oldBinary), 'libe_sqlite3.dylib'), 'sqlite-old');
+
+    await applyServerUpdate(h.opts);
+
+    const backupDir = path.join(updatePaths(h.home).backupsDir, 'server');
+    expect(fs.readdirSync(backupDir).sort()).toEqual(['astra-server-0.1.0', 'astra-server-0.1.0-libs']);
+    expect(fs.readFileSync(path.join(backupDir, 'astra-server-0.1.0-libs', 'libe_sqlite3.dylib'), 'utf8')).toBe(
+      'sqlite-old',
+    );
+  });
+
+  it('prunes backups and their -libs snapshots as one entry', () => {
+    const dir = path.join(tmp, 'backup-prune');
+    fs.mkdirSync(dir, { recursive: true });
+    for (const v of ['0.1.0', '0.2.0', '0.3.0', '0.4.0']) {
+      fs.writeFileSync(path.join(dir, `astra-server-${v}`), 'bin');
+      fs.mkdirSync(path.join(dir, `astra-server-${v}-libs`));
+      fs.writeFileSync(path.join(dir, `astra-server-${v}-libs`, 'libe_sqlite3.dylib'), 'lib');
+    }
+
+    pruneBackups(dir, 2);
+
+    expect(fs.readdirSync(dir).sort()).toEqual([
+      'astra-server-0.3.0',
+      'astra-server-0.3.0-libs',
+      'astra-server-0.4.0',
+      'astra-server-0.4.0-libs',
+    ]);
   });
 
   it('fails before touching anything when the manifest is not newer or api-incompatible', async () => {
@@ -213,6 +253,37 @@ describe('applyServerUpdate', () => {
 
     expect(fs.readFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'utf8')).toBe('new-ui');
     expect(fs.existsSync(path.join(serverDir, 'wwwroot.prev'))).toBe(false);
+  });
+
+  it('installs the native companion libraries beside the managed binary', async () => {
+    const h = harness(tmp);
+    h.opts.installIntoPrefix = fakeInstaller(() => FAKE_BINARY, undefined, {
+      'libe_sqlite3.dylib': 'sqlite-new',
+    });
+    const { serverDir } = updatePaths(h.home);
+
+    await applyServerUpdate(h.opts);
+
+    expect(fs.readFileSync(path.join(serverDir, 'libe_sqlite3.dylib'), 'utf8')).toBe('sqlite-new');
+    // Committed on success: no rollback snapshot and no temp copy left behind.
+    expect(fs.existsSync(path.join(serverDir, 'libe_sqlite3.dylib.prev'))).toBe(false);
+    expect(fs.existsSync(path.join(serverDir, 'libe_sqlite3.dylib.tmp'))).toBe(false);
+  });
+
+  it('restores the previous companion libraries on rollback', async () => {
+    const h = harness(tmp);
+    h.control.versionToReport = '0.1.0'; // server somehow still reports the old build
+    const { serverDir } = updatePaths(h.home);
+    fs.mkdirSync(serverDir, { recursive: true });
+    fs.writeFileSync(path.join(serverDir, 'libe_sqlite3.dylib'), 'sqlite-old');
+    h.opts.installIntoPrefix = fakeInstaller(() => FAKE_BINARY, undefined, {
+      'libe_sqlite3.dylib': 'sqlite-new',
+    });
+
+    await expect(applyServerUpdate(h.opts)).rejects.toThrow(/reports 0.1.0/);
+
+    expect(fs.readFileSync(path.join(serverDir, 'libe_sqlite3.dylib'), 'utf8')).toBe('sqlite-old');
+    expect(fs.existsSync(path.join(serverDir, 'libe_sqlite3.dylib.prev'))).toBe(false);
   });
 
   it('restores the previous wwwroot on rollback', async () => {

@@ -15,10 +15,10 @@ public sealed class AdminApiErrorFilter : IEndpointFilter
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         try { return await next(context); }
-        catch (AdminApiException ex) { return Results.Json(new ErrorBody(ex.Message, ex.Details), statusCode: ex.StatusCode); }
+        catch (AdminApiException ex) { return ApiJson.Result(new ErrorBody(ex.Message, ex.Details), ex.StatusCode); }
         catch (Exception ex) when (ex is JsonException or ArgumentException or FormatException or EditorException)
-        { return Results.Json(new ErrorBody(ex.Message), statusCode: 400); }
+        { return ApiJson.Result(new ErrorBody(ex.Message), 400); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        { return Results.Json(new ErrorBody("Configuration file could not be updated: " + ex.Message), statusCode: 409); }
+        { return ApiJson.Result(new ErrorBody("Configuration file could not be updated: " + ex.Message), 409); }
     }
 }

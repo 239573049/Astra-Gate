@@ -348,7 +348,7 @@ public sealed class ResponsesResponseEncoder(ResponseEncodeContext ctx) : IRespo
     {
         var output = new JsonArray();
         foreach (var block in _order)
-            output.Add(ItemJson(block, completed: true));
+            output.AddNode(ItemJson(block, completed: true));
         return output;
     }
 

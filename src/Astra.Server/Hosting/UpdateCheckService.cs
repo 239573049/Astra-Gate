@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
@@ -80,7 +81,8 @@ public sealed class UpdateCheckService(AstraDatabase db, SettingsService setting
                 req.Headers.UserAgent.ParseAdd($"Astra/{ServerOptions.Version}");
                 using var resp = await factory.CreateClient(HttpClientName).SendAsync(req, ct);
                 resp.EnsureSuccessStatusCode();
-                var manifest = await resp.Content.ReadFromJsonAsync<UpdateManifest>(Json.Api, ct)
+                var text = await resp.Content.ReadAsStringAsync(ct);
+                var manifest = Json.DeserializeApi<UpdateManifest>(JsonNode.Parse(text))
                     ?? throw new InvalidOperationException("Update manifest is empty");
                 if (string.IsNullOrWhiteSpace(manifest.Version))
                     throw new InvalidOperationException("Update manifest has no version");

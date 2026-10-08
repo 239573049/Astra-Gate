@@ -28,6 +28,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY --from=deps /repo/node_modules ./node_modules
 COPY --from=deps /repo/docs/node_modules ./docs/node_modules
 COPY docs ./docs
+# Canonical origin (https://astra-gate.si) is fixed in docs/lib/shared.ts —
+# no build-time env needed for sitemap/robots/hreflang/llms URLs.
 RUN pnpm --filter @aidotnet/docs build
 
 # ---------- runtime: standalone server only ----------

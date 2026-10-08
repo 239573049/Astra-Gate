@@ -58,9 +58,27 @@ public sealed record UpstreamAuth(
     string? HeaderName,
     string? HeaderValue,
     string? QueryName,
-    string? QueryValue)
+    string? QueryValue,
+    /// <summary>Fixed header the upstream CLI client always sends (e.g. chatgpt-account-id).</summary>
+    string? ExtraHeaderName = null,
+    string? ExtraHeaderValue = null)
 {
     public static UpstreamAuth None { get; } = new(AuthSchemes.None, null, null, null, null);
+
+    /// <summary>Applies the credentials (and any fixed client header) to an outgoing upstream request.</summary>
+    public void Apply(HttpRequestMessage request)
+    {
+        if (ExtraHeaderName is not null && ExtraHeaderValue is not null)
+        {
+            request.Headers.Remove(ExtraHeaderName);
+            request.Headers.TryAddWithoutValidation(ExtraHeaderName, ExtraHeaderValue);
+        }
+        if (HeaderName is not null && HeaderValue is not null)
+        {
+            request.Headers.Remove(HeaderName);
+            request.Headers.TryAddWithoutValidation(HeaderName, HeaderValue);
+        }
+    }
 }
 
 /// <summary>
@@ -80,7 +98,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
 
         var (_, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
-        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token);
+        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token, ChatGptAccountHeader(token));
     }
 
     /// <summary>Upstream answered 401/403: force-refresh the account once and resolve again.</summary>
@@ -92,18 +110,28 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         var refreshed = await tokens.RefreshAfterUnauthorizedAsync(account, config, ct);
         if (refreshed.AccessTokenEnc is null)
             throw new SubscriptionAuthException(account.Id, "刷新后仍没有访问令牌，请重新登录");
-        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), protector.Unprotect(refreshed.AccessTokenEnc));
+        var accessToken = protector.Unprotect(refreshed.AccessTokenEnc);
+        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), accessToken, ChatGptAccountHeader(accessToken));
     }
 
     private static UpstreamAuth? BuildStatic(Provider provider, ISecretProtector protector) =>
         provider.ApiKeyEnc is null ? UpstreamAuth.None : Build(provider.AuthScheme, protector.Unprotect(provider.ApiKeyEnc));
 
-    private static UpstreamAuth Build(string scheme, string secret) => scheme switch
+    /// <summary>
+    /// codex-cli 每个 ChatGPT 后端请求都带 <c>chatgpt-account-id</c>（取自令牌的
+    /// <c>chatgpt_account_id</c> claim）；Astra 代它发请求时同样要带，否则后端可能选错工作区。
+    /// </summary>
+    private static (string? Name, string? Value) ChatGptAccountHeader(string token) =>
+        SubscriptionTokenService.ChatGptAccountId(token) is { Length: > 0 } accountId
+            ? ("chatgpt-account-id", accountId)
+            : (null, null);
+
+    private static UpstreamAuth Build(string scheme, string secret, (string? Name, string? Value) extra = default) => scheme switch
     {
-        AuthSchemes.Bearer => new UpstreamAuth(scheme, "Authorization", $"Bearer {secret}", null, null),
-        AuthSchemes.XApiKey => new UpstreamAuth(scheme, "x-api-key", secret, null, null),
-        AuthSchemes.XGoogApiKey => new UpstreamAuth(scheme, "x-goog-api-key", secret, null, null),
-        AuthSchemes.QueryKey => new UpstreamAuth(scheme, null, null, "key", secret),
+        AuthSchemes.Bearer => new UpstreamAuth(scheme, "Authorization", $"Bearer {secret}", null, null, extra.Name, extra.Value),
+        AuthSchemes.XApiKey => new UpstreamAuth(scheme, "x-api-key", secret, null, null, extra.Name, extra.Value),
+        AuthSchemes.XGoogApiKey => new UpstreamAuth(scheme, "x-goog-api-key", secret, null, null, extra.Name, extra.Value),
+        AuthSchemes.QueryKey => new UpstreamAuth(scheme, null, null, "key", secret, extra.Name, extra.Value),
         _ => UpstreamAuth.None,
     };
 }

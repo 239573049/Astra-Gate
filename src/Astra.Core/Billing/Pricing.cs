@@ -109,7 +109,9 @@ public sealed class PriceSetJsonConverter : JsonConverter<PriceSet>
             reader.Read();
             if (name == "per_call")
             {
-                set.PerCall = JsonSerializer.Deserialize<Dictionary<string, decimal>>(ref reader, options) ?? new();
+                // JsonTypeInfo overload: the options overload is RequiresDynamicCode (see JsonContexts).
+                var info = JsonContexts.Info<Dictionary<string, decimal>>(options);
+                set.PerCall = JsonSerializer.Deserialize(ref reader, info) ?? new();
             }
             else if (reader.TokenType == JsonTokenType.Null)
             {
@@ -138,7 +140,7 @@ public sealed class PriceSetJsonConverter : JsonConverter<PriceSet>
         if (value.PerCall.Count > 0)
         {
             writer.WritePropertyName("per_call");
-            JsonSerializer.Serialize(writer, value.PerCall, options);
+            JsonSerializer.Serialize(writer, value.PerCall, JsonContexts.Info<Dictionary<string, decimal>>(options));
         }
         writer.WriteEndObject();
     }

@@ -2,6 +2,14 @@
   "title": "CLI 参考",
   "description": "astra 命令行完整用法",
   "icon": "SquareTerminal",
-  "root": true,
-  "pages": ["index", "service", "clients", "maintain"]
+  "defaultOpen": true,
+  "pages": [
+    "index",
+    "---[Server]服务管理---",
+    "service",
+    "---[Cable]客户端与提供商---",
+    "clients",
+    "---[Package]安装与维护---",
+    "maintain"
+  ]
 }

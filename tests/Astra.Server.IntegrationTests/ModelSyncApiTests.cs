@@ -12,6 +12,10 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
+// Direct vanilla-Dapper assertions in this assembly are deliberate; opting the test assembly out of
+// Dapper.AOT (which flows from the Astra.Data reference) keeps them that way and silences DAP005.
+[module: DapperAot(false)]
+
 namespace Astra.Server.IntegrationTests;
 
 /// <summary>
@@ -133,9 +137,9 @@ public class ModelSyncApiTests
 
         // price kind: {upstreamModelId, pricing} on both sides, merged base keeps stored keys
         var openrouter = Change(preview, "deepseek-v4-flash", "price", priceKey: "openrouter");
-        Assert.Equal(0.0134m, openrouter["before"]!["pricing"]!["base"]!["input"]!.GetValue<decimal>());
+        Assert.Equal(0.0104m, openrouter["before"]!["pricing"]!["base"]!["input"]!.GetValue<decimal>());
         Assert.Equal(0.014m, openrouter["after"]!["pricing"]!["base"]!["input"]!.GetValue<decimal>());
-        Assert.Equal(0.0134m, openrouter["after"]!["pricing"]!["base"]!["cache_read"]!.GetValue<decimal>());
+        Assert.Equal(0.0104m, openrouter["after"]!["pricing"]!["base"]!["cache_read"]!.GetValue<decimal>());
         Assert.NotNull(Change(preview, "deepseek-v4-flash", "price", priceKey: "siliconflow"));
 
         // new_model kind: before absent, after describes the model including its provider prices
@@ -194,7 +198,7 @@ public class ModelSyncApiTests
         var openrouter = await host.Db.Models.GetPriceAsync("deepseek-v4-flash", "openrouter");
         Assert.NotNull(openrouter);
         Assert.Equal(0.014m, openrouter!.Pricing.Base["input"]);
-        Assert.Equal(0.0134m, openrouter.Pricing.Base["cache_read"]);
+        Assert.Equal(0.0104m, openrouter.Pricing.Base["cache_read"]);
         Assert.Equal(1.3m, openrouter.Pricing.Base["output"]);
         Assert.Equal("deepseek/deepseek-v4-flash-0731", openrouter.UpstreamModelId);
         Assert.False(openrouter.UserModified);

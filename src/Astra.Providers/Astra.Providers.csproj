@@ -1,9 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- AOT analyzer gate (IL2026/IL3050 are errors); does not flow through ProjectReference, so set per project. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Templates\*.json" />
+    <EmbeddedResource Include="Quota\*.json" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />

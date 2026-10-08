@@ -158,7 +158,7 @@ public sealed partial class PrivacyDetector
             case JsonValue value when value.TryGetValue<string>(out var s):
             {
                 var r = Apply(s, policy);
-                if (r.Text != s) value.ReplaceWith(r.Text);
+                if (r.Text != s) value.ReplaceTextWith(r.Text);
                 Merge(merged, r);
                 break;
             }

@@ -4,6 +4,7 @@ using Astra.Clients.Config;
 using Astra.Clients.Editing;
 using Astra.Core;
 using Astra.Core.Clients;
+using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
 using Astra.Server.Hosting;
@@ -15,11 +16,14 @@ public sealed record ClientInfoDto(
     string Kind, string Name, ApiProtocol Protocol, string Availability, string? AvailabilityReason, string Mode,
     ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
     JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
-    bool ConfigOutdated = false);
+    bool ConfigOutdated = false, string? TokenId = null);
 public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
 public sealed record ConfigChangeDto(string File, string Format, string KeyPath, string? Before, string? After);
 public sealed record ClientDisableDto(IReadOnlyList<string> Restored, IReadOnlyList<string> Drifted, ClientInfoDto Client);
 public sealed record ClientBackupDto(string Id, DateTimeOffset CreatedAt, IReadOnlyList<string> Files, bool FirstWrite);
+
+/// <summary>Outcome of rewriting the clients that use one token: rewritten kinds and kinds left alone (drifted / unreadable).</summary>
+public sealed record TokenRewriteResult(IReadOnlyList<string> Rewritten, IReadOnlyList<string> Skipped);
 
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
@@ -81,7 +85,7 @@ public sealed class ClientService(
     {
         var adapter = Require(kind);
         var record = await db.Clients.GetAsync(kind, ct);
-        if (record is not { Enabled: true, LocalKeyEnc: not null }) return false;
+        if (record is not { Enabled: true }) return false;
         var binding = await db.Clients.GetBindingAsync(kind, ct);
         if (binding is null || (providerId is not null && binding.ProviderId != providerId)) return false;
         if (await db.Providers.GetAsync(binding.ProviderId, ct) is not { Enabled: true }) return false;
@@ -89,7 +93,8 @@ public sealed class ClientService(
         {
             var status = adapter.Inspect();
             if (!status.Enabled || status.DriftedKeys.Count > 0) return false;
-            var context = await ContextAsync(kind, binding.ProviderId, record, secrets.Unprotect(record.LocalKeyEnc), ct);
+            if (await ClientKeyAsync(record, ct) is not { } key) return false;
+            var context = await ContextAsync(kind, binding.ProviderId, record, key, ct);
             var plan = adapter.PlanEnable(context); // rewrites the Astra provider as a whole so its recorded applied value stays exact
             if (plan.Diffs.Count == 0) return false;
             _applier.Apply(plan);
@@ -98,7 +103,7 @@ public sealed class ClientService(
             await db.Clients.UpsertAsync(record, CancellationToken.None);
             return true;
         }
-        catch (Exception ex) when (ex is EditorException or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is EditorException or IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
         {
             return false; // the client page reports unreadable / drifted configs on its own
         }
@@ -107,8 +112,8 @@ public sealed class ClientService(
     public async Task<ClientPreviewDto> PreviewAsync(string kind, JsonObject input, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
-            var (adapter, record, context, _, warnings) = await PrepareAsync(kind, input, ct);
-            var plan = EnablePlan(adapter, record, context, input);
+            var (adapter, record, context, _, _, warnings) = await PrepareAsync(kind, input, ct);
+            var plan = EnablePlan(adapter, context, input);
             return new ClientPreviewDto(plan.Changes.Select(c => new ConfigChangeDto(c.File,
                 c.Format.ToString().ToLowerInvariant(), c.KeyPath, c.Before, c.After)).ToList(), plan.Diffs, warnings);
         }, ct);
@@ -116,18 +121,11 @@ public sealed class ClientService(
     public async Task<ClientInfoDto> EnableAsync(string kind, JsonObject input, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
-            var (adapter, record, context, providerId, _) = await PrepareAsync(kind, input, ct);
-            var plan = EnablePlan(adapter, record, context, input); // parse/validate before persisting or writing
-            if (record.LocalKeyEnc is null)
-            {
-                record.LocalKeyEnc = secrets.Protect(context.LocalKey);
-                record.LocalKeyHash = LocalKeys.Hash(context.LocalKey);
-                record.LocalKeyPrefix = LocalKeys.PrefixOf(context.LocalKey);
-                // Persist the new key before touching a file. If IO fails the row remains disabled and reusable.
-                await db.Clients.UpsertAsync(record, ct);
-            }
+            var (adapter, record, context, providerId, tokenId, _) = await PrepareAsync(kind, input, ct);
+            var plan = EnablePlan(adapter, context, input); // parse/validate before writing
             _applier.Apply(plan);
             record.Enabled = true;
+            record.TokenId = tokenId;
             record.SelectedModel = context.Model;
             record.ExtraJson = context.Extras?.ToJsonString();
             record.AppliedAt = DateTimeOffset.UtcNow;
@@ -178,23 +176,48 @@ public sealed class ClientService(
             return await InfoAsync(adapter, CancellationToken.None);
         }, ct);
 
-    public async Task<ClientInfoDto> RotateKeyAsync(string kind, CancellationToken ct) =>
+    /// <summary>
+    /// Rewrites every enabled client that uses the token (after its key was reset, or after its clients were moved to
+    /// it), through the applier so the restore invariants hold. Drifted or unreadable configs are never touched and are
+    /// reported as skipped; configs that already hold the current values are left as they are.
+    /// </summary>
+    public async Task<TokenRewriteResult> RewriteForTokenAsync(string tokenId, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
-            var adapter = Require(kind);
-            var record = await db.Clients.GetAsync(kind, ct) ?? throw new AdminApiException(409, "Client is not configured");
-            var binding = await db.Clients.GetBindingAsync(kind, ct);
-            if (record.Enabled && adapter.Inspect().DriftedKeys.Count > 0)
-                throw new AdminApiException(409, "Client configuration was modified; review and re-enable before rotating its key");
-            var key = LocalKeys.Rotate(record, secrets);
-            if (record.Enabled)
+            var rewritten = new List<string>();
+            var skipped = new List<string>();
+            foreach (var record in await db.Clients.ListByTokenAsync(tokenId, tokenId == TokenIds.Default, ct))
             {
-                var context = await ContextAsync(kind, binding?.ProviderId, record, key, ct);
-                _applier.Apply(adapter.PlanEnable(context));
-                record.AppliedAt = DateTimeOffset.UtcNow;
+                if (!record.Enabled || _registry.Get(record.Kind) is not { } adapter) continue;
+                try
+                {
+                    var status = adapter.Inspect();
+                    if (!status.Enabled || status.DriftedKeys.Count > 0 || await ClientKeyAsync(record, ct) is not { } key)
+                    {
+                        skipped.Add(record.Kind);
+                        continue;
+                    }
+                    // A disabled or missing provider keeps the stored model list instead of rebuilding it.
+                    var binding = await db.Clients.GetBindingAsync(record.Kind, ct);
+                    var providerId = binding is not null && await db.Providers.GetAsync(binding.ProviderId, ct) is { Enabled: true }
+                        ? binding.ProviderId
+                        : null;
+                    var context = await ContextAsync(record.Kind, providerId, record, key, ct);
+                    var plan = adapter.PlanEnable(context);
+                    if (plan.Diffs.Count == 0) continue;
+                    _applier.Apply(plan);
+                    record.ExtraJson = context.Extras?.ToJsonString();
+                    record.AppliedAt = DateTimeOffset.UtcNow;
+                    await db.Clients.UpsertAsync(record, CancellationToken.None);
+                    rewritten.Add(record.Kind);
+                }
+                catch (Exception ex) when (ex is EditorException or IOException or UnauthorizedAccessException
+                                               or System.Security.Cryptography.CryptographicException)
+                {
+                    skipped.Add(record.Kind);
+                }
             }
-            await db.Clients.UpsertAsync(record);
-            return await InfoAsync(adapter, CancellationToken.None);
+            return new TokenRewriteResult(rewritten, skipped);
         }, ct);
 
     public async Task<IReadOnlyList<string>> ModelsAsync(string kind, CancellationToken ct)
@@ -208,7 +231,7 @@ public sealed class ClientService(
         return result;
     }
 
-    private async Task<(IClientAdapter Adapter, ClientRecord Record, EnableContext Context, string ProviderId, List<string> Warnings)>
+    private async Task<(IClientAdapter Adapter, ClientRecord Record, EnableContext Context, string ProviderId, string TokenId, List<string> Warnings)>
         PrepareAsync(string kind, JsonObject input, CancellationToken ct)
     {
         var adapter = Require(kind);
@@ -228,11 +251,15 @@ public sealed class ClientService(
         // Plan §7.5: the gateway maps Claude Desktop's role ids, so at least one role must point at a model.
         if (kind == ClientKinds.ClaudeDesktop && ClaudeDesktopRoles.Parse(next.ExtraJson).Count == 0)
             throw new AdminApiException(400, "Claude Desktop needs at least one role mapping (sonnet / opus / haiku → a provider model)");
-        var key = record.LocalKeyEnc is null ? LocalKeys.Generate(kind) : secrets.Unprotect(record.LocalKeyEnc);
+        // Tokens: the chosen token, else the one this client already uses, else the default token.
+        var tokenId = Trim(input["tokenId"]?.GetValue<string>()) ?? record.TokenId ?? TokenIds.Default;
+        var token = await db.Tokens.GetAsync(tokenId, ct) ?? throw new AdminApiException(404, "Token not found");
+        if (!token.Enabled) throw new AdminApiException(409, "Token is disabled");
+        if (token.KeyEnc is null) throw new AdminApiException(409, "Token has no key yet");
+        var key = GatewayTokens.ForClient(secrets.Unprotect(token.KeyEnc), kind);
         var context = await ContextAsync(kind, providerId, next, key, ct);
         var warnings = adapter.Inspect().Warnings.ToList();
-        if (record.LocalKeyEnc is null) warnings.Add("The new local key shown in this preview is an example; confirmation generates the actual key.");
-        return (adapter, record, context, providerId, warnings);
+        return (adapter, record, context, providerId, token.Id, warnings);
     }
 
     private async Task<EnableContext> ContextAsync(string kind, string? providerId, ClientRecord record, string key, CancellationToken ct)
@@ -259,30 +286,37 @@ public sealed class ClientService(
         return new EnableContext { GatewayBaseUrl = server.GatewayBaseUrl, LocalKey = key, Model = record.SelectedModel, Extras = extras };
     }
 
-    private ConfigChangePlan EnablePlan(IClientAdapter adapter, ClientRecord record, EnableContext context, JsonObject input)
+    private ConfigChangePlan EnablePlan(IClientAdapter adapter, EnableContext context, JsonObject input)
     {
         var plan = adapter.PlanEnable(context);
-        if (!input.ContainsKey("model") || context.Model is not null || record.SelectedModel is null) return plan;
-        // Unsetting a model restores only the model selection Astra owned, not an unrelated user setting.
-        var modelKey = adapter.Kind switch
-        {
-            ClientKinds.ClaudeCode => "env.ANTHROPIC_MODEL",
-            ClientKinds.GeminiCli => "GEMINI_MODEL",
-            ClientKinds.GrokBuild => "model.astra.model",
-            ClientKinds.Pi or ClientKinds.MiniMaxCode => "defaultModel",
-            ClientKinds.HermesAgent => "model.default",
-            _ => "model",
-        };
+        if (!input.ContainsKey("model") && !input.ContainsKey("extras")) return plan;
+        // Clearing a model selection restores what Astra had written for it (and whatever was there before); a
+        // key the client owns that never held one of our values is left alone.
+        var old = adapter.PlanDisable();
+        var candidates = new List<string> { ModelKeyOf(adapter.Kind) };
+        // Claude Code's optional tiers only come back through PlanDisable (PlanEnable writes just the chosen ones).
+        if (adapter.Kind == ClientKinds.ClaudeCode) candidates.AddRange(ClaudeCodeModels.Slots.Select(slot => $"env.{slot}"));
+        var written = plan.Changes.Where(c => c.After is not null).Select(c => (c.File, c.KeyPath)).ToHashSet();
         var changes = plan.Changes.ToList();
-        foreach (var old in adapter.PlanDisable().Changes.Where(c => c.KeyPath == modelKey))
+        foreach (var change in old.Changes.Where(c => candidates.Contains(c.KeyPath) && !written.Contains((c.File, c.KeyPath))))
         {
-            var state = db.ClientConfigState.Get(adapter.Kind, old.File, old.KeyPath);
-            if (state is null || changes.Any(c => c.File == old.File && c.KeyPath == old.KeyPath)) continue;
-            changes.Add(new ConfigChange(old.File, old.Format, old.KeyPath, old.Before,
-                state.OriginalAbsent ? null : state.OriginalValueJson, old.Kind));
+            if (db.ClientConfigState.Get(adapter.Kind, change.File, change.KeyPath) is not { } state) continue;
+            changes.Add(new ConfigChange(change.File, change.Format, change.KeyPath, change.Before,
+                state.OriginalAbsent ? null : state.OriginalValueJson, change.Kind));
         }
         return _applier.Preview(adapter.Kind, changes);
     }
+
+    /// <summary>The config key behind a client's "default model" choice, so unsetting it can be restored.</summary>
+    private static string ModelKeyOf(string kind) => kind switch
+    {
+        ClientKinds.ClaudeCode => "env.ANTHROPIC_MODEL",
+        ClientKinds.GeminiCli => "GEMINI_MODEL",
+        ClientKinds.GrokBuild => "model.astra.model",
+        ClientKinds.Pi or ClientKinds.MiniMaxCode => "defaultModel",
+        ClientKinds.HermesAgent => "model.default",
+        _ => "model",
+    };
 
     private async Task<ClientInfoDto> InfoAsync(IClientAdapter adapter, CancellationToken ct)
     {
@@ -306,7 +340,8 @@ public sealed class ClientService(
             new ClientDetectionDto(detection.Detected, configPaths.Any(File.Exists), detection.Version, configPaths),
             drifted ? "drifted" : enabled ? "enabled" : "disabled", enabled, binding?.ProviderId, binding?.AccountId,
             record?.SelectedModel,
-            Json.Deserialize<JsonObject>(record?.ExtraJson) ?? new JsonObject(), record?.AppliedAt, warnings, true, outdated);
+            Json.Deserialize<JsonObject>(record?.ExtraJson) ?? new JsonObject(), record?.AppliedAt, warnings, true, outdated,
+            record?.TokenId ?? TokenIds.Default);
     }
 
     /// <summary>
@@ -316,11 +351,12 @@ public sealed class ClientService(
     /// </summary>
     private async Task<ConfigChangePlan?> OutdatedPlanAsync(IClientAdapter adapter, ClientRecord record, ClientBinding? binding, CancellationToken ct)
     {
-        if (record.LocalKeyEnc is null || binding is null) return null;
+        if (binding is null) return null;
         if (await db.Providers.GetAsync(binding.ProviderId, ct) is not { Enabled: true }) return null;
         try
         {
-            var context = await ContextAsync(adapter.Kind, binding.ProviderId, record, secrets.Unprotect(record.LocalKeyEnc), ct);
+            if (await ClientKeyAsync(record, ct) is not { } key) return null;
+            var context = await ContextAsync(adapter.Kind, binding.ProviderId, record, key, ct);
             var plan = adapter.PlanEnable(context);
             var stale = plan.Changes.Any(c => c.Kind == ConfigChangeKind.Table
                 ? c.Before is null && c.After is not null
@@ -352,7 +388,8 @@ public sealed class ClientService(
                 if (ClientKinds.WithModelList.Contains(adapter.Kind))
                 {
                     // Keep the stored model list in step with what was just written.
-                    var context = await ContextAsync(adapter.Kind, binding!.ProviderId, record, secrets.Unprotect(record.LocalKeyEnc!), ct);
+                    var key = await ClientKeyAsync(record, ct) ?? throw new InvalidOperationException("Token key vanished during reapply");
+                    var context = await ContextAsync(adapter.Kind, binding!.ProviderId, record, key, ct);
                     record.ExtraJson = context.Extras?.ToJsonString();
                 }
                 record.AppliedAt = DateTimeOffset.UtcNow;
@@ -362,9 +399,19 @@ public sealed class ClientService(
             return (IReadOnlyList<string>)updated;
         }, ct);
 
+    /// <summary>
+    /// The key Astra writes into this client's configuration: its token (default token when unset) plus the client
+    /// suffix. Null when the token is missing or has no key yet.
+    /// </summary>
+    private async Task<string?> ClientKeyAsync(ClientRecord record, CancellationToken ct)
+    {
+        var token = await db.Tokens.GetAsync(record.TokenId ?? TokenIds.Default, ct);
+        return token?.KeyEnc is null ? null : GatewayTokens.ForClient(secrets.Unprotect(token.KeyEnc), record.Kind);
+    }
+
     private IClientAdapter Require(string kind) => _registry.Get(kind) ?? throw new AdminApiException(404, "Unknown client kind");
 
-    private async Task<Astra.Core.Models.Provider> RequireProviderAsync(string id, CancellationToken ct)
+    internal async Task<Astra.Core.Models.Provider> RequireProviderAsync(string id, CancellationToken ct)
     {
         var provider = await db.Providers.GetAsync(id, ct) ?? throw new AdminApiException(404, "Provider not found");
         if (!provider.Enabled) throw new AdminApiException(409, "Provider is disabled");
@@ -372,7 +419,7 @@ public sealed class ClientService(
     }
 
     /// <summary>Validates a pinned subscription account exists and belongs to the provider.</summary>
-    private async Task<string> RequireAccountAsync(string providerId, string accountId, CancellationToken ct)
+    internal async Task<string> RequireAccountAsync(string providerId, string accountId, CancellationToken ct)
     {
         var account = await db.Accounts.GetAsync(accountId, ct)
                       ?? throw new AdminApiException(400, "Subscription account not found");

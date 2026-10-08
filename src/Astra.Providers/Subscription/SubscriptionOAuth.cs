@@ -19,6 +19,13 @@ public sealed class SubscriptionOAuthConfig
     public string AuthorizeUrl { get; init; } = "";
     public string TokenUrl { get; init; } = "";
     public string DeviceCodeUrl { get; init; } = "";
+    /// <summary>
+    /// 设备码授权（RFC 8628）的轮询端点。空 = 轮询复用 <see cref="TokenUrl"/>。
+    /// 非标准：OpenAI 的设备码轮询在另一个路径（/api/accounts/deviceauth/token）上，
+    /// 拿到的不是令牌而是一次性授权码。
+    /// </summary>
+    public string DeviceTokenUrl { get; init; } = "";
+
     public string ClientId { get; init; } = "";
     public IReadOnlyList<string> Scopes { get; init; } = [];
 
@@ -26,11 +33,14 @@ public sealed class SubscriptionOAuthConfig
     public bool UsePkce { get; init; } = true;
 
     /// <summary>
-    /// 流程形态。空 = 标准 OAuth（PKCE 授权码或设备码）；"zcode" = ZCode 的非标准
-    /// 授权码链路：无 PKCE、无 scope，换码是 JSON body <c>{provider, code, redirect_uri,
+    /// 流程形态。空 = 标准 OAuth（PKCE 授权码或设备码）；
+    /// "zcode" = ZCode 的非标准授权码链路：无 PKCE、无 scope，换码是 JSON body <c>{provider, code, redirect_uri,
     /// state}</c>（没有 grant_type），换到 OAuth token 后还要跑一跳业务登录换取真正
     /// 的调用令牌，刷新 = 用存下的 OAuth token 重跑业务登录。来源：NextCoWork
-    /// `issuers/zcode.ts`（逆向 Vibe Coding Labs《ZCode RE》 + ZCode.app v3.11.2）。
+    /// `issuers/zcode.ts`（逆向 Vibe Coding Labs《ZCode RE》 + ZCode.app v3.11.2）；
+    /// "deviceauth" = 一类非标准设备码链路：申请非
+    /// <c>/oauth2/token</c> 的端点、轮询返回一次性授权码（含它自己带的 PKCE
+    /// challenge/verifier），再用该授权码走标准换码。OpenAI（Codex）走这条。
     /// </summary>
     public string Style { get; init; } = "";
 
@@ -40,6 +50,18 @@ public sealed class SubscriptionOAuthConfig
     /// OAuth token 本身。
     /// </summary>
     public string BusinessLoginUrl { get; init; } = "";
+
+    /// <summary>ZAI CLI 链路：发起授权（server-mediated，无回调）。</summary>
+    public string CliInitUrl { get; init; } = "";
+
+    /// <summary>ZAI CLI 链路：轮询授权结果（拼 <c>/{flow_id}</c>）。</summary>
+    public string CliPollUrl { get; init; } = "";
+
+    /// <summary>
+    /// 覆盖登录回调地址（实例级 settings.subscription_oauth.redirect_uri）。空 = 用目录默认：
+    /// codex 用它的 1455/1457 回环（上游白名单），其它家族用 Astra 自己的回调。
+    /// </summary>
+    public string RedirectUriOverride { get; init; } = "";
 
     /// <summary>可选的身份端点（登录后拉 email / 套餐名做展示）。失败不致命。</summary>
     public string IdentityUrl { get; init; } = "";
@@ -74,22 +96,38 @@ public static class SubscriptionCatalog
             ClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
             Scopes = ["org:create_api_key", "user:profile", "user:inference"],
             UsePkce = true,
-            // 目录默认不开放（plan §15：核实前不登录）。claude-subscription 模板通过
-            // settings.subscription_oauth.verified=true 显式开放——端点与 client_id 来自 cc-switch
-            // 的公开配置，已在开发环境验证过完整登录 + 刷新链路。
-            Verified = false,
+            // 端点与 client_id 来自 cc-switch 的公开配置，开发环境验证过完整登录 + 刷新链路。
+            // 五家订阅一律目录默认开放；实例可用 settings.subscription_oauth.verified=false 关掉。
+            Verified = true,
         },
         new SubscriptionOAuthConfig
         {
             ProviderKey = "openai-subscription",
             DisplayName = "ChatGPT 订阅（Codex）",
+            // codex-cli 的默认登录（`codex login`）：授权码 + PKCE，回环回调固定
+            // http://localhost:{1455|1457}/auth/callback —— codex 源码注释写明这一对端口就是
+            // auth.openai.com（Hydra）的 redirect URI 白名单，任何别的回调（含 Astra 自己的
+            // 127.0.0.1:{port}/api/oauth/callback）都会被判 invalid_authorize_request。
+            // 所以这里记的是 codex 的本地回调；Astra 发登录时会在该端口起一个临时接收器，
+            // 把 code 转给 Astra 自己的回调完成换码（SubscriptionEndpoints.ArmCodexCallbackAsync）。
+            // 额外三个参数与 scope 集合同样取自 codex（server.rs build_authorize_url）。
+            // 备选是 device code（codex login --device-auth，beta）：把 style 改成 "deviceauth"、
+            // use_pkce 关掉即可，端点已在下面备好。
             AuthorizeUrl = "https://auth.openai.com/oauth/authorize",
             TokenUrl = "https://auth.openai.com/oauth/token",
-            // 公开逆向值（openai/codex codex-rs/login/src/auth/manager.rs 的 CLIENT_ID）。
+            DeviceCodeUrl = "https://auth.openai.com/api/accounts/deviceauth/usercode",
+            DeviceTokenUrl = "https://auth.openai.com/api/accounts/deviceauth/token",
+            // 不是标准 OAuth 必填项：该 client 的登录必须带 codex 自己的回调（见 CodexLoopbackRedirect）。
             ClientId = "app_EMoamEEZ73f0CkXaXp7hrann",
-            Scopes = ["openid", "profile", "email", "offline_access"],
+            Scopes = ["openid", "profile", "email", "offline_access", "api.connectors.read", "api.connectors.invoke"],
             UsePkce = true,
-            Verified = false,
+            ExtraAuthorizeParams = new Dictionary<string, string>
+            {
+                ["id_token_add_organizations"] = "true",
+                ["codex_cli_simplified_flow"] = "true",
+                ["originator"] = "codex_cli_rs",
+            },
+            Verified = true,
         },
         new SubscriptionOAuthConfig
         {
@@ -108,7 +146,34 @@ public static class SubscriptionCatalog
             ],
             UsePkce = false,
             ExtraDeviceParams = new Dictionary<string, string> { ["referrer"] = "grok-build" },
-            Verified = false,
+            Verified = true,
+        },
+        new SubscriptionOAuthConfig
+        {
+            ProviderKey = "github-copilot-subscription",
+            DisplayName = "GitHub Copilot 订阅",
+            // GitHub 官方 device flow（github.com/login/device），client id 取自官方 Copilot 客户端
+            // （copilot-language-server main.js：GitHubAppInfo 的 "Iv1.b507a08c87ecfe98"，scope repo+workflow）。
+            // 换到的 GitHub token 再换 Copilot 短时令牌（CopilotLoginUrl）才能发请求——
+            // 所以走 Style="github-copilot" 的那条"第二跳"分支。推理端点是
+            // api.githubcopilot.com（OpenAI Chat 兼容，另有 /responses 与 /v1/messages）。
+            TokenUrl = "https://github.com/login/oauth/access_token",
+            DeviceCodeUrl = "https://github.com/login/device/code",
+            ClientId = "Iv1.b507a08c87ecfe98",
+            Scopes = ["repo", "workflow"],
+            UsePkce = false,
+            Style = "github-copilot",
+            BusinessLoginUrl = "https://api.github.com/copilot_internal/v2/token",
+            // 官方客户端身份头：缺了会被 Copilot 后端按"未知客户端"拒掉。
+            ExtraHeaders = new Dictionary<string, string>
+            {
+                ["User-Agent"] = "GitHubCopilotChat/0.26.7",
+                ["Editor-Version"] = "vscode/1.99.3",
+                ["Editor-Plugin-Version"] = "copilot-chat/0.26.7",
+                ["Copilot-Integration-Id"] = "vscode-chat",
+                ["X-GitHub-Api-Version"] = "2024-12-15",
+            },
+            Verified = true,
         },
         new SubscriptionOAuthConfig
         {
@@ -126,18 +191,23 @@ public static class SubscriptionCatalog
             // kimi-code 对每个上游请求都带 X-Msh-* 设备头（含设备码申请、换码、刷新）。
             ExtraHeaders = KimiDeviceHeaders(),
             IdentityUrl = "https://api.kimi.com/coding/v1/me", // user_id / email / user_level_name
-            Verified = false,
+            Verified = true,
         },
         new SubscriptionOAuthConfig
         {
             ProviderKey = "zcode-subscription",
             DisplayName = "ZCode 订阅（GLM Coding Plan · Z.AI）",
-            // 公开逆向值（NextCoWork issuers/zcode-zai.ts：Vibe Coding Labs《ZCode RE》 +
-            // ZCode.app v3.11.2 逆向，Z.AI 渠道是被实测走通的那条）。换码/业务登录都要求
-            // ZCode UA 与 referer 头；redirect_uri 在 authorize 阶段不校验，换码发真实回调。
-            Style = "zcode",
+            // 授权码 + 回环回调这条（Style="zcode"，NextCoWork issuers/zcode-zai.ts）在 authorize
+            // 阶段会被上游按 client 白名单拒掉：该 client 只登记了桌面端的自定义协议回调
+            // （ZCode.app 3.14 里 redirectUri = "zcode://oauth/callback"，本地实测报
+            // "Redirect URI not registered for this client"）。所以 Z.AI 渠道改走官方 CLI 链路
+            // （CliInitUrl/CliPollUrl，无回调，见 zcode2api docs/development/05-upstream-protocols.md §2.1），
+            // 回调字段保留给 bigmodel 渠道（Style="zcode" 分支）继续用。
+            Style = "zcli",
             AuthorizeUrl = "https://chat.z.ai/api/oauth/authorize",
             TokenUrl = "https://zcode.z.ai/api/v1/oauth/token",
+            CliInitUrl = "https://zcode.z.ai/api/v1/oauth/cli/init",
+            CliPollUrl = "https://zcode.z.ai/api/v1/oauth/cli/poll",
             ClientId = "client_P8X5CMWmlaRO9gyO-KSqtg",
             Scopes = [],
             UsePkce = false,
@@ -148,12 +218,25 @@ public static class SubscriptionCatalog
                 ["User-Agent"] = "ZCode/3.10.2",
                 ["http-referer"] = "https://zcode.z.ai",
             },
-            Verified = false,
+            Verified = true,
         },
     ];
 
     public static SubscriptionOAuthConfig? Find(string providerKey) =>
         All.FirstOrDefault(c => c.ProviderKey == providerKey);
+
+    /// <summary>codex-cli 登录回调的路径（端口见 <see cref="CodexLoopbackPorts"/>）。</summary>
+    public const string CodexLoopbackPath = "/auth/callback";
+
+    /// <summary>
+    /// codex-cli 允许的回环回调端口：1455 默认、1457 备用。这一对端口是 auth.openai.com 的
+    /// redirect URI 白名单，其它回调一律 invalid_authorize_request。
+    /// </summary>
+    public static readonly IReadOnlyList<int> CodexLoopbackPorts = [1455, 1457];
+
+    /// <summary>是否是 codex-cli 的 PKCE 登录（需要按上面的回调端口临时接管）。</summary>
+    public static bool IsCodexLogin(SubscriptionOAuthConfig config) =>
+        config.ProviderKey == "openai-subscription" && config.UsePkce && config.Style.Length == 0;
 
     /// <summary>
     /// kimi-code 的 X-Msh-* 设备头（值取自 @moonshot-ai/kimi-code v0.42.0 的
@@ -191,7 +274,8 @@ public static class SubscriptionCatalog
     /// <summary>
     /// Merges instance-level overrides from <c>providers.settings_json</c> key
     /// <c>subscription_oauth</c>: verified, client_id, authorize_url, token_url, device_code_url,
-    /// scopes (array), plus extra_authorize_params / extra_device_params (object).
+    /// device_token_url, cli_init_url, cli_poll_url, scopes (array), plus extra_authorize_params /
+    /// extra_device_params (object).
     /// </summary>
     public static SubscriptionOAuthConfig Effective(SubscriptionOAuthConfig baseConfig, JsonObject? providerSettings)
     {
@@ -214,6 +298,7 @@ public static class SubscriptionCatalog
             AuthorizeUrl = Str("authorize_url") ?? baseConfig.AuthorizeUrl,
             TokenUrl = Str("token_url") ?? baseConfig.TokenUrl,
             DeviceCodeUrl = Str("device_code_url") ?? baseConfig.DeviceCodeUrl,
+            DeviceTokenUrl = Str("device_token_url") ?? baseConfig.DeviceTokenUrl,
             ClientId = Str("client_id") ?? baseConfig.ClientId,
             Scopes = o.TryGetPropertyValue("scopes", out var scopesNode) && scopesNode is JsonArray arr
                 ? arr.Where(n => n is JsonValue).Select(n => n!.ToJsonString().Trim('"')).ToList()
@@ -222,6 +307,9 @@ public static class SubscriptionCatalog
             Verified = Bool("verified") ?? baseConfig.Verified,
             Style = Str("style") ?? baseConfig.Style,
             BusinessLoginUrl = Str("business_login_url") ?? baseConfig.BusinessLoginUrl,
+            CliInitUrl = Str("cli_init_url") ?? baseConfig.CliInitUrl,
+            CliPollUrl = Str("cli_poll_url") ?? baseConfig.CliPollUrl,
+            RedirectUriOverride = Str("redirect_uri") ?? baseConfig.RedirectUriOverride,
             IdentityUrl = Str("identity_url") ?? baseConfig.IdentityUrl,
             ExtraAuthorizeParams = ReadExtra("extra_authorize_params", baseConfig.ExtraAuthorizeParams),
             ExtraDeviceParams = ReadExtra("extra_device_params", baseConfig.ExtraDeviceParams),
@@ -229,14 +317,26 @@ public static class SubscriptionCatalog
         };
     }
 
-    /// <summary>A login may only start when the flow is fully specified AND verified.</summary>
+    /// <summary>
+    /// A login may only start when the flow is fully specified AND verified. "zcode" 只需要
+    /// authorize url；"zcli" 需要 init + poll（无回环回调）；deviceauth（OpenAI）额外需要
+    /// 一个设备码申请端点。
+    /// </summary>
     public static bool IsReady(SubscriptionOAuthConfig config) =>
         config.Verified
         && !string.IsNullOrWhiteSpace(config.TokenUrl)
         && !string.IsNullOrWhiteSpace(config.ClientId)
-        && (config.Style == "zcode" || config.UsePkce
-            ? !string.IsNullOrWhiteSpace(config.AuthorizeUrl)
-            : !string.IsNullOrWhiteSpace(config.DeviceCodeUrl));
+        && config.Style switch
+        {
+            "zcli" => config.CliInitUrl.Length > 0 && config.CliPollUrl.Length > 0,
+            // github-copilot：设备码登录 GitHub，再换 Copilot 短时令牌（BusinessLoginUrl）。
+            "github-copilot" => !string.IsNullOrWhiteSpace(config.DeviceCodeUrl) && config.BusinessLoginUrl.Length > 0,
+            "zcode" => !string.IsNullOrWhiteSpace(config.AuthorizeUrl),
+            "deviceauth" => !string.IsNullOrWhiteSpace(config.DeviceCodeUrl) && config.DeviceTokenUrl.Length > 0,
+            _ => config.UsePkce
+                ? !string.IsNullOrWhiteSpace(config.AuthorizeUrl)
+                : !string.IsNullOrWhiteSpace(config.DeviceCodeUrl),
+        };
 }
 
 /// <summary>PKCE helpers (RFC 7636, S256).</summary>
@@ -275,3 +375,27 @@ public sealed class SubscriptionAuthException(string accountId, string message) 
 {
     public string AccountId { get; } = accountId;
 }
+
+/// <summary>
+/// 非标准设备码（<see cref="SubscriptionOAuthConfig.Style"/> = "deviceauth"）轮询成功时上游给的
+/// 东西：一次性授权码，以及上游自己配对好的 PKCE challenge/verifier——换码时原样带上，
+/// 不需要本地重新生成。来源：openai/codex device_code_auth.rs 的 CodeSuccessResp。
+/// </summary>
+public sealed record DeviceAuthGrant(string AuthorizationCode, string CodeChallenge, string CodeVerifier);
+
+/// <summary>
+/// ZAI CLI 链路（<see cref="SubscriptionOAuthConfig.Style"/> = "zcli"）的发起响应：
+/// flow id、可直接在浏览器打开的授权链接，以及轮询要用的 poll_token。
+/// </summary>
+public sealed record ZcodeCliStart(string FlowId, string AuthorizeUrl, string PollToken);
+
+public enum ZcodeCliPollKind { Done, Expired, Error }
+
+/// <summary>ZAI CLI 轮询结果：授权完成给出 access_token，否则是过期/失败。</summary>
+public sealed record ZcodeCliPoll(ZcodeCliPollKind Kind, string? AccessToken, string? Error, string? Description);
+
+/// <summary>
+/// Copilot 短时令牌（GitHub token 换来的第二跳）：<c>token</c> 是实际发请求用的，
+/// <c>expiresAt</c> 是它的硬过期时间，<c>apiBase</c> 是渠道下发的 API 主机（企业版会不同）。
+/// </summary>
+public sealed record CopilotToken(string Token, DateTimeOffset? ExpiresAt, int? RefreshInSeconds, string? ApiBase, string? Sku);

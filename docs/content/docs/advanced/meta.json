@@ -2,6 +2,6 @@
   "title": "进阶",
   "description": "架构、配置、隐私护栏原理与常见问题",
   "icon": "Blocks",
-  "root": true,
+  "defaultOpen": true,
   "pages": ["index", "config", "privacy", "troubleshooting"]
 }

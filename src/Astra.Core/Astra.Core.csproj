@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- AOT analyzer gate (IL2026/IL3050 are errors); does not flow through ProjectReference, so set per project. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Seed\models.json" LogicalName="Astra.Core.Seed.models.json" />
   </ItemGroup>

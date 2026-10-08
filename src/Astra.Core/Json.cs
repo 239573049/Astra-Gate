@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace Astra.Core;
@@ -17,6 +18,7 @@ public static class Json
         ReadCommentHandling = JsonCommentHandling.Skip,
         AllowTrailingCommas = true,
         NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        TypeInfoResolver = JsonContexts.Resolver,
     };
 
     /// <summary>Options for the admin HTTP API: camelCase.</summary>
@@ -24,6 +26,7 @@ public static class Json
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        TypeInfoResolver = JsonContexts.Resolver,
     };
 
     /// <summary>Compact options for wire payloads we generate ourselves.</summary>
@@ -31,12 +34,40 @@ public static class Json
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        TypeInfoResolver = JsonContexts.Resolver,
     };
 
-    public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Storage);
+    /// <summary>
+    /// Options byte-identical to the System.Text.Json defaults (no naming policy, default encoder), with
+    /// the resolver swapped for source-generated metadata. Value texts embedded in client configuration
+    /// files must escape exactly like the plain <c>JsonSerializer</c> default, so no formatting knob is set.
+    /// </summary>
+    public static readonly JsonSerializerOptions Raw = new() { TypeInfoResolver = JsonContexts.Resolver };
 
+    // The generic JsonSerializer.Serialize<T>/Deserialize<T> overloads are annotated
+    // RequiresDynamicCode/RequiresUnreferencedCode; resolving the JsonTypeInfo first keeps the same
+    // formatting (the options instance still supplies the naming policy) without the reflection path.
+
+    /// <summary>Serializes with <see cref="Storage"/>; the type must be registered in a <see cref="JsonContexts"/>-backed context.</summary>
+    public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, JsonContexts.Info<T>(Storage));
+
+    /// <summary>Deserializes with <see cref="Storage"/>; null/whitespace yields <c>default</c>.</summary>
     public static T? Deserialize<T>(string? json) =>
-        string.IsNullOrWhiteSpace(json) ? default : JsonSerializer.Deserialize<T>(json, Storage);
+        string.IsNullOrWhiteSpace(json) ? default : JsonSerializer.Deserialize<T>(json, JsonContexts.Info<T>(Storage));
+
+    /// <summary>Serializes with <see cref="Api"/> (camelCase), for text files and non-HTTP contracts.</summary>
+    public static string SerializeApi<T>(T value) => JsonSerializer.Serialize(value, JsonContexts.Info<T>(Api));
+
+    /// <summary>Deserializes a <see cref="JsonNode"/> tree as camelCase (<see cref="Api"/>).</summary>
+    public static T? DeserializeApi<T>(JsonNode? node) =>
+        node is null ? default : node.Deserialize<T>(JsonContexts.Info<T>(Api));
+
+    /// <summary>Encodes a string as its default-escaped JSON text (see <see cref="Raw"/>).</summary>
+    public static string EncodeString(string value) => JsonSerializer.Serialize(value, JsonContexts.Info<string>(Raw));
+
+    /// <summary>Decodes the string a JSON text holds (see <see cref="Raw"/>); null yields null, malformed text throws <see cref="JsonException"/>.</summary>
+    public static string? DecodeString(string? json) =>
+        json is null ? null : JsonSerializer.Deserialize(json, JsonContexts.Info<string>(Raw));
 }
 
 /// <summary>Sortable unique id (ULID, Crockford base32).</summary>

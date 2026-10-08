@@ -16,6 +16,7 @@ import {
   runProviderAdd,
   runProviderList,
   runProviderRemove,
+  runTokenList,
 } from './commands/admin.js';
 import { runSetPassword } from './commands/config.js';
 import { runRestoreAll } from './commands/restore-all.js';
@@ -129,14 +130,25 @@ client
   .addArgument(new Argument('<kind>', 'Client kind').choices([...CLIENT_KINDS]))
   .requiredOption('--provider <id-or-name>', 'Provider id or name to bind')
   .option('--model <model>', 'Model to write into the client configuration')
-  .action((kind: (typeof CLIENT_KINDS)[number], opts: { provider: string; model?: string }) =>
-    runClientEnable(kind, opts),
+  .option(
+    '--token <id-or-name>',
+    "Token to write into the client configuration (default: the client's current token, else the default token)",
+  )
+  .action(
+    (kind: (typeof CLIENT_KINDS)[number], opts: { provider: string; model?: string; token?: string }) =>
+      runClientEnable(kind, opts),
   );
 client
   .command('disable')
   .description('Disable a client and restore its original configuration')
   .addArgument(new Argument('<kind>', 'Client kind').choices([...CLIENT_KINDS]))
   .action((kind: (typeof CLIENT_KINDS)[number]) => runClientDisable(kind));
+
+const token = program.command('token').description('Manage tokens (credentials clients use to reach Astra)');
+token
+  .command('list')
+  .description("List tokens with today's and lifetime usage")
+  .action(() => runTokenList());
 
 const provider = program.command('provider').description('Manage providers (upstream AI accounts)');
 provider

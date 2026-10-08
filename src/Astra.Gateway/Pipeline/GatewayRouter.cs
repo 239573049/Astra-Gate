@@ -1,6 +1,7 @@
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Tokens;
 using Astra.Data;
 using Microsoft.AspNetCore.Http;
 
@@ -13,47 +14,73 @@ public sealed class GatewayException(int status, string type, string message) : 
     public string Type { get; } = type;
 }
 
-/// <summary>Who is calling and where the request goes.</summary>
-public sealed record GatewayRoute(ClientRecord Client, ClientBinding Binding, Provider Provider)
+/// <summary>
+/// Who is calling and where the request goes: the authenticating token, the client named by the key suffix (null for a
+/// direct call with a bare token), the pinned subscription account (null = the provider's default) and the provider.
+/// </summary>
+public sealed record GatewayRoute(TokenRecord Token, ClientRecord? Client, string? AccountId, Provider Provider)
 {
+    /// <summary>The calling client's kind; null for a direct call.</summary>
+    public string? ClientKind => Client?.Kind;
+
     /// <summary>
     /// The model sent upstream. The gateway passes model names through, except for Claude Desktop, whose role ids
     /// are mapped to provider models (plan §7.5).
     /// </summary>
     public string UpstreamModelFor(string requested) =>
-        Client.Kind == ClientKinds.ClaudeDesktop ? ClaudeDesktopRoles.Map(ClaudeDesktopRoles.Parse(Client.ExtraJson), requested) : requested;
+        Client?.Kind == ClientKinds.ClaudeDesktop ? ClaudeDesktopRoles.Map(ClaudeDesktopRoles.Parse(Client.ExtraJson), requested) : requested;
 }
 
 /// <summary>
-/// Authenticates the local client key (plan §6.1) and resolves the bound provider.
-/// Keys are looked up by prefix and compared by hash in constant time.
+/// Authenticates the gateway token (plan §6.1, tokens) and resolves the provider: "&lt;token&gt;.&lt;kind&gt;" routes through
+/// that client's binding, a bare token is a direct call to the token's own default provider.
+/// Tokens are looked up by prefix and compared by hash in constant time.
 /// </summary>
 public sealed class GatewayRouter(AstraDatabase db)
 {
     public async Task<GatewayRoute> ResolveAsync(HttpRequest request, CancellationToken ct)
     {
-        var key = LocalKeys.Extract(request);
+        var key = GatewayTokens.Extract(request);
         if (string.IsNullOrEmpty(key))
-            throw new GatewayException(401, "authentication_error", "缺少 Astra 客户端密钥（Authorization: Bearer / x-api-key / x-goog-api-key / ?key=）。请在 Astra 的「客户端」页面启用对应客户端。");
-        if (!LocalKeys.LooksLikeLocalKey(key))
-            throw new GatewayException(401, "authentication_error", "这不是 Astra 客户端密钥。请在 Astra 的「客户端」页面启用客户端，由 Astra 写入密钥。");
+            throw new GatewayException(401, "authentication_error", "缺少 Astra 令牌（Authorization: Bearer / x-api-key / x-goog-api-key / ?key=）。请在 Astra 的「客户端」页面启用对应客户端，或在「令牌」页面复制令牌。");
+        if (GatewayTokens.IsLegacyKey(key))
+            throw new GatewayException(401, "authentication_error", "旧版客户端密钥已失效（Astra 已改用令牌）。请在 Astra 的「客户端」页面重新启用该客户端。");
+        if (!GatewayTokens.TryParse(key, out var secret, out var kind))
+            throw new GatewayException(401, "authentication_error", "这不是 Astra 令牌。请在 Astra 的「客户端」页面启用客户端，由 Astra 写入令牌，或在「令牌」页面复制令牌。");
 
-        var prefix = LocalKeys.PrefixOf(key);
-        var client = (await db.Clients.ListAsync(ct)).FirstOrDefault(c => c.LocalKeyPrefix == prefix && LocalKeys.Verify(key, c.LocalKeyHash));
-        if (client is null)
-            throw new GatewayException(401, "authentication_error", "Astra 客户端密钥无效或已轮换。请在 Astra 中重新启用该客户端。");
-        if (!client.Enabled)
-            throw new GatewayException(403, "permission_error", $"客户端 {client.Kind} 在 Astra 中未启用。");
+        var prefix = GatewayTokens.PrefixOf(secret);
+        var token = (await db.Tokens.FindByPrefixAsync(prefix, ct)).FirstOrDefault(t => GatewayTokens.Verify(secret, t.KeyHash));
+        if (token is null)
+            throw new GatewayException(401, "authentication_error", "Astra 令牌无效或已重置。请在 Astra 中重新启用该客户端，或在「令牌」页面复制最新的令牌。");
+        if (!token.Enabled)
+            throw new GatewayException(403, "permission_error", $"令牌 {token.Name} 已停用。");
 
+        if (kind is null)
+        {
+            if (token.ProviderId is null)
+                throw new GatewayException(503, "api_error", $"令牌 {token.Name} 没有设置默认提供商，无法直接调用。请在 Astra 的「令牌」页面为它选择提供商，或通过已启用的客户端使用。");
+            var direct = await db.Providers.GetAsync(token.ProviderId, ct)
+                         ?? throw new GatewayException(503, "api_error", $"令牌 {token.Name} 的默认提供商不存在，请在 Astra 的「令牌」页面重新选择。");
+            return new GatewayRoute(token, null, token.AccountId, RequireUsable(direct));
+        }
+
+        var client = await db.Clients.GetAsync(kind, ct);
+        if (client is not { Enabled: true })
+            throw new GatewayException(403, "permission_error", $"客户端 {kind} 在 Astra 中未启用。");
         var binding = await db.Clients.GetBindingAsync(client.Kind, ct)
                       ?? throw new GatewayException(503, "api_error", $"客户端 {client.Kind} 还没有选择提供商。请在 Astra 的「客户端」页面选择一个提供商。");
         var provider = await db.Providers.GetAsync(binding.ProviderId, ct)
                        ?? throw new GatewayException(503, "api_error", "绑定的提供商不存在，请在 Astra 中重新选择提供商。");
+        return new GatewayRoute(token, client, binding.AccountId, RequireUsable(provider));
+    }
+
+    private static Provider RequireUsable(Provider provider)
+    {
         if (!provider.Enabled)
             throw new GatewayException(503, "api_error", $"提供商 {provider.Name} 已停用。");
         if (provider.Endpoints.Count == 0)
             throw new GatewayException(503, "api_error", $"提供商 {provider.Name} 没有配置接口地址。");
-        return new GatewayRoute(client, binding, provider);
+        return provider;
     }
 
     /// <summary>

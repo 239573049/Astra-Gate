@@ -64,7 +64,9 @@ public sealed class GatewayPipeline(
         {
             var route = await router.ResolveAsync(ctx.Request, ct);
             provider = route.Provider;
-            record.ClientKind = route.Client.Kind;
+            record.ClientKind = route.ClientKind;
+            record.TokenId = route.Token.Id;
+            record.TokenName = route.Token.Name;
             record.ProviderId = provider.Id;
             record.ProviderName = provider.Name;
 
@@ -72,7 +74,7 @@ public sealed class GatewayPipeline(
             capture?.Set(BodyStore.ClientRequest, rawBody);
 
             // Privacy guard (plan §6.7): runs on the client body before anything leaves the machine.
-            var guard = privacy.Inspect(rawBody, route.Client.Kind);
+            var guard = privacy.Inspect(rawBody, route.ClientKind);
             if (guard.Applied && guard.Hits.Count > 0)
                 record.PrivacyJson = PrivacyGuardService.ReportJson(guard.DryRun, guard.Blocked, guard.Hits, guard.RestoreMap.Count);
             if (guard.Blocked)
@@ -124,6 +126,12 @@ public sealed class GatewayPipeline(
             record.RequestedModel = model;
             var upstreamModel = route.UpstreamModelFor(model);
             record.UpstreamModel = upstreamModel;
+            // ChatGPT 订阅（Codex）的 backend 把请求钉死成 codex-cli 的形状：input 必须是数组、
+            // store 必须是 false、stream 必须是 true（客户端要非流式时我们带 stream:true 发上去，
+            // 再把完整响应一次性回给客户端）。因此上游的流式与否在这里就定下来了。
+            var forceResponsesStream = provider.SettingFlag("force_stream", false) && upstreamProtocol == ApiProtocol.OpenAIResponses;
+            var clientWantsStream = stream;
+            if (forceResponsesStream) stream = true;
             record.Stream = stream;
             var clientWantsChatUsage = inbound == ApiProtocol.OpenAIChat
                                        && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
@@ -140,6 +148,22 @@ public sealed class GatewayPipeline(
                 if (upstreamModel != model && inbound != ApiProtocol.Gemini)
                 {
                     body["model"] = upstreamModel; // Gemini carries the model in the URL instead.
+                    rewritten = true;
+                }
+                if (forceResponsesStream)
+                {
+                    // codex backend: input 必须是数组、store 必须是 false、stream 必须是 true。
+                    if (body["input"] is JsonValue inputValue && inputValue.TryGetValue<string>(out var inputText))
+                    {
+                        body["input"] = new JsonArray(new JsonObject
+                        {
+                            ["type"] = "message", ["role"] = "user",
+                            ["content"] = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = inputText }),
+                        });
+                        rewritten = true;
+                    }
+                    body["store"] = false;
+                    body["stream"] = true;
                     rewritten = true;
                 }
                 if (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
@@ -180,12 +204,15 @@ public sealed class GatewayPipeline(
             }
 
             var restore = guard.RestoreMap;
+            // 被强制成流式的上游（codex backend）遇到"客户端要非流式"时：把 SSE 读完，
+            // 再按客户端协议拼成一个完整 JSON 响应回去。
+            var collapseStream = forceResponsesStream && !clientWantsStream;
             decoder = upstreamCodec?.CreateResponseDecoder(new ResponseDecodeContext { Stream = stream, Model = upstreamModel });
             encoder = passthrough
                 ? null
                 : clientCodec!.CreateResponseEncoder(new ResponseEncodeContext
                 {
-                    Stream = stream,
+                    Stream = clientWantsStream,
                     Model = model,
                     ResponseId = record.Id,
                     Created = record.StartedAtUtc,
@@ -193,12 +220,14 @@ public sealed class GatewayPipeline(
                     Request = ir,
                 });
 
-            if (stream)
+            if (stream && !collapseStream)
             {
                 // Gemini :streamGenerateContent without ?alt=sse answers with a JSON array of chunks, not SSE.
                 var asJsonArray = inbound == ApiProtocol.Gemini && pathAltSse == false;
                 await StreamAsync(ctx, response, decoder, encoder, observer, sw, restore, injectedChatUsage, capture, s.StreamIdleTimeoutSec, asJsonArray, ct);
             }
+            else if (collapseStream)
+                await CollapseStreamAsync(ctx, response, decoder, encoder, observer, sw, restore, capture, s.StreamIdleTimeoutSec, ct);
             else
                 await BufferAsync(ctx, response, decoder, encoder, observer, sw, restore, capture, s.StreamIdleTimeoutSec, ct);
 
@@ -281,7 +310,7 @@ public sealed class GatewayPipeline(
         UpstreamAuth credentials;
         try
         {
-            credentials = await auth.ResolveAsync(provider.Id, route.Binding.AccountId, ct) ?? UpstreamAuth.None;
+            credentials = await auth.ResolveAsync(provider.Id, route.AccountId, ct) ?? UpstreamAuth.None;
         }
         catch (SubscriptionAuthException e)
         {
@@ -296,7 +325,7 @@ public sealed class GatewayPipeline(
             response.Dispose();
             try
             {
-                credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, route.Binding.AccountId, ct);
+                credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, route.AccountId, ct);
             }
             catch (SubscriptionAuthException e)
             {
@@ -326,16 +355,21 @@ public sealed class GatewayPipeline(
             if (passthrough && endpoint.Protocol is ApiProtocol.OpenAIChat or ApiProtocol.OpenAIResponses
                 && clientRequest.Headers["openai-beta"].ToString() is { Length: > 0 } openaiBeta)
                 request.Headers.TryAddWithoutValidation("OpenAI-Beta", openaiBeta);
+            // codex-cli 每个聊天后端请求都带 session-id / thread-id；直通时原样带上
+            // （chatgpt.com 用它做缓存亲和）。只转发现有值，绝不替客户端编造。
+            if (passthrough && endpoint.Protocol == ApiProtocol.OpenAIResponses)
+            {
+                foreach (var name in (string[])["session-id", "thread-id", "x-client-request-id"])
+                    if (clientRequest.Headers[name].ToString() is { Length: > 0 } forwarded)
+                        request.Headers.TryAddWithoutValidation(name, forwarded);
+            }
             foreach (var (name, value) in provider.ExtraHeaders)
             {
                 request.Headers.Remove(name);
                 request.Headers.TryAddWithoutValidation(name, value);
             }
-            if (a.HeaderName is not null && a.HeaderValue is not null)
-            {
-                request.Headers.Remove(a.HeaderName);
-                request.Headers.TryAddWithoutValidation(a.HeaderName, a.HeaderValue);
-            }
+            // 凭据 + 上游 CLI 固定头（Authorization / chatgpt-account-id）。
+            a.Apply(request);
             return request;
         }
     }
@@ -554,6 +588,65 @@ public sealed class GatewayPipeline(
         capture?.Set(BodyStore.ClientResponse, output);
         ctx.Response.StatusCode = 200;
         await ctx.Response.WriteAsync(output, ct);
+    }
+
+    /// <summary>
+    /// 上游被强制成流式（codex backend 只接受 stream:true），但客户端要的是非流式：
+    /// 把整个 SSE 读完喂给解码器，再用客户端的编码器拼出**一个**完整 JSON 响应。
+    /// 直接回客户端协议的 JSON（与 BufferAsync 的非转换分支一致），不做二次转换。
+    /// </summary>
+    private async Task CollapseStreamAsync(
+        HttpContext ctx, HttpResponseMessage response, IResponseDecoder? decoder, IResponseEncoder? encoder,
+        ResponseObserver observer, Stopwatch sw, IReadOnlyDictionary<string, string> restore,
+        BodyCapture? capture, int idleTimeoutSec, CancellationToken ct)
+    {
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        var parser = new SseParser();
+        var upstreamCapture = capture is null ? null : new StringBuilder();
+        var buffer = new byte[16 * 1024];
+        var rawPending = new StringBuilder();
+        var sawSseEvent = false;
+        while (true)
+        {
+            var read = await ReadWithIdleTimeoutAsync(stream, buffer, idleTimeoutSec, ct);
+            if (read == 0) break;
+            upstreamCapture?.Append(Encoding.UTF8.GetString(buffer, 0, read));
+            var events = parser.Feed(buffer.AsSpan(0, read));
+            if (events.Count > 0)
+            {
+                sawSseEvent = true;
+                rawPending.Clear();
+            }
+            else if (!sawSseEvent)
+            {
+                rawPending.Append(Encoding.UTF8.GetString(buffer, 0, read));
+            }
+            foreach (var sse in events) Emit(decoder?.DecodeSse(sse) ?? []);
+        }
+        foreach (var sse in parser.Flush()) Emit(decoder?.DecodeSse(sse) ?? []);
+        if (!sawSseEvent && rawPending.Length > 0 && JsonNode.Parse(rawPending.ToString()) is JsonObject whole)
+            Emit(decoder?.DecodeJson(whole) ?? []);
+        Emit(decoder?.Complete() ?? []);
+        capture?.Set(BodyStore.UpstreamResponse, upstreamCapture?.ToString() ?? "");
+
+        // 非转换路径没有客户端编码器：把上游的完整响应对象原样透出，只是去掉了 SSE 外壳。
+        JsonObject payload;
+        if (encoder is null)
+            payload = decoder?.FinalResponse
+                      ?? throw new GatewayException(502, "api_error", "上游强制流式但响应里没有完整结果。");
+        else
+            payload = encoder.BuildJson();
+        var json = payload.ToJsonString(GatewayJson.Options);
+        json = PrivacyGuardService.Restore(json, restore);
+        capture?.Set(BodyStore.ClientResponse, json);
+        ctx.Response.StatusCode = 200;
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync(json, ct);
+
+        void Emit(IEnumerable<UnifiedStreamEvent> events)
+        {
+            foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds);
+        }
     }
 
     private async Task ForwardErrorAsync(

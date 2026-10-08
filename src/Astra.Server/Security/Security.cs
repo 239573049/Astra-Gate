@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Astra.Server.Api;
 using Astra.Server.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -69,7 +70,7 @@ public sealed class AdminSessions(IDataProtectionProvider dp)
 /// - loopback mode: Host header must be 127.0.0.1 / localhost / [::1] (DNS-rebinding defense);
 /// - every mutating /api call needs "X-Astra-Admin: 1" (forces a CORS preflight from foreign origins);
 /// - non-loopback mode: /api requires an admin session cookie (except health/version/auth).
-/// Gateway endpoints (/v1, /v1beta) authenticate with local client keys elsewhere.
+/// Gateway endpoints (/v1, /v1beta) authenticate with gateway tokens elsewhere.
 /// </summary>
 public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions options, AdminSessions sessions)
 {
@@ -113,6 +114,6 @@ public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions optio
     private static Task Problem(HttpContext ctx, int status, string message)
     {
         ctx.Response.StatusCode = status;
-        return ctx.Response.WriteAsJsonAsync(new { error = message });
+        return ctx.Response.WriteAsJsonAsync(new ErrorOnlyDto(message), ApiJson.Info<ErrorOnlyDto>());
     }
 }

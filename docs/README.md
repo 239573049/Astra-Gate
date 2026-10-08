@@ -11,13 +11,15 @@ pnpm --filter @aidotnet/docs build
 
 ## 模块结构
 
-内容在 `content/docs/`，每个根目录是一个侧边栏标签（`meta.json` 的 `"root": true`）：
+内容在 `content/docs/`。左侧菜单是**单栏分组侧边栏**：根 `meta.json` 决定分组顺序，每个目录是一个
+分组（目录的 `meta.json` 提供 `title` / `description` / `icon` / `defaultOpen`），`pages` 里的
+`---[图标名]名称---` 条目是组内小节分隔条。页面 URL 与目录层级一致，调整分组不会改变 URL：
 
-| 目录 | 标签 | 内容 |
+| 目录 | 分组 | 内容 |
 | --- | --- | --- |
 | `guide/` | 快速开始 | 介绍、安装、第一个请求 |
-| `console/` | 管理控制台 | 按页面划分的截图教程 |
-| `cli/` | CLI 参考 | astra 全部子命令 |
+| `console/` | 管理控制台 | 按页面划分的截图教程（组内按「服务商与模型 / 客户端与令牌 / 运行与安全」分小节） |
+| `cli/` | CLI 参考 | astra 全部子命令（按「服务管理 / 客户端与提供商 / 安装与维护」分小节） |
 | `desktop/` | 桌面端 | Electron 应用 |
 | `advanced/` | 进阶 | 架构、配置、隐私护栏原理、常见问题 |
 
@@ -26,6 +28,14 @@ pnpm --filter @aidotnet/docs build
 | `app/(home)` | 落地页 |
 | `app/docs` | 文档布局与页面 |
 | `app/api/search/route.ts` | 搜索 |
+| `app/sitemap.ts` / `app/robots.ts` | sitemap.xml / robots.txt |
+| `app/llms.txt` / `app/llms-full.txt` / `app/llms.mdx/**` | 面向 AI 的文档索引 / 全文 / 单页 Markdown（GEO） |
+
+## 站点 URL
+
+canonical、hreflang、sitemap.xml、robots.txt、llms.txt 都需要绝对 URL。站点域名**固定为**
+`https://astra-gate.si`（`lib/shared.ts` 的 `siteUrl` 常量，不走环境变量，本地构建与 Docker
+构建输出一致）。要换域名就改这一个常量。
 
 ## 截图教程的截图
 

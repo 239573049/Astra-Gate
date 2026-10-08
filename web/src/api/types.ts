@@ -128,13 +128,67 @@ export interface Provider {
   priceMultiplier: number; priceKey?: string | null; adapterId?: string | null; settings: Record<string, unknown>;
   enabled: boolean; sortOrder: number; notes?: string | null; website?: string | null;
   modelCount: number; boundClients: string[]; createdAt: string; updatedAt: string;
+  /** Balance / quota query settings (settings.quota is managed only through the quota endpoints). */
+  quotaConfig: ProviderQuotaConfig;
+  /** Last snapshot; on a failed query the previous plans stay and `error` / `errorCode` describe the failure. */
+  quota?: ProviderQuotaSnapshot | null;
+  quotaCheckedAtUtc?: string | null;
 }
+
+// ---------- provider balance / quota query ----------
+export type QuotaErrorCode =
+  | "config" | "no_key" | "unauthorized" | "no_endpoint" | "rate_limited" | "upstream"
+  | "timeout" | "network" | "not_json" | "too_large" | "empty";
+/** One balance or usage window. Money plans carry remaining/total/used + unit; plan windows carry usedPercent. */
+export interface ProviderQuotaPlan {
+  name?: string | null; unit?: string | null; remaining?: number | null; total?: number | null; used?: number | null;
+  usedPercent?: number | null; resetsAtUtc?: string | null; windowMinutes?: number | null; extra?: string | null;
+}
+export interface ProviderQuotaSnapshot {
+  fetchedAtUtc?: string | null; template?: string | null; kind?: "balance" | "plan" | null;
+  isValid?: boolean | null; invalidMessage?: string | null; planLabel?: string | null; plans?: ProviderQuotaPlan[] | null;
+  error?: string | null; errorCode?: QuotaErrorCode | null; errorAtUtc?: string | null; failures?: number | null;
+}
+export interface ProviderQuotaRequest { method: "GET" | "POST"; url: string; auth: "provider" | "none"; headers?: Record<string, string> }
+export interface ProviderQuotaConfig {
+  enabled: boolean;
+  /** null = the suggested template; "custom" = request + extract below. */
+  template?: string | null; suggestedTemplate?: string | null; effectiveTemplate?: string | null;
+  /** null = the global interval; 0 = never in the background. */
+  intervalMinutes?: number | null; effectiveIntervalMinutes: number;
+  timeoutSec: number; baseUrl?: string | null; params: Record<string, string>;
+  /** Names of the stored secret parameters (values never leave the server). */
+  secrets: string[];
+  request?: ProviderQuotaRequest | null; extract?: Record<string, unknown> | null;
+}
+/** PUT body: omitted fields keep their value; secrets: "" removes one, an omitted name keeps it. */
+export interface ProviderQuotaConfigInput {
+  enabled?: boolean; template?: string | null; intervalMinutes?: number | null; timeoutSec?: number; baseUrl?: string | null;
+  params?: Record<string, string>; secrets?: Record<string, string>;
+  request?: ProviderQuotaRequest | null; extract?: Record<string, unknown> | null;
+}
+export interface ProviderQuotaState { config: ProviderQuotaConfig; snapshot?: ProviderQuotaSnapshot | null; checkedAtUtc?: string | null }
+export interface ProviderQuotaTest {
+  ok: boolean; errorCode?: QuotaErrorCode | null; error?: string | null; httpStatus?: number | null; url?: string | null;
+  raw?: unknown; snapshot?: ProviderQuotaSnapshot | null; template?: string | null;
+}
+export interface QuotaTemplate {
+  id: string; name: string; kind: "balance" | "plan"; appliesTo: string[]; hosts: string[];
+  params: { name: string; secret: boolean; required: boolean }[];
+  request: ProviderQuotaRequest; extract: Record<string, unknown>;
+}
+// GET /api/provider-quota/templates -> QuotaTemplate[]
+// GET /api/providers/{id}/quota -> ProviderQuotaState
+// POST /api/providers/{id}/quota -> ProviderQuotaState (400 {error, details:{errorCode}} for config / no_key)
+// POST /api/providers/{id}/quota/test body ProviderQuotaConfigInput -> ProviderQuotaTest (nothing saved)
+// PUT /api/providers/{id}/quota/config body ProviderQuotaConfigInput -> ProviderQuotaState
 // GET /api/providers -> Provider[] ; GET /api/providers/{id} -> Provider
 // POST /api/providers body ProviderCreate -> Provider
 // PATCH /api/providers/{id} body Partial<ProviderUpdate> -> Provider  (apiKey: "" clears, omitted keeps)
 // DELETE /api/providers/{id}  -> 409 {error, details:{boundClients}} when a client is bound
 // POST /api/providers/{id}/duplicate -> Provider
-// POST /api/providers/{id}/test body {modelId?} -> ProviderTestResult
+// POST /api/providers/{id}/test body ProviderTestRequest -> text/event-stream of ProviderTestEvent
+//   Validation failures (unknown provider, bad parameter) answer with plain JSON {error} instead.
 // GET /api/providers/{id}/remote-models -> RemoteModel[]
 // GET /api/providers/{id}/template-update -> {currentVersion, latestVersion, changes: string[]} ; POST same path -> Provider
 // PUT /api/providers/order body {ids: string[]}
@@ -150,7 +204,31 @@ export interface ProviderUpdate {
   authScheme: AuthScheme; extraHeaders: Record<string, string>; httpProxy: string | null; priceMultiplier: number;
   priceKey: string | null; settings: Record<string, unknown>; enabled: boolean; notes: string | null;
 }
-export interface ProviderTestResult { ok: boolean; latencyMs: number; httpStatus?: number | null; protocol: ApiProtocol; model?: string | null; error?: string | null }
+/** Body of one provider connection test; every field is optional (the server fills in the defaults). */
+export interface ProviderTestRequest {
+  modelId?: string | null;
+  /** Upstream protocol; defaults to the provider's preferred one. */
+  protocol?: ApiProtocol | null;
+  stream?: boolean;
+  prompt?: string | null;
+  maxOutputTokens?: number;
+}
+/** The "done" event of a test stream: whether it worked, what it cost in time, and what came back. */
+export interface ProviderTestDone {
+  ok: boolean; error?: string | null; httpStatus?: number | null;
+  /** Milliseconds to the upstream response headers; null when the request never reached one. */
+  httpMs?: number | null;
+  /** Milliseconds to the first token of the answer; null when the upstream sent none. */
+  ttftMs?: number | null;
+  totalMs?: number | null;
+  text: string; reasoning: string;
+  /** The upstream body as received (credentials redacted, truncated past 256 KiB). */
+  raw: string; rawTruncated: boolean; contentType?: string | null;
+  /** The upstream response headers, credentials redacted. */
+  headers?: Record<string, string> | null;
+  responseModel?: string | null; requestId: string;
+  usage?: { inputTokens: number; outputTokens: number; raw?: unknown } | null;
+}
 export interface RemoteModel { id: string; displayName?: string | null; linkedSystemModelId?: string | null; alreadyAdded: boolean }
 
 export type FieldOrigin = "inherited" | "overridden" | "unset";
@@ -186,8 +264,11 @@ export interface ClientInfo {
   appliedAt?: string | null; warnings: string[]; requiresRestart: boolean;
   /** Enabled, not drifted, but Astra would now write different values (e.g. the gateway port changed). */
   configOutdated?: boolean;
+  /** Token written into this client's config (as "<token>.<kind>"); "default" when never chosen. */
+  tokenId?: string | null;
 }
-export interface EnableRequest { providerId?: string | null; model?: string | null; extras?: Record<string, unknown> | null }
+/** tokenId: omitted keeps the client's current token (default token when it has none). */
+export interface EnableRequest { providerId?: string | null; model?: string | null; extras?: Record<string, unknown> | null; tokenId?: string | null }
 export interface ConfigChange { file: string; format: "toml" | "json" | "env" | "yaml"; keyPath: string; before?: string | null; after?: string | null }
 export interface ConfigPreview { changes: ConfigChange[]; diffs: { file: string; unifiedDiff: string }[]; warnings: string[] }
 export interface DisableResult { restored: string[]; drifted: string[]; client: ClientInfo }
@@ -199,8 +280,36 @@ export interface BackupInfo { id: string; createdAt: string; files: string[]; fi
 // POST /api/clients/{kind}/disable -> DisableResult
 // POST /api/clients/{kind}/force-restore -> DisableResult
 // GET /api/clients/{kind}/backups -> BackupInfo[] ; POST /api/clients/{kind}/backups/{id}/restore -> ClientInfo
-// POST /api/clients/{kind}/rotate-key -> ClientInfo   (rewrites the key in the client config when enabled)
 // GET /api/clients/{kind}/models -> string[]   (enabled models of the bound provider, for model pickers)
+
+// ---------- tokens ----------
+/** Usage of one token: `today` from the request log (server-local day), `total` from lifetime counters. */
+export interface TokenStats {
+  costUsd: number; requests: number; inputTokens: number; outputTokens: number; totalTokens: number;
+  cacheReadTokens: number; cacheWriteTokens: number;
+  /** cacheReadTokens / inputTokens; null without input. */
+  cacheHitRate?: number | null;
+  /** Weighted output speed: output tokens / generation seconds of successful requests; null without data. */
+  tps?: number | null;
+}
+export interface Token {
+  id: string; name: string; isDefault: boolean; enabled: boolean;
+  /** e.g. "sk-astra-AbC123…" — the plaintext only comes from /reveal. */
+  keyMasked: string;
+  /** Provider (and pinned subscription account) for direct calls with the bare token; null = direct calls rejected. */
+  providerId?: string | null; accountId?: string | null;
+  createdAt: string; updatedAt: string; lastUsedAt?: string | null;
+  /** Enabled clients whose config uses this token. */
+  clients: ClientKind[];
+  today: TokenStats; total: TokenStats;
+}
+export interface TokenMutationResult { token?: Token | null; rewritten: ClientKind[]; skipped: ClientKind[] }
+// GET /api/tokens -> Token[]
+// POST /api/tokens body {name, providerId?, accountId?} -> Token
+// PATCH /api/tokens/{id} body {name?, enabled?, providerId?, accountId?} -> Token   (never touches client configs)
+// POST /api/tokens/{id}/reset -> TokenMutationResult   (new key; rewrites the configs of its enabled clients)
+// POST /api/tokens/{id}/reveal -> {token}
+// DELETE /api/tokens/{id} -> TokenMutationResult       (default token: 409; clients move to the default token)
 
 // ---------- requests & stats ----------
 export type RequestStatus = "success" | "upstream_error" | "gateway_error" | "client_cancelled" | "blocked";
@@ -221,6 +330,8 @@ export interface RequestSummary {
   totalInputTokens: number; totalOutputTokens: number;
   cacheReadTokens: number; cacheWriteTokens: number; reasoningTokens: number;
   costNanoUsd: number; usageSource: "reported" | "missing";
+  /** Token that authenticated the request (current name, or the snapshot once the token was deleted). */
+  tokenId?: string | null; tokenName?: string | null;
 }
 export interface RequestUsageItem {
   tokenType: string; tokens: number; isPerCall: boolean; unitPrice: string; baseUnitPrice?: string | null;
@@ -237,7 +348,7 @@ export interface RequestDetail extends RequestSummary {
   /** Privacy guard outcome (plan §6.7); present when the guard produced a report for this request. */
   privacy?: PrivacyReport | null;
 }
-// GET /api/requests?from=&to=&client=&provider=&model=&status=&page=1&pageSize=50 -> Page<RequestSummary>
+// GET /api/requests?from=&to=&client=&token=&provider=&model=&status=&page=1&pageSize=50 -> Page<RequestSummary>
 // GET /api/requests/{id} -> RequestDetail
 export interface StatsSummary {
   range: Range; costUsd: number; requests: number; successRate: number;
@@ -248,11 +359,15 @@ export interface StatsSummary {
 export interface TimeseriesPoint { bucket: string; key: string; costUsd: number; requests: number; tokens: number }
 /** inputTokens already includes cacheReadTokens; hit rate = cacheReadTokens / inputTokens. */
 export interface TopModel { model: string; costUsd: number; requests: number; tokens: number; inputTokens: number; cacheReadTokens: number }
-// GET /api/stats/summary?range=&client= -> StatsSummary
-// GET /api/stats/timeseries?range=&groupBy=day|hour&by=model|provider|client&client=&tzOffset= -> TimeseriesPoint[]
+/** One local day of the activity heatmap; days without requests are absent. */
+export interface DailyActivity { day: string; requests: number }
+// GET /api/stats/summary?range=&client=&token= -> StatsSummary
+// GET /api/stats/timeseries?range=&groupBy=day|hour&by=model|provider|client|token&client=&token=&tzOffset= -> TimeseriesPoint[]
 //    (tzOffset = viewer's UTC offset in minutes; buckets are local "yyyy-MM-dd" / "yyyy-MM-ddTHH:00")
-// GET /api/stats/top-models?range=&limit=10&client= -> TopModel[]
-// `client` (a ClientKind) narrows any stats call to that client's requests.
+// GET /api/stats/top-models?range=&limit=10&client=&token= -> TopModel[]
+// GET /api/stats/activity-heatmap?days=365&client=&token=&tzOffset= -> DailyActivity[]
+//    (a fixed window ending today, 30-730 days; it ignores the range selector's 今天/7d/30d/90d)
+// `client` (a ClientKind) / `token` (a token id) narrow any stats call to those requests.
 
 // ---------- privacy guard (M11) ----------
 export type PrivacyAction = "off" | "warn" | "block" | "redact";
@@ -300,21 +415,45 @@ export interface AccountQuota {
   fetchedAtUtc?: string | null;
   session?: QuotaWindow | null;   // Claude 5h / Codex primary window
   weekly?: QuotaWindow | null;    // Claude 7d / Codex secondary window
-  credits?: { usedPercent?: number; monthlyLimit?: number | null; prepaidBalance?: number | null } | null; // Grok
+  credits?: { usedPercent?: number; resetsAtUtc?: string | null; monthlyLimit?: number | null; prepaidBalance?: number | null } | null; // Grok / Copilot premium requests
   planLabel?: string | null;
+  /** GitHub Copilot: premium-request quota (Copilot bills premium requests, not tokens). */
+  entitlement?: number | null;
+  remaining?: number | null;
+  overageUsed?: number | null;
+  overagePermitted?: boolean | null;
+  /** Copilot login reported by /copilot_internal/user. */
+  account?: string | null;
 }
 export interface ProviderAccount {
   id: string; providerId: string; displayName: string; accountEmail?: string | null; plan?: string | null;
   status: AccountStatus; expiresAtUtc?: string | null; lastRefreshAtUtc?: string | null; createdAt: string;
   quota?: AccountQuota | null;
+  /** codex 的额度重置卡快照（列表接口实时刷新）。 */
+  credits?: ResetCreditList | null;
 }
+/** One rate-limit reset card (codex); `status` is available | redeemed | expired. */
+export interface ResetCredit {
+  id: string; reset_type?: string | null; is_supported_by_plan?: boolean | null; status: string;
+  granted_at?: string | null; expires_at?: string | null; redeemed_at?: string | null;
+  title?: string | null; description?: string | null;
+}
+export interface ResetCreditList {
+  credits?: ResetCredit[] | null; available_count?: number | null; total_earned_count?: number | null;
+  history_enabled?: boolean | null;
+}
+// GET /api/provider-accounts/{id}/reset-credits -> ResetCreditList
+export interface ResetCreditResult { account: ProviderAccount; quota?: AccountQuota | null }
+// POST /api/provider-accounts/{id}/reset-credits/{creditId}/consume -> ResetCreditResult
 // GET /api/providers/{id}/accounts -> ProviderAccount[]   (tokens never leave the server)
 // POST /api/provider-accounts/{id}/refresh -> ProviderAccount (409 {error, status} when refresh failed)
 // POST /api/provider-accounts/{id}/quota -> ProviderAccount (501 {error} when the family has no probe)
 // DELETE /api/provider-accounts/{id}
 export type SubscriptionLoginStart =
   | { mode: "pkce"; state: string; authorizeUrl: string }
-  | { mode: "device"; state: string; userCode: string; verificationUrl?: string | null; interval: number };
+  | { mode: "device"; state: string; userCode: string; verificationUrl?: string | null; interval: number }
+  // Server-mediated flow (ZAI CLI): open the authorize URL, then the server polls until done.
+  | { mode: "cli"; state: string; authorizeUrl: string; interval: number };
 // POST /api/providers/{id}/accounts/login body {accountId?} -> SubscriptionLoginStart
 //   (400 {error, needsVerification: true} while the provider's OAuth flow is unverified)
 export type SubscriptionPollResult =
@@ -322,12 +461,25 @@ export type SubscriptionPollResult =
   | { status: "done"; account: ProviderAccount }
   | { status: "expired" | "denied" | "error"; error?: string | null };
 // POST /api/providers/{id}/accounts/login/{state}/poll -> SubscriptionPollResult
+/** A `codex login` already present on this machine (~/.codex/auth.json); tokens never cross the wire. */
+export interface LocalCodexLogin {
+  available: boolean; accountEmail?: string | null; plan?: string | null; detail?: string | null;
+}
+// GET /api/subscription/codex/local-login -> LocalCodexLogin
+export interface ImportedCodexAccount {
+  account: ProviderAccount; quota?: AccountQuota | null;
+  /** Set when the account was imported but its first verification failed. */
+  warning?: string | null;
+}
+// POST /api/providers/{id}/accounts/import-codex -> ImportedCodexAccount
 
 // ---------- settings ----------
 export interface Settings {
   locale: "zh" | "en"; debugBodies: boolean; bodyRetentionDays: number; requestRetentionDays: number | null;
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
   updateChannel: "stable" | "beta"; updateAutoCheck: boolean;
+  /** Background balance / quota refresh of API-key providers, minutes (0 = off; providers may override). */
+  quotaAutoIntervalMinutes: number;
   /** Read-only here (changed via CLI / config.json): */
   port: number; host: string; dataDir: string; gatewayBaseUrl: string;
 }

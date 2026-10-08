@@ -11,12 +11,21 @@ description: client / provider / restore-all 子命令
 astra client list                       # 列出全部客户端与接管状态
 astra client status claude-code         # 查看单个客户端详情
 astra client enable codex --provider deepseek --model deepseek-chat
+astra client enable codex --provider deepseek --token 工作电脑   # 指定写入的令牌
 astra client disable codex              # 停用并还原配置
 ```
 
 客户端标识：`codex`、`claude-code`、`gemini-cli`、`opencode`、`claude-desktop`、`grok-build`、`pi`、`hermes-agent`、`minimax-code`、`copilot-cli`、`vscode-copilot`。
 
-启用流程与控制台一致：先备份（首次修改前的备份永久保留），再写入网关地址与本地密钥。`--provider` 使用提供商的 ID（`astra provider list` 可查）。
+启用流程与控制台一致：先备份（首次修改前的备份永久保留），再写入网关地址与令牌。`--provider` 使用提供商的 ID 或名称（`astra provider list` 可查）；`--token` 使用令牌的 ID 或名称（`astra token list` 可查），不传时沿用该客户端当前的令牌，从未设置过则使用默认令牌。
+
+## 查看令牌
+
+```bash
+astra token list
+```
+
+列出全部令牌：是否默认、是否启用、使用它的客户端、今日消耗 / 今日 Token 与累计消耗。命令不会输出令牌明文；新建、重置、删除令牌以及复制明文请在控制台的[令牌页](/docs/console/tokens)完成。
 
 <Callout type="info" title="禁用即还原">
   `disable` 会撤销 Astra 写入的配置项。若某些项在接管后被你手动改过（漂移），

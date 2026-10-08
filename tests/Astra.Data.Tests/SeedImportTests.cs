@@ -4,6 +4,10 @@ using Astra.Core.Models;
 using Astra.Core.Seed;
 using Astra.Data.Tests;
 
+// These tests exercise vanilla Dapper deliberately (Astra.Data's AOT interceptors must not mask it);
+// opting the test assembly out of Dapper.AOT also silences DAP005 for the direct SqlMapper calls below.
+[module: DapperAot(false)]
+
 namespace Astra.Data;
 
 public class SeedImportTests

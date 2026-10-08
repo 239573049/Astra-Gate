@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Astra.Clients.Editing;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -135,7 +136,7 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
             var maxOutput = Long(info?["maxOutputTokens"]) ?? DefaultMaxOutputTokens;
             var context = Long(info?["contextWindow"]) ?? DefaultContextWindow;
             if (maxOutput >= context) maxOutput = Math.Max(1, context / 4);
-            models.Add(new JsonObject
+            models.AddNode(new JsonObject
             {
                 ["id"] = id,
                 ["name"] = name ?? id,

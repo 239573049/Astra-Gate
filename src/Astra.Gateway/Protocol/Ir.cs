@@ -228,7 +228,7 @@ public sealed class RequestEncodeContext
 
     public EffortBudgets EffortBudgets { get; init; } = new();
 
-    /// <summary>Anthropic upstream: add 5m cache_control breakpoints to system and tools (provider setting).</summary>
+    /// <summary>Anthropic upstream: add 5m cache_control breakpoints to system, tools, and the last two message blocks (provider setting).</summary>
     public bool AutoCacheControl { get; init; } = true;
 }
 
@@ -273,6 +273,13 @@ public interface IResponseDecoder
 
     /// <summary>End of the upstream stream: close open blocks, emit a MessageStop if none was seen.</summary>
     IEnumerable<UnifiedStreamEvent> Complete();
+
+    /// <summary>
+    /// The complete upstream response object, when the decoder can reconstruct one (Responses decoder:
+    /// a non-streaming body, or the terminal <c>response.completed|failed</c> event). Callers that must
+    /// answer a non-streaming client with a single JSON body use this instead of re-encoding.
+    /// </summary>
+    JsonObject? FinalResponse => null;
 }
 
 /// <summary>Converts IR events into the client protocol. Stateful, one per response.</summary>

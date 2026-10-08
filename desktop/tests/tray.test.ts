@@ -2,7 +2,7 @@ import type { MenuItemConstructorOptions } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
 
 import { navHash, NAV_ORDER } from '../src/shared/chrome';
-import { parsePrefs } from '../src/shared/prefs';
+import { DEFAULT_TRAY_PREFS, parsePrefs, parseTrayPrefs } from '../src/shared/prefs';
 import {
   buildTrayMenuTemplate,
   trayStateKey,
@@ -11,6 +11,7 @@ import {
   type TrayMenuEnv,
   type TrayState,
 } from '../src/shared/trayMenu';
+import { isTrayPanelCommand, sanitizeTrayTitle, trayPanelBounds } from '../src/shared/trayPanel';
 
 function state(over: Partial<TrayState> = {}): TrayState {
   return {
@@ -29,6 +30,7 @@ function state(over: Partial<TrayState> = {}): TrayState {
 function callbacks(): TrayCallbacks {
   return {
     onOpenWindow: vi.fn(),
+    onShowPanel: vi.fn(),
     onNavigate: vi.fn(),
     onStartService: vi.fn(),
     onStopService: vi.fn(),
@@ -92,6 +94,15 @@ describe('buildTrayMenuTemplate', () => {
     expect(items[1]!.label).toBe('Restarting service…');
     expect(find(items, 'Stop Service').enabled).toBe(false);
     expect(find(items, 'Restart Service').enabled).toBe(false);
+  });
+
+  it('offers the tray panel in the menu only on Linux', () => {
+    const cb = callbacks();
+    const linux: TrayMenuEnv = { platform: 'linux', locale: 'en', version: '1.2.3' };
+    click(find(buildTrayMenuTemplate(state(), cb, linux), 'Show Tray Panel'));
+    expect(cb.onShowPanel).toHaveBeenCalledOnce();
+    expect(buildTrayMenuTemplate(state(), cb, mac).some((i) => i.label === 'Show Tray Panel')).toBe(false);
+    expect(buildTrayMenuTemplate(state(), cb, win).some((i) => i.label === '显示托盘面板')).toBe(false);
   });
 
   it('navigates to every page from the Go To submenu', () => {
@@ -175,9 +186,66 @@ describe('navHash', () => {
 
 describe('parsePrefs', () => {
   it('falls back to defaults on missing or malformed input', () => {
-    expect(parsePrefs(null)).toEqual({ closeHintShown: false });
-    expect(parsePrefs('nope')).toEqual({ closeHintShown: false });
-    expect(parsePrefs('[1]')).toEqual({ closeHintShown: false });
-    expect(parsePrefs('{"closeHintShown":true}')).toEqual({ closeHintShown: true });
+    const defaults = { closeHintShown: false, tray: DEFAULT_TRAY_PREFS };
+    expect(parsePrefs(null)).toEqual(defaults);
+    expect(parsePrefs('nope')).toEqual(defaults);
+    expect(parsePrefs('[1]')).toEqual(defaults);
+    expect(parsePrefs('{"closeHintShown":true}')).toEqual({ ...defaults, closeHintShown: true });
+  });
+
+  it('keeps valid tray fields and defaults the rest one by one', () => {
+    const tray = parseTrayPrefs({ title: 'cost', sections: { overview: false, quota: 'yes', bogus: true } });
+    expect(tray.title).toBe('cost');
+    expect(tray.sections.overview).toBe(false);
+    expect(tray.sections.quota).toBe(DEFAULT_TRAY_PREFS.sections.quota);
+    expect(Object.keys(tray.sections)).not.toContain('bogus');
+    expect(parseTrayPrefs({ title: 'everything' }).title).toBe(DEFAULT_TRAY_PREFS.title);
+    expect(parseTrayPrefs(null)).toEqual(DEFAULT_TRAY_PREFS);
+    // Parsing never hands out the shared default object.
+    expect(parseTrayPrefs(null).sections).not.toBe(DEFAULT_TRAY_PREFS.sections);
+  });
+});
+
+describe('tray panel', () => {
+  const size = { width: 360, height: 500 };
+
+  it('drops down from a macOS menu-bar icon, centered on it', () => {
+    const workArea = { x: 0, y: 25, width: 1512, height: 920 };
+    const b = trayPanelBounds({ x: 1200, y: 0, width: 30, height: 24 }, workArea, size);
+    expect(b).toEqual({ x: 1035, y: 31, width: 360, height: 500 });
+  });
+
+  it('opens upward from a bottom taskbar and stays on screen at the corner', () => {
+    const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
+    const b = trayPanelBounds({ x: 1880, y: 1044, width: 24, height: 32 }, workArea, size);
+    expect(b).toEqual({ x: 1554, y: 534, width: 360, height: 500 });
+  });
+
+  it('opens sideways from a left taskbar', () => {
+    const workArea = { x: 48, y: 0, width: 1872, height: 1080 };
+    const b = trayPanelBounds({ x: 8, y: 1000, width: 32, height: 32 }, workArea, size);
+    expect(b).toEqual({ x: 54, y: 574, width: 360, height: 500 });
+  });
+
+  it('places below a cursor anchor, or above when there is no room', () => {
+    const workArea = { x: 0, y: 0, width: 1920, height: 1080 };
+    expect(trayPanelBounds({ x: 500, y: 100, width: 0, height: 0 }, workArea, size).y).toBe(106);
+    expect(trayPanelBounds({ x: 500, y: 1000, width: 0, height: 0 }, workArea, size).y).toBe(494);
+  });
+
+  it('never grows taller than the work area', () => {
+    const workArea = { x: 0, y: 25, width: 1440, height: 400 };
+    const b = trayPanelBounds({ x: 1200, y: 0, width: 30, height: 24 }, workArea, { width: 360, height: 900 });
+    expect(b.height).toBe(388);
+    expect(b.y).toBe(31);
+  });
+
+  it('validates renderer input', () => {
+    expect(isTrayPanelCommand('restart')).toBe(true);
+    expect(isTrayPanelCommand('rm -rf')).toBe(false);
+    expect(isTrayPanelCommand(1)).toBe(false);
+    expect(sanitizeTrayTitle({ title: ' 7\n', detail: 'Today 7 calls' })).toEqual({ title: '7', detail: 'Today 7 calls' });
+    expect(sanitizeTrayTitle({ title: 42 })).toEqual({ title: '', detail: '' });
+    expect(sanitizeTrayTitle('x')).toBeNull();
   });
 });

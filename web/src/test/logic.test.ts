@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { api, ApiError, qs } from '../api/client';
 import { compactSchedule, emptySchedule, parsePricing } from '../components/PricingEditor';
-import { breakdownRows, bucketTotals, fillBuckets, rangeBuckets, rangeStart } from '../lib/stats';
+import { activityGrid, activityLevel, breakdownRows, bucketTotals, fillBuckets, rangeBuckets, rangeStart } from '../lib/stats';
 
 describe('parsePricing / compactSchedule', () => {
   it('validates the document shape', () => {
@@ -60,6 +60,42 @@ describe('overview time axis', () => {
     const totals = [{ bucket: '2026-10-03', value: 4 }];
     expect(fillBuckets(totals, ['2026-10-02', '2026-10-03', '2026-10-04']).map((p) => p.value)).toEqual([0, 4, 0]);
     expect(fillBuckets(totals, [])).toBe(totals);
+  });
+});
+
+describe('activity grid', () => {
+  // Local Oct 8, 2026 is a Thursday.
+  const now = new Date(2026, 9, 8, 9, 30);
+
+  it('lays a week out Monday first and pads the ends of the window', () => {
+    const grid = activityGrid(7, now);
+    expect(grid.days[0]).toBe('2026-09-28'); // padded back to the Monday of the window's first week
+    expect(grid.days).toHaveLength(14); // and forward to the Sunday of the current week
+    expect(grid.weeks).toHaveLength(2);
+    expect(grid.weeks[0]).toHaveLength(7);
+    expect(grid.days[grid.weeks[1][6]!]).toBe('2026-10-11');
+    expect(grid.days[grid.weeks[1][3]!]).toBe('2026-10-08'); // today (Thursday) in the last column
+  });
+
+  it('marks the column that opens a month', () => {
+    const grid = activityGrid(365, now);
+    expect(grid.months.map((m) => m.label)).toEqual([11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    // Each label sits on the column that holds the first of that month (the window's first month can open mid-column).
+    for (const month of grid.months) {
+      const label = String(month.label).padStart(2, '0');
+      expect(grid.weeks[month.index]!.some((at) => grid.days[at]!.slice(5) === `${label}-01`)).toBe(true);
+    }
+    expect(grid.months.some((m) => m.index < 2)).toBe(false);
+    expect(new Set(grid.days).size).toBe(grid.days.length); // one cell per day, no repeats
+  });
+
+  it('scales intensity against the busiest day', () => {
+    expect(activityLevel(0, 10)).toBe(0);
+    expect(activityLevel(1, 10)).toBe(1);
+    expect(activityLevel(5, 10)).toBe(2);
+    expect(activityLevel(8, 10)).toBe(4);
+    expect(activityLevel(10, 10)).toBe(4);
+    expect(activityLevel(3, 0)).toBe(1); // a day counts even when the peak was not reported
   });
 });
 

@@ -26,7 +26,7 @@ public static class Program
             switch (command)
             {
                 case "version":
-                    Console.WriteLine(JsonSerializer.Serialize(new { version = ServerOptions.Version, apiVersion = ServerOptions.ApiVersion }));
+                    Console.WriteLine(Json.SerializeApi(new Api.VersionDto(ServerOptions.Version, ServerOptions.ApiVersion)));
                     return 0;
                 case "serve":
                     return await ServeAsync(paths, rest);

@@ -444,7 +444,7 @@ public sealed class ResponsesCodec : IProtocolCodec
         {
             if (buffer.Count == 0)
                 return;
-            input.Add(MessageItem(message.Role, buffer, request));
+            input.AddNode(MessageItem(message.Role, buffer, request));
             buffer.Clear();
         }
         foreach (var part in message.Parts)
@@ -453,11 +453,11 @@ public sealed class ResponsesCodec : IProtocolCodec
             {
                 case ToolResultPart result:
                     Flush();
-                    input.Add(FunctionCallOutputItem(result, request));
+                    input.AddNode(FunctionCallOutputItem(result, request));
                     break;
                 case ToolCallPart call:
                     Flush();
-                    input.Add(new JsonObject
+                    input.AddNode(new JsonObject
                     {
                         ["type"] = "function_call",
                         ["call_id"] = call.Id,
@@ -468,7 +468,7 @@ public sealed class ResponsesCodec : IProtocolCodec
                 case ReasoningPart reasoning:
                     Flush();
                     if (ReasoningItem(reasoning) is { } item)
-                        input.Add(item);
+                        input.AddNode(item);
                     else if (reasoning.Origin != ApiProtocol.OpenAIResponses)
                         Warn(request, $"dropped reasoning from '{reasoning.Origin}' (encrypted content only round-trips to its own protocol)");
                     break;
@@ -496,15 +496,15 @@ public sealed class ResponsesCodec : IProtocolCodec
                 switch (part)
                 {
                     case TextPart text:
-                        content.Add(new JsonObject { ["type"] = "input_text", ["text"] = text.Text });
+                        content.AddNode(new JsonObject { ["type"] = "input_text", ["text"] = text.Text });
                         break;
                     case ImagePart image:
                         if (ImagePartJson(image, request) is { } imageJson)
-                            content.Add(imageJson);
+                            content.AddNode(imageJson);
                         break;
                     case FilePart file:
                         if (FilePartJson(file, request) is { } fileJson)
-                            content.Add(fileJson);
+                            content.AddNode(fileJson);
                         break;
                     default:
                         Warn(request, $"dropped {part.GetType().Name} in a user message");
@@ -517,7 +517,7 @@ public sealed class ResponsesCodec : IProtocolCodec
             foreach (var part in parts)
             {
                 if (part is TextPart text)
-                    content.Add(new JsonObject { ["type"] = "output_text", ["text"] = text.Text, ["annotations"] = new JsonArray() });
+                    content.AddNode(new JsonObject { ["type"] = "output_text", ["text"] = text.Text, ["annotations"] = new JsonArray() });
                 else
                     Warn(request, $"dropped {part.GetType().Name} in an assistant message");
             }
@@ -596,11 +596,11 @@ public sealed class ResponsesCodec : IProtocolCodec
                 switch (part)
                 {
                     case TextPart text:
-                        output.Add(new JsonObject { ["type"] = "input_text", ["text"] = text.Text });
+                        output.AddNode(new JsonObject { ["type"] = "input_text", ["text"] = text.Text });
                         break;
                     case ImagePart image:
                         if (ImagePartJson(image, request) is { } imageJson)
-                            output.Add(imageJson);
+                            output.AddNode(imageJson);
                         break;
                 }
             }
@@ -648,11 +648,11 @@ public sealed class ResponsesCodec : IProtocolCodec
                     function["parameters"] = schema.DeepClone();
                 if (tool.Strict is { } strict)
                     function["strict"] = strict;
-                array.Add(function);
+                array.AddNode(function);
             }
             else if (tool.BuiltinOrigin == ApiProtocol.OpenAIResponses)
             {
-                array.Add(tool.BuiltinRaw is { } raw ? raw.DeepClone() : new JsonObject { ["type"] = tool.BuiltinType });
+                array.AddNode(tool.BuiltinRaw is { } raw ? raw.DeepClone() : new JsonObject { ["type"] = tool.BuiltinType });
             }
             else
             {

@@ -3,18 +3,21 @@ import { Activity, ArrowRight, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 
-import { useRequests, useSettings, useStatsSummary, useTimeseries, useTopModels } from '../api/hooks';
+import { useActivityHeatmap, useRequests, useSettings, useStatsSummary, useTimeseries, useTokens, useTopModels } from '../api/hooks';
 import type { ClientKind, Range, RequestSummary, TimeseriesPoint } from '../api/types';
+import { ActivityHeatmap } from '../components/arc/activity-heatmap/activity-heatmap';
 import { BarChart } from '../components/arc/bar-chart/bar-chart';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
 import { CLIENT_META, CLIENT_ORDER, ClientGlyph, ClientIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, CodeBlock, EmptyState, Segmented, Spinner, type SegmentItem } from '../components/ui/controls';
+import { Select } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
-import { formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUsd, formatUsdAxis } from '../lib/format';
+import { formatDayCount, formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUsd, formatUsdAxis, monthName, monthStartName, weekdayName } from '../lib/format';
 import {
+  activityGrid,
   breakdownRows,
   bucketAxisLabel,
   bucketFullLabel,
@@ -29,7 +32,7 @@ import { cacheHitRatio } from '../lib/usage';
 import { RequestDetailSheet } from './RequestsPage';
 
 type ClientFilterValue = ClientKind | 'all';
-type Section = 'requests' | 'providers' | 'models';
+type Section = 'requests' | 'providers' | 'models' | 'tokens';
 type ModelBreakdownRow = BreakdownRow & { cacheHit: number };
 
 /**
@@ -58,10 +61,14 @@ export function OverviewPage() {
   const [range, setRange] = useState<Range>('today');
   const [client, setClient] = useState<ClientFilterValue>('all');
   const [measure, setMeasure] = useState<Measure>('requests');
+  const [token, setToken] = useState('');
+  const tokens = useTokens();
   const clientKind = client === 'all' ? undefined : client;
-  const summary = useStatsSummary(range, clientKind);
+  const tokenId = token || undefined;
+  const tokenName = tokens.data?.find((tk) => tk.id === tokenId)?.name ?? tokenId;
+  const summary = useStatsSummary(range, clientKind, tokenId);
   // by=provider: the chart sums every series per bucket, and the provider tab reuses the same rows.
-  const series = useTimeseries(range, range === 'today' ? 'hour' : 'day', 'provider', clientKind);
+  const series = useTimeseries(range, range === 'today' ? 'hour' : 'day', 'provider', clientKind, tokenId);
   const settings = useSettings();
   const fetching = useIsFetching({ queryKey: ['stats'] }) > 0;
 
@@ -102,7 +109,16 @@ export function OverviewPage() {
       }
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <ClientFilter value={client} onChange={setClient} />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <ClientFilter value={client} onChange={setClient} />
+          <Select
+            className="w-44"
+            ariaLabel={t('overview.tokenFilter')}
+            value={token}
+            onChange={setToken}
+            options={[{ value: '', label: t('overview.allTokens') }, ...(tokens.data ?? []).map((tk) => ({ value: tk.id, label: tk.name }))]}
+          />
+        </div>
         <Segmented
           ariaLabel={t('overview.range')}
           value={range}
@@ -115,6 +131,8 @@ export function OverviewPage() {
           ]}
         />
       </div>
+
+      <ActivitySection clientKind={clientKind} tokenId={tokenId} />
 
       {!s ? (
         <Spinner lines={4} />
@@ -144,6 +162,12 @@ export function OverviewPage() {
               icon={<ClientIcon kind={clientKind} size={32} />}
               title={t('overview.clientEmpty.title', { client: CLIENT_META[clientKind].name })}
               detail={t('overview.clientEmpty.detail', { range: rangeLabel })}
+            />
+          ) : tokenId ? (
+            <EmptyState
+              icon={<Activity className="size-6" />}
+              title={t('overview.tokenEmpty.title', { token: tokenName ?? '' })}
+              detail={t('overview.tokenEmpty.detail', { range: rangeLabel })}
             />
           ) : (
             <EmptyState
@@ -194,10 +218,48 @@ export function OverviewPage() {
             )}
           </section>
 
-          <Breakdown range={range} clientKind={clientKind} series={series.data ?? []} seriesLoading={series.isLoading} />
+          <Breakdown range={range} clientKind={clientKind} tokenId={tokenId} series={series.data ?? []} seriesLoading={series.isLoading} />
         </div>
       )}
     </Page>
+  );
+}
+
+/**
+ * The activity heatmap on its own time window: the last 365 days, whatever the range selector above says, so
+ * today's downloaded streak stays visible next to the short-range numbers. Client and token filters still narrow it.
+ */
+const ACTIVITY_DAYS = 365;
+
+function ActivitySection({ clientKind, tokenId }: { clientKind?: ClientKind; tokenId?: string }) {
+  const { t, locale } = useI18n();
+  const activity = useActivityHeatmap(ACTIVITY_DAYS, clientKind, tokenId);
+  const data = activity.data ?? [];
+  const active = data.length;
+  const peak = data.reduce((max, d) => Math.max(max, d.requests), 0);
+  const grid = useMemo(() => activityGrid(ACTIVITY_DAYS), []);
+  const weekdays = useMemo(() => Array.from({ length: 7 }, (_, row) => weekdayName(row, locale)), [locale]);
+  const summary = `${t('overview.activitySummary', { from: grid.days[0], to: grid.days[grid.days.length - 1], active, days: ACTIVITY_DAYS })} · ${t('overview.activityPeak', { count: formatTokens(peak) })}`;
+
+  return (
+    <section className="card mb-3 p-5">
+      <h2 className="mb-3 text-[13px] font-medium">{t('overview.activity')}</h2>
+      {activity.isLoading ? (
+        <Spinner lines={3} />
+      ) : (
+        <ActivityHeatmap
+          label={t('overview.activity')}
+          data={data}
+          days={ACTIVITY_DAYS}
+          weekdays={weekdays}
+          summary={summary}
+          legend={{ less: t('overview.activityLegend.less'), more: t('overview.activityLegend.more') }}
+          formatDay={(day, requests) => formatDayCount(day, requests, locale, t('overview.activityUnit'), t('overview.activityNone'))}
+          formatMonth={(month) => monthName(month, locale)}
+          formatMonthStart={(month, year) => monthStartName(month, year, locale)}
+        />
+      )}
+    </section>
   );
 }
 
@@ -238,19 +300,32 @@ function Stat({ label, value, context }: { label: string; value: string; context
   );
 }
 
-/** Recent requests, per-provider and per-model breakdowns for the selected client and range. */
-function Breakdown({ range, clientKind, series, seriesLoading }: { range: Range; clientKind?: ClientKind; series: TimeseriesPoint[]; seriesLoading: boolean }) {
+/** Recent requests, per-provider, per-model and per-token breakdowns for the selected client, token and range. */
+function Breakdown({
+  range,
+  clientKind,
+  tokenId,
+  series,
+  seriesLoading,
+}: {
+  range: Range;
+  clientKind?: ClientKind;
+  tokenId?: string;
+  series: TimeseriesPoint[];
+  seriesLoading: boolean;
+}) {
   const { t, locale } = useI18n();
   const [section, setSection] = useState<Section>('requests');
   const [selected, setSelected] = useState<string | null>(null);
   const from = useMemo(() => rangeStart(range)?.toISOString(), [range]);
-  const requests = useRequests({ client: clientKind, from, page: 1, pageSize: 20 }, section === 'requests');
-  const top = useTopModels(range, clientKind, 20);
+  const requests = useRequests({ client: clientKind, token: tokenId, from, page: 1, pageSize: 20 }, section === 'requests');
+  const top = useTopModels(range, clientKind, 20, tokenId);
+  const byToken = useTimeseries(range, range === 'today' ? 'hour' : 'day', 'token', clientKind, tokenId);
 
   const logRows: LogRow[] = (requests.data?.items ?? []).map((r) => ({
     id: r.id,
     time: Date.parse(r.startedAtUtc),
-    client: r.clientKind ? (CLIENT_META[r.clientKind as ClientKind]?.name ?? r.clientKind) : '—',
+    client: r.clientKind ? (CLIENT_META[r.clientKind as ClientKind]?.name ?? r.clientKind) : r.tokenId ? t('requests.direct') : '—',
     provider: r.providerName ?? '',
     model: r.requestedModel ?? '',
     input: r.totalInputTokens,
@@ -304,6 +379,10 @@ function Breakdown({ range, clientKind, series, seriesLoading }: { range: Range;
   ];
 
   const providerRows = useMemo(() => breakdownRows(series.map((p) => ({ key: p.key, requests: p.requests, tokens: p.tokens, costUsd: p.costUsd }))), [series]);
+  const tokenRows = useMemo(
+    () => breakdownRows((byToken.data ?? []).map((p) => ({ key: p.key, requests: p.requests, tokens: p.tokens, costUsd: p.costUsd }))),
+    [byToken.data],
+  );
   const modelRows = useMemo<ModelBreakdownRow[]>(() => {
     // -1 (shown as "—") when a model had no input tokens to hit, so it sorts below a real 0%.
     const hit = new Map((top.data ?? []).map((m) => [m.model, cacheHitRatio(m.cacheReadTokens, m.inputTokens) ?? -1]));
@@ -336,6 +415,7 @@ function Breakdown({ range, clientKind, series, seriesLoading }: { range: Range;
             <TabsTrigger value="requests">{t('nav.requests')}</TabsTrigger>
             <TabsTrigger value="providers">{t('nav.providers')}</TabsTrigger>
             <TabsTrigger value="models">{t('nav.models')}</TabsTrigger>
+            <TabsTrigger value="tokens">{t('nav.tokens')}</TabsTrigger>
           </TabsList>
           {section === 'requests' && (
             <Link to="/requests" className="inline-flex items-center gap-1 text-[12px] text-[var(--text-secondary)] hover:text-[var(--accent)]">
@@ -373,6 +453,20 @@ function Breakdown({ range, clientKind, series, seriesLoading }: { range: Range;
               caption={t('overview.topModels')}
               rows={modelRows}
               columns={breakdownColumns(t('requests.col.model'), [cacheHitColumn])}
+              rowKey="key"
+              defaultSort={{ key: 'costUsd', direction: 'desc' }}
+              emptyMessage={t('common.noData')}
+            />
+          )}
+        </TabsContent>
+        <TabsContent value="tokens">
+          {byToken.isLoading ? (
+            <Spinner lines={3} />
+          ) : (
+            <SortableDataTable<BreakdownRow>
+              caption={t('nav.tokens')}
+              rows={tokenRows}
+              columns={breakdownColumns(t('overview.by.token'))}
               rowKey="key"
               defaultSort={{ key: 'costUsd', direction: 'desc' }}
               emptyMessage={t('common.noData')}

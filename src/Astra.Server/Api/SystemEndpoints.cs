@@ -14,9 +14,9 @@ public static class SystemEndpoints
 
     public static void MapSystemEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
+        app.MapGet("/api/health", () => Results.Ok(new StatusDto("ok")));
 
-        app.MapGet("/api/version", () => Results.Ok(new { version = ServerOptions.Version, apiVersion = ServerOptions.ApiVersion }));
+        app.MapGet("/api/version", () => Results.Ok(new VersionDto(ServerOptions.Version, ServerOptions.ApiVersion)));
 
         app.MapPost("/api/admin/shutdown", (HttpContext ctx, RuntimeFile runtime, IHostApplicationLifetime lifetime) =>
         {
@@ -31,27 +31,25 @@ public static class SystemEndpoints
                 lifetime.StopApplication();
                 return Task.CompletedTask;
             });
-            return Results.Ok(new { status = "stopping" });
+            return Results.Ok(new StatusDto("stopping"));
         });
 
-        app.MapGet("/api/auth/status", (HttpContext ctx, ServerOptions options, AdminSessions sessions) => Results.Ok(new
-        {
-            required = !options.IsLoopback,
-            signedIn = options.IsLoopback || sessions.IsSignedIn(ctx),
-        }));
+        app.MapGet("/api/auth/status", (HttpContext ctx, ServerOptions options, AdminSessions sessions) => Results.Ok(new AuthStatusDto(
+            Required: !options.IsLoopback,
+            SignedIn: options.IsLoopback || sessions.IsSignedIn(ctx))));
 
         app.MapPost("/api/auth/login", (LoginRequest body, HttpContext ctx, ServerOptions options, AdminSessions sessions) =>
         {
             if (!PasswordHasher.Verify(body.Password, options.AdminPasswordHash))
-                return Results.Json(new { error = "Invalid password" }, statusCode: StatusCodes.Status401Unauthorized);
+                return ApiJson.Result(new ErrorOnlyDto("Invalid password"), StatusCodes.Status401Unauthorized);
             sessions.SignIn(ctx);
-            return Results.Ok(new { signedIn = true });
+            return Results.Ok(new SignedInDto(true));
         });
 
         app.MapPost("/api/auth/logout", (HttpContext ctx, AdminSessions sessions) =>
         {
             sessions.SignOut(ctx);
-            return Results.Ok(new { signedIn = false });
+            return Results.Ok(new SignedInDto(false));
         });
     }
 }

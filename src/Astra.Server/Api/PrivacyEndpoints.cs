@@ -22,18 +22,18 @@ public static class PrivacyEndpoints
     public sealed record PrivacyEventStatsDto(
         long Events, long Blocked, long DryRun, long Redactions, IReadOnlyList<PrivacyCategoryStatDto> Categories);
 
+    public sealed record PrivacyRuleDto(string Id, string Category, string Description);
+
+    public sealed record PrivacyPolicyDto(PrivacySettings Settings, IReadOnlyList<PrivacyRuleDto> Rules);
+
+    public sealed record PrivacyDryRunResultDto(
+        bool Blocked, IReadOnlyList<PrivacyHit> Hits, int WouldRedact, IReadOnlyList<string> Categories);
+
     public static void MapPrivacyEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/privacy", (PrivacyGuardService guard) => Results.Ok(new
-        {
-            settings = guard.Settings,
-            rules = PrivacyDetector.BuiltInRules.Select(r => new
-            {
-                id = r.Id,
-                category = r.Category,
-                description = r.Description,
-            }),
-        }));
+        app.MapGet("/api/privacy", (PrivacyGuardService guard) => Results.Ok(new PrivacyPolicyDto(
+            guard.Settings,
+            PrivacyDetector.BuiltInRules.Select(r => new PrivacyRuleDto(r.Id, r.Category, r.Description)).ToList())));
 
         app.MapPut("/api/privacy", async (PrivacySettings body, PrivacyGuardService guard) =>
         {
@@ -95,7 +95,7 @@ public static class PrivacyEndpoints
         {
             var input = body.Json ?? body.Text;
             if (string.IsNullOrWhiteSpace(input))
-                return Results.BadRequest(new { error = "text 或 json 必填其一" });
+                return Results.BadRequest(new ErrorOnlyDto("text 或 json 必填其一"));
 
             var policy = guard.EffectiveFor(body.ClientKind, enabledOverride: true, dryRunOverride: false);
             var detector = new PrivacyDetector();
@@ -103,13 +103,9 @@ public static class PrivacyEndpoints
                 ? detector.Apply(input, policy)
                 : detector.ApplyJson(input, policy) ?? detector.Apply(input, policy);
 
-            return Results.Ok(new
-            {
-                blocked = applied.Blocked,
-                hits = applied.Hits,
-                wouldRedact = applied.Redactions.Count,
-                categories = applied.Redactions.Select(r => r.Category).Distinct().ToList(),
-            });
+            return Results.Ok(new PrivacyDryRunResultDto(
+                applied.Blocked, applied.Hits, applied.Redactions.Count,
+                applied.Redactions.Select(r => r.Category).Distinct().ToList()));
         });
     }
 

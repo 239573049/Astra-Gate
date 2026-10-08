@@ -13,8 +13,8 @@ import {
   useProviderAccounts,
   useProviders,
   useRestoreBackup,
-  useRotateKey,
   useSetBinding,
+  useTokens,
 } from '../api/hooks';
 import type { ClientInfo, ClientKind, ConfigPreview, Provider } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
@@ -26,6 +26,7 @@ import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/format';
+import { CLAUDE_CODE_MODELS, modelSlotsKey, modelSlotsOf, type ModelSlots } from '../lib/modelSlots';
 import { ROLES, roleKey, rolesOf, type RoleMap } from '../lib/roleMap';
 import { dirnameOf, systemActions } from '../shell/systemActions';
 
@@ -61,19 +62,25 @@ export function ClientsPage() {
 /** Clients whose config lists the bound provider's models (ClientKinds.WithModelList on the server). */
 const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>(['opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot']);
 
-/** Fixed client tabs (cc-switch style): official logo, name and an enabled mark. */
+/** Fixed client tabs (cc-switch style): official logo and an enabled mark; the name shows only on the selected tab or on hover. */
 function ClientTabs({ clients }: { clients: Map<ClientKind, ClientInfo> }) {
   const { t } = useI18n();
   return (
     <TabsList aria-label={t('nav.clients')}>
       {CLIENT_ORDER.map((k) => {
         const c = clients.get(k);
+        // min-w-0! beats the unlayered .trigger min-width so collapsed tabs hug their glyph.
         return (
-          <TabsTrigger key={k} value={k} className={cn(c?.availability === 'coming_soon' && 'opacity-60')}>
-            <span className="inline-flex items-center gap-2 whitespace-nowrap">
+          <TabsTrigger key={k} value={k} aria-label={CLIENT_META[k].name} className={cn('group min-w-0!', c?.availability === 'coming_soon' && 'opacity-60')}>
+            <span className="inline-flex items-center whitespace-nowrap">
               <ClientGlyph kind={k} size={18} />
-              {CLIENT_META[k].name}
-              {c?.enabled && <Check className="size-3.5 text-[var(--success)]" strokeWidth={2.5} aria-label={t('clients.enabled')} />}
+              {/* Name collapses to nothing (grid 0fr → 1fr) and unfurls on hover or when the tab is selected. */}
+              <span className="grid grid-cols-[0fr] overflow-hidden transition-[grid-template-columns] duration-[var(--duration-standard)] ease-[var(--ease-enter)] motion-reduce:transition-none group-hover:grid-cols-[1fr] group-data-[state=active]:grid-cols-[1fr]">
+                <span className="min-w-0 overflow-hidden pl-2 whitespace-nowrap opacity-0 transition-opacity duration-[var(--duration-standard)] ease-[var(--ease-enter)] motion-reduce:transition-none group-hover:opacity-100 group-data-[state=active]:opacity-100">
+                  {CLIENT_META[k].name}
+                </span>
+              </span>
+              {c?.enabled && <Check className="ml-2 size-3.5 text-[var(--success)]" strokeWidth={2.5} aria-label={t('clients.enabled')} />}
             </span>
           </TabsTrigger>
         );
@@ -91,15 +98,22 @@ function statusBadge(c: ClientInfo, t: ReturnType<typeof useI18n>['t']) {
 
 function ClientPanel({ client }: { client: ClientInfo }) {
   const { t, locale } = useI18n();
+  const navigate = useNavigate();
   const { toast, confirm } = useFeedback();
   const providers = useProviders();
   const setBinding = useSetBinding();
   const disable = useDisableClient();
   const forceRestore = useForceRestore();
-  const rotateKey = useRotateKey();
+  const tokens = useTokens();
   const models = useClientModels(client.kind, Boolean(client.providerId));
   const [model, setModel] = useState<string | null>(client.selectedModel ?? null);
   const [account, setAccount] = useState<string>(client.accountId ?? '');
+  const savedToken = client.tokenId ?? 'default';
+  const [tokenId, setTokenId] = useState<string>(savedToken);
+  // Enabled tokens, plus the client's current one even when it is disabled (so the picker never shows blank).
+  const tokenOptions = (tokens.data ?? [])
+    .filter((tk) => tk.enabled || tk.id === savedToken)
+    .map((tk) => ({ value: tk.id, label: tk.enabled ? tk.name : t('clients.tokenDisabled', { name: tk.name }), disabled: !tk.enabled }));
   const [enableOpen, setEnableOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
   const soon = client.availability === 'coming_soon';
@@ -110,16 +124,37 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   const isSubscriptionBinding = boundProvider?.authScheme === 'oauth-subscription';
   const accounts = useProviderAccounts(boundProvider?.id, isSubscriptionBinding);
   const isDesktopClient = client.kind === 'claude-desktop';
+  const isClaudeCode = client.kind === 'claude-code';
   const savedRoles = rolesOf(client.extras);
   const [roles, setRoles] = useState<RoleMap>(savedRoles);
   const hasRole = ROLES.some((r) => roles[r]);
   const rolesChanged = roleKey(roles) !== roleKey(savedRoles);
-  const extras = isDesktopClient ? { ...client.extras, roleMap: roles } : undefined;
+  // Claude Code model slots: the default model lives in selectedModel, the tiers in extras.models (plan §7.3).
+  const savedSlots = modelSlotsOf(client.extras);
+  const [slots, setSlots] = useState<ModelSlots>(savedSlots);
+  const claudeModelsChanged = (model ?? null) !== (client.selectedModel ?? null) || modelSlotsKey(slots) !== modelSlotsKey(savedSlots);
+  // The default model is the first slot, so only the extra tiers get a row of their own.
+  const tierSlots = isClaudeCode ? CLAUDE_CODE_MODELS.filter((s) => s !== 'ANTHROPIC_MODEL') : [];
+  const modelFooter = isClaudeCode
+    ? client.enabled
+      ? t('clients.modelSlotsFooterEnabled')
+      : t('clients.modelSlotsFooter')
+    : client.enabled
+      ? t('clients.modelFooterEnabled')
+      : t('clients.modelFooter');
+  const extras = isDesktopClient
+    ? { ...client.extras, roleMap: roles }
+    : isClaudeCode
+      ? { ...client.extras, models: slots }
+      : undefined;
 
   useEffect(() => setModel(client.selectedModel ?? null), [client.kind, client.selectedModel]);
   useEffect(() => setAccount(client.accountId ?? ''), [client.kind, client.providerId, client.accountId]);
+  useEffect(() => setTokenId(savedToken), [client.kind, savedToken]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setRoles(rolesOf(client.extras)), [client.kind, roleKey(savedRoles)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setSlots(modelSlotsOf(client.extras)), [client.kind, modelSlotsKey(savedSlots)]);
 
   const bind = (p: Provider) => {
     if (p.id === client.providerId) return;
@@ -290,6 +325,20 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </Group>
       )}
 
+      {!soon && (
+        <Group title={t('clients.tokenTitle')} footer={client.enabled ? t('clients.tokenFooterEnabled') : t('clients.tokenFooter')}>
+          <Row label={t('clients.token')}>
+            <Select className="max-w-[300px]" ariaLabel={t('clients.token')} value={tokenId} onChange={setTokenId} options={tokenOptions} />
+            {client.enabled && tokenId !== savedToken && (
+              <Button size="sm" variant="primary" onClick={() => setEnableOpen(true)}>
+                {t('common.apply')}
+              </Button>
+            )}
+          </Row>
+          <Row icon={<KeyRound className="size-4 text-[var(--text-secondary)]" />} label={t('clients.manageTokens')} onClick={() => navigate('/tokens')} />
+        </Group>
+      )}
+
       {!soon && client.providerId && isDesktopClient && (
         <Group title={t('clients.roleMapTitle')} footer={client.enabled ? t('clients.roleMapFooterEnabled') : t('clients.roleMapFooter')}>
           {ROLES.map((r) => (
@@ -315,7 +364,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
       )}
 
       {!soon && client.providerId && !isDesktopClient && (
-        <Group title={t('clients.modelTitle')} footer={client.enabled ? t('clients.modelFooterEnabled') : t('clients.modelFooter')}>
+        <Group title={t('clients.modelTitle')} footer={modelFooter}>
           <Row label={t('clients.defaultModel')}>
             <Select
               value={model ?? ''}
@@ -324,12 +373,26 @@ function ClientPanel({ client }: { client: ClientInfo }) {
               options={[{ value: '', label: t('clients.modelUnset') }, ...(models.data ?? []).map((m) => ({ value: m, label: m }))]}
               className="max-w-[300px]"
             />
-            {client.enabled && (model ?? null) !== (client.selectedModel ?? null) && (
+          </Row>
+          {tierSlots.map((slot) => (
+            <Row key={slot} label={t(`clients.modelSlot.${slot}` as 'clients.modelSlot.ANTHROPIC_MODEL')}>
+              <Select
+                ariaLabel={t(`clients.modelSlot.${slot}` as 'clients.modelSlot.ANTHROPIC_MODEL')}
+                value={slots[slot] ?? ''}
+                onChange={(v) => setSlots((cur) => ({ ...cur, [slot]: v || undefined }))}
+                placeholder={t('clients.modelPlaceholder')}
+                options={[{ value: '', label: t('clients.modelUnset') }, ...(models.data ?? []).map((m) => ({ value: m, label: m }))]}
+                className="max-w-[300px]"
+              />
+            </Row>
+          ))}
+          {client.enabled && (isClaudeCode ? claudeModelsChanged : (model ?? null) !== (client.selectedModel ?? null)) && (
+            <Row label="">
               <Button size="sm" variant="primary" onClick={() => setEnableOpen(true)}>
                 {t('common.apply')}
               </Button>
-            )}
-          </Row>
+            </Row>
+          )}
         </Group>
       )}
 
@@ -344,24 +407,10 @@ function ClientPanel({ client }: { client: ClientInfo }) {
             />
           )}
           <Row icon={<Archive className="size-4 text-[var(--text-secondary)]" />} label={t('clients.backups')} detail={t('clients.backupsDetail')} onClick={() => setBackupsOpen(true)} />
-          {client.enabled && (
-            <Row
-              icon={<KeyRound className="size-4 text-[var(--text-secondary)]" />}
-              label={t('clients.rotateKey')}
-              detail={t('clients.rotateKeyDetail')}
-              onClick={async () => {
-                if (!(await confirm({ title: t('clients.rotateKey'), detail: t('clients.rotateKeyDetail') }))) return;
-                rotateKey.mutate(client.kind, {
-                  onSuccess: () => toast(t('clients.rotated'), 'success'),
-                  onError: (e) => toast(errorText(e), 'error'),
-                });
-              }}
-            />
-          )}
         </Group>
       )}
 
-      <EnableSheet open={enableOpen} onOpenChange={setEnableOpen} client={client} model={model} extras={extras} />
+      <EnableSheet open={enableOpen} onOpenChange={setEnableOpen} client={client} model={model} extras={extras} tokenId={tokenId} />
       <BackupsSheet open={backupsOpen} onOpenChange={setBackupsOpen} client={client} />
     </>
   );
@@ -374,20 +423,23 @@ function EnableSheet({
   client,
   model,
   extras,
+  tokenId,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   client: ClientInfo;
   model: string | null;
-  /** Replaces the client's stored extras (Claude Desktop role map); omitted = keep them. */
+  /** Replaces the client's stored extras (Claude model slots / Claude Desktop role map); omitted = keep them. */
   extras?: Record<string, unknown>;
+  /** Token written into the config as "<token>.<kind>". */
+  tokenId: string;
 }) {
   const { t } = useI18n();
   const { toast } = useFeedback();
   const preview = usePreviewEnable();
   const enable = useEnableClient();
   const name = CLIENT_META[client.kind].name;
-  const req = extras ? { providerId: client.providerId, model, extras } : { providerId: client.providerId, model };
+  const req = extras ? { providerId: client.providerId, model, extras, tokenId } : { providerId: client.providerId, model, tokenId };
 
   useEffect(() => {
     if (open) preview.mutate({ kind: client.kind, req });

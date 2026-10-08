@@ -12,7 +12,7 @@ using Microsoft.AspNetCore.Routing;
 
 namespace Astra.Gateway.Http;
 
-/// <summary>Gateway entry points (plan §6.1). Authentication happens in the pipeline with local client keys.</summary>
+/// <summary>Gateway entry points (plan §6.1). Authentication happens in the pipeline with gateway tokens.</summary>
 public static class GatewayEndpoints
 {
     public static IEndpointRouteBuilder MapGatewayEndpoints(this IEndpointRouteBuilder app)
@@ -65,10 +65,10 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
             return;
         }
         var list = (await db.Providers.ListModelsAsync(route.Provider.Id, ctx.RequestAborted)).Where(m => m.Enabled).ToList();
-        if (route.Client.Kind == ClientKinds.ClaudeDesktop)
+        if (route.Client is { Kind: ClientKinds.ClaudeDesktop } desktop)
         {
             // Plan §7.5: Claude Desktop only accepts role ids, so it sees one entry per mapped role.
-            list = ClaudeDesktopRoles.Parse(route.Client.ExtraJson).Select(r => new ProviderModel
+            list = ClaudeDesktopRoles.Parse(desktop.ExtraJson).Select(r => new ProviderModel
             {
                 ProviderId = route.Provider.Id,
                 ModelId = ClaudeDesktopRoles.AdvertisedId(r.Key),
@@ -130,7 +130,7 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
             var body = await reader.ReadToEndAsync(ct);
 
             // 隐私护栏（plan §6.7）：count_tokens 的请求体同样发往上游，必须先过护栏。
-            var guard = privacy.Inspect(body, route.Client.Kind);
+            var guard = privacy.Inspect(body, route.ClientKind);
             if (guard.Blocked)
                 throw new GatewayException(400, "invalid_request_error", "请求中包含被 Astra 隐私护栏拦截的敏感信息，已拒绝发送到上游。");
             body = guard.Body;
@@ -146,7 +146,7 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
             var url = endpoint is null ? null : UpstreamUrls.CountTokens(endpoint, model);
             if (url is not null)
             {
-                var credentials = await auth.ResolveAsync(route.Provider.Id, route.Binding.AccountId, ct) ?? UpstreamAuth.None;
+                var credentials = await auth.ResolveAsync(route.Provider.Id, route.AccountId, ct) ?? UpstreamAuth.None;
                 if (credentials.QueryName is not null && credentials.QueryValue is not null)
                     url = UpstreamUrls.WithQuery(url, credentials.QueryName, credentials.QueryValue);
                 using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(body, Encoding.UTF8, "application/json") };

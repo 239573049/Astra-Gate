@@ -1,15 +1,28 @@
 import { RootProvider } from 'fumadocs-ui/provider/next';
 import type { Metadata } from 'next';
-import { appName } from '@/lib/shared';
+import { appName, siteDescription, siteUrl } from '@/lib/shared';
 import './global.css';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: { default: `${appName} — 本地 AI 网关`, template: `%s | ${appName}` },
-  description:
-    'Astra Gate 是一个跑在本机的 AI 网关：聚合服务商、一键接管 Codex / Claude Code / Gemini CLI，自动转换协议、统计用量费用，并在请求发出前保护隐私。',
+  description: siteDescription,
+  applicationName: appName,
   icons: {
     icon: '/favicon.png',
     apple: '/apple-touch-icon.png',
+  },
+  openGraph: {
+    type: 'website',
+    siteName: appName,
+    locale: 'zh_CN',
+  },
+  twitter: {
+    card: 'summary_large_image',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 

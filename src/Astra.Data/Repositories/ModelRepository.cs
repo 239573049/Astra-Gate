@@ -114,15 +114,15 @@ public sealed class ModelRepository
         await using var tx = conn.BeginTransaction(deferred: false);
         foreach (var (id, expected) in expectedModels)
         {
-            var row = await conn.QuerySingleOrDefaultAsync<ModelRow>(new CommandDefinition(
-                $"{ModelSelect} WHERE id = @id", new { id }, transaction: tx, cancellationToken: ct));
+            var row = await conn.QuerySingleOrDefaultAsync<ModelRow>(
+                $"{ModelSelect} WHERE id = @id", new { id }, transaction: tx);
             if (!SameSnapshot(row?.ToModel(), expected)) return false;
         }
         foreach (var (key, expected) in expectedPrices)
         {
-            var row = await conn.QuerySingleOrDefaultAsync<PriceRow>(new CommandDefinition(
+            var row = await conn.QuerySingleOrDefaultAsync<PriceRow>(
                 $"{PriceSelect} WHERE model_id = @model_id AND price_key = @price_key",
-                new { model_id = key.ModelId, price_key = key.PriceKey }, transaction: tx, cancellationToken: ct));
+                new { model_id = key.ModelId, price_key = key.PriceKey }, transaction: tx);
             if (!SameSnapshot(row?.ToPrice(), expected)) return false;
         }
         foreach (var model in newModels) { ct.ThrowIfCancellationRequested(); await InsertCoreAsync(conn, model, tx); }
@@ -143,7 +143,24 @@ public sealed class ModelRepository
             VALUES (@id, @display_name, @vendor, @family, @aliases_json, @context_window, @max_output_tokens,
                     @capabilities_json, @pricing_json, @source, @user_modified_fields_json, @seed_version,
                     @enabled, @created_at, @updated_at)
-            """, Params(model), tx);
+            """, new
+        {
+            id = model.Id,
+            display_name = model.DisplayName,
+            vendor = model.Vendor,
+            family = model.Family,
+            aliases_json = Json.Serialize(model.Aliases),
+            context_window = model.ContextWindow,
+            max_output_tokens = model.MaxOutputTokens,
+            capabilities_json = Json.Serialize(model.Capabilities),
+            pricing_json = model.Pricing is null ? null : Json.Serialize(model.Pricing),
+            source = model.Source,
+            user_modified_fields_json = Json.Serialize(model.UserModifiedFields),
+            seed_version = model.SeedVersion,
+            enabled = model.Enabled,
+            created_at = DateTimeOffsetHandler.ToStorage(model.CreatedAt),
+            updated_at = DateTimeOffsetHandler.ToStorage(model.UpdatedAt),
+        }, tx);
 
     private static Task<int> UpdateCoreAsync(SqliteConnection conn, SystemModel model, IDbTransaction? tx = null)
     {
@@ -155,7 +172,24 @@ public sealed class ModelRepository
                 user_modified_fields_json = @user_modified_fields_json, seed_version = @seed_version,
                 enabled = @enabled, created_at = @created_at, updated_at = @updated_at
             WHERE id = @id
-            """, Params(model), tx);
+            """, new
+        {
+            id = model.Id,
+            display_name = model.DisplayName,
+            vendor = model.Vendor,
+            family = model.Family,
+            aliases_json = Json.Serialize(model.Aliases),
+            context_window = model.ContextWindow,
+            max_output_tokens = model.MaxOutputTokens,
+            capabilities_json = Json.Serialize(model.Capabilities),
+            pricing_json = model.Pricing is null ? null : Json.Serialize(model.Pricing),
+            source = model.Source,
+            user_modified_fields_json = Json.Serialize(model.UserModifiedFields),
+            seed_version = model.SeedVersion,
+            enabled = model.Enabled,
+            created_at = DateTimeOffsetHandler.ToStorage(model.CreatedAt),
+            updated_at = DateTimeOffsetHandler.ToStorage(model.UpdatedAt),
+        }, tx);
     }
 
     private static async Task UpsertPriceCoreAsync(SqliteConnection conn, ModelPrice price, IDbTransaction? tx = null)
@@ -230,7 +264,7 @@ public sealed class ModelRepository
     public async Task<Dictionary<string, List<string>>> GetPriceKeysByModelAsync(CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<(string ModelId, string PriceKey)>(
+        var rows = await conn.QueryAsync<ModelPriceKeyRow>(
             "SELECT model_id, price_key FROM model_prices ORDER BY model_id, price_key");
         return rows.GroupBy(r => r.ModelId).ToDictionary(g => g.Key, g => g.Select(r => r.PriceKey).ToList());
     }
@@ -239,7 +273,7 @@ public sealed class ModelRepository
     public async Task<IReadOnlyList<string>> ListPriceKeysAsync(CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        return (await conn.QueryAsync<string>("SELECT DISTINCT price_key FROM model_prices ORDER BY price_key")).AsList();
+        return (await conn.QueryAsync<string>("SELECT DISTINCT price_key FROM model_prices ORDER BY price_key")).ToList();
     }
 
     private static bool Matches(SystemModel m, string needle) =>
@@ -248,97 +282,82 @@ public sealed class ModelRepository
         || m.Vendor.Contains(needle, StringComparison.OrdinalIgnoreCase)
         || (m.Family?.Contains(needle, StringComparison.OrdinalIgnoreCase) ?? false)
         || m.Aliases.Any(a => a.Contains(needle, StringComparison.OrdinalIgnoreCase));
+}
 
-    private static object Params(SystemModel m) => new
+// Dapper.AOT only materializes rows into types it can see from outside the repository class; nested
+// private types are silently left on vanilla Dapper, which dies under Native AOT (see its FAQ).
+internal sealed record ModelPriceKeyRow(string ModelId, string PriceKey);
+
+internal sealed class ModelRow
+{
+    public string Id { get; set; } = "";
+    public string DisplayName { get; set; } = "";
+    public string Vendor { get; set; } = "";
+    public string? Family { get; set; }
+    public string? AliasesJson { get; set; }
+    public long? ContextWindow { get; set; }
+    public long? MaxOutputTokens { get; set; }
+    public string? CapabilitiesJson { get; set; }
+    public string? PricingJson { get; set; }
+    public string Source { get; set; } = "user";
+    public string? UserModifiedFieldsJson { get; set; }
+    public int? SeedVersion { get; set; }
+    public bool Enabled { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public SystemModel ToModel() => new()
     {
-        id = m.Id,
-        display_name = m.DisplayName,
-        vendor = m.Vendor,
-        family = m.Family,
-        aliases_json = Json.Serialize(m.Aliases),
-        context_window = m.ContextWindow,
-        max_output_tokens = m.MaxOutputTokens,
-        capabilities_json = Json.Serialize(m.Capabilities),
-        pricing_json = m.Pricing is null ? null : Json.Serialize(m.Pricing),
-        source = m.Source,
-        user_modified_fields_json = Json.Serialize(m.UserModifiedFields),
-        seed_version = m.SeedVersion,
-        enabled = m.Enabled,
-        created_at = DateTimeOffsetHandler.ToStorage(m.CreatedAt),
-        updated_at = DateTimeOffsetHandler.ToStorage(m.UpdatedAt),
+        Id = Id,
+        DisplayName = DisplayName,
+        Vendor = Vendor,
+        Family = Family,
+        Aliases = Json.Deserialize<List<string>>(AliasesJson) ?? [],
+        ContextWindow = ContextWindow,
+        MaxOutputTokens = MaxOutputTokens,
+        Capabilities = Json.Deserialize<ModelCapabilities>(CapabilitiesJson) ?? new(),
+        Pricing = Json.Deserialize<PricingSchedule>(PricingJson),
+        Source = Source,
+        UserModifiedFields = Json.Deserialize<List<string>>(UserModifiedFieldsJson) ?? [],
+        SeedVersion = SeedVersion,
+        Enabled = Enabled,
+        CreatedAt = CreatedAt,
+        UpdatedAt = UpdatedAt,
     };
+}
 
-    private sealed class ModelRow
+internal sealed class PriceRow
+{
+    public long Id { get; set; }
+    public string ModelId { get; set; } = "";
+    public string PriceKey { get; set; } = "";
+    public string? UpstreamModelId { get; set; }
+    public string? PricingJson { get; set; }
+    public string Source { get; set; } = "user";
+    public bool UserModified { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+
+    public ModelPrice ToPrice() => new()
     {
-        public string Id { get; set; } = "";
-        public string DisplayName { get; set; } = "";
-        public string Vendor { get; set; } = "";
-        public string? Family { get; set; }
-        public string? AliasesJson { get; set; }
-        public long? ContextWindow { get; set; }
-        public long? MaxOutputTokens { get; set; }
-        public string? CapabilitiesJson { get; set; }
-        public string? PricingJson { get; set; }
-        public string Source { get; set; } = "user";
-        public string? UserModifiedFieldsJson { get; set; }
-        public int? SeedVersion { get; set; }
-        public bool Enabled { get; set; }
-        public DateTimeOffset CreatedAt { get; set; }
-        public DateTimeOffset UpdatedAt { get; set; }
+        Id = Id,
+        ModelId = ModelId,
+        PriceKey = PriceKey,
+        UpstreamModelId = UpstreamModelId,
+        Pricing = Json.Deserialize<PricingSchedule>(PricingJson) ?? new(),
+        Source = Source,
+        UserModified = UserModified,
+        UpdatedAt = UpdatedAt,
+    };
+}
 
-        public SystemModel ToModel() => new()
-        {
-            Id = Id,
-            DisplayName = DisplayName,
-            Vendor = Vendor,
-            Family = Family,
-            Aliases = Json.Deserialize<List<string>>(AliasesJson) ?? [],
-            ContextWindow = ContextWindow,
-            MaxOutputTokens = MaxOutputTokens,
-            Capabilities = Json.Deserialize<ModelCapabilities>(CapabilitiesJson) ?? new(),
-            Pricing = Json.Deserialize<PricingSchedule>(PricingJson),
-            Source = Source,
-            UserModifiedFields = Json.Deserialize<List<string>>(UserModifiedFieldsJson) ?? [],
-            SeedVersion = SeedVersion,
-            Enabled = Enabled,
-            CreatedAt = CreatedAt,
-            UpdatedAt = UpdatedAt,
-        };
-    }
+internal sealed class UpstreamRow
+{
+    public string? UpstreamModelId { get; set; }
+    public string ModelId { get; set; } = "";
+}
 
-    private sealed class PriceRow
-    {
-        public long Id { get; set; }
-        public string ModelId { get; set; } = "";
-        public string PriceKey { get; set; } = "";
-        public string? UpstreamModelId { get; set; }
-        public string? PricingJson { get; set; }
-        public string Source { get; set; } = "user";
-        public bool UserModified { get; set; }
-        public DateTimeOffset UpdatedAt { get; set; }
-
-        public ModelPrice ToPrice() => new()
-        {
-            Id = Id,
-            ModelId = ModelId,
-            PriceKey = PriceKey,
-            UpstreamModelId = UpstreamModelId,
-            Pricing = Json.Deserialize<PricingSchedule>(PricingJson) ?? new(),
-            Source = Source,
-            UserModified = UserModified,
-            UpdatedAt = UpdatedAt,
-        };
-    }
-
-    private sealed class UpstreamRow
-    {
-        public string? UpstreamModelId { get; set; }
-        public string ModelId { get; set; } = "";
-    }
-
-    private sealed class CandidateRow
-    {
-        public string SystemModelId { get; set; } = "";
-        public string? AliasesJson { get; set; }
-    }
+internal sealed class CandidateRow
+{
+    public string SystemModelId { get; set; } = "";
+    public string? AliasesJson { get; set; }
 }

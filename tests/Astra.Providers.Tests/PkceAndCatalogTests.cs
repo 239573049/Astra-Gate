@@ -33,16 +33,29 @@ public class PkceTests
 public class SubscriptionCatalogTests
 {
     [Fact]
-    public void Catalog_Has_The_Five_Subscription_Families()
+    public void Catalog_Has_The_Six_Subscription_Families()
     {
         Assert.NotNull(SubscriptionCatalog.Find("claude-subscription"));
         Assert.NotNull(SubscriptionCatalog.Find("openai-subscription"));
         Assert.NotNull(SubscriptionCatalog.Find("grok-subscription"));
         Assert.NotNull(SubscriptionCatalog.Find("kimi-subscription"));
         Assert.NotNull(SubscriptionCatalog.Find("zcode-subscription"));
+        Assert.NotNull(SubscriptionCatalog.Find("github-copilot-subscription"));
         Assert.Null(SubscriptionCatalog.Find("nope"));
-        // Nothing ships as verified: plan §15 requires field verification before login is offered.
-        Assert.All(SubscriptionCatalog.All, c => Assert.False(c.Verified));
+        // 登录默认开放：端点与 client id 都已按公开来源写死，verified 只是"允许登录"的开关。
+        Assert.All(SubscriptionCatalog.All, c => Assert.True(c.Verified));
+
+        // GitHub Copilot：官方 device flow 的 client id + repo/workflow scope，第二跳换 Copilot 令牌。
+        var copilot = SubscriptionCatalog.Find("github-copilot-subscription")!;
+        Assert.Equal("Iv1.b507a08c87ecfe98", copilot.ClientId); // copilot-language-server GitHubAppInfo
+        Assert.Equal("https://github.com/login/device/code", copilot.DeviceCodeUrl);
+        Assert.Equal("https://github.com/login/oauth/access_token", copilot.TokenUrl);
+        Assert.Equal(["repo", "workflow"], copilot.Scopes);
+        Assert.False(copilot.UsePkce);
+        Assert.Equal("github-copilot", copilot.Style);
+        Assert.Equal("https://api.github.com/copilot_internal/v2/token", copilot.BusinessLoginUrl);
+        Assert.Equal("vscode-chat", copilot.ExtraHeaders["Copilot-Integration-Id"]);
+        Assert.True(SubscriptionCatalog.IsReady(copilot));
     }
 
     [Fact]
@@ -66,25 +79,24 @@ public class SubscriptionCatalogTests
     public void Ready_Requires_Verified_ClientId_And_Flow_Endpoints()
     {
         var claude = SubscriptionCatalog.Find("claude-subscription")!;
-        Assert.False(SubscriptionCatalog.IsReady(claude)); // shipped unverified
+        Assert.True(SubscriptionCatalog.IsReady(claude)); // PKCE: authorize url + token url + client id
 
-        // All three families ship complete endpoint sets + client ids from public reverse
-        // engineering, so flipping verified=true is enough to open the login.
-        var openai = SubscriptionCatalog.Effective(SubscriptionCatalog.Find("openai-subscription")!, JsonNode.Parse(
-            """{"subscription_oauth":{"verified":true}}""")!.AsObject());
-        Assert.True(SubscriptionCatalog.IsReady(openai));
+        // All five families ship complete endpoint sets + client ids from public sources, so they
+        // all start a login out of the box; a provider instance can still close it (verified=false).
+        Assert.All(SubscriptionCatalog.All, c => Assert.True(SubscriptionCatalog.IsReady(c), c.ProviderKey));
 
-        var grok = SubscriptionCatalog.Effective(SubscriptionCatalog.Find("grok-subscription")!, JsonNode.Parse(
-            """{"subscription_oauth":{"verified":true}}""")!.AsObject());
-        Assert.True(SubscriptionCatalog.IsReady(grok)); // device flow: device url + client id suffice
+        var openai = SubscriptionCatalog.Find("openai-subscription")!;
+        Assert.Equal("", openai.Style); // codex-cli 默认的浏览器 PKCE 登录，不是 deviceauth
+        Assert.True(openai.UsePkce);
+        // 走 device code 备选时才需要额外的轮询端点：把它清掉不影响 PKCE 就绪。
+        var noPoll = SubscriptionCatalog.Effective(openai, JsonNode.Parse(
+            """{"subscription_oauth":{"device_token_url":"","verified":true}}""")!.AsObject());
+        Assert.True(SubscriptionCatalog.IsReady(noPoll));
 
-        var kimi = SubscriptionCatalog.Effective(SubscriptionCatalog.Find("kimi-subscription")!, JsonNode.Parse(
-            """{"subscription_oauth":{"verified":true}}""")!.AsObject());
-        Assert.True(SubscriptionCatalog.IsReady(kimi));
-
-        var zcode = SubscriptionCatalog.Effective(SubscriptionCatalog.Find("zcode-subscription")!, JsonNode.Parse(
-            """{"subscription_oauth":{"verified":true}}""")!.AsObject());
-        Assert.True(SubscriptionCatalog.IsReady(zcode)); // zcode style: authorize url + client id suffice
+        // verified=false on the instance closes a catalog-open family again.
+        var closed = SubscriptionCatalog.Effective(claude, JsonNode.Parse(
+            """{"subscription_oauth":{"verified":false}}""")!.AsObject());
+        Assert.False(SubscriptionCatalog.IsReady(closed));
     }
 
     /// <summary>The shipped OAuth constants must match the public reverse-engineering sources they came from.</summary>
@@ -95,7 +107,20 @@ public class SubscriptionCatalogTests
         Assert.Equal("app_EMoamEEZ73f0CkXaXp7hrann", openai.ClientId); // openai/codex manager.rs CLIENT_ID
         Assert.Equal("https://auth.openai.com/oauth/authorize", openai.AuthorizeUrl);
         Assert.Equal("https://auth.openai.com/oauth/token", openai.TokenUrl);
+        // codex-cli 的默认登录：PKCE 授权码 + 它固定带的三个额外参数与完整 scope 集合。
+        Assert.Equal("", openai.Style);
         Assert.True(openai.UsePkce);
+        Assert.Equal(["openid", "profile", "email", "offline_access", "api.connectors.read", "api.connectors.invoke"], openai.Scopes);
+        Assert.Equal("true", openai.ExtraAuthorizeParams["id_token_add_organizations"]);
+        Assert.Equal("true", openai.ExtraAuthorizeParams["codex_cli_simplified_flow"]);
+        Assert.Equal("codex_cli_rs", openai.ExtraAuthorizeParams["originator"]);
+        // 上游只认 codex 自己的回环回调（1455/1457 + /auth/callback），别的 redirect_uri 会被拒。
+        Assert.True(SubscriptionCatalog.IsCodexLogin(openai));
+        Assert.Equal([1455, 1457], SubscriptionCatalog.CodexLoopbackPorts);
+        Assert.Equal("/auth/callback", SubscriptionCatalog.CodexLoopbackPath);
+        // device code 端点是备选路径（Style="deviceauth"）用的，保留但不默认启用。
+        Assert.Equal("https://auth.openai.com/api/accounts/deviceauth/usercode", openai.DeviceCodeUrl);
+        Assert.Equal("https://auth.openai.com/api/accounts/deviceauth/token", openai.DeviceTokenUrl);
 
         var grok = SubscriptionCatalog.Find("grok-subscription")!;
         Assert.Equal("https://auth.x.ai/oauth2/device/code", grok.DeviceCodeUrl); // xai-org/grok-build device_code.rs
@@ -117,10 +142,12 @@ public class SubscriptionCatalogTests
         Assert.Equal("kimi_code_cli", kimi.ExtraHeaders["X-Msh-Platform"]);
         Assert.Equal("https://api.kimi.com/coding/v1/me", kimi.IdentityUrl);
 
-        // ZCode（Z.AI 渠道）：Vibe Coding Labs《ZCode RE》 + ZCode.app v3.11.2 逆向，
-        // 经 NextCoWork issuers/zcode-zai.ts 实测走通的那条链路。
+        // ZCode（Z.AI 渠道）改走官方 CLI 链路：授权码 + 回环回调会被上游的 client 白名单拒掉
+        // （ZCode.app 只登记了 zcode://oauth/callback），CLI 链路无回调、服务端轮询取码。
         var zcode = SubscriptionCatalog.Find("zcode-subscription")!;
-        Assert.Equal("zcode", zcode.Style);
+        Assert.Equal("zcli", zcode.Style);
+        Assert.Equal("https://zcode.z.ai/api/v1/oauth/cli/init", zcode.CliInitUrl);
+        Assert.Equal("https://zcode.z.ai/api/v1/oauth/cli/poll", zcode.CliPollUrl);
         Assert.Equal("https://chat.z.ai/api/oauth/authorize", zcode.AuthorizeUrl);
         Assert.Equal("https://zcode.z.ai/api/v1/oauth/token", zcode.TokenUrl);
         Assert.Equal("client_P8X5CMWmlaRO9gyO-KSqtg", zcode.ClientId);

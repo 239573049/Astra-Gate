@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
 
@@ -27,6 +29,12 @@ public sealed class SubscriptionQuotaService(
 
     /// <summary>Snapshot older than this is considered stale by the UI (auto refetch).</summary>
     public static readonly TimeSpan FreshFor = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// codex-cli 的 User-Agent（形如 <c>codex_cli_rs/0.48.0</c>）。chatgpt.com 前端 Cloudflare
+    /// 只放行带这个身份的请求，裸客户端会被 403 + HTML 挡下，所以订阅请求也要用同一身份。
+    /// </summary>
+    public const string CodexClientUserAgent = "codex_cli_rs/0.48.0";
 
     private static readonly string[] GrokBillingUrls =
     [
@@ -56,6 +64,7 @@ public sealed class SubscriptionQuotaService(
             "openai-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeOpenAiAsync, ct),
             "grok-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeGrokAsync, ct),
             "zcode-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeZcodeAsync, ct),
+            "github-copilot-subscription" => await ProbeCopilotAsync(account, config, ct),
             // Kimi：上游有 /coding/v1/usages 路由，但没有公开的响应形状可解析（NextCoWork
             // 同样未实现 kimi 额度）——返回 null 让 UI 显示"暂不支持"，而不是猜一个字段名。
             _ => null,
@@ -66,6 +75,183 @@ public sealed class SubscriptionQuotaService(
         account.Extra["quota"] = quota;
         await accounts.UpdateAsync(account, ct);
         return (account, quota);
+    }
+
+    /// <summary>
+    /// 这个账号能不能用"重置卡"：目前只有 ChatGPT 订阅有（codex 的
+    /// <c>/wham/rate-limit-reset-credits</c>）。前端据此决定是否显示重置卡区块。
+    /// </summary>
+    public static bool SupportsResetCredits(Provider provider) =>
+        (provider.TemplateId ?? provider.PriceKey ?? provider.Id) == "openai-subscription";
+
+    /// <summary>
+    /// 读取该账号的重置卡列表（codex 的 rate limit reset credits）。列表每次实时拉取，
+    /// 因为卡有 <c>status</c>（available / redeemed / expired）会变；同时把它快照进
+    /// <c>extra.credits</c>，方便 UI 一进页面就有东西显示。
+    /// </summary>
+    public async Task<JsonObject?> ListResetCreditsAsync(
+        Provider provider, ProviderAccount account, SubscriptionOAuthConfig config, CancellationToken ct = default)
+    {
+        var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
+        var payload = await GetResetCreditsAsync(account, token, ct);
+        if (payload is null) return null;
+        account = await accounts.GetAsync(account.Id, ct) ?? account;
+        account.Extra["credits"] = payload.DeepClone();
+        await accounts.UpdateAsync(account, ct);
+        return payload;
+    }
+
+    /// <summary>
+    /// 用掉一张重置卡：<c>POST /wham/rate-limit-reset-credits/consume</c>，
+    /// body 是 <c>{ redeem_request_id（幂等键）, credit_id }</c>。成功后就地把该卡标成 redeemed，
+    /// 调用方（端点）随后刷新额度。
+    /// </summary>
+    public async Task<JsonObject?> ConsumeResetCreditAsync(
+        Provider provider, ProviderAccount account, SubscriptionOAuthConfig config, string? creditId, CancellationToken ct = default)
+    {
+        var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
+        var body = new JsonObject
+        {
+            ["redeem_request_id"] = Ulid.NewUlid(),
+        };
+        if (!string.IsNullOrWhiteSpace(creditId)) body["credit_id"] = creditId;
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post, "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume")
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
+        request.Headers.TryAddWithoutValidation("User-Agent", CodexClientUserAgent);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var (status, contentType, payload) = await SendAsync(request, ct);
+        if (IsAuthRejection(status, contentType, payload))
+            throw new SubscriptionAuthException(account.Id, "订阅上游拒绝了该请求，账号可能需要重新登录");
+        if (!IsSuccess(status))
+            throw new OAuthProtocolException($"http_{(int)status}", UpstreamErrorText(payload) ?? "重置失败");
+        if (payload?["code"] is JsonValue code && code.TryGetValue<string>(out var codeText) && codeText is "nothing_to_reset" or "no_credit" or "already_redeemed")
+            // 已知的终态码用本地化文案（比上游的英文 message 更好懂），未知码才透传上游消息。
+            throw new OAuthProtocolException(codeText, ResetCodeHint(codeText));
+
+        // 就地把用掉的那张卡标成已兑换，省掉一次额外拉取。
+        account = await accounts.GetAsync(account.Id, ct) ?? account;
+        if (account.Extra["credits"] is JsonObject credits && credits["credits"] is JsonArray cards)
+        {
+            foreach (var card in cards)
+            {
+                if (card is JsonObject o && (creditId is null || o["id"]?.GetValue<string>() == creditId))
+                {
+                    o["status"] = "redeemed";
+                    o["redeemed_at"] = DateTimeOffset.UtcNow.ToString("o");
+                    break;
+                }
+            }
+            if (credits["available_count"] is JsonValue count && count.TryGetValue<int>(out var available) && available > 0)
+                credits["available_count"] = available - 1;
+            await accounts.UpdateAsync(account, ct);
+        }
+        return payload;
+    }
+
+    private static string ResetCodeHint(string code) => code switch
+    {
+        "nothing_to_reset" => "当前额度没有被限流，暂时不需要重置",
+        "no_credit" => "没有可用的重置卡",
+        "already_redeemed" => "这张重置卡已经被用掉了",
+        _ => "重置失败",
+    };
+
+    /// <summary>
+    /// GitHub Copilot 的额度：Copilot 按"高级请求"计费，没有 token 计量。
+    /// <c>GET https://api.github.com/copilot_internal/user</c>（Bearer / token 认证，带官方身份头）
+    /// 返回 <c>quota_snapshots.{chat,premium_models,premium_interactions}</c>，每项形如
+    /// <c>{ entitlement, percent_remaining, remaining, unlimited, overage_count, overage_permitted, quota_id, timestamp_utc }</c>，
+    /// 外加 <c>quota_reset_date</c> / <c>copilot_plan</c> / <c>login</c>。
+    /// 来源：官方 copilot-language-server main.js（copilotUserInfoURL + ChatQuotaService 的字段名）。
+    /// 与其它家族不同，这里不做 401 强制刷新——Copilot 短时令牌本来就靠专用刷新路径续，
+    /// 额度查询失败不该把账号标成失效。
+    /// </summary>
+    private async Task<JsonObject?> ProbeCopilotAsync(ProviderAccount account, SubscriptionOAuthConfig config, CancellationToken ct)
+    {
+        var githubToken = account.RefreshTokenEnc is null ? null : protector.Unprotect(account.RefreshTokenEnc);
+        if (githubToken is null) throw new SubscriptionAuthException(account.Id, "账号没有 GitHub 授权，请重新登录");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/copilot_internal/user");
+        request.Headers.TryAddWithoutValidation("Authorization", $"token {githubToken}");
+        request.Headers.TryAddWithoutValidation("User-Agent", "GitHubCopilotChat/0.26.7");
+        request.Headers.TryAddWithoutValidation("Editor-Version", "vscode/1.99.3");
+        request.Headers.TryAddWithoutValidation("Editor-Plugin-Version", "copilot-chat/0.26.7");
+        request.Headers.TryAddWithoutValidation("Copilot-Integration-Id", "vscode-chat");
+        request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2025-05-01");
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        var (status, contentType, payload) = await SendAsync(request, ct);
+        if (IsAuthRejection(status, contentType, payload))
+            throw new SubscriptionAuthException(account.Id, "GitHub 授权已失效，请重新登录");
+        if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "Copilot 额度查询被上游拒绝");
+        return NormalizeCopilot(payload);
+    }
+
+    private JsonObject NormalizeCopilot(JsonObject? payload)
+    {
+        var quota = NewSnapshot();
+        if (payload is null) return quota;
+        var snapshots = payload["quota_snapshots"] as JsonObject;
+        // 付费账号看 premium_models / premium_interactions，免费账号看 chat。
+        var snapshot = snapshots?["premium_models"] as JsonObject
+                       ?? snapshots?["premium_interactions"] as JsonObject
+                       ?? snapshots?["chat"] as JsonObject;
+        var resetDate = ParseDate(payload["quota_reset_date"]);
+        if (snapshot is not null)
+        {
+            var unlimited = Bool(snapshot, "unlimited") ?? false;
+            // 卡片按"已用百分比"画条：上游给的是剩余百分比，换算一下。
+            double? used = null;
+            if (!unlimited)
+            {
+                if (Pct(snapshot["percent_remaining"], null) is { } remaining) used = Math.Clamp(100 - remaining, 0, 100);
+                else if (Long(snapshot, "entitlement") is { } entitlement and > 0 && Long(snapshot, "remaining") is { } left)
+                    used = Math.Clamp(100d * (entitlement - left) / entitlement, 0, 100);
+            }
+            if (unlimited) quota["planLabel"] = "unlimited";
+            if (used is not null)
+                quota["credits"] = WindowNode(used.Value, resetDate?.ToString("o"));
+            quota["entitlement"] = Long(snapshot, "entitlement");
+            quota["remaining"] = Long(snapshot, "remaining");
+            quota["overageUsed"] = Long(snapshot, "overage_count");
+            quota["overagePermitted"] = Bool(snapshot, "overage_permitted");
+        }
+        if (Str(payload, "copilot_plan") is { } plan) quota["planLabel"] = plan;
+        if (Str(payload, "login") is { } login) quota["account"] = login;
+        if (resetDate is not null && quota["credits"] is JsonObject window) window["resetsAtUtc"] = resetDate.Value.ToString("o");
+        return quota;
+    }
+
+    private static DateTimeOffset? ParseDate(JsonNode? node) =>
+        node is JsonValue v && v.TryGetValue<string>(out var text) && DateTimeOffset.TryParse(text, out var at) ? at : null;
+
+    private static string? Str(JsonObject o, string key) =>
+        o[key] is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;
+
+    private static bool? Bool(JsonObject o, string key) =>
+        o[key] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : null;
+
+    private static long? Long(JsonObject o, string key) =>
+        o[key] is JsonValue v && v.TryGetValue<long>(out var n) ? n : null;
+
+    private static string? UpstreamErrorText(JsonObject? payload) =>
+        payload?["error"] is JsonValue e && e.TryGetValue<string>(out var text) ? text
+        : payload?["message"] is JsonValue m && m.TryGetValue<string>(out var message) ? message : null;
+
+    /// <summary>GET the reset-credit list; null when the account/family has none (e.g. 404).</summary>
+    private async Task<JsonObject?> GetResetCreditsAsync(ProviderAccount account, string accessToken, CancellationToken ct)
+    {
+        var request = Build("https://chatgpt.com/backend-api/wham/rate-limit-reset-credits", accessToken);
+        request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
+        request.Headers.TryAddWithoutValidation("User-Agent", CodexClientUserAgent);
+        var (status, contentType, payload) = await SendAsync(request, ct);
+        if (IsAuthRejection(status, contentType, payload))
+            throw new SubscriptionAuthException(account.Id, "订阅上游拒绝了该账号，请重新登录");
+        return IsSuccess(status) ? payload : null;
     }
 
     /// <summary>Runs the probe; recovers once from an upstream rejection by force-refreshing the grant.</summary>
@@ -88,33 +274,46 @@ public sealed class SubscriptionQuotaService(
         throw new SubscriptionAuthException(account.Id, "订阅上游拒绝了该账号的额度查询，账号已被禁用，请重新登录");
     }
 
-    // ----- per-family probes (return null only for 401/403 so the recovery path kicks in) -----
+    // ----- per-family probes (return null only for a rejected grant so the recovery path kicks in) -----
 
     private async Task<JsonObject?> ProbeClaudeAsync(string accessToken, CancellationToken ct)
     {
         using var request = Build("https://api.anthropic.com/api/oauth/usage", accessToken);
         request.Headers.TryAddWithoutValidation("anthropic-beta", "oauth-2025-04-20");
-        var (status, payload) = await SendAsync(request, ct);
-        if (IsUnauthorized(status)) return null;
-        if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", null);
+        var (status, contentType, payload) = await SendAsync(request, ct);
+        if (IsAuthRejection(status, contentType, payload)) return null;
+        if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "额度查询被上游拒绝");
         return NormalizeClaude(payload);
     }
 
     private async Task<JsonObject?> ProbeOpenAiAsync(string accessToken, CancellationToken ct)
     {
-        var accountId = JwtClaim(accessToken, "chatgpt_account_id");
+        // 账号 id 在命名空间 claim 里（真实令牌是 https://api.openai.com/auth.chatgpt_account_id）；
+        // 拿不到再退回平铺形态。缺这个头上游会 401——它按账号选工作区。
+        var accountId = JwtClaim(accessToken, "chatgpt_account_id")
+                        ?? JwtNestedClaim(accessToken, "https://api.openai.com/auth", "chatgpt_account_id");
+        HttpStatusCode last = default;
         foreach (var url in new[] { "https://chatgpt.com/backend-api/codex/usage", "https://chatgpt.com/backend-api/wham/usage" })
         {
             using var request = Build(url, accessToken);
             if (accountId is not null) request.Headers.TryAddWithoutValidation("chatgpt-account-id", accountId);
             request.Headers.TryAddWithoutValidation("originator", "codex_cli_rs");
-            var (status, payload) = await SendAsync(request, ct);
-            if (IsUnauthorized(status)) return null;
-            if (status == HttpStatusCode.NotFound) continue; // older deployments serve the wham path only
-            if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", null);
+            // codex 的客户端身份（形如 codex_cli_rs/0.48.0）：chatgpt.com 的 WAF 对裸客户端
+            // 直接回 403 + HTML，带上官方身份更稳（实测两种端点都过）。
+            request.Headers.TryAddWithoutValidation("User-Agent", CodexClientUserAgent);
+            var (status, contentType, payload) = await SendAsync(request, ct);
+            // 真·401/403（上游给了 JSON）：走强制刷新那条路。
+            if (IsAuthRejection(status, contentType, payload)) return null;
+            if (!IsSuccess(status))
+            {
+                // 其它失败按"这个端点不行"处理，换下一个端点——实测 codex/usage 会被 WAF 挡
+                // 而 wham/usage 正常，不能因为前者就把整个探测量判死。
+                last = status;
+                continue;
+            }
             return NormalizeOpenAi(payload);
         }
-        throw new OAuthProtocolException("http_404", "usage endpoint not found");
+        throw new OAuthProtocolException($"http_{(int)last}", "额度查询被上游拒绝");
     }
 
     /// <summary>
@@ -130,9 +329,9 @@ public sealed class SubscriptionQuotaService(
         using var request = Build("https://api.z.ai/api/monitor/usage/quota/limit", accessToken);
         // 裸值覆盖 Build 写的 "Bearer …"：biz/monitor API 只认这个形状。
         request.Headers.Authorization = new AuthenticationHeaderValue(accessToken);
-        var (status, payload) = await SendAsync(request, ct);
-        if (IsUnauthorized(status)) return null;
-        if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", null);
+        var (status, contentType, payload) = await SendAsync(request, ct);
+        if (IsAuthRejection(status, contentType, payload)) return null;
+        if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "额度查询被上游拒绝");
         return NormalizeZcode(payload);
     }
 
@@ -144,9 +343,9 @@ public sealed class SubscriptionQuotaService(
             using var request = Build(url, accessToken);
             request.Headers.TryAddWithoutValidation("x-grok-client-identifier", "xai-grok-cli");
             request.Headers.TryAddWithoutValidation("x-grok-client-version", "0.2.93");
-            var (status, payload) = await SendAsync(request, ct);
-            if (IsUnauthorized(status)) return null;
-            if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", null);
+            var (status, contentType, payload) = await SendAsync(request, ct);
+            if (IsAuthRejection(status, contentType, payload)) return null;
+            if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "额度查询被上游拒绝");
             if (url.Contains("/billing", StringComparison.Ordinal)) billing = payload;
             else user = payload;
         }
@@ -161,24 +360,33 @@ public sealed class SubscriptionQuotaService(
         return request;
     }
 
-    private async Task<(HttpStatusCode Status, JsonObject? Payload)> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    private async Task<(HttpStatusCode Status, string ContentType, JsonObject? Payload)> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         using var client = httpClientFactory.CreateClient(HttpClientName);
         using var response = await client.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
+        var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
         try
         {
-            return (response.StatusCode, JsonNode.Parse(body) as JsonObject);
+            return (response.StatusCode, contentType, JsonNode.Parse(body) as JsonObject);
         }
         catch (System.Text.Json.JsonException)
         {
-            return (response.StatusCode, null);
+            return (response.StatusCode, contentType, null);
         }
     }
 
-    private static bool IsUnauthorized(HttpStatusCode status) => status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden;
-
     private static bool IsSuccess(HttpStatusCode status) => (int)status is >= 200 and < 300;
+
+    /// <summary>
+    /// 401/403 只有在上游确实给了 JSON 响应时才算"授权死了"，触发强制刷新。
+    /// Cloudflare / WAF 会因为出口 IP、缺浏览器指纹直接回 403 + HTML（实测 chatgpt.com
+    /// 对裸 HTTP 客户端如此），那不是授权问题，把这种响应当成失效刷新一轮、
+    /// 再把账号标成 revoked 会把好账号废掉。
+    /// </summary>
+    private static bool IsAuthRejection(HttpStatusCode status, string contentType, JsonObject? payload) =>
+        status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
+        && (payload is not null || contentType.Contains("json", StringComparison.OrdinalIgnoreCase));
 
     // ----- normalizers -----
 
@@ -205,9 +413,13 @@ public sealed class SubscriptionQuotaService(
     private JsonObject NormalizeOpenAi(JsonObject? payload)
     {
         var quota = NewSnapshot();
-        var limits = payload?["rate_limits"] as JsonObject;
+        // 老的 codex/usage 用复数 rate_limits.{primary,secondary}_window；wham/usage 用单数
+        // rate_limit.primary_window 且以 epoch 秒给 reset_at，两种都认。
+        var limits = payload?["rate_limits"] as JsonObject ?? payload?["rate_limit"] as JsonObject;
         if (OpenAiWindow(limits, "primary_window") is { } session) quota["session"] = session;
         if (OpenAiWindow(limits, "secondary_window") is { } weekly) quota["weekly"] = weekly;
+        if (payload?["plan_type"] is JsonValue plan && plan.TryGetValue<string>(out var planName) && planName.Length > 0)
+            quota["planLabel"] = planName;
         return quota;
     }
 
@@ -215,12 +427,16 @@ public sealed class SubscriptionQuotaService(
     {
         if (limits?[key] is not JsonObject window) return null;
         if (Pct(window["used_percent"], null) is not { } used) return null;
+        // codex/usage 给 resets_in_seconds；wham/usage 给 reset_at（epoch 秒）。
         var resetsAt = window["resets_in_seconds"] is JsonValue v && v.TryGetValue<double>(out var seconds)
             ? _clock.GetUtcNow().AddSeconds(seconds)
-            : default(DateTimeOffset?);
+            : window["reset_at"] is JsonValue at && at.TryGetValue<double>(out var epoch) && epoch > 0
+                ? DateTimeOffset.FromUnixTimeMilliseconds((long)(epoch * 1000))
+                : default(DateTimeOffset?);
         var node = WindowNode(used, resetsAt?.ToString("o"));
-        if (window["window_minutes"] is JsonValue m && m.TryGetValue<double>(out var minutes))
-            node["windowMinutes"] = (int)minutes;
+        if (window["window_minutes"] is JsonValue m && m.TryGetValue<double>(out var minutes)) node["windowMinutes"] = (int)minutes;
+        else if (window["limit_window_seconds"] is JsonValue s && s.TryGetValue<double>(out var windowSeconds) && windowSeconds > 0)
+            node["windowMinutes"] = (int)(windowSeconds / 60);
         return node;
     }
 
@@ -378,15 +594,28 @@ public sealed class SubscriptionQuotaService(
     /// <summary>Best-effort claim from a JWT payload (display only; never verified here).</summary>
     private static string? JwtClaim(string token, string claim)
     {
+        if (JwtPayload(token) is { } json && json[claim] is JsonValue v && v.TryGetValue<string>(out var value))
+            return value;
+        return null;
+    }
+
+    /// <summary>String claim nested one level under a namespaced object claim.</summary>
+    private static string? JwtNestedClaim(string token, string ns, string claim) =>
+        JwtPayload(token)?[ns] is JsonObject nested && nested[claim] is JsonValue v && v.TryGetValue<string>(out var value)
+            ? value
+            : null;
+
+    /// <summary>Best-effort JWT payload object; null when the token is not a parsable JWT.</summary>
+    private static JsonObject? JwtPayload(string token)
+    {
         var parts = token.Split('.');
         if (parts.Length < 2) return null;
         try
         {
             var padded = parts[1].Replace('-', '+').Replace('_', '/');
             var rem = (4 - padded.Length % 4) % 4;
-            padded += rem switch { 2 => "==", 3 => "=", _ => "" };
-            return JsonNode.Parse(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded)))?[claim] is JsonValue v
-                   && v.TryGetValue<string>(out var value) ? value : null;
+            padded += new string('=', (4 - padded.Length % 4) % 4);
+            return JsonNode.Parse(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded))) as JsonObject;
         }
         catch (Exception)
         {

@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 using Dapper;
 using Astra.Core;
 using Astra.Core.Requests;
@@ -12,6 +11,7 @@ public sealed record RequestQuery
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
     public string? ClientKind { get; init; }
+    public string? TokenId { get; init; }
     public string? ProviderId { get; init; }
 
     /// <summary>Literal contains-match (case-insensitive) over requested_model, upstream_model, system_model_id and response_model; LIKE wildcards in the term are escaped.</summary>
@@ -59,6 +59,13 @@ public sealed class TimeseriesPoint
     public long TotalCostNanoUsd { get; init; }
     public long TotalInputTokens { get; init; }
     public long TotalOutputTokens { get; init; }
+}
+
+/// <summary>One day of the activity heatmap: the local "yyyy-MM-dd" and how many requests landed on it.</summary>
+public sealed class DailyActivityRow
+{
+    public string Day { get; init; } = "";
+    public long Requests { get; init; }
 }
 
 /// <summary>Filter for privacy guard events (rows with a guard outcome in <c>privacy_json</c>).</summary>
@@ -129,7 +136,9 @@ public sealed class TopModelStat
 public sealed class RequestRepository
 {
     private const string RequestSelect = """
-        SELECT id, started_at_utc, client_kind, provider_id, provider_name, inbound_protocol, upstream_protocol,
+        SELECT id, started_at_utc, client_kind, token_id,
+               COALESCE((SELECT t.name FROM tokens t WHERE t.id = requests.token_id), token_name) AS token_name,
+               provider_id, provider_name, inbound_protocol, upstream_protocol,
                passthrough, requested_model, upstream_model, system_model_id, response_model, stream, service_tier, status,
                http_status, error_type, error_message, upstream_request_id, ttfb_ms, ttft_ms, total_ms,
                generation_ms, output_tps, total_input_tokens, total_output_tokens, cache_read_tokens, cache_write_tokens,
@@ -146,7 +155,7 @@ public sealed class RequestRepository
         """;
 
     private const string InsertRequestSql = """
-        INSERT INTO requests(id, started_at_utc, client_kind, provider_id, provider_name, inbound_protocol,
+        INSERT INTO requests(id, started_at_utc, client_kind, token_id, token_name, provider_id, provider_name, inbound_protocol,
                              upstream_protocol, passthrough, requested_model, upstream_model, system_model_id,
                              response_model,
                              stream, service_tier, status, http_status, error_type, error_message,
@@ -156,7 +165,7 @@ public sealed class RequestRepository
                              pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                              billing_description, privacy_json, body_ref, user_agent,
                              reasoning_effort, reasoning_mode, reasoning_budget_tokens)
-        VALUES (@id, @started_at_utc, @client_kind, @provider_id, @provider_name, @inbound_protocol,
+        VALUES (@id, @started_at_utc, @client_kind, @token_id, @token_name, @provider_id, @provider_name, @inbound_protocol,
                 @upstream_protocol, @passthrough, @requested_model, @upstream_model, @system_model_id,
                 @response_model,
                 @stream, @service_tier, @status, @http_status, @error_type, @error_message,
@@ -175,13 +184,69 @@ public sealed class RequestRepository
                 @tier_applied, @priced_as, @multipliers_json, @cost_nanousd, @note)
         """;
 
+    // Lifetime token counters (plan: tokens). Skipped when the token was deleted meanwhile (no row to attach to).
+    private const string AddTokenTotalsSql = """
+        INSERT INTO token_usage_totals(token_id, requests, success_requests, cost_nanousd, input_tokens, output_tokens,
+                                       cache_read_tokens, cache_write_tokens, reasoning_tokens, tps_output_tokens, tps_generation_ms)
+        SELECT @token_id, 1, @success, @cost_nanousd, @input_tokens, @output_tokens, @cache_read_tokens, @cache_write_tokens,
+               @reasoning_tokens, @tps_output_tokens, @tps_generation_ms
+        WHERE EXISTS (SELECT 1 FROM tokens WHERE id = @token_id)
+        ON CONFLICT(token_id) DO UPDATE SET
+            requests = requests + 1,
+            success_requests = success_requests + excluded.success_requests,
+            cost_nanousd = cost_nanousd + excluded.cost_nanousd,
+            input_tokens = input_tokens + excluded.input_tokens,
+            output_tokens = output_tokens + excluded.output_tokens,
+            cache_read_tokens = cache_read_tokens + excluded.cache_read_tokens,
+            cache_write_tokens = cache_write_tokens + excluded.cache_write_tokens,
+            reasoning_tokens = reasoning_tokens + excluded.reasoning_tokens,
+            tps_output_tokens = tps_output_tokens + excluded.tps_output_tokens,
+            tps_generation_ms = tps_generation_ms + excluded.tps_generation_ms
+        """;
+
+    private const string TouchTokenSql = """
+        UPDATE tokens SET last_used_at = MAX(COALESCE(last_used_at, ''), @used_at) WHERE id = @token_id
+        """;
+
+    // Filters are expressed against a fixed parameter shape (Dapper.AOT cannot read DynamicParameters):
+    // a null/empty parameter means "no filter" for that predicate, matching the previous string-built
+    // predicate list row-for-row. The SQL text below is constant; the parameter objects are anonymous.
+    private const string RequestWhereSql = """
+         WHERE 1=1
+           AND (@from IS NULL OR started_at_utc >= @from)
+           AND (@to IS NULL OR started_at_utc <= @to)
+           AND (@client_kind IS NULL OR @client_kind = '' OR client_kind = @client_kind)
+           AND (@token_id IS NULL OR @token_id = '' OR token_id = @token_id)
+           AND (@provider_id IS NULL OR @provider_id = '' OR provider_id = @provider_id)
+           AND (@model IS NULL OR (requested_model LIKE @model ESCAPE '\' OR upstream_model LIKE @model ESCAPE '\'
+                OR system_model_id LIKE @model ESCAPE '\' OR response_model LIKE @model ESCAPE '\'))
+           AND (@status IS NULL OR @status = '' OR status = @status)
+        """;
+
+    private const string PrivacyWhereSql = """
+         WHERE privacy_json IS NOT NULL
+           AND (@from IS NULL OR started_at_utc >= @from)
+           AND (@to IS NULL OR started_at_utc <= @to)
+           AND (@client_kind IS NULL OR @client_kind = '' OR client_kind = @client_kind)
+           AND (@provider_id IS NULL OR @provider_id = '' OR provider_id = @provider_id)
+           AND (@blocked IS NULL OR json_extract(privacy_json, '$.blocked') = @blocked)
+           AND (@hit_category IS NULL OR @hit_category = '' OR EXISTS
+                (SELECT 1 FROM json_each(json_extract(privacy_json, '$.hits')) je
+                 WHERE json_extract(je.value, '$.category') = @hit_category))
+           AND (@hit_action IS NULL OR @hit_action = '' OR EXISTS
+                (SELECT 1 FROM json_each(json_extract(privacy_json, '$.hits')) je
+                 WHERE json_extract(je.value, '$.action') = @hit_action))
+           AND (@model IS NULL OR @model = ''
+                OR (requested_model = @model OR upstream_model = @model OR system_model_id = @model))
+        """;
+
     private readonly SqliteConnectionFactory _factory;
 
     public RequestRepository(SqliteConnectionFactory factory) => _factory = factory;
 
     /// <summary>
-    /// Inserts records and their usage items in ONE transaction (called by the background usage writer).
-    /// Fills missing record ids with fresh ULIDs.
+    /// Inserts records and their usage items in ONE transaction (called by the background usage writer), adding
+    /// each record to its token's lifetime counters in that same transaction. Fills missing record ids with fresh ULIDs.
     /// </summary>
     public async Task InsertBatchAsync(IReadOnlyList<RequestRecord> records, CancellationToken ct = default)
     {
@@ -191,11 +256,93 @@ public sealed class RequestRepository
         foreach (var record in records)
         {
             if (string.IsNullOrEmpty(record.Id)) record.Id = Ulid.NewUlid();
-            await conn.ExecuteAsync(InsertRequestSql, RequestParams(record), transaction: tx);
+            await conn.ExecuteAsync(InsertRequestSql, new
+            {
+                id = record.Id,
+                started_at_utc = DateTimeOffsetHandler.ToStorage(record.StartedAtUtc),
+                client_kind = record.ClientKind,
+                token_id = record.TokenId,
+                token_name = record.TokenName,
+                provider_id = record.ProviderId,
+                provider_name = record.ProviderName,
+                inbound_protocol = record.InboundProtocol,
+                upstream_protocol = record.UpstreamProtocol,
+                passthrough = record.Passthrough,
+                requested_model = record.RequestedModel,
+                upstream_model = record.UpstreamModel,
+                system_model_id = record.SystemModelId,
+                response_model = record.ResponseModel,
+                stream = record.Stream,
+                service_tier = record.ServiceTier,
+                status = record.Status,
+                http_status = record.HttpStatus,
+                error_type = record.ErrorType,
+                error_message = record.ErrorMessage,
+                upstream_request_id = record.UpstreamRequestId,
+                ttfb_ms = record.TtfbMs,
+                ttft_ms = record.TtftMs,
+                total_ms = record.TotalMs,
+                generation_ms = record.GenerationMs,
+                output_tps = record.OutputTps,
+                total_input_tokens = record.TotalInputTokens,
+                total_output_tokens = record.TotalOutputTokens,
+                cache_read_tokens = record.CacheReadTokens,
+                cache_write_tokens = record.CacheWriteTokens,
+                reasoning_tokens = record.ReasoningTokens,
+                cost_nanousd = record.CostNanoUsd,
+                usage_source = record.UsageSource,
+                usage_raw_json = record.UsageRawJson,
+                pricing_snapshot_json = record.PricingSnapshotJson,
+                pricing_source = record.PricingSource,
+                price_key = record.PriceKey,
+                billing_trace_json = record.BillingTraceJson,
+                billing_description = record.BillingDescription,
+                privacy_json = record.PrivacyJson,
+                body_ref = record.BodyRef,
+                user_agent = record.UserAgent,
+                reasoning_effort = record.ReasoningEffort,
+                reasoning_mode = record.ReasoningMode,
+                reasoning_budget_tokens = record.ReasoningBudgetTokens,
+            }, transaction: tx);
             foreach (var item in record.UsageItems)
             {
                 item.RequestId = record.Id;
-                await conn.ExecuteAsync(InsertItemSql, ItemParams(item), transaction: tx);
+                await conn.ExecuteAsync(InsertItemSql, new
+                {
+                    request_id = item.RequestId,
+                    token_type = item.TokenType,
+                    tokens = item.Tokens,
+                    is_per_call = item.IsPerCall,
+                    unit_price = item.UnitPrice,
+                    base_unit_price = item.BaseUnitPrice,
+                    tier_applied = item.TierApplied,
+                    priced_as = item.PricedAs,
+                    multipliers_json = item.MultipliersJson,
+                    cost_nanousd = item.CostNanoUsd,
+                    note = item.Note,
+                }, transaction: tx);
+            }
+            if (record.TokenId is not null)
+            {
+                var timed = record.Status == RequestStatus.Success && record.GenerationMs > 0;
+                await conn.ExecuteAsync(AddTokenTotalsSql, new
+                {
+                    token_id = record.TokenId,
+                    success = record.Status == RequestStatus.Success ? 1 : 0,
+                    cost_nanousd = record.CostNanoUsd,
+                    input_tokens = record.TotalInputTokens,
+                    output_tokens = record.TotalOutputTokens,
+                    cache_read_tokens = record.CacheReadTokens,
+                    cache_write_tokens = record.CacheWriteTokens,
+                    reasoning_tokens = record.ReasoningTokens,
+                    tps_output_tokens = timed ? record.TotalOutputTokens : 0,
+                    tps_generation_ms = timed ? record.GenerationMs!.Value : 0,
+                }, transaction: tx);
+                await conn.ExecuteAsync(TouchTokenSql, new
+                {
+                    token_id = record.TokenId,
+                    used_at = DateTimeOffsetHandler.ToStorage(record.StartedAtUtc),
+                }, transaction: tx);
             }
         }
         await tx.CommitAsync(ct);
@@ -204,29 +351,39 @@ public sealed class RequestRepository
     /// <summary>Paged privacy events (rows with a guard outcome), newest first, with total count.</summary>
     public async Task<PrivacyEventPage> QueryPrivacyEventsAsync(PrivacyEventQuery query, CancellationToken ct = default)
     {
-        var where = new StringBuilder();
-        var p = new DynamicParameters();
-        BuildPrivacyWhere(query, where, p);
+        var filter = ToPrivacyFilter(query);
+        var p = new
+        {
+            filter.from, filter.to, filter.client_kind, filter.provider_id,
+            filter.blocked, filter.hit_category, filter.hit_action, filter.model,
+        };
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 200);
-        p.Add("limit", pageSize);
-        p.Add("offset", (page - 1) * pageSize);
 
         await using var conn = await _factory.OpenAsync(ct);
-        var total = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM requests{where}", p);
+        var total = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM requests{PrivacyWhereSql}", p);
         var items = (await conn.QueryAsync<PrivacyEventRow>($"""
             SELECT id, started_at_utc, client_kind, provider_id, provider_name, requested_model, status, privacy_json
-            FROM requests{where} ORDER BY started_at_utc DESC, id DESC LIMIT @limit OFFSET @offset
-            """, p)).AsList();
+            FROM requests{PrivacyWhereSql} ORDER BY started_at_utc DESC, id DESC LIMIT @limit OFFSET @offset
+            """, new
+        {
+            p.from, p.to, p.client_kind, p.provider_id,
+            p.blocked, p.hit_category, p.hit_action, p.model,
+            limit = pageSize,
+            offset = (page - 1) * pageSize,
+        })).ToList();
         return new PrivacyEventPage { Items = items, Total = total, Page = page, PageSize = pageSize };
     }
 
     /// <summary>Aggregated guard outcome counts plus a per-category hit breakdown for the same filters.</summary>
     public async Task<PrivacyEventStats> PrivacyEventStatsAsync(PrivacyEventQuery query, CancellationToken ct = default)
     {
-        var where = new StringBuilder();
-        var p = new DynamicParameters();
-        BuildPrivacyWhere(query, where, p);
+        var filter = ToPrivacyFilter(query);
+        var p = new
+        {
+            filter.from, filter.to, filter.client_kind, filter.provider_id,
+            filter.blocked, filter.hit_category, filter.hit_action, filter.model,
+        };
 
         await using var conn = await _factory.OpenAsync(ct);
         var totals = await conn.QuerySingleAsync<PrivacyTotalsRow>($"""
@@ -234,7 +391,7 @@ public sealed class RequestRepository
                    COALESCE(SUM(json_extract(privacy_json, '$.blocked')), 0) AS Blocked,
                    COALESCE(SUM(json_extract(privacy_json, '$.dry_run')), 0) AS DryRun,
                    COALESCE(SUM(json_extract(privacy_json, '$.redactions')), 0) AS Redactions
-            FROM requests{where}
+            FROM requests{PrivacyWhereSql}
             """, p);
         var categories = (await conn.QueryAsync<PrivacyCategoryRow>($"""
             SELECT json_extract(h.value, '$.category') AS Category,
@@ -243,10 +400,10 @@ public sealed class RequestRepository
                    COALESCE(SUM(CASE WHEN json_extract(h.value, '$.action') = 'warn' THEN json_extract(h.value, '$.count') ELSE 0 END), 0) AS WarnHits,
                    COALESCE(SUM(CASE WHEN json_extract(h.value, '$.action') = 'block' THEN json_extract(h.value, '$.count') ELSE 0 END), 0) AS BlockHits,
                    COALESCE(SUM(CASE WHEN json_extract(h.value, '$.action') = 'redact' THEN json_extract(h.value, '$.count') ELSE 0 END), 0) AS RedactHits
-            FROM requests, json_each(json_extract(requests.privacy_json, '$.hits')) h{where}
+            FROM requests, json_each(json_extract(requests.privacy_json, '$.hits')) h{PrivacyWhereSql}
             GROUP BY Category
             ORDER BY Hits DESC
-            """, p)).AsList();
+            """, p)).ToList();
         return new PrivacyEventStats
         {
             Events = totals.Events,
@@ -258,102 +415,54 @@ public sealed class RequestRepository
         };
     }
 
-    /// <summary>WHERE clause over rows that have a guard outcome; every predicate runs in SQLite (JSON1).</summary>
-    private static void BuildPrivacyWhere(PrivacyEventQuery query, StringBuilder where, DynamicParameters p)
-    {
-        where.Append(" WHERE privacy_json IS NOT NULL");
-        if (query.From is { } from)
-        {
-            where.Append(" AND started_at_utc >= @from");
-            p.Add("from", DateTimeOffsetHandler.ToStorage(from));
-        }
-        if (query.To is { } to)
-        {
-            where.Append(" AND started_at_utc <= @to");
-            p.Add("to", DateTimeOffsetHandler.ToStorage(to));
-        }
-        if (!string.IsNullOrEmpty(query.ClientKind))
-        {
-            where.Append(" AND client_kind = @client_kind");
-            p.Add("client_kind", query.ClientKind);
-        }
-        if (!string.IsNullOrEmpty(query.ProviderId))
-        {
-            where.Append(" AND provider_id = @provider_id");
-            p.Add("provider_id", query.ProviderId);
-        }
-        if (query.Blocked is { } blocked)
-        {
-            where.Append(" AND json_extract(privacy_json, '$.blocked') = @blocked");
-            p.Add("blocked", blocked ? 1 : 0);
-        }
-        if (!string.IsNullOrEmpty(query.Category))
-        {
-            where.Append(" AND EXISTS (SELECT 1 FROM json_each(json_extract(privacy_json, '$.hits')) je WHERE json_extract(je.value, '$.category') = @hit_category)");
-            p.Add("hit_category", query.Category);
-        }
-        if (!string.IsNullOrEmpty(query.Action))
-        {
-            where.Append(" AND EXISTS (SELECT 1 FROM json_each(json_extract(privacy_json, '$.hits')) je WHERE json_extract(je.value, '$.action') = @hit_action)");
-            p.Add("hit_action", query.Action);
-        }
-        if (!string.IsNullOrEmpty(query.Model))
-        {
-            where.Append(" AND (requested_model = @model OR upstream_model = @model OR system_model_id = @model)");
-            p.Add("model", query.Model);
-        }
-    }
+    /// <summary>Fixed-shape filter values for <see cref="PrivacyWhereSql"/> (member names are the SQL parameter names); a member is null (or empty, for strings) exactly when the previous string-built predicate list omitted that filter.</summary>
+    private sealed record PrivacyFilter(
+        string? from, string? to, string? client_kind, string? provider_id,
+        long? blocked, string? hit_category, string? hit_action, string? model);
+
+    private static PrivacyFilter ToPrivacyFilter(PrivacyEventQuery query) => new(
+        query.From is { } from ? DateTimeOffsetHandler.ToStorage(from) : null,
+        query.To is { } to ? DateTimeOffsetHandler.ToStorage(to) : null,
+        query.ClientKind,
+        query.ProviderId,
+        query.Blocked is { } blocked ? (long?)(blocked ? 1 : 0) : null,
+        query.Category,
+        query.Action,
+        query.Model);
 
     /// <summary>Paged, newest-first query with total count.</summary>
     public async Task<RequestPage> QueryAsync(RequestQuery query, CancellationToken ct = default)
     {
-        var where = new StringBuilder(" WHERE 1=1");
-        var p = new DynamicParameters();
-        if (query.From is { } from)
-        {
-            where.Append(" AND started_at_utc >= @from");
-            p.Add("from", DateTimeOffsetHandler.ToStorage(from));
-        }
-        if (query.To is { } to)
-        {
-            where.Append(" AND started_at_utc <= @to");
-            p.Add("to", DateTimeOffsetHandler.ToStorage(to));
-        }
-        if (!string.IsNullOrEmpty(query.ClientKind))
-        {
-            where.Append(" AND client_kind = @client_kind");
-            p.Add("client_kind", query.ClientKind);
-        }
-        if (!string.IsNullOrEmpty(query.ProviderId))
-        {
-            where.Append(" AND provider_id = @provider_id");
-            p.Add("provider_id", query.ProviderId);
-        }
+        // Literal contains-match: escape LIKE wildcards so the term never broadens, then wrap it in %...%.
+        // Null when absent/whitespace — @model IS NULL then means "no filter", as before.
+        string? model = null;
         if (!string.IsNullOrWhiteSpace(query.Model))
         {
-            // Literal contains-match: escape LIKE wildcards so the term never broadens, then wrap it in %...%.
-            var model = query.Model.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
-            where.Append("""
-                 AND (requested_model LIKE @model ESCAPE '\' OR upstream_model LIKE @model ESCAPE '\'
-                      OR system_model_id LIKE @model ESCAPE '\' OR response_model LIKE @model ESCAPE '\')
-                """);
-            p.Add("model", $"%{model}%");
+            var term = query.Model.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
+            model = $"%{term}%";
         }
-        if (!string.IsNullOrEmpty(query.Status))
+        var p = new
         {
-            where.Append(" AND status = @status");
-            p.Add("status", query.Status);
-        }
-
+            from = query.From is { } from ? DateTimeOffsetHandler.ToStorage(from) : null,
+            to = query.To is { } to ? DateTimeOffsetHandler.ToStorage(to) : null,
+            client_kind = query.ClientKind,
+            token_id = query.TokenId,
+            provider_id = query.ProviderId,
+            model,
+            status = query.Status,
+        };
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 200);
-        p.Add("limit", pageSize);
-        p.Add("offset", (page - 1) * pageSize);
 
         await using var conn = await _factory.OpenAsync(ct);
-        var total = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM requests{where}", p);
+        var total = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM requests{RequestWhereSql}", p);
         var items = (await conn.QueryAsync<RequestRecord>(
-            $"{RequestSelect}{where} ORDER BY started_at_utc DESC, id DESC LIMIT @limit OFFSET @offset", p)).AsList();
+            $"{RequestSelect}{RequestWhereSql} ORDER BY started_at_utc DESC, id DESC LIMIT @limit OFFSET @offset", new
+            {
+                p.from, p.to, p.client_kind, p.token_id, p.provider_id, p.model, p.status,
+                limit = pageSize,
+                offset = (page - 1) * pageSize,
+            })).ToList();
         return new RequestPage { Items = items, Total = total, Page = page, PageSize = pageSize };
     }
 
@@ -364,16 +473,16 @@ public sealed class RequestRepository
         var record = await conn.QuerySingleOrDefaultAsync<RequestRecord>($"{RequestSelect} WHERE id = @id", new { id });
         if (record is null) return null;
         record.UsageItems = (await conn.QueryAsync<RequestUsageItem>(
-            $"{ItemSelect} WHERE request_id = @request_id ORDER BY id", new { request_id = id })).AsList();
+            $"{ItemSelect} WHERE request_id = @request_id ORDER BY id", new { request_id = id })).ToList();
         return record;
     }
 
     /// <summary>
     /// Cost, request count, success rate, token totals and average TTFT for a range;
-    /// <paramref name="clientKind"/> restricts it to one client (null = every request).
+    /// <paramref name="clientKind"/> / <paramref name="tokenId"/> restrict it to one client / token (null = every request).
     /// </summary>
     public async Task<RequestSummary> SummaryAsync(
-        DateTimeOffset from, DateTimeOffset to, string? clientKind = null, CancellationToken ct = default)
+        DateTimeOffset from, DateTimeOffset to, string? clientKind = null, string? tokenId = null, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
         var row = await conn.QuerySingleAsync<SummaryRow>($"""
@@ -387,12 +496,13 @@ public sealed class RequestRepository
                    COALESCE(SUM(reasoning_tokens), 0) AS TotalReasoningTokens,
                    AVG(ttft_ms) AS AvgTtftMs
             FROM requests
-            WHERE started_at_utc >= @from AND started_at_utc <= @to{ClientFilter(clientKind)}
+            WHERE started_at_utc >= @from AND started_at_utc <= @to{Filters(clientKind, tokenId)}
             """, new
         {
             from = DateTimeOffsetHandler.ToStorage(from),
             to = DateTimeOffsetHandler.ToStorage(to),
             client_kind = clientKind,
+            token_id = tokenId,
         });
         return new RequestSummary
         {
@@ -412,11 +522,12 @@ public sealed class RequestRepository
     /// <summary>
     /// Cost/usage buckets. <paramref name="groupBy"/> is "day" or "hour"; buckets are UTC wall time shifted by
     /// <paramref name="utcOffsetMinutes"/> (pass the viewer's offset to bucket by local days/hours).
-    /// <paramref name="by"/> is "model", "provider" or "client"; <paramref name="clientKind"/> restricts the rows to one client.
+    /// <paramref name="by"/> is "model", "provider", "client" or "token"; <paramref name="clientKind"/> /
+    /// <paramref name="tokenId"/> restrict the rows to one client / token.
     /// </summary>
     public async Task<IReadOnlyList<TimeseriesPoint>> TimeseriesAsync(
         DateTimeOffset from, DateTimeOffset to, string groupBy = "day", string by = "model",
-        string? clientKind = null, int utcOffsetMinutes = 0, CancellationToken ct = default)
+        string? clientKind = null, int utcOffsetMinutes = 0, string? tokenId = null, CancellationToken ct = default)
     {
         var bucket = groupBy.Trim().ToLowerInvariant() switch
         {
@@ -431,7 +542,9 @@ public sealed class RequestRepository
             "model" => ("COALESCE(system_model_id, requested_model)", "COALESCE(system_model_id, requested_model)"),
             "provider" => ("provider_id", "MAX(provider_name)"),
             "client" => ("client_kind", "client_kind"),
-            _ => throw new ArgumentException("by must be \"model\", \"provider\" or \"client\".", nameof(by)),
+            // Current token name; the request-time snapshot once the token was deleted.
+            "token" => ("token_id", "COALESCE((SELECT t.name FROM tokens t WHERE t.id = requests.token_id), MAX(token_name))"),
+            _ => throw new ArgumentException("by must be \"model\", \"provider\", \"client\" or \"token\".", nameof(by)),
         };
 
         await using var conn = await _factory.OpenAsync(ct);
@@ -444,7 +557,7 @@ public sealed class RequestRepository
                    COALESCE(SUM(total_input_tokens), 0) AS TotalInputTokens,
                    COALESCE(SUM(total_output_tokens), 0) AS TotalOutputTokens
             FROM requests
-            WHERE started_at_utc >= @from AND started_at_utc <= @to{ClientFilter(clientKind)}
+            WHERE started_at_utc >= @from AND started_at_utc <= @to{Filters(clientKind, tokenId)}
             GROUP BY Bucket, GroupKey
             ORDER BY Bucket
             """, new
@@ -452,6 +565,7 @@ public sealed class RequestRepository
             from = DateTimeOffsetHandler.ToStorage(from),
             to = DateTimeOffsetHandler.ToStorage(to),
             client_kind = clientKind,
+            token_id = tokenId,
             shift = string.Create(CultureInfo.InvariantCulture, $"{utcOffsetMinutes:+0;-0;+0} minutes"),
         });
         return rows.Select(r => new TimeseriesPoint
@@ -466,9 +580,13 @@ public sealed class RequestRepository
         }).ToList();
     }
 
-    /// <summary>Most expensive models in the range, ordered by cost descending; <paramref name="clientKind"/> restricts it to one client.</summary>
+    /// <summary>
+    /// Most expensive models in the range, ordered by cost descending; <paramref name="clientKind"/> /
+    /// <paramref name="tokenId"/> restrict it to one client / token.
+    /// </summary>
     public async Task<IReadOnlyList<TopModelStat>> TopModelsAsync(
-        DateTimeOffset from, DateTimeOffset to, int limit = 10, string? clientKind = null, CancellationToken ct = default)
+        DateTimeOffset from, DateTimeOffset to, int limit = 10, string? clientKind = null, string? tokenId = null,
+        CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
         var rows = await conn.QueryAsync<TopModelRow>($"""
@@ -479,7 +597,7 @@ public sealed class RequestRepository
                    COALESCE(SUM(total_output_tokens), 0) AS TotalOutputTokens,
                    COALESCE(SUM(cache_read_tokens), 0) AS TotalCacheReadTokens
             FROM requests
-            WHERE started_at_utc >= @from AND started_at_utc <= @to{ClientFilter(clientKind)}
+            WHERE started_at_utc >= @from AND started_at_utc <= @to{Filters(clientKind, tokenId)}
             GROUP BY ModelId
             ORDER BY TotalCostNanoUsd DESC
             LIMIT @limit
@@ -488,6 +606,7 @@ public sealed class RequestRepository
             from = DateTimeOffsetHandler.ToStorage(from),
             to = DateTimeOffsetHandler.ToStorage(to),
             client_kind = clientKind,
+            token_id = tokenId,
             limit,
         });
         return rows.Select(r => new TopModelStat
@@ -501,6 +620,36 @@ public sealed class RequestRepository
         }).ToList();
     }
 
+    /// <summary>
+    /// Request count per local day since <paramref name="from"/>, for the overview's activity heatmap. Days are
+    /// bucketed by the viewer's offset like <see cref="TimeseriesAsync"/> and days with no requests are absent;
+    /// <paramref name="clientKind"/> / <paramref name="tokenId"/> restrict the rows to one client / token.
+    /// </summary>
+    public async Task<IReadOnlyList<DailyActivityRow>> DailyActivityAsync(
+        DateTimeOffset from, string? clientKind = null, int utcOffsetMinutes = 0, string? tokenId = null,
+        CancellationToken ct = default)
+    {
+        if (utcOffsetMinutes is < -14 * 60 or > 14 * 60)
+            throw new ArgumentOutOfRangeException(nameof(utcOffsetMinutes), "UTC offset must be within ±14 hours.");
+
+        await using var conn = await _factory.OpenAsync(ct);
+        var rows = await conn.QueryAsync<DailyActivityRow>($"""
+            SELECT strftime('%Y-%m-%d', started_at_utc, @shift) AS Day,
+                   COUNT(*) AS Requests
+            FROM requests
+            WHERE started_at_utc >= @from{Filters(clientKind, tokenId)}
+            GROUP BY Day
+            ORDER BY Day
+            """, new
+        {
+            from = DateTimeOffsetHandler.ToStorage(from),
+            client_kind = clientKind,
+            token_id = tokenId,
+            shift = string.Create(CultureInfo.InvariantCulture, $"{utcOffsetMinutes:+0;-0;+0} minutes"),
+        });
+        return rows.Where(r => !string.IsNullOrEmpty(r.Day)).ToList();
+    }
+
     /// <summary>Retention cleanup: deletes requests (and, via cascade, their usage items) started before the cutoff. Returns the number of requests removed.</summary>
     public async Task<long> DeleteOlderThanAsync(DateTimeOffset cutoff, CancellationToken ct = default)
     {
@@ -509,121 +658,65 @@ public sealed class RequestRepository
             new { cutoff = DateTimeOffsetHandler.ToStorage(cutoff) });
     }
 
-    /// <summary>Extra stats predicate for an optional client filter; the value is bound as <c>@client_kind</c>.</summary>
-    private static string ClientFilter(string? clientKind) =>
-        string.IsNullOrEmpty(clientKind) ? "" : " AND client_kind = @client_kind";
+    /// <summary>
+    /// Extra stats predicates for the optional client / token filters; the values are bound as <c>@client_kind</c> and
+    /// <c>@token_id</c>.
+    /// </summary>
+    private static string Filters(string? clientKind, string? tokenId) =>
+        (string.IsNullOrEmpty(clientKind) ? "" : " AND client_kind = @client_kind")
+        + (string.IsNullOrEmpty(tokenId) ? "" : " AND token_id = @token_id");
+}
 
-    private static object RequestParams(RequestRecord r) => new
-    {
-        id = r.Id,
-        started_at_utc = DateTimeOffsetHandler.ToStorage(r.StartedAtUtc),
-        client_kind = r.ClientKind,
-        provider_id = r.ProviderId,
-        provider_name = r.ProviderName,
-        inbound_protocol = r.InboundProtocol,
-        upstream_protocol = r.UpstreamProtocol,
-        passthrough = r.Passthrough,
-        requested_model = r.RequestedModel,
-        upstream_model = r.UpstreamModel,
-        system_model_id = r.SystemModelId,
-        response_model = r.ResponseModel,
-        stream = r.Stream,
-        service_tier = r.ServiceTier,
-        status = r.Status,
-        http_status = r.HttpStatus,
-        error_type = r.ErrorType,
-        error_message = r.ErrorMessage,
-        upstream_request_id = r.UpstreamRequestId,
-        ttfb_ms = r.TtfbMs,
-        ttft_ms = r.TtftMs,
-        total_ms = r.TotalMs,
-        generation_ms = r.GenerationMs,
-        output_tps = r.OutputTps,
-        total_input_tokens = r.TotalInputTokens,
-        total_output_tokens = r.TotalOutputTokens,
-        cache_read_tokens = r.CacheReadTokens,
-        cache_write_tokens = r.CacheWriteTokens,
-        reasoning_tokens = r.ReasoningTokens,
-        cost_nanousd = r.CostNanoUsd,
-        usage_source = r.UsageSource,
-        usage_raw_json = r.UsageRawJson,
-        pricing_snapshot_json = r.PricingSnapshotJson,
-        pricing_source = r.PricingSource,
-        price_key = r.PriceKey,
-        billing_trace_json = r.BillingTraceJson,
-        billing_description = r.BillingDescription,
-        privacy_json = r.PrivacyJson,
-        body_ref = r.BodyRef,
-        user_agent = r.UserAgent,
-        reasoning_effort = r.ReasoningEffort,
-        reasoning_mode = r.ReasoningMode,
-        reasoning_budget_tokens = r.ReasoningBudgetTokens,
-    };
+// Dapper.AOT only materializes rows into types it can see from outside the repository class; nested
+// private types are silently left on vanilla Dapper, which dies under Native AOT (see its FAQ).
+internal sealed class PrivacyTotalsRow
+{
+    public long Events { get; set; }
+    public long Blocked { get; set; }
+    public long DryRun { get; set; }
+    public long Redactions { get; set; }
+}
 
-    private static object ItemParams(RequestUsageItem i) => new
-    {
-        request_id = i.RequestId,
-        token_type = i.TokenType,
-        tokens = i.Tokens,
-        is_per_call = i.IsPerCall,
-        unit_price = i.UnitPrice,
-        base_unit_price = i.BaseUnitPrice,
-        tier_applied = i.TierApplied,
-        priced_as = i.PricedAs,
-        multipliers_json = i.MultipliersJson,
-        cost_nanousd = i.CostNanoUsd,
-        note = i.Note,
-    };
+internal sealed class PrivacyCategoryRow
+{
+    public string? Category { get; set; }
+    public long Requests { get; set; }
+    public long Hits { get; set; }
+    public long WarnHits { get; set; }
+    public long BlockHits { get; set; }
+    public long RedactHits { get; set; }
+}
 
-    private sealed class PrivacyTotalsRow
-    {
-        public long Events { get; set; }
-        public long Blocked { get; set; }
-        public long DryRun { get; set; }
-        public long Redactions { get; set; }
-    }
+internal sealed class SummaryRow
+{
+    public long TotalRequests { get; set; }
+    public long SuccessRequests { get; set; }
+    public long TotalCostNanoUsd { get; set; }
+    public long TotalInputTokens { get; set; }
+    public long TotalOutputTokens { get; set; }
+    public long TotalCacheReadTokens { get; set; }
+    public long TotalCacheWriteTokens { get; set; }
+    public long TotalReasoningTokens { get; set; }
+    public double? AvgTtftMs { get; set; }
+}
 
-    private sealed class PrivacyCategoryRow
-    {
-        public string? Category { get; set; }
-        public long Requests { get; set; }
-        public long Hits { get; set; }
-        public long WarnHits { get; set; }
-        public long BlockHits { get; set; }
-        public long RedactHits { get; set; }
-    }
+internal sealed class TimeseriesRow
+{
+    public string Bucket { get; set; } = "";
+    public string? GroupKey { get; set; }
+    public string? Label { get; set; }
+    public long Requests { get; set; }
+    public long TotalCostNanoUsd { get; set; }
+    public long TotalInputTokens { get; set; }
+    public long TotalOutputTokens { get; set; }
+}
 
-    private sealed class SummaryRow
-    {
-        public long TotalRequests { get; set; }
-        public long SuccessRequests { get; set; }
-        public long TotalCostNanoUsd { get; set; }
-        public long TotalInputTokens { get; set; }
-        public long TotalOutputTokens { get; set; }
-        public long TotalCacheReadTokens { get; set; }
-        public long TotalCacheWriteTokens { get; set; }
-        public long TotalReasoningTokens { get; set; }
-        public double? AvgTtftMs { get; set; }
-    }
-
-    private sealed class TimeseriesRow
-    {
-        public string Bucket { get; set; } = "";
-        public string? GroupKey { get; set; }
-        public string? Label { get; set; }
-        public long Requests { get; set; }
-        public long TotalCostNanoUsd { get; set; }
-        public long TotalInputTokens { get; set; }
-        public long TotalOutputTokens { get; set; }
-    }
-
-    private sealed class TopModelRow
-    {
-        public string? ModelId { get; set; }
-        public long Requests { get; set; }
-        public long TotalCostNanoUsd { get; set; }
-        public long TotalInputTokens { get; set; }
-        public long TotalOutputTokens { get; set; }
-        public long TotalCacheReadTokens { get; set; }
-    }
+internal sealed class TopModelRow
+{
+    public string? ModelId { get; set; }
+    public long Requests { get; set; }
+    public long TotalCostNanoUsd { get; set; }
+    public long TotalInputTokens { get; set; }
+    public long TotalOutputTokens { get; set; }
+    public long TotalCacheReadTokens { get; set; }
 }

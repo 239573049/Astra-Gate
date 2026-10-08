@@ -53,11 +53,14 @@ describe('ensureDesktopServer', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  function fakePackage(dir: string): string {
+  function fakePackage(dir: string, nativeLibraries: Record<string, string> = {}): string {
     const bin = path.join(root, dir, 'bin', 'astra-server');
     fs.mkdirSync(path.join(path.dirname(bin), 'wwwroot'), { recursive: true });
     fs.writeFileSync(bin, 'server');
     fs.writeFileSync(path.join(path.dirname(bin), 'wwwroot', 'index.html'), '<html>');
+    for (const [name, content] of Object.entries(nativeLibraries)) {
+      fs.writeFileSync(path.join(path.dirname(bin), name), content);
+    }
     return bin;
   }
 
@@ -70,6 +73,18 @@ describe('ensureDesktopServer', () => {
     expect(fs.readFileSync(managed, 'utf8')).toBe('server');
     expect(fs.existsSync(path.join(home, 'server', 'wwwroot', 'index.html'))).toBe(true);
     expect(readInstallJson(home)).toMatchObject({ serverPath: managed, serverVersion: '0.2.0' });
+  });
+
+  it('copies the native companion library beside the managed binary', () => {
+    const bin = fakePackage('_npx/abc/node_modules/@aidotnet/server-darwin-arm64', {
+      'libe_sqlite3.dylib': 'sqlite',
+    });
+    const r = ensureDesktopServer({ home, version: '0.2.0', platform: 'darwin', findPackaged: () => ({ path: bin }) });
+
+    expect(r.action).toBe('copied');
+    expect(fs.readFileSync(path.join(home, 'server', 'libe_sqlite3.dylib'), 'utf8')).toBe('sqlite');
+    // Committed immediately: no rollback snapshot left behind.
+    expect(fs.existsSync(path.join(home, 'server', 'libe_sqlite3.dylib.prev'))).toBe(false);
   });
 
   it('records a global package path without copying', () => {

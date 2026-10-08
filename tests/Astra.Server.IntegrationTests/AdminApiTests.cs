@@ -205,6 +205,14 @@ public class AdminApiTests
         Assert.Single((await host.GetJsonAsync("/api/stats/timeseries?range=today&groupBy=hour&by=provider&client=codex&tzOffset=480")).AsArray());
         Assert.Empty((await host.GetJsonAsync("/api/stats/timeseries?range=today&groupBy=hour&by=provider&client=claude-code")).AsArray());
         Assert.Empty((await host.GetJsonAsync("/api/stats/top-models?range=7d&client=claude-code")).AsArray());
+
+        // The activity heatmap counts today's requests for the same filters (one row per active day, none for empty days).
+        var heatmap = (await host.GetJsonAsync("/api/stats/activity-heatmap?client=codex&tzOffset=0")).AsArray();
+        var today = Assert.Single(heatmap)!;
+        Assert.Equal(1, today["requests"]!.GetValue<long>());
+        Assert.Equal(DateTimeOffset.Now.ToString("yyyy-MM-dd"), today["day"]!.GetValue<string>());
+        Assert.Empty((await host.GetJsonAsync("/api/stats/activity-heatmap?client=claude-code")).AsArray());
+        Assert.Single((await host.GetJsonAsync("/api/stats/activity-heatmap?days=730&client=codex")).AsArray());
     }
 
     [Theory]

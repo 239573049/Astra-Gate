@@ -106,7 +106,7 @@ public abstract class ClientAdapterBase : IClientAdapter
     }
 
     /// <summary>Shorthand for a .NET string as JSON text.</summary>
-    protected static string JsonString(string value) => System.Text.Json.JsonSerializer.Serialize(value);
+    protected static string JsonString(string value) => Astra.Core.Json.EncodeString(value);
 
     /// <summary>
     /// The bound provider's models from the "models" extra (<c>{"…": {"id": …, "name": …}}</c>), in order and

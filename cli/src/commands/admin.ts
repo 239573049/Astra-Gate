@@ -12,6 +12,23 @@ interface ClientRow {
   providerId?: string;
   selectedModel?: string;
   availability?: string;
+  tokenId?: string;
+}
+
+interface TokenStatsRow {
+  costUsd?: number;
+  requests?: number;
+  totalTokens?: number;
+}
+
+interface TokenRow {
+  id: string;
+  name?: string;
+  isDefault?: boolean;
+  enabled?: boolean;
+  clients?: string[];
+  today?: TokenStatsRow;
+  total?: TokenStatsRow;
 }
 
 interface ProviderRow {
@@ -65,6 +82,25 @@ function findProvider(providers: ProviderRow[], idOrName: string): ProviderRow |
   return undefined;
 }
 
+function findToken(tokens: TokenRow[], idOrName: string): TokenRow | undefined {
+  const needle = idOrName.toLowerCase();
+  const byId = tokens.find((t) => t.id.toLowerCase() === needle);
+  if (byId) return byId;
+  const byName = tokens.filter((t) => t.name?.toLowerCase() === needle);
+  if (byName.length === 1) return byName[0];
+  if (byName.length > 1) {
+    throw new AstraError(
+      `Token name "${idOrName}" is ambiguous.`,
+      `Matching ids: ${byName.map((t) => t.id).join(', ')} — use an id instead.`,
+    );
+  }
+  return undefined;
+}
+
+function fmtUsd(v: number | undefined): string {
+  return v === undefined ? '' : `$${v.toFixed(v !== 0 && Math.abs(v) < 0.01 ? 4 : 2)}`;
+}
+
 // ---------- client ----------
 
 export async function runClientList(): Promise<void> {
@@ -93,11 +129,16 @@ export async function runClientStatus(kind: ClientKind): Promise<void> {
   if (row.availability) console.log(`  Availability ${row.availability}`);
   if (row.providerId) console.log(`  Provider     ${row.providerId}`);
   if (row.selectedModel) console.log(`  Model        ${row.selectedModel}`);
+  if (row.tokenId) console.log(`  Token        ${row.tokenId}`);
 }
 
+/**
+ * Enables a client. `token` (id or name) picks the token written into its config; omitted, the server keeps the
+ * client's current token, or uses the default token for a client that never had one.
+ */
 export async function runClientEnable(
   kind: ClientKind,
-  opts: { provider: string; model?: string },
+  opts: { provider: string; model?: string; token?: string },
 ): Promise<void> {
   const providers = await api<ProviderRow[]>('/api/providers');
   const provider = findProvider(providers, opts.provider);
@@ -107,13 +148,28 @@ export async function runClientEnable(
       'Run `astra provider list` to see available providers.',
     );
   }
+  let token: TokenRow | undefined;
+  if (opts.token) {
+    token = findToken(await api<TokenRow[]>('/api/tokens'), opts.token);
+    if (!token) {
+      throw new AstraError(
+        `No token matches "${opts.token}".`,
+        'Run `astra token list` to see available tokens.',
+      );
+    }
+  }
   await api(`/api/clients/${kind}/enable`, {
     method: 'POST',
-    body: { providerId: provider.id, ...(opts.model ? { model: opts.model } : {}) },
+    body: {
+      providerId: provider.id,
+      ...(opts.model ? { model: opts.model } : {}),
+      ...(token ? { tokenId: token.id } : {}),
+    },
   });
   success(
     `Client "${kind}" enabled with provider "${provider.name ?? provider.id}"` +
-      `${opts.model ? ` (model: ${opts.model})` : ''}.`,
+      `${opts.model ? ` (model: ${opts.model})` : ''}` +
+      `${token ? ` (token: ${token.name ?? token.id})` : ''}.`,
   );
   console.log('Restart the client (Codex, Claude Desktop, …) if it does not pick up the change.');
 }
@@ -121,6 +177,26 @@ export async function runClientEnable(
 export async function runClientDisable(kind: ClientKind): Promise<void> {
   await api(`/api/clients/${kind}/disable`, { method: 'POST', body: {} });
   success(`Client "${kind}" disabled. Its original configuration was restored.`);
+}
+
+// ---------- token ----------
+
+/** Lists tokens with today's and lifetime usage; the plaintext token is never printed. */
+export async function runTokenList(): Promise<void> {
+  const rows = await api<TokenRow[]>('/api/tokens');
+  printTable(
+    rows.map((r) => [
+      r.id,
+      r.name ?? '',
+      fmtBool(r.isDefault),
+      fmtBool(r.enabled),
+      (r.clients ?? []).join(','),
+      fmtUsd(r.today?.costUsd),
+      r.today?.totalTokens === undefined ? '' : String(r.today.totalTokens),
+      fmtUsd(r.total?.costUsd),
+    ]),
+    ['ID', 'NAME', 'DEFAULT', 'ENABLED', 'CLIENTS', 'TODAY COST', 'TODAY TOKENS', 'TOTAL COST'],
+  );
 }
 
 // ---------- provider ----------

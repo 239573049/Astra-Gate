@@ -301,6 +301,33 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task DailyActivity_Counts_Requests_Per_Local_Day()
+    {
+        var db = await TestDb.InitializeAsync();
+        await db.Requests.InsertBatchAsync(SampleBatch());
+
+        var utc = await db.Requests.DailyActivityAsync(T0.AddDays(-1));
+        Assert.Equal(["2026-10-01", "2026-10-02"], utc.Select(r => r.Day).ToList());
+        Assert.Equal([2, 1], utc.Select(r => r.Requests).ToList());
+
+        // UTC+8 pushes the Oct 2 23:10Z row onto Oct 3, and days without requests are simply absent.
+        var east = await db.Requests.DailyActivityAsync(T0.AddDays(-1), utcOffsetMinutes: 480);
+        Assert.Equal(["2026-10-01", "2026-10-03"], east.Select(r => r.Day).ToList());
+        Assert.Equal(2, east[0].Requests);
+
+        var codex = await db.Requests.DailyActivityAsync(T0.AddDays(-1), clientKind: "codex");
+        Assert.Equal(["2026-10-01", "2026-10-02"], codex.Select(r => r.Day).ToList());
+        Assert.Equal([1, 1], codex.Select(r => r.Requests).ToList());
+
+        // Only requests at or after the start of the window are counted.
+        var latest = await db.Requests.DailyActivityAsync(T2);
+        Assert.Equal("2026-10-02", Assert.Single(latest).Day);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => db.Requests.DailyActivityAsync(T0, utcOffsetMinutes: 15 * 60));
+    }
+
+    [Fact]
     public async Task DeleteOlderThan_Removes_Rows_And_Cascades_Items()
     {
         var db = await TestDb.InitializeAsync();
@@ -527,5 +554,70 @@ public class RequestRepositoryTests
         // The model search composes with the other filters (AND).
         var combined = await db.Requests.QueryAsync(new RequestQuery { Model = "spec", ClientKind = "claude-code" });
         Assert.Equal(byResponse.Id, Assert.Single(combined.Items).Id);
+    }
+
+    [Fact]
+    public async Task Token_Counters_Accumulate_In_The_Insert_Transaction_And_Survive_Retention()
+    {
+        var db = await TestDb.InitializeAsync();
+        var now = DateTimeOffset.UtcNow;
+        await db.Tokens.InsertAsync(new Astra.Core.Tokens.TokenRecord { Id = "t1", Name = "Work", CreatedAt = now, UpdatedAt = now });
+        var batch = SampleBatch();
+        foreach (var r in batch) r.TokenId = "t1";
+        batch[0].TokenName = "Work";
+        batch[1].TokenId = "gone"; // token deleted before the writer ran: logged, but no counter row to attach to
+        batch[1].TokenName = "Gone";
+        batch[0].CacheReadTokens = 400;
+        await db.Requests.InsertBatchAsync(batch);
+
+        // Only t1 gains counters (the default token's row from the migration stays at zero).
+        var totals = Assert.Single(await db.Tokens.ListTotalsAsync(), t => t.Requests > 0);
+        Assert.Equal("t1", totals.TokenId);
+        Assert.Equal(2, totals.Requests);
+        Assert.Equal(1, totals.SuccessRequests);
+        Assert.Equal(1_000_000, totals.CostNanoUsd);
+        Assert.Equal(1000, totals.InputTokens);
+        Assert.Equal(400, totals.CacheReadTokens);
+        Assert.Equal(500, totals.TpsOutputTokens);
+        Assert.Equal(800, totals.TpsGenerationMs);
+        Assert.Equal(0.4, totals.CacheHitRate);
+        Assert.Equal(625.0, totals.Tps);
+        Assert.Equal(T2, (await db.Tokens.GetAsync("t1"))!.LastUsedAt);
+
+        // Range usage comes from the log; retention removes rows but never the lifetime counters.
+        var usage = (await db.Tokens.UsageAsync(T0.AddMinutes(-1), T2.AddMinutes(1))).ToDictionary(u => u.TokenId);
+        Assert.Equal(2, usage["t1"].Requests);
+        Assert.Equal(1, usage["gone"].Requests);
+        await db.Requests.DeleteOlderThanAsync(T2.AddDays(1));
+        Assert.Equal(2, Assert.Single(await db.Tokens.ListTotalsAsync(), t => t.TokenId == "t1").Requests);
+    }
+
+    [Fact]
+    public async Task Requests_And_Stats_Filter_And_Group_By_Token_With_Current_Name()
+    {
+        var db = await TestDb.InitializeAsync();
+        var now = DateTimeOffset.UtcNow;
+        await db.Tokens.InsertAsync(new Astra.Core.Tokens.TokenRecord { Id = "t1", Name = "Renamed", CreatedAt = now, UpdatedAt = now });
+        var batch = SampleBatch();
+        batch[0].TokenId = "t1";
+        batch[0].TokenName = "Original";
+        batch[1].TokenId = "deleted";
+        batch[1].TokenName = "Snapshot";
+        await db.Requests.InsertBatchAsync(batch);
+        var range = (From: T0.AddMinutes(-1), To: T2.AddMinutes(1));
+
+        var page = await db.Requests.QueryAsync(new RequestQuery { TokenId = "t1" });
+        var row = Assert.Single(page.Items);
+        Assert.Equal("Renamed", row.TokenName); // current name wins over the snapshot
+        Assert.Equal("Snapshot", (await db.Requests.GetAsync(batch[1].Id))!.TokenName); // deleted token: snapshot
+
+        Assert.Equal(1, (await db.Requests.SummaryAsync(range.From, range.To, tokenId: "t1")).TotalRequests);
+        Assert.Equal("gpt-5", Assert.Single(await db.Requests.TopModelsAsync(range.From, range.To, tokenId: "t1")).ModelId);
+        var byToken = await db.Requests.TimeseriesAsync(range.From, range.To, "day", "token");
+        Assert.Contains(byToken, p => p.GroupKey == "t1" && p.Label == "Renamed");
+        Assert.Contains(byToken, p => p.GroupKey == "deleted" && p.Label == "Snapshot");
+        Assert.Contains(byToken, p => p.GroupKey == null);
+        var filtered = await db.Requests.TimeseriesAsync(range.From, range.To, "day", "model", tokenId: "deleted");
+        Assert.Equal("claude-x", Assert.Single(filtered).GroupKey);
     }
 }
