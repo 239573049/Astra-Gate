@@ -10,7 +10,8 @@ the behavior they describe.
 Astra (`astragate`) — a local AI gateway. One product, two toolchains:
 
 - **.NET 10** (`Astra.sln`; `global.json` pins SDK 10.0.x): `src/Astra.Server` builds
-  `astra-server`, an ASP.NET Core host published as a self-contained single file. The other
+  `astra-server`, an ASP.NET Core host published as a self-contained Native AOT binary (no .NET
+  runtime on the target; a JIT single-file publish still works — see Native AOT). The other
   `src/Astra.*` projects are its libraries. Tests live in `tests/Astra.*.Tests` (xunit).
 - **pnpm workspace** (`pnpm@9.15.0`, `pnpm-workspace.yaml`; Node >= 18 per `cli`, CI runs Node 24):
   `cli/` (npm package `astragate`, bin `astra`; `release.yml` also rebuilds and publishes it as
@@ -36,7 +37,10 @@ login page). `docs` has no `lint`/`test` script, so `pnpm -r --if-present …` s
 
 Distribution couples the sides: the server binary and `web/dist` are packed into `npm/server-*`
 (`scripts/pack-platform.mjs`), and `web/dist` is copied into `desktop/renderer`
-(`desktop/scripts/copy-web.mjs`). Packaging changes can therefore span toolchains.
+(`desktop/scripts/copy-web.mjs`). Packaging changes can therefore span toolchains. The AOT
+executable needs its native companion library beside it (see Native AOT), so anything that
+copies the binary must copy the companions too — `scripts/pack-platform.mjs` and
+`packages/update-core` both do.
 
 ## Commands
 
@@ -47,6 +51,9 @@ Distribution couples the sides: the server binary and `web/dist` are packed into
 - Test all: `dotnet test --no-build` (after building). Targeted: `dotnet test tests/Astra.Gateway.Tests`.
 - Run: `dotnet run --project src/Astra.Server -- serve` — subcommands are listed in the
   `Program.cs` header comment (`serve`, `migrate`, `restore-all`, `set-password`, `version`).
+- Publish (release): `dotnet publish src/Astra.Server -c Release -r <rid> --self-contained true
+  -p:PublishAot=true -o out/publish` — Native AOT; never pass `-p:PublishSingleFile=true`
+  (see Native AOT).
 
 Node (run `pnpm install` first; CI uses `pnpm install --frozen-lockfile`):
 
@@ -101,14 +108,17 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   is read before startup (`ServerOptions`); `runtime.json` records the pid/port/apiVersion
   actually in use — the port can drift at startup (`PortPicker`), so never assume the configured
   port; read `runtime.json`.
-- Everything else lives in SQLite (`Astra.Data`, Dapper, WAL). Runtime-editable settings are one
-  `AppSettings` JSON blob stored under key `"app"` (`SettingsService`); adding a setting is a
-  property on `AppSettings` plus endpoint/UI wiring — no migration needed.
+- Everything else lives in SQLite (`Astra.Data`, Dapper.AOT, WAL; see Native AOT).
+  Runtime-editable settings are one `AppSettings` JSON blob stored under key `"app"`
+  (`SettingsService`); adding a setting is a property on `AppSettings` plus endpoint/UI wiring —
+  no migration needed.
 - Money is stored as INTEGER nanodollars (`Money` in `Astra.Core/Json.cs`, 1e9 per USD); unit
   prices are decimal strings inside pricing JSON. Never store money as a float.
 - JSON options are deliberate (`Astra.Core/Json.cs`): `Json.Storage` (snake_case, omits nulls)
   for anything persisted; `Json.Api` (camelCase) for the admin HTTP surface, configured globally
-  in `AstraApp`. Do not create ad-hoc `JsonSerializerOptions`.
+  in `AstraApp`. Do not create ad-hoc `JsonSerializerOptions`. Every type crossing a JSON
+  boundary must also be registered in the owning assembly's `JsonSerializerContext`
+  (`JsonContexts` is the registry); under AOT an unregistered type throws (see Native AOT).
 
 ### Error and security boundaries
 
@@ -124,6 +134,59 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 - Secrets (provider API keys, local client keys) go through `ISecretProtector` (DataProtection);
   DTOs expose only masks (see `ProviderDto.HasApiKey` / `ApiKeyMasked`). Never log secrets or
   echo them back.
+
+## Native AOT
+
+`src/Astra.Server` publishes as a self-contained Native AOT binary (~30 MB executable, no .NET
+runtime needed on the target).
+
+- Publish: `dotnet publish src/Astra.Server -c Release -r <rid> --self-contained true
+  -p:PublishAot=true -o out/publish` (what `release.yml` runs). Do **not** pass
+  `-p:PublishSingleFile=true`: `src/Astra.Server/Astra.Server.csproj` keeps
+  `PublishSingleFile`/`PublishReadyToRun`/`PublishTrimmed` behind a
+  `Condition="'$(PublishAot)' != 'true'"` property group, and a command-line
+  `-p:PublishSingleFile=true` overrides that group and breaks the AOT build. AOT output is
+  multi-file by design — see the companion bullet below.
+- Build gate: the six shipped projects (`Astra.Core`, `Astra.Data`, `Astra.Clients`,
+  `Astra.Providers`, `Astra.Gateway`, `Astra.Server`) set
+  `<IsAotCompatible>true</IsAotCompatible>`, so a plain `dotnet build -warnaserror` fails on
+  AOT-hostile code (IL2026/IL3050 become errors via `TreatWarningsAsErrors`) — fix the code, do
+  not weaken the gate. `Astra.Gateway` and `Astra.Server` also set
+  `<EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>`: the SDK only
+  auto-enables the Request Delegate Generator when `PublishTrimmed`/`PublishAot` is set, so
+  without it a plain build analyses differently from the publish.
+- JSON is source-generated: `JsonContexts` (`src/Astra.Core/JsonContexts.cs`) is the registry
+  and every assembly contributes its own `JsonSerializerContext` via `[ModuleInitializer]`
+  (`src/Astra.Core/JsonContext.cs`, `src/Astra.Providers/Templates/ProviderJsonContext.cs`,
+  `src/Astra.Clients/Config/ClientJsonContext.cs`, `src/Astra.Server/Api/ServerJsonContext.cs`).
+  The reflection fallback is pruned under AOT — an unregistered type throws there, while on the
+  JIT it silently falls back. `JsonContexts.FallbackTypes` exposes what fell back, and
+  `tests/Astra.Server.IntegrationTests/JsonRegistrationTests.cs` asserts the admin API resolves
+  entirely from generated metadata. Trap: an interface-typed collection root
+  (`IReadOnlyList<T>`, `IEnumerable<T>`) makes the serializer probe the whole interface graph
+  and needs each interface registered — the established fix is to materialise a `List<T>` at
+  the endpoint and register that.
+- Dapper is source-generated (`src/Astra.Data`: Dapper.AOT with `[module: DapperAot]` plus a
+  declarative `[module: TypeHandler(typeof(DateTimeOffset), typeof(DateTimeOffsetHandler))]`):
+  - **Never call vanilla Dapper from a shipped assembly** — `SqlMapper.AsList` (and other
+    `SqlMapper.*` / `DefaultTypeMap`) is not intercepted by Dapper.AOT, so it roots vanilla
+    Dapper's reflection machinery into the AOT closure and ilc fails with `MSB3077`, an error
+    whose message points at Dapper, not at your line. Use `.ToList()`.
+  - **Private nested row types are silently not intercepted** (a no-warn "not supported" case),
+    so row types are `internal` at namespace level; a `Query*` that silently stops being
+    intercepted fails at runtime under AOT.
+  - **Test assemblies opt out** with `[module: DapperAot(false)]` and then need the
+    vanilla-Dapper globals in `tests/Astra.Data.Tests/VanillaDapper.cs` and
+    `tests/Astra.Server.IntegrationTests/VanillaDapper.cs` — mirrored copies, keep them in sync.
+- Native companion library: the publish output includes `libe_sqlite3.dylib` (macOS), `.so`
+  (Linux), `e_sqlite3.dll` (Windows) beside the executable, loaded relative to the executable's
+  directory — not embedded, unlike `PublishSingleFile`. Anything that copies the binary must
+  copy the companions: `scripts/pack-platform.mjs` packs them into `npm/server-*/bin/` (the
+  desktop installers pick them up via the existing `server-bundle` → `extraResources` chain),
+  and `packages/update-core` (`staging.ts`/`swap.ts`/`apply.ts`) stages, commits and rolls them
+  back with the same `.prev` pattern as the binary.
+- Known gap: `scripts/gen-manifest.mjs` hashes only the executable, so the companion carries no
+  integrity hash in the update feed.
 
 ## Linked updates — things that must change together
 
@@ -157,6 +220,9 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
    `astra-server restore-all` is an offline subcommand that depends on this data. Adapter tests
    must use a fake home (`ClientEnvironment`, `tests/Astra.Clients.Tests/TestHome.cs`) — never
    the developer's real client configs.
+7. **A new JSON type crossing a boundary**: register it in the owning assembly's
+   `JsonSerializerContext` (see Native AOT); the guard test
+   (`tests/Astra.Server.IntegrationTests/JsonRegistrationTests.cs`) fails otherwise.
 
 ## Conventions
 

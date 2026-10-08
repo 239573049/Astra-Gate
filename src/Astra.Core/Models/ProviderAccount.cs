@@ -36,6 +36,24 @@ public sealed class ProviderAccount
     /// <summary>Provider-specific extras (quota info, organization id, …).</summary>
     public JsonObject Extra { get; set; } = new();
 
+    /// <summary>User switch: a disabled account is never selected for requests (its tokens are kept).</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// The provider's current account (at most one per provider), set by "switch to this account" or by automatic
+    /// failover. Unset everywhere = the first usable account in <see cref="SortOrder"/>.
+    /// </summary>
+    public bool IsCurrent { get; set; }
+
+    /// <summary>Failover order inside the provider (ascending).</summary>
+    public int SortOrder { get; set; }
+
+    /// <summary>Rate-limited until then (automatic failover skips it meanwhile); null = not cooling down.</summary>
+    public DateTimeOffset? CooldownUntilUtc { get; set; }
+
+    /// <summary>Why the account was last taken out of rotation (display only).</summary>
+    public string? LastError { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }
@@ -51,7 +69,10 @@ public interface IProviderAccountStore
 
     Task InsertAsync(ProviderAccount account, CancellationToken ct = default);
 
-    /// <summary>Full update; stamps UpdatedAt. Returns false when the row does not exist.</summary>
+    /// <summary>
+    /// Updates the login / token / extra fields; stamps UpdatedAt. The switching state (enabled, current, order,
+    /// cooldown) has dedicated writers and is left untouched. Returns false when the row does not exist.
+    /// </summary>
     Task<bool> UpdateAsync(ProviderAccount account, CancellationToken ct = default);
 
     /// <summary>Token rotation after a successful refresh (keeps the old refresh token when none is returned).</summary>

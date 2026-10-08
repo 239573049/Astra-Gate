@@ -44,6 +44,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   const [login, setLogin] = useState<SubscriptionLoginStart | null>(null);
   // 登录过程中最后一条错误：显示在弹窗里，避免"授权完了但界面还在等"。
   const [loginError, setLoginError] = useState<string | null>(null);
+  // 手动"立即验证"的进行中状态（设备码/CLI 流程）。
+  const [checking, setChecking] = useState(false);
   const baseline = useRef<Set<string>>(new Set());
   const quotaAttempted = useRef<Set<string>>(new Set());
 
@@ -150,6 +152,33 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
     });
   };
 
+  /**
+   * 手动验证一次授权（设备码 / CLI 流程用）：不等自动轮询的下一拍，立刻向服务端确认。
+   * 即使后台轮询已经把这次会话消费掉（404），只要账号已经进了列表就算成功——
+   * 用户点这个按钮时的期望是"我授权完了，告诉我到底成没成"。
+   */
+  const checkNow = async () => {
+    if (!login) return;
+    setChecking(true);
+    try {
+      const r = await poll.mutateAsync(login.state);
+      if (r.status === 'done') finish(true, r.account.displayName || r.account.accountEmail || r.account.id);
+      else if (r.status === 'pending' || r.status === 'slow_down') toast(t('providers.subscription.stillWaiting'), 'info');
+      else finish(false, undefined, 'error' in r ? (r.error ?? r.status) : r.status);
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 404) {
+        const fresh = await accounts.refetch();
+        const added = (fresh.data ?? []).find((a) => !baseline.current.has(a.id));
+        if (added) finish(true, added.displayName || added.accountEmail || added.id);
+        else finish(false, undefined, errorText(e));
+      } else {
+        finish(false, undefined, errorText(e));
+      }
+    } finally {
+      setChecking(false);
+    }
+  };
+
   return (
     <>
       <Group title={t('providers.subscription')} footer={t('providers.subscription.footer')}>
@@ -243,12 +272,20 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
               <div className="text-[11px] text-[var(--text-secondary)]">{t('providers.subscription.deviceCode')}</div>
               <div className="selectable font-mono text-[18px] font-medium tracking-wide">{login.userCode}</div>
             </div>
-            {login.verificationUrl && (
-              <Button onClick={() => window.open(login.verificationUrl ?? undefined, '_blank', 'noopener')}>
-                {t('providers.subscription.visitPage')}
+            <div className="flex flex-wrap gap-2">
+              {login.verificationUrl && (
+                <Button onClick={() => window.open(login.verificationUrl ?? undefined, '_blank', 'noopener')}>
+                  {t('providers.subscription.visitPage')}
+                </Button>
+              )}
+              {/* 授权完成后不必等自动轮询的下一拍：立刻问一次服务端。 */}
+              <Button variant="primary" loading={checking} onClick={() => void checkNow()}>
+                {t('providers.subscription.checkNow')}
               </Button>
-            )}
-            <Alert tone="info" title={t('providers.subscription.waiting')} />
+            </div>
+            <Alert tone="info" title={t('providers.subscription.waiting')}>
+              {t('providers.subscription.checkNowHint')}
+            </Alert>
           </div>
         )}
       </Sheet>

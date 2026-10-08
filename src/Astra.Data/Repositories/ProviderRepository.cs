@@ -18,7 +18,7 @@ public sealed class ProviderRepository
         """;
 
     private const string ProviderModelSelect = """
-        SELECT id, provider_id, model_id, system_model_id, overrides_json, enabled, sort_order
+        SELECT id, provider_id, model_id, system_model_id, overrides_json, enabled, sort_order, upstream_protocols_json
         FROM provider_models
         """;
 
@@ -171,6 +171,7 @@ public sealed class ProviderRepository
                 overrides_json = Json.Serialize(model.Overrides),
                 enabled = model.Enabled,
                 sort_order = model.SortOrder,
+                upstream_protocols_json = model.UpstreamProtocols is { Count: > 0 } ? Json.Serialize(model.UpstreamProtocols) : null,
             }, transaction: tx);
         await tx.CommitAsync(ct);
     }
@@ -275,6 +276,7 @@ public sealed class ProviderRepository
                 overrides_json = Json.Serialize(model.Overrides),
                 enabled = model.Enabled,
                 sort_order = model.SortOrder,
+                upstream_protocols_json = model.UpstreamProtocols is { Count: > 0 } ? Json.Serialize(model.UpstreamProtocols) : null,
             }, transaction: tx);
         await tx.CommitAsync(ct);
     }
@@ -285,7 +287,8 @@ public sealed class ProviderRepository
         await using var conn = await _factory.OpenAsync(ct);
         return await conn.ExecuteAsync("""
             UPDATE provider_models SET model_id = @model_id, system_model_id = @system_model_id,
-                overrides_json = @overrides_json, enabled = @enabled, sort_order = @sort_order
+                overrides_json = @overrides_json, enabled = @enabled, sort_order = @sort_order,
+                upstream_protocols_json = @upstream_protocols_json
             WHERE id = @id
             """, new
         {
@@ -328,8 +331,8 @@ public sealed class ProviderRepository
     }
 
     private const string ModelInsertSql = """
-        INSERT INTO provider_models(provider_id, model_id, system_model_id, overrides_json, enabled, sort_order)
-        VALUES (@provider_id, @model_id, @system_model_id, @overrides_json, @enabled, @sort_order)
+        INSERT INTO provider_models(provider_id, model_id, system_model_id, overrides_json, enabled, sort_order, upstream_protocols_json)
+        VALUES (@provider_id, @model_id, @system_model_id, @overrides_json, @enabled, @sort_order, @upstream_protocols_json)
         RETURNING id
         """;
 
@@ -435,6 +438,7 @@ internal sealed class ProviderModelRow
     public string? OverridesJson { get; set; }
     public bool Enabled { get; set; }
     public int SortOrder { get; set; }
+    public string? UpstreamProtocolsJson { get; set; }
 
     public ProviderModel ToProviderModel() => new()
     {
@@ -443,6 +447,7 @@ internal sealed class ProviderModelRow
         ModelId = ModelId,
         SystemModelId = SystemModelId,
         Overrides = Json.Deserialize<ModelOverrides>(OverridesJson) ?? new(),
+        UpstreamProtocols = Json.Deserialize<List<ApiProtocol>>(UpstreamProtocolsJson) ?? [],
         Enabled = Enabled,
         SortOrder = SortOrder,
     };

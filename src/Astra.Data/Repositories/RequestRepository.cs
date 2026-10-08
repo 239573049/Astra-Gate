@@ -144,7 +144,8 @@ public sealed class RequestRepository
                generation_ms, output_tps, total_input_tokens, total_output_tokens, cache_read_tokens, cache_write_tokens,
                reasoning_tokens, cost_nanousd, usage_source, usage_raw_json, pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                billing_description, privacy_json, body_ref, user_agent,
-               reasoning_effort, reasoning_mode, reasoning_budget_tokens
+               reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id,
+               (SELECT a.display_name FROM provider_accounts a WHERE a.id = requests.account_id) AS account_name
         FROM requests
         """;
 
@@ -164,7 +165,7 @@ public sealed class RequestRepository
                              reasoning_tokens, cost_nanousd, usage_source, usage_raw_json,
                              pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                              billing_description, privacy_json, body_ref, user_agent,
-                             reasoning_effort, reasoning_mode, reasoning_budget_tokens)
+                             reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id)
         VALUES (@id, @started_at_utc, @client_kind, @token_id, @token_name, @provider_id, @provider_name, @inbound_protocol,
                 @upstream_protocol, @passthrough, @requested_model, @upstream_model, @system_model_id,
                 @response_model,
@@ -174,7 +175,7 @@ public sealed class RequestRepository
                 @reasoning_tokens, @cost_nanousd, @usage_source, @usage_raw_json,
                 @pricing_snapshot_json, @pricing_source, @price_key, @billing_trace_json,
                 @billing_description, @privacy_json, @body_ref, @user_agent,
-                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens)
+                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id)
         """;
 
     private const string InsertItemSql = """
@@ -303,6 +304,7 @@ public sealed class RequestRepository
                 reasoning_effort = record.ReasoningEffort,
                 reasoning_mode = record.ReasoningMode,
                 reasoning_budget_tokens = record.ReasoningBudgetTokens,
+                account_id = record.AccountId,
             }, transaction: tx);
             foreach (var item in record.UsageItems)
             {

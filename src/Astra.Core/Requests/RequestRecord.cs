@@ -29,6 +29,12 @@ public sealed class RequestRecord
 
     public string? ProviderId { get; set; }
     public string? ProviderName { get; set; }
+
+    /// <summary>Subscription account that served the request (after any failover); null for API-key providers.</summary>
+    public string? AccountId { get; set; }
+
+    /// <summary>The account's current display name (query-time join, not stored); null once the account is deleted.</summary>
+    public string? AccountName { get; set; }
     public string InboundProtocol { get; set; } = "";
     public string? UpstreamProtocol { get; set; }
     public bool Passthrough { get; set; }

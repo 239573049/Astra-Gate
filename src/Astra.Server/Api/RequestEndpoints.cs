@@ -21,7 +21,7 @@ public static class RequestEndpoints
         long TotalInputTokens, long TotalOutputTokens, long CacheReadTokens, long CacheWriteTokens, long ReasoningTokens,
         long CostNanoUsd, string UsageSource,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
-        string? TokenId, string? TokenName);
+        string? TokenId, string? TokenName, string? AccountId, string? AccountName);
 
     public sealed record UsageItemDto(
         string TokenType, long Tokens, bool IsPerCall, string UnitPrice, string? BaseUnitPrice, string TierApplied,
@@ -40,7 +40,7 @@ public static class RequestEndpoints
         string? PriceKey, List<BillingTraceStep> BillingTrace, string? BillingDescription, List<UsageItemDto> UsageItems,
         string? UserAgent, BodiesDto? Bodies, PrivacyReport? Privacy,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
-        string? TokenId, string? TokenName);
+        string? TokenId, string? TokenName, string? AccountId, string? AccountName);
 
     public sealed record PageDto<T>(IReadOnlyList<T> Items, long Total, int Page, int PageSize);
 
@@ -187,7 +187,7 @@ public static class RequestEndpoints
         r.TotalInputTokens, r.TotalOutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.ReasoningTokens,
         r.CostNanoUsd, r.UsageSource,
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-        r.TokenId, r.TokenName);
+        r.TokenId, r.TokenName, r.AccountId, r.AccountName);
 
     private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies)
     {
@@ -211,7 +211,7 @@ public static class RequestEndpoints
                 i.CostNanoUsd, i.Note)).ToList(),
             r.UserAgent, captured, r.PrivacyJson is null ? null : Json.Deserialize<PrivacyReport>(r.PrivacyJson),
             r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-            r.TokenId, r.TokenName);
+            r.TokenId, r.TokenName, r.AccountId, r.AccountName);
     }
 
     private static JsonNode? ParseNode(string? json)

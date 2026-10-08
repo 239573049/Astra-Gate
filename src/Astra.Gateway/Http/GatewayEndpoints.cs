@@ -126,6 +126,9 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
         try
         {
             var route = await router.ResolveAsync(ctx.Request, ct);
+            // Claude subscription client policy (plan §5.4): count_tokens is a Claude Code request on the UA alone.
+            var isClaudeCode = protocol == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, null, countTokens: true);
+            SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
             using var reader = new StreamReader(ctx.Request.Body, Encoding.UTF8);
             var body = await reader.ReadToEndAsync(ct);
 
@@ -146,17 +149,29 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
             var url = endpoint is null ? null : UpstreamUrls.CountTokens(endpoint, model);
             if (url is not null)
             {
+                var claudeOAuth = SubscriptionSupport.IsClaudeSubscription(route.Provider) && protocol == ApiProtocol.Anthropic;
+                var relay = claudeOAuth && isClaudeCode;
+                if (relay) url = GatewayPipeline.WithClientQuery(url, ctx.Request.QueryString);
                 var credentials = await auth.ResolveAsync(route.Provider.Id, route.AccountId, ct) ?? UpstreamAuth.None;
                 if (credentials.QueryName is not null && credentials.QueryValue is not null)
                     url = UpstreamUrls.WithQuery(url, credentials.QueryName, credentials.QueryValue);
                 using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-                if (protocol == ApiProtocol.Anthropic)
+                if (relay)
                 {
-                    var version = ctx.Request.Headers["anthropic-version"].ToString();
-                    request.Headers.TryAddWithoutValidation("anthropic-version", version.Length > 0 ? version : "2023-06-01");
-                    if (ctx.Request.Headers["anthropic-beta"].ToString() is { Length: > 0 } beta) request.Headers.TryAddWithoutValidation("anthropic-beta", beta);
+                    // Same relay as /v1/messages: Claude Code's own headers, only the credential and OAuth beta change.
+                    ClaudeOAuthHeaders.ApplyRelay(request, ctx.Request.Headers, model, route.Provider.ExtraHeaders, "2023-06-01");
                 }
-                foreach (var (name, value) in route.Provider.ExtraHeaders) request.Headers.TryAddWithoutValidation(name, value);
+                else
+                {
+                    if (protocol == ApiProtocol.Anthropic)
+                    {
+                        var version = ctx.Request.Headers["anthropic-version"].ToString();
+                        request.Headers.TryAddWithoutValidation("anthropic-version", version.Length > 0 ? version : "2023-06-01");
+                        if (ctx.Request.Headers["anthropic-beta"].ToString() is { Length: > 0 } beta) request.Headers.TryAddWithoutValidation("anthropic-beta", beta);
+                    }
+                    foreach (var (name, value) in route.Provider.ExtraHeaders) request.Headers.TryAddWithoutValidation(name, value);
+                    if (claudeOAuth) ClaudeOAuthHeaders.ApplyCompat(request, ctx.Request.Headers);
+                }
                 if (credentials.HeaderName is not null) request.Headers.TryAddWithoutValidation(credentials.HeaderName, credentials.HeaderValue);
                 using var response = await http.For(route.Provider).SendAsync(request, ct);
                 ctx.Response.StatusCode = (int)response.StatusCode;

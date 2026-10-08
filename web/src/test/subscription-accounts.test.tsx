@@ -20,6 +20,7 @@ const spies = vi.hoisted(() => ({
   start: vi.fn(),
   remove: vi.fn(),
   importCodex: vi.fn(),
+  poll: vi.fn(),
   // Flipped per test: whether this machine already has a `codex login`.
   localCodex: { available: false } as { available: boolean; accountEmail?: string; plan?: string; detail?: string },
 }));
@@ -28,7 +29,7 @@ vi.mock('../api/hooks', () => ({
   keys: { providerAccounts: (id: string) => ['provider-accounts', id] as const },
   useProviderAccounts: () => ({ data: accounts, isLoading: false, refetch: vi.fn() }),
   useStartProviderLogin: () => ({ mutate: spies.start, isPending: false }),
-  usePollProviderLogin: () => ({ mutateAsync: vi.fn() }),
+  usePollProviderLogin: () => ({ mutateAsync: spies.poll, isPending: false }),
   useRefreshProviderAccount: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
   useDeleteProviderAccount: () => ({ mutate: spies.remove, isPending: false }),
   useFetchProviderAccountQuota: () => quotaSpies.fetch,
@@ -73,6 +74,7 @@ beforeEach(() => {
   spies.start.mockReset();
   spies.remove.mockReset();
   spies.importCodex.mockReset();
+  spies.poll.mockReset();
   spies.localCodex = { available: false };
   quotaSpies.fetch.mutate.mockReset();
   quotaSpies.fetch.isPending = false;
@@ -117,6 +119,24 @@ describe('SubscriptionAccounts', () => {
     expect(window.open).toHaveBeenCalledWith('https://claude.ai/oauth/authorize?x=1', '_blank', 'noopener');
     expect(screen.getByText('Waiting for authorization…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I've finished authorizing" })).toBeInTheDocument();
+  });
+
+  it('device flow: shows the code and offers a manual "check now" that resolves the login', async () => {
+    spies.start.mockImplementation((_vars: unknown, opts?: { onSuccess?: (r: unknown) => void }) =>
+      opts?.onSuccess?.({
+        mode: 'device', state: 'st-dev', userCode: 'ABCD-1234', verificationUrl: 'https://github.com/login/device', interval: 5,
+      }));
+    // 手动验证时服务端说已完成。
+    spies.poll.mockResolvedValue({ status: 'done', account: accounts[0] });
+
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByText('ABCD-1234')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'I authorized — check now' }));
+
+    await waitFor(() => expect(spies.poll).toHaveBeenCalledWith('st-dev'));
+    await waitFor(() => expect(screen.queryByText('ABCD-1234')).not.toBeInTheDocument());
   });
 
   it('offers to import an existing local codex login for the ChatGPT subscription only', () => {

@@ -100,6 +100,11 @@ namespace Astra.Server;
 // subscriptions and OAuth login
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginOptions))]
 [JsonSerializable(typeof(SubscriptionEndpoints.ProviderAccountDto))]
+[JsonSerializable(typeof(List<SubscriptionEndpoints.ProviderAccountDto>))]
+[JsonSerializable(typeof(SubscriptionEndpoints.AccountPatch))]
+[JsonSerializable(typeof(SubscriptionEndpoints.AccountOrder))]
+[JsonSerializable(typeof(SubscriptionEndpoints.SubscriptionPolicyDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.SubscriptionPolicyPatch))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginModeDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginDeviceDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginCliDto))]

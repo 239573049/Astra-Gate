@@ -17,7 +17,8 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Astra.Server.Api;
 
-public sealed record RemoteModelDto(string Id, string? DisplayName, string? LinkedSystemModelId, bool AlreadyAdded);
+public sealed record RemoteModelDto(string Id, string? DisplayName, string? LinkedSystemModelId, bool AlreadyAdded,
+    IReadOnlyList<ApiProtocol>? UpstreamProtocols = null);
 
 /// <summary>Everything one test run needs, after validation. Every field is optional on the wire.</summary>
 public sealed record ProviderTestOptions(string? ModelId, ApiProtocol? Protocol, bool Stream, string? Prompt, int MaxOutputTokens);
@@ -478,6 +479,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         foreach (var (key, val) in p.ExtraHeaders) request.Headers.TryAddWithoutValidation(key, val);
         if (protocol == ApiProtocol.Anthropic && !request.Headers.Contains("anthropic-version"))
             request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
+        // Claude subscription OAuth tokens are rejected without the claude-code / oauth betas (same as the gateway's compat path).
+        if (protocol == ApiProtocol.Anthropic && SubscriptionSupport.IsClaudeSubscription(p))
+            ClaudeOAuthHeaders.ApplyCompat(request, new HeaderDictionary());
         if (credentials.HeaderName is { } header)
         {
             request.Headers.Remove(header);
@@ -508,6 +512,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             endpoint.Protocol == ApiProtocol.Anthropic && !new Uri(endpoint.BaseUrl).AbsolutePath.TrimEnd('/').EndsWith("/v1", StringComparison.Ordinal) ? "/v1/models" : "/models";
         var url = AppendPath(endpoint.BaseUrl, suffix);
         var found = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var foundProtocols = new Dictionary<string, List<ApiProtocol>>(StringComparer.Ordinal);
         var cursors = new HashSet<string>(StringComparer.Ordinal);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(ModelListTimeoutSec));
@@ -530,6 +535,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                     if (endpoint.Protocol == ApiProtocol.Gemini && id.StartsWith("models/", StringComparison.Ordinal)) id = id[7..];
                     if (id.Length == 0) throw InvalidList();
                     found[id] = Text(item["displayName"]) ?? Text(item["display_name"]);
+                    // Copilot advertises per-model endpoints (Claude models are Messages-only); the same parsing
+                    // is harmless for upstreams that never send it.
+                    if (SupportedProtocols(item) is { Count: > 0 } protocols) foundProtocols[id] = protocols;
                     if (found.Count > MaxModels) throw new AdminApiException(502, "Upstream model list exceeds the supported limit");
                 }
                 var next = Text(body["nextPageToken"]);
@@ -559,7 +567,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         var index = key is null ? null : await db.Models.GetUpstreamIdIndexAsync(key, ct);
         var existing = (await db.Providers.ListModelsAsync(p.Id, ct)).Select(m => m.ModelId).ToHashSet(StringComparer.Ordinal);
         return found.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => new RemoteModelDto(x.Key, x.Value,
-            ModelIdMatcher.Match(x.Key, candidates, index), existing.Contains(x.Key))).ToList();
+            ModelIdMatcher.Match(x.Key, candidates, index), existing.Contains(x.Key),
+            foundProtocols.TryGetValue(x.Key, out var protocols) ? protocols : null)).ToList();
     }
 
     /// <summary>
@@ -580,9 +589,14 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         {
             return 0;
         }
-        var toAdd = remote.Where(m => !m.AlreadyAdded).Select(m => m.Id).ToList();
+        var toAdd = remote.Where(m => !m.AlreadyAdded).ToList();
         if (toAdd.Count == 0) return 0;
-        var added = await PlanModels(p, toAdd, ct);
+        var added = await PlanModels(p, toAdd.Select(m => m.Id).ToList(), ct);
+        // 把上游给出的 per-model 协议约束一并存下来（例如 Copilot 的 Claude 只支持 Messages）。
+        var constraints = toAdd.Where(m => m.UpstreamProtocols is { Count: > 0 })
+            .ToDictionary(m => m.Id, m => m.UpstreamProtocols!, StringComparer.Ordinal);
+        foreach (var model in added)
+            if (constraints.TryGetValue(model.ModelId, out var protocols)) model.UpstreamProtocols = [.. protocols];
         await db.Providers.InsertModelsAsync(added, ct);
         return added.Count;
     }
@@ -615,6 +629,33 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     internal static ProviderEndpoint PreferredEndpoint(Provider p) =>
         p.PreferredUpstreamProtocols.Select(p.EndpointFor).FirstOrDefault(e => e is not null)
         ?? p.Endpoints.FirstOrDefault() ?? throw new AdminApiException(400, "Provider has no endpoint");
+
+
+    /// <summary>
+    /// Maps an upstream model row's <c>supported_endpoints</c> (GitHub Copilot: "/chat/completions",
+    /// "/responses", "ws:/responses", "/v1/messages") to Astra protocols. Null when the row does not
+    /// constrain endpoints, or when nothing recognisable is listed.
+    /// </summary>
+    private static List<ApiProtocol>? SupportedProtocols(JsonObject item)
+    {
+        if (item["supported_endpoints"] is not JsonArray raw) return null;
+        var protocols = new List<ApiProtocol>();
+        foreach (var entry in raw)
+        {
+            var text = Text(entry);
+            if (text is null) continue;
+            var lower = text.ToLowerInvariant();
+            ApiProtocol? protocol = lower switch
+            {
+                "/responses" or "ws:/responses" or "ws://responses" => ApiProtocol.OpenAIResponses,
+                "/chat/completions" => ApiProtocol.OpenAIChat,
+                "/v1/messages" or "/messages" => ApiProtocol.Anthropic,
+                _ => null,
+            };
+            if (protocol is { } known && !protocols.Contains(known)) protocols.Add(known);
+        }
+        return protocols.Count > 0 ? protocols : null;
+    }
 
     /// <summary>The request body of one test, in the endpoint's own protocol (no IR conversion).</summary>
     internal static JsonObject TestBody(string model, string prompt, int maxOutputTokens, bool stream, ApiProtocol protocol)

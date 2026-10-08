@@ -86,7 +86,29 @@ public static class SubscriptionEndpoints
         string Id, string ProviderId, string DisplayName, string? AccountEmail, string? Plan, string Status,
         DateTimeOffset? ExpiresAtUtc, DateTimeOffset? LastRefreshAtUtc, JsonNode? Quota, DateTimeOffset CreatedAt,
         /// <summary>codex 的额度重置卡列表（<c>extra.credits</c> 快照；列表接口实时刷新）。</summary>
-        JsonNode? Credits = null);
+        JsonNode? Credits = null,
+        bool Enabled = true,
+        /// <summary>The account requests currently go to (without a client / token pin).</summary>
+        bool IsCurrent = false,
+        int SortOrder = 0,
+        DateTimeOffset? CooldownUntilUtc = null,
+        string? LastError = null);
+
+    /// <summary>PATCH body for one account; omitted fields keep their value.</summary>
+    public sealed record AccountPatch(bool? Enabled, string? DisplayName);
+
+    /// <summary>New failover order (account ids, first = tried first).</summary>
+    public sealed record AccountOrder(List<string> Ids);
+
+    /// <summary>
+    /// Subscription policy of a provider: who may use it (<c>claude-code-only</c> | <c>any</c>) and how accounts switch
+    /// (<c>manual</c> | <c>failover</c>). <see cref="ClaudeSubscription"/> tells the UI whether the client policy
+    /// applies by default.
+    /// </summary>
+    public sealed record SubscriptionPolicyDto(string ClientPolicy, string SwitchMode, bool ClaudeSubscription);
+
+    /// <summary>PUT body for the subscription policy; omitted fields keep their value.</summary>
+    public sealed record SubscriptionPolicyPatch(string? ClientPolicy, string? SwitchMode);
 
     /// <summary>Authorization-code (PKCE) login start; the UI opens <see cref="AuthorizeUrl"/>.</summary>
     public sealed record LoginModeDto(string Mode, string State, string AuthorizeUrl);
@@ -123,7 +145,72 @@ public static class SubscriptionEndpoints
         // ----- accounts (secrets never leave the server) -----
 
         app.MapGet("/api/providers/{providerId}/accounts", async (string providerId, AstraDatabase db) =>
-            Results.Ok((await db.Accounts.ListAsync(providerId)).Select(ToDto)));
+            Results.Ok(await ListDtosAsync(db, providerId)));
+
+        // ----- switching (plan §5.4): current account, enable switch, failover order, policy -----
+
+        // "切换到此账号"：成为提供商的当前账号（停用的账号顺带启用），立即对下一个请求生效。
+        // 客户端 / 令牌上固定了账号的请求不受影响。
+        app.MapPost("/api/provider-accounts/{id}/activate", async (string id, AstraDatabase db) =>
+        {
+            var account = await db.Accounts.GetAsync(id);
+            if (account is null) return Results.NotFound(new ErrorOnlyDto("账号不存在"));
+            if (account.Status != AccountStatus.Active)
+                return ApiJson.Result(new ErrorStatusDto("账号登录已失效，请先重新登录", account.Status), StatusCodes.Status409Conflict);
+            if (!account.Enabled) await db.Accounts.SetEnabledAsync(id, true);
+            await db.Accounts.SetCurrentAsync(account.ProviderId, id);
+            return Results.Ok(await ListDtosAsync(db, account.ProviderId));
+        });
+
+        app.MapPatch("/api/provider-accounts/{id}", async (string id, AccountPatch body, AstraDatabase db) =>
+        {
+            var account = await db.Accounts.GetAsync(id);
+            if (account is null) return Results.NotFound(new ErrorOnlyDto("账号不存在"));
+            if (body.DisplayName is { } name)
+            {
+                if (string.IsNullOrWhiteSpace(name)) return Results.BadRequest(new ErrorOnlyDto("账号名称不能为空"));
+                await db.Accounts.SetDisplayNameAsync(id, name.Trim());
+            }
+            if (body.Enabled is { } enabled)
+            {
+                await db.Accounts.SetEnabledAsync(id, enabled);
+                // A disabled account cannot stay current: the next usable one takes over by order.
+                if (!enabled && account.IsCurrent) await db.Accounts.SetCurrentAsync(account.ProviderId, null);
+            }
+            return Results.Ok(await ListDtosAsync(db, account.ProviderId));
+        });
+
+        app.MapPut("/api/providers/{providerId}/accounts/order", async (string providerId, AccountOrder body, AstraDatabase db) =>
+        {
+            if (await db.Providers.GetAsync(providerId) is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
+            await db.Accounts.ReorderAsync(providerId, body.Ids ?? []);
+            return Results.Ok(await ListDtosAsync(db, providerId));
+        });
+
+        app.MapGet("/api/providers/{providerId}/subscription-policy", async (string providerId, AstraDatabase db) =>
+            await db.Providers.GetAsync(providerId) is { } provider
+                ? Results.Ok(PolicyOf(provider))
+                : Results.NotFound(new ErrorOnlyDto("提供商不存在")));
+
+        app.MapPut("/api/providers/{providerId}/subscription-policy", async (
+            string providerId, SubscriptionPolicyPatch body, AstraDatabase db) =>
+        {
+            var provider = await db.Providers.GetAsync(providerId);
+            if (provider is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
+            if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
+                return Results.BadRequest(new ErrorOnlyDto("该提供商不是订阅类型（auth_scheme ≠ oauth-subscription）"));
+            if (body.ClientPolicy is { } policy && !ClientPolicies.All.Contains(policy))
+                return Results.BadRequest(new ErrorOnlyDto($"未知的客户端策略：{policy}"));
+            if (body.SwitchMode is { } mode && !SwitchModes.All.Contains(mode))
+                return Results.BadRequest(new ErrorOnlyDto($"未知的切换模式：{mode}"));
+
+            var section = provider.Settings["subscription"] as JsonObject ?? new JsonObject();
+            if (body.ClientPolicy is not null) section["client_policy"] = body.ClientPolicy;
+            if (body.SwitchMode is not null) section["switch_mode"] = body.SwitchMode;
+            provider.Settings["subscription"] = section;
+            await db.Providers.UpdateAsync(provider);
+            return Results.Ok(PolicyOf(provider));
+        });
 
         // 本机是否已有 `codex login` 的登录态（~/.codex/auth.json）——有的话可以直接导入，
         // 不必再走一遍浏览器授权。凭据内容永远不外传，只回是否可用与展示用信息。
@@ -700,7 +787,9 @@ public static class SubscriptionEndpoints
         return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(padded));
     }
 
-    private static ProviderAccountDto ToDto(ProviderAccount a) => new(
+    private static ProviderAccountDto ToDto(ProviderAccount a) => ToDto(a, a.IsCurrent);
+
+    private static ProviderAccountDto ToDto(ProviderAccount a, bool isCurrent) => new(
         a.Id,
         a.ProviderId,
         a.DisplayName,
@@ -711,7 +800,25 @@ public static class SubscriptionEndpoints
         a.LastRefreshAtUtc,
         a.Extra["quota"],
         a.CreatedAt,
-        a.Extra["credits"]);
+        a.Extra["credits"],
+        a.Enabled,
+        isCurrent,
+        a.SortOrder,
+        a.CooldownUntilUtc,
+        a.LastError);
+
+    /// <summary>The provider's accounts in failover order; <c>isCurrent</c> marks the one requests go to right now.</summary>
+    private static async Task<List<ProviderAccountDto>> ListDtosAsync(AstraDatabase db, string providerId)
+    {
+        var all = await db.Accounts.ListAsync(providerId);
+        var current = SubscriptionSupport.SelectAccount(all, null, DateTimeOffset.UtcNow)?.Id;
+        return all.Select(a => ToDto(a, a.Id == current)).ToList();
+    }
+
+    private static SubscriptionPolicyDto PolicyOf(Provider provider) => new(
+        SubscriptionSupport.ClientPolicyOf(provider),
+        SubscriptionSupport.SwitchModeOf(provider),
+        SubscriptionSupport.IsClaudeSubscription(provider));
 
     private static IResult Html(LoopbackCaptureResult result)
     {

@@ -94,6 +94,26 @@ public sealed class GatewayRouter(AstraDatabase db)
         ?? provider.Endpoints[0];
 
     /// <summary>
+    /// Endpoint choice for one model, honouring per-model upstream constraints. Some upstreams serve a model
+    /// over only one of their APIs — GitHub Copilot's Claude models are Messages-only, so a Responses request
+    /// for them must be translated rather than passed through (the Responses endpoint answers
+    /// <c>model_not_supported</c>). <paramref name="supportedProtocols"/> comes from the provider model row
+    /// (<c>upstream_protocols</c>, learned from the upstream model list); null/empty means "no constraint".
+    /// </summary>
+    public static ProviderEndpoint SelectEndpoint(Provider provider, ApiProtocol inbound, IReadOnlyList<ApiProtocol>? supportedProtocols)
+    {
+        if (supportedProtocols is not { Count: > 0 }) return SelectEndpoint(provider, inbound);
+        // The inbound protocol works as-is when the model allows it and the provider has an address for it.
+        if (supportedProtocols.Contains(inbound) && provider.EndpointFor(inbound) is { } direct) return direct;
+        // Otherwise translate into the model's protocol: its own order first, then the provider's preference.
+        foreach (var protocol in supportedProtocols)
+            if (provider.EndpointFor(protocol) is { } endpoint) return endpoint;
+        foreach (var protocol in provider.PreferredUpstreamProtocols)
+            if (supportedProtocols.Contains(protocol) && provider.EndpointFor(protocol) is { } preferred) return preferred;
+        return SelectEndpoint(provider, inbound);
+    }
+
+    /// <summary>
     /// The provider's preferred protocols without an address, in priority order. None of them can ever be selected,
     /// so a request in one of them is translated into a lower-preference protocol instead of passing through.
     /// </summary>

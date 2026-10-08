@@ -87,11 +87,25 @@ public sealed class GatewayPipeline(
             // Log-only metadata (plan §6.5): what the client itself set, read before any codec derives
             // upstream budgets from it. Never touches the wire and never throws.
             RequestReasoning.Capture(record, inbound, body);
-            var endpoint = GatewayRouter.SelectEndpoint(provider, inbound);
+            var requestedModel = (inbound == ApiProtocol.Gemini ? StripModels(pathModel) : null) ?? Str(body, "model") ?? "";
+            // 有时上游按模型区分协议（GitHub Copilot 的 Claude 只支持 Messages），
+            // 先解析出这条 provider model 的约束，再据它选上游端点：
+            // 不支持直通时就翻译，否则 Responses 端点会回 model_not_supported。
+            var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, requestedModel, ct);
+            var endpoint = GatewayRouter.SelectEndpoint(provider, inbound, resolvedModel.UpstreamProtocols);
             var upstreamProtocol = endpoint.Protocol;
             var passthrough = upstreamProtocol == inbound;
             record.UpstreamProtocol = upstreamProtocol.ToId();
             record.Passthrough = passthrough;
+
+            // Claude subscription (plan §5.4): the client policy ("Claude Code only" by default) and, for Claude Code
+            // itself on the pass-through path, a faithful relay of its own headers; other callers get the minimal
+            // OAuth compatibility headers.
+            var isClaudeCode = inbound == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, body);
+            SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
+            var claudeMode = !SubscriptionSupport.IsClaudeSubscription(provider) || upstreamProtocol != ApiProtocol.Anthropic
+                ? ClaudeHeaderMode.None
+                : passthrough && isClaudeCode ? ClaudeHeaderMode.Relay : ClaudeHeaderMode.Compat;
 
             // Legal per plan §6.2, but worth a line in the log: the provider prefers this protocol, has no address for
             // it, and the request is translated into a lower-preference protocol instead of passing through.
@@ -136,7 +150,10 @@ public sealed class GatewayPipeline(
             var clientWantsChatUsage = inbound == ApiProtocol.OpenAIChat
                                        && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
 
-            (_, effective) = await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
+            // 上游模型名可能与请求里的不同（provider model 映射），按上游名再解析一次取有效模型。
+            (_, effective) = upstreamModel == requestedModel
+                ? (resolvedModel, await models.ResolveAsync(provider, resolvedModel, ct))
+                : await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
             record.SystemModelId = effective.SystemModelId;
 
             // What we send upstream.
@@ -192,10 +209,15 @@ public sealed class GatewayPipeline(
             capture?.Set(BodyStore.UpstreamRequest, upstreamText);
 
             var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
-            using var response = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, ctx.Request, ct);
+            // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
+            if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
+            var (sent, accountId) = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, claudeMode, upstreamModel, ctx.Request, ct);
+            using var response = sent;
+            record.AccountId = accountId;
             record.TtfbMs = sw.ElapsedMilliseconds;
             record.HttpStatus = (int)response.StatusCode;
             record.UpstreamRequestId = FirstHeader(response, "x-request-id", "request-id", "x-goog-request-id", "cf-ray");
+            if (claudeMode == ClaudeHeaderMode.Relay) RelayResponseHeaders(response, ctx.Response);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -302,38 +324,72 @@ public sealed class GatewayPipeline(
 
     // ------------------------------------------------------------------ upstream
 
-    private async Task<HttpResponseMessage> SendAsync(
+    private async Task<(HttpResponseMessage Response, string? AccountId)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, string body, bool stream, bool passthrough,
-        HttpRequest clientRequest, CancellationToken ct)
+        ClaudeHeaderMode claudeMode, string upstreamModel, HttpRequest clientRequest, CancellationToken ct)
     {
         var provider = route.Provider;
-        UpstreamAuth credentials;
-        try
-        {
-            credentials = await auth.ResolveAsync(provider.Id, route.AccountId, ct) ?? UpstreamAuth.None;
-        }
-        catch (SubscriptionAuthException e)
-        {
-            throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
-        }
-
+        var subscription = provider.AuthScheme == AuthSchemes.OAuthSubscription;
+        // Plan §5.4: in failover mode a rate-limited or dead account hands the request to the next usable account
+        // (which also becomes the provider's current account, so the following requests stay on it).
+        var failover = subscription && SubscriptionSupport.SwitchModeOf(provider) == SwitchModes.Failover;
         var client = http.For(provider);
-        var response = await client.SendAsync(Build(credentials), HttpCompletionOption.ResponseHeadersRead, ct);
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && provider.AuthScheme == AuthSchemes.OAuthSubscription)
+        var accountId = route.AccountId;
+        var tried = new List<string>();
+        while (true)
         {
-            // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
-            response.Dispose();
+            UpstreamAuth credentials;
             try
             {
-                credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, route.AccountId, ct);
+                credentials = await auth.ResolveAsync(provider.Id, accountId, ct) ?? UpstreamAuth.None;
             }
             catch (SubscriptionAuthException e)
             {
-                throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号需要重新登录：{e.Message}");
+                throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
             }
-            response = await client.SendAsync(Build(credentials), HttpCompletionOption.ResponseHeadersRead, ct);
+
+            var response = await client.SendAsync(Build(credentials), HttpCompletionOption.ResponseHeadersRead, ct);
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
+            {
+                // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
+                response.Dispose();
+                var used = credentials.AccountId ?? accountId;
+                try
+                {
+                    credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);
+                }
+                catch (SubscriptionAuthException e)
+                {
+                    if (failover && used is not null && await FailOverAsync(used, null, e.Message) is { } next)
+                    {
+                        accountId = next;
+                        continue;
+                    }
+                    throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号需要重新登录：{e.Message}");
+                }
+                response = await client.SendAsync(Build(credentials), HttpCompletionOption.ResponseHeadersRead, ct);
+            }
+            if (failover && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
+            {
+                var until = RateLimitResetOf(response, DateTimeOffset.UtcNow);
+                if (await FailOverAsync(limited, until, $"429 限流，冷却至 {until.UtcDateTime:yyyy-MM-dd HH:mm} UTC") is { } next)
+                {
+                    response.Dispose();
+                    accountId = next;
+                    continue;
+                }
+            }
+            return (response, credentials.AccountId);
         }
-        return response;
+
+        async Task<string?> FailOverAsync(string from, DateTimeOffset? cooldownUntil, string reason)
+        {
+            tried.Add(from);
+            var next = await auth.FailOverAsync(provider.Id, from, cooldownUntil, reason, tried, ct);
+            if (next is not null)
+                logger.LogInformation("Provider {Provider}: account {From} → {To} ({Reason})", provider.Name, from, next, reason);
+            return next;
+        }
 
         HttpRequestMessage Build(UpstreamAuth a)
         {
@@ -342,6 +398,13 @@ public sealed class GatewayPipeline(
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
             };
+            if (claudeMode == ClaudeHeaderMode.Relay)
+            {
+                // Claude Code → Claude subscription: its own headers verbatim, only the credential and the OAuth beta change.
+                ClaudeOAuthHeaders.ApplyRelay(request, clientRequest.Headers, upstreamModel, provider.ExtraHeaders, DefaultAnthropicVersion);
+                a.Apply(request);
+                return request;
+            }
             request.Headers.TryAddWithoutValidation("Accept", stream ? "text/event-stream" : "application/json");
             request.Headers.TryAddWithoutValidation("User-Agent",
                 passthrough && clientRequest.Headers.UserAgent.Count > 0 ? clientRequest.Headers.UserAgent.ToString() : UserAgent);
@@ -368,10 +431,58 @@ public sealed class GatewayPipeline(
                 request.Headers.Remove(name);
                 request.Headers.TryAddWithoutValidation(name, value);
             }
+            // Non-Claude-Code callers of a Claude subscription (policy lifted): the betas OAuth tokens require.
+            if (claudeMode == ClaudeHeaderMode.Compat) ClaudeOAuthHeaders.ApplyCompat(request, clientRequest.Headers);
             // 凭据 + 上游 CLI 固定头（Authorization / chatgpt-account-id）。
             a.Apply(request);
             return request;
         }
+    }
+
+    /// <summary>
+    /// When a rate-limited account may be used again: Anthropic's <c>anthropic-ratelimit-unified-reset</c> (unix
+    /// seconds), else <c>Retry-After</c>, else five minutes. Clamped to [1 minute, 7 days].
+    /// </summary>
+    public static DateTimeOffset RateLimitResetOf(HttpResponseMessage response, DateTimeOffset now)
+    {
+        DateTimeOffset? at = null;
+        if (response.Headers.TryGetValues("anthropic-ratelimit-unified-reset", out var values)
+            && long.TryParse(values.FirstOrDefault(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var unix))
+            at = DateTimeOffset.FromUnixTimeSeconds(unix);
+        else if (response.Headers.RetryAfter is { } retry)
+            at = retry.Date ?? (retry.Delta is { } delta ? now + delta : null);
+        var until = at ?? now + TimeSpan.FromMinutes(5);
+        if (until < now + TimeSpan.FromMinutes(1)) until = now + TimeSpan.FromMinutes(1);
+        if (until > now + TimeSpan.FromDays(7)) until = now + TimeSpan.FromDays(7);
+        return until;
+    }
+
+    /// <summary>Appends the client's query string (e.g. Claude Code's <c>?beta=true</c>) to the upstream URL.</summary>
+    public static string WithClientQuery(string url, QueryString query)
+    {
+        if (!query.HasValue || query.Value is not { Length: > 1 } q) return url;
+        return url.Contains('?') ? url + "&" + q[1..] : url + q;
+    }
+
+    /// <summary>Relay path: hands Anthropic's rate-limit / request-id headers back to Claude Code.</summary>
+    private static void RelayResponseHeaders(HttpResponseMessage response, HttpResponse target)
+    {
+        foreach (var (name, values) in response.Headers)
+            if (ClaudeOAuthHeaders.IsRelayedResponseHeader(name))
+                target.Headers[name] = string.Join(",", values);
+    }
+
+    /// <summary>How outbound headers are built for a Claude subscription upstream.</summary>
+    private enum ClaudeHeaderMode
+    {
+        /// <summary>Not a Claude subscription upstream.</summary>
+        None,
+
+        /// <summary>Claude Code itself on the pass-through path: relay its headers verbatim.</summary>
+        Relay,
+
+        /// <summary>Any other caller (policy lifted, or translated): minimal OAuth compatibility headers.</summary>
+        Compat,
     }
 
     private async Task StreamAsync(

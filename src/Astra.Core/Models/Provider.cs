@@ -91,4 +91,12 @@ public sealed class ProviderModel
     public ModelOverrides Overrides { get; set; } = new();
     public bool Enabled { get; set; } = true;
     public int SortOrder { get; set; }
+
+    /// <summary>
+    /// Upstream protocols this model is served over, when the upstream distinguishes them per model
+    /// (GitHub Copilot's <c>/models.supported_endpoints</c>: Claude models are Messages-only). Empty means
+    /// "no constraint" — the provider's endpoint selection applies as usual. Used to translate instead of
+    /// passing through when the inbound protocol is not supported for this model.
+    /// </summary>
+    public List<ApiProtocol> UpstreamProtocols { get; set; } = [];
 }
