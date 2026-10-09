@@ -9,6 +9,7 @@
 ### 新增
 
 - **新增 10 个客户端**：Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness（官方桌面应用 / `dsh web`，写入 profile 的 `cordis.patch.yml` 与 `~/.dsh/.env`）可由 Astra 接管（写入前备份、禁用时还原、跳过你后来改过的值），并会随提供商的模型增减同步模型列表；Zed 不会从设置文件读取密钥，启用后需在 Zed 里粘贴一次令牌（卡片有提示）。Crush、Qwen Code、Droid、Kimi Code、MiMo Code 以 npm 包分发，可在客户端页安装、检查并更新；Zed、VS Code Insiders、VSCodium、omp、DeepSeek Harness 只显示版本与下载主页，Astra 不会替你运行安装命令。
+- **新增 WorkBuddy 客户端**：在 `~/.codebuddy/models.json` 里为所绑定提供商的每个模型新增一条自定义模型（显示名 `Astra: <模型>`，不动你已有的模型），WorkBuddy 与 CodeBuddy Code CLI / IDE 都会读取；只显示下载主页，不代为安装。
 - **从其他应用导入提供商**：提供商页新增「从其他应用导入」，只读扫描 CC Switch、Alma、Claude Code、Codex、Magpie 的本地配置并预览（`GET /api/providers/import/sources`），勾选后由服务端重新读取并创建提供商（`POST /api/providers/import`）。API Key 不经过浏览器，预览只返回遮掩值；会自动匹配内置模板、合并同一中转的多个端点，并识别已存在的提供商。CLI 同步新增 `astra provider import [--from <来源>] [--yes] [--only <ref>…]`。不导入订阅 / OAuth 登录、路由、限流、余额与会话数据，也不改动任何客户端配置。
 
 ## [未发布]
