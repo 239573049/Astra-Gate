@@ -83,11 +83,17 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rid: osx-arm64, os: macos-14 }
+          # macos-15, not macos-14: the macos-14 fleet (deprecated, unsupported
+          # from 2026-11-02) tops out at Xcode 16.2, whose SDK lacks the Swift
+          # shims (swift_time, swift_errno, …) that the .NET AOT runtime pack's
+          # pal_swiftbindings.o auto-links — the link dies with undefined
+          # __swift_FORCE_LOAD_* symbols (dotnet/runtime#125858, randomly per
+          # agent). Xcode 26, which ships the shims, needs macOS 15+.
+          - { rid: osx-arm64, os: macos-15 }
           # macos-13 (the last Intel image) is retired; cross-build x64 on
           # Apple silicon — dotnet publish -r osx-x64 and electron-builder
           # --x64 both target Intel without running the binary.
-          - { rid: osx-x64, os: macos-14 }
+          - { rid: osx-x64, os: macos-15 }
           - { rid: linux-x64, os: ubuntu-latest }
           - { rid: linux-arm64, os: ubuntu-24.04-arm }
           - { rid: win-x64, os: windows-latest }
@@ -158,6 +164,18 @@ jobs:
       # carries into the platform package. No -p:PublishSingleFile here — a
       # command-line -p: overrides the csproj's conditional group and would
       # re-enable single-file under AOT, breaking the build.
+      - name: Select an Xcode 26 toolchain
+        # macos-15 defaults to Xcode 16.4; the AOT link needs an Xcode 26+ SDK
+        # for the Swift shims (see the matrix note above). Pick the newest
+        # installed Xcode 2x explicitly.
+        if: startsWith(matrix.rid, 'osx')
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=$(ls -d /Applications/Xcode_2*.app | sort -V | tail -1)
+          sudo xcode-select -s "$app"
+          xcodebuild -version
+
       - name: Publish server binary (self-contained, Native AOT)
         shell: bash
         run: >-
