@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/desktop",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "private": true,
   "description": "Astra desktop app (Electron shell around the Astra web UI and local server)",
   "author": {
