@@ -61,11 +61,16 @@ export interface UpdateSummary {
   action: 'none' | 'server' | 'desktop-dmg' | 'desktop-npm';
 }
 
+/** Outcome of the in-app apply (Settings page button). */
+export type UiApplyOutcome = 'server' | 'desktop' | 'none';
+
 export class UpdateController {
   readonly track: UpdateTrack;
   private busy = false;
   private timer: NodeJS.Timeout | null = null;
   private pendingManifest: UpdateManifest | null = null;
+  /** True when the pending manifest is also newer than this app (mac npm track updates both). */
+  private desktopUpdatePending = false;
   private dmgDownloadedVersion: string | null = null;
 
   constructor(private readonly o: UpdateControllerOptions) {
@@ -182,23 +187,29 @@ export class UpdateController {
 
   private async checkServerAndManifest(): Promise<string> {
     const base = this.o.apiBase();
+    // Gated on the SERVER's version, like the apply gate below: a server left
+    // behind by an older install must surface even when this app is current.
+    const serverVersion = (await this.o.control.probeVersion()) ?? app.getVersion();
     const r = await checkForServerUpdate({
-      currentVersion: app.getVersion(),
+      currentVersion: serverVersion,
       baseUrl: base ?? undefined,
       feedUrl: this.o.feedUrl,
     });
     if (!r.availableVersion) {
       this.pendingManifest = null;
+      this.desktopUpdatePending = false;
       return '';
     }
     // The server-side status carries only the version; fetch the manifest for
     // the checksum + platform info the executor needs, and re-validate.
     const manifest = await fetchManifest({ feedUrl: this.o.feedUrl });
-    if (!isNewerVersion(manifest.version, app.getVersion())) {
+    if (!isNewerVersion(manifest.version, serverVersion)) {
       this.pendingManifest = null;
+      this.desktopUpdatePending = false;
       return '';
     }
     this.pendingManifest = manifest;
+    this.desktopUpdatePending = isNewerVersion(manifest.version, app.getVersion());
     return `Server update ${manifest.version} is available.`;
   }
 
@@ -233,6 +244,41 @@ export class UpdateController {
       log: (line) => this.o.log(line),
     });
     this.pendingManifest = null;
+    this.desktopUpdatePending = false;
+  }
+
+  /**
+   * Applies pending updates for in-app surfaces (Settings page) without any
+   * dialog. Mirrors the tray dialog's routing: a downloaded DMG quits and
+   * installs; otherwise the server updates first, then the desktop app when
+   * the macOS npm track has one pending (that step relaunches the app).
+   * Throws with a user-facing message on failure; 'none' means the automatic
+   * re-check found nothing newer.
+   */
+  async applyFromUi(): Promise<UiApplyOutcome> {
+    if (this.busy) throw new Error('An update is already running.');
+    this.busy = true;
+    try {
+      if (this.dmgDownloadedVersion) {
+        this.applyDesktopDmgUpdate(); // quitAndInstall — the app exits
+        return 'desktop';
+      }
+      if (!this.pendingManifest) await this.check();
+      if (!this.pendingManifest) return 'none';
+      const updateDesktop =
+        this.desktopUpdatePending &&
+        this.track === 'npm' &&
+        (this.o.platform ?? process.platform) === 'darwin';
+      await this.applyServerUpdate();
+      if (updateDesktop) {
+        // Server first — the desktop step relaunches the app.
+        await this.applyDesktopNpmUpdate();
+        return 'desktop';
+      }
+      return 'server';
+    } finally {
+      this.busy = false;
+    }
   }
 
   /** npm track, macOS only: replaces the desktop app under the npm prefix and relaunches. */
@@ -253,6 +299,7 @@ export class UpdateController {
       log: (line) => this.o.log(line),
     });
     this.pendingManifest = null;
+    this.desktopUpdatePending = false;
     this.o.log('desktop app updated — relaunching');
     app.relaunch();
     app.quit();

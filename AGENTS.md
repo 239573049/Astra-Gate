@@ -275,6 +275,11 @@ runtime needed on the target).
   passed in from `server-lifecycle.ts`); desktop resolves install.json > `ASTRA_SERVER_BIN` >
   bundled server > dev build (`desktop/src/shared/resolveServerBinary.ts`, no platform-package
   fallback; install.json loses to the bundled server when its `serverVersion` is older). The
+  desktop owns the service version at runtime: `ensureRunning` (`desktop/src/service.ts`) adopts a
+  running server only when its version matches the resolved binary's recorded version
+  (`shouldReplaceRunningServer`); a mismatching server — an older `astra serve`, a previous
+  install — is stopped and replaced, so a packaged app always serves with its own bits. Env/dev
+  targets and unreadable versions adopt instead of killing. The
   standalone installers (dmg / NSIS / AppImage) ship the server under `resources/server`:
   `release.yml` stages `npm/server-*/bin` into `desktop/server-bundle`, which
   `electron-builder.yml` copies via `extraResources`. `scripts/pack-desktop.mjs` drops it from
@@ -295,6 +300,10 @@ runtime needed on the target).
   `GET /api/update/status`, `POST /api/update/check`); applies happen out of process in the CLI
   or desktop via `packages/update-core` (staged download → sha256 → swap → restart → rollback,
   state in `~/.astra/update-state.json`, executor never replaces a running binary in place).
+  The desktop surfaces this to its web UI through the `updates` bridge (`astra:update-check` /
+  `astra:update-apply` → `UpdateController.check` / `applyFromUi` in `desktop/src/update.ts`):
+  the server-update check is gated on the running SERVER's version, not the app's (the apply
+  gate always was), so a current app with an old server still offers the update.
 
 ## Ground rules for edits
 

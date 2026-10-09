@@ -11,15 +11,16 @@ using Astra.Server.Hosting;
 namespace Astra.Server.Api;
 
 /// <summary>Install / version state of one client, embedded in <see cref="ClientInfoDto"/>.</summary>
-/// <param name="Method">"npm", "vscode-extension" or "manual".</param>
+/// <param name="Method">"npm", "vscode-extension", "script" or "manual".</param>
 /// <param name="Installed">The client's command (or VS Code extension / desktop app) was found.</param>
 /// <param name="UpdateAvailable">The registry has a newer version than the installed one.</param>
 /// <param name="InstallCommand">What "install" would run; null when installing is not offered.</param>
 /// <param name="UpdateCommand">What "update" would run; null when updating is not offered.</param>
 /// <param name="UpdateVia">"npm" (global npm package) or "self" (the client's own updater).</param>
 /// <param name="Blocker">
-/// Why an action is unavailable: "npm-missing", "vscode-missing", "external-install", or "shadowed" (the latest version
-/// is already installed behind the copy that runs — another update would change nothing; see <c>OtherCopies</c>).
+/// Why an action is unavailable: "npm-missing", "vscode-missing", "script-missing", "external-install", or "shadowed"
+/// (the latest version is already installed behind the copy that runs — another update would change nothing; see
+/// <c>OtherCopies</c>).
 /// </param>
 /// <param name="Busy">An install / update of this client is running.</param>
 /// <param name="NeedsAdmin">The npm install / update would fail for the current user: npm's global directories are not writable (typically root-owned).</param>
@@ -66,9 +67,10 @@ public sealed record ClientUpdateCheckRequest(bool? Force);
 /// <summary>
 /// Client versions, update checks and installs. Installed versions come from <c>&lt;command&gt; --version</c>
 /// (VS Code's extensions.json, the app bundle for Claude Desktop), cached per executable fingerprint so listing
-/// clients does not spawn processes every time. Latest versions come from the npm registry the user's npm uses
-/// (only on <see cref="CheckUpdatesAsync"/>, never while listing). Installs and updates run one at a time, with
-/// commands taken only from <see cref="ClientInstallCatalog"/>; output is kept in memory for the UI to poll.
+/// clients does not spawn processes every time. Latest versions come from the npm registry the user's npm uses or
+/// the client's own feed (only on <see cref="CheckUpdatesAsync"/>, never while listing). Installs and updates run
+/// one at a time, with commands taken only from <see cref="ClientInstallCatalog"/>; output is kept in memory for
+/// the UI to poll.
 /// </summary>
 public sealed partial class ClientInstallService(ClientEnvironment env, IHttpClientFactory http, ILogger<ClientInstallService> logger)
     : IDisposable
@@ -148,6 +150,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     {
         ClientInstallMethod.Npm => "npm",
         ClientInstallMethod.VsCodeExtension => "vscode-extension",
+        ClientInstallMethod.Script => "script",
         _ => "manual",
     };
 
@@ -441,7 +444,8 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     // ------------------------------------------------------------------ update check
 
     /// <summary>
-    /// Fetches the latest version of every npm-installed client from the registry npm itself uses. Without
+    /// Fetches the latest version of every npm-installed client from the registry npm itself uses, and of
+    /// script-installed clients from their <see cref="ClientInstallSpec.LatestUrl"/>. Without
     /// <paramref name="force"/>, versions fetched within the last six hours are kept. Failures are recorded per client.
     /// </summary>
     public async Task CheckUpdatesAsync(bool force, CancellationToken ct)
@@ -452,14 +456,14 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             var now = DateTimeOffset.UtcNow;
             var registry = NpmRegistry();
             var due = ClientInstallCatalog.All
-                .Where(s => s.Method == ClientInstallMethod.Npm)
+                .Where(s => LatestUrl(s, registry) is not null)
                 .Where(s => force || !_latest.TryGetValue(s.Kind, out var e) || now - e.CheckedAt > LatestTtl)
                 .ToList();
             await Task.WhenAll(due.Select(async spec =>
             {
                 try
                 {
-                    _latest[spec.Kind] = new LatestEntry(await FetchLatestAsync(registry, spec.Package!, ct), DateTimeOffset.UtcNow, null);
+                    _latest[spec.Kind] = new LatestEntry(await FetchLatestAsync(LatestUrl(spec, registry)!, ct), DateTimeOffset.UtcNow, null);
                 }
                 catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException or InvalidOperationException)
                 {
@@ -476,18 +480,28 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         }
     }
 
-    private async Task<string> FetchLatestAsync(string registry, string package, CancellationToken ct)
+    /// <summary>Where the newest version of a client is published: the npm registry, the spec's feed, or nowhere.</summary>
+    private static string? LatestUrl(ClientInstallSpec spec, string registry) => spec.Method switch
     {
         // Scoped names keep their "@" and encode the slash ("@openai%2fcodex"), which every registry accepts.
-        using var req = new HttpRequestMessage(HttpMethod.Get, $"{registry.TrimEnd('/')}/{package.Replace("/", "%2f")}/latest");
+        ClientInstallMethod.Npm => $"{registry.TrimEnd('/')}/{spec.Package!.Replace("/", "%2f")}/latest",
+        _ => spec.LatestUrl,
+    };
+
+    private async Task<string> FetchLatestAsync(string url, CancellationToken ct)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
         req.Headers.UserAgent.ParseAdd($"Astra/{ServerOptions.Version}");
         req.Headers.Accept.ParseAdd("application/json");
         using var resp = await http.CreateClient(HttpClientName).SendAsync(req, ct);
         resp.EnsureSuccessStatusCode();
         var doc = JsonNode.Parse(await resp.Content.ReadAsStringAsync(ct));
-        return (doc?["version"] as JsonValue)?.TryGetValue(out string? v) == true && !string.IsNullOrWhiteSpace(v)
-            ? v
-            : throw new InvalidOperationException("registry response has no version");
+        // npm answers {"version": …}; a GitHub releases feed answers {"tag_name": "v…"}.
+        foreach (var field in new[] { "version", "tag_name" })
+        {
+            if ((doc?[field] as JsonValue)?.TryGetValue(out string? v) == true && !string.IsNullOrWhiteSpace(v)) return v;
+        }
+        throw new InvalidOperationException("registry response has no version");
     }
 
     /// <summary>
@@ -533,6 +547,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             {
                 "npm-missing" => "没有找到 npm，请先安装 Node.js",
                 "vscode-missing" => "没有找到 VS Code 的 code 命令",
+                "script-missing" => $"这里没有可用的安装脚本，请手动安装：{spec.HomepageUrl}",
                 "external-install" => $"{state.ExecutablePath} 不是通过 npm 安装的，请用原来的方式更新",
                 _ => action == "install" ? "客户端已经安装" : "客户端尚未安装",
             });

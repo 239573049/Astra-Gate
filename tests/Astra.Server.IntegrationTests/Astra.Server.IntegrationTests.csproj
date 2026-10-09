@@ -10,6 +10,11 @@
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
+    <None Include="..\Astra.Gateway.Tests\Fixtures\chat\response-cache-write.json" Link="Fixtures\chat\response-cache-write.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Astra.Gateway.Tests\Fixtures\responses\response-cache-write.json" Link="Fixtures\responses\response-cache-write.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Astra.Gateway.Tests\Fixtures\responses\response-completed.json" Link="Fixtures\responses\response-completed.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Astra.Gateway.Tests\Fixtures\responses\stream-custom-tool.sse" Link="Fixtures\responses\stream-custom-tool.sse" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Astra.Gateway.Tests\Fixtures\responses\stream-encrypted-reasoning.sse" Link="Fixtures\responses\stream-encrypted-reasoning.sse" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Astra.Server\Astra.Server.csproj" />

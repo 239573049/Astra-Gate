@@ -709,10 +709,13 @@ public sealed class ResponsesCodec : IProtocolCodec
                     + usage.Get(TokenTypes.CacheWrite1h) + usage.Get(TokenTypes.InputAudio) + usage.Get(TokenTypes.InputImage);
         var output = usage.Get(TokenTypes.Output) + usage.Get(TokenTypes.Reasoning)
                      + usage.Get(TokenTypes.OutputAudio) + usage.Get(TokenTypes.OutputImage);
+        var inputDetails = new JsonObject { ["cached_tokens"] = usage.Get(TokenTypes.CacheRead) };
+        var cacheWrite = usage.Get(TokenTypes.CacheWrite5m) + usage.Get(TokenTypes.CacheWrite1h);
+        if (cacheWrite > 0) inputDetails["cache_write_tokens"] = cacheWrite;
         return new JsonObject
         {
             ["input_tokens"] = input,
-            ["input_tokens_details"] = new JsonObject { ["cached_tokens"] = usage.Get(TokenTypes.CacheRead) },
+            ["input_tokens_details"] = inputDetails,
             ["output_tokens"] = output,
             ["output_tokens_details"] = new JsonObject { ["reasoning_tokens"] = usage.Get(TokenTypes.Reasoning) },
             ["total_tokens"] = input + output,

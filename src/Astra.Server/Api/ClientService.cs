@@ -12,11 +12,14 @@ using Astra.Server.Hosting;
 namespace Astra.Server.Api;
 
 public sealed record ClientDetectionDto(bool Installed, bool ConfigExists, string? Version, IReadOnlyList<string> ConfigPaths);
+/// <summary>One provider bound to a client; the list order is the routing order (see <see cref="ClientRouting"/>).</summary>
+public sealed record ClientBindingDto(string ProviderId, string? AccountId);
+/// <summary>ProviderId / AccountId describe the primary binding (first of <see cref="Bindings"/>).</summary>
 public sealed record ClientInfoDto(
     string Kind, string Name, ApiProtocol Protocol, string Availability, string? AvailabilityReason, string Mode,
     ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
     JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
-    bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null);
+    bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null);
 public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
 public sealed record ConfigChangeDto(string File, string Format, string KeyPath, string? Before, string? After);
 public sealed record ClientDisableDto(IReadOnlyList<string> Restored, IReadOnlyList<string> Drifted, ClientInfoDto Client);
@@ -28,7 +31,7 @@ public sealed record TokenRewriteResult(IReadOnlyList<string> Rewritten, IReadOn
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
-    EffectiveModelResolver models, ClientInstallService installs)
+    ClientInstallService installs, ClientRouting routing)
 {
     private readonly ClientAdapterRegistry _registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState);
     private readonly ClientConfigApplier _applier = new(db.ClientConfigState, env, paths.ClientBackupsDir);
@@ -44,34 +47,66 @@ public sealed class ClientService(
     }
 
     /// <summary>
-    /// Sets the provider a client uses. accountId semantics (plan §5.4): null = keep the current pin when
-    /// the provider is unchanged, "" = clear the pin (use the provider's default account), an id = pin it.
+    /// Sets the client's primary provider (priority 0), keeping its other bindings; the provider is dropped from a lower
+    /// slot if it held one. accountId semantics (plan §5.4): null = keep the pin the provider already has for this
+    /// client, "" = clear the pin (use the provider's default account), an id = pin it.
     /// </summary>
     public async Task<ClientInfoDto> SetBindingAsync(string kind, string providerId, string? accountId, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
             var adapter = Require(kind);
             await RequireProviderAsync(providerId, ct);
-            var previous = await db.Clients.GetBindingAsync(kind, ct);
+            var bindings = await db.Clients.ListBindingsAsync(kind, ct);
             var pinned = accountId switch
             {
-                null => previous?.ProviderId == providerId ? previous.AccountId : null,
+                null => bindings.FirstOrDefault(b => b.ProviderId == providerId)?.AccountId,
                 "" => null,
                 _ => await RequireAccountAsync(providerId, accountId, ct),
             };
-            await db.Clients.SetBindingAsync(new ClientBinding
-            {
-                ClientKind = kind,
-                ProviderId = providerId,
-                AccountId = pinned,
-            }, ct);
+            await db.Clients.ReplaceBindingsAsync(kind, WithPrimary(bindings, kind, providerId, pinned), ct);
             if (ClientKinds.WithModelList.Contains(kind)) await SyncModelListCoreAsync(kind, null, ct);
             return await InfoAsync(adapter, ct);
         }, ct);
 
     /// <summary>
+    /// Replaces the client's provider list; the order is the routing order (a request goes to the first provider that
+    /// serves its model, else the first — see <see cref="ClientRouting"/>). Providers must exist and be distinct; a disabled one may stay
+    /// only if it is already bound. accountId: null = the provider's default account, an id = pin it.
+    /// </summary>
+    public async Task<ClientInfoDto> SetBindingsAsync(string kind, IReadOnlyList<ClientBindingDto> input, CancellationToken ct) =>
+        await MutateAsync(async () =>
+        {
+            var adapter = Require(kind);
+            if (input.Count == 0) throw new AdminApiException(400, "Choose at least one provider");
+            if (input.Select(b => b.ProviderId).Distinct().Count() != input.Count) throw new AdminApiException(400, "Each provider can be bound only once");
+            var current = (await db.Clients.ListBindingsAsync(kind, ct)).Select(b => b.ProviderId).ToHashSet();
+            var next = new List<ClientBinding>();
+            foreach (var b in input)
+            {
+                if (string.IsNullOrWhiteSpace(b.ProviderId)) throw new AdminApiException(400, "providerId is required");
+                if (current.Contains(b.ProviderId))
+                {
+                    if (await db.Providers.GetAsync(b.ProviderId, ct) is null) throw new AdminApiException(404, "Provider not found");
+                }
+                else await RequireProviderAsync(b.ProviderId, ct);
+                var pinned = string.IsNullOrEmpty(b.AccountId) ? null : await RequireAccountAsync(b.ProviderId, b.AccountId, ct);
+                next.Add(new ClientBinding { ClientKind = kind, ProviderId = b.ProviderId, AccountId = pinned });
+            }
+            await db.Clients.ReplaceBindingsAsync(kind, next, ct);
+            if (ClientKinds.WithModelList.Contains(kind)) await SyncModelListCoreAsync(kind, null, ct);
+            return await InfoAsync(adapter, ct);
+        }, ct);
+
+    /// <summary>The bindings with <paramref name="providerId"/> as the primary: it replaces slot 0, later slots keep their order.</summary>
+    private static List<ClientBinding> WithPrimary(IReadOnlyList<ClientBinding> bindings, string kind, string providerId, string? accountId) =>
+        [
+            new ClientBinding { ClientKind = kind, ProviderId = providerId, AccountId = accountId },
+            .. bindings.Skip(1).Where(b => b.ProviderId != providerId),
+        ];
+
+    /// <summary>
     /// Plan §7.6: OpenCode (and the other <see cref="ClientKinds.WithModelList"/> clients)
-    /// list the bound provider's models in their config. Keeps those lists current when the provider's models change
+    /// list the bound providers' models in their config. Keeps those lists current when a provider's models change
     /// (<paramref name="providerId"/> = the changed provider; null = whatever is bound). Never touches a config the user
     /// edited (drift). Returns true when any file was rewritten.
     /// </summary>
@@ -88,15 +123,16 @@ public sealed class ClientService(
         var adapter = Require(kind);
         var record = await db.Clients.GetAsync(kind, ct);
         if (record is not { Enabled: true }) return false;
-        var binding = await db.Clients.GetBindingAsync(kind, ct);
-        if (binding is null || (providerId is not null && binding.ProviderId != providerId)) return false;
-        if (await db.Providers.GetAsync(binding.ProviderId, ct) is not { Enabled: true }) return false;
+        var bindings = await db.Clients.ListBindingsAsync(kind, ct);
+        if (bindings.Count == 0 || (providerId is not null && bindings.All(b => b.ProviderId != providerId))) return false;
+        var targets = await routing.TargetsAsync(bindings, ct);
+        if (targets.Count == 0) return false;
         try
         {
             var status = adapter.Inspect();
             if (!status.Enabled || status.DriftedKeys.Count > 0) return false;
             if (await ClientKeyAsync(record, ct) is not { } key) return false;
-            var context = await ContextAsync(kind, binding.ProviderId, record, key, ct);
+            var context = await ContextAsync(kind, targets, record, key, ct);
             var plan = adapter.PlanEnable(context); // rewrites the Astra provider as a whole so its recorded applied value stays exact
             if (plan.Diffs.Count == 0) return false;
             _applier.Apply(plan);
@@ -133,8 +169,10 @@ public sealed class ClientService(
             record.AppliedAt = DateTimeOffset.UtcNow;
             // Once files have been written, finish the metadata commit even if the caller disconnected.
             await db.Clients.UpsertAsync(record, CancellationToken.None);
-            await db.Clients.SetBindingAsync(new ClientBinding { ClientKind = kind, ProviderId = providerId,
-                AccountId = (await db.Clients.GetBindingAsync(kind)) is { } old && old.ProviderId == providerId ? old.AccountId : null });
+            var bindings = await db.Clients.ListBindingsAsync(kind);
+            if (bindings.Count == 0 || bindings[0].ProviderId != providerId)
+                await db.Clients.ReplaceBindingsAsync(kind,
+                    WithPrimary(bindings, kind, providerId, bindings.FirstOrDefault(b => b.ProviderId == providerId)?.AccountId));
             return await InfoAsync(adapter, CancellationToken.None);
         }, ct);
 
@@ -199,12 +237,9 @@ public sealed class ClientService(
                         skipped.Add(record.Kind);
                         continue;
                     }
-                    // A disabled or missing provider keeps the stored model list instead of rebuilding it.
-                    var binding = await db.Clients.GetBindingAsync(record.Kind, ct);
-                    var providerId = binding is not null && await db.Providers.GetAsync(binding.ProviderId, ct) is { Enabled: true }
-                        ? binding.ProviderId
-                        : null;
-                    var context = await ContextAsync(record.Kind, providerId, record, key, ct);
+                    // A client without a usable provider keeps the stored model list instead of rebuilding it.
+                    var targets = await routing.TargetsAsync(await db.Clients.ListBindingsAsync(record.Kind, ct), ct);
+                    var context = await ContextAsync(record.Kind, targets, record, key, ct);
                     var plan = adapter.PlanEnable(context);
                     if (plan.Diffs.Count == 0) continue;
                     _applier.Apply(plan);
@@ -222,15 +257,12 @@ public sealed class ClientService(
             return new TokenRewriteResult(rewritten, skipped);
         }, ct);
 
+    /// <summary>The model ids the client can use: enabled models of its usable bound providers, each id once.</summary>
     public async Task<IReadOnlyList<string>> ModelsAsync(string kind, CancellationToken ct)
     {
         Require(kind);
-        var binding = await db.Clients.GetBindingAsync(kind, ct);
-        if (binding is null || await db.Providers.GetAsync(binding.ProviderId, ct) is not { Enabled: true } provider) return [];
-        var result = new List<string>();
-        foreach (var pm in await db.Providers.ListModelsAsync(provider.Id, ct))
-            if ((await models.ResolveAsync(provider, pm, ct)).Enabled) result.Add(pm.ModelId);
-        return result;
+        var targets = await routing.TargetsAsync(await db.Clients.ListBindingsAsync(kind, ct), ct);
+        return (await routing.ListModelsAsync(targets, ct)).Select(m => m.Id).ToList();
     }
 
     private async Task<(IClientAdapter Adapter, ClientRecord Record, EnableContext Context, string ProviderId, string TokenId, List<string> Warnings)>
@@ -239,8 +271,8 @@ public sealed class ClientService(
         var adapter = Require(kind);
         if (adapter.Availability != ClientAvailability.Available) throw new AdminApiException(409, adapter.UnavailableReason ?? "Client not supported yet");
         var record = await db.Clients.GetAsync(kind, ct) ?? new ClientRecord { Kind = kind };
-        var binding = await db.Clients.GetBindingAsync(kind, ct);
-        var providerId = input["providerId"]?.GetValue<string>() ?? binding?.ProviderId;
+        var bindings = await db.Clients.ListBindingsAsync(kind, ct);
+        var providerId = input["providerId"]?.GetValue<string>() ?? bindings.FirstOrDefault()?.ProviderId;
         if (string.IsNullOrWhiteSpace(providerId)) throw new AdminApiException(400, "Choose a provider first");
         await RequireProviderAsync(providerId, ct);
         var next = Json.Deserialize<ClientRecord>(Json.Serialize(record))!;
@@ -259,29 +291,31 @@ public sealed class ClientService(
         if (!token.Enabled) throw new AdminApiException(409, "Token is disabled");
         if (token.KeyEnc is null) throw new AdminApiException(409, "Token has no key yet");
         var key = GatewayTokens.ForClient(secrets.Unprotect(token.KeyEnc), kind);
-        var context = await ContextAsync(kind, providerId, next, key, ct);
+        // The providers as they will be bound after enabling: the chosen one first, then the client's others.
+        var targets = await routing.TargetsAsync(
+            WithPrimary(bindings, kind, providerId, bindings.FirstOrDefault(b => b.ProviderId == providerId)?.AccountId), ct);
+        var context = await ContextAsync(kind, targets, next, key, ct);
         var warnings = adapter.Inspect().Warnings.ToList();
         return (adapter, record, context, providerId, token.Id, warnings);
     }
 
-    private async Task<EnableContext> ContextAsync(string kind, string? providerId, ClientRecord record, string key, CancellationToken ct)
+    private async Task<EnableContext> ContextAsync(string kind, IReadOnlyList<RouteTarget> targets, ClientRecord record, string key, CancellationToken ct)
     {
         var extras = Json.Deserialize<JsonObject>(record.ExtraJson) ?? new JsonObject();
-        if (ClientKinds.WithModelList.Contains(kind) && providerId is not null)
+        if (ClientKinds.WithModelList.Contains(kind) && targets.Count > 0)
         {
-            var provider = await RequireProviderAsync(providerId, ct);
+            // Every bound provider's models and mapped ids, each id once (ClientRouting): the gateway routes each to its
+            // provider. A mapped id carries its target model's capabilities under its own name.
             var list = new JsonObject();
-            foreach (var pm in await db.Providers.ListModelsAsync(provider.Id, ct))
+            foreach (var (id, _, pm, effective) in await routing.ListModelsAsync(targets, ct))
             {
-                var effective = await models.ResolveAsync(provider, pm, ct);
-                if (!effective.Enabled) continue;
-                var entry = new JsonObject { ["id"] = pm.ModelId, ["name"] = effective.DisplayName };
+                var entry = new JsonObject { ["id"] = id, ["name"] = id == pm.ModelId ? effective.DisplayName : id };
                 // Capability hints for clients that declare per-model limits (VS Code Copilot); omitted when unknown.
                 if (effective.ContextWindow is { } context) entry["contextWindow"] = context;
                 if (effective.MaxOutputTokens is { } maxOut) entry["maxOutputTokens"] = maxOut;
                 if (effective.Capabilities.Vision is { } vision) entry["vision"] = vision;
                 if (effective.Capabilities.Reasoning is { } reasoning) entry["reasoning"] = reasoning;
-                list[pm.ModelId] = entry;
+                list[id] = entry;
             }
             extras["models"] = list;
         }
@@ -330,7 +364,7 @@ public sealed class ClientService(
     {
         install ??= installs.Describe(adapter.Kind);
         var record = await db.Clients.GetAsync(adapter.Kind, ct);
-        var binding = await db.Clients.GetBindingAsync(adapter.Kind, ct);
+        var bindings = await db.Clients.ListBindingsAsync(adapter.Kind, ct);
         var warnings = new List<string>();
         ClientStatus? inspected = null;
         try { inspected = adapter.Inspect(); }
@@ -342,15 +376,17 @@ public sealed class ClientService(
         if (drifted) warnings.Add("Client configuration differs from the recorded Astra configuration. Review before enabling or restoring.");
         var configPaths = adapter.ConfigPaths();
         var detection = inspected?.Detection ?? adapter.Detect();
-        var outdated = enabled && !drifted && await OutdatedPlanAsync(adapter, record!, binding, ct) is not null;
+        var outdated = enabled && !drifted && await OutdatedPlanAsync(adapter, record!, bindings, ct) is not null;
+        var primary = bindings.Count > 0 ? bindings[0] : null;
         return new ClientInfoDto(adapter.Kind, NameOf(adapter.Kind), ClientKinds.ProtocolOf(adapter.Kind),
             adapter.Availability == ClientAvailability.Available ? "available" : "coming_soon", adapter.UnavailableReason,
             adapter.Mode == ClientMode.Coexist ? "coexist" : "switch",
             new ClientDetectionDto(detection.Detected, configPaths.Any(File.Exists), detection.Version ?? install?.Version, configPaths),
-            drifted ? "drifted" : enabled ? "enabled" : "disabled", enabled, binding?.ProviderId, binding?.AccountId,
+            drifted ? "drifted" : enabled ? "enabled" : "disabled", enabled, primary?.ProviderId, primary?.AccountId,
             record?.SelectedModel,
             Json.Deserialize<JsonObject>(record?.ExtraJson) ?? new JsonObject(), record?.AppliedAt, warnings, true, outdated,
-            record?.TokenId ?? TokenIds.Default, install);
+            record?.TokenId ?? TokenIds.Default, install,
+            bindings.Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList());
     }
 
     /// <summary>
@@ -358,14 +394,14 @@ public sealed class ClientService(
     /// Returns the re-apply plan when an enabled client's Astra-owned values are stale (typically after the port
     /// changed), or null when they are current or cannot be determined.
     /// </summary>
-    private async Task<ConfigChangePlan?> OutdatedPlanAsync(IClientAdapter adapter, ClientRecord record, ClientBinding? binding, CancellationToken ct)
+    private async Task<ConfigChangePlan?> OutdatedPlanAsync(IClientAdapter adapter, ClientRecord record, IReadOnlyList<ClientBinding> bindings, CancellationToken ct)
     {
-        if (binding is null) return null;
-        if (await db.Providers.GetAsync(binding.ProviderId, ct) is not { Enabled: true }) return null;
+        var targets = await routing.TargetsAsync(bindings, ct);
+        if (targets.Count == 0) return null;
         try
         {
             if (await ClientKeyAsync(record, ct) is not { } key) return null;
-            var context = await ContextAsync(adapter.Kind, binding.ProviderId, record, key, ct);
+            var context = await ContextAsync(adapter.Kind, targets, record, key, ct);
             var plan = adapter.PlanEnable(context);
             var stale = plan.Changes.Any(c => c.Kind == ConfigChangeKind.Table
                 ? c.Before is null && c.After is not null
@@ -391,14 +427,14 @@ public sealed class ClientService(
                 if (await db.Clients.GetAsync(adapter.Kind, ct) is not { Enabled: true } record) continue;
                 var status = adapter.Inspect();
                 if (!status.Enabled || status.DriftedKeys.Count > 0) continue;
-                var binding = await db.Clients.GetBindingAsync(adapter.Kind, ct);
-                if (await OutdatedPlanAsync(adapter, record, binding, ct) is not { } plan) continue;
+                var bindings = await db.Clients.ListBindingsAsync(adapter.Kind, ct);
+                if (await OutdatedPlanAsync(adapter, record, bindings, ct) is not { } plan) continue;
                 _applier.Apply(plan);
                 if (ClientKinds.WithModelList.Contains(adapter.Kind))
                 {
                     // Keep the stored model list in step with what was just written.
                     var key = await ClientKeyAsync(record, ct) ?? throw new InvalidOperationException("Token key vanished during reapply");
-                    var context = await ContextAsync(adapter.Kind, binding!.ProviderId, record, key, ct);
+                    var context = await ContextAsync(adapter.Kind, await routing.TargetsAsync(bindings, ct), record, key, ct);
                     record.ExtraJson = context.Extras?.ToJsonString();
                 }
                 record.AppliedAt = DateTimeOffset.UtcNow;

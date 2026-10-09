@@ -622,6 +622,34 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Tps_Counters_Skip_Timed_Rows_Without_Output_Tokens()
+    {
+        var db = await TestDb.InitializeAsync();
+        var now = DateTimeOffset.UtcNow;
+        await db.Tokens.InsertAsync(new Astra.Core.Tokens.TokenRecord { Id = "t1", Name = "Work", CreatedAt = now, UpdatedAt = now });
+
+        var counted = Success("01TEST0000000000000000001A", T0, "codex", "p1", "Alpha", "gpt-5", 1, 100, 500, 200);
+        // A measured generation window without usage: time without tokens must not dilute the weighted speed.
+        var timedWithoutUsage = Success("01TEST0000000000000000001B", T1, "codex", "p1", "Alpha", "gpt-5", 1, 100, 0, 200);
+        timedWithoutUsage.OutputTps = null;
+        // Output tokens but no measured generation window: nothing to divide by.
+        var unmeasured = Success("01TEST0000000000000000001C", T2, "codex", "p1", "Alpha", "gpt-5", 1, 100, 300, 200);
+        unmeasured.GenerationMs = null;
+        unmeasured.OutputTps = null;
+        foreach (var r in new[] { counted, timedWithoutUsage, unmeasured }) r.TokenId = "t1";
+        await db.Requests.InsertBatchAsync([counted, timedWithoutUsage, unmeasured]);
+
+        var totals = Assert.Single(await db.Tokens.ListTotalsAsync(), t => t.TokenId == "t1");
+        Assert.Equal(500, totals.TpsOutputTokens);
+        Assert.Equal(800, totals.TpsGenerationMs);
+        Assert.Equal(625.0, totals.Tps);
+
+        var usage = Assert.Single(await db.Tokens.UsageAsync(T0.AddMinutes(-1), T2.AddMinutes(1)));
+        Assert.Equal(500, usage.TpsOutputTokens);
+        Assert.Equal(800, usage.TpsGenerationMs);
+    }
+
+    [Fact]
     public async Task Requests_And_Stats_Filter_And_Group_By_Token_With_Current_Name()
     {
         var db = await TestDb.InitializeAsync();

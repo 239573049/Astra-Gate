@@ -97,6 +97,7 @@ public static class AstraApp
         // Gateway (plan §6): codecs are registered by GatewayCodecs.Register; the pipeline picks them per protocol.
         GatewayCodecs.Register(builder.Services);
         builder.Services.AddSingleton<CodecRegistry>();
+        builder.Services.AddSingleton<ClientRouting>();
         builder.Services.AddSingleton<GatewayRouter>();
         builder.Services.AddSingleton<GatewayHttpClients>();
         builder.Services.AddSingleton<GatewayPipeline>();

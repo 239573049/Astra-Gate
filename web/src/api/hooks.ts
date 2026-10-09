@@ -6,6 +6,7 @@ import type {
   BackupInfo,
   BillingResult,
   BillingSimulateRequest,
+  ClientBinding,
   ClientInfo,
   ClientInstallJob,
   ClientKind,
@@ -320,6 +321,19 @@ export function useUpdateProvider(id: string) {
     },
   });
 }
+
+/** Replaces the provider's model mapping (requested model id → provider model id); stored as settings.model_map. */
+export function useSetProviderModelMap(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (map: Record<string, string>) => api<Provider>('PUT', `/api/providers/${enc(id)}/model-map`, { map }),
+    onSuccess: (p) => {
+      qc.setQueryData(keys.provider(id), p);
+      invalidateProviders(qc, id);
+    },
+  });
+}
+
 
 export function useDeleteProvider() {
   const qc = useQueryClient();
@@ -745,6 +759,14 @@ export const useSetBinding = () =>
     (v: { kind: ClientKind; providerId: string; accountId?: string }) =>
       // accountId: omitted keeps the current pin, "" clears it, an id pins that subscription account.
       api<ClientInfo>('PUT', `/api/clients/${v.kind}/binding`, { providerId: v.providerId, accountId: v.accountId }),
+    (v) => [keys.clientModels(v.kind)],
+  );
+
+/** Replaces the client's provider list; the order is the routing order (first = primary). */
+export const useSetBindings = () =>
+  useClientMutation(
+    (v: { kind: ClientKind; bindings: ClientBinding[] }) =>
+      api<ClientInfo>('PUT', `/api/clients/${v.kind}/bindings`, { bindings: v.bindings }),
     (v) => [keys.clientModels(v.kind)],
   );
 

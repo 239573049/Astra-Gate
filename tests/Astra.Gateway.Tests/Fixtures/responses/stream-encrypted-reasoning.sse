@@ -1,0 +1,12 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_reasoning","object":"response","status":"in_progress","model":"gpt-5","output":[]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"id":"rs_1","type":"reasoning","summary":[]}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":2,"output_index":0,"item":{"id":"rs_1","type":"reasoning","summary":[],"encrypted_content":"opaque-test-reasoning"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":3,"response":{"id":"resp_reasoning","object":"response","status":"completed","model":"gpt-5","output":[{"id":"rs_1","type":"reasoning","summary":[],"encrypted_content":"opaque-test-reasoning"}],"usage":{"input_tokens":12,"output_tokens":912,"output_tokens_details":{"reasoning_tokens":912},"total_tokens":924}}}
+

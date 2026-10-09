@@ -456,6 +456,8 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
                   label: x.name,
                   description: [...new Set(x.endpoints.map((e) => e.protocol))].join(' · '),
                   icon: <ProviderIcon name={x.name} icon={x.icon} colorKey={x.id} size={24} />,
+                  disabled: addedSubscriptionTemplateIds.has(x.id),
+                  disabledReason: t('providers.subscriptionAdded'),
                 }))}
               />
             </section>

@@ -93,6 +93,27 @@ public class ClientRepositoryTests
     }
 
     [Fact]
+    public async Task Replace_Bindings_Renumbers_Priorities_In_List_Order()
+    {
+        var db = await TestDb.InitializeAsync();
+        foreach (var id in new[] { "p1", "p2", "p3" })
+            await db.Providers.InsertAsync(new Astra.Core.Models.Provider { Id = id, Name = id });
+        await db.Clients.SetBindingAsync(new ClientBinding { ClientKind = ClientKinds.Codex, ProviderId = "p1" });
+
+        await db.Clients.ReplaceBindingsAsync(ClientKinds.Codex,
+            [new ClientBinding { ProviderId = "p3" }, new ClientBinding { ProviderId = "p2" }]);
+        var list = await db.Clients.ListBindingsAsync(ClientKinds.Codex);
+        Assert.Equal(["p3", "p2"], list.Select(b => b.ProviderId));
+        Assert.Equal([0, 1], list.Select(b => b.Priority));
+        Assert.Equal("p3", (await db.Clients.GetBindingAsync(ClientKinds.Codex))!.ProviderId);
+        Assert.Empty(await db.Clients.ListBindingsByProviderAsync("p1"));
+
+        // Creates the client row when missing, without enabling it.
+        await db.Clients.ReplaceBindingsAsync(ClientKinds.OpenCode, [new ClientBinding { ProviderId = "p1" }]);
+        Assert.False((await db.Clients.GetAsync(ClientKinds.OpenCode))!.Enabled);
+    }
+
+    [Fact]
     public async Task Bindings_Carry_Subscription_Account_And_Unpin_On_Account_Delete()
     {
         var db = await TestDb.InitializeAsync();

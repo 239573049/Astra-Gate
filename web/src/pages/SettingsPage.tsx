@@ -1,4 +1,4 @@
-import { Copy, FolderOpen, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Copy, Download, FolderOpen, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -225,17 +225,22 @@ function GeneralSettings() {
 }
 
 /**
- * Update feed rows: auto-check toggle plus a manual check button. The web UI
- * never installs anything itself — applies happen in the desktop app (tray)
- * or via `astra update`, so the hint adapts to where the UI is running.
+ * Update feed rows: auto-check toggle plus a manual check button. In the
+ * desktop app an available update gets an apply button that runs the shared
+ * update engine over the bridge (server first, then the app per track); the
+ * plain web UI never installs anything itself and points at the tray menu
+ * / `astra update` instead.
  */
 function UpdateRows() {
   const { t } = useI18n();
   const { toast } = useFeedback();
+  const qc = useQueryClient();
   const update = useUpdateSettings();
   const status = useUpdateStatus();
   const check = useCheckUpdate();
   const s = status.data;
+  const updates = getBridge()?.updates ?? null;
+  const [applying, setApplying] = useState(false);
 
   const runCheck = () =>
     check.mutate(undefined, {
@@ -243,7 +248,33 @@ function UpdateRows() {
       onError: (e) => toast(errorText(e), 'error'),
     });
 
+  const runApply = () => {
+    if (!updates || applying) return;
+    setApplying(true);
+    updates
+      .apply()
+      .then((outcome) => {
+        if (outcome === 'server') {
+          toast(t('settings.updateApplied'));
+          void qc.invalidateQueries({ queryKey: keys.version });
+          void qc.invalidateQueries({ queryKey: keys.update });
+        } else if (outcome === 'desktop') {
+          // The desktop step relaunches the app; say so before it quits.
+          toast(t('settings.updateDesktopRelaunch'));
+        } else {
+          toast(t('settings.upToDate'));
+        }
+      })
+      .catch((e) => toast(errorText(e), 'error'))
+      .finally(() => setApplying(false));
+  };
+
   const lastChecked = s?.lastCheckAt ? new Date(s.lastCheckAt).toLocaleString() : undefined;
+  const availableDetail = s?.available
+    ? updates
+      ? t('settings.updateAvailable', { version: s.available })
+      : `${t('settings.updateAvailable', { version: s.available })} ${t('settings.updateApplyHint')}`
+    : undefined;
 
   return (
     <>
@@ -263,7 +294,7 @@ function UpdateRows() {
           check.isError
             ? t('settings.updateCheckFailed', { error: errorText(check.error) })
             : s?.available
-              ? t('settings.updateAvailable', { version: s.available })
+              ? availableDetail
               : lastChecked
                 ? t('settings.lastChecked', { time: lastChecked })
                 : undefined
@@ -272,6 +303,11 @@ function UpdateRows() {
         <Button size="sm" variant="plain" disabled={check.isPending} onClick={runCheck}>
           {check.isPending ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
         </Button>
+        {updates && s?.available && (
+          <Button size="sm" variant="plain" disabled={applying} aria-label={t('settings.updateApply')} onClick={runApply}>
+            {applying ? <Spinner className="size-3.5" /> : <Download className="size-3.5" />}
+          </Button>
+        )}
       </Row>
     </>
   );

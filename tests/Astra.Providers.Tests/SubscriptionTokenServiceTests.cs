@@ -247,4 +247,58 @@ public class SubscriptionTokenServiceTests
 
         Assert.Equal(AccountStatus.Revoked, (await store.GetAsync("acc-1"))!.Status);
     }
+
+    private sealed class RoutedFactory(Func<HttpRequestMessage, (HttpStatusCode Status, string Body)> respond) : IHttpClientFactory
+    {
+        private sealed class Handler(Func<HttpRequestMessage, (HttpStatusCode Status, string Body)> respond) : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+            {
+                var (status, body) = respond(request);
+                return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+            }
+        }
+
+        public HttpClient CreateClient(string name) => new(new Handler(respond), disposeHandler: true);
+    }
+
+    /// <summary>BigModel：刷新 = 用 OAuth token 幂等地重跑 API Key 供应；key 不是 JWT，没有 exp，有效期给一天。</summary>
+    [Fact]
+    public async Task BigModel_Refresh_Reprovisions_The_Api_Key_With_A_Day_Of_Validity()
+    {
+        var config = SubscriptionCatalog.Find("bigmodel-subscription")!;
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account("old-key.old-secret", TimeSpan.FromSeconds(10)));
+        var factory = new RoutedFactory(request => (HttpStatusCode.OK, request.RequestUri!.AbsolutePath switch
+        {
+            "/api/biz/customer/getCustomerInfo" =>
+                """{"code":200,"data":{"organizations":[{"organizationId":"o","projects":[{"projectId":"p"}]}]}}""",
+            "/api/biz/v1/organization/o/projects/p/api_keys" =>
+                """{"code":200,"data":[{"name":"zcode-api-key","apiKey":"key-2"}]}""",
+            _ => """{"code":200,"data":{"secretKey":"sec-2"}}""",
+        }));
+        var service = new SubscriptionTokenService(store, new FakeProtector(), factory, new FakeClock());
+
+        var refreshed = await service.RefreshAsync((await store.GetAsync("acc-1"))!, config, force: false);
+
+        Assert.Equal("key-2.sec-2", new FakeProtector().Unprotect(refreshed.AccessTokenEnc!));
+        Assert.Equal("rt-1", new FakeProtector().Unprotect(refreshed.RefreshTokenEnc!)); // OAuth token 原样保留
+        Assert.Equal(Now.AddDays(1), refreshed.ExpiresAtUtc);
+        Assert.Equal(AccountStatus.Active, refreshed.Status);
+    }
+
+    [Fact]
+    public async Task BigModel_Refresh_With_A_Rejected_Oauth_Token_Revokes_The_Account()
+    {
+        var config = SubscriptionCatalog.Find("bigmodel-subscription")!;
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account("old-key.old-secret", TimeSpan.FromSeconds(10)));
+        var service = new SubscriptionTokenService(store, new FakeProtector(),
+            new RoutedFactory(_ => (HttpStatusCode.Unauthorized, """{"code":1001,"msg":"invalid token"}""")), new FakeClock());
+
+        await Assert.ThrowsAsync<SubscriptionAuthException>(
+            () => service.RefreshAsync(store.GetAsync("acc-1").GetAwaiter().GetResult()!, config, force: false));
+
+        Assert.Equal(AccountStatus.Revoked, (await store.GetAsync("acc-1"))!.Status);
+    }
 }

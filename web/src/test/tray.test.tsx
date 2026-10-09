@@ -15,6 +15,7 @@ import {
   quotaTone,
   resetsIn,
   tightestQuota,
+  tightestRows,
   topModelShare,
   trayTitle,
   updatedAgo,
@@ -124,6 +125,10 @@ describe('tray helpers', () => {
       ['weekly', 64],
     ]);
     expect(tightestQuota(plans)?.row).toMatchObject({ kind: 'credits', remaining: 5 });
+    expect(tightestRows(plans, 2).map((r) => [r.row.kind, r.row.remaining])).toEqual([
+      ['credits', 5],
+      ['weekly', 64],
+    ]);
     expect(quotaTone(64)).toBe('green');
     expect(quotaTone(20)).toBe('orange');
     expect(quotaTone(5)).toBe('red');
@@ -188,11 +193,12 @@ describe('TrayPanelView', () => {
     show(<TrayPanelView prefs={DEFAULT_TRAY_PREFS} state={running} data={data()} onRefresh={() => {}} />);
     expect(screen.getByText('Gateway running')).toBeInTheDocument();
     expect(screen.getByText('localhost:18317')).toBeInTheDocument();
-    expect(screen.getByText('1 failed')).toBeInTheDocument();
+    expect(screen.getByText('1 failed · 14.3% of today')).toBeInTheDocument();
     expect(screen.getByText('68.8K')).toBeInTheDocument();
     expect(screen.getByText('$<0.01')).toBeInTheDocument();
     expect(screen.getByText('glm-5.3-flash')).toBeInTheDocument();
-    expect(screen.getByText('GLM Coding Plan')).toBeInTheDocument();
+    // The overview lists the tightest windows, one line each.
+    expect(screen.getAllByText('GLM Coding Plan')).toHaveLength(2);
     expect(screen.getByText('99%')).toBeInTheDocument();
     expect(screen.getByText('64%')).toBeInTheDocument();
   });
@@ -204,6 +210,31 @@ describe('TrayPanelView', () => {
     expect(screen.queryByText('$<0.01')).not.toBeInTheDocument();
     expect(screen.queryByText('GLM Coding Plan')).not.toBeInTheDocument();
     expect(screen.getByText('68.8K')).toBeInTheDocument();
+  });
+
+  it('switches between tabs and only offers the ones with content', () => {
+    const prefs = withSection(DEFAULT_TRAY_PREFS, 'clients', true);
+    const clients = [{ kind: 'codex', name: 'Codex', enabled: true, providerId: null }] as unknown as TrayData['clients'];
+    show(<TrayPanelView prefs={prefs} state={running} data={data({ clients })} onRefresh={() => {}} />);
+    expect(screen.getAllByRole('tab').map((el) => el.textContent)).toEqual(['Overview', 'Quota', 'Clients']);
+    expect(screen.queryByText('Quota & balance')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Quota' }));
+    expect(screen.getByText('Quota & balance')).toBeInTheDocument();
+    expect(screen.queryByText('68.8K')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab', { name: 'Clients' }));
+    expect(screen.getByText('Codex')).toBeInTheDocument();
+    cleanup();
+
+    // Nothing but the overview to show: no tab bar.
+    show(<TrayPanelView prefs={DEFAULT_TRAY_PREFS} state={running} data={data({ plans: [], hasSubscriptions: false })} onRefresh={() => {}} />);
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument();
+  });
+
+  it('warns about a nearly empty quota and links to the quota tab', () => {
+    const low = quotaPlans([{ provider: glm, account: account({ quota: { weekly: { usedPercent: 92, windowMinutes: 10_080, resetsAtUtc: null } } }) }]);
+    show(<TrayPanelView prefs={DEFAULT_TRAY_PREFS} state={running} data={data({ plans: low })} onRefresh={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /only 8% left/ }));
+    expect(screen.getByText('Quota & balance')).toBeInTheDocument();
   });
 
   it('forwards footer actions and offers start when stopped', () => {

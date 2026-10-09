@@ -41,6 +41,14 @@ export interface TrayPanelState {
 }
 export type TrayPanelCommand = 'open' | 'open-settings' | 'start' | 'stop' | 'restart' | 'quit' | 'hide' | 'menu' | 'check-updates';
 
+/** Result of the desktop's in-app update check (mirrors desktop/src/update.ts). */
+export interface UpdateSummary {
+  message: string;
+  action: 'none' | 'server' | 'desktop-dmg' | 'desktop-npm';
+}
+/** What an in-app apply did (mirrors desktop/src/update.ts). */
+export type UiApplyOutcome = 'server' | 'desktop' | 'none';
+
 /** Mirrors desktop/src/preload.ts. */
 export interface DesktopBridge {
   apiBase: string;
@@ -56,6 +64,10 @@ export interface DesktopBridge {
   openPath(p: string): Promise<boolean>;
   revealLogs(): Promise<boolean>;
   startService(): Promise<{ ok: boolean; error?: string | null }>;
+  updates: {
+    check(): Promise<UpdateSummary>;
+    apply(): Promise<UiApplyOutcome>;
+  };
   showContextMenu(items: ContextMenuItem[]): Promise<string | null>;
   onMenuCommand(cb: (command: MenuCommand) => void): () => void;
   tray: {

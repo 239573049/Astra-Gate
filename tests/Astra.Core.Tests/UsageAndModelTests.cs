@@ -26,6 +26,36 @@ public class UsageNormalizerTests
     }
 
     [Fact]
+    public void Openai_chat_subtracts_cache_writes_alongside_cached_and_multimodal_input()
+    {
+        var u = N(ApiProtocol.OpenAIChat, """
+            {"prompt_tokens":2000,"completion_tokens":800,
+             "prompt_tokens_details":{"cached_tokens":1500,"cache_write_tokens":200,"audio_tokens":100,"image_tokens":50},
+             "completion_tokens_details":{"reasoning_tokens":600,"audio_tokens":50}}
+            """);
+        Assert.Equal(150, u.Get("input"));
+        Assert.Equal(1500, u.Get("cache_read"));
+        Assert.Equal(200, u.Get("cache_write_5m"));
+        Assert.Equal(100, u.Get("input_audio"));
+        Assert.Equal(50, u.Get("input_image"));
+        Assert.Equal(2000, u.TotalInput);
+        Assert.Equal(800, u.TotalOutput);
+    }
+
+    [Fact]
+    public void Deepseek_cache_miss_excludes_reported_cache_writes()
+    {
+        var u = N(ApiProtocol.OpenAIChat, """
+            {"prompt_tokens":2000,"prompt_cache_hit_tokens":1500,"prompt_cache_miss_tokens":500,
+             "prompt_tokens_details":{"cache_write_tokens":200},"completion_tokens":8}
+            """);
+        Assert.Equal(300, u.Get("input"));
+        Assert.Equal(1500, u.Get("cache_read"));
+        Assert.Equal(200, u.Get("cache_write_5m"));
+        Assert.Equal(2000, u.TotalInput);
+    }
+
+    [Fact]
     public void Anthropic_splits_cache_creation_by_ttl()
     {
         var u = N(ApiProtocol.Anthropic, """

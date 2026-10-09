@@ -28,7 +28,8 @@ public sealed record ClientToolState(
 /// <summary>
 /// The install / update commands available for a client right now. <see cref="Blocker"/> says why an action
 /// that would otherwise be offered is not: "npm-missing" (no npm to install with), "vscode-missing" (no
-/// <c>code</c> command), "external-install" (installed some other way and the client has no updater of its own).
+/// <c>code</c> command), "script-missing" (the catalog has no install script for this OS), "external-install"
+/// (installed some other way and the client has no updater of its own).
 /// </summary>
 public sealed record ClientInstallPlan(ToolCommand? Install, ToolCommand? Update, string? UpdateVia, string? Blocker)
 {
@@ -42,6 +43,7 @@ public static class ClientInstallPlanner
     {
         ClientInstallMethod.Npm => PlanNpm(spec, state, os),
         ClientInstallMethod.VsCodeExtension => PlanVsCode(spec, state),
+        ClientInstallMethod.Script => PlanScript(spec, state, os),
         _ => ClientInstallPlan.None,
     };
 
@@ -79,6 +81,40 @@ public static class ClientInstallPlanner
         if (state.Installed) return ClientInstallPlan.None;
         if (state.ExecutablePath is not { } code) return new ClientInstallPlan(null, null, null, "vscode-missing");
         return new ClientInstallPlan(new ToolCommand(code, ["--install-extension", spec.Package!]), null, null, null);
+    }
+
+    private static ClientInstallPlan PlanScript(ClientInstallSpec spec, ClientToolState state, string os)
+    {
+        if (state.Installed)
+        {
+            if (spec.SelfUpdateArgs is { } self && state.ExecutablePath is { } exe)
+                return new ClientInstallPlan(null, new ToolCommand(exe, self), "self", null);
+            return new ClientInstallPlan(null, null, null, "external-install");
+        }
+        return ScriptCommand(spec, os) is { } install
+            ? new ClientInstallPlan(install, null, null, null)
+            : new ClientInstallPlan(null, null, null, "script-missing");
+    }
+
+    /// <summary>
+    /// The vendor's install script as one command: <c>curl -fsSL &lt;url&gt; | bash -s -- --non-interactive</c>
+    /// (macOS / Linux; <c>pipefail</c> so a failed download fails the run) or PowerShell (Windows). The
+    /// non-interactive flags keep the script's setup stages from prompting — Astra runs installers with a closed
+    /// stdin. Null when the spec has no script for this OS.
+    /// </summary>
+    public static ToolCommand? ScriptCommand(ClientInstallSpec spec, string os)
+    {
+        if (os == "windows")
+            return spec.WindowsScriptUrl is { } win
+                ? new ToolCommand("powershell",
+                    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", $"& ([scriptblock]::Create((irm '{win}'))) -NonInteractive"],
+                    $"& ([scriptblock]::Create((irm {win}))) -NonInteractive")
+                : null;
+        return spec.PosixScriptUrl is { } posix
+            ? new ToolCommand("bash",
+                ["-o", "pipefail", "-c", $"curl -fsSL '{posix}' | bash -s -- --non-interactive"],
+                $"curl -fsSL {posix} | bash -s -- --non-interactive")
+            : null;
     }
 
     /// <summary>

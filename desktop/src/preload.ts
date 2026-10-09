@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { ContextMenuItem, MenuCommand, ThemeSource } from './shared/chrome';
 import type { TrayPrefs } from './shared/prefs';
 import type { TrayPanelCommand, TrayPanelState } from './shared/trayPanel';
+import type { UiApplyOutcome, UpdateSummary } from './update';
 
 /**
  * The renderer needs apiBase synchronously at page load, so the values are
@@ -47,6 +48,11 @@ const bridge = {
   revealLogs: () => ipcRenderer.invoke('astra:reveal-logs') as Promise<boolean>,
   /** Starts (or adopts) the local server; used when the UI cannot reach it. */
   startService: () => ipcRenderer.invoke('astra:start-service') as Promise<{ ok: boolean; error: string | null }>,
+  /** In-app update entry (Settings › About): check, and apply server/desktop updates. */
+  updates: {
+    check: () => ipcRenderer.invoke('astra:update-check') as Promise<UpdateSummary>,
+    apply: () => ipcRenderer.invoke('astra:update-apply') as Promise<UiApplyOutcome>,
+  },
   /** Native context menu; resolves with the clicked item id, or null when dismissed. */
   showContextMenu: (items: ContextMenuItem[]) =>
     ipcRenderer.invoke('astra:context-menu', items) as Promise<string | null>,

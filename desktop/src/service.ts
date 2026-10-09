@@ -2,13 +2,13 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 
-import { checkHealth, fetchVersion, requestShutdown } from './api';
+import { checkHealth, fetchVersion, requestShutdown, type ServerVersionInfo } from './api';
 import { parseConfigJson, type ServerConfig } from './shared/config';
 import { parseInstallJson, serverPathFromInstall } from './shared/install';
 import { type AstraPaths } from './shared/paths';
 import { isPidAlive } from './shared/pid';
 import { apiBase } from './shared/port';
-import { resolveServerBinary } from './shared/resolveServerBinary';
+import { resolveServerBinary, shouldReplaceRunningServer, type ServerBinary } from './shared/resolveServerBinary';
 import { isRuntimeStale, parseRuntimeJson } from './shared/runtime';
 import { STARTED_BY, type InstallInfo, type RuntimeInfo } from './shared/types';
 import { EXPECTED_API_MAJOR, isApiVersionCompatible } from './shared/version';
@@ -34,6 +34,8 @@ export interface ProbeResult {
   runtime: RuntimeInfo | null;
   runtimeStale: boolean;
   apiVersion: string | null;
+  /** Server version from /api/version (same call as apiVersion); null when it could not be read. */
+  version: string | null;
 }
 
 export interface RunningService {
@@ -59,7 +61,8 @@ export interface ServiceManagerOptions {
 
 /**
  * Owns the Astra server lifecycle for this desktop session:
- * probe -> (maybe) spawn with --started-by desktop -> wait for health,
+ * probe -> take over a version-matching server or replace a mismatching one
+ * (and spawn with --started-by desktop when none runs) -> wait for health,
  * and shutdown-on-exit only when we spawned it ourselves.
  */
 export class ServiceManager {
@@ -118,25 +121,43 @@ export class ServiceManager {
     const port = runtime !== null && !stale ? runtime.port : config.port;
     const base = apiBase(port);
     const running = await checkHealth(base, healthTimeoutMs);
-    const apiVersion = running ? await this.fetchApiVersion(base) : null;
-    return { running, port, runtime, runtimeStale: stale, apiVersion };
+    const info = running ? await this.fetchServerInfo(base) : null;
+    return {
+      running,
+      port,
+      runtime,
+      runtimeStale: stale,
+      apiVersion: info?.apiVersion ?? null,
+      version: info?.version ?? null,
+    };
   }
 
   /**
-   * Ensures a healthy server: probes first and adopts a running server
-   * (without owning it), otherwise spawns the resolved binary and waits up to
-   * 20s for health. Throws StartupError with the log path on failure.
+   * Ensures a healthy server running the binary this app resolved: probes
+   * first and adopts a running server whose version matches the target;
+   * a mismatching one (an older `astra serve`, a previous install left
+   * running) is stopped and replaced. Otherwise spawns the resolved binary
+   * and waits up to 20s for health. Throws StartupError with the log path
+   * on failure.
    */
   async ensureRunning(): Promise<RunningService> {
     const probed = await this.probe();
     if (probed.running && probed.port !== null) {
-      return {
-        port: probed.port,
-        apiBase: apiBase(probed.port),
-        weStarted: this.weStarted,
-        apiVersion: probed.apiVersion,
-        apiVersionMismatch: this.computeMismatch(probed.apiVersion),
-      };
+      const target = await this.resolveBinary();
+      // target === null (nothing installed) keeps the running server: it beats failing.
+      if (target === null || !shouldReplaceRunningServer(probed.version, target)) {
+        return {
+          port: probed.port,
+          apiBase: apiBase(probed.port),
+          weStarted: this.weStarted,
+          apiVersion: probed.apiVersion,
+          apiVersionMismatch: this.computeMismatch(probed.apiVersion),
+        };
+      }
+      this.log(
+        `replacing running server ${probed.version} with the resolved ${target.version} (${target.source} build)`,
+      );
+      await this.stopService();
     }
     return this.startServer();
   }
@@ -185,22 +206,7 @@ export class ServiceManager {
     const port = config.port;
     const todayLog = this.paths.logFile(new Date());
 
-    const install = await this.readInstall();
-    const binary = resolveServerBinary({
-      installServerPath: serverPathFromInstall(install),
-      installServerVersion: install?.serverVersion ?? null,
-      envServerBin: this.env.ASTRA_SERVER_BIN ?? null,
-      bundled: this.bundledServer,
-      repoRoot: this.repoRoot,
-      platform: this.platform,
-      exists: (p) => {
-        try {
-          return fs.statSync(p).isFile();
-        } catch {
-          return false;
-        }
-      },
-    });
+    const binary = await this.resolveBinary();
     if (!binary) {
       throw new StartupError(
         'Astra server binary not found. Looked at install.json serverPath, ' +
@@ -249,7 +255,8 @@ export class ServiceManager {
       const base = apiBase(actualPort);
       if (await checkHealth(base, 1000)) {
         this.weStarted = true;
-        const apiVersion = await this.fetchApiVersion(base);
+        const info = await this.fetchServerInfo(base);
+        const apiVersion = info?.apiVersion ?? null;
         this.log(
           `server is healthy on port ${actualPort}${actualPort !== port ? ` (port ${port} was busy)` : ''} (pid ${child.pid ?? '?'})`,
         );
@@ -268,10 +275,29 @@ export class ServiceManager {
     );
   }
 
-  private async fetchApiVersion(base: string): Promise<string | null> {
+  /** The binary this app would serve with (install.json > ASTRA_SERVER_BIN > bundled > dev). */
+  private async resolveBinary(): Promise<ServerBinary | null> {
+    const install = await this.readInstall();
+    return resolveServerBinary({
+      installServerPath: serverPathFromInstall(install),
+      installServerVersion: install?.serverVersion ?? null,
+      envServerBin: this.env.ASTRA_SERVER_BIN ?? null,
+      bundled: this.bundledServer,
+      repoRoot: this.repoRoot,
+      platform: this.platform,
+      exists: (p) => {
+        try {
+          return fs.statSync(p).isFile();
+        } catch {
+          return false;
+        }
+      },
+    });
+  }
+
+  private async fetchServerInfo(base: string): Promise<ServerVersionInfo | null> {
     try {
-      const v = await fetchVersion(base, 2000);
-      return v.apiVersion ?? null;
+      return await fetchVersion(base, 2000);
     } catch {
       return null;
     }

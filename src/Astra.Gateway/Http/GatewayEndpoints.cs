@@ -48,10 +48,14 @@ public static class GatewayEndpoints
 }
 
 /// <summary>Model listing and token counting (no usage record, no billing).</summary>
-public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, CodecRegistry codecs, GatewayHttpClients http,
-    UpstreamAuthResolver auth, PrivacyGuardService privacy)
+public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs, GatewayHttpClients http,
+    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing)
 {
-    /// <summary>The bound provider's enabled models, in the shape of the asking protocol.</summary>
+    /// <summary>
+    /// The model ids every provider the caller can reach serves (the client's bound providers in binding order, their
+    /// enabled models and mapped ids, each id listed once — see <see cref="ClientRouting"/>), in the shape of the
+    /// asking protocol.
+    /// </summary>
     public async Task ListModelsAsync(HttpContext ctx, ApiProtocol protocol)
     {
         GatewayRoute route;
@@ -64,18 +68,22 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
             await WriteErrorAsync(ctx, protocol, e.Status, e.Type, e.Message);
             return;
         }
-        var list = (await db.Providers.ListModelsAsync(route.Provider.Id, ctx.RequestAborted)).Where(m => m.Enabled).ToList();
+        List<(string Id, string Name, Provider Provider)> list;
         if (route.Client is { Kind: ClientKinds.ClaudeDesktop } desktop)
         {
             // Plan §7.5: Claude Desktop only accepts role ids, so it sees one entry per mapped role.
-            list = ClaudeDesktopRoles.Parse(desktop.ExtraJson).Select(r => new ProviderModel
-            {
-                ProviderId = route.Provider.Id,
-                ModelId = ClaudeDesktopRoles.AdvertisedId(r.Key),
-                Overrides = new ModelOverrides { DisplayName = $"{char.ToUpperInvariant(r.Key[0])}{r.Key[1..]} → {r.Value}" },
-            }).ToList();
+            list = ClaudeDesktopRoles.Parse(desktop.ExtraJson)
+                .Select(r => (ClaudeDesktopRoles.AdvertisedId(r.Key), $"{char.ToUpperInvariant(r.Key[0])}{r.Key[1..]} → {r.Value}", route.Provider))
+                .ToList();
         }
-        var created = route.Provider.CreatedAt.ToUnixTimeSeconds();
+        else
+        {
+            var targets = route.Targets.Count > 0 ? route.Targets : [new RouteTarget(route.Provider, route.AccountId)];
+            // A mapped id shows under its own name; a provider model under its display name.
+            list = (await routing.ListModelsAsync(targets, ctx.RequestAborted))
+                .Select(m => (m.Id, m.Id == m.Model.ModelId ? m.Model.Overrides.DisplayName ?? m.Id : m.Id, m.Target.Provider))
+                .ToList();
+        }
         JsonObject body = protocol switch
         {
             ApiProtocol.Anthropic => new JsonObject
@@ -83,20 +91,20 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
                 ["data"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
                 {
                     ["type"] = "model",
-                    ["id"] = m.ModelId,
-                    ["display_name"] = m.Overrides.DisplayName ?? m.ModelId,
-                    ["created_at"] = route.Provider.CreatedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    ["id"] = m.Id,
+                    ["display_name"] = m.Name,
+                    ["created_at"] = m.Provider.CreatedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 }).ToArray()),
                 ["has_more"] = false,
-                ["first_id"] = list.FirstOrDefault()?.ModelId,
-                ["last_id"] = list.LastOrDefault()?.ModelId,
+                ["first_id"] = list.Count > 0 ? list[0].Id : null,
+                ["last_id"] = list.Count > 0 ? list[^1].Id : null,
             },
             ApiProtocol.Gemini => new JsonObject
             {
                 ["models"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
                 {
-                    ["name"] = "models/" + m.ModelId,
-                    ["displayName"] = m.Overrides.DisplayName ?? m.ModelId,
+                    ["name"] = "models/" + m.Id,
+                    ["displayName"] = m.Name,
                     ["supportedGenerationMethods"] = new JsonArray("generateContent", "streamGenerateContent", "countTokens"),
                 }).ToArray()),
             },
@@ -105,10 +113,10 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
                 ["object"] = "list",
                 ["data"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
                 {
-                    ["id"] = m.ModelId,
+                    ["id"] = m.Id,
                     ["object"] = "model",
-                    ["created"] = created,
-                    ["owned_by"] = route.Provider.Name,
+                    ["created"] = m.Provider.CreatedAt.ToUnixTimeSeconds(),
+                    ["owned_by"] = m.Provider.Name,
                 }).ToArray()),
             },
         };
@@ -128,7 +136,8 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
             var route = await router.ResolveAsync(ctx.Request, ct);
             // Claude subscription client policy (plan §5.4): count_tokens is a Claude Code request on the UA alone.
             var isClaudeCode = protocol == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, null, countTokens: true);
-            SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
+            // With a single provider the policy is known before the body is read; several wait for the model below.
+            if (route.Targets.Count < 2) SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
             using var reader = new StreamReader(ctx.Request.Body, Encoding.UTF8);
             var body = await reader.ReadToEndAsync(ct);
 
@@ -138,12 +147,16 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
                 throw new GatewayException(400, "invalid_request_error", "请求中包含被 Astra 隐私护栏拦截的敏感信息，已拒绝发送到上游。");
             body = guard.Body;
 
-            var endpoint = route.Provider.EndpointFor(protocol);
             var json = pathModel is null ? JsonNode.Parse(body) as JsonObject : null;
-            var model = route.UpstreamModelFor(pathModel ?? json?["model"]?.GetValue<string>() ?? "");
+            var requestedModel = pathModel ?? json?["model"]?.GetValue<string>() ?? "";
+            // Same provider choice as the generation request for this model (ClientRouting); nothing has left the machine yet.
+            route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
+            SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
+            var model = route.UpstreamModelFor(requestedModel);
+            var endpoint = route.Provider.EndpointFor(protocol);
             if (json is not null && json["model"]?.GetValue<string>() is { } requested && requested != model)
             {
-                json["model"] = model; // Claude Desktop role id → provider model
+                json["model"] = model; // Claude Desktop role id / provider model mapping → provider model
                 body = json.ToJsonString(GatewayJson.Options);
             }
             var url = endpoint is null ? null : UpstreamUrls.CountTokens(endpoint, model);

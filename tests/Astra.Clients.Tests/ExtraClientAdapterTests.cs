@@ -719,7 +719,7 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
     public WorkBuddyClientAdapterTests()
     {
         _adapter = new WorkBuddyClientAdapter(Home.Env, Store);
-        _config = Home.File(".codebuddy", "models.json");
+        _config = Home.File(".workbuddy", "models.json");
     }
 
     [Fact]
@@ -769,5 +769,21 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
         Assert.True(Home.FileExists(_config));
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.False(Home.FileExists(_config));
+    }
+
+    [Fact]
+    public void LegacyCodeBuddyEntries_AreRemovedOnTheNextApply()
+    {
+        // Astra ≤ 0.3.0 wrote WorkBuddy's models into ~/.codebuddy/models.json (CodeBuddy's file).
+        var legacy = Home.File(".codebuddy", "models.json");
+        const string entry = """{"id":"a","name":"Astra: a","vendor":"Astra","url":"http://127.0.0.1:1/v1/chat/completions","apiKey":"old"}""";
+        Applier.Apply(new ConfigChangePlan(_adapter.Kind,
+            [new ConfigChange(legacy, ConfigFileFormat.Json, "models.[name=Astra: a]", null, entry)], []));
+        Assert.True(_adapter.Inspect().Enabled); // entries recorded there still count, until they are migrated
+
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-wb-5", null, Hints.Extra("a"))));
+        Assert.Empty(Hints.Jsonc(Home.ReadFile(legacy))["models"]!.AsArray());
+        Assert.Equal(["a"], Hints.Jsonc(Home.ReadFile(_config))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
     }
 }

@@ -317,8 +317,33 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         {
             var data = await SendZcodeEnvelopeAsync(config, HttpMethod.Get, $"{config.CliPollUrl}/{flowId}",
                 null, ct, $"Bearer {pollToken}");
-            return new ZcodeCliPoll(ZcodeCliPollKind.Done,
-                Optional(data, "accessToken") ?? Optional(data, "access_token"), null, null);
+            // 真实响应是 data.status ∈ pending / ready / failed（逆向 ZCode.app v3.11.2，NextCoWork flow.ts
+            // pollCliFlow）；ready 时凭证在渠道键下：data.{zai|bigmodel}.access_token。
+            // 没有 status 的老形态（data.accessToken，zcode2api 文档）继续认，保持向后兼容。
+            switch (Optional(data, "status"))
+            {
+                case "pending":
+                    return new ZcodeCliPoll(ZcodeCliPollKind.Pending, null, null, null);
+                case "failed":
+                    return new ZcodeCliPoll(ZcodeCliPollKind.Error, null, "failed", "授权失败（服务端标记该次授权未完成）");
+                case null or "ready":
+                    break;
+                case var other:
+                    return new ZcodeCliPoll(ZcodeCliPollKind.Error, null, "unknown_status", $"未知的授权状态：{other}");
+            }
+            var token = Optional(data, "accessToken") ?? Optional(data, "access_token")
+                ?? data.Select(p => p.Value as JsonObject).Select(o => o is null ? null : Optional(o, "access_token"))
+                    .FirstOrDefault(t => t is not null);
+            return token is null
+                ? new ZcodeCliPoll(ZcodeCliPollKind.Error, null, "invalid_token_response", "授权完成但响应里没有 access_token")
+                : new ZcodeCliPoll(ZcodeCliPollKind.Done, token, null, null,
+                    data["user"] is JsonObject user ? Optional(user, "email") : null);
+        }
+        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
+        {
+            // 网络抖动 / 超时可重试（真实 ZCode.app 同款）：轮询本来就是对着一个还没发生的事件反复问，
+            // 瞬时断网不该废掉用户已经在浏览器里点了「同意」的授权。
+            return new ZcodeCliPoll(ZcodeCliPollKind.Pending, null, null, null);
         }
         catch (OAuthProtocolException e)
         {
@@ -353,6 +378,99 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         return Optional(data, "access_token")
                ?? throw new OAuthProtocolException("invalid_token_response", "业务登录响应里没有 access_token");
     }
+
+    /// <summary>
+    /// ZCode 第四跳的统一入口：OAuth token → 真正发请求用的凭据。配了 <see cref="SubscriptionOAuthConfig.BizHost"/>
+    /// （智谱 BigModel）就供应一把真 API Key，否则换业务 JWT（Z.AI）。刷新时也走这里。
+    /// </summary>
+    public Task<string> ZcodeApiCredentialAsync(SubscriptionOAuthConfig config, string oauthAccessToken, CancellationToken ct = default) =>
+        config.BizHost.Length > 0
+            ? ProvisionBizApiKeyAsync(config, oauthAccessToken, ct)
+            : ZcodeBusinessLoginAsync(config, oauthAccessToken, ct);
+
+    /// <summary>
+    /// 把 BigModel 的 OAuth token 供应成一把真 API Key（<c>id.secret</c>）。逆向自 ZCode.app 打包的 CLI
+    /// （<c>resolveCodingPlanApiKey</c>，经 NextCoWork `issuers/zcode.ts` provisionBizApiKey）：
+    /// <list type="number">
+    /// <item><c>GET {BizHost}/api/biz/customer/getCustomerInfo</c>：挑名字含「默认机构」的第一个机构（否则第 0 个），
+    /// 其下同样规则挑「默认项目」；</item>
+    /// <item><c>GET …/api/biz/v1/organization/{org}/projects/{proj}/api_keys</c>：找 name==<see cref="SubscriptionOAuthConfig.ApiKeyName"/> 的那条，
+    /// 没有就 POST <c>{name}</c> 创建；</item>
+    /// <item><c>GET …/api_keys/copy/{apiKey}</c> → <c>secretKey</c>；最终凭据 = <c>apiKey.secretKey</c>。</item>
+    /// </list>
+    /// 鉴权头是裸 <c>Authorization: &lt;OAuth token&gt;</c>（不带 Bearer）。copy 失败不致命：只有 id 没有 secret 的 key
+    /// 形态不完整，但先把能用的返回，让请求端去暴露真实问题。
+    /// </summary>
+    public async Task<string> ProvisionBizApiKeyAsync(SubscriptionOAuthConfig config, string oauthAccessToken, CancellationToken ct = default)
+    {
+        var host = config.BizHost.TrimEnd('/');
+        var keyName = config.ApiKeyName.Length > 0 ? config.ApiKeyName : "zcode-api-key";
+
+        var customer = await BizRequestAsync(HttpMethod.Get, $"{host}/api/biz/customer/getCustomerInfo", oauthAccessToken, null, ct) as JsonObject;
+        var org = PickByMarker(customer?["organizations"], "默认机构", "organizationName");
+        var orgId = ScalarText(org?["organizationId"]);
+        var project = PickByMarker(org?["projects"], "默认项目", "projectName");
+        var projectId = ScalarText(project?["projectId"]);
+        if (orgId is null || projectId is null)
+            throw new OAuthProtocolException("biz_no_project", "账号下没有可用的机构/项目");
+
+        var keysUrl = $"{host}/api/biz/v1/organization/{orgId}/projects/{projectId}/api_keys";
+        var existing = await BizRequestAsync(HttpMethod.Get, keysUrl, oauthAccessToken, null, ct);
+        var entry = (existing as JsonArray)?.OfType<JsonObject>().FirstOrDefault(r => ScalarText(r["name"]) == keyName)
+                    ?? await BizRequestAsync(HttpMethod.Post, keysUrl, oauthAccessToken,
+                        new JsonObject { ["name"] = keyName }.ToJsonString(), ct) as JsonObject;
+        var apiKey = ScalarText(entry?["apiKey"])
+                     ?? throw new OAuthProtocolException("invalid_token_response", "供应 API Key 失败：响应里没有 apiKey");
+
+        try
+        {
+            var copied = await BizRequestAsync(HttpMethod.Get,
+                $"{keysUrl}/copy/{Uri.EscapeDataString(apiKey)}", oauthAccessToken, null, ct) as JsonObject;
+            if (ScalarText(copied?["secretKey"]) is { } secret) return $"{apiKey}.{secret}";
+        }
+        catch (OAuthProtocolException)
+        {
+            // 见方法注释：copy 失败不致命。
+        }
+        return apiKey;
+    }
+
+    /// <summary>biz API 请求：成功码是 {缺省, 0, 200, "0", "200"}（比换码那套的"非 0 即失败"宽），返回信封里的 <c>data</c>。</summary>
+    private async Task<JsonNode?> BizRequestAsync(
+        HttpMethod method, string url, string oauthAccessToken, string? jsonBody, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(method, url);
+        request.Headers.TryAddWithoutValidation("Authorization", oauthAccessToken);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        if (jsonBody is not null) request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+        using var client = Create();
+        using var response = await client.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new OAuthProtocolException($"http_{(int)response.StatusCode}", body is { Length: > 0 and <= 300 } ? body : null);
+        var json = Parse(body);
+        if (json["code"] is JsonValue c)
+        {
+            var code = c.TryGetValue<string>(out var text) ? text : c.ToJsonString();
+            if (code is not ("0" or "200"))
+                throw new OAuthProtocolException($"biz_{code}", Optional(json, "msg") ?? Optional(json, "message"));
+        }
+        return json["data"];
+    }
+
+    /// <summary>名字含 marker 的第一个，否则第 0 个（CLI 的 pickOrgAndProject 原样规则）。</summary>
+    private static JsonObject? PickByMarker(JsonNode? list, string marker, string nameKey)
+    {
+        var records = (list as JsonArray)?.OfType<JsonObject>().ToList();
+        if (records is null || records.Count == 0) return null;
+        return records.FirstOrDefault(r => ScalarText(r[nameKey])?.Contains(marker, StringComparison.Ordinal) == true) ?? records[0];
+    }
+
+    /// <summary>字符串或数字节点的文本；空串/缺失/其它类型给 null（id 在有的响应里是数字）。</summary>
+    private static string? ScalarText(JsonNode? node) =>
+        node is JsonValue v
+            ? (v.TryGetValue<string>(out var s) ? s : v.TryGetValue<long>(out var n) ? n.ToString() : null) is { Length: > 0 } text ? text : null
+            : null;
 
     /// <summary>信封里的 access_token：先看渠道键（如 zai），再退回平铺形态。</summary>
     /// <summary>

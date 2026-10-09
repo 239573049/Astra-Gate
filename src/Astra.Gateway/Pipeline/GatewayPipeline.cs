@@ -100,8 +100,18 @@ public sealed class GatewayPipeline(
             // upstream budgets from it. Never touches the wire and never throws.
             RequestReasoning.Capture(record, inbound, body);
             var requestedModel = (inbound == ApiProtocol.Gemini ? StripModels(pathModel) : null) ?? Str(body, "model") ?? "";
-            // Enforce the client policy before capability discovery sends anything upstream.
             var isClaudeCode = inbound == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, body);
+            // A client bound to several providers: the first one serving this model — as an enabled model or through its
+            // model mapping — else the primary (ClientRouting). Decided before the client policy and capability discovery below.
+            route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
+            if (route.Provider.Id != provider.Id)
+            {
+                provider = route.Provider;
+                record.ProviderId = provider.Id;
+                record.ProviderName = provider.Name;
+                live.Update(record);
+            }
+            // Enforce the client policy before capability discovery sends anything upstream.
             SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
             // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
             // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
@@ -672,21 +682,21 @@ public sealed class GatewayPipeline(
             if (decoder is null) return;
             if (body is not null)
             {
-                Emit(decoder.DecodeJson(body));
+                Emit(decoder.DecodeJson(body), wholeBody: true);
             }
             else if (arrayBody is not null)
             {
                 // Gemini's non-alt=sse shape: an array of GenerateContentResponse chunks.
                 foreach (var element in arrayBody.OfType<JsonObject>())
-                    Emit(decoder.DecodeSse(new SseEvent(null, element.ToJsonString(GatewayJson.Options))));
+                    Emit(decoder.DecodeSse(new SseEvent(null, element.ToJsonString(GatewayJson.Options))), wholeBody: true);
             }
         }
 
-        void Emit(IEnumerable<UnifiedStreamEvent> events)
+        void Emit(IEnumerable<UnifiedStreamEvent> events, bool wholeBody = false)
         {
             foreach (var e in events)
             {
-                observer.Observe(e, sw.ElapsedMilliseconds);
+                observer.Observe(e, sw.ElapsedMilliseconds, wholeBody);
                 if (encoder is null) continue;
                 foreach (var frame in encoder.OnEvent(e))
                     Write(asJsonArray
@@ -753,7 +763,8 @@ public sealed class GatewayPipeline(
         }
 
         var events = json is null || decoder is null ? [] : decoder.DecodeJson(json).ToList();
-        foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds);
+        // One complete body: usage and errors are real, but there is no first-token moment to measure.
+        foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds, wholeBody: true);
 
         string output;
         if (encoder is null)
@@ -809,7 +820,7 @@ public sealed class GatewayPipeline(
         }
         foreach (var sse in parser.Flush()) Emit(decoder?.DecodeSse(sse) ?? []);
         if (!sawSseEvent && rawPending.Length > 0 && JsonNode.Parse(rawPending.ToString()) is JsonObject whole)
-            Emit(decoder?.DecodeJson(whole) ?? []);
+            Emit(decoder?.DecodeJson(whole) ?? [], wholeBody: true);
         Emit(decoder?.Complete() ?? []);
         capture?.Set(BodyStore.UpstreamResponse, upstreamCapture?.ToString() ?? "");
 
@@ -827,9 +838,9 @@ public sealed class GatewayPipeline(
         ctx.Response.ContentType = "application/json";
         await ctx.Response.WriteAsync(json, ct);
 
-        void Emit(IEnumerable<UnifiedStreamEvent> events)
+        void Emit(IEnumerable<UnifiedStreamEvent> events, bool wholeBody = false)
         {
-            foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds);
+            foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds, wholeBody);
         }
     }
 
@@ -1011,15 +1022,22 @@ public sealed class GatewayPipeline(
         /// <summary>Called once, with the TTFT, when the first token arrives.</summary>
         public Action<long>? FirstToken { get; init; }
 
-        public void Observe(UnifiedStreamEvent e, long elapsedMs)
+        /// <summary>
+        /// Folds one observed event. <paramref name="wholeBody"/> marks events decoded from a complete response
+        /// body (no stream): there is no first-token moment to measure there, so the TTFT — and with it
+        /// GenerationMs / OutputTps — stays unset instead of being guessed from the decode time.
+        /// </summary>
+        public void Observe(UnifiedStreamEvent e, long elapsedMs, bool wholeBody = false)
         {
             switch (e)
             {
                 case TextDeltaEvent { Text.Length: > 0 }:
                 case ReasoningDeltaEvent { Text.Length: > 0 }:
+                case ReasoningDeltaEvent { EncryptedContent.Length: > 0 }:
                 case ToolArgsDeltaEvent:
                 case BlockStartEvent { Kind: BlockKind.ToolCall }:
-                    if (TtftMs is null)
+                case OutputActivityEvent:
+                    if (TtftMs is null && !wholeBody)
                     {
                         TtftMs = elapsedMs;
                         FirstToken?.Invoke(elapsedMs);

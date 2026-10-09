@@ -375,8 +375,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 sink.Failed("Upstream returned invalid JSON");
                 return null;
             }
-            await FeedAsync(sink, decoder.DecodeJson(body), sw);
-            await FeedAsync(sink, decoder.Complete(), sw);
+            await FeedAsync(sink, decoder.DecodeJson(body), sw, wholeBody: true);
+            await FeedAsync(sink, decoder.Complete(), sw, wholeBody: true);
             return body;
         }
         await FeedAsync(sink, decoder.Complete(), sw);
@@ -393,25 +393,36 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             sink.Failed("Upstream returned invalid JSON");
             return null;
         }
-        await FeedAsync(sink, decoder.DecodeJson(body), sw);
-        await FeedAsync(sink, decoder.Complete(), sw);
+        await FeedAsync(sink, decoder.DecodeJson(body), sw, wholeBody: true);
+        await FeedAsync(sink, decoder.Complete(), sw, wholeBody: true);
         return body;
     }
 
-    /// <summary>Folds one codec batch into the preview, the usage and the errors.</summary>
-    private async Task FeedAsync(EventSink sink, IEnumerable<UnifiedStreamEvent> events, Stopwatch sw)
+    /// <summary>
+    /// Folds one codec batch into the preview, the usage and the errors. <paramref name="wholeBody"/> marks
+    /// batches decoded from a complete response body (no stream): there is no first-token moment to measure
+    /// there, so FirstTokenMs — and with it GenerationMs / OutputTps — stays unset instead of being guessed
+    /// from the decode time.
+    /// </summary>
+    private async Task FeedAsync(EventSink sink, IEnumerable<UnifiedStreamEvent> events, Stopwatch sw, bool wholeBody = false)
     {
         foreach (var e in events)
         {
             switch (e)
             {
                 case TextDeltaEvent { Text.Length: > 0 } delta:
-                    sink.FirstToken(sw.ElapsedMilliseconds);
+                    if (!wholeBody) sink.FirstToken(sw.ElapsedMilliseconds);
                     await sink.TextAsync(delta.Text);
                     break;
                 case ReasoningDeltaEvent { Text.Length: > 0 } thinking:
-                    sink.FirstToken(sw.ElapsedMilliseconds);
+                    if (!wholeBody) sink.FirstToken(sw.ElapsedMilliseconds);
                     await sink.ReasoningAsync(thinking.Text);
+                    break;
+                case ReasoningDeltaEvent { EncryptedContent.Length: > 0 }:
+                case ToolArgsDeltaEvent:
+                case BlockStartEvent { Kind: BlockKind.ToolCall }:
+                case OutputActivityEvent:
+                    if (!wholeBody) sink.FirstToken(sw.ElapsedMilliseconds);
                     break;
                 case UsageEvent usage:
                     sink.SawUsage();

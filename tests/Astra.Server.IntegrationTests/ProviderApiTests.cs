@@ -23,7 +23,7 @@ public class ProviderApiTests
     {
         await using var host = await TestHost.StartAsync();
         var templates = (await host.GetJsonAsync("/api/provider-templates")).AsArray();
-        Assert.Equal(26, templates.Count); // + nextcowork, github-copilot-subscription
+        Assert.Equal(27, templates.Count); // + nextcowork, github-copilot-subscription, bigmodel-subscription
         var claudeSub = templates.Single(t => t!["id"]!.GetValue<string>() == "claude-subscription")!;
         Assert.Equal("oauth-subscription", claudeSub["authScheme"]!.GetValue<string>());
         Assert.False(claudeSub["requiresApiKey"]!.GetValue<bool>());
@@ -805,6 +805,110 @@ public class ProviderApiTests
         var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
         Assert.Equal("jwt-1", protector.Unprotect(account.AccessTokenEnc!)); // 访问令牌 = 业务 JWT
         Assert.Equal("oauth-1", protector.Unprotect(account.RefreshTokenEnc!)); // 刷新槽 = OAuth token
+    }
+
+    [Fact]
+    public async Task BigModel_Subscription_Login_Provisions_An_Api_Key_Instead_Of_A_Business_Jwt()
+    {
+        var requests = new List<(string Method, string Path, string Body)>();
+        string? pollToken = null;
+        var handler = new StubHandler(async request =>
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
+            var path = request.RequestUri!.AbsolutePath;
+            lock (requests) requests.Add((request.Method.Method, path, body));
+            if (path == "/api/v1/oauth/cli/init") pollToken = request.Headers.Authorization?.Parameter;
+            return path switch
+            {
+                "/api/v1/oauth/cli/init" => JsonResponse("""{"code":0,"data":{"flow_id":"flow-1","authorize_url":"https://bigmodel.cn/login?appId=zcode&state=s","poll_token":"poll-1"}}"""),
+                "/api/v1/oauth/cli/poll/flow-1" => JsonResponse("""{"code":0,"data":{"status":"ready","user":{"user_id":"u1","email":"me@bigmodel.cn"},"bigmodel":{"access_token":"oauth-bm"}}}"""),
+                "/api/biz/customer/getCustomerInfo" => JsonResponse("""{"code":200,"data":{"organizations":[{"organizationId":"o1","projects":[{"projectId":"p1"}]}]}}"""),
+                "/api/biz/v1/organization/o1/projects/p1/api_keys" => JsonResponse("""{"code":200,"data":[{"name":"zcode-api-key","apiKey":"key-1"}]}"""),
+                "/api/biz/v1/organization/o1/projects/p1/api_keys/copy/key-1" => JsonResponse("""{"code":200,"data":{"secretKey":"sec-1"}}"""),
+                _ => JsonResponse("{}"),
+            };
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "bigmodel-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("cli", body!["mode"]!.GetValue<string>());
+        // 上游 init 只认 32 字节随机数的 64 位小写 hex 作 poll_token（其它形态一律 3004 invalid_flow）。
+        Assert.Matches("^[0-9a-f]{64}$", pollToken!);
+        var state = body["state"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login/{state}/poll", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("done", body!["status"]!.GetValue<string>());
+        Assert.Equal("me@bigmodel.cn", body["account"]!["accountEmail"]!.GetValue<string>());
+
+        Assert.Contains("\"provider\":\"bigmodel\"", requests[0].Body);
+        Assert.DoesNotContain(requests, r => r.Path == "/api/auth/z/login"); // 不走业务 JWT 那一跳
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal("key-1.sec-1", protector.Unprotect(account.AccessTokenEnc!)); // 访问令牌 = 供应出的 API Key
+        Assert.Equal("oauth-bm", protector.Unprotect(account.RefreshTokenEnc!)); // 刷新槽 = OAuth token
+    }
+
+    [Fact]
+    public async Task Cli_Login_Start_Reports_An_Upstream_Rejection_As_502_With_The_Reason()
+    {
+        var handler = new StubHandler(_ => Task.FromResult(JsonResponse("""{"code":3004,"msg":"invalid_flow"}""")));
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "bigmodel-subscription" });
+        var providerId = body!["id"]!.GetValue<string>();
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+
+        Assert.Equal(HttpStatusCode.BadGateway, status);
+        Assert.Contains("invalid_flow", body!["error"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("0.2.93", "1.0.13")]
+    [InlineData("1.0.99", "1.0.99")]
+    public async Task Grok_Template_Update_Refreshes_The_Old_Client_Version_And_Preserves_Overrides(
+        string currentVersion, string expectedVersion)
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "grok-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("1.0.13", body!["extraHeaders"]!["x-grok-client-version"]!.GetValue<string>());
+        var id = body["id"]!.GetValue<string>();
+
+        // 模拟升级前创建的 v3 实例；直接保留旧快照，验证已落库的默认请求头也能跟上。
+        var provider = (await host.Db.Providers.GetAsync(id))!;
+        var old = Json.Deserialize<ProviderTemplate>(provider.TemplateSnapshotJson)!;
+        old.Version = 3;
+        old.DefaultHeaders["x-grok-client-version"] = "0.2.93";
+        provider.TemplateVersion = old.Version;
+        provider.TemplateSnapshotJson = Json.Serialize(old);
+        provider.ExtraHeaders["x-grok-client-version"] = currentVersion;
+        provider.ExtraHeaders["X-Custom"] = "keep-me";
+        await host.Db.Providers.UpdateAsync(provider);
+
+        Assert.True((await host.GetJsonAsync($"/api/providers/{id}"))["templateUpdateAvailable"]!.GetValue<bool>());
+        var preview = await host.GetJsonAsync($"/api/providers/{id}/template-update");
+        Assert.Equal(3, preview["currentVersion"]!.GetValue<int>());
+        Assert.Equal(4, preview["latestVersion"]!.GetValue<int>());
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/template-update");
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(4, body!["templateVersion"]!.GetValue<int>());
+        Assert.False(body["templateUpdateAvailable"]!.GetValue<bool>());
+        Assert.Equal(expectedVersion, body["extraHeaders"]!["x-grok-client-version"]!.GetValue<string>());
+        Assert.Equal("keep-me", body["extraHeaders"]!["X-Custom"]!.GetValue<string>());
+
+        var updated = (await host.Db.Providers.GetAsync(id))!;
+        Assert.Equal(expectedVersion, updated.ExtraHeaders["x-grok-client-version"]);
+        var snapshot = Json.Deserialize<ProviderTemplate>(updated.TemplateSnapshotJson)!;
+        Assert.Equal("1.0.13", snapshot.DefaultHeaders["x-grok-client-version"]);
     }
 
     [Fact]

@@ -74,6 +74,31 @@ public sealed class Provider
 
     public bool SettingFlag(string key, bool defaultValue) =>
         Settings.TryGetPropertyValue(key, out var node) && node is JsonValue v && v.TryGetValue<bool>(out var b) ? b : defaultValue;
+
+    /// <summary>Settings key of the model mapping, see <see cref="ModelMap"/>.</summary>
+    public const string ModelMapKey = "model_map";
+
+    /// <summary>
+    /// Model mapping (settings <c>model_map</c>, an object of requested model id → this provider's model id): the
+    /// provider serves a model clients ask for under another name. The gateway sends the mapped id upstream, and a
+    /// client bound to several providers routes the requested id here when the mapped model is one of this provider's
+    /// enabled models. Entries that are not non-empty strings are ignored.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> ModelMap()
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (Settings[ModelMapKey] is not JsonObject o) return map;
+        foreach (var (from, to) in o)
+            if (from.Length > 0 && to is JsonValue v && v.TryGetValue<string>(out var target) && target.Length > 0)
+                map[from] = target;
+        return map;
+    }
+
+    /// <summary>The model id to send upstream for <paramref name="requested"/>: its <see cref="ModelMap"/> entry, else itself.</summary>
+    public string MapModel(string requested) =>
+        Settings[ModelMapKey] is JsonObject o && o[requested] is JsonValue v && v.TryGetValue<string>(out var target) && target.Length > 0
+            ? target
+            : requested;
 }
 
 /// <summary>A model offered by a provider. Only <see cref="ModelId"/> is required; everything else inherits.</summary>

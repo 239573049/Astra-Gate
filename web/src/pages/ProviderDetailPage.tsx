@@ -1,4 +1,4 @@
-import { ArrowLeft, CloudDownload, Copy, Ellipsis, FlaskConical, Plus, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CloudDownload, Copy, Ellipsis, FlaskConical, Plus, RotateCcw, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -14,6 +14,7 @@ import {
   useProvider,
   useProviderModels,
   useRemoteModels,
+  useSetProviderModelMap,
   useTemplateUpdate,
   useUpdateProvider,
   useUpdateProviderModel,
@@ -36,6 +37,7 @@ import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/ov
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatContext, priceSummary, pretty } from '../lib/format';
+import { modelMapOf, type ModelMap } from '../lib/modelMap';
 import { AUTH_OPTIONS, PROTOCOL_OPTIONS } from './ProvidersPage';
 import type { ClientKind } from '../api/types';
 
@@ -237,9 +239,122 @@ function ModelsTab({ provider, models, loading, selected, onSelect }: { provider
           ))}
         </Group>
       )}
+      {models && <ModelMapGroup provider={provider} models={models} />}
       <AddModelsSheet open={addOpen} onOpenChange={setAddOpen} provider={provider} />
       <RemoteModelsSheet open={remoteOpen} onOpenChange={setRemoteOpen} provider={provider} />
     </>
+  );
+}
+
+/**
+ * Model mapping (settings.model_map): a model id clients ask for → one of this provider's models. The gateway sends the
+ * mapped model upstream, and clients bound to several providers route the requested id here.
+ */
+function ModelMapGroup({ provider, models }: { provider: Provider; models: ProviderModel[] }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const save = useSetProviderModelMap(provider.id);
+  const [open, setOpen] = useState(false);
+  const map = modelMapOf(provider.settings);
+  const entries = Object.entries(map);
+  const known = new Set(models.map((m) => m.modelId));
+
+  const write = (next: ModelMap, onDone?: () => void) =>
+    save.mutate(next, {
+      onSuccess: () => {
+        onDone?.();
+        toast(t('providers.modelMap.saved'), 'success');
+      },
+      onError: (e) => toast(errorText(e), 'error'),
+    });
+
+  return (
+    <>
+      <Group title={t('providers.modelMap.title')} footer={t('providers.modelMap.footer')}>
+        {entries.map(([from, to]) => (
+          <Row
+            key={from}
+            label={
+              <span className="flex items-center gap-2 font-mono text-[12.5px]">
+                <span className="truncate">{from}</span>
+                <ArrowRight className="size-3.5 shrink-0 text-[var(--text-muted)]" aria-hidden />
+                <span className={cn('truncate', !known.has(to) && 'text-[var(--text-muted)]')}>{to}</span>
+                {!known.has(to) && <Badge tone="orange">{t('providers.modelMap.missingTarget')}</Badge>}
+              </span>
+            }
+          >
+            <Button
+              size="sm"
+              variant="plain"
+              icon={<X className="size-3.5" />}
+              aria-label={t('providers.modelMap.remove', { from })}
+              title={t('providers.modelMap.remove', { from })}
+              disabled={save.isPending}
+              onClick={() => write(Object.fromEntries(entries.filter(([f]) => f !== from)))}
+            />
+          </Row>
+        ))}
+        <Row
+          icon={<Plus className="size-4 text-[var(--text-secondary)]" />}
+          label={t('providers.modelMap.add')}
+          detail={models.length === 0 ? t('providers.modelMap.needModels') : undefined}
+          onClick={models.length === 0 ? undefined : () => setOpen(true)}
+        />
+      </Group>
+      <ModelMapSheet open={open} onOpenChange={setOpen} models={models} saving={save.isPending} onSave={(from, to) => write({ ...map, [from]: to }, () => setOpen(false))} />
+    </>
+  );
+}
+
+function ModelMapSheet({
+  open,
+  onOpenChange,
+  models,
+  saving,
+  onSave,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  models: ProviderModel[];
+  saving: boolean;
+  onSave: (from: string, to: string) => void;
+}) {
+  const { t } = useI18n();
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  useEffect(() => {
+    if (open) {
+      setFrom('');
+      setTo('');
+    }
+  }, [open]);
+  const requested = from.trim();
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t('providers.modelMap.add')}
+      description={t('providers.modelMap.addDetail')}
+      footer={
+        <>
+          <Button onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
+          <Button variant="primary" disabled={!requested || !to || requested === to} loading={saving} onClick={() => onSave(requested, to)}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <Input autoFocus mono label={t('providers.modelMap.from')} placeholder="deepseek-v4.1" spellCheck={false} value={from} onChange={(e) => setFrom(e.target.value)} />
+        <Select
+          label={t('providers.modelMap.to')}
+          value={to}
+          onChange={setTo}
+          placeholder={t('providers.modelMap.toPlaceholder')}
+          options={models.map((m) => ({ value: m.modelId, label: m.modelId }))}
+        />
+      </div>
+    </Sheet>
   );
 }
 

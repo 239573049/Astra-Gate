@@ -76,6 +76,8 @@ namespace Astra.Server;
 [JsonSerializable(typeof(TokenRewriteResult))]
 [JsonSerializable(typeof(ReappliedDto))]
 [JsonSerializable(typeof(ClientEndpoints.BindingInput))]
+[JsonSerializable(typeof(ClientEndpoints.BindingsInput))]
+[JsonSerializable(typeof(ClientBindingDto))]
 [JsonSerializable(typeof(ClientInstallDto))]
 [JsonSerializable(typeof(ClientCopyDto))]
 [JsonSerializable(typeof(ClientInstallJobDto))]

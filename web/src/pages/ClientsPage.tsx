@@ -1,5 +1,8 @@
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Check, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert } from 'lucide-react';
+import { Archive, Check, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, GripVertical, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -19,10 +22,11 @@ import {
   useProviders,
   useRestoreBackup,
   useSetBinding,
+  useSetBindings,
   useStartClientInstall,
   useTokens,
 } from '../api/hooks';
-import type { ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
+import type { ClientBinding, ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
 import { CLIENT_META, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
@@ -276,20 +280,6 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setSlots(modelSlotsOf(client.extras)), [client.kind, modelSlotsKey(savedSlots)]);
 
-  const bind = (p: Provider) => {
-    if (p.id === client.providerId) return;
-    setBinding.mutate(
-      { kind: client.kind, providerId: p.id },
-      {
-        onSuccess: () =>
-          toast(MODEL_LIST_CLIENTS.has(client.kind) && client.enabled
-            ? t('clients.boundModelsSynced', { provider: p.name, client: CLIENT_META[client.kind].name })
-            : t('clients.bound', { provider: p.name })),
-        onError: (e) => toast(errorText(e), 'error'),
-      },
-    );
-  };
-
   const saveAccount = () => {
     if (!client.providerId) return;
     setBinding.mutate(
@@ -379,39 +369,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </div>
       )}
 
-      <Group title={t('clients.providerTitle')} footer={t('clients.providerFooter')}>
-        {providers.isLoading && (
-          <div className="p-4">
-            <Spinner lines={2} />
-          </div>
-        )}
-        {enabledProviders.length === 0 && !providers.isLoading && (
-          <EmptyState
-            title={t('clients.noProviders')}
-            detail={t('clients.noProvidersDetail')}
-            action={
-              <Link to="/providers?new=1">
-                <Button variant="primary" icon={<Plus className="size-3.5" />}>
-                  {t('providers.add')}
-                </Button>
-              </Link>
-            }
-          />
-        )}
-        {enabledProviders.map((p) => (
-          <Row
-            key={p.id}
-            icon={<ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={24} />}
-            label={p.name}
-            detail={[p.priceKey ?? p.templateId, t('providers.modelCount', { count: p.modelCount }), p.priceMultiplier !== 1 ? `×${p.priceMultiplier}` : null].filter(Boolean).join(' · ')}
-            onClick={soon ? undefined : () => bind(p)}
-          >
-            {(setBinding.isPending ? setBinding.variables?.providerId === p.id : p.id === client.providerId) ? (
-              <Check className="size-4 text-[var(--accent)]" strokeWidth={2.5} aria-label={t('clients.current')} />
-            ) : null}
-          </Row>
-        ))}
-      </Group>
+      <ProviderBindings client={client} providers={providers.data ?? []} loading={providers.isLoading} soon={soon} />
 
       {isSubscriptionBinding && (
         <Group title={t('clients.accountTitle')} footer={t('clients.accountFooter')}>
@@ -542,6 +500,173 @@ function ClientPanel({ client }: { client: ClientInfo }) {
 
 type InstallSheetMode = ClientInstallJob['action'] | 'log';
 
+function providerDetail(p: Provider, t: ReturnType<typeof useI18n>['t']): string {
+  return [p.priceKey ?? p.templateId, t('providers.modelCount', { count: p.modelCount }), p.priceMultiplier !== 1 ? `×${p.priceMultiplier}` : null]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/**
+ * The client's providers in routing order (drag the handle to reorder) and the enabled providers it can add. The
+ * gateway sends a request to the first bound provider that serves the requested model id (one of its enabled models, or
+ * its model mapping onto one), else to the first one; the client's model list is the union (server ClientRouting).
+ */
+function ProviderBindings({ client, providers, loading, soon }: { client: ClientInfo; providers: Provider[]; loading: boolean; soon: boolean }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const setBindings = useSetBindings();
+  const saved = useMemo<ClientBinding[]>(
+    () => client.bindings ?? (client.providerId ? [{ providerId: client.providerId, accountId: client.accountId }] : []),
+    [client.bindings, client.providerId, client.accountId],
+  );
+  // Shown immediately while the save is in flight; reverts when it fails.
+  const [order, setOrder] = useState<ClientBinding[]>(saved);
+  useEffect(() => setOrder(saved), [saved]);
+  const byId = useMemo(() => new Map(providers.map((p) => [p.id, p])), [providers]);
+  const bound = order.flatMap((b) => {
+    const provider = byId.get(b.providerId);
+    return provider ? [{ binding: b, provider }] : [];
+  });
+  const available = providers.filter((p) => p.enabled && !order.some((b) => b.providerId === p.id));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const busy = soon || setBindings.isPending;
+
+  const save = (next: ClientBinding[], done: string) => {
+    const previous = order;
+    setOrder(next);
+    setBindings.mutate(
+      { kind: client.kind, bindings: next },
+      {
+        onSuccess: () =>
+          toast(MODEL_LIST_CLIENTS.has(client.kind) && client.enabled ? t('clients.providersModelsSynced', { client: CLIENT_META[client.kind].name }) : done),
+        onError: (e) => {
+          setOrder(previous);
+          toast(errorText(e), 'error');
+        },
+      },
+    );
+  };
+
+  const onDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const from = order.findIndex((b) => b.providerId === active.id);
+    const to = order.findIndex((b) => b.providerId === over.id);
+    if (from < 0 || to < 0) return;
+    save(arrayMove(order, from, to), t('clients.providerOrderSaved'));
+  };
+
+  const add = (p: Provider) => save([...order, { providerId: p.id }], t('clients.providerAdded', { provider: p.name }));
+  const remove = (p: Provider) => save(order.filter((b) => b.providerId !== p.id), t('clients.providerRemoved', { provider: p.name }));
+
+  const availableRows = available.map((p) => (
+    <Row
+      key={p.id}
+      icon={<ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={24} />}
+      label={p.name}
+      detail={providerDetail(p, t)}
+      onClick={busy ? undefined : () => add(p)}
+    >
+      {!soon && <Plus className="size-4 text-[var(--text-secondary)]" aria-label={t('common.add')} />}
+    </Row>
+  ));
+
+  return (
+    <>
+      <Group title={t('clients.providerTitle')} footer={t('clients.providerFooter')}>
+        {loading && (
+          <div className="p-4">
+            <Spinner lines={2} />
+          </div>
+        )}
+        {!loading && bound.length === 0 && available.length === 0 && (
+          <EmptyState
+            title={t('clients.noProviders')}
+            detail={t('clients.noProvidersDetail')}
+            action={
+              <Link to="/providers?new=1">
+                <Button variant="primary" icon={<Plus className="size-3.5" />}>
+                  {t('providers.add')}
+                </Button>
+              </Link>
+            }
+          />
+        )}
+        {bound.length > 0 && (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={bound.map((b) => b.provider.id)} strategy={verticalListSortingStrategy}>
+              {bound.map(({ provider }, i) => (
+                <SortableProviderRow
+                  key={provider.id}
+                  provider={provider}
+                  primary={i === 0}
+                  disabled={busy}
+                  onRemove={bound.length > 1 ? () => remove(provider) : undefined}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
+        )}
+        {!loading && bound.length === 0 && availableRows}
+      </Group>
+      {bound.length > 0 && available.length > 0 && <Group title={t('clients.moreProvidersTitle')}>{availableRows}</Group>}
+    </>
+  );
+}
+
+function SortableProviderRow({ provider, primary, disabled, onRemove }: { provider: Provider; primary: boolean; disabled: boolean; onRemove?: () => void }) {
+  const { t } = useI18n();
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: provider.id, disabled });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      className={cn(isDragging && 'relative z-10 bg-[var(--surface)] shadow-lg')}
+    >
+      <Row
+        icon={
+          <span className="flex items-center gap-2">
+            <button
+              ref={setActivatorNodeRef}
+              type="button"
+              aria-label={t('clients.dragToReorder', { provider: provider.name })}
+              title={t('clients.dragToReorder', { provider: provider.name })}
+              className="-ml-1 inline-flex cursor-grab touch-none text-[var(--text-muted)] hover:text-[var(--text-secondary)] active:cursor-grabbing disabled:cursor-default disabled:opacity-50"
+              {...attributes}
+              {...listeners}
+            >
+              <GripVertical className="size-4" />
+            </button>
+            <ProviderIcon name={provider.name} icon={provider.icon} colorKey={provider.templateId} size={24} />
+          </span>
+        }
+        label={
+          <span className="flex items-center gap-2">
+            <span className="truncate">{provider.name}</span>
+            {primary && <Badge tone="accent">{t('clients.primaryProvider')}</Badge>}
+            {!provider.enabled && <Badge tone="orange">{t('clients.providerDisabledBadge')}</Badge>}
+          </span>
+        }
+        detail={providerDetail(provider, t)}
+      >
+        {onRemove && (
+          <Button
+            size="sm"
+            variant="plain"
+            icon={<X className="size-3.5" />}
+            aria-label={t('clients.removeProvider', { provider: provider.name })}
+            title={t('clients.removeProvider', { provider: provider.name })}
+            disabled={disabled}
+            onClick={onRemove}
+          />
+        )}
+      </Row>
+    </div>
+  );
+}
+
 /**
  * Header buttons: install a missing client, update an outdated one, or open the download page of a manual one.
  * When npm's global directories belong to root, the button says so up front: running it will ask for the
@@ -651,7 +776,7 @@ function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: ()
           {value(c.version, !c.newer)}
         </Row>
       ))}
-      {inst.method === 'npm' && (
+      {(inst.method === 'npm' || inst.method === 'script') && (
         <Row
           label={t('clients.latestVersion')}
           detail={inst.latestError ?? (inst.latestCheckedAt ? t('clients.checkedAt', { time: formatDateTime(inst.latestCheckedAt, locale) }) : undefined)}

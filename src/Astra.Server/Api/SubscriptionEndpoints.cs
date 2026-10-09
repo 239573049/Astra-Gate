@@ -515,10 +515,22 @@ public static class SubscriptionEndpoints
             if (config.Style == "zcli")
             {
                 // ZAI CLI 链路：官方提供的授权（无回调）。poll_token 本地随机，除非上游下发自己的。
-                var pollToken = Pkce.Create().Verifier[..32];
+                // ★ 必须是 32 字节随机数的 64 位小写 hex（真实 ZCode.app 的生成方式）：实测上游 init 对
+                // 其它形态（base64url 任意长度、短 hex）一律回 3004 invalid_flow，只认这一种。
+                var pollToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
                 // 渠道键与换码一致：CLI init 的 provider 取 "zai"（zcode2api 实测），bigmodel 取自己的键。
                 var channel = config.ProviderKey == "zcode-subscription" ? "zai" : config.ProviderKey.Replace("-subscription", "");
-                var start = await client.StartZcodeCliAsync(config, channel, pollToken, ct);
+                ZcodeCliStart start;
+                try
+                {
+                    start = await client.StartZcodeCliAsync(config, channel, pollToken, ct);
+                }
+                catch (Exception e) when (e is OAuthProtocolException or HttpRequestException)
+                {
+                    // 上游拒绝（或传输失败）：报成 502 + 原因，而不是未处理异常的空 500（浏览器里只剩 "Failed to fetch"）。
+                    logger.LogWarning("订阅登录发起失败：{Error}", e.Message);
+                    return ApiJson.Result(new ErrorOnlyDto($"发起登录失败：{e.Message}"), StatusCodes.Status502BadGateway);
+                }
                 pending.Put(new PendingSubscriptionLogins.PendingLogin(
                     state, providerId, body?.AccountId, config, null, "cli", DateTimeOffset.UtcNow + LoginTtl,
                     null, start.FlowId, start.PollToken));
@@ -692,15 +704,23 @@ public static class SubscriptionEndpoints
                     : await client.PollZcodeCliAsync(login.Config, login.CliFlowId, login.CliPollToken, ct);
                 if (cli.Kind != ZcodeCliPollKind.Done)
                 {
-                    if (cli.Kind == ZcodeCliPollKind.Expired) pending.Take(state);
-                    var status = cli.Kind == ZcodeCliPollKind.Expired ? "expired" : "pending";
-                    return cli.Kind == ZcodeCliPollKind.Error
-                        ? ApiJson.Result(new PollFailureDto(status, cli.Description ?? cli.Error), StatusCodes.Status400BadRequest)
-                        : Results.Ok(new LoginPollDto(status));
+                    if (cli.Kind == ZcodeCliPollKind.Pending) return Results.Ok(new LoginPollDto("pending"));
+                    pending.Take(state);
+                    return cli.Kind == ZcodeCliPollKind.Expired
+                        ? ApiJson.Result(new PollFailureDto("expired", cli.Description ?? cli.Error), StatusCodes.Status404NotFound)
+                        : ApiJson.Result(new PollFailureDto("error", cli.Description ?? cli.Error), StatusCodes.Status400BadRequest);
                 }
                 pending.Take(state);
                 var cliToken = new OAuthClient.TokenResult(cli.AccessToken!, cli.AccessToken, null, null, null);
-                var cliAccount = await CompleteLoginAsync(db, protector, client, login, cliToken);
+                ProviderAccount cliAccount;
+                try
+                {
+                    cliAccount = await CompleteLoginAsync(db, protector, client, login, cliToken, cli.Email);
+                }
+                catch (Exception e) when (e is OAuthProtocolException or HttpRequestException)
+                {
+                    return ApiJson.Result(new PollFailureDto("error", e.Message), StatusCodes.Status400BadRequest);
+                }
                 return Results.Ok(new LoginDoneDto(ToDto(cliAccount)));
             }
 
@@ -790,15 +810,17 @@ public static class SubscriptionEndpoints
     /// <summary>Persists the exchanged tokens (encrypted) as a new or updated account row.</summary>
     private static async Task<ProviderAccount> CompleteLoginAsync(
         AstraDatabase db, ISecretProtector protector, OAuthClient? client,
-        PendingSubscriptionLogins.PendingLogin login, OAuthClient.TokenResult token)
+        PendingSubscriptionLogins.PendingLogin login, OAuthClient.TokenResult token, string? emailHint = null)
     {
         // ZCode/ZAI 形态（"zcode" 授权码 / "zcli" CLI）：上游存的是 OAuth token，真正能发请求的
-        // 是它换出来的业务 JWT（第四跳）。这里先换一次，刷新槽里仍存 OAuth token（刷新时重跑这一跳）。
+        // 是它换出来的凭据（第四跳）：Z.AI 渠道是业务 JWT，BigModel 渠道是供应出来的真 API Key。
+        // 这里先换一次，刷新槽里仍存 OAuth token（刷新时重跑这一跳）。
         if (login.Config.Style is "zcode" or "zcli")
         {
-            var business = await client!.ZcodeBusinessLoginAsync(login.Config, token.AccessToken);
-            var expiresIn = SubscriptionTokenService.ExpiresInSeconds(business, DateTimeOffset.UtcNow) ?? 3600;
-            // 刷新槽存 OAuth token（刷新 = 重跑这一跳）；访问令牌是业务 JWT。
+            var business = await client!.ZcodeApiCredentialAsync(login.Config, token.AccessToken);
+            var expiresIn = SubscriptionTokenService.ExpiresInSeconds(business, DateTimeOffset.UtcNow)
+                            ?? SubscriptionTokenService.CredentialLifetimeSeconds(login.Config);
+            // 刷新槽存 OAuth token（刷新 = 重跑这一跳）；访问令牌是业务 JWT / API Key。
             token = new OAuthClient.TokenResult(business, token.AccessToken, expiresIn, null, null);
         }
 
@@ -814,7 +836,7 @@ public static class SubscriptionEndpoints
             plan = copilot.Sku;
         }
 
-        var email = EmailFromIdToken(token.IdToken);
+        var email = EmailFromIdToken(token.IdToken) ?? emailHint;
         if (login.Config.IdentityUrl.Length > 0 && client is not null)
         {
             // 没有 id_token 的家族（Kimi / ZCode）从这里补 email 与套餐名；装饰性字段，失败不致命。
@@ -876,8 +898,9 @@ public static class SubscriptionEndpoints
             var key => key.Replace("-subscription", ""),
         };
         var oauthToken = await client.ExchangeZcodeCodeAsync(config, provider, code, redirectUri, state);
-        var apiToken = await client.ZcodeBusinessLoginAsync(config, oauthToken);
-        var expiresIn = SubscriptionTokenService.ExpiresInSeconds(apiToken, DateTimeOffset.UtcNow) ?? 3600;
+        var apiToken = await client.ZcodeApiCredentialAsync(config, oauthToken);
+        var expiresIn = SubscriptionTokenService.ExpiresInSeconds(apiToken, DateTimeOffset.UtcNow)
+                        ?? SubscriptionTokenService.CredentialLifetimeSeconds(config);
         return new OAuthClient.TokenResult(apiToken, oauthToken, expiresIn, null, null);
     }
 

@@ -11,6 +11,11 @@ public enum ClientInstallMethod
     /// <summary>A VS Code extension (<c>code --install-extension &lt;id&gt;</c>); VS Code keeps it updated itself.</summary>
     VsCodeExtension,
 
+    /// <summary>The vendor's own install script (<see cref="ClientInstallSpec.PosixScriptUrl"/> /
+    /// <see cref="ClientInstallSpec.WindowsScriptUrl"/>); run non-interactively once, then the client's own
+    /// updater (<see cref="ClientInstallSpec.SelfUpdateArgs"/>) keeps it current.</summary>
+    Script,
+
     /// <summary>A desktop app or a client with its own installer: Astra only links to the download page.</summary>
     Manual,
 }
@@ -19,7 +24,8 @@ public enum ClientInstallMethod
 /// Install facts for one client. <see cref="Executable"/> is the command the user runs (probed with
 /// <c>--version</c>); <see cref="Package"/> is the npm package or VS Code extension id;
 /// <see cref="SelfUpdateArgs"/> is the client's own updater, used when the installed copy did not come from
-/// npm (e.g. Claude Code's native installer).
+/// npm (e.g. Claude Code's native installer). <see cref="LatestUrl"/> is a JSON document naming the newest
+/// version (<c>version</c> or <c>tag_name</c>) for clients the npm registry does not cover.
 /// </summary>
 public sealed record ClientInstallSpec(
     string Kind,
@@ -27,7 +33,10 @@ public sealed record ClientInstallSpec(
     string? Executable,
     string? Package,
     string HomepageUrl,
-    IReadOnlyList<string>? SelfUpdateArgs = null);
+    IReadOnlyList<string>? SelfUpdateArgs = null,
+    string? PosixScriptUrl = null,
+    string? WindowsScriptUrl = null,
+    string? LatestUrl = null);
 
 /// <summary>
 /// Install facts per client kind. npm package names were checked against the npm registry (the <c>bin</c>
@@ -49,7 +58,11 @@ public static class ClientInstallCatalog
         new(ClientKinds.ClaudeDesktop, ClientInstallMethod.Manual, null, null, "https://claude.ai/download"),
         new(ClientKinds.GrokBuild, ClientInstallMethod.Npm, "grok", "@xai-official/grok", "https://www.npmjs.com/package/@xai-official/grok"),
         new(ClientKinds.Pi, ClientInstallMethod.Npm, "pi", "@mariozechner/pi-coding-agent", "https://www.npmjs.com/package/@mariozechner/pi-coding-agent"),
-        new(ClientKinds.HermesAgent, ClientInstallMethod.Manual, "hermes", null, "https://github.com/NousResearch/hermes-agent"),
+        new(ClientKinds.HermesAgent, ClientInstallMethod.Script, "hermes", null, "https://github.com/NousResearch/hermes-agent",
+            SelfUpdateArgs: ["update"],
+            PosixScriptUrl: "https://hermes-agent.nousresearch.com/install.sh",
+            WindowsScriptUrl: "https://hermes-agent.nousresearch.com/install.ps1",
+            LatestUrl: "https://api.github.com/repos/NousResearch/hermes-agent/releases/latest"),
         new(ClientKinds.MiniMaxCode, ClientInstallMethod.Npm, "mcode", "@minimax-ai/code", "https://www.npmjs.com/package/@minimax-ai/code"),
         new(ClientKinds.CopilotCli, ClientInstallMethod.Npm, "copilot", "@github/copilot",
             "https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli"),

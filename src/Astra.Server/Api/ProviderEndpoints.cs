@@ -125,9 +125,12 @@ public static class ProviderEndpoints
             if (body.ContainsKey("settings"))
             {
                 // settings.quota holds encrypted secrets and has its own endpoint: a settings write never replaces it.
+                // Neither does it replace settings.model_map, which is validated by PUT /{id}/model-map.
                 var settings = Read<JsonObject>(body["settings"]);
                 settings.Remove(QuotaConfig.SettingsKey);
                 if (p.Settings[QuotaConfig.SettingsKey] is { } stored) settings[QuotaConfig.SettingsKey] = stored.DeepClone();
+                settings.Remove(Provider.ModelMapKey);
+                if (p.Settings[Provider.ModelMapKey] is { } mapped) settings[Provider.ModelMapKey] = mapped.DeepClone();
                 p.Settings = settings;
             }
             if (body.ContainsKey("enabled")) p.Enabled = Read<bool>(body["enabled"]);
@@ -250,6 +253,32 @@ public static class ProviderEndpoints
             if (m is null || m.ProviderId != id) throw new AdminApiException(404, "Provider model not found");
             await db.Providers.DeleteModelAsync(pmId, ct);
             return Results.NoContent();
+        });
+
+        // Model mapping (Provider.ModelMap, settings.model_map): requested model id → one of this provider's models. Replaces
+        // the whole map; the write filter then re-syncs the model lists of the clients bound to this provider.
+        group.MapPut("/{id}/model-map", async (string id, JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog,
+            ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
+        {
+            var p = await RequireAsync(db, id, ct);
+            if (body["map"] is not JsonObject input) throw new AdminApiException(400, "map must be an object of requested model id → provider model id");
+            var known = (await db.Providers.ListModelsAsync(id, ct)).Select(m => m.ModelId).ToHashSet(StringComparer.Ordinal);
+            var map = new JsonObject();
+            foreach (var (rawFrom, rawTo) in input)
+            {
+                var from = rawFrom.Trim();
+                var to = rawTo is JsonValue v && v.TryGetValue<string>(out var s) ? s.Trim() : "";
+                if (from.Length == 0 || to.Length == 0) throw new AdminApiException(400, "Model mapping entries need a requested model id and a provider model");
+                if (from.Any(char.IsControl) || from.Length > 200) throw new AdminApiException(400, $"Invalid requested model id: {from}");
+                if (from == to) throw new AdminApiException(400, $"{from} is mapped to itself");
+                if (!known.Contains(to)) throw new AdminApiException(400, $"{to} is not a model of this provider");
+                if (map.ContainsKey(from)) throw new AdminApiException(400, $"{from} is mapped twice");
+                map[from] = to;
+            }
+            if (map.Count == 0) p.Settings.Remove(Provider.ModelMapKey);
+            else p.Settings[Provider.ModelMapKey] = map;
+            await db.Providers.UpdateAsync(p, ct);
+            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
 
         group.MapGet("/{id}/template-update", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, CancellationToken ct) =>

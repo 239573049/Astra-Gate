@@ -94,6 +94,14 @@ public class ClientInstallPlannerTests
             Assert.False(string.IsNullOrEmpty(s.Package));
             Assert.False(string.IsNullOrEmpty(s.Executable));
         });
+        Assert.All(ClientInstallCatalog.All.Where(s => s.Method == ClientInstallMethod.Script), s =>
+        {
+            Assert.False(string.IsNullOrEmpty(s.Executable));
+            Assert.StartsWith("https://", s.PosixScriptUrl);
+            Assert.StartsWith("https://", s.WindowsScriptUrl);
+            Assert.NotNull(s.SelfUpdateArgs);
+            Assert.StartsWith("https://", s.LatestUrl);
+        });
     }
 
     [Fact]
@@ -179,6 +187,41 @@ public class ClientInstallPlannerTests
         Assert.Equal("code --install-extension GitHub.copilot-chat", missing.Install!.Display);
         Assert.Equal("vscode-missing", ClientInstallPlanner.Plan(spec, new ClientToolState(false), "osx").Blocker);
         Assert.Equal(ClientInstallPlan.None, ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/usr/local/bin/code"), "osx"));
+    }
+
+    [Fact]
+    public void Script_Client_Installs_With_The_Vendor_Script_Non_Interactively()
+    {
+        // Astra runs installers with a closed stdin, so the script must never ask anything.
+        var spec = ClientInstallCatalog.Get(ClientKinds.HermesAgent)!;
+        var posix = ClientInstallPlanner.Plan(spec, new ClientToolState(false), "osx");
+        Assert.Equal("curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive", posix.Install!.Display);
+        Assert.Equal(["-o", "pipefail", "-c", "curl -fsSL 'https://hermes-agent.nousresearch.com/install.sh' | bash -s -- --non-interactive"], posix.Install.Arguments);
+        Assert.Null(posix.Update);
+        Assert.Null(posix.Blocker);
+        var windows = ClientInstallPlanner.Plan(spec, new ClientToolState(false), "windows");
+        Assert.Equal("& ([scriptblock]::Create((irm https://hermes-agent.nousresearch.com/install.ps1))) -NonInteractive", windows.Install!.Display);
+    }
+
+    [Fact]
+    public void Script_Client_Updates_With_Its_Own_Updater()
+    {
+        var spec = ClientInstallCatalog.Get(ClientKinds.HermesAgent)!;
+        var exe = Path.Combine(Path.GetTempPath(), "home", ".local", "bin", "hermes");
+        var plan = ClientInstallPlanner.Plan(spec, new ClientToolState(true, exe), "osx");
+        Assert.Null(plan.Install);
+        Assert.Equal("self", plan.UpdateVia);
+        Assert.Equal(exe, plan.Update!.FileName);
+        Assert.Equal(["update"], plan.Update.Arguments);
+    }
+
+    [Fact]
+    public void Script_Client_Without_A_Script_Or_An_Updater_Is_Blocked()
+    {
+        var spec = new ClientInstallSpec("x", ClientInstallMethod.Script, "x", null, "https://example.com",
+            WindowsScriptUrl: "https://example.com/install.ps1");
+        Assert.Equal("script-missing", ClientInstallPlanner.Plan(spec, new ClientToolState(false), "osx").Blocker);
+        Assert.Equal("external-install", ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/usr/local/bin/x"), "osx").Blocker);
     }
 
     [Theory]

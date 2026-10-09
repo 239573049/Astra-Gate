@@ -29,6 +29,7 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
     private bool _started;
     private bool _stopped;
     private bool _terminal;
+    private bool _reportedOutputActivity;
 
     /// <summary>block key → IR block index. Keys: "o{output_index}" for item blocks, "o{out}:c{content}" for text parts.</summary>
     private readonly Dictionary<string, int> _blocks = new();
@@ -132,6 +133,10 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
                 break;
             }
 
+            case "custom_tool_call":
+                ReportOutputActivity(events);
+                break;
+
             // web_search_call, file_search_call, … : server-side items are not representable in the IR.
         }
     }
@@ -201,6 +206,14 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
                 break;
             }
 
+            case "response.custom_tool_call_input.delta":
+                if (ResponsesCodec.Str(data, "delta") is { Length: > 0 }) ReportOutputActivity(events);
+                break;
+
+            case "response.custom_tool_call_input.done":
+                if (ResponsesCodec.Str(data, "input") is { Length: > 0 }) ReportOutputActivity(events);
+                break;
+
             case "response.output_text.done" or "response.refusal.done":
                 // Closed at content_part.done; nothing to do here.
                 break;
@@ -257,6 +270,9 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
                 events.Add(new BlockStartEvent(index, BlockKind.ToolCall, callId, ResponsesCodec.Str(item, "name") ?? ""));
                 break;
             }
+            case "custom_tool_call":
+                ReportOutputActivity(events);
+                break;
             // web_search_call, file_search_call, … : server-side items are not representable in the IR.
         }
     }
@@ -277,6 +293,8 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
 
     private void OutputItemDone(JsonObject data, List<UnifiedStreamEvent> events)
     {
+        if (data["item"] is JsonObject custom && ResponsesCodec.Str(custom, "type") == "custom_tool_call")
+            ReportOutputActivity(events);
         var outputIndex = ResponsesCodec.Int(data, "output_index") ?? -1;
         var itemKey = $"o{outputIndex}";
         if (data["item"] is JsonObject item
@@ -303,6 +321,9 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
             _started = true;
             events.Add(new MessageStartEvent(ResponsesCodec.Str(response, "id"), ResponsesCodec.Str(response, "model") ?? _ctx.Model));
         }
+        if (response["output"] is JsonArray finalOutput
+            && finalOutput.OfType<JsonObject>().Any(item => ResponsesCodec.Str(item, "type") == "custom_tool_call"))
+            ReportOutputActivity(events);
         // Defensive: normally every block was closed by the *_done events already.
         CloseOpenBlocks(events);
 
@@ -345,6 +366,13 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
             && output.OfType<JsonObject>().Any(o => ResponsesCodec.Str(o, "type") == "function_call");
         _stopped = true;
         events.Add(new MessageStopEvent(hasToolCall ? FinishReason.ToolCalls : FinishReason.Stop, "completed"));
+    }
+
+    private void ReportOutputActivity(List<UnifiedStreamEvent> events)
+    {
+        if (_reportedOutputActivity || _terminal) return;
+        _reportedOutputActivity = true;
+        events.Add(new OutputActivityEvent());
     }
 
     // ---------------------------------------------------------------- block bookkeeping

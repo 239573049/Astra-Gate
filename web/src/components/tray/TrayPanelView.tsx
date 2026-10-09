@@ -2,6 +2,7 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Ban,
+  ChevronRight,
   ChevronsUpDown,
   Copy,
   Ellipsis,
@@ -23,8 +24,12 @@ import {
   failedRequests,
   formatCostShort,
   hourlyRequests,
+  QUOTA_CRITICAL,
+  QUOTA_LOW,
   quotaTone,
   resetsIn,
+  tightestQuota,
+  tightestRows,
   topModelShare,
   updatedAgo,
   windowLength,
@@ -50,24 +55,44 @@ export interface TrayPanelViewProps {
   onSwitchClient?: (client: ClientInfo) => void;
   /** Settings preview: no window-close button semantics, no fixed height. */
   preview?: boolean;
+  /** Controlled tab (the tray window resets it to the overview each time it opens); uncontrolled when omitted. */
+  tab?: TrayTab;
+  onTabChange?: (tab: TrayTab) => void;
   className?: string;
 }
+
+export type TrayTab = 'overview' | 'quota' | 'clients';
+
+type Translate = ReturnType<typeof useI18n>['t'];
 
 const TONE_COLOR = { green: 'var(--success)', orange: 'var(--warning)', red: 'var(--danger)' } as const;
 
 /**
  * The tray panel (plan §9.1 menu-bar surface): service status, today's usage, subscription quota windows and
  * service controls. The same component renders in the tray popover window (/tray) and as the live preview on
- * Settings › Tray panel; `prefs.sections` decides which blocks appear.
+ * Settings › Tray panel. The overview tab leads with what needs attention (failures, a nearly empty quota),
+ * then today's numbers and the tightest quota windows; Quota / Clients tabs hold the full lists. `prefs.sections`
+ * decides which blocks (and tabs) appear.
  */
 export const TrayPanelView = forwardRef<HTMLDivElement, TrayPanelViewProps>(function TrayPanelView(
-  { prefs, state, data, onCommand, onRefresh, onCopyAddress, onSwitchClient, preview, className },
+  { prefs, state, data, onCommand, onRefresh, onCopyAddress, onSwitchClient, preview, tab, onTabChange, className },
   ref,
 ) {
   const { t } = useI18n();
+  const [innerTab, setInnerTab] = useState<TrayTab>('overview');
   const busy = state.activity !== null;
   const up = state.running && !busy;
   const command = (c: TrayPanelCommand) => onCommand?.(c);
+  const tabs: TrayTab[] = ['overview'];
+  if (prefs.sections.quota && (data.plans.length > 0 || data.hasSubscriptions)) tabs.push('quota');
+  if (prefs.sections.clients && data.clients.some((c) => c.enabled)) tabs.push('clients');
+  const requested = tab ?? innerTab;
+  const active = tabs.includes(requested) ? requested : 'overview';
+  const selectTab = (next: TrayTab) => {
+    setInnerTab(next);
+    onTabChange?.(next);
+  };
+  const showTabs = (state.running || busy) && tabs.length > 1;
   const address = data.settings?.gatewayBaseUrl.replace(/^https?:\/\//, '') ?? (state.port ? `127.0.0.1:${state.port}` : '');
   const statusLabel = state.activity ? t(`tray.status.${state.activity}`) : state.running ? t('tray.status.running') : t('tray.status.stopped');
 
@@ -117,6 +142,11 @@ export const TrayPanelView = forwardRef<HTMLDivElement, TrayPanelViewProps>(func
         )}
       </header>
 
+      {/* Tabs (the wrapper always exists: the tray window measures it) */}
+      <div data-tray-part="tabs" className="shrink-0">
+        {showTabs && <TabBar tabs={tabs} active={active} onChange={selectTab} />}
+      </div>
+
       {/* Body */}
       <div className="scroll min-h-0 flex-1 overflow-y-auto">
         <div data-tray-part="body" className="flex flex-col gap-3 px-4 py-3.5">
@@ -124,9 +154,15 @@ export const TrayPanelView = forwardRef<HTMLDivElement, TrayPanelViewProps>(func
             <Stopped onStart={() => command('start')} />
           ) : (
             <>
-              <UsageBlock prefs={prefs} data={data} onRefresh={onRefresh} />
-              {prefs.sections.quota && <QuotaBlock data={data} />}
-              {prefs.sections.clients && <ClientsBlock data={data} disabled={!up} onSwitch={onSwitchClient} />}
+              {active === 'overview' && (
+                <>
+                  <Alerts prefs={prefs} data={data} onViewQuota={() => selectTab('quota')} />
+                  <UsageBlock prefs={prefs} data={data} onRefresh={onRefresh} />
+                  {prefs.sections.quota && <QuotaSummary data={data} onViewAll={() => selectTab('quota')} />}
+                </>
+              )}
+              {active === 'quota' && <QuotaBlock data={data} plain />}
+              {active === 'clients' && <ClientsBlock data={data} disabled={!up} onSwitch={onSwitchClient} plain />}
             </>
           )}
         </div>
@@ -197,6 +233,76 @@ function Pill({ tone, children, title }: { tone: 'red' | 'orange' | 'accent' | '
   );
 }
 
+function TabBar({ tabs, active, onChange }: { tabs: TrayTab[]; active: TrayTab; onChange: (tab: TrayTab) => void }) {
+  const { t } = useI18n();
+  const label: Record<TrayTab, string> = { overview: t('tray.tab.overview'), quota: t('tray.tab.quota'), clients: t('tray.clients') };
+  return (
+    <div role="tablist" className="flex gap-1 px-3 pt-2.5">
+      {tabs.map((tab) => (
+        <button
+          key={tab}
+          type="button"
+          role="tab"
+          aria-selected={tab === active}
+          onClick={() => onChange(tab)}
+          className={cn(
+            'h-7 cursor-default rounded-[7px] px-2.5 text-[12.5px] transition-colors',
+            tab === active ? 'bg-[var(--surface-muted)] font-medium text-[var(--foreground)]' : 'text-[var(--text-secondary)] hover:text-[var(--foreground)]',
+          )}
+        >
+          {label[tab]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Alert({ tone, onClick, children }: { tone: 'red' | 'orange'; onClick?: () => void; children: ReactNode }) {
+  const color = tone === 'red' ? 'var(--danger)' : 'var(--warning)';
+  const style = { color, borderColor: `color-mix(in oklab, ${color} 45%, transparent)`, background: `color-mix(in oklab, ${color} 10%, transparent)` };
+  const className = 'flex w-full items-center gap-1.5 rounded-[8px] border px-2.5 py-1.5 text-left text-[12.5px]';
+  const body = (
+    <>
+      <TriangleAlert className="size-3.5 shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={cn(className, 'cursor-default')} style={style}>
+      {body}
+      <ChevronRight className="size-3.5 shrink-0" />
+    </button>
+  ) : (
+    <div className={className} style={style}>
+      {body}
+    </div>
+  );
+}
+
+/** What needs attention right now: failed requests today, a quota window running low. Nothing when all is well. */
+function Alerts({ prefs, data, onViewQuota }: { prefs: TrayPrefs; data: TrayData; onViewQuota: () => void }) {
+  const { t, locale } = useI18n();
+  const s = data.summary;
+  const failed = prefs.sections.overview && s ? failedRequests(s) : 0;
+  const tight = prefs.sections.quota ? tightestQuota(data.plans) : null;
+  const low = tight && tight.row.remaining < QUOTA_LOW ? tight : null;
+  if (!s || (failed === 0 && !low)) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {failed > 0 && <Alert tone="red">{t('tray.alert.failures', { count: failed, share: formatPercent(failed / s.requests) })}</Alert>}
+      {low && (
+        <Alert tone={low.row.remaining < QUOTA_CRITICAL ? 'red' : 'orange'} onClick={onViewQuota}>
+          {t('tray.alert.quota', {
+            plan: low.plan.providerName,
+            window: quotaRowName(low.row, t, locale),
+            remaining: `${Math.round(low.row.remaining)}%`,
+          })}
+        </Alert>
+      )}
+    </div>
+  );
+}
+
 function Stopped({ onStart }: { onStart: () => void }) {
   const { t } = useI18n();
   return (
@@ -232,7 +338,6 @@ function UsageBlock({ prefs, data, onRefresh }: { prefs: TrayPrefs; data: TrayDa
   const sec = prefs.sections;
   const showTiles = sec.overview || sec.cost;
   const tokens = s ? s.inputTokens + s.outputTokens : 0;
-  const failed = s ? failedRequests(s) : 0;
   const ago = updatedAgo(data.updatedAt, locale, t('tray.justNow'), now);
   const top = sec.topModel ? topModelShare(data.top, tokens) : null;
   const hit = sec.cacheHitRate && s ? cacheHitRatio(s.cacheReadTokens, s.inputTokens) : null;
@@ -244,7 +349,6 @@ function UsageBlock({ prefs, data, onRefresh }: { prefs: TrayPrefs; data: TrayDa
     <section className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <span className="text-[13px] text-[var(--text-secondary)]">{t('tray.today')}</span>
-        {sec.overview && failed > 0 && <Pill tone="red">{t('tray.failures', { count: failed })}</Pill>}
         <div className="flex-1" />
         {ago && <span className="text-[12px] text-[var(--text-muted)]">{t('tray.updated', { time: ago })}</span>}
         <IconButton label={t('common.refresh')} onClick={onRefresh}>
@@ -351,14 +455,47 @@ function HourlyChart({ data, now }: { data: TrayData; now: number }) {
   );
 }
 
-function QuotaBlock({ data }: { data: TrayData }) {
+/** Overview teaser: the few windows closest to running out; the Quota tab has everything. */
+function QuotaSummary({ data, onViewAll }: { data: TrayData; onViewAll: () => void }) {
+  const { t, locale } = useI18n();
+  if (data.plans.length === 0) {
+    return data.hasSubscriptions ? <div className="border-t border-[var(--border)] pt-3 text-[12px] text-[var(--text-muted)]">{t('tray.quotaPending')}</div> : null;
+  }
+  const rows = tightestRows(data.plans, 3);
+  const total = data.plans.reduce((sum, p) => sum + p.rows.length, 0);
+  return (
+    <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+      <div className="flex items-center text-[12px] text-[var(--text-secondary)]">
+        <span className="flex-1">{t('tray.quotaTightest')}</span>
+        {total > rows.length && (
+          <button type="button" onClick={onViewAll} className="inline-flex cursor-default items-center gap-0.5 hover:text-[var(--foreground)]">
+            {t('tray.viewAll')}
+            <ChevronRight className="size-3" />
+          </button>
+        )}
+      </div>
+      {rows.map(({ plan, row }, i) => (
+        <div key={`${plan.accountId}-${row.kind}-${i}`} className="grid grid-cols-[minmax(0,1fr)_64px_40px_60px] items-center gap-2 text-[12.5px]">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <ProviderIcon name={plan.providerName} icon={plan.providerIcon} size={14} />
+            <span className="truncate font-medium">{plan.providerName}</span>
+            <span className="shrink-0 text-[var(--text-secondary)]">{quotaRowName(row, t, locale)}</span>
+          </span>
+          <QuotaCells row={row} locale={locale} />
+        </div>
+      ))}
+    </section>
+  );
+}
+
+function QuotaBlock({ data, plain }: { data: TrayData; plain?: boolean }) {
   const { t } = useI18n();
   if (data.plans.length === 0 && !data.hasSubscriptions) return null;
   // Several accounts of one provider: tell them apart by account name.
   const perProvider = new Map<string, number>();
   for (const p of data.plans) perProvider.set(p.providerId, (perProvider.get(p.providerId) ?? 0) + 1);
   return (
-    <section className="flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+    <section className={cn('flex flex-col gap-2', !plain && 'border-t border-[var(--border)] pt-3')}>
       <div className="grid grid-cols-[1fr_48px_72px] items-center gap-2 text-[12px] text-[var(--text-secondary)]">
         <span>{t('tray.quota')}</span>
         <span className="text-right">{t('tray.quotaRemaining')}</span>
@@ -373,14 +510,42 @@ function QuotaBlock({ data }: { data: TrayData }) {
   );
 }
 
+function quotaRowName(row: QuotaRow, t: Translate, locale: string): string {
+  return row.kind === 'balance'
+    ? (row.label ?? t('tray.quotaBalance'))
+    : row.kind === 'credits' || row.windowMinutes == null
+      ? t('tray.quotaCredits')
+      : windowLength(row.windowMinutes, locale);
+}
+
+/** Meter, remaining share and reset time of one quota row: three cells of the caller's grid. */
+function QuotaCells({ row, locale }: { row: QuotaRow; locale: string }) {
+  const remaining = row.remaining;
+  const color = remaining === null ? undefined : TONE_COLOR[quotaTone(remaining)];
+  return (
+    <>
+      {remaining === null ? (
+        <span />
+      ) : (
+        <span className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
+          <span className="block h-full rounded-full" style={{ width: `${remaining}%`, background: color }} />
+        </span>
+      )}
+      {row.amount ? (
+        // A balance has no reset time: its amount takes both right-hand columns.
+        <span className="num col-span-2 truncate text-right font-medium">{formatAmount(row.amount.value, row.amount.unit, locale)}</span>
+      ) : (
+        <>
+          <span className="num text-right font-medium">{remaining === null ? '—' : `${Math.round(remaining)}%`}</span>
+          <span className="truncate text-right text-[var(--text-secondary)]">{resetsIn(row.resetsAt, locale) ?? '—'}</span>
+        </>
+      )}
+    </>
+  );
+}
+
 function QuotaPlanRows({ plan, showAccount }: { plan: QuotaPlan; showAccount: boolean }) {
   const { t, locale } = useI18n();
-  const name = (row: QuotaRow) =>
-    row.kind === 'balance'
-      ? (row.label ?? t('tray.quotaBalance'))
-      : row.kind === 'credits' || row.windowMinutes == null
-        ? t('tray.quotaCredits')
-        : windowLength(row.windowMinutes, locale);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex min-w-0 items-center gap-2">
@@ -389,27 +554,11 @@ function QuotaPlanRows({ plan, showAccount }: { plan: QuotaPlan; showAccount: bo
         {showAccount && <span className="truncate text-[12px] text-[var(--text-muted)]">{plan.accountName}</span>}
       </div>
       {plan.rows.map((row, i) => {
-        const remaining = row.remaining;
-        const color = remaining === null ? undefined : TONE_COLOR[quotaTone(remaining)];
+        const name = quotaRowName(row, t, locale);
         return (
           <div key={`${row.kind}-${i}`} className="grid grid-cols-[52px_1fr_48px_72px] items-center gap-2 pl-6 text-[12.5px]">
-            <span className="truncate text-[var(--text-secondary)]" title={name(row)}>{name(row)}</span>
-            {remaining === null ? (
-              <span />
-            ) : (
-              <span className="h-1.5 overflow-hidden rounded-full bg-[var(--surface-muted)]">
-                <span className="block h-full rounded-full" style={{ width: `${remaining}%`, background: color }} />
-              </span>
-            )}
-            {row.amount ? (
-              // A balance has no reset time: its amount takes both right-hand columns.
-              <span className="num col-span-2 truncate text-right font-medium">{formatAmount(row.amount.value, row.amount.unit, locale)}</span>
-            ) : (
-              <>
-                <span className="num text-right font-medium">{remaining === null ? '—' : `${Math.round(remaining)}%`}</span>
-                <span className="truncate text-right text-[var(--text-secondary)]">{resetsIn(row.resetsAt, locale) ?? '—'}</span>
-              </>
-            )}
+            <span className="truncate text-[var(--text-secondary)]" title={name}>{name}</span>
+            <QuotaCells row={row} locale={locale} />
           </div>
         );
       })}
@@ -417,13 +566,13 @@ function QuotaPlanRows({ plan, showAccount }: { plan: QuotaPlan; showAccount: bo
   );
 }
 
-function ClientsBlock({ data, disabled, onSwitch }: { data: TrayData; disabled: boolean; onSwitch?: (client: ClientInfo) => void }) {
+function ClientsBlock({ data, disabled, onSwitch, plain }: { data: TrayData; disabled: boolean; onSwitch?: (client: ClientInfo) => void; plain?: boolean }) {
   const { t } = useI18n();
   const clients = data.clients.filter((c) => c.enabled);
   if (clients.length === 0) return null;
   const providerName = (id?: string | null) => data.providers.find((p) => p.id === id)?.name ?? t('tray.unbound');
   return (
-    <section className="flex flex-col gap-1 border-t border-[var(--border)] pt-3">
+    <section className={cn('flex flex-col gap-1', !plain && 'border-t border-[var(--border)] pt-3')}>
       <div className="mb-0.5 text-[12px] text-[var(--text-secondary)]">{t('tray.clients')}</div>
       {clients.map((c) => (
         <button

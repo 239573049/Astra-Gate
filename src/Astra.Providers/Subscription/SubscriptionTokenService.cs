@@ -60,12 +60,18 @@ public sealed class SubscriptionTokenService(
             var seconds = (int)Math.Max(60, (expiresAt - _clock.GetUtcNow()).TotalSeconds);
             return (copilot.Token, accessToken, seconds, expiresAt);
         }
-        if (config.Style is not ("zcode" or "zcli") || string.IsNullOrWhiteSpace(config.BusinessLoginUrl))
+        if (config.Style is not ("zcode" or "zcli") || (string.IsNullOrWhiteSpace(config.BusinessLoginUrl) && config.BizHost.Length == 0))
             return (accessToken, refreshToken, null, _clock.GetUtcNow().AddHours(1));
-        var jwt = await Client.ZcodeBusinessLoginAsync(config, accessToken, ct);
-        return (jwt, refreshToken, ExpiresInSeconds(jwt, _clock.GetUtcNow()) ?? 3600,
-            JwtExpiresAt(jwt, _clock.GetUtcNow()) ?? _clock.GetUtcNow().AddHours(1));
+        var jwt = await Client.ZcodeApiCredentialAsync(config, accessToken, ct);
+        return (jwt, refreshToken, ExpiresInSeconds(jwt, _clock.GetUtcNow()) ?? CredentialLifetimeSeconds(config),
+            JwtExpiresAt(jwt, _clock.GetUtcNow()) ?? _clock.GetUtcNow().AddSeconds(CredentialLifetimeSeconds(config)));
     }
+
+    /// <summary>
+    /// 解不出 exp 时 ZCode 形态凭据的有效期：业务 JWT 给保守的一小时；供应出来的 API Key（BizHost）不是令牌、
+    /// 不会过期，给一天——被控制台删掉的情况由上游 401 触发的强制刷新（幂等重新供应）兜住。
+    /// </summary>
+    public static int CredentialLifetimeSeconds(SubscriptionOAuthConfig config) => config.BizHost.Length > 0 ? 86400 : 3600;
 
     /// <summary>
     /// Refreshes the account's tokens (serialized per account). When <paramref name="force"/> is false
@@ -106,20 +112,21 @@ public sealed class SubscriptionTokenService(
             {
                 try
                 {
-                    var apiToken = await Client.ZcodeBusinessLoginAsync(config, refreshToken, ct);
+                    var apiToken = await Client.ZcodeApiCredentialAsync(config, refreshToken, ct);
                     await accounts.UpdateTokensAsync(
                         current.Id,
                         protector.Protect(apiToken),
                         current.RefreshTokenEnc,
-                        JwtExpiresAt(apiToken, _clock.GetUtcNow()) ?? _clock.GetUtcNow().AddHours(1),
+                        JwtExpiresAt(apiToken, _clock.GetUtcNow()) ?? _clock.GetUtcNow().AddSeconds(CredentialLifetimeSeconds(config)),
                         ct);
                     return await accounts.GetAsync(current.Id, ct) ?? current;
                 }
                 catch (OAuthProtocolException e)
                 {
                     // 2007 = OAuth 授权令牌已失效（逆向实测）——授权本身没了，判 revoked。
-                    await accounts.SetStatusAsync(current.Id,
-                        e.Error == "zcode_2007" ? AccountStatus.Revoked : AccountStatus.Expired, ct);
+                    // BigModel 的 biz API 对失效的 OAuth token 回 401/403，同样判 revoked。
+                    var dead = e.Error == "zcode_2007" || (config.BizHost.Length > 0 && e.Error is "http_401" or "http_403");
+                    await accounts.SetStatusAsync(current.Id, dead ? AccountStatus.Revoked : AccountStatus.Expired, ct);
                     throw new SubscriptionAuthException(current.Id, $"业务令牌刷新失败（{e.Error}），请重新登录");
                 }
             }

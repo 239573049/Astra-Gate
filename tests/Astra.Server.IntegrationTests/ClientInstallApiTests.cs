@@ -98,6 +98,10 @@ public class ClientInstallApiTests
         Assert.Null(codex["latestVersion"]);
         Assert.Equal("manual", Client(list, "claude-desktop")["install"]!["method"]!.GetValue<string>());
         Assert.Equal("vscode-extension", Client(list, "vscode-copilot")["install"]!["method"]!.GetValue<string>());
+        var hermes = Client(list, "hermes-agent")["install"]!;
+        Assert.Equal("script", hermes["method"]!.GetValue<string>());
+        Assert.Equal("curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash -s -- --non-interactive",
+            hermes["installCommand"]!.GetValue<string>());
     }
 
     [Fact]

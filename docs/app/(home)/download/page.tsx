@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { PackageOpen } from 'lucide-react';
 
 import { DownloadPanel } from '@/components/download/download-panel';
+import { Markdown } from '@/components/download/markdown';
 import { DEFAULT_CHANNEL, latestVersion, readIndex } from '@/lib/releases';
 
 export const dynamic = 'force-dynamic';
@@ -43,7 +44,9 @@ export default async function DownloadPage() {
         {latest?.notes && (
           <div className="mt-8 rounded-xl border border-fd-border p-5">
             <h2 className="text-sm font-medium">版本说明</h2>
-            <pre className="mt-2 whitespace-pre-wrap font-sans text-sm text-fd-muted-foreground">{latest.notes}</pre>
+            <div className="prose mt-2">
+              <Markdown text={latest.notes} />
+            </div>
           </div>
         )}
 

@@ -185,6 +185,27 @@ public class SubscriptionCatalogTests
         Assert.Equal("https://api.z.ai/api/auth/z/login", zcode.BusinessLoginUrl);
         Assert.Equal("ZCode/3.10.2", zcode.ExtraHeaders["User-Agent"]);
         Assert.False(zcode.UsePkce);
+
+        // 智谱 BigModel：同一条 CLI 链路（provider 取 bigmodel，服务端收回调），最后一步供应真 API Key
+        // 而不是换业务 JWT（coding 端点不认 OAuth token，直接用回 1234）。
+        var bigmodel = SubscriptionCatalog.Find("bigmodel-subscription")!;
+        Assert.Equal("zcli", bigmodel.Style);
+        Assert.Equal(zcode.CliInitUrl, bigmodel.CliInitUrl);
+        Assert.Equal(zcode.CliPollUrl, bigmodel.CliPollUrl);
+        Assert.Equal("zcode", bigmodel.ClientId); // 桌面端 appId
+        Assert.Equal("https://bigmodel.cn", bigmodel.BizHost);
+        Assert.Equal("zcode-api-key", bigmodel.ApiKeyName);
+        Assert.Equal("", bigmodel.BusinessLoginUrl); // 不走 z/login（真 token 也被拒：z.ai用户信息异常）
+        Assert.True(SubscriptionCatalog.IsReady(bigmodel));
+
+        // 实例级覆盖也认 biz_host / api_key_name
+        var overridden = SubscriptionCatalog.Effective(bigmodel,
+            new System.Text.Json.Nodes.JsonObject
+            {
+                ["subscription_oauth"] = new System.Text.Json.Nodes.JsonObject { ["biz_host"] = "https://biz.example", ["api_key_name"] = "mine" },
+            });
+        Assert.Equal("https://biz.example", overridden.BizHost);
+        Assert.Equal("mine", overridden.ApiKeyName);
     }
 
     /// <summary>
@@ -308,6 +329,7 @@ public class ProviderTemplateCatalogTests
 
         var grok = _catalog.Get("grok-subscription")!;
         Assert.Equal("xai-grok-cli", grok.DefaultHeaders["x-grok-client-identifier"]);
+        Assert.Equal("1.0.13", grok.DefaultHeaders["x-grok-client-version"]);
         Assert.Equal("https://cli-chat-proxy.grok.com/v1", Assert.Single(grok.Endpoints).BaseUrl);
         Assert.False(grok.Endpoints[0].FullUrl);
         Assert.Equal("/models", grok.ModelListEndpoint?.Path);

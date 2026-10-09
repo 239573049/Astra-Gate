@@ -3,7 +3,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import { keys, useSetBinding } from '../api/hooks';
 import type { ClientInfo } from '../api/types';
-import { TrayPanelView } from '../components/tray/TrayPanelView';
+import { TrayPanelView, type TrayTab } from '../components/tray/TrayPanelView';
 import { useTrayPrefs, useTrayState } from '../components/tray/useTrayBridge';
 import { useTrayData } from '../components/tray/useTrayData';
 import { errorText, useFeedback } from '../components/ui/overlays';
@@ -28,6 +28,7 @@ export function TrayPanelPage() {
   const [prefs] = useTrayPrefs();
   const state = useTrayState();
   const [visible, setVisible] = useState(false);
+  const [tab, setTab] = useState<TrayTab>('overview');
   const data = useTrayData(prefs, { enabled: state.running, background: true, live: visible });
   const setBinding = useSetBinding();
   const cardRef = useRef<HTMLDivElement>(null);
@@ -52,7 +53,11 @@ export function TrayPanelPage() {
     () =>
       bridge?.tray.onVisibilityChanged((v) => {
         setVisible(v);
-        if (v) refresh();
+        // Every opening starts on the overview.
+        if (v) {
+          setTab('overview');
+          refresh();
+        }
       }),
     [bridge, refresh],
   );
@@ -79,11 +84,11 @@ export function TrayPanelPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, [bridge]);
 
-  // Window height follows the content: header + body content (not its scroll box) + footer + border.
+  // Window height follows the content: header + tabs + body content (not its scroll box) + footer + border.
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!card || !bridge) return;
-    const parts = ['header', 'body', 'footer'].map((p) => card.querySelector<HTMLElement>(`[data-tray-part="${p}"]`));
+    const parts = ['header', 'tabs', 'body', 'footer'].map((p) => card.querySelector<HTMLElement>(`[data-tray-part="${p}"]`));
     const report = () => {
       const border = card.offsetHeight - card.clientHeight;
       const height = parts.reduce((sum, el) => sum + (el?.offsetHeight ?? 0), 0) + border;
@@ -148,6 +153,8 @@ export function TrayPanelPage() {
         prefs={prefs}
         state={state}
         data={data}
+        tab={tab}
+        onTabChange={setTab}
         onCommand={command}
         onRefresh={refresh}
         onCopyAddress={() => void copyAddress()}

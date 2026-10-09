@@ -55,6 +55,18 @@ public sealed class SubscriptionOAuthConfig
     /// </summary>
     public string BusinessLoginUrl { get; init; } = "";
 
+    /// <summary>
+    /// ZCode 形态第四跳的另一种实现（智谱 BigModel 渠道）：biz API 主机（如 <c>https://bigmodel.cn</c>）。
+    /// 非空 = 不走 <see cref="BusinessLoginUrl"/> 的业务 JWT，而是把 OAuth token 供应成一把真 API Key
+    /// （<c>id.secret</c>）：查机构/项目 → 找或建名为 <see cref="ApiKeyName"/> 的 key → copy 出 secretKey。
+    /// coding 端点认的是这把 key，不认 OAuth token（直接用会回 1234）。key 不过期，刷新 = 幂等地重跑一遍。
+    /// 来源：NextCoWork `issuers/zcode.ts` provisionBizApiKey（逆向 ZCode.app v3.11.2 的 resolveCodingPlanApiKey）。
+    /// </summary>
+    public string BizHost { get; init; } = "";
+
+    /// <summary>供应出来的 API Key 的名字（ZCode CLI 用死值 <c>zcode-api-key</c>）。</summary>
+    public string ApiKeyName { get; init; } = "";
+
     /// <summary>ZAI CLI 链路：发起授权（server-mediated，无回调）。</summary>
     public string CliInitUrl { get; init; } = "";
 
@@ -242,6 +254,33 @@ public static class SubscriptionCatalog
             },
             Verified = true,
         },
+        new SubscriptionOAuthConfig
+        {
+            ProviderKey = "bigmodel-subscription",
+            DisplayName = "智谱 GLM 订阅（Coding Plan · BigModel）",
+            // 与 Z.AI 渠道同一条 CLI 链路（cli/init 的 provider 取 "bigmodel"，服务端签发的授权链接
+            // 是 bigmodel.cn/login?appId=zcode&redirect=…/cli/callback/bigmodel&state=…，授权后由服务端
+            // 收 authCode，客户端只轮询）。差别只在最后一步：BigModel 的 coding 端点要的是真 API Key，
+            // 所以不是换业务 JWT，而是三步供应（BizHost / ApiKeyName，见 OAuthClient.ProvisionBizApiKeyAsync）。
+            // 来源：NextCoWork issuers/zcode-bigmodel.ts（2026-09-15 逆向 ZCode.app v3.11.2）。
+            // TokenUrl / AuthorizeUrl 在这条链路里不参与（保留给 IsReady 与回退用）。
+            Style = "zcli",
+            AuthorizeUrl = "https://bigmodel.cn/login",
+            TokenUrl = "https://zcode.z.ai/api/v1/oauth/token",
+            CliInitUrl = "https://zcode.z.ai/api/v1/oauth/cli/init",
+            CliPollUrl = "https://zcode.z.ai/api/v1/oauth/cli/poll",
+            ClientId = "zcode", // ZCode 桌面端的 appId（不是 Z.AI 那种 client_… 形状）
+            Scopes = [],
+            UsePkce = false,
+            BizHost = "https://bigmodel.cn",
+            ApiKeyName = "zcode-api-key",
+            ExtraHeaders = new Dictionary<string, string>
+            {
+                ["User-Agent"] = "ZCode/3.10.2",
+                ["http-referer"] = "https://zcode.z.ai",
+            },
+            Verified = true,
+        },
     ];
 
     public static SubscriptionOAuthConfig? Find(string providerKey) =>
@@ -397,6 +436,8 @@ public static class SubscriptionCatalog
             Verified = Bool("verified") ?? baseConfig.Verified,
             Style = Str("style") ?? baseConfig.Style,
             BusinessLoginUrl = Str("business_login_url") ?? baseConfig.BusinessLoginUrl,
+            BizHost = Str("biz_host") ?? baseConfig.BizHost,
+            ApiKeyName = Str("api_key_name") ?? baseConfig.ApiKeyName,
             CliInitUrl = Str("cli_init_url") ?? baseConfig.CliInitUrl,
             CliPollUrl = Str("cli_poll_url") ?? baseConfig.CliPollUrl,
             RedirectUriOverride = Str("redirect_uri") ?? baseConfig.RedirectUriOverride,
@@ -498,10 +539,10 @@ public sealed record DeviceAuthGrant(string AuthorizationCode, string CodeChalle
 /// </summary>
 public sealed record ZcodeCliStart(string FlowId, string AuthorizeUrl, string PollToken);
 
-public enum ZcodeCliPollKind { Done, Expired, Error }
+public enum ZcodeCliPollKind { Pending, Done, Expired, Error }
 
-/// <summary>ZAI CLI 轮询结果：授权完成给出 access_token，否则是过期/失败。</summary>
-public sealed record ZcodeCliPoll(ZcodeCliPollKind Kind, string? AccessToken, string? Error, string? Description);
+/// <summary>ZAI CLI 轮询结果：授权完成给出 access_token（及响应里自带的 user.email），否则是过期/失败。</summary>
+public sealed record ZcodeCliPoll(ZcodeCliPollKind Kind, string? AccessToken, string? Error, string? Description, string? Email = null);
 
 /// <summary>
 /// Copilot 短时令牌（GitHub token 换来的第二跳）：<c>token</c> 是实际发请求用的，

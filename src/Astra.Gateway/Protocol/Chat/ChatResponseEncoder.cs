@@ -166,14 +166,20 @@ public sealed class ChatResponseEncoder : IResponseEncoder
     };
 
     /// <summary>OpenAI usage lines synthesized from the normalized usage (plan §4.2): totals include the details.</summary>
-    private static JsonObject UsageJson(NormalizedUsage usage) => new()
+    private static JsonObject UsageJson(NormalizedUsage usage)
     {
-        ["prompt_tokens"] = usage.TotalInput,
-        ["completion_tokens"] = usage.TotalOutput,
-        ["total_tokens"] = usage.TotalInput + usage.TotalOutput,
-        ["prompt_tokens_details"] = new JsonObject { ["cached_tokens"] = usage.Get(TokenTypes.CacheRead) },
-        ["completion_tokens_details"] = new JsonObject { ["reasoning_tokens"] = usage.Get(TokenTypes.Reasoning) },
-    };
+        var promptDetails = new JsonObject { ["cached_tokens"] = usage.Get(TokenTypes.CacheRead) };
+        var cacheWrite = usage.Get(TokenTypes.CacheWrite5m) + usage.Get(TokenTypes.CacheWrite1h);
+        if (cacheWrite > 0) promptDetails["cache_write_tokens"] = cacheWrite;
+        return new JsonObject
+        {
+            ["prompt_tokens"] = usage.TotalInput,
+            ["completion_tokens"] = usage.TotalOutput,
+            ["total_tokens"] = usage.TotalInput + usage.TotalOutput,
+            ["prompt_tokens_details"] = promptDetails,
+            ["completion_tokens_details"] = new JsonObject { ["reasoning_tokens"] = usage.Get(TokenTypes.Reasoning) },
+        };
+    }
 
     private SseEvent Frame(JsonObject chunk) => new(null, chunk.ToJsonString(GatewayJson.Options));
 

@@ -321,6 +321,119 @@ public class GatewayPipelineTests
     }
 
     [Fact]
+    public async Task A_Client_Bound_To_Several_Providers_Routes_Each_Model_To_The_First_Provider_Serving_It()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        var protector = gw.Host.App.Services.GetRequiredService<ISecretProtector>();
+        var second = new Provider
+        {
+            Id = Ulid.NewUlid(),
+            Name = "Second upstream",
+            AuthScheme = AuthSchemes.Bearer,
+            ApiKeyEnc = protector.Protect("sk-second-secret"),
+            Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://second.test/v1" }],
+            PreferredUpstreamProtocols = [ApiProtocol.OpenAIChat],
+        };
+        await gw.Host.Db.Providers.InsertAsync(second);
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "shared" });
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = second.Id, ModelId = "shared" });
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = second.Id, ModelId = "only-second" });
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = second.Id, ModelId = "off-second", Enabled = false });
+        await gw.Host.Db.Clients.ReplaceBindingsAsync(ClientKinds.OpenCode,
+            [new ClientBinding { ProviderId = gw.Provider.Id }, new ClientBinding { ProviderId = second.Id }]);
+
+        // Exact model match in binding order; disabled or unknown models stay on the primary. Names are never rewritten.
+        foreach (var (model, host) in new[] { ("only-second", "second.test"), ("shared", "upstream.test"), ("off-second", "upstream.test"), ("unknown", "upstream.test") })
+        {
+            var body = new JsonObject { ["model"] = model, ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "hi" }) };
+            var response = await gw.PostAsync("/v1/chat/completions", body.ToJsonString());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var seen = gw.Upstream.Requests[^1];
+            Assert.Equal(host, seen.Url.Host);
+            Assert.Equal(model, seen.Json["model"]!.GetValue<string>());
+            Assert.Equal(host == "second.test" ? "Bearer sk-second-secret" : "Bearer sk-upstream-secret", seen.Headers["authorization"]);
+            Assert.Equal(host == "second.test" ? second.Id : gw.Provider.Id, (await gw.RecordOfAsync(response)).ProviderId);
+        }
+
+        // The model list is the union in binding order, each id once (owned by the provider that serves it).
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/models");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {gw.Key}");
+        var list = JsonNode.Parse(await (await gw.Host.Client.SendAsync(request)).Content.ReadAsStringAsync())!["data"]!.AsArray();
+        Assert.Equal(["shared", "only-second"], list.Select(m => m!["id"]!.GetValue<string>()));
+        Assert.Equal(["Fake upstream", "Second upstream"], list.Select(m => m!["owned_by"]!.GetValue<string>()));
+
+        // A disabled provider is skipped: the next bound provider takes over its models.
+        gw.Provider.Enabled = false;
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        var fallback = await gw.PostAsync("/v1/chat/completions", """{"model":"shared","messages":[{"role":"user","content":"hi"}]}""");
+        Assert.Equal(HttpStatusCode.OK, fallback.StatusCode);
+        Assert.Equal("second.test", gw.Upstream.Requests[^1].Url.Host);
+    }
+
+    [Fact]
+    public async Task A_Provider_Model_Mapping_Is_Matched_And_Rewrites_The_Upstream_Model()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        var protector = gw.Host.App.Services.GetRequiredService<ISecretProtector>();
+        var second = new Provider
+        {
+            Id = Ulid.NewUlid(),
+            Name = "Second upstream",
+            AuthScheme = AuthSchemes.Bearer,
+            ApiKeyEnc = protector.Protect("sk-second-secret"),
+            Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://second.test/v1" }],
+            PreferredUpstreamProtocols = [ApiProtocol.OpenAIChat],
+        };
+        await gw.Host.Db.Providers.InsertAsync(second);
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "a-model" });
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = second.Id, ModelId = "deepseek-chat" });
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = second.Id, ModelId = "off", Enabled = false });
+        await gw.Host.Db.Clients.ReplaceBindingsAsync(ClientKinds.OpenCode,
+            [new ClientBinding { ProviderId = gw.Provider.Id }, new ClientBinding { ProviderId = second.Id }]);
+
+        async Task<(FakeUpstream.Seen Seen, RequestRecord Record)> SendAsync(string model)
+        {
+            var body = new JsonObject { ["model"] = model, ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "hi" }) };
+            var response = await gw.PostAsync("/v1/chat/completions", body.ToJsonString());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            return (gw.Upstream.Requests[^1], await gw.RecordOfAsync(response));
+        }
+
+        // Without a mapping the second provider does not serve deepseek-v4.1: the primary gets it as is.
+        var (seen, _) = await SendAsync("deepseek-v4.1");
+        Assert.Equal("upstream.test", seen.Url.Host);
+        Assert.Equal("deepseek-v4.1", seen.Json["model"]!.GetValue<string>());
+
+        second.Settings[Provider.ModelMapKey] = new JsonObject { ["deepseek-v4.1"] = "deepseek-chat", ["mapped-off"] = "off" };
+        await gw.Host.Db.Providers.UpdateAsync(second);
+        var primary = (await gw.Host.Db.Providers.GetAsync(gw.Provider.Id))!;
+        primary.Settings[Provider.ModelMapKey] = new JsonObject { ["alias-a"] = "a-model" };
+        await gw.Host.Db.Providers.UpdateAsync(primary);
+
+        // The mapping makes the second provider match, and its model is what goes upstream (and is billed).
+        (seen, var record) = await SendAsync("deepseek-v4.1");
+        Assert.Equal("second.test", seen.Url.Host);
+        Assert.Equal("deepseek-chat", seen.Json["model"]!.GetValue<string>());
+        Assert.Equal("deepseek-v4.1", record.RequestedModel);
+        Assert.Equal("deepseek-chat", record.UpstreamModel);
+        Assert.Equal(second.Id, record.ProviderId);
+
+        // A mapping onto a disabled model does not match; the primary's own mapping applies to what it receives.
+        (seen, _) = await SendAsync("mapped-off");
+        Assert.Equal("upstream.test", seen.Url.Host);
+        (seen, _) = await SendAsync("alias-a");
+        Assert.Equal("upstream.test", seen.Url.Host);
+        Assert.Equal("a-model", seen.Json["model"]!.GetValue<string>());
+
+        // Mapped ids are listed for the provider that serves them; a mapping onto a disabled model is not.
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/models");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {gw.Key}");
+        var list = JsonNode.Parse(await (await gw.Host.Client.SendAsync(request)).Content.ReadAsStringAsync())!["data"]!.AsArray();
+        Assert.Equal(["a-model", "alias-a", "deepseek-chat", "deepseek-v4.1"], list.Select(m => m!["id"]!.GetValue<string>()));
+        Assert.Equal("Second upstream", list.Single(m => m!["id"]!.GetValue<string>() == "deepseek-v4.1")!["owned_by"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Previous_Response_Id_Cannot_Cross_To_A_Non_Responses_Upstream()
     {
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.Codex, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));

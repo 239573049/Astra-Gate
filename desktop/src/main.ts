@@ -22,7 +22,7 @@ import { fetchClients, fetchProviders, fetchVersion, putBinding } from './api';
 import { ServiceManager, StartupError, type RunningService } from './service';
 import { TrayController, type TrayCallbacks, type TrayState } from './tray';
 import { TrayPanel } from './trayPanel';
-import { UpdateController } from './update';
+import { UpdateController, type UiApplyOutcome } from './update';
 import {
   NAV_ORDER,
   isThemeSource,
@@ -656,6 +656,15 @@ function registerIpc(): void {
       const logPath = err instanceof StartupError ? err.logPath : null;
       return { ok: false, error: logPath ? `${message} (${logPath})` : message };
     }
+  });
+  // In-app update entry (Settings › About): check and apply via the shared update engine.
+  ipcMain.handle('astra:update-check', async () => {
+    return updater!.check();
+  });
+  ipcMain.handle('astra:update-apply', async (): Promise<UiApplyOutcome> => {
+    const outcome = await updater!.applyFromUi();
+    void refreshTray();
+    return outcome;
   });
   ipcMain.handle('astra:get-accent', (): string | null => currentAccentColor());
   ipcMain.handle('astra:set-theme', (_event, source: unknown): boolean => {

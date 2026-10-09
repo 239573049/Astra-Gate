@@ -332,7 +332,9 @@ public sealed class RequestRepository
             }
             if (record.TokenId is not null)
             {
-                var timed = record.Status == RequestStatus.Success && record.GenerationMs > 0;
+                // TPS only counts requests carrying both a measured generation window and output tokens: a timed
+                // request without usage would add time without tokens and drag the weighted speed down.
+                var timed = record.Status == RequestStatus.Success && record.GenerationMs > 0 && record.TotalOutputTokens > 0;
                 await conn.ExecuteAsync(AddTokenTotalsSql, new
                 {
                     token_id = record.TokenId,

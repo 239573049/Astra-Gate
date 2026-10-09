@@ -150,6 +150,14 @@ export function tightestQuota(plans: QuotaPlan[]): { plan: QuotaPlan; row: Quota
   return best;
 }
 
+/** The `limit` windows closest to running out, tightest first; rows without a share are skipped. */
+export function tightestRows(plans: QuotaPlan[], limit: number): { plan: QuotaPlan; row: QuotaRow & { remaining: number } }[] {
+  const all: { plan: QuotaPlan; row: QuotaRow & { remaining: number } }[] = [];
+  for (const plan of plans)
+    for (const row of plan.rows) if (row.remaining !== null) all.push({ plan, row: { ...row, remaining: row.remaining } });
+  return all.sort((a, b) => a.row.remaining - b.row.remaining).slice(0, limit);
+}
+
 /** Remaining below this share counts as running low (orange), below the next as critical (red). */
 export const QUOTA_LOW = 30;
 export const QUOTA_CRITICAL = 10;

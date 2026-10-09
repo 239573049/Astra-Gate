@@ -734,7 +734,7 @@
   },
   {
     "id": "grok-subscription",
-    "version": 3,
+    "version": 4,
     "name": "Grok 订阅",
     "category": "subscription",
     "icon": "grok",
@@ -763,7 +763,7 @@
     "adapter": "openai",
     "defaultHeaders": {
       "x-grok-client-identifier": "xai-grok-cli",
-      "x-grok-client-version": "0.2.93"
+      "x-grok-client-version": "1.0.13"
     },
     "modelListEndpoint": {
       "protocol": "openai-responses",
@@ -850,6 +850,38 @@
       "glm-4.7-flash"
     ],
     "priceKey": "zai",
+    "adapter": "glm",
+    "defaultHeaders": {
+      "User-Agent": "ZCode/3.10.2",
+      "http-referer": "https://zcode.z.ai"
+    }
+  },
+  {
+    "id": "bigmodel-subscription",
+    "version": 1,
+    "name": "智谱 GLM 订阅（Coding Plan · BigModel）",
+    "category": "subscription",
+    "icon": "glm",
+    "website": "https://bigmodel.cn",
+    "docsUrl": "https://docs.bigmodel.cn/cn/coding-plan/overview",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat"
+    ],
+    "auth": {
+      "scheme": "oauth-subscription"
+    },
+    "requiresApiKey": false,
+    "models": [
+      "glm-5.3",
+      "glm-5.3-flash"
+    ],
+    "priceKey": "zhipuai",
     "adapter": "glm",
     "defaultHeaders": {
       "User-Agent": "ZCode/3.10.2",

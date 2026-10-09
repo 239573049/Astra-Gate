@@ -407,6 +407,21 @@ public class OAuthClientTests
         var failed = await new OAuthClient(new StubFactory(failedHandler))
             .PollZcodeCliAsync(config, "flow-1", "t");
         Assert.Equal(ZcodeCliPollKind.Error, failed.Kind);
+
+        // 真实上游形态：data.status = pending / ready（凭证在渠道键下）/ failed
+        var pending = await new OAuthClient(new StubFactory(new StubHandler(_ => """{"code":0,"data":{"status":"pending"}}""")))
+            .PollZcodeCliAsync(config, "flow-1", "t");
+        Assert.Equal(ZcodeCliPollKind.Pending, pending.Kind);
+
+        var ready = await new OAuthClient(new StubFactory(new StubHandler(_ =>
+                """{"code":0,"data":{"status":"ready","token":"x","user":{"user_id":"u1"},"zai":{"access_token":"oauth-2"}}}""")))
+            .PollZcodeCliAsync(config, "flow-1", "t");
+        Assert.Equal(ZcodeCliPollKind.Done, ready.Kind);
+        Assert.Equal("oauth-2", ready.AccessToken);
+
+        var denied = await new OAuthClient(new StubFactory(new StubHandler(_ => """{"code":0,"data":{"status":"failed"}}""")))
+            .PollZcodeCliAsync(config, "flow-1", "t");
+        Assert.Equal(ZcodeCliPollKind.Error, denied.Kind);
         Assert.Equal("zcode_3005", failed.Error);
     }
 
@@ -469,5 +484,104 @@ public class OAuthClientTests
             () => client.ExchangeZcodeCodeAsync(config, "zai", "expired-code", "http://127.0.0.1:1/cb", "s"));
         Assert.Equal("zcode_2007", error.Error);
         Assert.Contains("http error", error.Message);
+    }
+
+    private static SubscriptionOAuthConfig BigModelConfig => SubscriptionCatalog.Find("bigmodel-subscription")!;
+
+    private const string CustomerInfo = """
+        {"code":200,"data":{"organizations":[
+          {"organizationName":"其它","organizationId":"org-0","projects":[{"projectName":"p","projectId":"proj-0"}]},
+          {"organizationName":"我的默认机构","organizationId":"org-1","projects":[
+            {"projectName":"别的","projectId":"proj-a"},{"projectName":"默认项目","projectId":"proj-1"}]}]}}
+        """;
+
+    [Fact]
+    public async Task BigModel_Provisions_An_Api_Key_Creating_It_When_Missing()
+    {
+        var handler = new StubHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/biz/customer/getCustomerInfo" => CustomerInfo,
+            "/api/biz/v1/organization/org-1/projects/proj-1/api_keys" when request.Method == HttpMethod.Get =>
+                """{"code":200,"data":[{"name":"other","apiKey":"nope"}]}""",
+            "/api/biz/v1/organization/org-1/projects/proj-1/api_keys" =>
+                """{"code":200,"data":{"name":"zcode-api-key","apiKey":"key-1"}}""",
+            "/api/biz/v1/organization/org-1/projects/proj-1/api_keys/copy/key-1" =>
+                """{"code":200,"data":{"secretKey":"sec-1"}}""",
+            _ => """{"code":404,"msg":"unexpected"}""",
+        });
+        var client = new OAuthClient(new StubFactory(handler));
+
+        var credential = await client.ZcodeApiCredentialAsync(BigModelConfig, "oauth-token");
+
+        Assert.Equal("key-1.sec-1", credential); // 最终凭据 = apiKey.secretKey
+        Assert.Equal(4, handler.Requests.Count);
+        // 挑的是名字含「默认机构」/「默认项目」的那条，而不是第 0 条
+        Assert.Contains("/organization/org-1/projects/proj-1/api_keys", handler.Requests[1].Url);
+        // 创建 key 的 body 只有 name；鉴权头是裸 OAuth token（无 Bearer）
+        Assert.Equal("""{"name":"zcode-api-key"}""", handler.Requests[2].Body);
+        foreach (var request in handler.Requests)
+            Assert.Equal("oauth-token", request.Headers["Authorization"]);
+    }
+
+    [Fact]
+    public async Task BigModel_Reuses_The_Existing_Key_And_Tolerates_A_Failed_Copy()
+    {
+        var handler = new StubHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/biz/customer/getCustomerInfo" => CustomerInfo,
+            "/api/biz/v1/organization/org-1/projects/proj-1/api_keys" =>
+                """{"code":200,"data":[{"name":"zcode-api-key","apiKey":"key-9"}]}""",
+            _ => """{"code":500,"msg":"copy failed"}""",
+        });
+        var client = new OAuthClient(new StubFactory(handler));
+
+        var credential = await client.ZcodeApiCredentialAsync(BigModelConfig, "oauth-token");
+
+        Assert.Equal("key-9", credential); // 已存在就不再创建；copy 失败退回只有 id 的 key
+        Assert.DoesNotContain(handler.Requests, r => r.Body.Contains("zcode-api-key"));
+    }
+
+    [Fact]
+    public async Task BigModel_Provisioning_Reports_A_Dead_Oauth_Token_And_A_Missing_Project()
+    {
+        var unauthorized = new StubHandler(_ => """{"code":1001,"msg":"token invalid"}""", HttpStatusCode.Unauthorized);
+        var dead = await Assert.ThrowsAsync<OAuthProtocolException>(() =>
+            new OAuthClient(new StubFactory(unauthorized)).ZcodeApiCredentialAsync(BigModelConfig, "t"));
+        Assert.Equal("http_401", dead.Error);
+
+        var empty = new StubHandler(_ => """{"code":200,"data":{"organizations":[]}}""");
+        var none = await Assert.ThrowsAsync<OAuthProtocolException>(() =>
+            new OAuthClient(new StubFactory(empty)).ZcodeApiCredentialAsync(BigModelConfig, "t"));
+        Assert.Equal("biz_no_project", none.Error);
+
+        var envelope = new StubHandler(_ => """{"code":1234,"msg":"nope"}""");
+        var rejected = await Assert.ThrowsAsync<OAuthProtocolException>(() =>
+            new OAuthClient(new StubFactory(envelope)).ZcodeApiCredentialAsync(BigModelConfig, "t"));
+        Assert.Equal("biz_1234", rejected.Error);
+    }
+
+    [Fact]
+    public async Task Zcli_Poll_Reads_The_BigModel_Credentials_And_Email_And_Treats_Network_Errors_As_Pending()
+    {
+        var ready = new StubHandler(_ =>
+            """{"code":0,"data":{"status":"ready","user":{"user_id":"u1","email":"a@b.c"},"bigmodel":{"access_token":"oauth-bm","refresh_token":"r"}}}""");
+        var done = await new OAuthClient(new StubFactory(ready)).PollZcodeCliAsync(BigModelConfig, "flow-1", "t");
+        Assert.Equal(ZcodeCliPollKind.Done, done.Kind);
+        Assert.Equal("oauth-bm", done.AccessToken);
+        Assert.Equal("a@b.c", done.Email);
+
+        var broken = new OAuthClient(new ThrowingFactory());
+        Assert.Equal(ZcodeCliPollKind.Pending, (await broken.PollZcodeCliAsync(BigModelConfig, "flow-1", "t")).Kind);
+    }
+
+    private sealed class ThrowingFactory : IHttpClientFactory
+    {
+        private sealed class Throwing : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+                throw new HttpRequestException("connection reset");
+        }
+
+        public HttpClient CreateClient(string name) => new(new Throwing(), disposeHandler: true);
     }
 }

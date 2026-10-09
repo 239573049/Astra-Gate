@@ -547,6 +547,82 @@ public class ClientApiTests
         return path;
     }
 
+    [Fact]
+    public async Task Several_Providers_Fill_The_Model_List_In_Drag_Order()
+    {
+        await using var host = await TestHost.StartAsync();
+        var first = await AddProvider(host, "First");
+        var second = await AddProvider(host, "Second");
+        var third = await AddProvider(host, "Third");
+        await host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = second.Id, ModelId = "glm-4.6" });
+        var config = Path.Combine(host.ClientHome, ".config", "opencode", "opencode.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+        await File.WriteAllTextAsync(config, "{}\n");
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/opencode/enable", new { providerId = first.Id });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        // The full list replaces the bindings in order and rewrites the model list with every provider's models.
+        (status, var info) = await host.SendAsync(HttpMethod.Put, "/api/clients/opencode/bindings",
+            new { bindings = new[] { new { providerId = second.Id }, new { providerId = first.Id } } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(second.Id, info!["providerId"]!.GetValue<string>());
+        Assert.Equal([second.Id, first.Id], info["bindings"]!.AsArray().Select(b => b!["providerId"]!.GetValue<string>()));
+        Assert.Equal(["glm-4.6", "gpt-5"], OpenCodeModels(config));
+        Assert.Equal(["gpt-5", "glm-4.6"], (await host.GetJsonAsync("/api/clients/opencode/models")).AsArray().Select(m => m!.GetValue<string>()));
+
+        // Duplicates, an empty list and a disabled provider that is not bound yet are rejected.
+        (status, _) = await host.SendAsync(HttpMethod.Put, "/api/clients/opencode/bindings",
+            new { bindings = new[] { new { providerId = first.Id }, new { providerId = first.Id } } });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        (status, _) = await host.SendAsync(HttpMethod.Put, "/api/clients/opencode/bindings", new { bindings = Array.Empty<object>() });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        third.Enabled = false;
+        await host.Db.Providers.UpdateAsync(third);
+        (status, _) = await host.SendAsync(HttpMethod.Put, "/api/clients/opencode/bindings",
+            new { bindings = new[] { new { providerId = second.Id }, new { providerId = third.Id } } });
+        Assert.Equal(HttpStatusCode.Conflict, status);
+
+        // Choosing a primary replaces only slot 0; the other bindings keep their order.
+        (status, info) = await host.SendAsync(HttpMethod.Put, "/api/clients/opencode/binding", new { providerId = first.Id });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal([first.Id], info!["bindings"]!.AsArray().Select(b => b!["providerId"]!.GetValue<string>()));
+        Assert.Equal(["gpt-5"], OpenCodeModels(config));
+    }
+
+    [Fact]
+    public async Task Model_Mapping_Is_Validated_Kept_By_Settings_Writes_And_Listed_For_Clients()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        var config = Path.Combine(host.ClientHome, ".config", "opencode", "opencode.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+        await File.WriteAllTextAsync(config, "{}\n");
+        await host.SendAsync(HttpMethod.Post, "/api/clients/opencode/enable", new { providerId = provider.Id });
+
+        var (status, _) = await host.SendAsync(HttpMethod.Put, $"/api/providers/{provider.Id}/model-map", new { map = new Dictionary<string, string> { ["x"] = "not-a-model" } });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        (status, _) = await host.SendAsync(HttpMethod.Put, $"/api/providers/{provider.Id}/model-map", new { map = new Dictionary<string, string> { ["gpt-5"] = "gpt-5" } });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+
+        (status, var dto) = await host.SendAsync(HttpMethod.Put, $"/api/providers/{provider.Id}/model-map",
+            new { map = new Dictionary<string, string> { [" deepseek-v4.1 "] = "gpt-5" } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("gpt-5", dto!["settings"]!["model_map"]!["deepseek-v4.1"]!.GetValue<string>());
+        // The write filter re-synced the bound client's model list: the mapped id is offered too.
+        Assert.Equal(["deepseek-v4.1", "gpt-5"], OpenCodeModels(config));
+        Assert.Equal(["gpt-5", "deepseek-v4.1"], (await host.GetJsonAsync("/api/clients/opencode/models")).AsArray().Select(m => m!.GetValue<string>()));
+
+        // A settings write never replaces the mapping (it has its own validated endpoint).
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{provider.Id}", new { settings = new { } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("gpt-5", (await host.Db.Providers.GetAsync(provider.Id))!.MapModel("deepseek-v4.1"));
+
+        (status, dto) = await host.SendAsync(HttpMethod.Put, $"/api/providers/{provider.Id}/model-map", new { map = new { } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Null(dto!["settings"]!["model_map"]);
+        Assert.Equal(["gpt-5"], OpenCodeModels(config));
+    }
+
     private static async Task<Provider> AddProvider(TestHost host, string name = "Mock provider")
     {
         var provider = new Provider { Id = Ulid.NewUlid(), Name = name, AuthScheme = AuthSchemes.None,

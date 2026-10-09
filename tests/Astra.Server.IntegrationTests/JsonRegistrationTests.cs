@@ -61,6 +61,8 @@ public sealed class JsonRegistrationTests
         // Provider import: preview (above), commit, and the conflict envelope.
         await host.SendAsync(HttpMethod.Post, "/api/providers/import", new[] { new { source = "magpie", @ref = "missing" } });
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = "missing" });
+        await host.SendAsync(HttpMethod.Put, "/api/clients/codex/bindings", new { bindings = new[] { new { providerId = quotaId } } });
+        await host.GetJsonAsync("/api/clients/codex/models");
         await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Guard" });
         await host.SendAsync(HttpMethod.Patch, "/api/settings", new { locale = "en" });
         await host.SendAsync(HttpMethod.Post, "/api/privacy/dry-run", new { text = "hello" });

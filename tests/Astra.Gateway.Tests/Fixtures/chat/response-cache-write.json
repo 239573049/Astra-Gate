@@ -1,0 +1,21 @@
+{
+  "id": "chatcmpl-cache-write",
+  "object": "chat.completion",
+  "created": 1791432300,
+  "model": "gpt-5",
+  "choices": [
+    {
+      "index": 0,
+      "message": { "role": "assistant", "content": "OK" },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 101519,
+    "prompt_tokens_details": { "cache_write_tokens": 9290, "cached_tokens": 92226 },
+    "completion_tokens": 912,
+    "completion_tokens_details": { "reasoning_tokens": 516 },
+    "total_tokens": 102431
+  },
+  "service_tier": "default"
+}

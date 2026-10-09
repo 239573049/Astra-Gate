@@ -1,0 +1,21 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_custom","object":"response","status":"in_progress","model":"gpt-5","output":[]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"id":"ctc_1","type":"custom_tool_call","status":"in_progress","call_id":"call_custom","name":"code","input":""}}
+
+event: response.custom_tool_call_input.delta
+data: {"type":"response.custom_tool_call_input.delta","sequence_number":2,"output_index":0,"item_id":"ctc_1","delta":"print("}
+
+event: response.custom_tool_call_input.delta
+data: {"type":"response.custom_tool_call_input.delta","sequence_number":3,"output_index":0,"item_id":"ctc_1","delta":"'OK')"}
+
+event: response.custom_tool_call_input.done
+data: {"type":"response.custom_tool_call_input.done","sequence_number":4,"output_index":0,"item_id":"ctc_1","input":"print('OK')"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"id":"ctc_1","type":"custom_tool_call","status":"completed","call_id":"call_custom","name":"code","input":"print('OK')"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":6,"response":{"id":"resp_custom","object":"response","status":"completed","model":"gpt-5","output":[{"id":"ctc_1","type":"custom_tool_call","status":"completed","call_id":"call_custom","name":"code","input":"print('OK')"}],"usage":{"input_tokens":101519,"input_tokens_details":{"cache_write_tokens":9290,"cached_tokens":92226},"output_tokens":912,"output_tokens_details":{"reasoning_tokens":516},"total_tokens":102431}}}
+

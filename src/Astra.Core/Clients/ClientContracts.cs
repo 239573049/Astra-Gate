@@ -72,7 +72,11 @@ public sealed class ClientBinding
     public string ClientKind { get; set; } = "";
     public string ProviderId { get; set; } = "";
 
-    /// <summary>0 = primary. Higher values reserved for future failover.</summary>
+    /// <summary>
+    /// 0 = primary. A client may bind several providers: the gateway routes a request to the first one (lowest
+    /// priority) that serves the requested model id — one of its enabled models, or its model mapping onto one
+    /// (<c>Provider.ModelMap</c>) — else to the primary.
+    /// </summary>
     public int Priority { get; set; }
 
     /// <summary>

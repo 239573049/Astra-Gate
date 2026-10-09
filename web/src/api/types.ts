@@ -125,7 +125,9 @@ export interface Provider {
   endpoints: TemplateEndpoint[]; preferredUpstreamProtocols: ApiProtocol[]; authScheme: AuthScheme;
   hasApiKey: boolean; apiKeyMasked?: string | null; // e.g. "sk-…a1b2"
   extraHeaders: Record<string, string>; httpProxy?: string | null;
-  priceMultiplier: number; priceKey?: string | null; adapterId?: string | null; settings: Record<string, unknown>;
+  priceMultiplier: number; priceKey?: string | null; adapterId?: string | null;
+  /** settings.model_map (requested model id → provider model id) is written only through PUT /api/providers/{id}/model-map. */
+  settings: Record<string, unknown>;
   enabled: boolean; sortOrder: number; notes?: string | null; website?: string | null;
   modelCount: number; boundClients: string[]; createdAt: string; updatedAt: string;
   /** Balance / quota query settings (settings.quota is managed only through the quota endpoints). */
@@ -275,12 +277,20 @@ export type ClientKind =
   | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot"
   | "crush" | "qwen-code" | "droid" | "kimi-code" | "zed"
   | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy";
+/** One provider bound to a client; the list order is the routing order (first = primary). */
+export interface ClientBinding { providerId: string; accountId?: string | null }
 export interface ClientInfo {
   kind: ClientKind; name: string; protocol: ApiProtocol;
   availability: "available" | "coming_soon"; availabilityReason?: string | null; mode: "switch" | "coexist";
   detection: { installed: boolean; configExists: boolean; version?: string | null; configPaths: string[] };
   status: "disabled" | "enabled" | "drifted"; enabled: boolean;
+  /** providerId / accountId: the primary binding (first of `bindings`). */
   providerId?: string | null; accountId?: string | null; selectedModel?: string | null; extras: Record<string, unknown>;
+  /**
+   * Every bound provider in routing order: a request goes to the first one that serves the requested model id (one of
+   * its enabled models, or its model mapping onto one), else to the first.
+   */
+  bindings?: ClientBinding[] | null;
   appliedAt?: string | null; warnings: string[]; requiresRestart: boolean;
   /** Enabled, not drifted, but Astra would now write different values (e.g. the gateway port changed). */
   configOutdated?: boolean;
@@ -289,17 +299,17 @@ export interface ClientInfo {
   install?: ClientInstall | null;
 }
 /**
- * How the client is installed and kept up to date. latestVersion comes from the npm registry (only after
- * POST /api/clients/check-updates). blocker: why install/update is unavailable — "npm-missing",
- * "vscode-missing" or "external-install" (installed another way, no updater of its own).
+ * How the client is installed and kept up to date. latestVersion comes from the npm registry or the client's own
+ * feed (only after POST /api/clients/check-updates). blocker: why install/update is unavailable — "npm-missing",
+ * "vscode-missing", "script-missing" or "external-install" (installed another way, no updater of its own).
  */
 export interface ClientInstall {
-  method: "npm" | "vscode-extension" | "manual";
+  method: "npm" | "vscode-extension" | "script" | "manual";
   package?: string | null; homepageUrl: string;
   installed: boolean; executable?: string | null; version?: string | null;
   latestVersion?: string | null; latestCheckedAt?: string | null; latestError?: string | null; updateAvailable: boolean;
   installCommand?: string | null; updateCommand?: string | null; updateVia?: "npm" | "self" | null;
-  blocker?: "npm-missing" | "vscode-missing" | "external-install" | "shadowed" | null; busy: boolean;
+  blocker?: "npm-missing" | "vscode-missing" | "script-missing" | "external-install" | "shadowed" | null; busy: boolean;
   /** npm's global directories are not writable for this user (root-owned): the npm command needs admin rights. */
   needsAdmin?: boolean;
   /** Astra can show the system's admin prompt (macOS osascript / Linux pkexec) and run npm elevated. */
@@ -332,13 +342,14 @@ export interface ConfigPreview { changes: ConfigChange[]; diffs: { file: string;
 export interface DisableResult { restored: string[]; drifted: string[]; client: ClientInfo }
 export interface BackupInfo { id: string; createdAt: string; files: string[]; firstWrite: boolean }
 // GET /api/clients -> ClientInfo[]
-// PUT /api/clients/{kind}/binding body {providerId} -> ClientInfo      (takes effect immediately, no config rewrite)
+// PUT /api/clients/{kind}/binding body {providerId} -> ClientInfo      (sets the primary provider; takes effect immediately)
+// PUT /api/clients/{kind}/bindings body {bindings: ClientBinding[]} -> ClientInfo   (full provider list in routing order)
 // POST /api/clients/{kind}/preview-enable body EnableRequest -> ConfigPreview
 // POST /api/clients/{kind}/enable body EnableRequest -> ClientInfo
 // POST /api/clients/{kind}/disable -> DisableResult
 // POST /api/clients/{kind}/force-restore -> DisableResult
 // GET /api/clients/{kind}/backups -> BackupInfo[] ; POST /api/clients/{kind}/backups/{id}/restore -> ClientInfo
-// GET /api/clients/{kind}/models -> string[]   (enabled models of the bound provider, for model pickers)
+// GET /api/clients/{kind}/models -> string[]   (enabled models of every bound provider, each id once, for model pickers)
 
 // ---------- tokens ----------
 /** Usage of one token: `today` from the request log (server-local day), `total` from lifetime counters. */

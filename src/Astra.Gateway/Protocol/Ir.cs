@@ -192,9 +192,17 @@ public sealed record ToolArgsDeltaEvent(int Index, string JsonFragment) : Unifie
 public sealed record BlockStopEvent(int Index) : UnifiedStreamEvent;
 
 /// <summary>
+/// Timing signal for output with no portable IR content, such as a Responses custom tool call.
+/// Encoders ignore it; pass-through still forwards the original payload unchanged.
+/// </summary>
+public sealed record OutputActivityEvent : UnifiedStreamEvent;
+
+/// <summary>
 /// Usage reported by the upstream. <paramref name="Raw"/> is the cumulative usage object in the upstream's own
 /// shape (decoders merge partial reports, e.g. Anthropic message_start + message_delta); <paramref name="Usage"/> is
 /// <c>UsageNormalizer.Normalize(Protocol, Raw)</c>. The last UsageEvent of a response wins.
+/// OpenAI's <c>cache_write_tokens</c> extension has no TTL: decoders map it to 5m with a usage note;
+/// encoders sum 5m and 1h writes into that field, losing the TTL split.
 /// </summary>
 public sealed record UsageEvent(ApiProtocol Protocol, JsonObject Raw, NormalizedUsage Usage) : UnifiedStreamEvent;
 

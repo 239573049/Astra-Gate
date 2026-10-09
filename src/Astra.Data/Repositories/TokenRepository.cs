@@ -121,8 +121,8 @@ public sealed class TokenRepository
                    COALESCE(SUM(cache_read_tokens), 0) AS CacheReadTokens,
                    COALESCE(SUM(cache_write_tokens), 0) AS CacheWriteTokens,
                    COALESCE(SUM(reasoning_tokens), 0) AS ReasoningTokens,
-                   COALESCE(SUM(CASE WHEN status = 'success' AND generation_ms > 0 THEN total_output_tokens ELSE 0 END), 0) AS TpsOutputTokens,
-                   COALESCE(SUM(CASE WHEN status = 'success' AND generation_ms > 0 THEN generation_ms ELSE 0 END), 0) AS TpsGenerationMs
+                   COALESCE(SUM(CASE WHEN status = 'success' AND generation_ms > 0 AND total_output_tokens > 0 THEN total_output_tokens ELSE 0 END), 0) AS TpsOutputTokens,
+                   COALESCE(SUM(CASE WHEN status = 'success' AND generation_ms > 0 AND total_output_tokens > 0 THEN generation_ms ELSE 0 END), 0) AS TpsGenerationMs
             FROM requests
             WHERE token_id IS NOT NULL AND started_at_utc >= @from AND started_at_utc <= @to
             GROUP BY token_id

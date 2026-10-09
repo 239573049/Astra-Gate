@@ -1,0 +1,24 @@
+{
+  "id": "resp_cache_write",
+  "object": "response",
+  "created_at": 1791432300,
+  "status": "completed",
+  "model": "gpt-5",
+  "output": [
+    {
+      "id": "msg_cache_write",
+      "type": "message",
+      "status": "completed",
+      "role": "assistant",
+      "content": [{ "type": "output_text", "text": "OK", "annotations": [] }]
+    }
+  ],
+  "usage": {
+    "input_tokens": 101519,
+    "input_tokens_details": { "cache_write_tokens": 9290, "cached_tokens": 92226 },
+    "output_tokens": 912,
+    "output_tokens_details": { "reasoning_tokens": 516 },
+    "total_tokens": 102431
+  },
+  "service_tier": "default"
+}

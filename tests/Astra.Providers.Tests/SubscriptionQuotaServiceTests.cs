@@ -277,8 +277,16 @@ public class SubscriptionQuotaServiceTests
         Assert.Equal(1000, quota["credits"]!["monthlyLimit"]!.GetValue<double>());
         Assert.Equal(5.5, quota["credits"]!["prepaidBalance"]!.GetValue<double>());
         Assert.Equal("SuperGrok", quota["planLabel"]!.GetValue<string>());
-        var probe = handler.Requests.Single(r => r.Url.Contains("/billing"));
-        Assert.Null(probe.Authorization!.EndsWith("xai-grok-cli", StringComparison.Ordinal) ? probe.Authorization : null);
+        var probes = handler.Requests.Where(r => r.Url.StartsWith("https://cli-chat-proxy.grok.com/", StringComparison.Ordinal)).ToList();
+        Assert.Equal(
+            ["https://cli-chat-proxy.grok.com/v1/billing?format=credits", "https://cli-chat-proxy.grok.com/v1/user?include=subscription"],
+            probes.Select(r => r.Url));
+        Assert.All(probes, probe =>
+        {
+            Assert.Equal("Bearer at-fresh", probe.Authorization);
+            Assert.Equal("xai-grok-cli", probe.Headers["x-grok-client-identifier"]);
+            Assert.Equal("1.0.13", probe.Headers["x-grok-client-version"]);
+        });
     }
 
     [Fact]
@@ -390,6 +398,25 @@ public class SubscriptionQuotaServiceTests
         // TIME_LIMIT（工具月额度）不认；鉴权头是裸值（无 Bearer）——biz/monitor API 只认这个形状
         var probe = handler.Requests.Single(r => r.Url.Contains("/monitor/usage/quota/limit"));
         Assert.Equal("api-key-jwt", probe.Authorization);
+        Assert.Equal("api.z.ai", new Uri(probe.Url).Host);
+    }
+
+    [Fact]
+    public async Task BigModel_Quota_Uses_The_BigModel_Host_With_The_Bare_Api_Key()
+    {
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account("key-id.key-secret"));
+        var handler = new RoutingHandler((request, _) =>
+            Json("""{"success":true,"code":200,"data":{"level":"lite","limits":[{"type":"TOKENS_LIMIT","unit":3,"number":5,"percentage":20,"nextResetTime":1791230400000}]}}"""));
+        var service = Service(store, handler);
+
+        var (_, quota) = await service.FetchAsync(Provider("bigmodel-subscription"), (await store.GetAsync("acc-1"))!,
+            SubscriptionCatalog.Find("bigmodel-subscription")!);
+
+        Assert.Equal(20, quota!["session"]!["usedPercent"]!.GetValue<double>());
+        var probe = handler.Requests.Single(r => r.Url.Contains("/monitor/usage/quota/limit"));
+        Assert.Equal("https://bigmodel.cn/api/monitor/usage/quota/limit", probe.Url);
+        Assert.Equal("key-id.key-secret", probe.Authorization); // 裸 API Key，无 Bearer
     }
 
     [Fact]
@@ -529,6 +556,107 @@ public class SubscriptionQuotaServiceTests
     {
         Assert.True(SubscriptionQuotaService.SupportsResetCredits(Provider("openai-subscription")));
         Assert.False(SubscriptionQuotaService.SupportsResetCredits(Provider("claude-subscription")));
+    }
+
+    /// <summary>
+    /// Kimi Code：GET /coding/v1/usages。数字是字符串，顶层 usage 是周额度，limits[] 里 300 分钟窗口是 5 小时会话。
+    /// </summary>
+    [Fact]
+    public async Task Kimi_Usages_Map_Session_And_Weekly_Windows_From_String_Numbers()
+    {
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account("kimi-at"));
+        var handler = new RoutingHandler((request, _) => request.RequestUri!.AbsolutePath.Contains("/oauth/token")
+            ? Json(RefreshResponse)
+            : Json("""{"usage":{"limit":"100","remaining":"74","resetTime":"2026-10-11T17:32:50.757941Z"},"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"100","remaining":"85","resetTime":"2026-10-06T17:00:00Z"}}],"user":{"membership":{"level":"LEVEL_INTERMEDIATE"}}}"""));
+        var service = Service(store, handler);
+
+        var (account, quota) = await service.FetchAsync(Provider("kimi-subscription"), (await store.GetAsync("acc-1"))!,
+            SubscriptionCatalog.Find("kimi-subscription")!);
+
+        Assert.Equal(15, quota!["session"]!["usedPercent"]!.GetValue<double>());
+        Assert.Equal(300, quota["session"]!["windowMinutes"]!.GetValue<int>());
+        Assert.Equal(DateTimeOffset.Parse("2026-10-06T17:00:00Z"), DateTimeOffset.Parse(quota["session"]!["resetsAtUtc"]!.GetValue<string>()));
+        Assert.Equal(26, quota["weekly"]!["usedPercent"]!.GetValue<double>());
+        Assert.Equal(10_080, quota["weekly"]!["windowMinutes"]!.GetValue<int>());
+        Assert.Equal("intermediate", quota["planLabel"]!.GetValue<string>());
+        Assert.Equal(26, account.Extra["quota"]!["weekly"]!["usedPercent"]!.GetValue<double>()); // 已持久化
+
+        var probe = handler.Requests.Single(r => r.Url == "https://api.kimi.com/coding/v1/usages");
+        Assert.Equal("Bearer kimi-at", probe.Authorization);
+        Assert.Equal("kimi_code_cli", probe.Headers["X-Msh-Platform"]);
+    }
+
+    [Fact]
+    public async Task Kimi_Exhausted_Weekly_Quota_Uses_Usage_Not_The_Contradicting_Usages_Ratio()
+    {
+        // kimi-code#3951：usage.used=100/100（周额度耗尽，上游也确实 403），而 usages.limit_7d.used_ratio 却是 0。
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        var handler = new RoutingHandler((request, _) => request.RequestUri!.AbsolutePath.Contains("/oauth/token")
+            ? Json(RefreshResponse)
+            : Json("""{"usage":{"limit":"100","used":"100","resetTime":"2026-09-24T02:09:07.465054Z"},"limits":[{"window":{"duration":300,"timeUnit":"TIME_UNIT_MINUTE"},"detail":{"limit":"100","remaining":"100","resetTime":"2026-09-21T01:09:07Z"}}],"usages":{"limit_5h":{"used_ratio":0},"limit_7d":{"used_ratio":0}}}"""));
+        var service = Service(store, handler);
+
+        var (_, quota) = await service.FetchAsync(Provider("kimi-subscription"), (await store.GetAsync("acc-1"))!,
+            SubscriptionCatalog.Find("kimi-subscription")!);
+
+        Assert.Equal(100, quota!["weekly"]!["usedPercent"]!.GetValue<double>());
+        Assert.Equal(0, quota["session"]!["usedPercent"]!.GetValue<double>()); // 满额剩余 → 0% 已用，不是缺失
+        Assert.Null(quota["planLabel"]);
+    }
+
+    [Fact]
+    public async Task Kimi_Drops_Incomplete_Or_Unrecognized_Windows_Instead_Of_Inventing_Zero()
+    {
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        // usage 缺 used/remaining；limits 里一条是小时窗口（不是 300 分钟）且单位不认识，一条 limit 为 0。
+        var handler = new RoutingHandler((request, _) => request.RequestUri!.AbsolutePath.Contains("/oauth/token")
+            ? Json(RefreshResponse)
+            : Json("""{"usage":{"limit":"100","resetTime":"2026-10-11T00:00:00Z"},"limits":[{"window":{"duration":1,"timeUnit":"TIME_UNIT_FORTNIGHT"},"detail":{"limit":"10","remaining":"1"}},{"window":{"duration":5,"timeUnit":"TIME_UNIT_HOUR"},"detail":{"limit":"0","remaining":"0"}}]}"""));
+        var service = Service(store, handler);
+
+        var (_, quota) = await service.FetchAsync(Provider("kimi-subscription"), (await store.GetAsync("acc-1"))!,
+            SubscriptionCatalog.Find("kimi-subscription")!);
+
+        Assert.NotNull(quota);
+        Assert.Null(quota!["weekly"]);
+        Assert.Null(quota["session"]);
+    }
+
+    [Fact]
+    public async Task Kimi_Hour_Window_Is_Recognized_As_The_Five_Hour_Session_And_Reset_Is_Optional()
+    {
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        var handler = new RoutingHandler((request, _) => request.RequestUri!.AbsolutePath.Contains("/oauth/token")
+            ? Json(RefreshResponse)
+            : Json("""{"limits":[{"window":{"duration":5,"timeUnit":"TIME_UNIT_HOUR"},"detail":{"limit":200,"remaining":150}}]}"""));
+        var service = Service(store, handler);
+
+        var (_, quota) = await service.FetchAsync(Provider("kimi-subscription"), (await store.GetAsync("acc-1"))!,
+            SubscriptionCatalog.Find("kimi-subscription")!);
+
+        Assert.Equal(25, quota!["session"]!["usedPercent"]!.GetValue<double>()); // 裸数字也认
+        Assert.Null(quota["session"]!["resetsAtUtc"]);
+    }
+
+    [Fact]
+    public async Task Kimi_Persistently_Rejected_Account_Is_Disabled_As_Revoked()
+    {
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        var handler = new RoutingHandler((request, _) => request.RequestUri!.AbsolutePath.Contains("/oauth/token")
+            ? Json(RefreshResponse)
+            : Json("""{"error":{"message":"invalid token"}}""", HttpStatusCode.Unauthorized));
+        var service = Service(store, handler);
+
+        var stored = (await store.GetAsync("acc-1"))!;
+        await Assert.ThrowsAsync<SubscriptionAuthException>(() => service.FetchAsync(
+            Provider("kimi-subscription"), stored, SubscriptionCatalog.Find("kimi-subscription")!));
+
+        Assert.Equal(AccountStatus.Revoked, (await store.GetAsync("acc-1"))!.Status);
     }
 
     [Fact]

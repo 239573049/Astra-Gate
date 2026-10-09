@@ -21,6 +21,10 @@ declare global {
       openPath(p: string): Promise<boolean>;
       revealLogs(): Promise<boolean>;
       startService(): Promise<{ ok: boolean; error: string | null }>;
+      updates: {
+        check(): Promise<UpdateSummary>;
+        apply(): Promise<UiApplyOutcome>;
+      };
       showContextMenu(items: ContextMenuItem[]): Promise<string | null>;
       onMenuCommand(cb: (command: MenuCommand) => void): () => void;
       tray: {

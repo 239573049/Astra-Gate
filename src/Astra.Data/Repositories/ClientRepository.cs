@@ -120,13 +120,37 @@ public sealed class ClientRepository
         });
     }
 
-    /// <summary>All bindings of one client ordered by priority (reserved for failover).</summary>
+    /// <summary>All bindings of one client ordered by priority — the order the gateway tries them in for a model.</summary>
     public async Task<IReadOnlyList<ClientBinding>> ListBindingsAsync(string clientKind, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
         return (await conn.QueryAsync<ClientBinding>(
             $"{BindingSelect} WHERE client_kind = @client_kind ORDER BY priority",
             new { client_kind = clientKind })).ToList();
+    }
+
+    /// <summary>
+    /// Replaces every binding of the client with <paramref name="bindings"/>, renumbering priorities 0..n-1 in list
+    /// order (one transaction); creates the client row when missing. Callers reject duplicate providers.
+    /// </summary>
+    public async Task ReplaceBindingsAsync(string clientKind, IReadOnlyList<ClientBinding> bindings, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        await conn.ExecuteAsync("INSERT OR IGNORE INTO clients(kind, enabled) VALUES (@kind, 0)", new { kind = clientKind }, transaction: tx);
+        await conn.ExecuteAsync("DELETE FROM client_bindings WHERE client_kind = @client_kind", new { client_kind = clientKind }, transaction: tx);
+        for (var i = 0; i < bindings.Count; i++)
+            await conn.ExecuteAsync("""
+                INSERT INTO client_bindings(client_kind, provider_id, priority, account_id)
+                VALUES (@client_kind, @provider_id, @priority, @account_id)
+                """, new
+            {
+                client_kind = clientKind,
+                provider_id = bindings[i].ProviderId,
+                priority = i,
+                account_id = bindings[i].AccountId,
+            }, transaction: tx);
+        await tx.CommitAsync(ct);
     }
 
     /// <summary>Bindings pointing at the provider — check before deleting a bound provider.</summary>

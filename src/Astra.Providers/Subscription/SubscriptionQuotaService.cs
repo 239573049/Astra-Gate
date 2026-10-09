@@ -15,7 +15,7 @@ namespace Astra.Providers.Subscription;
 /// credits: {usedPercent, monthlyLimit, prepaidBalance}, planLabel }</c>. Sources:
 /// Claude <c>api.anthropic.com/api/oauth/usage</c> (+ <c>anthropic-beta: oauth-2025-04-20</c>),
 /// Codex <c>chatgpt.com/backend-api/codex/usage</c> (rate_limits windows), Grok
-/// <c>cli-chat-proxy.grok.com/v1/billing</c>. A 401/403 triggers one forced token refresh; if the
+/// <c>cli-chat-proxy.grok.com/v1/billing</c>, Kimi <c>api.kimi.com/coding/v1/usages</c>. A 401/403 triggers one forced token refresh; if the
 /// upstream still refuses the account it is marked revoked — a dead grant disables itself.
 /// </summary>
 public sealed class SubscriptionQuotaService(
@@ -63,10 +63,11 @@ public sealed class SubscriptionQuotaService(
             "claude-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeClaudeAsync, ct),
             "openai-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeOpenAiAsync, ct),
             "grok-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeGrokAsync, ct),
-            "zcode-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeZcodeAsync, ct),
+            "zcode-subscription" or "bigmodel-subscription" =>
+                await ProbeWithRecoveryAsync(account, config, (token, c) => ProbeZcodeAsync(token, config, c), ct),
             "github-copilot-subscription" => await ProbeCopilotAsync(account, config, ct),
-            // Kimi：上游有 /coding/v1/usages 路由，但没有公开的响应形状可解析（NextCoWork
-            // 同样未实现 kimi 额度）——返回 null 让 UI 显示"暂不支持"，而不是猜一个字段名。
+            "kimi-subscription" => await ProbeWithRecoveryAsync(account, config, (token, c) => ProbeKimiAsync(token, config, c), ct),
+            // 其它家族没有额度探针：返回 null 让 UI 显示"暂不支持"，而不是猜一个字段名。
             _ => null,
         };
         if (quota is null) return (account, null);
@@ -323,16 +324,34 @@ public sealed class SubscriptionQuotaService(
     /// unit==3 且 number==5；每周 = 同 type 且 unit==6；percentage 是已用百分比；
     /// nextResetTime 是绝对毫秒。来源：NextCoWork kernel/upstream/coding-plan-quota.ts
     /// （2026-09-29 逆向 ZCode.app v3.11）。信封 success!==false 且 code 缺席/0/200 都算成功。
+    /// 智谱 BigModel 渠道（<see cref="SubscriptionOAuthConfig.BizHost"/> 非空）是同一个接口、同一套形状，
+    /// 只是主机换成 BizHost（<c>https://bigmodel.cn</c>），鉴权头里放的是供应出来的 API Key。
     /// </summary>
-    private async Task<JsonObject?> ProbeZcodeAsync(string accessToken, CancellationToken ct)
+    private async Task<JsonObject?> ProbeZcodeAsync(string accessToken, SubscriptionOAuthConfig config, CancellationToken ct)
     {
-        using var request = Build("https://api.z.ai/api/monitor/usage/quota/limit", accessToken);
+        var host = config.BizHost.Length > 0 ? config.BizHost.TrimEnd('/') : "https://api.z.ai";
+        using var request = Build($"{host}/api/monitor/usage/quota/limit", accessToken);
         // 裸值覆盖 Build 写的 "Bearer …"：biz/monitor API 只认这个形状。
         request.Headers.Authorization = new AuthenticationHeaderValue(accessToken);
         var (status, contentType, payload) = await SendAsync(request, ct);
         if (IsAuthRejection(status, contentType, payload)) return null;
         if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "额度查询被上游拒绝");
         return NormalizeZcode(payload);
+    }
+
+    /// <summary>
+    /// Kimi Code（Coding Plan）的额度：<c>GET https://api.kimi.com/coding/v1/usages</c>，Bearer 用订阅的
+    /// OAuth access token（与推理同一个），带 kimi-code 的 X-Msh-* 设备头（与登录/刷新一致）。
+    /// 上游未公开文档，响应形状见 <see cref="NormalizeKimi"/>（来自社区实测）。
+    /// </summary>
+    private async Task<JsonObject?> ProbeKimiAsync(string accessToken, SubscriptionOAuthConfig config, CancellationToken ct)
+    {
+        using var request = Build("https://api.kimi.com/coding/v1/usages", accessToken);
+        foreach (var (name, value) in config.ExtraHeaders) request.Headers.TryAddWithoutValidation(name, value);
+        var (status, contentType, payload) = await SendAsync(request, ct);
+        if (IsAuthRejection(status, contentType, payload)) return null;
+        if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "额度查询被上游拒绝");
+        return NormalizeKimi(payload);
     }
 
     private async Task<JsonObject?> ProbeGrokAsync(string accessToken, CancellationToken ct)
@@ -342,7 +361,7 @@ public sealed class SubscriptionQuotaService(
         {
             using var request = Build(url, accessToken);
             request.Headers.TryAddWithoutValidation("x-grok-client-identifier", "xai-grok-cli");
-            request.Headers.TryAddWithoutValidation("x-grok-client-version", "0.2.93");
+            request.Headers.TryAddWithoutValidation("x-grok-client-version", "1.0.13");
             var (status, contentType, payload) = await SendAsync(request, ct);
             if (IsAuthRejection(status, contentType, payload)) return null;
             if (!IsSuccess(status)) throw new OAuthProtocolException($"http_{(int)status}", "额度查询被上游拒绝");
@@ -533,6 +552,75 @@ public sealed class SubscriptionQuotaService(
         if (limit["remaining"] is not JsonValue r || !r.TryGetValue<double>(out var remaining)) return null;
         if (limit["number"] is not JsonValue n || !n.TryGetValue<double>(out var total) || total <= 0) return null;
         return Math.Clamp(100 - remaining / total * 100, 0, 100);
+    }
+
+    /// <summary>
+    /// <c>{ usage:{limit,remaining|used,resetTime}, limits:[{window:{duration,timeUnit},detail:{limit,remaining|used,resetTime}}],
+    /// user:{membership:{level}} }</c>——数字都是字符串，<c>remaining</c> 与 <c>used</c> 只会给其一。
+    /// 顶层 <c>usage</c> 是周额度（与周窗口共用重置时间，周额度耗尽时服务端会 403，它是准的）；
+    /// <c>limits[]</c> 里 300 分钟的窗口是 5 小时会话额度。上游另有 <c>usages.limit_5h/limit_7d.used_ratio</c>，
+    /// 实测会与 <c>usage</c> 矛盾（kimi-code#3951：周额度已耗尽却报 0），所以不读。
+    /// 一个窗口凑不出 limit 与（used 或 remaining）就整条丢弃，绝不编 0；全丢时返回只有 fetchedAtUtc 的快照。
+    /// </summary>
+    private JsonObject NormalizeKimi(JsonObject? payload)
+    {
+        var quota = NewSnapshot();
+        if (payload is null) return quota;
+
+        if (payload["limits"] is JsonArray limits)
+        {
+            foreach (var raw in limits)
+            {
+                if (raw is not JsonObject entry || KimiWindowMinutes(entry["window"] as JsonObject) != 300) continue;
+                if (KimiWindow(entry["detail"] as JsonObject, 300) is not { } session) continue;
+                quota["session"] = session;
+                break;
+            }
+        }
+        if (KimiWindow(payload["usage"] as JsonObject, 10_080) is { } weekly) quota["weekly"] = weekly;
+
+        if ((payload["user"] as JsonObject)?["membership"] is JsonObject membership && Str(membership, "level") is { } level)
+        {
+            var label = level.StartsWith("LEVEL_", StringComparison.Ordinal) ? level["LEVEL_".Length..] : level;
+            quota["planLabel"] = label.ToLowerInvariant();
+        }
+        return quota;
+    }
+
+    /// <summary><c>{duration, timeUnit}</c> → 分钟数；单位不认识返回 null。</summary>
+    private static int? KimiWindowMinutes(JsonObject? window)
+    {
+        if (window is null || KimiNumber(window["duration"]) is not { } duration) return null;
+        var unit = Str(window, "timeUnit") switch
+        {
+            "TIME_UNIT_MINUTE" => 1d,
+            "TIME_UNIT_HOUR" => 60d,
+            "TIME_UNIT_DAY" => 1440d,
+            _ => 0d,
+        };
+        return unit == 0 ? null : (int)Math.Round(duration * unit);
+    }
+
+    private JsonObject? KimiWindow(JsonObject? detail, int windowMinutes)
+    {
+        if (detail is null || KimiNumber(detail["limit"]) is not { } limit || limit <= 0) return null;
+        var used = KimiNumber(detail["used"]) ?? (KimiNumber(detail["remaining"]) is { } remaining ? limit - remaining : null);
+        if (used is null) return null;
+        var node = WindowNode(Math.Clamp(used.Value / limit * 100, 0, 100), ParseDate(detail["resetTime"])?.ToString("o"));
+        node["windowMinutes"] = windowMinutes;
+        return node;
+    }
+
+    /// <summary>Kimi 的数字是字符串（<c>"100"</c>），偶尔也可能是裸数字，两种都认。</summary>
+    private static double? KimiNumber(JsonNode? node)
+    {
+        if (node is not JsonValue v) return null;
+        if (v.TryGetValue<double>(out var d)) return double.IsFinite(d) ? d : null;
+        return v.TryGetValue<string>(out var s)
+               && double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+               && double.IsFinite(parsed)
+            ? parsed
+            : null;
     }
 
     private JsonObject NormalizeGrok(JsonObject? billing, JsonObject? user)
