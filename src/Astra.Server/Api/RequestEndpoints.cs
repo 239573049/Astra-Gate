@@ -67,6 +67,13 @@ public static class RequestEndpoints
     /// <summary>One local day of the activity heatmap; days without requests are absent.</summary>
     public sealed record DailyActivityDto(string Day, long Requests);
 
+    /// <summary>
+    /// Live request-log rate over a trailing window, normalized to per minute: requests (including in-flight ones)
+    /// and tokens (completed requests only — usage settles when a request finishes), plus the window's cache-hit
+    /// ratio (null when the window has no input tokens).
+    /// </summary>
+    public sealed record RateStatsDto(double Rpm, double Tpm, double? CacheHitRate, int WindowSeconds);
+
     public sealed record SettingsDto(
         string Locale, bool DebugBodies, int BodyRetentionDays, int? RequestRetentionDays, EffortBudgets EffortBudgets,
         int StreamIdleTimeoutSec, string UpdateChannel, bool UpdateAutoCheck,
@@ -193,6 +200,38 @@ public static class RequestEndpoints
             return Results.Ok(activity.Select(a => new DailyActivityDto(a.Day, a.Requests)).ToList());
         });
 
+        // Live RPM / TPM for the request-log header: everything started in the trailing window ("window" seconds,
+        // 10-600, default 60) — persisted rows plus in-flight requests (they are not stored yet) — normalized to
+        // per minute. Filters mirror /api/requests.
+        app.MapGet("/api/stats/rate", async (HttpContext http, AstraDatabase db, LiveRequestFeed live, CancellationToken ct) =>
+        {
+            var q = http.Request.Query;
+            var windowSeconds = int.TryParse(q["window"], out var w) ? Math.Clamp(w, 10, 600) : 60;
+            var now = DateTimeOffset.Now;
+            var query = new RequestQuery
+            {
+                From = now.AddSeconds(-windowSeconds),
+                To = now,
+                ClientKind = Str(q["client"]),
+                TokenId = Str(q["token"]),
+                ProviderId = Str(q["provider"]),
+                Model = Str(q["model"]),
+                Status = Str(q["status"]),
+            };
+            var rate = await db.Requests.RateAsync(query, ct);
+            var requests = rate.Requests;
+            if (string.IsNullOrEmpty(query.Status))
+            {
+                // In-flight rows count toward RPM the moment they arrive (they are visible in the live table above).
+                // They have no final status yet, so a status filter skips them entirely.
+                requests += live.InFlightSnapshot().Count(r =>
+                    r.StartedAtUtc >= query.From && MatchesWindowFilters(r, query));
+            }
+            var scale = 60.0 / windowSeconds;
+            return Results.Ok(new RateStatsDto(requests * scale, rate.Tokens * scale,
+                rate.InputTokens == 0 ? null : (double)rate.CacheReadTokens / rate.InputTokens, windowSeconds));
+        });
+
         app.MapGet("/api/settings", (SettingsService settings, ServerOptions server, AstraPaths paths) =>
             Results.Ok(ToSettings(settings.Current, server, paths)));
 
@@ -288,6 +327,23 @@ public static class RequestEndpoints
         s.UpdateChannel, s.UpdateAutoCheck,
         server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes,
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass);
+
+    /// <summary>
+    /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:
+    /// same client / token / provider equality and case-insensitive model contains-match, without the LIKE escaping.
+    /// </summary>
+    private static bool MatchesWindowFilters(RequestRecord r, RequestQuery f) =>
+        (string.IsNullOrEmpty(f.ClientKind) || r.ClientKind == f.ClientKind)
+        && (string.IsNullOrEmpty(f.TokenId) || r.TokenId == f.TokenId)
+        && (string.IsNullOrEmpty(f.ProviderId) || r.ProviderId == f.ProviderId)
+        && (string.IsNullOrWhiteSpace(f.Model) || ModelContains(r, f.Model.Trim()));
+
+    private static bool ModelContains(RequestRecord r, string term) =>
+        Contains(r.RequestedModel, term) || Contains(r.UpstreamModel, term)
+        || Contains(r.SystemModelId, term) || Contains(r.ResponseModel, term);
+
+    private static bool Contains(string? s, string term) =>
+        s?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
 
     internal static RequestSummaryDto ToSummary(RequestRecord r) => ToSummary(r, inFlight: false);
 

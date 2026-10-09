@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { X } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,13 +17,16 @@ const hookSpies = vi.hoisted(() => ({
   useProviders: vi.fn(),
   useRequests: vi.fn(),
   useRequest: vi.fn(),
+  useRequestRate: vi.fn(),
 }));
 
 vi.mock('../api/hooks', () => ({
+  keys: { stats: (...args: unknown[]) => ['stats', ...args] },
   useClients: hookSpies.useClients,
   useProviders: hookSpies.useProviders,
   useRequests: hookSpies.useRequests,
   useRequest: hookSpies.useRequest,
+  useRequestRate: hookSpies.useRequestRate,
   useTokens: () => ({ data: [] }),
 }));
 
@@ -135,9 +139,11 @@ const lastQuery = (): RequestQuery => hookSpies.useRequests.mock.calls.at(-1)![0
 const showPage = () => {
   localStorage.setItem('astra.locale', 'en');
   render(
-    <I18nProvider>
-      <RequestsPage />
-    </I18nProvider>,
+    <QueryClientProvider client={new QueryClient()}>
+      <I18nProvider>
+        <RequestsPage />
+      </I18nProvider>
+    </QueryClientProvider>,
   );
 };
 
@@ -343,6 +349,7 @@ describe('RequestsPage filtering', () => {
     hookSpies.useProviders.mockReset().mockReturnValue(hookResult([providerRow('prov-anthropic', 'Anthropic'), providerRow('prov-relay', 'Anthropic')]));
     hookSpies.useRequests.mockReset().mockReturnValue(hookResult(pageOf([summary({ id: 'req-1' })])));
     hookSpies.useRequest.mockReset().mockReturnValue(hookResult(undefined));
+    hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
   it('keeps the model search inside the Active filters group; trim + debounce produce the chip and the query', async () => {
@@ -422,6 +429,7 @@ describe('Requests list model column', () => {
     hookSpies.useClients.mockReset().mockReturnValue(hookResult([{ kind: 'codex', name: 'Codex' } as ClientInfo]));
     hookSpies.useProviders.mockReset().mockReturnValue(hookResult([providerRow('prov-anthropic', 'Anthropic')]));
     hookSpies.useRequest.mockReset().mockReturnValue(hookResult(undefined));
+    hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
   it('colors matched models green and mismatches orange with visible wording', () => {
@@ -488,6 +496,7 @@ describe('Requests list reasoning badge', () => {
     hookSpies.useClients.mockReset().mockReturnValue(hookResult([]));
     hookSpies.useProviders.mockReset().mockReturnValue(hookResult([]));
     hookSpies.useRequest.mockReset().mockReturnValue(hookResult(undefined));
+    hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
   it('shows the explicitly set effort, mode and raw budget next to the model name', () => {
@@ -548,6 +557,7 @@ describe('Requests list TTFT / TPS column', () => {
     hookSpies.useClients.mockReset().mockReturnValue(hookResult([]));
     hookSpies.useProviders.mockReset().mockReturnValue(hookResult([]));
     hookSpies.useRequest.mockReset().mockReturnValue(hookResult(undefined));
+    hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
   it('places output speed beneath TTFT in the same cell, with units', () => {
@@ -592,6 +602,7 @@ describe('RequestsPage detail sheet', () => {
     hookSpies.useClients.mockReset().mockReturnValue(hookResult([{ kind: 'codex', name: 'Codex' } as ClientInfo]));
     hookSpies.useProviders.mockReset().mockReturnValue(hookResult([providerRow('prov-anthropic', 'Anthropic')]));
     hookSpies.useRequests.mockReset().mockReturnValue(hookResult(pageOf([summary({ id: 'req-1', requestedModel: 'gpt-a', upstreamModel: 'up-b', responseModel: 'up-c' })])));
+    hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
   it('opens the request detail with all three model values and colors the returned model', async () => {

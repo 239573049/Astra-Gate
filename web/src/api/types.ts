@@ -429,12 +429,16 @@ export interface TimeseriesPoint { bucket: string; key: string; costUsd: number;
 export interface TopModel { model: string; costUsd: number; requests: number; tokens: number; inputTokens: number; cacheReadTokens: number }
 /** One local day of the activity heatmap; days without requests are absent. */
 export interface DailyActivity { day: string; requests: number }
+/** Live request-log rate over a trailing window, per minute: requests (in-flight included), tokens (completed only), and the window's cache-hit ratio (null without input tokens). */
+export interface RateStats { rpm: number; tpm: number; cacheHitRate?: number | null; windowSeconds: number }
 // GET /api/stats/summary?range=&client=&token= -> StatsSummary
 // GET /api/stats/timeseries?range=&groupBy=day|hour&by=model|provider|client|token&client=&token=&tzOffset= -> TimeseriesPoint[]
 //    (tzOffset = viewer's UTC offset in minutes; buckets are local "yyyy-MM-dd" / "yyyy-MM-ddTHH:00")
 // GET /api/stats/top-models?range=&limit=10&client=&token= -> TopModel[]
 // GET /api/stats/activity-heatmap?days=365&client=&token=&tzOffset= -> DailyActivity[]
 //    (a fixed window ending today, 30-730 days; it ignores the range selector's 今天/7d/30d/90d)
+// GET /api/stats/rate?window=60&client=&token=&provider=&model=&status= -> RateStats
+//    (a trailing window in seconds, 10-600; filters mirror /api/requests)
 // `client` (a ClientKind) / `token` (a token id) narrow any stats call to those requests.
 
 // ---------- privacy guard (M11) ----------

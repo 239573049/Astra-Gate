@@ -278,6 +278,35 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Rate_Aggregates_Window_Requests_Tokens_And_Cache()
+    {
+        var db = await TestDb.InitializeAsync();
+        var batch = SampleBatch();
+        batch[0].CacheReadTokens = 600; // gpt-5, 1000 input tokens
+        await db.Requests.InsertBatchAsync(batch);
+
+        // The whole batch: 3 requests, 3000 input + 1500 output tokens, 600 of them cache reads.
+        var all = await db.Requests.RateAsync(new RequestQuery { From = T0.AddMinutes(-1), To = T2.AddMinutes(1) });
+        Assert.Equal((3L, 4_500L, 600L, 3_000L), (all.Requests, all.Tokens, all.CacheReadTokens, all.InputTokens));
+
+        // Only the rows from T1 on: the T1 success row plus the T2 error row (which has no tokens).
+        var tail = await db.Requests.RateAsync(new RequestQuery { From = T1, To = T2.AddMinutes(1) });
+        Assert.Equal((2L, 3_000L, 0L, 2_000L), (tail.Requests, tail.Tokens, tail.CacheReadTokens, tail.InputTokens));
+
+        // The list filters apply: client, model contains-match and status.
+        var codex = await db.Requests.RateAsync(new RequestQuery { From = T0, To = T2, ClientKind = "codex" });
+        Assert.Equal(2, codex.Requests);
+        var model = await db.Requests.RateAsync(new RequestQuery { From = T0, To = T2, Model = "  CLAUDE  " });
+        Assert.Equal((1L, 3_000L), (model.Requests, model.Tokens));
+        var failed = await db.Requests.RateAsync(new RequestQuery { From = T0, To = T2, Status = RequestStatus.GatewayError });
+        Assert.Equal((1L, 0L), (failed.Requests, failed.Tokens));
+
+        // An empty window is all zeros, never nulls.
+        var empty = await db.Requests.RateAsync(new RequestQuery { From = T0.AddYears(1), To = T0.AddYears(2) });
+        Assert.Equal(new RateWindow(0, 0, 0, 0), empty);
+    }
+
+    [Fact]
     public async Task Timeseries_Buckets_Follow_The_Utc_Offset()
     {
         var db = await TestDb.InitializeAsync();

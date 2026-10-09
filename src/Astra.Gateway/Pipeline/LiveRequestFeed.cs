@@ -78,6 +78,10 @@ public sealed class LiveRequestFeed
     public LiveRequestEvent? Find(string id) =>
         _inFlight.TryGetValue(id, out var e) ? new LiveRequestEvent(LiveRequestEventTypes.Updated, e.Record, !e.Finished) : null;
 
+    /// <summary>The in-flight (not yet persisted) records, oldest first — a cheap snapshot for aggregates (live RPM).</summary>
+    public IReadOnlyList<RequestRecord> InFlightSnapshot() =>
+        _inFlight.Values.OrderBy(e => e.Record.StartedAtUtc).Select(e => e.Record).ToList();
+
     /// <summary>
     /// Subscribes to the feed: yields the in-flight snapshot (oldest first), then live events until cancelled.
     /// A subscriber that falls more than <see cref="SubscriberBuffer"/> events behind loses the oldest ones.

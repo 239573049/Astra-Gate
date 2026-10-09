@@ -5,7 +5,7 @@ using Astra.Core.Requests;
 
 namespace Astra.Data.Repositories;
 
-/// <summary>Filter for <see cref="RequestRepository.QueryAsync"/>.</summary>
+/// <summary>Filter for <see cref="RequestRepository.QueryAsync"/> and <see cref="RequestRepository.RateAsync"/> (which ignores Page/PageSize).</summary>
 public sealed record RequestQuery
 {
     public DateTimeOffset? From { get; init; }
@@ -30,6 +30,12 @@ public sealed class RequestPage
     public int Page { get; init; }
     public int PageSize { get; init; }
 }
+
+/// <summary>
+/// Aggregate over a short trailing window (the live RPM / TPM readout): request count, input+output tokens,
+/// cache-read tokens and input tokens (the hit-rate denominator, cache reads included).
+/// </summary>
+public sealed record RateWindow(long Requests, long Tokens, long CacheReadTokens, long InputTokens);
 
 /// <summary>Aggregated request/cost numbers for one time range.</summary>
 public sealed class RequestSummary
@@ -435,14 +441,6 @@ public sealed class RequestRepository
     /// <summary>Paged, newest-first query with total count.</summary>
     public async Task<RequestPage> QueryAsync(RequestQuery query, CancellationToken ct = default)
     {
-        // Literal contains-match: escape LIKE wildcards so the term never broadens, then wrap it in %...%.
-        // Null when absent/whitespace — @model IS NULL then means "no filter", as before.
-        string? model = null;
-        if (!string.IsNullOrWhiteSpace(query.Model))
-        {
-            var term = query.Model.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_");
-            model = $"%{term}%";
-        }
         var p = new
         {
             from = query.From is { } from ? DateTimeOffsetHandler.ToStorage(from) : null,
@@ -450,7 +448,7 @@ public sealed class RequestRepository
             client_kind = query.ClientKind,
             token_id = query.TokenId,
             provider_id = query.ProviderId,
-            model,
+            model = LikePattern(query.Model),
             status = query.Status,
         };
         var page = Math.Max(1, query.Page);
@@ -466,6 +464,33 @@ public sealed class RequestRepository
                 offset = (page - 1) * pageSize,
             })).ToList();
         return new RequestPage { Items = items, Total = total, Page = page, PageSize = pageSize };
+    }
+
+    /// <summary>
+    /// Aggregates a short trailing window (the live RPM / TPM readout) under the <see cref="RequestQuery"/>
+    /// filters — same model contains-match and status handling as <see cref="QueryAsync"/>; Page/PageSize ignored.
+    /// </summary>
+    public async Task<RateWindow> RateAsync(RequestQuery query, CancellationToken ct = default)
+    {
+        var p = new
+        {
+            from = query.From is { } from ? DateTimeOffsetHandler.ToStorage(from) : null,
+            to = query.To is { } to ? DateTimeOffsetHandler.ToStorage(to) : null,
+            client_kind = query.ClientKind,
+            token_id = query.TokenId,
+            provider_id = query.ProviderId,
+            model = LikePattern(query.Model),
+            status = query.Status,
+        };
+        await using var conn = await _factory.OpenAsync(ct);
+        var row = await conn.QuerySingleAsync<RateRow>($"""
+            SELECT COUNT(*) AS Requests,
+                   COALESCE(SUM(total_input_tokens + total_output_tokens), 0) AS Tokens,
+                   COALESCE(SUM(cache_read_tokens), 0) AS CacheReadTokens,
+                   COALESCE(SUM(total_input_tokens), 0) AS InputTokens
+            FROM requests{RequestWhereSql}
+            """, p);
+        return new RateWindow(row.Requests, row.Tokens, row.CacheReadTokens, row.InputTokens);
     }
 
     /// <summary>One request including its usage items; null when absent.</summary>
@@ -667,6 +692,16 @@ public sealed class RequestRepository
     private static string Filters(string? clientKind, string? tokenId) =>
         (string.IsNullOrEmpty(clientKind) ? "" : " AND client_kind = @client_kind")
         + (string.IsNullOrEmpty(tokenId) ? "" : " AND token_id = @token_id");
+
+    /// <summary>
+    /// Literal contains-match for a model term: escape LIKE wildcards so the term never broadens, then wrap it
+    /// in %...%. Null when absent/whitespace — @model IS NULL then means "no filter".
+    /// </summary>
+    private static string? LikePattern(string? term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return null;
+        return $"%{term.Trim().Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_")}%";
+    }
 }
 
 // Dapper.AOT only materializes rows into types it can see from outside the repository class; nested
@@ -721,4 +756,12 @@ internal sealed class TopModelRow
     public long TotalInputTokens { get; set; }
     public long TotalOutputTokens { get; set; }
     public long TotalCacheReadTokens { get; set; }
+}
+
+internal sealed class RateRow
+{
+    public long Requests { get; set; }
+    public long Tokens { get; set; }
+    public long CacheReadTokens { get; set; }
+    public long InputTokens { get; set; }
 }

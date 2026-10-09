@@ -139,6 +139,9 @@ export const zh = {
 
   // requests
   'requests.total': '共 {count} 条',
+  'requests.rate.rpm': 'RPM',
+  'requests.rate.tpm': 'TPM',
+  'requests.rate.hint': '最近 {window} 秒的平均每分钟请求数（RPM）、令牌数（TPM，仅已完成请求）与缓存命中率；跟随当前筛选，每 5 秒自动刷新。',
   'requests.elapsed': '已等待（尚未收到首个 token）',
   'requests.searchModel': '搜索模型 ID（支持关键字）',
   'requests.noFilters': '未设置筛选',
@@ -1315,6 +1318,9 @@ export const en: Record<MessageKey, string> = {
   'overview.activityLegend.more': 'More',
 
   'requests.total': '{count} total',
+  'requests.rate.rpm': 'RPM',
+  'requests.rate.tpm': 'TPM',
+  'requests.rate.hint': 'Requests (RPM), tokens (TPM, completed requests only) and the cache-hit ratio per minute over the last {window}s; follows the active filters, refreshes every 5s.',
   'requests.elapsed': 'Waiting (no first token yet)',
   'requests.searchModel': 'Search model IDs (keyword)',
   'requests.noFilters': 'No filters applied',

@@ -98,6 +98,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(RequestEndpoints.TimeseriesPointDto))]
 [JsonSerializable(typeof(RequestEndpoints.TopModelDto))]
 [JsonSerializable(typeof(RequestEndpoints.DailyActivityDto))]
+[JsonSerializable(typeof(RequestEndpoints.RateStatsDto))]
 [JsonSerializable(typeof(RequestEndpoints.SettingsDto))]
 // privacy
 [JsonSerializable(typeof(PrivacyEndpoints.DryRunRequest))]

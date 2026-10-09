@@ -1,14 +1,16 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Check, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import { useClients, useProviders, useRequest, useRequests, useTokens, type RequestQuery } from '../api/hooks';
+import { keys, useClients, useProviders, useRequest, useRequestRate, useRequests, useTokens, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
-import type { ClientKind, RequestDetail, RequestSummary } from '../api/types';
+import type { ClientKind, RateStats, RequestDetail, RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
 import { Alert } from '../components/arc/alert/alert';
 import { FilterToolbar, type FilterChip, type FilterField } from '../components/arc/filter-toolbar/filter-toolbar';
 import { Pagination } from '../components/arc/pagination/pagination';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
+import { Tooltip } from '../components/arc/tooltip/tooltip';
 import { PricingSourceBadge } from '../components/Billing';
 import { CLIENT_META } from '../components/icons';
 import { Page } from '../components/layout/Page';
@@ -18,7 +20,7 @@ import { errorText, Sheet } from '../components/ui/overlays';
 import { useI18n, type MessageKey, type TFunction } from '../i18n';
 import { cn } from '../lib/cn';
 import { useDebounced } from '../lib/hooks';
-import { formatDateTime, formatMs, formatNanos, formatTime, formatTokens, formatTps, formatUnitPrice, pretty } from '../lib/format';
+import { formatDateTime, formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUnitPrice, pretty } from '../lib/format';
 import { useCommandListener } from '../shell/commands';
 
 const PAGE_SIZE = 50;
@@ -73,6 +75,9 @@ export function RequestsPage() {
   const clients = useClients();
   const providers = useProviders();
   const tokens = useTokens();
+  // Header rate readout: the trailing window under the same filters as the list (paging excluded), every 5 s.
+  const qc = useQueryClient();
+  const rate = useRequestRate({ client: filters.client, token: filters.token, provider: filters.provider, status: filters.status, model: debouncedModel });
 
   const query: RequestQuery = { model: debouncedModel, ...filters, page, pageSize: PAGE_SIZE };
   // Page 1 follows the live feed: requests show up as they arrive and update in place. Polling is only the
@@ -250,12 +255,18 @@ export function RequestsPage() {
       title={t('nav.requests')}
       subtitle={data ? t('requests.total', { count: formatTokens(data.total + liveOnly.length) }) : undefined}
       actions={
-        <Button
-          variant="plain"
-          icon={<RefreshCw className={cn('size-4', requests.isFetching && 'animate-spin')} />}
-          aria-label={t('common.refresh')}
-          onClick={() => void requests.refetch()}
-        />
+        <>
+          <LiveRate rate={rate.data} />
+          <Button
+            variant="plain"
+            icon={<RefreshCw className={cn('size-4', requests.isFetching && 'animate-spin')} />}
+            aria-label={t('common.refresh')}
+            onClick={() => {
+              void requests.refetch();
+              void qc.invalidateQueries({ queryKey: keys.stats('rate') });
+            }}
+          />
+        </>
       }
     >
       <div className="mb-3">
@@ -369,6 +380,29 @@ function Elapsed({ since }: { since: string }) {
     return () => clearInterval(timer);
   }, []);
   return <>{formatMs(Math.max(0, now - Date.parse(since)))}</>;
+}
+
+/** Header pill with the live RPM / TPM / cache-hit ratio of the trailing window; hidden until the first answer arrives. */
+function LiveRate({ rate }: { rate: RateStats | undefined }) {
+  const { t } = useI18n();
+  if (!rate) return null;
+  const hint = t('requests.rate.hint', { window: rate.windowSeconds });
+  const entry = (label: string, value: string) => (
+    <span key={label} className="flex items-baseline gap-1">
+      <span className="text-[10.5px] text-[var(--text-muted)]">{label}</span>
+      <span className="num text-[12px]">{value}</span>
+    </span>
+  );
+  const rateText = (n: number) => (n >= 100 ? formatTokens(Math.round(n)) : n.toFixed(1));
+  return (
+    <Tooltip side="bottom" content={hint}>
+      <div className="flex items-center gap-3 rounded-full border border-[var(--border)] px-3.5 py-1.5">
+        {entry(t('requests.rate.rpm'), rateText(rate.rpm))}
+        {entry(t('requests.rate.tpm'), formatTokens(Math.round(rate.tpm), true))}
+        {entry(t('usage.hitRate'), formatPercent(rate.cacheHitRate))}
+      </div>
+    </Tooltip>
+  );
 }
 
 function StatusBadge({ status, http, hint }: { status: string; http?: number | null; hint?: string }) {

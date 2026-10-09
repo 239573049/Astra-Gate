@@ -45,6 +45,7 @@ import type {
   ProviderTestRequest,
   ProviderUpdate,
   Range,
+  RateStats,
   RemoteModel,
   RequestDetail,
   RequestSummary,
@@ -883,6 +884,18 @@ export const useRequest = (id: string | null) =>
     enabled: Boolean(id),
     // An in-flight request is served from the live feed; follow it until it finishes.
     refetchInterval: (query) => (query.state.data?.status === 'pending' ? 1000 : false),
+  });
+
+/** The list's filters, minus paging — exactly what the live rate endpoint accepts. */
+export type RequestRateFilter = Pick<RequestQuery, 'client' | 'token' | 'provider' | 'model' | 'status'>;
+
+/** Live RPM / TPM / cache-hit ratio for the request-log header: a trailing window (default 60 s) under the list's filters. */
+export const useRequestRate = (filters: RequestRateFilter) =>
+  useQuery({
+    queryKey: keys.stats('rate', filters),
+    queryFn: () => api<RateStats>('GET', `/api/stats/rate${qs({ ...filters })}`),
+    placeholderData: (prev) => prev,
+    refetchInterval: 5000,
   });
 
 /** The viewer's UTC offset in minutes, so timeseries buckets follow local days and hours. */
