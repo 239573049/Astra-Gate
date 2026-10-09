@@ -6,6 +6,7 @@ using Astra.Core.Models;
 using Astra.Core.Requests;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Astra.Server.IntegrationTests;
 
@@ -120,6 +121,168 @@ public class GatewayConversionTests
         Assert.Equal("https://upstream.test/v1/responses", upstream.Url.ToString());
         var record = await gw.RecordOfAsync(response);
         Assert.True(record.Passthrough);
+    }
+
+    [Theory]
+    [InlineData(ApiProtocol.Anthropic, false, true)]
+    [InlineData(ApiProtocol.Anthropic, true, true)]
+    [InlineData(ApiProtocol.Anthropic, false, false)]
+    [InlineData(ApiProtocol.Anthropic, true, false)]
+    [InlineData(ApiProtocol.OpenAIChat, false, true)]
+    [InlineData(ApiProtocol.OpenAIChat, true, false)]
+    public async Task Codex_Responses_Discovers_Copilot_Model_Protocols_Before_Forwarding(
+        ApiProtocol protocol, bool stream, bool storedModel)
+    {
+        const string chatBody =
+            """{"id":"c1","object":"chat.completion","model":"claude-sonnet-5","choices":[{"index":0,"message":{"role":"assistant","content":"OK","tool_calls":[{"id":"call_A","type":"function","function":{"name":"shell","arguments":"{\"cmd\":\"ls\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":12,"completion_tokens":3}}""";
+        const string anthropicBody =
+            """{"id":"msg_1","type":"message","role":"assistant","model":"claude-sonnet-5","content":[{"type":"text","text":"OK"},{"type":"tool_use","id":"call_A","name":"shell","input":{"cmd":"ls"}}],"stop_reason":"tool_use","usage":{"input_tokens":12,"cache_read_input_tokens":10,"output_tokens":3}}""";
+        const string anthropicStream =
+            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"claude-sonnet-5\",\"content\":[],\"usage\":{\"input_tokens\":12,\"cache_read_input_tokens\":10,\"output_tokens\":1}}}\n\n" +
+            "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n" +
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"OK\"}}\n\n" +
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n" +
+            "event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_A\",\"name\":\"shell\",\"input\":{}}}\n\n" +
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}}\n\n" +
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n" +
+            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":3}}\n\n" +
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n";
+        var modelList = new JsonObject
+        {
+            ["data"] = new JsonArray(new JsonObject
+            {
+                ["id"] = "claude-sonnet-5",
+                ["supported_endpoints"] = new JsonArray(protocol == ApiProtocol.Anthropic ? "/v1/messages" : "/chat/completions"),
+            }),
+        }.ToJsonString();
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.Codex, ApiProtocol.OpenAIResponses,
+            seen => seen.Url.AbsolutePath switch
+            {
+                "/models" => FakeUpstream.Json(modelList),
+                "/v1/messages" => stream ? FakeUpstream.Sse(anthropicStream) : FakeUpstream.Json(anthropicBody),
+                "/chat/completions" => stream ? FakeUpstream.Sse(ChatStream) : FakeUpstream.Json(chatBody),
+                _ => FakeUpstream.Json("""{"error":{"message":"The requested model is not supported.","code":"model_not_supported","param":"model","type":"invalid_request_error"}}""", HttpStatusCode.BadRequest),
+            }, authScheme: AuthSchemes.OAuthSubscription);
+        gw.Provider.TemplateId = "github-copilot-subscription";
+        gw.Provider.Endpoints =
+        [
+            new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://upstream.test" },
+            new ProviderEndpoint { Protocol = ApiProtocol.OpenAIResponses, BaseUrl = "https://upstream.test" },
+            new ProviderEndpoint { Protocol = ApiProtocol.Anthropic, BaseUrl = "https://upstream.test" },
+        ];
+        gw.Provider.PreferredUpstreamProtocols = [ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses, ApiProtocol.Anthropic];
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        if (storedModel)
+            await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "claude-sonnet-5" });
+        var protector = gw.Host.App.Services.GetRequiredService<ISecretProtector>();
+        foreach (var current in new[] { true, false })
+            await gw.Host.Db.Accounts.InsertAsync(new ProviderAccount
+            {
+                Id = current ? "acc-current" : "acc-pinned",
+                ProviderId = gw.Provider.Id,
+                DisplayName = current ? "Current" : "Pinned",
+                IsCurrent = current,
+                AccessTokenEnc = protector.Protect(current ? "current-copilot-token" : "pinned-copilot-token"),
+                ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+                Status = AccountStatus.Active,
+            });
+        await gw.Host.Db.Clients.SetBindingAsync(new ClientBinding
+        {
+            ClientKind = ClientKinds.Codex, ProviderId = gw.Provider.Id, AccountId = "acc-pinned",
+        });
+
+        // A legacy row and an unlisted model both learn their capabilities without re-login; the second call is cached.
+        for (var i = 0; i < 2; i++)
+        {
+            var response = await gw.PostAsync("/v1/responses", new JsonObject
+            {
+                ["model"] = "claude-sonnet-5", ["stream"] = stream, ["store"] = false,
+                ["instructions"] = "You are Codex.", ["input"] = "list files", ["max_output_tokens"] = 1024,
+                ["tools"] = new JsonArray(new JsonObject
+                {
+                    ["type"] = "function", ["name"] = "shell", ["parameters"] = new JsonObject { ["type"] = "object" },
+                }),
+            }.ToJsonString());
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var text = await response.Content.ReadAsStringAsync();
+            JsonNode completed;
+            if (stream)
+            {
+                Assert.Equal("text/event-stream", response.Content.Headers.ContentType!.MediaType);
+                var frames = SseParser.ParseAll(text);
+                Assert.Equal("response.created", frames[0].Event);
+                Assert.Contains(frames, f => f.Event == "response.function_call_arguments.delta");
+                Assert.Equal("response.completed", frames[^1].Event);
+                completed = JsonNode.Parse(frames[^1].Data)!["response"]!;
+            }
+            else
+            {
+                Assert.Equal("application/json", response.Content.Headers.ContentType!.MediaType);
+                completed = JsonNode.Parse(text)!;
+            }
+            Assert.Equal("completed", completed["status"]!.GetValue<string>());
+            Assert.True(completed["usage"]!["input_tokens"]!.GetValue<long>() > 0);
+            var call = completed["output"]!.AsArray().Single(o => o!["type"]!.GetValue<string>() == "function_call")!;
+            Assert.Equal("call_A", call["call_id"]!.GetValue<string>());
+            Assert.Equal("shell", call["name"]!.GetValue<string>());
+            Assert.Equal("{\"cmd\":\"ls\"}", call["arguments"]!.GetValue<string>());
+            var record = await gw.RecordOfAsync(response);
+            Assert.Equal(RequestStatus.Success, record.Status);
+            Assert.False(record.Passthrough);
+            Assert.Equal("openai-responses", record.InboundProtocol);
+            Assert.Equal(protocol.ToId(), record.UpstreamProtocol);
+            Assert.Equal("acc-pinned", record.AccountId);
+        }
+
+        var discovery = Assert.Single(gw.Upstream.Requests, r => r.Method == HttpMethod.Get);
+        Assert.Equal("/models", discovery.Url.AbsolutePath);
+        Assert.All(gw.Upstream.Requests, r => Assert.Equal("Bearer pinned-copilot-token", r.Headers["authorization"]));
+        var generations = gw.Upstream.Requests.Where(r => r.Method == HttpMethod.Post).ToList();
+        Assert.Equal(2, generations.Count);
+        Assert.All(generations, r =>
+        {
+            Assert.Equal(protocol == ApiProtocol.Anthropic ? "/v1/messages" : "/chat/completions", r.Url.AbsolutePath);
+            Assert.Equal("claude-sonnet-5", r.Json["model"]!.GetValue<string>());
+            Assert.Equal(stream, r.Json["stream"]?.GetValue<bool>() ?? false);
+            Assert.NotNull(r.Json["messages"]);
+            Assert.Null(r.Json["input"]);
+            Assert.NotNull(r.Json["tools"]);
+        });
+        if (storedModel)
+            Assert.Equal([protocol], (await gw.Host.Db.Providers.GetModelAsync(gw.Provider.Id, "claude-sonnet-5"))!.UpstreamProtocols);
+    }
+
+    [Fact]
+    public async Task Copilot_Models_That_Advertise_Responses_Keep_Responses_Passthrough()
+    {
+        const string completion = """{"id":"resp_1","object":"response","status":"completed","model":"gpt-5","output":[],"usage":{"input_tokens":12,"output_tokens":3}}""";
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.Codex, ApiProtocol.OpenAIResponses,
+            seen => seen.Method == HttpMethod.Get
+                ? FakeUpstream.Json("""{"data":[{"id":"gpt-5","supported_endpoints":["/chat/completions","/responses","ws:/responses"]}]}""")
+                : FakeUpstream.Json(completion));
+        gw.Provider.TemplateId = "github-copilot-subscription";
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        const string body = """{"model":"gpt-5","input":"hi","stream":false,"store":false}""";
+        var response = await gw.PostAsync("/v1/responses", body);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(completion, await response.Content.ReadAsStringAsync());
+        var generation = Assert.Single(gw.Upstream.Requests, r => r.Method == HttpMethod.Post);
+        Assert.Equal("/v1/responses", generation.Url.AbsolutePath);
+        Assert.Equal(body, generation.Body);
+        Assert.True((await gw.RecordOfAsync(response)).Passthrough);
+    }
+
+    [Fact]
+    public async Task Client_Policy_Is_Checked_Before_Copilot_Model_Discovery()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.Codex, ApiProtocol.OpenAIResponses,
+            _ => FakeUpstream.Json("{}"));
+        gw.Provider.TemplateId = "github-copilot-subscription";
+        gw.Provider.Settings["subscription"] = new JsonObject { ["client_policy"] = "claude-code-only" };
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        var response = await gw.PostAsync("/v1/responses", """{"model":"claude-sonnet-5","input":"hi"}""");
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        Assert.Empty(gw.Upstream.Requests);
     }
 
     [Fact]

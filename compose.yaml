@@ -1,0 +1,28 @@
+# Astra gateway. Set the admin password first:
+#   ASTRA_ADMIN_PASSWORD='a-long-password' docker compose up -d
+# Admin UI + gateway: http://localhost:17321  (put a TLS reverse proxy in front for anything beyond localhost)
+services:
+  astra:
+    image: ghcr.io/239573049/astra-gate:latest
+    restart: unless-stopped
+    ports:
+      - "17321:17321"
+      # Codex subscription login callback (browser must run on this Docker host):
+      # - "1455:1455"
+      # - "1457:1457"
+    environment:
+      ASTRA_ADMIN_PASSWORD: ${ASTRA_ADMIN_PASSWORD:?set ASTRA_ADMIN_PASSWORD (min 8 characters)}
+      # Externally reachable URL shown to clients (reverse proxy / domain); defaults to http://127.0.0.1:17321.
+      # ASTRA_PUBLIC_URL: https://gate.example.com
+      # Behind a TLS-terminating proxy, trust X-Forwarded-Proto/-For so the session cookie gets `Secure`:
+      # ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      # Outbound proxy for upstream providers:
+      # HTTPS_PROXY: http://proxy:3128
+      # NO_PROXY: localhost,127.0.0.1
+    volumes:
+      - astra-data:/data
+    # Upstreams on the Docker host (e.g. Ollama) are reachable as host.docker.internal; on Linux add:
+    # extra_hosts: ["host.docker.internal:host-gateway"]
+
+volumes:
+  astra-data:

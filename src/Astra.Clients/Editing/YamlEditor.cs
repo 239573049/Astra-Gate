@@ -16,6 +16,12 @@ namespace Astra.Clients.Editing;
 /// values are rendered as block YAML with double-quoted strings. Every mutation re-parses the result
 /// and compares the whole document against the expected one, throwing <see cref="EditorException"/>
 /// instead of returning a corrupted document.
+/// <para>
+/// A document whose root is a block <em>sequence of mappings</em> (DeepSeek Harness's <c>cordis.patch.yml</c>) is addressed
+/// with a leading array selector, <c>[id=llm-pi-ai].config.providers.astra</c> (<see cref="JsoncEditor.Selector"/>): the
+/// selector picks the row whose members match, the rest of the path walks inside it. A row Astra touches is re-rendered as
+/// block YAML (comments inside that one row are not kept); every other row stays byte-identical.
+/// </para>
 /// </summary>
 public sealed partial class YamlEditor
 {
@@ -35,19 +41,32 @@ public sealed partial class YamlEditor
     /// </summary>
     public string? GetJsonText(string path)
     {
-        var entry = Locate(LoadRoot(Text), SplitPath(path));
+        var segments = SplitPath(path);
+        if (IsRowPath(segments)) return ResolveInRow(LoadRoot(Text), segments, out var present) is { } node ? node.ToJsonString() : present ? "null" : null;
+        var entry = Locate(LoadRoot(Text), segments);
         return entry is null ? null : ToJson(entry.Value.Value)?.ToJsonString() ?? "null";
     }
 
     /// <summary>The value at <paramref name="path"/> as a JSON node (null when absent or YAML null).</summary>
     public JsonNode? Get(string path)
     {
-        var entry = Locate(LoadRoot(Text), SplitPath(path));
+        var segments = SplitPath(path);
+        if (IsRowPath(segments)) return ResolveInRow(LoadRoot(Text), segments, out _);
+        var entry = Locate(LoadRoot(Text), segments);
         return entry is null ? null : ToJson(entry.Value.Value);
     }
 
     /// <summary>True when a key exists at this dotted path.</summary>
-    public bool Has(string path) => Locate(LoadRoot(Text), SplitPath(path)) is not null;
+    public bool Has(string path)
+    {
+        var segments = SplitPath(path);
+        if (IsRowPath(segments))
+        {
+            _ = ResolveInRow(LoadRoot(Text), segments, out var present);
+            return present;
+        }
+        return Locate(LoadRoot(Text), segments) is not null;
+    }
 
     /// <summary>The whole document in the JSON data model (null for an empty document).</summary>
     public static JsonNode? ParseToJson(string text)
@@ -74,6 +93,7 @@ public sealed partial class YamlEditor
 
         var segments = SplitPath(path);
         var root = LoadRoot(Text);
+        if (IsRowPath(segments)) return SetRow(root, segments, value, path);
         var expected = DocumentObject(root);
         SetIn(expected, segments, value?.DeepClone());
 
@@ -99,6 +119,7 @@ public sealed partial class YamlEditor
     {
         var segments = SplitPath(path);
         var root = LoadRoot(Text);
+        if (IsRowPath(segments)) return RemoveRow(root, segments, path);
         if (Locate(root, segments) is not { } entry) return this;
         var expected = DocumentObject(root);
         RemoveIn(expected, segments);
@@ -354,6 +375,139 @@ public sealed partial class YamlEditor
     [GeneratedRegex(@"^[-+]?(\.[0-9]+|[0-9]+(\.[0-9]*)?)([eE][-+]?[0-9]+)?$")]
     private static partial Regex FloatPattern();
 
+    // ---------------------------------------------------------------- sequence-of-mappings documents (rows)
+
+    private static bool IsRowPath(string[] segments) => JsoncEditor.IsSelector(segments[0]);
+
+    private static JsonArray DocumentArray(YamlNode? root) => root is null
+        ? new JsonArray()
+        : ToJson(root) as JsonArray ?? throw new EditorException("The YAML document root is not a sequence.");
+
+    /// <summary>The row of the root sequence a selector picks, with its index; null when there is none.</summary>
+    private static (YamlSequenceNode Sequence, int Index, YamlMappingNode Row)? FindRow(YamlNode? root, string selector)
+    {
+        if (root is null) return null;
+        if (root is not YamlSequenceNode sequence) throw new EditorException("An array selector needs a YAML document whose root is a sequence.");
+        for (var i = 0; i < sequence.Children.Count; i++)
+        {
+            if (sequence.Children[i] is YamlMappingNode row && JsoncEditor.ElementMatches(ToJson(row), selector)) return (sequence, i, row);
+        }
+        return null;
+    }
+
+    /// <summary>The JSON node at a row path; <paramref name="present"/> tells an absent key from a YAML null.</summary>
+    private static JsonNode? ResolveInRow(YamlNode? root, string[] segments, out bool present)
+    {
+        present = false;
+        if (FindRow(root, segments[0]) is not { } found) return null;
+        JsonNode? current = ToJson(found.Row);
+        foreach (var segment in segments[1..])
+        {
+            if (current is not JsonObject o || !o.TryGetPropertyValue(segment, out var next)) return null;
+            current = next;
+        }
+        present = true;
+        return current;
+    }
+
+    private YamlEditor SetRow(YamlNode? root, string[] segments, JsonNode? value, string path)
+    {
+        var expected = DocumentArray(root);
+        var nl = TextTool.NewlineOf(Text);
+        var found = FindRow(root, segments[0]);
+        var rest = segments[1..];
+        JsonObject newRow;
+        if (found is { } existing)
+        {
+            newRow = ToJson(existing.Row) as JsonObject ?? throw new EditorException($"Cannot set '{path}': the row is not a mapping.");
+            if (rest.Length == 0) newRow = value as JsonObject ?? throw new EditorException($"'{path}' must be set to a whole mapping.");
+            else SetIn(newRow, rest, value?.DeepClone());
+            expected[existing.Index] = newRow.DeepClone();
+            return Verify(ReplaceRow(existing.Row, newRow, nl), expected, $"set '{path}'");
+        }
+
+        if (rest.Length > 0) throw new EditorException($"Cannot set '{path}': no row matches '{segments[0]}'; create the whole row first.");
+        newRow = value as JsonObject ?? throw new EditorException($"'{path}' must be set to a whole mapping.");
+        expected.Add(newRow.DeepClone());
+        if (root is YamlSequenceNode { Style: SequenceStyle.Flow }) throw new EditorException("A flow-style YAML root sequence is not supported.");
+        var indent = root is YamlSequenceNode { Children.Count: > 0 } seq ? RowIndent(Text, (YamlMappingNode)seq.Children[0]) : "";
+        var rendered = RenderRow(newRow, indent, nl) + nl;
+        string updated;
+        if (root is YamlSequenceNode { Children.Count: > 0 } sequence)
+        {
+            var at = TextTool.LineEnd(Text, ContentEnd(sequence.Children[^1]) - 1);
+            updated = TextTool.Splice(Text, at, at, (at > 0 && Text[at - 1] == '\n' ? "" : nl) + rendered);
+        }
+        else
+        {
+            updated = Text + (Text.Length == 0 || Text.EndsWith('\n') ? "" : nl) + rendered;
+        }
+        return Verify(updated, expected, $"set '{path}'");
+    }
+
+    private YamlEditor RemoveRow(YamlNode? root, string[] segments, string path)
+    {
+        if (FindRow(root, segments[0]) is not { } found) return this;
+        var expected = DocumentArray(root);
+        var nl = TextTool.NewlineOf(Text);
+        var rest = segments[1..];
+        if (rest.Length == 0)
+        {
+            expected.RemoveAt(found.Index);
+            var (start, end, _) = RowRegion(found.Row);
+            return Verify(TextTool.Splice(Text, start, end, ""), expected, $"remove '{path}'");
+        }
+
+        var row = ToJson(found.Row) as JsonObject ?? throw new EditorException($"Cannot remove '{path}': the row is not a mapping.");
+        if (ResolveInRow(root, segments, out var present) is null && !present) return this;
+        RemoveIn(row, rest);
+        expected[found.Index] = row.DeepClone();
+        return Verify(ReplaceRow(found.Row, row, nl), expected, $"remove '{path}'");
+    }
+
+    /// <summary>The text span of a row: from its "- " line start to the end of its last content line (newline included).</summary>
+    private (int Start, int End, string Indent) RowRegion(YamlMappingNode row)
+    {
+        if (row.Style == MappingStyle.Flow) throw new EditorException("A flow-style row in a YAML sequence is not supported.");
+        var keyStart = Idx(row.Start);
+        var lineStart = TextTool.LineStart(Text, keyStart);
+        var before = Text[lineStart..keyStart];
+        if (!before.EndsWith("- ", StringComparison.Ordinal) || before[..^2].Trim().Length > 0)
+            throw new EditorException("A row in a YAML sequence must start on its own '- ' line.");
+        return (lineStart, TextTool.LineEnd(Text, Math.Max(ContentEnd(row) - 1, keyStart)), before[..^2]);
+    }
+
+    private static string RowIndent(string text, YamlMappingNode row)
+    {
+        var keyStart = Idx(row.Start);
+        var before = text[TextTool.LineStart(text, keyStart)..keyStart];
+        return before.EndsWith("- ", StringComparison.Ordinal) ? before[..^2] : "";
+    }
+
+    private string ReplaceRow(YamlMappingNode row, JsonObject newRow, string nl)
+    {
+        var (start, end, indent) = RowRegion(row);
+        var hadNewline = end > 0 && Text[end - 1] == '\n';
+        return TextTool.Splice(Text, start, end, RenderRow(newRow, indent, nl) + (hadNewline ? nl : ""));
+    }
+
+    /// <summary>A mapping as a sequence item: the first member rides on the "- " line.</summary>
+    private static string RenderRow(JsonObject row, string indent, string nl)
+    {
+        if (row.Count == 0) return indent + "- {}";
+        var sb = new StringBuilder();
+        var first = true;
+        foreach (var (name, child) in row)
+        {
+            var entry = RenderEntry(name, child, indent + IndentUnit, nl);
+            if (first) entry = indent + "- " + entry[(indent.Length + IndentUnit.Length)..];
+            else sb.Append(nl);
+            sb.Append(entry);
+            first = false;
+        }
+        return sb.ToString();
+    }
+
     // ---------------------------------------------------------------- navigation and helpers
 
     private readonly record struct Entry(YamlNode Key, YamlNode Value, YamlMappingNode Parent, (YamlNode Key, YamlNode Value)? ParentEntry);
@@ -414,9 +568,9 @@ public sealed partial class YamlEditor
         (current as JsonObject)?.Remove(segments[^1]);
     }
 
-    private static YamlEditor Verify(string updated, JsonObject expected, string operation)
+    private static YamlEditor Verify(string updated, JsonNode expected, string operation)
     {
-        var actual = DocumentObject(LoadRoot(updated));
+        JsonNode actual = expected is JsonArray ? DocumentArray(LoadRoot(updated)) : DocumentObject(LoadRoot(updated));
         if (!JsonNode.DeepEquals(actual, expected))
             throw new EditorException($"Self-check failed after {operation}: the YAML document differs from the expected content.");
         return new YamlEditor(updated);
@@ -424,7 +578,7 @@ public sealed partial class YamlEditor
 
     private static string[] SplitPath(string path)
     {
-        var parts = path.Split('.', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var parts = JsoncEditor.SplitKeyPath(path); // dots inside a [selector] do not split
         if (parts.Length == 0) throw new ArgumentException("Empty key path.", nameof(path));
         return parts;
     }

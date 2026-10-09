@@ -25,10 +25,12 @@ public sealed class GatewayPipeline(
     GatewayHttpClients http,
     UpstreamAuthResolver auth,
     EffectiveModelResolver models,
+    IModelProtocolResolver modelProtocols,
     SettingsService settings,
     PrivacyGuardService privacy,
     BodyStore bodies,
     UsageWriter usageWriter,
+    LiveRequestFeed live,
     ILogger<GatewayPipeline> logger)
 {
     private const long MaxRequestBytes = 64L * 1024 * 1024;
@@ -53,8 +55,17 @@ public sealed class GatewayPipeline(
             UserAgent = Truncate(ctx.Request.Headers.UserAgent.ToString(), 300),
         };
         ctx.Response.Headers["x-astra-request-id"] = record.Id;
+        // Live request log: the request shows up the moment it arrives, then follows its progress.
+        live.Start(record);
         var capture = s.DebugBodies ? new BodyCapture() : null;
-        var observer = new ResponseObserver();
+        var observer = new ResponseObserver
+        {
+            FirstToken = ttft =>
+            {
+                record.TtftMs = ttft;
+                live.Update(record);
+            },
+        };
         EffectiveModel? effective = null;
         Provider? provider = null;
         IResponseDecoder? decoder = null;
@@ -69,6 +80,7 @@ public sealed class GatewayPipeline(
             record.TokenName = route.Token.Name;
             record.ProviderId = provider.Id;
             record.ProviderName = provider.Name;
+            live.Update(record);
 
             var rawBody = await ReadBodyAsync(ctx.Request, ct);
             capture?.Set(BodyStore.ClientRequest, rawBody);
@@ -88,24 +100,27 @@ public sealed class GatewayPipeline(
             // upstream budgets from it. Never touches the wire and never throws.
             RequestReasoning.Capture(record, inbound, body);
             var requestedModel = (inbound == ApiProtocol.Gemini ? StripModels(pathModel) : null) ?? Str(body, "model") ?? "";
-            // 有时上游按模型区分协议（GitHub Copilot 的 Claude 只支持 Messages），
-            // 先解析出这条 provider model 的约束，再据它选上游端点：
-            // 不支持直通时就翻译，否则 Responses 端点会回 model_not_supported。
-            var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, requestedModel, ct);
-            var endpoint = GatewayRouter.SelectEndpoint(provider, inbound, resolvedModel.UpstreamProtocols);
+            // Enforce the client policy before capability discovery sends anything upstream.
+            var isClaudeCode = inbound == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, body);
+            SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
+            // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
+            // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
+            var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, route.UpstreamModelFor(requestedModel), ct);
+            var supportedProtocols = await modelProtocols.ResolveAsync(provider, resolvedModel, route.AccountId, ct);
+            var endpoint = GatewayRouter.SelectEndpoint(provider, inbound, supportedProtocols);
             var upstreamProtocol = endpoint.Protocol;
             var passthrough = upstreamProtocol == inbound;
             record.UpstreamProtocol = upstreamProtocol.ToId();
             record.Passthrough = passthrough;
 
-            // Claude subscription (plan §5.4): the client policy ("Claude Code only" by default) and, for Claude Code
-            // itself on the pass-through path, a faithful relay of its own headers; other callers get the minimal
-            // OAuth compatibility headers.
-            var isClaudeCode = inbound == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, body);
-            SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
+            // Claude subscription (plan §5.4): for Claude Code itself on the pass-through path, a faithful relay of
+            // its own headers; other callers get the minimal OAuth compatibility headers — or, when the user enabled
+            // subscription.mimic_claude_code, the full Claude Code identity (see ClaudeCodeMimicry), which
+            // Anthropic's client check requires from non-Haiku callers.
             var claudeMode = !SubscriptionSupport.IsClaudeSubscription(provider) || upstreamProtocol != ApiProtocol.Anthropic
                 ? ClaudeHeaderMode.None
                 : passthrough && isClaudeCode ? ClaudeHeaderMode.Relay : ClaudeHeaderMode.Compat;
+            var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
 
             // Legal per plan §6.2, but worth a line in the log: the provider prefers this protocol, has no address for
             // it, and the request is translated into a lower-preference protocol instead of passing through.
@@ -151,10 +166,11 @@ public sealed class GatewayPipeline(
                                        && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
 
             // 上游模型名可能与请求里的不同（provider model 映射），按上游名再解析一次取有效模型。
-            (_, effective) = upstreamModel == requestedModel
+            (_, effective) = upstreamModel == resolvedModel.ModelId
                 ? (resolvedModel, await models.ResolveAsync(provider, resolvedModel, ct))
                 : await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
             record.SystemModelId = effective.SystemModelId;
+            live.Update(record);
 
             // What we send upstream.
             string upstreamText;
@@ -206,18 +222,32 @@ public sealed class GatewayPipeline(
                 upstreamText = encoded.ToJsonString(GatewayJson.Options);
                 if (ir!.Warnings.Count > 0) logger.LogInformation("Request {Id}: lossy mapping: {Warnings}", record.Id, string.Join("; ", ir.Warnings));
             }
+            // 模拟 Claude Code（subscription.mimic_claude_code，见 ClaudeCodeMimicry）：把最终发往
+            // 上游的请求体改写成 CLI 的形状（3 块 system + metadata.user_id）。直通与翻译两条路
+            // 都在这里收口，改的是同一份 upstreamText。
+            if (claudeMimic)
+                upstreamText = ClaudeCodeMimicry.ApplyBody(upstreamText, route.AccountId ?? provider.Id,
+                    ctx.Request.Headers["x-claude-code-session-id"].ToString());
+            // Relay（真正的 Claude Code）：经 ANTHROPIC_AUTH_TOKEN 指到 Astra 的 CC 处于 auth-token 模式，
+            // 它的请求体与自己用订阅（OAuth）登录时发的不同——实测抓包（claude-cli/2.1.281 两种模式的原始请求）
+            // 唯一的体差异是 cache_control 没有 ttl:"1h"（计费块、metadata 两种模式都有）。头里的 beta 同理要
+            // 补 oauth + extended-cache-ttl（见 ClaudeOAuthHeaders.MergeRelayBeta）：头体必须自洽，
+            // 只补头不补体，就是"声明订阅身份却带着 API-key 形态的体"，上游回 403 Request not allowed。
+            else if (claudeMode == ClaudeHeaderMode.Relay)
+                upstreamText = ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamText);
             capture?.Set(BodyStore.UpstreamRequest, upstreamText);
 
             var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
             // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
             if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
-            var (sent, accountId) = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, claudeMode, upstreamModel, ctx.Request, ct);
+            var (sent, accountId) = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, claudeMode, upstreamModel, ctx.Request, capture, ct);
             using var response = sent;
             record.AccountId = accountId;
             record.TtfbMs = sw.ElapsedMilliseconds;
             record.HttpStatus = (int)response.StatusCode;
             record.UpstreamRequestId = FirstHeader(response, "x-request-id", "request-id", "x-goog-request-id", "cf-ray");
             if (claudeMode == ClaudeHeaderMode.Relay) RelayResponseHeaders(response, ctx.Response);
+            live.Update(record);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -318,6 +348,7 @@ public sealed class GatewayPipeline(
                 record.BodyRef = BodyStore.RefFor(record.Id, record.StartedAtUtc);
                 await capture.WriteAsync(bodies, record.BodyRef);
             }
+            live.Finish(record);
             usageWriter.Enqueue(record);
         }
     }
@@ -326,13 +357,16 @@ public sealed class GatewayPipeline(
 
     private async Task<(HttpResponseMessage Response, string? AccountId)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, string body, bool stream, bool passthrough,
-        ClaudeHeaderMode claudeMode, string upstreamModel, HttpRequest clientRequest, CancellationToken ct)
+        ClaudeHeaderMode claudeMode, string upstreamModel, HttpRequest clientRequest, BodyCapture? capture, CancellationToken ct)
     {
         var provider = route.Provider;
         var subscription = provider.AuthScheme == AuthSchemes.OAuthSubscription;
         // Plan §5.4: in failover mode a rate-limited or dead account hands the request to the next usable account
         // (which also becomes the provider's current account, so the following requests stay on it).
         var failover = subscription && SubscriptionSupport.SwitchModeOf(provider) == SwitchModes.Failover;
+        // 模拟 Claude Code（subscription.mimic_claude_code）：只作用于 compat 路径（调用方不是 Claude Code 本身）。
+        var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
+        var claudeSessionId = clientRequest.Headers["x-claude-code-session-id"].ToString();
         var client = http.For(provider);
         var accountId = route.AccountId;
         var tried = new List<string>();
@@ -348,8 +382,11 @@ public sealed class GatewayPipeline(
                 throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
             }
 
-            var response = await client.SendAsync(Build(credentials), HttpCompletionOption.ResponseHeadersRead, ct);
-            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
+            var request = Build(credentials);
+            // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
+            // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
+            capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
+            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
             {
                 // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
                 response.Dispose();
@@ -367,7 +404,9 @@ public sealed class GatewayPipeline(
                     }
                     throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号需要重新登录：{e.Message}");
                 }
-                response = await client.SendAsync(Build(credentials), HttpCompletionOption.ResponseHeadersRead, ct);
+                request = Build(credentials);
+                capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
+                response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
             }
             if (failover && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
             {
@@ -379,6 +418,10 @@ public sealed class GatewayPipeline(
                     continue;
                 }
             }
+            // 失败时的请求日志（用户要求的排查手段）：地址 + 最终出去的请求头（凭据脱敏）。
+            if (!response.IsSuccessStatusCode && subscription)
+                logger.LogWarning("Upstream {Status} for {Provider} → {Url}; sent: {Headers}",
+                    (int)response.StatusCode, provider.Name, url, DescribeRequest(request));
             return (response, credentials.AccountId);
         }
 
@@ -389,6 +432,32 @@ public sealed class GatewayPipeline(
             if (next is not null)
                 logger.LogInformation("Provider {Provider}: account {From} → {To} ({Reason})", provider.Name, from, next, reason);
             return next;
+        }
+
+        /// <summary>
+        /// 调试视图：请求地址 + 最终出去的请求头。凭据头只留 scheme 与末 4 位——日志和请求详情
+        /// 都可能被截图分享，令牌本体永远不落盘。
+        /// </summary>
+        static string DescribeRequest(HttpRequestMessage request)
+        {
+            string Redact(string value)
+            {
+                var space = value.IndexOf(' ');
+                var tail = value.Length <= 8 ? "••••" : "••••" + value[^4..];
+                return space > 0 ? value[..(space + 1)] + tail : tail;
+            }
+
+            var headers = new JsonObject();
+            foreach (var (name, values) in request.Headers)
+            {
+                var value = string.Join(", ", values);
+                headers[name] = name is "Authorization" or "X-Api-Key" or "Cookie" ? Redact(value) : value;
+            }
+            return new JsonObject
+            {
+                ["url"] = request.RequestUri?.ToString(),
+                ["headers"] = headers,
+            }.ToJsonString();
         }
 
         HttpRequestMessage Build(UpstreamAuth a)
@@ -431,8 +500,12 @@ public sealed class GatewayPipeline(
                 request.Headers.Remove(name);
                 request.Headers.TryAddWithoutValidation(name, value);
             }
-            // Non-Claude-Code callers of a Claude subscription (policy lifted): the betas OAuth tokens require.
-            if (claudeMode == ClaudeHeaderMode.Compat) ClaudeOAuthHeaders.ApplyCompat(request, clientRequest.Headers);
+            // Non-Claude-Code callers of a Claude subscription: either the Claude Code identity
+            // (subscription.mimic_claude_code — canonical headers only, nothing of the client's leaks
+            // through) or just the betas OAuth tokens require.
+            if (claudeMimic)
+                ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? provider.Id, claudeSessionId);
+            else if (claudeMode == ClaudeHeaderMode.Compat) ClaudeOAuthHeaders.ApplyCompat(request, clientRequest.Headers);
             // 凭据 + 上游 CLI 固定头（Authorization / chatgpt-account-id）。
             a.Apply(request);
             return request;
@@ -935,6 +1008,9 @@ public sealed class GatewayPipeline(
         public FinishReason? Finish { get; private set; }
         public ErrorEvent? Error { get; private set; }
 
+        /// <summary>Called once, with the TTFT, when the first token arrives.</summary>
+        public Action<long>? FirstToken { get; init; }
+
         public void Observe(UnifiedStreamEvent e, long elapsedMs)
         {
             switch (e)
@@ -943,7 +1019,11 @@ public sealed class GatewayPipeline(
                 case ReasoningDeltaEvent { Text.Length: > 0 }:
                 case ToolArgsDeltaEvent:
                 case BlockStartEvent { Kind: BlockKind.ToolCall }:
-                    TtftMs ??= elapsedMs;
+                    if (TtftMs is null)
+                    {
+                        TtftMs = elapsedMs;
+                        FirstToken?.Invoke(elapsedMs);
+                    }
                     break;
                 case UsageEvent u:
                     Usage = u.Usage;

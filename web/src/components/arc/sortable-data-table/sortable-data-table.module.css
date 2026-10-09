@@ -6,7 +6,7 @@
 .table caption, .srOnly { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .selectCol { width: 44px; }
 
-.table th, .table td { --cell-base: var(--surface); --cell-fill: var(--cell-base); background-color: var(--cell-fill); transition: background-color var(--duration-standard) var(--ease-standard), color var(--duration-standard) var(--ease-standard); }
+.table th, .table td { --cell-base: transparent; --cell-fill: var(--cell-base); background-color: var(--cell-fill); transition: background-color var(--duration-standard) var(--ease-standard), color var(--duration-standard) var(--ease-standard); }
 .table th[data-sorted], .table td[data-sorted] { --cell-base: var(--column-tint); }
 .table th { height: 44px; padding: 0 var(--space-4); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: var(--text-sm); font-weight: 500; text-align: left; white-space: nowrap; }
 .table th[data-sortable] { padding: 0; }
@@ -76,10 +76,10 @@
   .table thead tr::-webkit-scrollbar { display: none; }
   .table th { display: block; flex: none; height: auto; border: 0; padding: 0; background: transparent; }
   /* Select all stays pinned while the sort controls scroll beneath it. */
-  .table th.selectCell { position: sticky; left: calc(-1 * var(--space-2)); z-index: 1; width: 40px; margin-left: calc(-1 * var(--space-2)); padding: 0 0 0 var(--space-3); background: var(--surface); }
+  .table th.selectCell { position: sticky; left: calc(-1 * var(--space-2)); z-index: 1; width: 40px; margin-left: calc(-1 * var(--space-2)); padding: 0 0 0 var(--space-3); background: var(--surface-raised); }
   .table th.selectCell .selectHit { height: 32px; }
   /* Once the strip scrolls, a fade off the pinned cell hides the word sliding under it. */
-  .table th.selectCell::after { position: absolute; top: 0; bottom: 0; left: 100%; width: 36px; background: linear-gradient(to right, var(--surface) 45%, transparent); content: ""; opacity: 0; pointer-events: none; animation: stripFade linear both; animation-timeline: scroll(nearest inline); animation-range: 0 24px; }
+  .table th.selectCell::after { position: absolute; top: 0; bottom: 0; left: 100%; width: 36px; background: linear-gradient(to right, var(--surface-raised) 45%, transparent); content: ""; opacity: 0; pointer-events: none; animation: stripFade linear both; animation-timeline: scroll(nearest inline); animation-range: 0 24px; }
   .table th .sortButton, .table[data-selectable] th[data-primary] .sortButton { width: auto; height: 32px; border-radius: var(--radius-control); padding: 0 10px; transition: background-color var(--duration-standard) var(--ease-standard), color var(--duration-standard) var(--ease-standard); }
   .table th[data-sorted] .sortButton { background: var(--surface-muted); }
   .table th[data-numeric] .sortInner { flex-direction: row; }
@@ -87,10 +87,10 @@
   .sortButton:focus-visible .sortInner { outline: none; }
   .table tbody { display: block; width: 100%; }
   /* Rows fold into two lines: the first column with its number, then the remaining details. */
-  .table tbody tr { --row-fill: var(--surface); position: relative; display: flex; width: 100%; min-height: 64px; box-sizing: border-box; flex-wrap: wrap; align-items: baseline; align-content: center; gap: 2px var(--space-2); padding: 10px var(--space-4); border-bottom: 1px solid var(--border-subtle); background-color: var(--row-fill); transition: background-color var(--duration-standard) var(--ease-standard); }
+  .table tbody tr { --row-fill: transparent; position: relative; display: flex; width: 100%; min-height: 64px; box-sizing: border-box; flex-wrap: wrap; align-items: baseline; align-content: center; gap: 2px var(--space-2); padding: 10px var(--space-4); border-bottom: 1px solid var(--border-subtle); background-color: var(--row-fill); transition: background-color var(--duration-standard) var(--ease-standard); }
   .table tbody tr::after { order: 1; flex-basis: 100%; content: ""; }
   .table[data-selectable] tbody tr { padding-left: 44px; }
-  .table[data-selectable] tbody tr[data-selected] { --row-fill: color-mix(in oklab, var(--accent) 8%, var(--surface)); }
+  .table[data-selectable] tbody tr[data-selected] { --row-fill: color-mix(in oklab, var(--accent) 8%, transparent); }
   .table tbody tr:last-child { border-bottom: 0; }
   .table td { order: 2; display: block; min-width: 0; height: auto; border: 0; padding: 0; background: transparent; color: var(--text-secondary); font-size: var(--text-xs); text-align: left; }
   .table[data-selectable] td[data-primary]:not([data-sortable]) { padding-left: 0; }
@@ -105,8 +105,8 @@
   .table[data-selectable] tbody tr:has(.empty) { padding-left: var(--space-4); }
 }
 @media (max-width: 620px) and (hover: hover) and (pointer: fine) {
-  .table tbody tr:hover { --row-fill: color-mix(in oklab, var(--foreground) 3%, var(--surface)); }
-  .table[data-selectable] tbody tr[data-selected]:hover { --row-fill: color-mix(in oklab, var(--accent) 11%, var(--surface)); }
+  .table tbody tr:hover { --row-fill: color-mix(in oklab, var(--foreground) 3%, transparent); }
+  .table[data-selectable] tbody tr[data-selected]:hover { --row-fill: color-mix(in oklab, var(--accent) 11%, transparent); }
   .table tbody tr:hover td { background: transparent; }
 }
 

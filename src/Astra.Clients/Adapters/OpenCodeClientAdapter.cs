@@ -11,24 +11,32 @@ namespace Astra.Clients.Adapters;
 /// "astra/&lt;id&gt;". Astra's own providers keep working untouched. Refreshing the model list
 /// rewrites only <c>provider.astra.models</c> (<see cref="PlanModelsRefresh"/>).
 /// </summary>
-public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
+public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store, OpenCodeFlavour flavour)
     : ClientAdapterBase(env, store)
 {
     public const string ProviderId = "astra";
+
+    /// <summary>OpenCode itself.</summary>
+    public OpenCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
+        : this(env, store, OpenCodeFlavour.OpenCode)
+    {
+    }
 
     private string ConfigDir
     {
         get
         {
+            if (flavour.WindowsLocalAppData && Env.Os == "windows" && Env.GetEnvironmentVariable("LOCALAPPDATA") is { Length: > 0 } local)
+                return Path.Combine(local, flavour.DirName);
             var xdg = Env.GetEnvironmentVariable("XDG_CONFIG_HOME");
-            return string.IsNullOrEmpty(xdg) ? Env.Combine(".config", "opencode") : Path.Combine(xdg, "opencode");
+            return string.IsNullOrEmpty(xdg) ? Env.Combine(".config", flavour.DirName) : Path.Combine(xdg, flavour.DirName);
         }
     }
 
     private string[] ConfigCandidates =>
     [
-        Path.Combine(ConfigDir, "opencode.json"),
-        Path.Combine(ConfigDir, "opencode.jsonc"),
+        Path.Combine(ConfigDir, flavour.FileBase + ".json"),
+        Path.Combine(ConfigDir, flavour.FileBase + ".jsonc"),
     ];
 
     /// <summary>The existing config file (jsonc wins), or opencode.json when none exists yet.</summary>
@@ -36,12 +44,12 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
     {
         get
         {
-            var jsonc = Path.Combine(ConfigDir, "opencode.jsonc");
-            return Env.FileExists(jsonc) ? jsonc : Path.Combine(ConfigDir, "opencode.json");
+            var jsonc = Path.Combine(ConfigDir, flavour.FileBase + ".jsonc");
+            return Env.FileExists(jsonc) ? jsonc : Path.Combine(ConfigDir, flavour.FileBase + ".json");
         }
     }
 
-    public override string Kind => ClientKinds.OpenCode;
+    public override string Kind => flavour.Kind;
 
     public override ClientMode Mode => ClientMode.Coexist;
 
@@ -51,8 +59,8 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
     {
         var dir = ConfigDir;
         if (Env.DirectoryExists(dir)) return ClientDetection.Found(null, $"config directory {dir}");
-        var exe = Env.FindOnPath("opencode");
-        return exe is not null ? ClientDetection.Found(null, $"executable {exe}") : ClientDetection.NotFound($"no {dir} and no opencode executable on PATH");
+        var exe = Env.FindOnPath(flavour.Executable);
+        return exe is not null ? ClientDetection.Found(null, $"executable {exe}") : ClientDetection.NotFound($"no {dir} and no {flavour.Executable} executable on PATH");
     }
 
     public override IReadOnlyList<string> ConfigPaths() => ConfigCandidates;
@@ -102,7 +110,10 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
             ConfigFileFormat.Json,
             CurrentValue(ConfigFile, ConfigFileFormat.Json, $"provider.{ProviderId}"),
             entry.AppliedValueJson);
-        return BuildStatus(detection, enabled, []);
+        var warnings = new List<string>();
+        if (flavour.HomeVariable is { } variable && !string.IsNullOrEmpty(Env.GetEnvironmentVariable(variable)))
+            warnings.Add($"{variable} is set; its effect on the config location is not documented, so Astra still uses {ConfigDir}.");
+        return BuildStatus(detection, enabled, warnings);
     }
 
     private ConfigChange ProviderChange(string file, EnableContext ctx)
@@ -153,4 +164,21 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
             return false;
         }
     }
+}
+
+/// <summary>The OpenCode build an <see cref="OpenCodeClientAdapter"/> configures (OpenCode and its forks share the schema).</summary>
+/// <param name="Kind">The client kind.</param>
+/// <param name="DirName">The directory under the XDG config home (<c>opencode</c>, <c>mimocode</c>).</param>
+/// <param name="FileBase">The config file name without extension (<c>opencode</c>, <c>mimocode</c>).</param>
+/// <param name="Executable">The command on PATH.</param>
+/// <param name="WindowsLocalAppData">The directory lives under <c>%LOCALAPPDATA%</c> on Windows (not the XDG layout).</param>
+/// <param name="HomeVariable">An environment variable that relocates the client's paths in an undocumented way (warned about).</param>
+public sealed record OpenCodeFlavour(string Kind, string DirName, string FileBase, string Executable,
+    bool WindowsLocalAppData = false, string? HomeVariable = null)
+{
+    public static readonly OpenCodeFlavour OpenCode = new(ClientKinds.OpenCode, "opencode", "opencode", "opencode");
+
+    /// <summary>MiMo Code (Xiaomi, npm <c>@mimo-ai/cli</c>, bin <c>mimo</c>) is an OpenCode fork: <c>~/.config/mimocode/mimocode.json(c)</c>, same provider schema.</summary>
+    public static readonly OpenCodeFlavour MiMoCode = new(ClientKinds.MiMoCode, "mimocode", "mimocode", "mimo",
+        WindowsLocalAppData: true, HomeVariable: "MIMOCODE_HOME");
 }

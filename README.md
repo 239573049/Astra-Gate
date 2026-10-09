@@ -106,7 +106,12 @@ astra client enable codex --provider deepseek --model deepseek-chat
 ## Supported clients
 
 `codex` · `claude-code` · `gemini-cli` · `opencode` · `claude-desktop` · `grok-build` ·
-`pi` · `hermes-agent` · `minimax-code` · `copilot-cli` · `vscode-copilot`
+`pi` · `hermes-agent` · `minimax-code` · `copilot-cli` · `vscode-copilot` · `crush` · `qwen-code` ·
+`droid` · `kimi-code` · `zed` · `vscode-insiders` · `vscodium` · `omp` · `mimo-code` ·
+`deepseek-harness`
+
+Zed never reads an API key from its settings file, so paste an Astra token into Zed's
+provider settings once after enabling.
 
 Take-over backs up the original file before first write, keeps permanent first-write
 backups plus 20 rolling ones, and never restores a value you changed yourself afterwards.

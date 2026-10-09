@@ -19,11 +19,19 @@ namespace Astra.Clients.Adapters;
 /// bundled with VS Code). The file is a JSON array; the group is addressed with a selector
 /// (<see cref="JsoncEditor.Selector"/>) and owned as a whole (<see cref="ConfigChangeKind.Table"/>), so the user's
 /// other groups and the per-model "settings" VS Code stores inside our group never count as drift. Models are
-/// picked in VS Code's model picker; Astra selects none.
+/// picked in VS Code's model picker; Astra selects none. VS Code Insiders ("Code - Insiders") and VSCodium ("VSCodium") share the
+/// code base and user-directory layout and are served by the same adapter through a <see cref="VsCodeFlavour"/>; VSCodium
+/// ships without Copilot, which its card warns about.
 /// </summary>
-public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
+public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientConfigStateStore store, VsCodeFlavour flavour)
     : ClientAdapterBase(env, store)
 {
+    /// <summary>VS Code (stable).</summary>
+    public VsCodeCopilotClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
+        : this(env, store, VsCodeFlavour.Stable)
+    {
+    }
+
     public const string GroupName = "Astra";
 
     /// <summary>Context window and output limit used when the model catalog does not know them.</summary>
@@ -37,18 +45,18 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
 
     private string UserDir => Env.Os switch
     {
-        "osx" => Env.Combine("Library", "Application Support", "Code", "User"),
+        "osx" => Env.Combine("Library", "Application Support", flavour.UserDirName, "User"),
         "windows" => Path.Combine(
             Env.GetEnvironmentVariable("APPDATA") is { Length: > 0 } appData ? appData : Env.Combine("AppData", "Roaming"),
-            "Code", "User"),
+            flavour.UserDirName, "User"),
         _ => Path.Combine(
             Env.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } xdg ? xdg : Env.Combine(".config"),
-            "Code", "User"),
+            flavour.UserDirName, "User"),
     };
 
     private string ConfigFile => Path.Combine(UserDir, "chatLanguageModels.json");
 
-    public override string Kind => ClientKinds.VsCodeCopilot;
+    public override string Kind => flavour.Kind;
 
     public override ClientMode Mode => ClientMode.Coexist;
 
@@ -58,8 +66,8 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
     {
         var dir = UserDir;
         if (Env.DirectoryExists(dir)) return ClientDetection.Found(null, $"config directory {dir}");
-        var exe = Env.FindOnPath("code");
-        return exe is not null ? ClientDetection.Found(null, $"executable {exe}") : ClientDetection.NotFound($"no {dir} and no code executable on PATH");
+        var exe = Env.FindOnPath(flavour.Executable);
+        return exe is not null ? ClientDetection.Found(null, $"executable {exe}") : ClientDetection.NotFound($"no {dir} and no {flavour.Executable} executable on PATH");
     }
 
     public override IReadOnlyList<string> ConfigPaths() => [ConfigFile];
@@ -107,7 +115,7 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
         var entry = Store.Get(Kind, ConfigFile, path);
         var enabled = entry is not null && ConfigValueCodec.EqualsValue(
             ConfigFileFormat.Json, CurrentValue(ConfigFile, ConfigFileFormat.Json, path), entry.AppliedValueJson);
-        return BuildStatus(detection, enabled, []);
+        return BuildStatus(detection, enabled, flavour.Warning is null ? [] : [flavour.Warning]);
     }
 
     protected override bool IsTableKeyPath(string keyPath) => keyPath == GroupPath;
@@ -157,4 +165,21 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
         && long.TryParse(v.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture, out var l) && l > 0 ? l : null;
 
     private static bool? Bool(JsonNode? node) => node is JsonValue v && v.TryGetValue(out bool b) ? b : null;
+}
+
+/// <summary>The VS Code build a <see cref="VsCodeCopilotClientAdapter"/> configures.</summary>
+/// <param name="Kind">The client kind.</param>
+/// <param name="UserDirName">The product's user-data directory name (<c>Code</c>, <c>Code - Insiders</c>, <c>VSCodium</c>).</param>
+/// <param name="Executable">The command on PATH (<c>code</c>, <c>code-insiders</c>, <c>codium</c>).</param>
+/// <param name="Warning">A prerequisite shown on the client card, or null.</param>
+public sealed record VsCodeFlavour(string Kind, string UserDirName, string Executable, string? Warning = null)
+{
+    public static readonly VsCodeFlavour Stable = new(ClientKinds.VsCodeCopilot, "Code", "code");
+
+    public static readonly VsCodeFlavour Insiders = new(ClientKinds.VsCodeInsiders, "Code - Insiders", "code-insiders");
+
+    /// <summary>VSCodium disables Copilot and does not ship it (Copilot Chat is not on Open VSX); Astra only writes the endpoint file.</summary>
+    public static readonly VsCodeFlavour VsCodium = new(ClientKinds.VsCodium, "VSCodium", "codium",
+        "VSCodium ships without GitHub Copilot Chat: it needs \"chat.disableAIFeatures\": false, a custom product.json and a side-loaded "
+        + "Copilot Chat extension before the Astra models appear (see VSCodium's docs/ext-github-copilot.md). Astra only writes the endpoint file.");
 }

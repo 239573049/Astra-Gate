@@ -134,6 +134,37 @@ public class ProviderRepositoryTests
     }
 
     [Fact]
+    public async Task Model_Protocol_Metadata_Refresh_Preserves_User_Settings()
+    {
+        var db = await TestDb.InitializeAsync();
+        await db.Providers.InsertAsync(new Provider { Id = "p1", Name = "Copilot" });
+        var model = new ProviderModel
+        {
+            ProviderId = "p1", ModelId = "claude-sonnet-5", SystemModelId = "claude-sonnet-5",
+            Enabled = false, SortOrder = 7, Overrides = new ModelOverrides { DisplayName = "My Claude", ContextWindow = 64000 },
+        };
+        await db.Providers.InsertModelAsync(model);
+        Assert.Empty((await db.Providers.GetModelByIdAsync(model.Id))!.UpstreamProtocols);
+        Assert.True(await db.Providers.UpdateModelProtocolsAsync(model.Id, [ApiProtocol.Anthropic]));
+        Assert.False(await db.Providers.UpdateModelProtocolsAsync(long.MaxValue, [ApiProtocol.Anthropic]));
+
+        var updated = (await db.Providers.GetModelAsync("p1", model.ModelId))!;
+        Assert.Equal([ApiProtocol.Anthropic], updated.UpstreamProtocols);
+        Assert.Equal(model.ModelId, updated.ModelId);
+        Assert.Equal(model.SystemModelId, updated.SystemModelId);
+        Assert.False(updated.Enabled);
+        Assert.Equal(7, updated.SortOrder);
+        Assert.Equal("My Claude", updated.Overrides.DisplayName);
+        Assert.Equal(64000, updated.Overrides.ContextWindow);
+
+        Assert.True(await db.Providers.UpdateModelProtocolsAsync(model.Id, [ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses]));
+        Assert.Equal([ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses],
+            Assert.Single(await db.Providers.ListModelsAsync("p1")).UpstreamProtocols);
+        Assert.True(await db.Providers.UpdateModelProtocolsAsync(model.Id, []));
+        Assert.Empty((await db.Providers.GetModelByIdAsync(model.Id))!.UpstreamProtocols);
+    }
+
+    [Fact]
     public async Task Quota_Snapshot_Is_Written_Alone_And_Survives_Full_Updates()
     {
         var db = await TestDb.InitializeAsync();

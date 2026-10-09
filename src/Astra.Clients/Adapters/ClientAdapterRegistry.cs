@@ -23,6 +23,17 @@ public sealed class ClientAdapterRegistry
         new MiniMaxCodeClientAdapter(env, store),
         new CopilotCliClientAdapter(env, store),
         new VsCodeCopilotClientAdapter(env, store),
+        new CrushClientAdapter(env, store),
+        new QwenCodeClientAdapter(env, store),
+        new DroidClientAdapter(env, store),
+        new KimiCodeClientAdapter(env, store),
+        new ZedClientAdapter(env, store),
+        new VsCodeCopilotClientAdapter(env, store, VsCodeFlavour.Insiders),
+        new VsCodeCopilotClientAdapter(env, store, VsCodeFlavour.VsCodium),
+        new OmpClientAdapter(env, store),
+        new OpenCodeClientAdapter(env, store, OpenCodeFlavour.MiMoCode),
+        new DeepSeekHarnessClientAdapter(env, store),
+        new WorkBuddyClientAdapter(env, store),
     ]);
 
     public IReadOnlyList<IClientAdapter> All { get; }

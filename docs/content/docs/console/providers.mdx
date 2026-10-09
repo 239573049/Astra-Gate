@@ -30,6 +30,27 @@ description: 添加上游服务商、配置密钥与计费、测试连接
   按官方授权流程在浏览器完成登录，令牌加密保存在本机、即将过期时自动刷新。配额以官方条款为准。
 </Callout>
 
+## 从其他应用导入
+
+已经在别的工具里配置过中转或官方 Key？点右上角 **从其他应用导入**，Astra 会只读扫描本机以下位置并列出可导入的提供商：
+
+| 来源 | 读取位置 |
+| --- | --- |
+| CC Switch | `~/.cc-switch/cc-switch.db`（旧版为 `config.json`） |
+| Alma | 系统用户配置目录下 `alma/chat_threads.db` |
+| Claude Code | `~/.claude/settings.json`（遵循 `CLAUDE_CONFIG_DIR`） |
+| Codex | `~/.codex/config.toml`（遵循 `CODEX_HOME`，只读自定义 `[model_providers.*]` 且带内联 token 的条目） |
+| Magpie | `~/.config/magpie/providers.json` |
+
+- 列表里每一行显示名称、协议与地址、遮掩后的 Key、模型数和状态：**新增**（默认勾选）、**已存在**（同地址同 Key，不可选）、**同地址**（地址相同但 Key 不同，可选并作为新提供商导入）、**已停用**（来源里已关闭，默认不勾选）、**无法导入**（附原因）；
+- 只读、不修改来源；API Key 由服务端直接读取并加密保存，**不经过浏览器**，预览里也只有遮掩值；
+- 同一来源里 Key 与主机都相同的多条配置会合并成一个提供商的多个端点；Magpie 里一个提供商的多个 Key 会各导入成一个提供商；
+- 官方登录（Claude / ChatGPT / Copilot 等订阅登录）、路由、限流、余额、会话与用量不会导入；导入不会绑定或改动任何客户端配置，也不会发起上游请求——导入后可用「测试连接」确认。
+
+<Callout type="info" title="Claude Code 已被 Astra 接管时">
+  此时 `settings.json` 里的地址和令牌是 Astra 自己写入的，导入会改为读取接管前记录的原值，不会把 Astra 导入回自己。
+</Callout>
+
 ## 提供商详情
 
 <Screenshot src="/screenshots/provider-detail.png" alt="提供商详情：设置标签页，含基本信息、认证、计费分区" title="Astra — DeepSeek" caption="详情页「设置」标签；右上角可测试连接" />

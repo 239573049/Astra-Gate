@@ -1,0 +1,71 @@
+---
+title: 用 Docker 运行
+description: 官方镜像、环境变量、数据卷、反向代理与容器内的功能限制
+---
+
+官方镜像发布在 GitHub Container Registry，支持 `linux/amd64` 与 `linux/arm64`，内含与 npm 平台包完全相同的服务端二进制和管理控制台。
+
+## 快速开始
+
+容器监听的是 `0.0.0.0`，**必须设置管理员密码**（至少 8 位），否则服务会拒绝启动。
+
+```bash
+docker run -d --name astra \
+  -p 17321:17321 \
+  -v astra-data:/data \
+  -e ASTRA_ADMIN_PASSWORD='换成你自己的密码' \
+  ghcr.io/239573049/astra-gate:latest
+```
+
+打开 `http://localhost:17321` 登录控制台。仓库根目录的 `compose.yaml` 是等价的 Compose 写法：
+
+```bash
+ASTRA_ADMIN_PASSWORD='换成你自己的密码' docker compose up -d
+```
+
+可用标签：`latest`、`x.y.z`、`x.y`。
+
+## 环境变量
+
+| 变量 | 默认值（镜像内） | 说明 |
+| --- | --- | --- |
+| `ASTRA_ADMIN_PASSWORD` | — | 管理员密码，启动时在内存中哈希，**不会写入** `config.json` |
+| `ASTRA_ADMIN_PASSWORD_FILE` | — | 从文件读取密码（配合 Docker secrets），与上一项二选一 |
+| `ASTRA_HOST` | `0.0.0.0` | 监听地址 |
+| `ASTRA_PORT` | `17321` | 监听端口 |
+| `ASTRA_STRICT_PORT` | `1` | 端口被占用时直接退出，而不是漂移到下一个端口（否则映射的端口会悄悄失效） |
+| `ASTRA_PUBLIC_URL` | — | 外部可访问的地址，例如 `https://gate.example.com`；控制台与客户端配置里显示的网关地址用它 |
+| `ASTRA_HOME` | `/data` | 数据目录 |
+
+优先级：命令行参数 > 环境变量 > `config.json`。另外 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 对访问上游提供商同样生效。
+
+## 数据卷
+
+所有状态都在 `/data`（见[配置与数据目录](/docs/advanced/config)）。务必挂载卷，并且**数据库与 `keys/` 必须一起保留**：没有 `keys/`，已保存的提供商 API Key 无法解密。SQLite 使用 WAL，不要把卷放在网络文件系统上。
+
+容器以非 root 用户 `app`（uid 1654）运行；使用 bind mount 时，请让宿主目录对该 uid 可写。
+
+## 反向代理与 HTTPS
+
+Astra 本身只提供 HTTP。对外暴露时请在前面放一个终止 TLS 的反向代理，并设置：
+
+- `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`：信任 `X-Forwarded-Proto` / `X-Forwarded-For`，登录会话 Cookie 才会带 `Secure`。**只有在容器只能被你的代理访问时才开启**，否则任何人都能伪造这些头。
+- `ASTRA_PUBLIC_URL=https://你的域名`。
+
+## 升级
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+容器不会自我更新，也不要在容器里执行 CLI 的更新命令。数据库迁移会在新版本启动时自动执行，并先备份到 `/data/backups/db/`。
+
+## 容器内的限制
+
+- **客户端一键接管**（改写 Claude Code、Codex 等的配置）改的是**容器内**的文件，对宿主机上的客户端没有意义。请在客户端里手动填写网关地址和令牌：`ASTRA_PUBLIC_URL` + `/v1`。
+- **订阅账号登录**使用本机回环回调。Codex 的回调端口固定为 1455 和 1457，可用 `-p 1455:1455 -p 1457:1457` 发布，且浏览器必须与 Docker 主机在同一台机器上；Claude 使用临时端口，在容器内无法完成回调。
+- 宿主机上的上游服务（如 Ollama）不能写 `localhost`，请用 `host.docker.internal`（Linux 上需要 `--add-host=host.docker.internal:host-gateway`）。
+
+## 健康检查
+
+镜像内置 `HEALTHCHECK`，调用 `astra-server healthcheck`（请求 `/api/health`，不走代理）。`docker ps` 的 `STATUS` 会显示 `healthy`。

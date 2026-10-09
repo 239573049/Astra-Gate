@@ -48,6 +48,17 @@ public static class SubscriptionSupport
     public static string SwitchModeOf(Provider provider) =>
         SubscriptionSetting(provider, "switch_mode") is { } m && SwitchModes.All.Contains(m) ? m : SwitchModes.Manual;
 
+    /// <summary>
+    /// Whether callers other than Claude Code present a Claude Code identity on a Claude subscription
+    /// (settings key <c>subscription.mimic_claude_code</c>; default off — see <see cref="ClaudeCodeMimicry"/>).
+    /// Anthropic ties subscription tokens to its own clients, so non-Haiku requests from other clients
+    /// fail unless they carry this identity.
+    /// </summary>
+    public static bool MimicClaudeCodeOf(Provider provider) =>
+        provider.Settings["subscription"] is System.Text.Json.Nodes.JsonObject o
+        && o["mimic_claude_code"] is System.Text.Json.Nodes.JsonValue v
+        && v.TryGetValue<bool>(out var on) && on;
+
     private static string? SubscriptionSetting(Provider provider, string key) =>
         provider.Settings["subscription"] is System.Text.Json.Nodes.JsonObject o && o[key] is System.Text.Json.Nodes.JsonValue v
         && v.TryGetValue<string>(out var s) ? s : null;

@@ -129,12 +129,39 @@ export async function apiStream(
   onEvent: (message: SseMessage) => void,
   signal?: AbortSignal,
 ): Promise<void> {
+  return readStream('POST', path, body, onEvent, signal);
+}
+
+/**
+ * GETs an event stream (e.g. the live request log) and reads it until the server closes it or `signal` aborts.
+ * `onOpen` fires once the server accepted the stream, before any event.
+ */
+export async function apiEventStream(
+  path: string,
+  onEvent: (message: SseMessage) => void,
+  signal?: AbortSignal,
+  onOpen?: () => void,
+): Promise<void> {
+  return readStream('GET', path, undefined, onEvent, signal, onOpen);
+}
+
+async function readStream(
+  method: 'GET' | 'POST',
+  path: string,
+  body: unknown,
+  onEvent: (message: SseMessage) => void,
+  signal?: AbortSignal,
+  onOpen?: () => void,
+): Promise<void> {
   let res: Response;
   try {
     res = await fetch(apiBase() + path, {
-      method: 'POST',
-      headers: { Accept: 'text/event-stream', 'Content-Type': 'application/json', 'X-Astra-Admin': '1' },
-      body: JSON.stringify(body),
+      method,
+      headers:
+        method === 'POST'
+          ? { Accept: 'text/event-stream', 'Content-Type': 'application/json', 'X-Astra-Admin': '1' }
+          : { Accept: 'text/event-stream' },
+      body: method === 'POST' ? JSON.stringify(body) : undefined,
       credentials: 'include',
       signal,
     });
@@ -157,6 +184,7 @@ export async function apiStream(
     throw new ApiError(obj.error || (typeof data === 'string' && data) || `HTTP ${res.status}`, res.status, obj.details);
   }
 
+  onOpen?.();
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   const parse = createSseParser();

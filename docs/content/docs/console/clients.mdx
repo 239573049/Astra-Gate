@@ -17,7 +17,7 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 - **模型** — 启用时写入客户端配置的默认模型。Claude Code 还提供 Opus / Sonnet / Haiku 三档选择，对应 `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`（Haiku 档兼作快速/后台模型）。所有模型选项默认留空，留空就不写入，配置文件里已有的同名设置也不会被改动；修改后需要重新写入客户端配置；
 - **维护** — 复制配置文件路径、配置备份。
 
-支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot。
+支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot，以及 Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness。
 
 后加入的几个客户端由 Astra 写入这些位置（括号内为可覆盖目录的环境变量）：
 
@@ -28,8 +28,21 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 | **MiniMax Code** | `~/.minimax/config.yaml`（`MINIMAX_DATA_DIR`） | 新增 `custom_provider.astra`（含模型列表）；选了模型时设置 `defaultModel` |
 | **Copilot CLI** | `~/.copilot/providers.json`、`settings.json`（`COPILOT_HOME`） | 在 BYOK 列表里新增 `astra` 提供商及其模型（不动你已有的条目）；选了模型时设置 `model` 为 `astra/<模型>` |
 | **VS Code Copilot** | VS Code 用户目录下的 `chatLanguageModels.json`（macOS `~/Library/Application Support/Code/User`，Windows `%APPDATA%\Code\User`，Linux `~/.config/Code/User`） | 新增名为 `Astra` 的 Custom Endpoint 模型组（Chat Completions），列出所绑定提供商的模型；令牌写在每个模型的 `requestHeaders` 里。模型在 VS Code 的模型选择器中挑选 |
+| **Crush** | `~/.config/crush/crush.json`（`CRUSH_GLOBAL_CONFIG` 为目录；也认 `XDG_CONFIG_HOME`） | 新增 `providers.astra`（`openai-compat`，含模型列表）；选了模型时设置 `models.large`。若同目录有 `crushrc`，它对同名顶层键优先于 `crush.json`，卡片会提示 |
+| **Qwen Code** | `~/.qwen/settings.json` | 在 `modelProviders.openai` 数组里新增 Astra 的模型条目，令牌写入 `env.ASTRA_QWEN_API_KEY`；选了模型时设置 `security.auth.selectedType` 与 `model.name`。模型列表热加载，切换模型可能需要重启 |
+| **Droid** | `~/.factory/settings.json` | 在 `customModels` 里为每个模型新增一条 BYOK 条目（`generic-chat-completion-api`，显示名 `Astra: <模型>`）。Droid 不公开自定义模型的默认 id，所以 Astra 不设默认模型，请在 `/model` 里挑选 |
+| **Kimi Code** | `~/.kimi-code/config.toml`（`KIMI_CODE_HOME`） | 新增 `[providers.astra]`（`type = "openai"`）与每个模型一张 `[models.astra-<模型>]` 表（模型 id 里的 `.` 等符号在别名中换成 `-`）；选了模型时设置 `default_model`。旧版 Python Kimi CLI 的 `~/.kimi` 不会被改动 |
+| **Zed** | `~/.config/zed/settings.json`（Windows `%APPDATA%\Zed`，Linux 认 `XDG_CONFIG_HOME`） | 新增 `language_models.openai_compatible.astra`（含模型列表）；选了模型时设置 `agent.default_model`。**Zed 不从 settings.json 读取密钥**，所以令牌不会被写入：请在 Zed 的智能体设置里选 Astra 提供商，把[令牌页](/docs/console/tokens)的令牌粘贴一次（或启动 Zed 前设置环境变量 `ASTRA_API_KEY`） |
+| **VS Code Insiders / VSCodium** | 各自用户目录下的 `chatLanguageModels.json`（`Code - Insiders/User`、`VSCodium/User`），写法与 VS Code Copilot 相同 | VSCodium 默认不带 Copilot（Copilot Chat 也不在 Open VSX 上）：需要 `"chat.disableAIFeatures": false`、自定义 `product.json` 并手动安装 Copilot Chat 扩展，Astra 只写端点文件，卡片会提示 |
+| **omp（oh-my-pi）** | `~/.omp/agent/models.yml`、`config.yml`（`PI_CODING_AGENT_DIR`） | 新增 `providers.astra`（`openai-completions`，含模型列表）；选了模型时设置 `modelRoles.default` 为 `astra/<模型>` |
+| **MiMo Code** | `~/.config/mimocode/mimocode.json(c)`（Windows `%LOCALAPPDATA%\mimocode`） | 与 OpenCode 相同的 `provider.astra`；选了模型时设置 `model`。该客户端的 `MIMOCODE_HOME` 对路径的影响没有文档，设置了会提示 |
+| **DeepSeek Harness** | `~/.dsh/profiles/desktop/cordis.patch.yml`、`~/.dsh/profiles/web/cordis.patch.yml`（取其中已存在的；`DSH_HOME`）和 `~/.dsh/.env` | 在 `llm-pi-ai` 行里新增 `providers.astra`（自定义模型 API，`openai-completions`，含模型列表），保留你已有的提供商；选了模型时把 `agent-default-model` 行的 `provider` / `model` 改为 Astra（其 `reasoningEffort` 暂时移除，自定义模型没有声明档位，停用时还原）。Harness 的配置里不放明文密钥，只放 `apiKeyEnv` 引用，所以令牌写进 `~/.dsh/.env` 的 `ASTRA_GATEWAY_API_KEY`（优先级最低，不会盖过你在 Harness 里保存的密钥或启动环境里的变量）。Harness 还没创建过 desktop / web 配置时请先启动一次；`$DSH_HOME/cordis.patch.yml`（家目录层）里若也有 `llm-pi-ai` 行，它会盖过 profile 里的，卡片会提示 |
 
-Pi、MiniMax Code、Copilot CLI、VS Code Copilot 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
+Pi、MiniMax Code、Copilot CLI、VS Code 系列、Crush、Qwen Code、Droid、Kimi Code、Zed、omp、MiMo Code、DeepSeek Harness 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
+
+### 安装与更新
+
+npm 分发的客户端（Codex、Claude Code、Gemini CLI、OpenCode、Grok Build、Pi、MiniMax Code、Copilot CLI、Crush、Qwen Code、Droid、Kimi Code、MiMo Code）可以在客户端页直接安装、检查并更新（`npm install -g <包>@latest`）。Zed、VS Code Insiders、VSCodium、omp（运行在 Bun 上）、DeepSeek Harness（桌面应用或 `npx @deepseek-ai/dsh web`）和 Hermes Agent、Claude Desktop 一样只显示已安装版本和下载主页，Astra 不会替你运行安装命令。Qwen Code 需要 Node 22 及以上，Kimi Code 需要 Node 22.19 及以上；Node 太旧时 npm 会给出警告或客户端无法运行。`kimi` 命令也可能指向已归档的 Python 版 Kimi CLI，版本以 `kimi --version` 的输出为准。
 
 ## 启用
 

@@ -2,11 +2,13 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Billing;
+using Astra.Core.Clients;
 using Astra.Core.Privacy;
 using Astra.Core.Requests;
 using Astra.Data;
 using Astra.Data.Repositories;
 using Astra.Gateway.Pipeline;
+using Astra.Gateway.Protocol;
 using Astra.Server.Hosting;
 
 namespace Astra.Server.Api;
@@ -27,7 +29,8 @@ public static class RequestEndpoints
         string TokenType, long Tokens, bool IsPerCall, string UnitPrice, string? BaseUnitPrice, string TierApplied,
         string? PricedAs, List<string>? Multipliers, long CostNanoUsd, string? Note);
 
-    public sealed record BodiesDto(string? ClientRequest, string? UpstreamRequest, string? UpstreamResponse, string? ClientResponse);
+    public sealed record BodiesDto(string? ClientRequest, string? UpstreamRequest, string? UpstreamRequestHeaders,
+        string? UpstreamResponse, string? ClientResponse);
 
     public sealed record RequestDetailDto(
         string Id, DateTimeOffset StartedAtUtc, string? ClientKind, string? ProviderId, string? ProviderName,
@@ -41,6 +44,15 @@ public static class RequestEndpoints
         string? UserAgent, BodiesDto? Bodies, PrivacyReport? Privacy,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
         string? TokenId, string? TokenName, string? AccountId, string? AccountName);
+
+    /// <summary>
+    /// One live request-log event (SSE <c>/api/requests/live</c>): "started" / "updated" carry the row as it stands
+    /// (status "pending" while in flight), "persisted" means list queries now return it.
+    /// </summary>
+    public sealed record RequestLiveEventDto(string Type, RequestSummaryDto Request);
+
+    /// <summary>Status reported for a request the gateway is still handling (never stored).</summary>
+    public const string PendingStatus = "pending";
 
     public sealed record PageDto<T>(IReadOnlyList<T> Items, long Total, int Page, int PageSize);
 
@@ -58,7 +70,8 @@ public static class RequestEndpoints
     public sealed record SettingsDto(
         string Locale, bool DebugBodies, int BodyRetentionDays, int? RequestRetentionDays, EffortBudgets EffortBudgets,
         int StreamIdleTimeoutSec, string UpdateChannel, bool UpdateAutoCheck,
-        int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes);
+        int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes,
+        string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass);
 
     public static void MapRequestEndpoints(this IEndpointRouteBuilder app)
     {
@@ -81,8 +94,61 @@ public static class RequestEndpoints
             return Results.Ok(new PageDto<RequestSummaryDto>(result.Items.Select(ToSummary).ToList(), result.Total, result.Page, result.PageSize));
         });
 
-        app.MapGet("/api/requests/{id}", async (string id, AstraDatabase db, BodyStore bodies, CancellationToken ct) =>
-            await db.Requests.GetAsync(id, ct) is { } r ? Results.Ok(ToDetail(r, bodies)) : ModelEndpoints.NotFound(id));
+        // Live request log (server-sent events): the in-flight snapshot first, then every change as it happens.
+        // A comment line every 15 s keeps idle connections (and proxies in front of them) open.
+        app.MapGet("/api/requests/live", async (HttpContext ctx, LiveRequestFeed live, IHostApplicationLifetime lifetime) =>
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, lifetime.ApplicationStopping);
+            var ct = cts.Token;
+            ctx.Response.Headers.CacheControl = "no-cache";
+            ctx.Response.Headers["X-Accel-Buffering"] = "no";
+            ctx.Response.ContentType = "text/event-stream; charset=utf-8";
+            var gate = new SemaphoreSlim(1, 1);
+            using var heartbeat = new PeriodicTimer(TimeSpan.FromSeconds(15));
+            var beats = Task.Run(async () =>
+            {
+                while (await heartbeat.WaitForNextTickAsync(ct)) await WriteAsync(": ping\n\n");
+            }, ct);
+            try
+            {
+                await WriteAsync(": connected\n\n");
+                await foreach (var e in live.SubscribeAsync(ct))
+                {
+                    var dto = new RequestLiveEventDto(e.Type, ToSummary(e.Record, e.InFlight));
+                    await WriteAsync(SseWriter.Format(new SseEvent(null, Json.SerializeApi(dto))));
+                }
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or IOException)
+            {
+                // Viewer left or the server is stopping.
+            }
+            finally
+            {
+                await cts.CancelAsync();
+                try { await beats; }
+                catch (Exception ex) when (ex is OperationCanceledException or IOException) { }
+            }
+            return Results.Empty;
+
+            async Task WriteAsync(string text)
+            {
+                await gate.WaitAsync(ct);
+                try
+                {
+                    await ctx.Response.WriteAsync(text, ct);
+                    await ctx.Response.Body.FlushAsync(ct);
+                }
+                finally
+                {
+                    gate.Release();
+                }
+            }
+        });
+
+        // A request still in flight (or not yet written) is served from the live feed, so its detail opens right away.
+        app.MapGet("/api/requests/{id}", async (string id, AstraDatabase db, BodyStore bodies, LiveRequestFeed live, CancellationToken ct) =>
+            live.Find(id) is { } e ? Results.Ok(ToDetail(e.Record, bodies, e.InFlight))
+            : await db.Requests.GetAsync(id, ct) is { } r ? Results.Ok(ToDetail(r, bodies)) : ModelEndpoints.NotFound(id));
 
         // Stats accept optional `client` (client kind) and `token` (token id) filters; omitted means every request.
         app.MapGet("/api/stats/summary", async (string? range, string? client, string? token, AstraDatabase db, CancellationToken ct) =>
@@ -130,11 +196,13 @@ public static class RequestEndpoints
         app.MapGet("/api/settings", (SettingsService settings, ServerOptions server, AstraPaths paths) =>
             Results.Ok(ToSettings(settings.Current, server, paths)));
 
-        app.MapPatch("/api/settings", async (JsonObject patch, SettingsService settings, ServerOptions server, AstraPaths paths, CancellationToken ct) =>
+        app.MapPatch("/api/settings", async (JsonObject patch, SettingsService settings, ServerOptions server, AstraPaths paths,
+            ISecretProtector secrets, CancellationToken ct) =>
         {
             string? error = null;
             var next = await settings.UpdateAsync(s =>
             {
+                var (previousProxyMode, previousProxyUrl) = (s.ProxyMode, s.ProxyUrl);
                 foreach (var (key, value) in patch)
                 {
                     switch (key)
@@ -168,8 +236,47 @@ public static class RequestEndpoints
                             // 0 turns the background balance / quota refresh off; providers may override it.
                             s.QuotaAutoIntervalMinutes = Math.Clamp(value?.GetValue<int>() ?? 30, 0, 1440);
                             break;
+                        case "proxyMode":
+                            var mode = value?.GetValue<string>();
+                            if (mode is SystemProxy.ModeSystem or SystemProxy.ModeCustom or SystemProxy.ModeDirect) s.ProxyMode = mode;
+                            else error = "proxyMode must be system, custom or direct";
+                            break;
+                        case "proxyUrl":
+                            // A pasted user:pass@ moves into the credential fields; only scheme://host:port is kept.
+                            if (value?.GetValue<string>()?.Trim() is not { Length: > 0 } rawUrl) s.ProxyUrl = null;
+                            else if (!Uri.TryCreate(rawUrl, UriKind.Absolute, out var proxy) || proxy.Scheme is not ("http" or "https" or "socks5")
+                                     || proxy.Host.Length == 0)
+                                error = "Invalid HTTP/SOCKS proxy URL";
+                            else
+                            {
+                                s.ProxyUrl = proxy.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped);
+                                if (proxy.UserInfo.Length > 0 && !patch.ContainsKey("proxyUsername"))
+                                {
+                                    var parts = proxy.UserInfo.Split(':', 2);
+                                    s.ProxyUsername = Uri.UnescapeDataString(parts[0]);
+                                    s.ProxyPasswordProtected = parts.Length > 1 ? secrets.Protect(Uri.UnescapeDataString(parts[1])) : null;
+                                }
+                            }
+                            break;
+                        case "proxyUsername":
+                            s.ProxyUsername = value?.GetValue<string>()?.Trim() is { Length: > 0 } user ? user : null;
+                            if (s.ProxyUsername is null) s.ProxyPasswordProtected = null;
+                            break;
+                        case "proxyPassword":
+                            // Write-only: null / "" clears it; reads only report hasProxyPassword.
+                            s.ProxyPasswordProtected = value?.GetValue<string>() is { Length: > 0 } password ? secrets.Protect(password) : null;
+                            break;
+                        case "proxyBypass":
+                            s.ProxyBypass = value?.GetValue<string>()?.Trim() is { Length: > 0 } bypass ? bypass : null;
+                            break;
                         // read-only fields are ignored (changed via CLI / config.json)
                     }
+                }
+                if (s.ProxyMode == SystemProxy.ModeCustom && s.ProxyUrl is null)
+                {
+                    // Keep the previous (valid) proxy choice instead of saving a custom mode with nothing to use.
+                    (s.ProxyMode, s.ProxyUrl) = (previousProxyMode, previousProxyUrl);
+                    error ??= "proxyUrl is required when proxyMode is custom";
                 }
             }, ct);
             return error is null ? Results.Ok(ToSettings(next, server, paths)) : ModelEndpoints.Bad(error);
@@ -179,34 +286,39 @@ public static class RequestEndpoints
     private static SettingsDto ToSettings(AppSettings s, ServerOptions server, AstraPaths paths) => new(
         s.Locale, s.DebugBodies, s.BodyRetentionDays, s.RequestRetentionDays, s.EffortBudgets, s.StreamIdleTimeoutSec,
         s.UpdateChannel, s.UpdateAutoCheck,
-        server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes);
+        server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes,
+        s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass);
 
-    internal static RequestSummaryDto ToSummary(RequestRecord r) => new(
+    internal static RequestSummaryDto ToSummary(RequestRecord r) => ToSummary(r, inFlight: false);
+
+    private static RequestSummaryDto ToSummary(RequestRecord r, bool inFlight) => new(
         r.Id, r.StartedAtUtc, r.ClientKind, r.ProviderId, r.ProviderName, r.InboundProtocol, r.UpstreamProtocol, r.Passthrough,
-        r.RequestedModel, r.UpstreamModel, r.ResponseModel, r.SystemModelId, r.Stream, r.Status, r.HttpStatus, r.TtftMs, r.TotalMs, r.OutputTps,
+        r.RequestedModel, r.UpstreamModel, r.ResponseModel, r.SystemModelId, r.Stream, inFlight ? PendingStatus : r.Status, r.HttpStatus, r.TtftMs, r.TotalMs, r.OutputTps,
         r.TotalInputTokens, r.TotalOutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.ReasoningTokens,
         r.CostNanoUsd, r.UsageSource,
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
         r.TokenId, r.TokenName, r.AccountId, r.AccountName);
 
-    private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies)
+    private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies, bool inFlight = false)
     {
         BodiesDto? captured = null;
         if (!string.IsNullOrEmpty(r.BodyRef))
         {
             captured = new BodiesDto(bodies.Read(r.BodyRef, BodyStore.ClientRequest), bodies.Read(r.BodyRef, BodyStore.UpstreamRequest),
+                bodies.Read(r.BodyRef, BodyStore.UpstreamRequestHeaders),
                 bodies.Read(r.BodyRef, BodyStore.UpstreamResponse), bodies.Read(r.BodyRef, BodyStore.ClientResponse));
         }
         return new RequestDetailDto(
             r.Id, r.StartedAtUtc, r.ClientKind, r.ProviderId, r.ProviderName, r.InboundProtocol, r.UpstreamProtocol, r.Passthrough,
-            r.RequestedModel, r.UpstreamModel, r.ResponseModel, r.SystemModelId, r.Stream, r.Status, r.HttpStatus, r.TtftMs, r.TotalMs,
+            r.RequestedModel, r.UpstreamModel, r.ResponseModel, r.SystemModelId, r.Stream, inFlight ? PendingStatus : r.Status, r.HttpStatus,
+            r.TtftMs, r.TotalMs,
             r.TotalInputTokens, r.TotalOutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.ReasoningTokens,
             r.CostNanoUsd, r.UsageSource,
             r.ServiceTier, r.ErrorType, r.ErrorMessage, r.UpstreamRequestId, r.TtfbMs, r.GenerationMs, r.OutputTps,
             ParseNode(r.UsageRawJson), ParseNode(r.PricingSnapshotJson), r.PricingSource, r.PriceKey,
             r.BillingTraceJson is null ? [] : JsonSerializer.Deserialize(r.BillingTraceJson, JsonContexts.Info<List<BillingTraceStep>>(Json.Storage)) ?? [],
             r.BillingDescription,
-            r.UsageItems.Select(i => new UsageItemDto(i.TokenType, i.Tokens, i.IsPerCall, i.UnitPrice, i.BaseUnitPrice, i.TierApplied,
+            (inFlight ? [] : r.UsageItems).Select(i => new UsageItemDto(i.TokenType, i.Tokens, i.IsPerCall, i.UnitPrice, i.BaseUnitPrice, i.TierApplied,
                 i.PricedAs, i.MultipliersJson is null ? null : JsonSerializer.Deserialize(i.MultipliersJson, JsonContexts.Info<List<string>>(Json.Storage)),
                 i.CostNanoUsd, i.Note)).ToList(),
             r.UserAgent, captured, r.PrivacyJson is null ? null : Json.Deserialize<PrivacyReport>(r.PrivacyJson),

@@ -127,6 +127,38 @@ public abstract class ClientAdapterBase : IClientAdapter
         return result;
     }
 
+    /// <summary>
+    /// Per-model capability hints from the "models" extra (<c>contextWindow</c>, <c>maxOutputTokens</c>, <c>vision</c>,
+    /// <c>reasoning</c>), keyed by model id; ids without hints are absent.
+    /// </summary>
+    protected static IReadOnlyDictionary<string, System.Text.Json.Nodes.JsonObject> ModelHints(EnableContext ctx)
+    {
+        var hints = new Dictionary<string, System.Text.Json.Nodes.JsonObject>(StringComparer.Ordinal);
+        foreach (var (_, value) in ctx.ExtraObject("models") ?? new System.Text.Json.Nodes.JsonObject())
+        {
+            if (value is System.Text.Json.Nodes.JsonObject m && (m["id"] as System.Text.Json.Nodes.JsonValue)?.TryGetValue(out string? id) == true
+                && !string.IsNullOrEmpty(id))
+                hints.TryAdd(id, m);
+        }
+        return hints;
+    }
+
+    /// <summary>A positive integer hint (e.g. <c>contextWindow</c>), or null when missing or not a positive number.</summary>
+    protected static long? PositiveLong(System.Text.Json.Nodes.JsonNode? node) =>
+        node is System.Text.Json.Nodes.JsonValue v && v.GetValueKind() == System.Text.Json.JsonValueKind.Number
+        && long.TryParse(v.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture, out var l) && l > 0 ? l : null;
+
+    /// <summary>A boolean hint (e.g. <c>vision</c>), or null when missing or not a boolean.</summary>
+    protected static bool? BoolHint(System.Text.Json.Nodes.JsonNode? node) =>
+        node is System.Text.Json.Nodes.JsonValue v && v.TryGetValue(out bool b) ? b : null;
+
+    /// <summary>True when Astra recorded a value for the key and the file still holds exactly that value (not edited since).</summary>
+    protected bool StillOurs(string file, ConfigFileFormat format, string keyPath, ConfigChangeKind kind = ConfigChangeKind.Key)
+    {
+        var entry = Store.Get(Kind, file, keyPath);
+        return entry is not null && ConfigValueCodec.EqualsValue(format, CurrentValue(file, format, keyPath, kind), entry.AppliedValueJson);
+    }
+
     /// <summary>The string a JSON value text holds, or null when it is absent or not a JSON string.</summary>
     protected static string? StringOf(string? jsonText)
     {

@@ -484,3 +484,97 @@ jobs:
             gh release create "v$VER" "${assets[@]}" \
               --target "$GITHUB_SHA" --title "v$VER" --notes-file out/release-notes.md
           fi
+
+  docker:
+    name: Publish the Docker image
+    # After `publish`: the image carries the same server as the npm platform packages, and a failed npm
+    # publish must not leave an image for a version that was never released. Re-runs of this job are safe.
+    needs: [version, publish]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    env:
+      VER: ${{ needs.version.outputs.version }}
+      REGISTRY: ghcr.io
+      IMAGE_NAME: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Only the linux server packages are needed; each holds bin/{astra-server,libe_sqlite3.so,wwwroot/}.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-linux-*
+          path: out/artifacts
+          merge-multiple: true
+
+      - name: Stage the server for the image
+        run: |
+          set -euo pipefail
+          # Dockerfile: COPY docker-bin/${TARGETARCH}/ — amd64 = linux-x64, arm64 = linux-arm64.
+          stage() {
+            local rid=$1 arch=$2 tgz
+            tgz=$(ls out/artifacts/aidotnet-server-"$rid"-*.tgz)
+            mkdir -p "out/unpack/$rid" "docker-bin/$arch"
+            tar -xzf "$tgz" -C "out/unpack/$rid"
+            cp -R "out/unpack/$rid/package/bin/." "docker-bin/$arch/"
+            test -x "docker-bin/$arch/astra-server"
+            ls "docker-bin/$arch"/libe_sqlite3.so "docker-bin/$arch"/wwwroot/index.html
+          }
+          stage linux-x64 amd64
+          stage linux-arm64 arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Smoke test the amd64 image (this runner can execute it) before anything is pushed.
+      - name: Build the amd64 image for a smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: astra-smoke:test
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          docker run -d --name astra-smoke -p 17321:17321 -e ASTRA_ADMIN_PASSWORD=smoke-test-password astra-smoke:test
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' astra-smoke)
+            [ "$status" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' astra-smoke)" = true ] || { docker logs astra-smoke; exit 1; }
+            sleep 2
+          done
+          [ "$status" = healthy ] || { echo "::error::container never became healthy ($status)"; docker logs astra-smoke; exit 1; }
+          curl --fail --silent http://127.0.0.1:17321/api/health
+          curl --fail --silent http://127.0.0.1:17321/api/auth/status | grep -q '"required":true'
+          curl --fail --silent http://127.0.0.1:17321/ | grep -qi '<html'
+          docker stop astra-smoke
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=semver,pattern={{version}},value=v${{ env.VER }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ env.VER }}
+
+      - name: Build and push (linux/amd64 + linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

@@ -124,6 +124,76 @@ public class SubscriptionQuotaServiceTests
     { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
     [Fact]
+    public async Task A_Transient_Handshake_Failure_Is_Retried_Once_On_A_Fresh_Connection()
+    {
+        // 真实事故：代理节点偶发在 TLS 握手阶段掐连接（"unexpected EOF"），下一次新连接就通了。
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        var calls = 0;
+        var handler = new RoutingHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath.Contains("/oauth/token")) return Json(RefreshResponse);
+            if (++calls == 1) throw new HttpRequestException("The SSL connection could not be established", new IOException("unexpected EOF"));
+            return Json("""{"five_hour":{"utilization":7,"resets_at":"2026-10-06T17:00:00Z"}}""");
+        });
+        var service = Service(store, handler);
+
+        var (_, quota) = await service.FetchAsync(Provider("claude-subscription"), (await store.GetAsync("acc-1"))!,
+            SubscriptionCatalog.Find("claude-subscription")!);
+
+        Assert.Equal(7, quota!["session"]!["usedPercent"]!.GetValue<double>());
+        Assert.Equal(2, calls);
+        // 重试带着同样的授权头。
+        Assert.All(handler.Requests.Where(r => r.Url.Contains("/api/oauth/usage")), r => Assert.Equal("Bearer at-fresh", r.Authorization));
+    }
+
+    [Fact]
+    public async Task A_Persistent_Connection_Failure_Becomes_A_Clear_Error_Not_An_Exception_Page()
+    {
+        // 重试仍失败：不能炸成 500 + 异常页，要报成一条指向"代理 / 网络"的 OAuthProtocolException，
+        // 且账号状态不变（网络不通不是授权失效，不能把账号禁用）。
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        var calls = 0;
+        var handler = new RoutingHandler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath.Contains("/oauth/token")) return Json(RefreshResponse);
+            calls++;
+            throw new HttpRequestException("The SSL connection could not be established", new IOException("unexpected EOF"));
+        });
+        var service = Service(store, handler);
+
+        var stored = (await store.GetAsync("acc-1"))!;
+        var error = await Assert.ThrowsAsync<OAuthProtocolException>(() => service.FetchAsync(
+            Provider("claude-subscription"), stored, SubscriptionCatalog.Find("claude-subscription")!));
+
+        Assert.Equal("network", error.Error);
+        Assert.Contains("api.anthropic.com", error.Message);
+        Assert.Contains("代理", error.Message);
+        Assert.Equal(2, calls); // 一次 + 一次重试，不无限重试
+        Assert.Equal(AccountStatus.Active, (await store.GetAsync("acc-1"))!.Status);
+    }
+
+    [Fact]
+    public async Task Cancellation_Is_Not_Swallowed_Into_A_Network_Error()
+    {
+        var store = new InMemoryAccountStore();
+        await store.InsertAsync(Account());
+        // 调用方取消了请求：HttpClient 会抛 TaskCanceledException。这必须原样向上传播，
+        // 不能被当成"网络不通"吞成一条 502 错误（那会让用户关掉页面后还看到报错）。
+        var handler = new RoutingHandler((request, _) => request.RequestUri!.AbsolutePath.Contains("/oauth/token")
+            ? Json(RefreshResponse)
+            : throw new TaskCanceledException());
+        var service = Service(store, handler);
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var stored = (await store.GetAsync("acc-1"))!;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.FetchAsync(
+            Provider("claude-subscription"), stored, SubscriptionCatalog.Find("claude-subscription")!, cts.Token));
+    }
+
+    [Fact]
     public async Task Claude_Usage_Is_Normalized_From_The_Nested_Shape_And_Persisted()
     {
         var store = new InMemoryAccountStore();

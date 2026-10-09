@@ -13,5 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Astra.Clients\Astra.Clients.csproj" />
+    <!-- Import tests build throwaway SQLite databases (CC Switch, Alma) and read them through the real read-only opener. -->
+    <ProjectReference Include="..\..\src\Astra.Data\Astra.Data.csproj" />
   </ItemGroup>
 </Project>

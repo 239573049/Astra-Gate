@@ -20,11 +20,21 @@ public sealed class ServerOptions
 
     [JsonIgnore] public string StartedBy { get; set; } = "cli";
 
+    /// <summary>ASTRA_PUBLIC_URL: the externally reachable base URL (container / reverse proxy); overrides <see cref="GatewayBaseUrl"/>.</summary>
+    [JsonIgnore] public string? PublicUrl { get; set; }
+
+    /// <summary>ASTRA_STRICT_PORT: fail when the port is taken instead of moving to the next free one (published container ports must not drift).</summary>
+    [JsonIgnore] public bool StrictPort { get; set; }
+
     public bool IsLoopback => Host is "127.0.0.1" or "localhost" or "::1" or "[::1]";
 
-    /// <summary>Base URL clients are pointed at (no trailing slash, no /v1). Wildcard hosts map to 127.0.0.1.</summary>
+    /// <summary>Base URL clients are pointed at (no trailing slash, no /v1): <see cref="PublicUrl"/> when set, else <see cref="LocalUrl"/>.</summary>
     [JsonIgnore]
-    public string GatewayBaseUrl
+    public string GatewayBaseUrl => PublicUrl ?? LocalUrl;
+
+    /// <summary>URL that reaches this process from the same machine. Wildcard hosts map to 127.0.0.1.</summary>
+    [JsonIgnore]
+    public string LocalUrl
     {
         get
         {
@@ -63,6 +73,46 @@ public sealed class ServerOptions
         File.WriteAllText(paths.ConfigFile, JsonSerializer.Serialize(this, JsonContexts.Info<ServerOptions>(FileJson)));
         AstraPaths.RestrictToOwner(paths.ConfigFile);
     }
+
+    /// <summary>
+    /// Applies the container-oriented environment overrides (precedence: config.json &lt; environment &lt; flags):
+    /// ASTRA_HOST, ASTRA_PORT, ASTRA_PUBLIC_URL, ASTRA_STRICT_PORT, ASTRA_ADMIN_PASSWORD or ASTRA_ADMIN_PASSWORD_FILE.
+    /// The password is hashed in memory only; it is never written to config.json.
+    /// </summary>
+    public void ApplyEnvironment(Func<string, string?> get)
+    {
+        if (Nonblank(get("ASTRA_HOST")) is { } host) Host = host;
+        if (Nonblank(get("ASTRA_PORT")) is { } port)
+            Port = int.TryParse(port, out var p) && p is > 0 and < 65536 ? p : throw new ArgumentException("ASTRA_PORT must be 1-65535");
+        if (Nonblank(get("ASTRA_PUBLIC_URL")) is { } url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+                throw new ArgumentException("ASTRA_PUBLIC_URL must be an absolute http(s) URL");
+            PublicUrl = url.TrimEnd('/');
+        }
+        if (Nonblank(get("ASTRA_STRICT_PORT")) is { } strict)
+            StrictPort = strict.ToLowerInvariant() is "1" or "true" or "yes" or "on";
+
+        var password = Nonblank(get("ASTRA_ADMIN_PASSWORD"));
+        if (password is null && Nonblank(get("ASTRA_ADMIN_PASSWORD_FILE")) is { } file)
+        {
+            try
+            {
+                password = File.ReadAllText(file).TrimEnd('\r', '\n');
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                throw new ArgumentException($"Cannot read ASTRA_ADMIN_PASSWORD_FILE: {ex.Message}");
+            }
+        }
+        if (password is not null)
+        {
+            if (password.Length < 8) throw new ArgumentException("Admin password must be at least 8 characters.");
+            AdminPasswordHash = Astra.Server.Security.PasswordHasher.Hash(password);
+        }
+    }
+
+    private static string? Nonblank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>Applies --port / --host / --started-by flags.</summary>
     public void ApplyArgs(IReadOnlyList<string> args)

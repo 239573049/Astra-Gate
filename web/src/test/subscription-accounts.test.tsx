@@ -21,8 +21,19 @@ const spies = vi.hoisted(() => ({
   remove: vi.fn(),
   importCodex: vi.fn(),
   poll: vi.fn(),
+  activate: vi.fn(),
+  update: vi.fn(),
+  reorder: vi.fn(),
+  updatePolicy: vi.fn(),
+  policy: { clientPolicy: 'claude-code-only', switchMode: 'manual', claudeSubscription: true, mimicClaudeCode: false } as {
+    clientPolicy: 'claude-code-only' | 'any'; switchMode: 'manual' | 'failover'; claudeSubscription: boolean; mimicClaudeCode: boolean;
+  },
   // Flipped per test: whether this machine already has a `codex login`.
   localCodex: { available: false } as { available: boolean; accountEmail?: string; plan?: string; detail?: string },
+  importCopilot: vi.fn(),
+  // Flipped per test: whether a local GitHub authorization is visible to the cheap probe.
+  localCopilot: { available: false } as { available: boolean; source?: string; detail?: string },
+  complete: vi.fn(),
 }));
 
 vi.mock('../api/hooks', () => ({
@@ -30,11 +41,19 @@ vi.mock('../api/hooks', () => ({
   useProviderAccounts: () => ({ data: accounts, isLoading: false, refetch: vi.fn() }),
   useStartProviderLogin: () => ({ mutate: spies.start, isPending: false }),
   usePollProviderLogin: () => ({ mutateAsync: spies.poll, isPending: false }),
+  useCompleteProviderLogin: () => ({ mutateAsync: spies.complete, isPending: false }),
   useRefreshProviderAccount: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
   useDeleteProviderAccount: () => ({ mutate: spies.remove, isPending: false }),
   useFetchProviderAccountQuota: () => quotaSpies.fetch,
   useLocalCodexLogin: () => ({ data: spies.localCodex, refetch: vi.fn() }),
   useImportCodexAccount: () => ({ mutate: spies.importCodex, isPending: false }),
+  useLocalCopilotLogin: () => ({ data: spies.localCopilot, refetch: vi.fn() }),
+  useImportCopilotAccount: () => ({ mutate: spies.importCopilot, isPending: false }),
+  useActivateProviderAccount: () => ({ mutate: spies.activate, isPending: false }),
+  useUpdateProviderAccount: () => ({ mutate: spies.update, isPending: false }),
+  useReorderProviderAccounts: () => ({ mutate: spies.reorder, isPending: false }),
+  useSubscriptionPolicy: () => ({ data: spies.policy }),
+  useUpdateSubscriptionPolicy: () => ({ mutate: spies.updatePolicy, isPending: false }),
   // Reset-credit cards are their own component; the account list only decides whether to render them.
   useResetCredits: () => ({ data: { credits: [], available_count: 0 }, isLoading: false, isError: false }),
   useConsumeResetCredit: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
@@ -48,10 +67,12 @@ const accounts: ProviderAccount[] = [
   {
     id: 'acc-1', providerId: 'p1', displayName: 'me@example.com', accountEmail: 'me@example.com', plan: 'claude_pro',
     status: 'active', expiresAtUtc: '2026-10-06T13:00:00.000Z', lastRefreshAtUtc: null, createdAt: '2026-10-01T00:00:00.000Z',
+    enabled: true, isCurrent: true, sortOrder: 0,
   },
   {
     id: 'acc-2', providerId: 'p1', displayName: 'other@example.com', accountEmail: 'other@example.com', plan: null,
     status: 'expired', expiresAtUtc: null, lastRefreshAtUtc: null, createdAt: '2026-10-02T00:00:00.000Z',
+    enabled: true, isCurrent: false, sortOrder: 1,
   },
 ];
 
@@ -74,8 +95,16 @@ beforeEach(() => {
   spies.start.mockReset();
   spies.remove.mockReset();
   spies.importCodex.mockReset();
+  spies.importCopilot.mockReset();
+  spies.complete.mockReset();
   spies.poll.mockReset();
+  spies.activate.mockReset();
+  spies.update.mockReset();
+  spies.reorder.mockReset();
+  spies.updatePolicy.mockReset();
+  spies.policy = { clientPolicy: 'claude-code-only', switchMode: 'manual', claudeSubscription: true, mimicClaudeCode: false };
   spies.localCodex = { available: false };
+  spies.localCopilot = { available: false };
   quotaSpies.fetch.mutate.mockReset();
   quotaSpies.fetch.isPending = false;
   quotaSpies.fetch.variables = undefined;
@@ -119,6 +148,25 @@ describe('SubscriptionAccounts', () => {
     expect(window.open).toHaveBeenCalledWith('https://claude.ai/oauth/authorize?x=1', '_blank', 'noopener');
     expect(screen.getByText('Waiting for authorization…')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: "I've finished authorizing" })).toBeInTheDocument();
+  });
+
+  it('paste flow: finishes the Claude login by handing the pasted code to the server', async () => {
+    // Claude 的 redirect_uri 是它自己注册的非回环地址，所以授权页回不来——服务端让前端"粘回来"。
+    spies.start.mockImplementation((_vars: unknown, opts?: { onSuccess?: (r: unknown) => void }) =>
+      opts?.onSuccess?.({ mode: 'paste', state: 'st-p', authorizeUrl: 'https://claude.com/cai/oauth/authorize?code=true' }));
+    spies.complete.mockResolvedValue({ status: 'done', account: accounts[0] });
+
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+
+    expect(await screen.findByLabelText('Authorization code')).toBeInTheDocument();
+    // 授权页上显示的是「授权码#state」，整段粘过来。
+    fireEvent.change(screen.getByLabelText('Authorization code'), { target: { value: 'ac-1#st-9' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Finish sign-in' }));
+
+    await waitFor(() => expect(spies.complete).toHaveBeenCalledWith({ state: 'st-p', code: 'ac-1#st-9' }));
+    // 成功后按成功路径收尾（弹窗关闭）。
+    await waitFor(() => expect(screen.queryByLabelText('Authorization code')).not.toBeInTheDocument());
   });
 
   it('device flow: shows the code and offers a manual "check now" that resolves the login', async () => {
@@ -166,6 +214,45 @@ describe('SubscriptionAccounts', () => {
     expect(screen.queryByRole('button', { name: /Import local Codex sign-in/ })).toBeNull();
   });
 
+  it('offers to import a local GitHub authorization for the Copilot subscription only', () => {
+    spies.localCopilot = { available: true, source: 'VS Code' };
+    const copilotProvider = {
+      id: 'p4',
+      name: 'GitHub Copilot 订阅',
+      authScheme: 'oauth-subscription',
+      templateId: 'github-copilot-subscription',
+    } as unknown as Provider;
+
+    show(<SubscriptionAccounts provider={copilotProvider} />);
+
+    expect(screen.getByText(/Found a local GitHub authorization: VS Code/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Import local GitHub authorization/ }));
+    // 没有手填 token 时让服务端自己去探测本机来源。
+    expect(spies.importCopilot).toHaveBeenCalledWith('', expect.anything());
+
+    // 非 Copilot 订阅永远不显示这个入口。
+    cleanup();
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.queryByRole('button', { name: /Import local GitHub authorization/ })).toBeNull();
+  });
+
+  it('passes a pasted GitHub token through when the machine has no discoverable one', () => {
+    const copilotProvider = {
+      id: 'p4',
+      name: 'GitHub Copilot 订阅',
+      authScheme: 'oauth-subscription',
+      templateId: 'github-copilot-subscription',
+    } as unknown as Provider;
+
+    show(<SubscriptionAccounts provider={copilotProvider} />);
+    // 探测拿不到东西（macOS 上的凭据只有用户点了才算数），按钮仍然在。
+    expect(screen.getByText(/Import reads the VS Code entry/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('GitHub token'), { target: { value: 'gho_pasted' } });
+    fireEvent.click(screen.getByRole('button', { name: /Import local GitHub authorization/ }));
+    expect(spies.importCopilot).toHaveBeenCalledWith('gho_pasted', expect.anything());
+  });
+
   it('surfaces the coming-soon hint when the provider flow is not verified yet', async () => {
     spies.start.mockImplementation((_vars: unknown, opts?: { onError?: (e: unknown) => void }) =>
       opts?.onError?.(new ApiError('not verified', 400, { needsVerification: true })));
@@ -191,5 +278,51 @@ describe('SubscriptionAccounts', () => {
     const confirmButtons = screen.getAllByRole('button', { name: 'Sign out & delete' });
     fireEvent.click(confirmButtons[confirmButtons.length - 1]);
     await waitFor(() => expect(spies.remove).toHaveBeenCalledWith('acc-1', expect.anything()));
+  });
+
+  it('marks the account in use and switches to another one from its menu', async () => {
+    const second = accounts[1]!;
+    accounts[1] = { ...second, status: 'active' };
+    try {
+      show(<SubscriptionAccounts provider={subscriptionProvider} />);
+      expect(screen.getByText('In use')).toBeInTheDocument();
+
+      fireEvent.pointerDown(screen.getAllByRole('button', { name: 'More' })[1]!, { button: 0, ctrlKey: false });
+      const item = (await screen.findAllByRole('menuitem')).find((i) => i.textContent?.includes('Switch to this account'))!;
+      fireEvent.click(item, { detail: 1 });
+      await waitFor(() => expect(spies.activate).toHaveBeenCalledWith('acc-2', expect.anything()));
+    } finally {
+      accounts[1] = second;
+    }
+  });
+
+  it('moves an account down in the failover order', async () => {
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+
+    fireEvent.pointerDown(screen.getAllByRole('button', { name: 'More' })[0]!, { button: 0, ctrlKey: false });
+    const item = (await screen.findAllByRole('menuitem')).find((i) => i.textContent?.includes('Move down'))!;
+    fireEvent.click(item, { detail: 1 });
+    await waitFor(() => expect(spies.reorder).toHaveBeenCalledWith(['acc-2', 'acc-1'], expect.anything()));
+  });
+
+  it('shows the Claude Code only policy and warns once it is lifted', () => {
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.getByText('Claude Code only')).toBeInTheDocument();
+    expect(screen.queryByText(/does not impersonate Claude Code/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Claude Code only' }));
+    expect(spies.updatePolicy).toHaveBeenCalledWith({ clientPolicy: 'any' }, expect.anything());
+
+    cleanup();
+    spies.policy = { clientPolicy: 'any', switchMode: 'failover', claudeSubscription: true, mimicClaudeCode: false };
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.getByText(/does not impersonate Claude Code/)).toBeInTheDocument();
+
+    // Other subscriptions have no client policy row.
+    cleanup();
+    spies.policy = { clientPolicy: 'any', switchMode: 'manual', claudeSubscription: false, mimicClaudeCode: false };
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.queryByText('Claude Code only')).toBeNull();
+    expect(screen.getByText('Account switching')).toBeInTheDocument();
   });
 });

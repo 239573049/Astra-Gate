@@ -40,7 +40,11 @@ public sealed class SubscriptionOAuthConfig
     /// `issuers/zcode.ts`（逆向 Vibe Coding Labs《ZCode RE》 + ZCode.app v3.11.2）；
     /// "deviceauth" = 一类非标准设备码链路：申请非
     /// <c>/oauth2/token</c> 的端点、轮询返回一次性授权码（含它自己带的 PKCE
-    /// challenge/verifier），再用该授权码走标准换码。OpenAI（Codex）走这条。
+    /// challenge/verifier），再用该授权码走标准换码。OpenAI（Codex）走这条；
+    /// "github-copilot" = 设备码登 GitHub，再拿 GitHub token 换 Copilot 短时令牌；
+    /// "claude-loopback" = Anthropic 的授权码链路：redirect_uri 是 http://localhost:{临时端口}/callback
+    /// （Claude Code 就这么登的），配合 PKCE；换码 body 是 JSON，redirect_uri 要逐字回传。
+    /// 见 OAuthClient.BuildAuthorizeUrl 的 claude 分支（参数顺序敏感）。
     /// </summary>
     public string Style { get; init; } = "";
 
@@ -91,12 +95,30 @@ public static class SubscriptionCatalog
             // ProviderKey 与订阅模板 id 对齐（Templates/catalog.json: claude-subscription）。
             ProviderKey = "claude-subscription",
             DisplayName = "Claude 订阅（Pro/Max）",
-            AuthorizeUrl = "https://claude.ai/oauth/authorize",
-            TokenUrl = "https://claude.ai/v1/oauth/token",
+            // 端点、client_id、scope 与 redirect 形态都取自 Claude Code 自己的二进制
+            // （@anthropic-ai/claude-code 的 claude-code-darwin-arm64/claude 里内嵌的 OAuth 配置
+            // 与授权 URL 构造函数），与 sub2api 的 Claude OAuth 客户端一致。要点：
+            //  1. 授权页是 claude.com/cai/oauth/authorize（claude.ai/oauth/authorize 会 307 到它、
+            //     参数保留），必须带 code=true；
+            //  2. redirect_uri 是**回环地址、端口临时挑**：http://localhost:{port}/callback。
+            //     platform.claude.com/oauth/code/callback 只是 Claude Code 的无头兜底，
+            //     实际登录走回环（实测 Claude Code 用 http://localhost:55522/callback）。
+            //     所以登录期间在临时端口上起一个接收器，见 SubscriptionCatalog.ClaudeLoopbackPath；
+            //  3. 参数**顺序**敏感：顺序不对授权端点直接回 "Invalid request format"
+            //     （见 OAuthClient.BuildAuthorizeUrl 的 claude 分支）；
+            //  4. 换码在 platform.claude.com，body 是 JSON，code 与 state 分开发。
+            AuthorizeUrl = "https://claude.com/cai/oauth/authorize",
+            TokenUrl = "https://platform.claude.com/v1/oauth/token",
             ClientId = "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
-            Scopes = ["org:create_api_key", "user:profile", "user:inference"],
+            // scopes 逐字对齐 Claude Code 的 yDr()。
+            Scopes =
+            [
+                "org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code",
+                "user:mcp_servers", "user:file_upload", "user:plugins",
+            ],
             UsePkce = true,
-            // 端点与 client_id 来自 cc-switch 的公开配置，开发环境验证过完整登录 + 刷新链路。
+            Style = "claude-loopback",
+            ExtraAuthorizeParams = new Dictionary<string, string> { ["code"] = "true" },
             // 五家订阅一律目录默认开放；实例可用 settings.subscription_oauth.verified=false 关掉。
             Verified = true,
         },
@@ -229,6 +251,74 @@ public static class SubscriptionCatalog
     public const string CodexLoopbackPath = "/auth/callback";
 
     /// <summary>
+    /// Claude（Anthropic）登录回调的路径。redirect_uri 是 <c>http://localhost:{临时端口}/callback</c>
+    /// ——端口由本地挑（Claude Code 实测用 <c>http://localhost:55522/callback</c>），所以没有固定值。
+    /// </summary>
+    public const string ClaudeLoopbackPath = "/callback";
+
+    /// <summary>
+    /// Claude Code 自己的无头兜底回调（授权页把 code 显示出来让用户粘回来）。
+    /// 正常登录走回环地址，这个值只在用户显式指定时才用。
+    /// </summary>
+    public const string ClaudeCodeCallback = "https://platform.claude.com/oauth/code/callback";
+
+    /// <summary>是否是 Claude 的回环登录（redirect_uri 是临时端口的 http://localhost）。</summary>
+    public static bool IsClaudeLoopback(SubscriptionOAuthConfig config) =>
+        config.Style == "claude-loopback";
+
+    /// <summary>
+    /// 是否是"授权页把 code 显示出来、用户粘回来"的链路：只有实例显式把 redirect_uri 覆盖成
+    /// 非回环地址时才成立（Claude Code 的无头路径就是这种）。
+    /// </summary>
+    public static bool IsPasteLogin(SubscriptionOAuthConfig config) =>
+        config.Style == "claude-loopback" && config.RedirectUriOverride.Length > 0;
+
+    /// <summary>
+    /// 把用户粘回来的东西还原成换码要的 <c>code</c> 与 <c>state</c>。
+    ///
+    /// 收的是**整条回调地址或整段回显值**，不是光秃秃一个 code——用户在授权页上一次全选复制，
+    /// code 不会被手抖截断，state 也跟着一起回来了。三种形态都认：
+    ///  1. 完整回调地址：<c>https://platform.claude.com/oauth/code/callback?code=…&amp;state=…</c>
+    ///  2. Claude 回显的 <c>授权码#state</c>（sub2api 换码时就是这么拆的）
+    ///  3. 只有授权码
+    /// 返回的 <c>Raw</c> 是"上游要的那种形态"：有 state 就是 <c>授权码#state</c>，否则就是授权码本身。
+    /// </summary>
+    public static (string Raw, string? State) ParsePastedCode(string? pasted)
+    {
+        var text = pasted?.Trim() ?? "";
+        if (text.Length == 0) return ("", null);
+        // URL 里 code 可能被百分号编码（# 会被编码成 %23，正好是最容易被忽略的一种）。
+        var decoded = Uri.UnescapeDataString(text);
+        if (Uri.TryCreate(decoded, UriKind.Absolute, out var uri) && uri.Query.Length > 1)
+        {
+            string? code = null;
+            string? state = null;
+            foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var eq = pair.IndexOf('=');
+                if (eq <= 0) continue;
+                var key = Uri.UnescapeDataString(pair[..eq]);
+                var value = Uri.UnescapeDataString(pair[(eq + 1)..]);
+                if (string.Equals(key, "code", StringComparison.OrdinalIgnoreCase)) code ??= value;
+                else if (string.Equals(key, "state", StringComparison.OrdinalIgnoreCase)) state ??= value;
+            }
+            if (!string.IsNullOrEmpty(code)) return (state is { Length: > 0 } ? $"{code}#{state}" : code, state);
+        }
+        // 授权页的 "授权码#state" 形态。code 本身不含 '#'，所以按第一个 '#' 拆。
+        var hash = decoded.IndexOf('#');
+        if (hash > 0)
+            return (decoded, decoded[(hash + 1)..] is { Length: > 0 } state ? state : null);
+        return (decoded, null);
+    }
+
+    /// <summary>拆出 <c>授权码#state</c> 里的授权码部分；没有 '#' 时原样返回。</summary>
+    public static string CodeWithoutState(string raw)
+    {
+        var hash = raw.IndexOf('#');
+        return hash < 0 ? raw : raw[..hash];
+    }
+
+    /// <summary>
     /// codex-cli 允许的回环回调端口：1455 默认、1457 备用。这一对端口是 auth.openai.com 的
     /// redirect URI 白名单，其它回调一律 invalid_authorize_request。
     /// </summary>
@@ -331,6 +421,8 @@ public static class SubscriptionCatalog
             "zcli" => config.CliInitUrl.Length > 0 && config.CliPollUrl.Length > 0,
             // github-copilot：设备码登录 GitHub，再换 Copilot 短时令牌（BusinessLoginUrl）。
             "github-copilot" => !string.IsNullOrWhiteSpace(config.DeviceCodeUrl) && config.BusinessLoginUrl.Length > 0,
+            // claude-loopback：授权码 + PKCE，回调走临时端口的回环地址（由登录流程起接收器）。
+            "claude-loopback" => config.UsePkce && !string.IsNullOrWhiteSpace(config.AuthorizeUrl),
             "zcode" => !string.IsNullOrWhiteSpace(config.AuthorizeUrl),
             "deviceauth" => !string.IsNullOrWhiteSpace(config.DeviceCodeUrl) && config.DeviceTokenUrl.Length > 0,
             _ => config.UsePkce
@@ -352,6 +444,23 @@ public static class Pkce
         foreach (var b in bytes) verifier.Append(Unreserved[b % Unreserved.Length]);
         return (verifier.ToString(), Challenge(verifier.ToString()));
     }
+
+    /// <summary>
+    /// Claude Code / sub2api 形态的 PKCE：verifier = 32 个随机字节的 base64url（43 字符）。
+    /// Anthropic 的授权端对输入形态严格校验，Claude 登录用这个形态而不是上面的 64 字符版本。
+    /// </summary>
+    public static (string Verifier, string Challenge) CreateBase64Url()
+    {
+        var verifier = RandomBase64Url(32);
+        return (verifier, Challenge(verifier));
+    }
+
+    /// <summary>
+    /// 随机字节的 base64url（32 字节 = 43 字符，无填充）——Claude Code 与 sub2api 的 OAuth state 形态。
+    /// 其它家族的 state 是 26 位 ULID；Claude 的授权端对它严格校验，发 ULID 会被判 "Invalid request format"。
+    /// </summary>
+    public static string RandomBase64Url(int byteCount) =>
+        Convert.ToBase64String(RandomNumberGenerator.GetBytes(byteCount)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     public static string Challenge(string verifier)
     {

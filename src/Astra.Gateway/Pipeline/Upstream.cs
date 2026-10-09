@@ -87,8 +87,9 @@ public sealed class GatewayHttpClients : IDisposable
             ConnectTimeout = TimeSpan.FromSeconds(30),
             AutomaticDecompression = DecompressionMethods.All,
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-            Proxy = proxy is null ? null : new WebProxy(proxy),
-            UseProxy = proxy is not null,
+            // 提供商配了 httpProxy 就用它；没配则默认走系统代理（环境变量 > 操作系统设置，回环直连）。
+            Proxy = proxy is null ? SystemProxy.Dynamic : new WebProxy(proxy),
+            UseProxy = true,
         };
         return new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
     }

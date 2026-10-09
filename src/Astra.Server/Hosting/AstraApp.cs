@@ -72,17 +72,21 @@ public static class AstraApp
         builder.Services.AddSingleton(server);
         builder.Services.AddSingleton(database);
         builder.Services.AddSingleton(ClientEnvironment.Real);
+        builder.Services.AddSingleton<ClientInstallService>();
         builder.Services.AddSingleton<ClientService>();
         builder.Services.AddSingleton<TokenService>();
         builder.Services.AddHostedService<TokenMigrationWorker>();
         builder.Services.AddSingleton<ProviderTemplateCatalog>();
         builder.Services.AddSingleton<ProviderProbe>();
+        builder.Services.AddSingleton<ImportService>();
+        builder.Services.AddSingleton<IModelProtocolResolver>(sp => sp.GetRequiredService<ProviderProbe>());
         builder.Services.AddSingleton<ModelSyncService>();
         builder.Services.AddSingleton<Astra.Core.Models.IProviderAccountStore>(database.Accounts);
         builder.Services.AddSingleton<SettingsService>();
         builder.Services.AddSingleton<PrivacyGuardService>();
         builder.Services.AddSingleton<EffectiveModelResolver>();
         builder.Services.AddSingleton<BodyStore>();
+        builder.Services.AddSingleton<LiveRequestFeed>();
         builder.Services.AddSingleton<UsageWriter>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageWriter>());
         builder.Services.AddHostedService<RetentionService>();
@@ -128,6 +132,9 @@ public static class AstraApp
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
         builder.Services.AddHttpClient(UpdateCheckService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
+        builder.Services.AddHttpClient(ClientInstallService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
         builder.Services.AddOpenApi();

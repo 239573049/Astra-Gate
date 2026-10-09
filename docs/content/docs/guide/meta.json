@@ -3,5 +3,5 @@
   "description": "认识 Astra，安装并发出第一个请求",
   "icon": "Rocket",
   "defaultOpen": true,
-  "pages": ["index", "install", "first-request"]
+  "pages": ["index", "install", "docker", "first-request"]
 }

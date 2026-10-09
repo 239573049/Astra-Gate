@@ -49,7 +49,7 @@ public class ClaudeSubscriptionTests
     [Fact]
     public void Other_Clients_Are_Not_Claude_Code()
     {
-        var body = Body($$"""{"model":"m","max_tokens":10,"metadata":{"user_id":"{{LegacyUserId}}"}}""");
+        var body = Body($$$"""{"model":"m","max_tokens":10,"metadata":{"user_id":"{{{LegacyUserId}}}"}}""");
 
         var otherUa = ClaudeCodeHeaders();
         otherUa["User-Agent"] = "opencode/1.0";
@@ -74,15 +74,60 @@ public class ClaudeSubscriptionTests
 
     // ---------- anthropic-beta ----------
 
+    /// <summary>
+    /// 真实抓包（claude-cli/2.1.281，原始请求）：同一个 CC 在 auth-token 模式（Astra 收到的）与订阅模式
+    /// （能用的直连）下的 anthropic-beta。订阅集 = auth-token 集 + 恰好两个 token——oauth 紧跟 claude-code、
+    /// extended-cache-ttl 放最后，其余逐个相同；集合大小随模型变（8 / 10 / 12），所以不能是固定列表。
+    /// </summary>
     [Theory]
-    [InlineData("claude-code-20250219,interleaved-thinking-2025-05-14", "claude-sonnet-4-5",
-        "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14")]
-    [InlineData("interleaved-thinking-2025-05-14", "claude-sonnet-4-5", "oauth-2025-04-20,interleaved-thinking-2025-05-14")]
-    [InlineData("claude-code-20250219, oauth-2025-04-20", "claude-sonnet-4-5", "claude-code-20250219,oauth-2025-04-20")]
-    [InlineData("", "claude-sonnet-4-5", ClaudeOAuthHeaders.DefaultBeta)]
-    [InlineData(null, "claude-haiku-4-5", ClaudeOAuthHeaders.HaikuBeta)]
-    public void Relay_Beta_Gets_The_OAuth_Beta_Next_To_Claude_Code(string? client, string model, string expected) =>
+    [InlineData(
+        "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,advisor-tool-2026-03-01,effort-2025-11-24",
+        "claude-opus-5-5",
+        "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,advisor-tool-2026-03-01,effort-2025-11-24,extended-cache-ttl-2025-04-11")]
+    [InlineData(
+        "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,advisor-tool-2026-03-01,effort-2025-11-24",
+        "claude-sonnet-5",
+        "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,advisor-tool-2026-03-01,effort-2025-11-24,extended-cache-ttl-2025-04-11")]
+    // haiku 的 -p 订阅请求（真实抓包）：claude-code 在 prompt-caching-scope 之后，oauth 紧跟它。
+    [InlineData(
+        "interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219,advisor-tool-2026-03-01",
+        "claude-haiku-4-5",
+        "interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,claude-code-20250219,oauth-2025-04-20,advisor-tool-2026-03-01,extended-cache-ttl-2025-04-11")]
+    // 已经带 oauth / ttl 的客户端：不重复追加。
+    [InlineData("claude-code-20250219,oauth-2025-04-20,extended-cache-ttl-2025-04-11", "claude-sonnet-5",
+        "claude-code-20250219,oauth-2025-04-20,extended-cache-ttl-2025-04-11")]
+    // 客户端没发 beta：退回 CLI 默认值，再补两个订阅专属 token。
+    [InlineData(null, "claude-haiku-4-5", "oauth-2025-04-20,interleaved-thinking-2025-05-14,extended-cache-ttl-2025-04-11")]
+    public void Relay_Beta_Is_The_Clients_Own_Set_Plus_The_Two_Subscription_Only_Tokens(string? client, string model, string expected) =>
         Assert.Equal(expected, ClaudeOAuthHeaders.MergeRelayBeta(client, model));
+
+    /// <summary>
+    /// 真实抓包：auth-token 模式的 CC 请求体里 system[1]/system[2]/最后一个消息块的 cache_control 是
+    /// {"type":"ephemeral"}，订阅模式是 {"type":"ephemeral","ttl":"1h"}——这是两种模式体的唯一结构差异，
+    /// 且与头里的 extended-cache-ttl beta 配套。已有 ttl 的不动，非 JSON 原样返回。
+    /// </summary>
+    [Fact]
+    public void Relay_Body_Gets_The_One_Hour_Cache_Ttl_The_Subscription_Mode_Sends()
+    {
+        const string authTokenBody = """
+            {"model":"claude-opus-5-5","system":[{"type":"text","text":"billing"},{"type":"text","text":"id","cache_control":{"type":"ephemeral"}},{"type":"text","text":"rules","cache_control":{"type":"ephemeral"}}],
+             "messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral"}}]}],"tools":[{"name":"t","cache_control":{"type":"ephemeral","ttl":"5m"}}]}
+            """;
+
+        var result = System.Text.Json.Nodes.JsonNode.Parse(ClaudeOAuthHeaders.PromoteCacheControlTtl(authTokenBody))!;
+
+        Assert.Equal("1h", result["system"]![1]!["cache_control"]!["ttl"]!.GetValue<string>());
+        Assert.Equal("1h", result["system"]![2]!["cache_control"]!["ttl"]!.GetValue<string>());
+        Assert.Equal("1h", result["messages"]![0]!["content"]![0]!["cache_control"]!["ttl"]!.GetValue<string>());
+        // 客户端自己给过 ttl 的块不被改写；没有 cache_control 的块不被加。
+        Assert.Equal("5m", result["tools"]![0]!["cache_control"]!["ttl"]!.GetValue<string>());
+        Assert.Null(result["system"]![0]!["cache_control"]);
+        Assert.Equal("claude-opus-5-5", result["model"]!.GetValue<string>());
+        // 幂等：订阅形态的体再过一遍不变；非 JSON 原样返回。
+        var once = ClaudeOAuthHeaders.PromoteCacheControlTtl(authTokenBody);
+        Assert.Equal(once, ClaudeOAuthHeaders.PromoteCacheControlTtl(once));
+        Assert.Equal("not json", ClaudeOAuthHeaders.PromoteCacheControlTtl("not json"));
+    }
 
     [Fact]
     public void Compat_Beta_Puts_The_Required_Betas_First_Without_Duplicates() =>
@@ -108,14 +153,18 @@ public class ClaudeSubscriptionTests
         ClaudeOAuthHeaders.ApplyRelay(request, client, "claude-sonnet-4-5",
             new Dictionary<string, string> { ["anthropic-version"] = "2099-01-01", ["x-extra"] = "1" }, "2023-06-01");
 
-        string H(string name) => string.Join(",", request.Headers.GetValues(name));
-        Assert.Equal(Ua, H("User-Agent"));
+        // The raw wire values (GetValues would re-split a User-Agent into product tokens).
+        string H(string name) => request.Headers.NonValidated[name].ToString();
+        // UA 重建为单个 product token（.NET 无法表示 product+注释 组合，见 SetUserAgent）；
+        // 版本取客户端 UA 里的 2.1.99。
+        Assert.Equal("claude-cli/2.1.99", H("User-Agent"));
         Assert.Equal("cli", H("x-app"));
         Assert.Equal("js", H("x-stainless-lang"));
         Assert.Equal("0", H("x-stainless-retry-count"));
         Assert.Equal("sess-1", H("x-claude-code-session-id"));
         Assert.Equal("application/json", H("Accept"));
-        Assert.Equal("claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14", H("anthropic-beta"));
+        Assert.Contains("oauth-2025-04-20", H("anthropic-beta"));
+        Assert.EndsWith("extended-cache-ttl-2025-04-11", H("anthropic-beta"));
         // The client's value wins over provider extras; extras only fill gaps.
         Assert.Equal("2023-06-01", H("anthropic-version"));
         Assert.Equal("1", H("x-extra"));

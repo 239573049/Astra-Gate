@@ -16,7 +16,7 @@ public sealed record ClientInfoDto(
     string Kind, string Name, ApiProtocol Protocol, string Availability, string? AvailabilityReason, string Mode,
     ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
     JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
-    bool ConfigOutdated = false, string? TokenId = null);
+    bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null);
 public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
 public sealed record ConfigChangeDto(string File, string Format, string KeyPath, string? Before, string? After);
 public sealed record ClientDisableDto(IReadOnlyList<string> Restored, IReadOnlyList<string> Drifted, ClientInfoDto Client);
@@ -28,7 +28,7 @@ public sealed record TokenRewriteResult(IReadOnlyList<string> Rewritten, IReadOn
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
-    EffectiveModelResolver models)
+    EffectiveModelResolver models, ClientInstallService installs)
 {
     private readonly ClientAdapterRegistry _registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState);
     private readonly ClientConfigApplier _applier = new(db.ClientConfigState, env, paths.ClientBackupsDir);
@@ -36,8 +36,10 @@ public sealed class ClientService(
 
     public async Task<IReadOnlyList<ClientInfoDto>> ListAsync(CancellationToken ct = default)
     {
+        // Probes every client's version in parallel up front (cached afterwards), so InfoAsync below stays cheap.
+        var install = await installs.DescribeAllAsync(ct);
         var result = new List<ClientInfoDto>();
-        foreach (var adapter in _registry.All) result.Add(await InfoAsync(adapter, ct));
+        foreach (var adapter in _registry.All) result.Add(await InfoAsync(adapter, ct, install.GetValueOrDefault(adapter.Kind)));
         return result;
     }
 
@@ -68,7 +70,7 @@ public sealed class ClientService(
         }, ct);
 
     /// <summary>
-    /// Plan §7.6: OpenCode (and the other <see cref="ClientKinds.WithModelList"/> clients: Pi, MiniMax Code, Copilot CLI)
+    /// Plan §7.6: OpenCode (and the other <see cref="ClientKinds.WithModelList"/> clients)
     /// list the bound provider's models in their config. Keeps those lists current when the provider's models change
     /// (<paramref name="providerId"/> = the changed provider; null = whatever is bound). Never touches a config the user
     /// edited (drift). Returns true when any file was rewritten.
@@ -315,11 +317,18 @@ public sealed class ClientService(
         ClientKinds.GrokBuild => "model.astra.model",
         ClientKinds.Pi or ClientKinds.MiniMaxCode => "defaultModel",
         ClientKinds.HermesAgent => "model.default",
+        ClientKinds.Crush => "models.large",
+        ClientKinds.QwenCode => "model.name",
+        ClientKinds.KimiCode => "default_model",
+        ClientKinds.Zed => "agent.default_model",
+        ClientKinds.Omp => "modelRoles.default",
+        ClientKinds.DeepSeekHarness => "[id=agent-default-model].config.model",
         _ => "model",
     };
 
-    private async Task<ClientInfoDto> InfoAsync(IClientAdapter adapter, CancellationToken ct)
+    private async Task<ClientInfoDto> InfoAsync(IClientAdapter adapter, CancellationToken ct, ClientInstallDto? install = null)
     {
+        install ??= installs.Describe(adapter.Kind);
         var record = await db.Clients.GetAsync(adapter.Kind, ct);
         var binding = await db.Clients.GetBindingAsync(adapter.Kind, ct);
         var warnings = new List<string>();
@@ -337,11 +346,11 @@ public sealed class ClientService(
         return new ClientInfoDto(adapter.Kind, NameOf(adapter.Kind), ClientKinds.ProtocolOf(adapter.Kind),
             adapter.Availability == ClientAvailability.Available ? "available" : "coming_soon", adapter.UnavailableReason,
             adapter.Mode == ClientMode.Coexist ? "coexist" : "switch",
-            new ClientDetectionDto(detection.Detected, configPaths.Any(File.Exists), detection.Version, configPaths),
+            new ClientDetectionDto(detection.Detected, configPaths.Any(File.Exists), detection.Version ?? install?.Version, configPaths),
             drifted ? "drifted" : enabled ? "enabled" : "disabled", enabled, binding?.ProviderId, binding?.AccountId,
             record?.SelectedModel,
             Json.Deserialize<JsonObject>(record?.ExtraJson) ?? new JsonObject(), record?.AppliedAt, warnings, true, outdated,
-            record?.TokenId ?? TokenIds.Default);
+            record?.TokenId ?? TokenIds.Default, install);
     }
 
     /// <summary>
@@ -443,6 +452,10 @@ public sealed class ClientService(
         ClientKinds.OpenCode => "OpenCode", ClientKinds.ClaudeDesktop => "Claude Desktop", ClientKinds.GrokBuild => "Grok Build",
         ClientKinds.Pi => "Pi", ClientKinds.HermesAgent => "Hermes Agent", ClientKinds.MiniMaxCode => "MiniMax Code",
         ClientKinds.CopilotCli => "Copilot CLI", ClientKinds.VsCodeCopilot => "VS Code Copilot",
+        ClientKinds.Crush => "Crush", ClientKinds.QwenCode => "Qwen Code", ClientKinds.Droid => "Droid",
+        ClientKinds.KimiCode => "Kimi Code", ClientKinds.Zed => "Zed", ClientKinds.VsCodeInsiders => "VS Code Insiders", ClientKinds.VsCodium => "VSCodium",
+        ClientKinds.Omp => "omp (oh-my-pi)", ClientKinds.MiMoCode => "MiMo Code", ClientKinds.DeepSeekHarness => "DeepSeek Harness",
+        ClientKinds.WorkBuddy => "WorkBuddy",
         _ => kind,
     };
 }

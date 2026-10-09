@@ -75,7 +75,7 @@ try {
     console.log('· request-detail skipped (no request rows)');
   }
 
-  // 客户端 + 未启用客户端标签（两张截图不能相同：/clients/:kind 是标签页）
+  // 客户端 + 未启用客户端（两张截图不能相同：/clients/:kind 切换左侧列表的选中项）
   await page.goto(`${APP}/clients`);
   await settle(page, 1400);
   await shot(page, 'clients');

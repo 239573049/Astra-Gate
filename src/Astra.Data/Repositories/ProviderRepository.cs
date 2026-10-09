@@ -257,6 +257,7 @@ public sealed class ProviderRepository
             overrides_json = Json.Serialize(model.Overrides),
             enabled = model.Enabled,
             sort_order = model.SortOrder,
+            upstream_protocols_json = model.UpstreamProtocols is { Count: > 0 } ? Json.Serialize(model.UpstreamProtocols) : null,
         });
     }
 
@@ -299,7 +300,21 @@ public sealed class ProviderRepository
             overrides_json = Json.Serialize(model.Overrides),
             enabled = model.Enabled,
             sort_order = model.SortOrder,
+            upstream_protocols_json = model.UpstreamProtocols is { Count: > 0 } ? Json.Serialize(model.UpstreamProtocols) : null,
         }) > 0;
+    }
+
+    /// <summary>Refreshes discovered protocol metadata without overwriting concurrent model settings edits.</summary>
+    public async Task<bool> UpdateModelProtocolsAsync(long id, IReadOnlyList<ApiProtocol> protocols, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return await conn.ExecuteAsync(
+            "UPDATE provider_models SET upstream_protocols_json = @upstream_protocols_json WHERE id = @id",
+            new
+            {
+                id,
+                upstream_protocols_json = protocols.Count > 0 ? Json.Serialize(protocols.ToList()) : null,
+            }) > 0;
     }
 
     public async Task<bool> DeleteModelAsync(long id, CancellationToken ct = default)

@@ -4,13 +4,13 @@ import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
-import type { Settings } from '../api/types';
+import type { ProxyMode, Settings } from '../api/types';
 import { Page } from '../components/layout/Page';
 import { NumberField } from '../components/arc/number-field/number-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
 import { TraySettings } from '../components/tray/TraySettings';
 import { hasTrayPanel } from '../components/tray/useTrayBridge';
-import { Button, Group, Row, Segmented, Spinner, Switch } from '../components/ui/controls';
+import { Button, Group, Input, Row, Segmented, Spinner, Switch } from '../components/ui/controls';
 import { errorText, Select, useFeedback } from '../components/ui/overlays';
 import { useI18n, type Locale } from '../i18n';
 import { ACCENT_PRESETS, useAppearance } from '../shell/appearance';
@@ -156,6 +156,8 @@ function GeneralSettings() {
             </Row>
           </Group>
 
+          <ProxySettings settings={s} />
+
           <Group title={t('settings.quota')} footer={t('settings.quota.autoIntervalHint')}>
             <Row label={t('settings.quota.autoInterval')}>
               <DeferredNumber
@@ -272,6 +274,95 @@ function UpdateRows() {
         </Button>
       </Row>
     </>
+  );
+}
+
+/**
+ * Outbound proxy for everything the server fetches (upstreams, logins, quota, updates, client installs).
+ * System / direct apply at once; custom needs a URL first, so its fields save together with an explicit button.
+ */
+function ProxySettings({ settings: s }: { settings: Settings }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateSettings();
+  // Custom is only stored once it has a URL: until then it is a local choice showing the form.
+  const [mode, setMode] = useState<ProxyMode>(s.proxyMode);
+  const [form, setForm] = useState({ url: s.proxyUrl ?? '', username: s.proxyUsername ?? '', password: '', bypass: s.proxyBypass ?? '' });
+  useEffect(() => setMode(s.proxyMode), [s.proxyMode]);
+  useEffect(
+    () => setForm({ url: s.proxyUrl ?? '', username: s.proxyUsername ?? '', password: '', bypass: s.proxyBypass ?? '' }),
+    [s.proxyUrl, s.proxyUsername, s.proxyBypass, s.hasProxyPassword],
+  );
+
+  const changeMode = (m: ProxyMode) => {
+    setMode(m);
+    if (m !== 'custom' || s.proxyUrl) update.mutate({ proxyMode: m }, { onError: (e) => toast(errorText(e), 'error') });
+  };
+
+  const save = () =>
+    update.mutate(
+      {
+        proxyMode: 'custom',
+        proxyUrl: form.url.trim() || null,
+        proxyUsername: form.username.trim() || null,
+        proxyBypass: form.bypass.trim() || null,
+        // Blank keeps the stored password; clearing the username clears it too.
+        ...(form.password ? { proxyPassword: form.password } : {}),
+      },
+      { onSuccess: () => toast(t('settings.proxy.saved')), onError: (e) => toast(errorText(e), 'error') },
+    );
+
+  const dirty =
+    mode !== s.proxyMode ||
+    form.url !== (s.proxyUrl ?? '') ||
+    form.username !== (s.proxyUsername ?? '') ||
+    form.password !== '' ||
+    form.bypass !== (s.proxyBypass ?? '');
+
+  return (
+    <Group title={t('settings.proxy')} footer={t('settings.proxy.footer')}>
+      <Row label={t('settings.proxy.mode')} detail={t(`settings.proxy.mode.${mode}.hint`)}>
+        <Segmented
+          ariaLabel={t('settings.proxy.mode')}
+          value={mode}
+          onChange={changeMode}
+          items={[
+            { value: 'system', label: t('settings.proxy.mode.system') },
+            { value: 'custom', label: t('settings.proxy.mode.custom') },
+            { value: 'direct', label: t('settings.proxy.mode.direct') },
+          ]}
+        />
+      </Row>
+      {mode === 'custom' && (
+        <>
+          <Row label={t('settings.proxy.url')} detail={t('settings.proxy.urlHint')}>
+            <Input className="w-64" mono aria-label={t('settings.proxy.url')} placeholder="http://127.0.0.1:7890" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+          </Row>
+          <Row label={t('settings.proxy.username')} detail={t('settings.proxy.optional')}>
+            <Input className="w-64" autoComplete="off" aria-label={t('settings.proxy.username')} value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+          </Row>
+          <Row label={t('settings.proxy.password')} detail={s.hasProxyPassword ? t('settings.proxy.passwordSaved') : t('settings.proxy.optional')}>
+            <Input
+              className="w-64"
+              type="password"
+              autoComplete="new-password"
+              aria-label={t('settings.proxy.password')}
+              placeholder={s.hasProxyPassword ? '••••••••' : undefined}
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </Row>
+          <Row label={t('settings.proxy.bypass')} detail={t('settings.proxy.bypassHint')}>
+            <Input className="w-64" mono aria-label={t('settings.proxy.bypass')} placeholder="example.com, *.lan" value={form.bypass} onChange={(e) => setForm({ ...form, bypass: e.target.value })} />
+          </Row>
+          <div className="flex justify-end px-4 py-2">
+            <Button size="sm" disabled={!dirty || !form.url.trim() || update.isPending} onClick={save}>
+              {t('common.save')}
+            </Button>
+          </div>
+        </>
+      )}
+    </Group>
   );
 }
 

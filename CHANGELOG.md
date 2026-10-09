@@ -4,6 +4,23 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [Unreleased]
+
+### 新增
+
+- **新增 10 个客户端**：Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness（官方桌面应用 / `dsh web`，写入 profile 的 `cordis.patch.yml` 与 `~/.dsh/.env`）可由 Astra 接管（写入前备份、禁用时还原、跳过你后来改过的值），并会随提供商的模型增减同步模型列表；Zed 不会从设置文件读取密钥，启用后需在 Zed 里粘贴一次令牌（卡片有提示）。Crush、Qwen Code、Droid、Kimi Code、MiMo Code 以 npm 包分发，可在客户端页安装、检查并更新；Zed、VS Code Insiders、VSCodium、omp、DeepSeek Harness 只显示版本与下载主页，Astra 不会替你运行安装命令。
+- **从其他应用导入提供商**：提供商页新增「从其他应用导入」，只读扫描 CC Switch、Alma、Claude Code、Codex、Magpie 的本地配置并预览（`GET /api/providers/import/sources`），勾选后由服务端重新读取并创建提供商（`POST /api/providers/import`）。API Key 不经过浏览器，预览只返回遮掩值；会自动匹配内置模板、合并同一中转的多个端点，并识别已存在的提供商。CLI 同步新增 `astra provider import [--from <来源>] [--yes] [--only <ref>…]`。不导入订阅 / OAuth 登录、路由、限流、余额与会话数据，也不改动任何客户端配置。
+
+## [未发布]
+
+### 新增
+
+- **Docker 镜像**：发布到 `ghcr.io/239573049/astra-gate`（`linux/amd64` + `linux/arm64`，标签 `latest`、`x.y.z`、`x.y`），内含服务端与管理控制台，复用与 npm 平台包相同的构建产物。仓库根目录新增 `Dockerfile` 与 `compose.yaml`，发布流程会在推送前对镜像做冒烟测试。
+- 服务端新增环境变量配置：`ASTRA_HOST`、`ASTRA_PORT`、`ASTRA_ADMIN_PASSWORD`（或 `ASTRA_ADMIN_PASSWORD_FILE`）、`ASTRA_PUBLIC_URL`、`ASTRA_STRICT_PORT`。优先级为命令行参数 > 环境变量 > `config.json`；密码仅在内存中哈希，不会写入配置文件。
+- `ASTRA_STRICT_PORT`：端口被占用时直接退出，而不是自动换到下一个端口，避免容器的端口映射悄悄失效。
+- `ASTRA_PUBLIC_URL`：指定对外可访问的网关地址，控制台与客户端配置不再显示容器内的 `127.0.0.1`。
+- `astra-server healthcheck` 子命令：请求 `/api/health`，健康时退出码为 0，供 Docker `HEALTHCHECK` 使用。
+
 ## [0.2.3] - 2026-10-08
 
 ### 修复

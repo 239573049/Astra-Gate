@@ -1,12 +1,21 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
-import { Claude, GithubCopilot, Grok, HermesAgent, OpenCode, Pi } from '@lobehub/icons';
+import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, OpenCode, Pi, XiaomiMiMo } from '@lobehub/icons';
 import { Code, Monitor, SquareTerminal, type LucideIcon } from 'lucide-react';
-import type { ComponentType } from 'react';
+import type { ComponentType, CSSProperties } from 'react';
 import type { ClientKind } from '../api/types';
 // Vendors without a @lobehub/icons brand component ship their own downloaded mark.
 // See assets/providers/sources.json for provenance.
 import routinLogo from '../assets/providers/routin.png';
+import nextcoworkLogo from '../assets/providers/nextcowork.png';
+// Clients without a @lobehub/icons mark: the vendor's own icon, provenance in assets/clients/sources.json.
+import crushLogo from '../assets/clients/crush.png';
+import droidLogo from '../assets/clients/droid.svg';
+import ompLogo from '../assets/clients/omp.png';
+import vscodeInsidersLogo from '../assets/clients/vscode-insiders.png';
+import vscodiumLogo from '../assets/clients/vscodium.svg';
+import workbuddyLogo from '../assets/clients/workbuddy.svg';
+import zedLogo from '../assets/clients/zed.png';
 
 export const CLIENT_META: Record<ClientKind, { name: string }> = {
   codex: { name: 'Codex' },
@@ -20,11 +29,24 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'minimax-code': { name: 'MiniMax Code' },
   'copilot-cli': { name: 'Copilot CLI' },
   'vscode-copilot': { name: 'VS Code Copilot' },
+  crush: { name: 'Crush' },
+  'qwen-code': { name: 'Qwen Code' },
+  droid: { name: 'Droid' },
+  'kimi-code': { name: 'Kimi Code' },
+  zed: { name: 'Zed' },
+  'vscode-insiders': { name: 'VS Code Insiders' },
+  vscodium: { name: 'VSCodium' },
+  omp: { name: 'omp (oh-my-pi)' },
+  'mimo-code': { name: 'MiMo Code' },
+  'deepseek-harness': { name: 'DeepSeek Harness' },
+  workbuddy: { name: 'WorkBuddy' },
 };
 
 export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
   'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
+  'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
+  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -32,6 +54,28 @@ type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean
 // Client marks come from @lobehub/icons and show the vendor's brand mark (as cc-switch does): product
 // mascots such as the Claude Code crab or the Codex cloud read as noise at toolbar size. Clients that share a
 // vendor mark (the two Claude clients, the two Copilot clients) are told apart by a corner badge.
+// Clients without a @lobehub/icons brand mark (Crush, Droid, Zed, omp, the VS Code builds, WorkBuddy) show the vendor's
+// own icon, bundled locally (never a remote URL); the avatar is the same image filling the tile.
+function logoMark(src: string): BrandMark {
+  return function LogoMark({ size = 18 }) {
+    return <img data-client-mark="logo" src={src} alt="" draggable={false} decoding="async" width={size} height={size} className="object-contain" style={{ borderRadius: Math.round(Number(size) * 0.22) }} />;
+  };
+}
+
+function logoAvatar(src: string): ComponentType<IconAvatarProps> {
+  return function LogoAvatar({ size = 28, style }: IconAvatarProps) {
+    const px = Number(size);
+    const box: CSSProperties = { width: px, height: px, ...style };
+    return (
+      <span className="inline-flex items-center justify-center overflow-hidden bg-white shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.08)]" style={box}>
+        <img data-client-mark="logo" src={src} alt="" draggable={false} decoding="async" className="size-full object-contain" />
+      </span>
+    );
+  };
+}
+
+const logo = (src: string) => ({ Mark: logoMark(src), Avatar: logoAvatar(src) });
+
 const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType<IconAvatarProps>; badge?: LucideIcon }> = {
   codex: { Mark: OpenAI, Avatar: OpenAI.Avatar },
   'claude-code': { Mark: Claude.Color, Avatar: Claude.Avatar, badge: SquareTerminal },
@@ -44,6 +88,17 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   'minimax-code': { Mark: Minimax.Color, Avatar: Minimax.Avatar },
   'copilot-cli': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar, badge: SquareTerminal },
   'vscode-copilot': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar, badge: Code },
+  crush: logo(crushLogo),
+  'qwen-code': { Mark: Qwen.Color, Avatar: Qwen.Avatar, badge: SquareTerminal },
+  droid: logo(droidLogo),
+  'kimi-code': { Mark: Kimi.Color, Avatar: Kimi.Avatar, badge: SquareTerminal },
+  zed: logo(zedLogo),
+  'vscode-insiders': logo(vscodeInsidersLogo),
+  vscodium: logo(vscodiumLogo),
+  omp: logo(ompLogo),
+  'mimo-code': { Mark: XiaomiMiMo, Avatar: XiaomiMiMo.Avatar, badge: SquareTerminal },
+  'deepseek-harness': { Mark: DeepSeek.Color, Avatar: DeepSeek.Avatar, badge: Monitor },
+  workbuddy: logo(workbuddyLogo),
 };
 
 function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {
@@ -53,7 +108,7 @@ function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {
   return (
     <span
       data-badge={kind}
-      className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-[3px] bg-[var(--surface)] text-[var(--foreground)] shadow-[0_0_0_1px_var(--border)]"
+      className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-[3px] bg-[var(--surface-raised)] text-[var(--foreground)] shadow-[0_0_0_1px_var(--border)]"
       style={{ width: box, height: box }}
     >
       <BadgeIcon style={{ width: box * 0.78, height: box * 0.78 }} strokeWidth={2.5} />
@@ -128,6 +183,7 @@ const LOBE_PROVIDER_AVATARS: Record<string, BrandAvatar> = {
 // Providers the icon library does not ship: a locally bundled vendor image, keyed by the same
 // template `icon` id. Kept out of LOBE_PROVIDER_AVATARS so the library lookup stays uniform.
 const LOCAL_PROVIDER_LOGOS: Record<string, string> = {
+  nextcowork: nextcoworkLogo,
   routin: routinLogo,
 };
 

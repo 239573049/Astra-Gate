@@ -319,6 +319,40 @@ public class AdminApiTests
     }
 
     [Fact]
+    public async Task Settings_proxy_keeps_credentials_out_of_the_url_and_the_response()
+    {
+        await using var host = await TestHost.StartAsync();
+        try
+        {
+            var (status, body) = await host.SendAsync(HttpMethod.Patch, "/api/settings",
+                new { proxyMode = "custom", proxyUrl = "http://me:s3cret@proxy.example.com:3128/", proxyBypass = " corp.example.com " });
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal("custom", body!["proxyMode"]!.GetValue<string>());
+            Assert.Equal("http://proxy.example.com:3128", body["proxyUrl"]!.GetValue<string>());
+            Assert.Equal("me", body["proxyUsername"]!.GetValue<string>());
+            Assert.True(body["hasProxyPassword"]!.GetValue<bool>());
+            Assert.Equal("corp.example.com", body["proxyBypass"]!.GetValue<string>());
+            Assert.DoesNotContain("s3cret", body.ToJsonString());
+
+            var stored = await host.Db.Settings.GetAsync<AppSettings>(AppSettings.StorageKey);
+            Assert.NotNull(stored!.ProxyPasswordProtected);
+            Assert.DoesNotContain("s3cret", stored.ProxyPasswordProtected);
+
+            (status, _) = await host.SendAsync(HttpMethod.Patch, "/api/settings", new { proxyUrl = "ftp://proxy.example.com" });
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            (status, _) = await host.SendAsync(HttpMethod.Patch, "/api/settings", new { proxyUrl = (string?)null });
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+            stored = await host.Db.Settings.GetAsync<AppSettings>(AppSettings.StorageKey);
+            Assert.Equal(("custom", "http://proxy.example.com:3128"), (stored!.ProxyMode, stored.ProxyUrl));
+        }
+        finally
+        {
+            // The proxy is process-wide: put it back so other tests in this assembly stay direct.
+            await host.SendAsync(HttpMethod.Patch, "/api/settings", new { proxyMode = "system" });
+        }
+    }
+
+    [Fact]
     public async Task Request_detail_exposes_the_privacy_report()
     {
         await using var host = await TestHost.StartAsync();

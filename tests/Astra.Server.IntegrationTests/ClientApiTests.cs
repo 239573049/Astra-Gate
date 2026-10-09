@@ -355,6 +355,58 @@ public class ClientApiTests
         Assert.Equal(minimaxOriginal, await File.ReadAllTextAsync(minimax));
     }
 
+    [Fact]
+    public async Task New_Clients_Enable_Follow_Model_Changes_And_Disable_Cleanly()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        var crush = Path.Combine(host.ClientHome, ".config", "crush", "crush.json");
+        var kimi = Path.Combine(host.ClientHome, ".kimi-code", "config.toml");
+        var omp = Path.Combine(host.ClientHome, ".omp", "agent", "models.yml");
+        var originals = new Dictionary<string, string>
+        {
+            [crush] = "{\n  \"options\": { \"debug\": false }\n}\n",
+            [kimi] = "# kimi\ndefault_model = \"kimi/k2\"\n",
+            [omp] = "providers:\n  ollama:\n    baseUrl: http://localhost:11434/v1\n",
+        };
+        foreach (var (path, text) in originals)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await File.WriteAllTextAsync(path, text);
+        }
+
+        foreach (var kind in new[] { "crush", "kimi-code", "omp" })
+        {
+            var (status, enabled) = await host.SendAsync(HttpMethod.Post, $"/api/clients/{kind}/enable", new { providerId = provider.Id, model = "gpt-5" });
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal("enabled", enabled!["status"]!.GetValue<string>());
+        }
+        Assert.Contains("\"gpt-5\"", await File.ReadAllTextAsync(crush));
+        Assert.Contains("[models.astra-gpt-5]", await File.ReadAllTextAsync(kimi));
+        Assert.Contains("astra/gpt-5", await File.ReadAllTextAsync(Path.Combine(host.ClientHome, ".omp", "agent", "config.yml")));
+
+        // Adding a model to the provider rewrites the model lists of the enabled clients.
+        var (added, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{provider.Id}/models", new { modelIds = new[] { "gpt-5-mini" } });
+        Assert.Equal(HttpStatusCode.OK, added);
+        Assert.Contains("gpt-5-mini", await File.ReadAllTextAsync(crush));
+        Assert.Contains("[models.astra-gpt-5-mini]", await File.ReadAllTextAsync(kimi));
+        Assert.Contains("gpt-5-mini", await File.ReadAllTextAsync(omp));
+
+        foreach (var kind in new[] { "crush", "kimi-code", "omp" })
+        {
+            var (status, disabled) = await host.SendAsync(HttpMethod.Post, $"/api/clients/{kind}/disable");
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Empty(disabled!["drifted"]!.AsArray());
+        }
+        foreach (var (path, text) in originals) Assert.Equal(text, await File.ReadAllTextAsync(path));
+        Assert.False(File.Exists(Path.Combine(host.ClientHome, ".omp", "agent", "config.yml")));
+
+        // Every registered client is listed, in the fixed order.
+        var (listed, list) = await host.SendAsync(HttpMethod.Get, "/api/clients");
+        Assert.Equal(HttpStatusCode.OK, listed);
+        Assert.Equal(ClientKinds.All, list!.AsArray().Select(c => c!["kind"]!.GetValue<string>()));
+    }
+
     private static List<string> CopilotModels(string providers) =>
         JsonNode.Parse(File.ReadAllText(providers))!["models"]!.AsArray()
             .Where(m => m!["provider"]!.GetValue<string>() == "astra")

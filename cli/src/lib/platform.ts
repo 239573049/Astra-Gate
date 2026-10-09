@@ -56,6 +56,17 @@ export const CLIENT_KINDS = [
   'minimax-code',
   'copilot-cli',
   'vscode-copilot',
+  'crush',
+  'qwen-code',
+  'droid',
+  'kimi-code',
+  'zed',
+  'vscode-insiders',
+  'vscodium',
+  'omp',
+  'mimo-code',
+  'deepseek-harness',
+  'workbuddy',
 ] as const;
 
 export type ClientKind = (typeof CLIENT_KINDS)[number];

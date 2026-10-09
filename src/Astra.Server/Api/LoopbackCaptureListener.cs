@@ -27,18 +27,28 @@ public sealed class LoopbackCaptureListener : IAsyncDisposable
         Func<IReadOnlyDictionary<string, string>, Task<LoopbackCaptureResult>> onRequest,
         Action? onCompleted)
     {
-        Port = port;
         _path = path;
         try
         {
             // 两个回环地址都必须绑上：localhost 解析到哪个由系统决定。
+            // port 0 = 让系统挑一个空闲端口（Claude 就是这样：redirect_uri 是
+            // http://localhost:<临时端口>/callback）。注意 IPv4 挑到的端口必须原样用于 IPv6，
+            // 否则两边会挑到**不同**的端口，而 redirect_uri 只能写一个。
+            var actual = port;
+            var first = true;
             foreach (var address in new[] { IPAddress.Loopback, IPAddress.IPv6Loopback })
             {
-                var listener = new TcpListener(address, port);
+                var listener = new TcpListener(address, actual);
                 listener.Start();
+                if (first)
+                {
+                    actual = ((IPEndPoint)listener.LocalEndpoint).Port;
+                    first = false;
+                }
                 _sockets.Add(listener);
                 _ = Task.Run(() => AcceptAsync(listener, onRequest, onCompleted));
             }
+            Port = actual;
         }
         catch (SocketException)
         {
@@ -47,7 +57,7 @@ public sealed class LoopbackCaptureListener : IAsyncDisposable
         }
     }
 
-    /// <summary>The port actually claimed (one of the preferred ports).</summary>
+    /// <summary>The port actually bound (the requested one, or the OS-assigned port for <c>port == 0</c>).</summary>
     public int Port { get; }
 
     /// <summary>Starts listening on the first free port, returning null when none could be claimed.</summary>

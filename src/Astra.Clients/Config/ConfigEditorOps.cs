@@ -129,7 +129,10 @@ internal abstract class ConfigEditorOps
 
         public override string Text => _editor.Text;
 
-        public override string? Read(ConfigChange change) => _editor.GetJsonText(change.KeyPath);
+        // A "table" in YAML is a whole row of a sequence document (a selector path) that Astra owns: "true"/null, like JSON.
+        public override string? Read(ConfigChange change) => change.Kind == ConfigChangeKind.Table
+            ? _editor.Has(change.KeyPath) ? "true" : null
+            : _editor.GetJsonText(change.KeyPath);
 
         public override void Apply(ConfigChange change, List<string> warnings)
         {

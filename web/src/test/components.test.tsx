@@ -26,6 +26,14 @@ vi.mock('../api/hooks', () => ({
   useTokens: () => ({ data: [] }),
 }));
 
+// The live request feed opens an event stream; the list tests only cover stored rows.
+vi.mock('../api/liveRequests', () => ({
+  useLiveRequestFeed: () => {},
+  useLiveRequestList: () => [],
+  useLiveRequestsConnected: () => false,
+  useLiveRequest: () => undefined,
+}));
+
 // Page reads the shell layout context that only the real AppShell provides.
 vi.mock('../components/layout/AppShell', () => ({
   useShellLayout: () => ({
@@ -65,6 +73,7 @@ vi.mock('@lobehub/icons', () => {
     GithubCopilot: stub('github-copilot'),
     Grok: stub('grok'),
     HermesAgent: stub('hermes-agent'),
+    Kimi: stub('kimi'),
     LmStudio: stub('lm-studio'),
     Minimax: stub('minimax'),
     Moonshot: stub('moonshot'),
@@ -77,6 +86,7 @@ vi.mock('@lobehub/icons', () => {
     SiliconCloud: stub('siliconcloud'),
     Volcengine: stub('volcengine'),
     XAI: stub('xai'),
+    XiaomiMiMo: stub('xiaomi-mimo'),
     Zhipu: stub('zhipu'),
   };
 });

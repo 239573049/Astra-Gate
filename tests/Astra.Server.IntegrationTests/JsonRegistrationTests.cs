@@ -25,6 +25,7 @@ public sealed class JsonRegistrationTests
             "/api/privacy/events", "/api/privacy/events/stats", "/api/providers", "/api/clients", "/api/tokens",
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/provider-quota/templates",
+            "/api/providers/import/sources",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -57,6 +58,8 @@ public sealed class JsonRegistrationTests
         await host.GetJsonAsync($"/api/providers/{quotaId}/quota");
         await host.SendAsync(HttpMethod.Post, $"/api/providers/{quotaId}/quota/test", new { timeoutSec = 1 });
         await host.SendAsync(HttpMethod.Post, $"/api/providers/{quotaId}/quota");
+        // Provider import: preview (above), commit, and the conflict envelope.
+        await host.SendAsync(HttpMethod.Post, "/api/providers/import", new[] { new { source = "magpie", @ref = "missing" } });
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = "missing" });
         await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Guard" });
         await host.SendAsync(HttpMethod.Patch, "/api/settings", new { locale = "en" });

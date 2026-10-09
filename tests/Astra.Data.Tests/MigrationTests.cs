@@ -18,7 +18,7 @@ public class MigrationTests
 
         await using var conn = await factory.OpenAsync();
         var versions = (await conn.QueryAsync<long>("SELECT version FROM schema_version")).AsList();
-        Assert.Equal([1L, 5L, 6L, 7L], versions.Order());
+        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L], versions.Order());
 
         var appliedAt = await conn.ExecuteScalarAsync<string>("SELECT applied_at FROM schema_version ORDER BY version LIMIT 1");
         Assert.NotNull(appliedAt);
@@ -54,6 +54,12 @@ public class MigrationTests
             "SELECT name FROM pragma_table_info('providers') ORDER BY name")).AsList();
         Assert.Contains("quota_json", providerColumns);
         Assert.Contains("quota_checked_at_utc", providerColumns);
+        // 0008_subscription_accounts: account switching state and the account that served each request.
+        var accountColumns = (await conn.QueryAsync<string>(
+            "SELECT name FROM pragma_table_info('provider_accounts') ORDER BY name")).AsList();
+        foreach (var column in new[] { "enabled", "is_current", "sort_order", "cooldown_until_utc", "last_error" })
+            Assert.Contains(column, accountColumns);
+        Assert.Contains("account_id", requestColumns);
         var bindingColumns = (await conn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('client_bindings') ORDER BY name")).AsList();
         Assert.Contains("account_id", bindingColumns);
@@ -92,8 +98,9 @@ public class MigrationTests
             await conn.ExecuteAsync("INSERT INTO settings(key, value_json) VALUES ('marker', 'true')");
             // A database with tables but no version tracking (e.g. from before the runner existed):
             // fromVersion = 0 while the schema already exists, so a backup must be taken and the
-            // idempotent script must re-apply as a no-op. 0001 is idempotent but 0005, 0006 and 0007
+            // idempotent script must re-apply as a no-op. 0001 is idempotent but 0005 through 0009
             // are not, so the pre-0005 schema is simulated by undoing what they add.
+            await conn.ExecuteAsync(UndoAfterProviderQuotaMigrations);
             await conn.ExecuteAsync(UndoProviderQuotaMigration);
             await conn.ExecuteAsync(UndoTokensMigration);
             foreach (var column in new[] { "reasoning_effort", "reasoning_mode", "reasoning_budget_tokens" })
@@ -109,7 +116,7 @@ public class MigrationTests
         Assert.True(new FileInfo(backup).Length > 0);
 
         await using var check = await factory.OpenAsync();
-        Assert.Equal(4, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
+        Assert.Equal(6, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
         Assert.Equal("true",
             await check.ExecuteScalarAsync<string>("SELECT value_json FROM settings WHERE key = 'marker'"));
         // 0005 was re-applied after the rollback: the reasoning columns are back.
@@ -130,6 +137,7 @@ public class MigrationTests
 
         await using (var conn = await factory.OpenAsync())
         {
+            await conn.ExecuteAsync(UndoAfterProviderQuotaMigrations);
             await conn.ExecuteAsync(UndoProviderQuotaMigration);
             await conn.ExecuteAsync(UndoTokensMigration);
             await conn.ExecuteAsync("""
@@ -149,7 +157,7 @@ public class MigrationTests
         var backup = Assert.Single(Directory.GetFiles(paths.DbBackupsDir));
         Assert.Contains("-v4", Path.GetFileName(backup));
         await using var check = await factory.OpenAsync();
-        Assert.Equal(7, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
+        Assert.Equal(9, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
         var record = await check.QuerySingleAsync<Astra.Core.Requests.RequestRecord>("""
             SELECT requested_model, reasoning_effort, reasoning_mode, reasoning_budget_tokens
             FROM requests WHERE id = 'r-v4'
@@ -160,7 +168,20 @@ public class MigrationTests
         Assert.Null(record.ReasoningBudgetTokens);
     }
 
-    /// <summary>Rolls a fully migrated database back to its v6 shape (what 0007_provider_quota adds is removed).</summary>
+    /// <summary>Rolls a fully migrated database back to its v7 shape (what 0008 and 0009 add is removed).</summary>
+    private const string UndoAfterProviderQuotaMigrations = """
+        ALTER TABLE provider_models DROP COLUMN upstream_protocols_json;
+        DELETE FROM schema_version WHERE version = 9;
+        ALTER TABLE requests DROP COLUMN account_id;
+        ALTER TABLE provider_accounts DROP COLUMN enabled;
+        ALTER TABLE provider_accounts DROP COLUMN is_current;
+        ALTER TABLE provider_accounts DROP COLUMN sort_order;
+        ALTER TABLE provider_accounts DROP COLUMN cooldown_until_utc;
+        ALTER TABLE provider_accounts DROP COLUMN last_error;
+        DELETE FROM schema_version WHERE version = 8;
+        """;
+
+    /// <summary>Rolls a v7 database back to its v6 shape (what 0007_provider_quota adds is removed).</summary>
     private const string UndoProviderQuotaMigration = """
         ALTER TABLE providers DROP COLUMN quota_json;
         ALTER TABLE providers DROP COLUMN quota_checked_at_utc;
@@ -198,6 +219,7 @@ public class MigrationTests
 
         await using (var conn = await factory.OpenAsync())
         {
+            await conn.ExecuteAsync(UndoAfterProviderQuotaMigrations);
             await conn.ExecuteAsync(UndoProviderQuotaMigration);
             await conn.ExecuteAsync(UndoTokensMigration);
             await conn.ExecuteAsync("""
@@ -238,6 +260,7 @@ public class MigrationTests
 
         await using (var conn = await factory.OpenAsync())
         {
+            await conn.ExecuteAsync(UndoAfterProviderQuotaMigrations);
             await conn.ExecuteAsync(UndoProviderQuotaMigration);
             await conn.ExecuteAsync("""
                 INSERT INTO providers(id, name, created_at, updated_at)

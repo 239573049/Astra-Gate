@@ -81,6 +81,13 @@ public static class SubscriptionEndpoints
 
     public sealed record LoginOptions(string? AccountId);
 
+    /// <summary>
+    /// Body of the Copilot import: <c>token</c> is an optional GitHub token the user pasted; when it is
+    /// empty the machine's own sources are probed. <c>accountId</c> adopts the token into an existing
+    /// account row instead of creating a new one.
+    /// </summary>
+    public sealed record LocalCopilotImport(string? Token, string? AccountId);
+
     /// <summary>A subscription account as shown in the admin API; tokens are never included.</summary>
     public sealed record ProviderAccountDto(
         string Id, string ProviderId, string DisplayName, string? AccountEmail, string? Plan, string Status,
@@ -101,20 +108,29 @@ public static class SubscriptionEndpoints
     public sealed record AccountOrder(List<string> Ids);
 
     /// <summary>
-    /// Subscription policy of a provider: who may use it (<c>claude-code-only</c> | <c>any</c>) and how accounts switch
-    /// (<c>manual</c> | <c>failover</c>). <see cref="ClaudeSubscription"/> tells the UI whether the client policy
-    /// applies by default.
+    /// Subscription policy of a provider: who may use it (<c>claude-code-only</c> | <c>any</c>), how accounts switch
+    /// (<c>manual</c> | <c>failover</c>), whether <see cref="ClaudeSubscription"/> marks the family whose client policy
+    /// applies by default, and whether non-Claude-Code callers present a Claude Code identity (mimic).
     /// </summary>
-    public sealed record SubscriptionPolicyDto(string ClientPolicy, string SwitchMode, bool ClaudeSubscription);
+    public sealed record SubscriptionPolicyDto(string ClientPolicy, string SwitchMode, bool ClaudeSubscription, bool MimicClaudeCode);
 
     /// <summary>PUT body for the subscription policy; omitted fields keep their value.</summary>
-    public sealed record SubscriptionPolicyPatch(string? ClientPolicy, string? SwitchMode);
+    public sealed record SubscriptionPolicyPatch(string? ClientPolicy, string? SwitchMode, bool? MimicClaudeCode);
 
     /// <summary>Authorization-code (PKCE) login start; the UI opens <see cref="AuthorizeUrl"/>.</summary>
     public sealed record LoginModeDto(string Mode, string State, string AuthorizeUrl);
 
     /// <summary>Device-code login start; the UI shows <see cref="UserCode"/> and polls.</summary>
     public sealed record LoginDeviceDto(string Mode, string State, string? UserCode, string VerificationUrl, int Interval);
+
+    /// <summary>
+    /// Manual-paste login start (Claude): the authorization page shows the code, the user pastes it back —
+    /// the client's registered redirect_uri is not a loopback address, so nothing can call us back.
+    /// </summary>
+    public sealed record LoginPasteDto(string Mode, string State, string AuthorizeUrl);
+
+    /// <summary>Body of the paste completion: whatever the user copied (the code, or the whole callback URL).</summary>
+    public sealed record CompleteLoginRequest(string? Code);
 
     /// <summary>Server-mediated CLI login start (zcli); the UI opens <see cref="AuthorizeUrl"/> and polls.</summary>
     public sealed record LoginCliDto(string Mode, string State, string AuthorizeUrl, int Interval);
@@ -133,6 +149,13 @@ public static class SubscriptionEndpoints
 
     /// <summary>Whether the machine already holds a usable <c>codex login</c> credential set.</summary>
     public sealed record LocalCodexLoginDto(bool Available, string? AccountEmail, string? Plan, string? Detail);
+
+    /// <summary>
+    /// Whether the machine already holds a GitHub authorization that could back a Copilot account.
+    /// Only the source is reported — never the token itself. Whether the account actually <em>has</em>
+    /// Copilot is decided by the exchange at import time, not here.
+    /// </summary>
+    public sealed record LocalCopilotLoginDto(bool Available, string? Source, string? Detail);
 
     /// <summary>Imported account + a fresh quota snapshot (when the probe succeeded).</summary>
     public sealed record ImportedAccountDto(ProviderAccountDto Account, JsonNode? Quota, string? Warning);
@@ -207,6 +230,7 @@ public static class SubscriptionEndpoints
             var section = provider.Settings["subscription"] as JsonObject ?? new JsonObject();
             if (body.ClientPolicy is not null) section["client_policy"] = body.ClientPolicy;
             if (body.SwitchMode is not null) section["switch_mode"] = body.SwitchMode;
+            if (body.MimicClaudeCode is { } mimic) section["mimic_claude_code"] = mimic;
             provider.Settings["subscription"] = section;
             await db.Providers.UpdateAsync(provider);
             return Results.Ok(PolicyOf(provider));
@@ -244,6 +268,88 @@ public static class SubscriptionEndpoints
                 DateTimeOffset.UtcNow + LoginTtl, null, null, null, null), token);
 
             // 立刻验一次，确认这份凭据现在还能用（额度探测失败不致命，只回一个警告）。
+            string? warning = null;
+            var snapshot = (JsonNode?)null;
+            try
+            {
+                var (updated, quota) = await quotaService.FetchAsync(provider, account, config, ct);
+                account = updated;
+                snapshot = quota;
+            }
+            catch (Exception e) when (e is SubscriptionAuthException or OAuthProtocolException)
+            {
+                warning = e.Message;
+            }
+            return Results.Ok(new ImportedAccountDto(ToDto(account), snapshot, warning));
+        });
+
+        // 本机是否已有可用的 GitHub 授权（VS Code 的 GitHub 会话、GH_TOKEN、Copilot 插件配置）——
+        // 有的话可以直接接成 Copilot 账号。只回来源，不出任何令牌。读系统凭据存储要弹授权框，
+        // 所以探测只看无副作用的来源（环境变量 / 插件配置）；真的去读凭据是在导入那一步。
+        app.MapGet("/api/subscription/copilot/local-login", (ClientEnvironment env) => ToLocalCopilotDto(CopilotEnv(env)));
+
+        // 把本机已有的 GitHub 授权接成 Copilot 账号：整份 token 原样加密进刷新槽
+        // （Copilot 短时令牌就是拿它换的，"刷新" = 再换一次，见 SubscriptionTokenService）。
+        app.MapPost("/api/providers/{providerId}/accounts/import-copilot", async (
+            string providerId, LocalCopilotImport? body, AstraDatabase db, ISecretProtector protector,
+            ClientEnvironment env, OAuthClient client, SubscriptionQuotaService quotaService,
+            ProviderProbe probe, CancellationToken ct) =>
+        {
+            var provider = await db.Providers.GetAsync(providerId, ct);
+            if (provider is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
+            if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
+                return Results.BadRequest(new ErrorOnlyDto("该提供商不是订阅类型（auth_scheme ≠ oauth-subscription）"));
+            var config = SubscriptionSupport.EffectiveConfig(provider);
+            if (config.ProviderKey != "github-copilot-subscription")
+                return Results.BadRequest(new ErrorOnlyDto("只有 GitHub Copilot 订阅可以从本机 GitHub 授权导入"));
+
+            // 手填的 token 优先，其次才是本机各处的自动探测。探测是惰性的：找到一份能用的就停下，
+            // 便宜来源成功时不会再去读系统凭据存储（macOS 上那一步会弹系统授权框）。
+            var provided = body?.Token?.Trim() ?? "";
+            // 手填的先看形态：打错一个字符不该报成"授权已失效"（那会让人以为自己的令牌真的过期了）。
+            if (provided.Length > 0 && !LocalCopilotLogin.LooksLikeGitHubToken(provided))
+                return Results.BadRequest(new ErrorOnlyDto("这不是可识别的 GitHub 令牌（应以 gho_ / ghp_ / github_pat_ 开头）"));
+            IEnumerable<LocalGitHubCredential> candidates = provided.Length > 0
+                ? [new LocalGitHubCredential(provided, "手动填写")]
+                : LocalCopilotLogin.All(CopilotEnv(env));
+
+            // 一份 GitHub 授权同时意味着「GitHub 登录」与「Copilot 订阅」两件事：有登录态不等于有这个订阅。
+            // 只有真的换出 Copilot 令牌才算数——换令牌就在 CompleteLoginAsync 里（失败会先抛错，
+            // 还没写库），所以一份份试，试到成功为止。
+            var failures = new List<string>();
+            var any = false;
+            ProviderAccount? account = null;
+            foreach (var candidate in candidates)
+            {
+                any = true;
+                try
+                {
+                    // 访问令牌这一格先放 GitHub token：CompleteLoginAsync 会拿它换 Copilot 短时令牌，
+                    // 并把 GitHub token 留在刷新槽（"刷新" = 再换一次，见 SubscriptionTokenService）。
+                    var token = new OAuthClient.TokenResult(candidate.Token, candidate.Token, null, null, null);
+                    var login = new PendingSubscriptionLogins.PendingLogin(
+                        Ulid.NewUlid(), providerId, body?.AccountId, config, candidate.Token, null,
+                        DateTimeOffset.UtcNow + LoginTtl, null, null, null, null);
+                    account = await CompleteLoginAsync(db, protector, client, login, token);
+                    break;
+                }
+                catch (OAuthProtocolException e)
+                {
+                    failures.Add($"{candidate.Source}：{CopilotImportFailure(e)}");
+                }
+            }
+            if (account is null)
+                return ApiJson.Result(new ErrorOnlyDto(any
+                        ? "本机找到的 GitHub 授权都不能用于 Copilot：" + string.Join("；", failures)
+                          + "（如果没有 Copilot 订阅，请改用设备码登录，或换一个有 Copilot 的账号）"
+                        : "没有在本机找到 GitHub 授权（可用 GH_TOKEN 环境变量提供，或在 VS Code 里登录 GitHub 后重试）"),
+                    StatusCodes.Status400BadRequest);
+
+            // Copilot 的模型清单（含每个模型支持哪些协议）归上游管：导入成功即同步一次，
+            // 失败不影响导入本身。
+            await probe.SyncModelsFromUpstreamAsync(providerId, ct);
+
+            // 立刻验一次额度，顺便确认这个账号现在真的可用（探测失败不致命，只回一个警告）。
             string? warning = null;
             var snapshot = (JsonNode?)null;
             try
@@ -305,6 +411,11 @@ public static class SubscriptionEndpoints
             {
                 var status = (await db.Accounts.GetAsync(id))?.Status ?? AccountStatus.Expired;
                 return ApiJson.Result(new ErrorStatusDto(e.Message, status), StatusCodes.Status409Conflict);
+            }
+            catch (OAuthProtocolException e)
+            {
+                // 传输层失败（代理不通 / 握手被掐）：账号本身没问题，报 502 而不是 500。
+                return ApiJson.Result(new ErrorOnlyDto(e.Message), StatusCodes.Status502BadGateway);
             }
         });
 
@@ -398,7 +509,9 @@ public static class SubscriptionEndpoints
                     "该订阅的 OAuth 流程尚未核实或配置不完整，暂不能登录（可在提供商设置中补全 subscription_oauth）", true),
                     StatusCodes.Status400BadRequest);
 
-            var state = Ulid.NewUlid();
+            // Claude 的授权端对 state 形态严格校验（Claude Code / sub2api 都是 32 字节 base64url，
+            // 43 字符）；其它家族继续用 ULID。
+            var state = SubscriptionCatalog.IsClaudeLoopback(config) ? Pkce.RandomBase64Url(32) : Ulid.NewUlid();
             if (config.Style == "zcli")
             {
                 // ZAI CLI 链路：官方提供的授权（无回调）。poll_token 本地随机，除非上游下发自己的。
@@ -410,6 +523,51 @@ public static class SubscriptionEndpoints
                     state, providerId, body?.AccountId, config, null, "cli", DateTimeOffset.UtcNow + LoginTtl,
                     null, start.FlowId, start.PollToken));
                 return Results.Ok(new LoginCliDto("cli", state, start.AuthorizeUrl, 3));
+            }
+
+            if (SubscriptionCatalog.IsClaudeLoopback(config))
+            {
+                // Claude（Anthropic）：redirect_uri 是 http://localhost:{临时端口}/callback
+                // ——Claude Code 就是这么登的（端口本地挑）。Astra 自己监听的端口不在其中，
+                // 所以在临时端口上起一个接收器，收到 code 后**进程内**完成换码
+                //（不走 HTTP 回环，测试宿主没有真实端口也能跑）。页面写完之后才释放端口。
+                var (verifier, challenge) = Pkce.Create();
+                if (config.RedirectUriOverride.Length > 0)
+                {
+                    // 实例显式指定了非回环回调（= Claude Code 的无头兜底）：只能让用户把 code 粘回来。
+                    pending.Put(new PendingSubscriptionLogins.PendingLogin(
+                        state, providerId, body?.AccountId, config, verifier, null, DateTimeOffset.UtcNow + LoginTtl,
+                        null, null, null, null, config.RedirectUriOverride));
+                    return Results.Ok(new LoginPasteDto("paste", state,
+                        OAuthClient.BuildAuthorizeUrl(config, config.RedirectUriOverride, state, challenge)));
+                }
+
+                var claudeSlot = new PendingSubscriptionLogins.CaptureSlot();
+                var capture = LoopbackCaptureListener.TryStart([0],
+                    SubscriptionCatalog.ClaudeLoopbackPath,
+                    async query =>
+                    {
+                        var captured = pending.Take(state);
+                        if (captured is null)
+                            return new LoopbackCaptureResult(false, "登录会话不存在或已过期，请在 Astra 中重新发起登录。");
+                        claudeSlot.Listener = captured.Capture;
+                        var (ok, message, _) = await CompleteCallbackAsync(db, protector, client, captured,
+                            code: query.GetValueOrDefault("code", ""),
+                            error: query.GetValueOrDefault("error", ""),
+                            state: state,
+                            redirectUri: captured.RedirectUri ?? $"http://localhost:{options.Port}{SubscriptionCatalog.ClaudeLoopbackPath}");
+                        return new LoopbackCaptureResult(ok, message);
+                    }, logger, () => claudeSlot.Release());
+                claudeSlot.Listener = capture;
+                if (capture is null)
+                    return ApiJson.Result(new ErrorOnlyDto("claude 登录需要一个回环端口接收授权回调，但没能占用任何端口，请稍后重试"),
+                        StatusCodes.Status409Conflict);
+                var claudeRedirect = $"http://localhost:{capture.Port}{SubscriptionCatalog.ClaudeLoopbackPath}";
+                pending.Put(new PendingSubscriptionLogins.PendingLogin(
+                    state, providerId, body?.AccountId, config, verifier, null, DateTimeOffset.UtcNow + LoginTtl,
+                    null, null, null, capture, claudeRedirect));
+                return Results.Ok(new LoginModeDto("pkce", state,
+                    OAuthClient.BuildAuthorizeUrl(config, claudeRedirect, state, challenge)));
             }
 
             if (config.UsePkce || config.Style == "zcode")
@@ -438,11 +596,12 @@ public static class SubscriptionEndpoints
                             if (captured is null)
                                 return new LoopbackCaptureResult(false, "登录会话不存在或已过期，请在 Astra 中重新发起登录。");
                             captureSlot.Listener = captured.Capture;
-                            return await CompleteCallbackAsync(db, protector, client, captured,
+                            var (ok, message, _) = await CompleteCallbackAsync(db, protector, client, captured,
                                 code: query.GetValueOrDefault("code", ""),
                                 error: query.GetValueOrDefault("error", ""),
                                 state: state,
                                 redirectUri: captured.RedirectUri ?? $"http://localhost:{options.Port}{SubscriptionCatalog.CodexLoopbackPath}");
+                            return new LoopbackCaptureResult(ok, message);
                         }, logger, () => captureSlot.Release());
                     captureSlot.Listener = capture;
                     if (capture is null)
@@ -471,6 +630,28 @@ public static class SubscriptionEndpoints
                 device.VerificationUrlComplete ?? device.VerificationUrl ?? "", device.Interval));
         });
 
+        // 把在授权页上显示的 code 粘回来的收尾（Claude）：redirect_uri 回不到本机，只能走这条路。
+        app.MapPost("/api/providers/{providerId}/accounts/login/{state}/complete", async (
+            string providerId, string state, CompleteLoginRequest? body, AstraDatabase db,
+            ISecretProtector protector, PendingSubscriptionLogins pending, OAuthClient client) =>
+        {
+            var login = pending.Peek(state);
+            if (login is null || login.ProviderId != providerId)
+                return ApiJson.Result(new PollFailureDto("expired", "登录会话不存在或已过期，请重新发起登录"), StatusCodes.Status404NotFound);
+            if (!SubscriptionCatalog.IsPasteLogin(login.Config))
+                return ApiJson.Result(new PollFailureDto("error", "该订阅不需要手动粘贴授权码"), StatusCodes.Status400BadRequest);
+            var (raw, _) = SubscriptionCatalog.ParsePastedCode(body?.Code);
+            if (raw.Length == 0)
+                return ApiJson.Result(new PollFailureDto("error", "请把授权页上显示的授权码粘贴进来"), StatusCodes.Status400BadRequest);
+
+            var result = await CompleteCallbackAsync(db, protector, client, login,
+                code: raw, error: "", state: state, redirectUri: login.RedirectUri ?? SubscriptionCatalog.ClaudeCodeCallback);
+            pending.Take(state);
+            return result.Account is null
+                ? ApiJson.Result(new PollFailureDto("error", result.Message), StatusCodes.Status400BadRequest)
+                : Results.Ok(new LoginDoneDto(ToDto(result.Account)));
+        });
+
         // OAuth redirect target (system browser). Completes the authorization-code exchange and shows a local HTML page.
         app.MapGet("/api/oauth/callback", async (
             HttpContext ctx, AstraDatabase db, ServerOptions options, ISecretProtector protector,
@@ -483,7 +664,7 @@ public static class SubscriptionEndpoints
 
             // 换码必须用发起时逐字一致的 redirect_uri：codex 登录是它自己的回调端口，
             // 其它家族是 Astra 自己的回调。
-            var result = await CompleteCallbackAsync(db, protector, client, login,
+            var (ok, message, _) = await CompleteCallbackAsync(db, protector, client, login,
                 ctx.Request.Query["code"].ToString(),
                 ctx.Request.Query["error"].ToString(),
                 state,
@@ -491,7 +672,7 @@ public static class SubscriptionEndpoints
                 // ZCode 的回调码参数名是 authCode（bigmodel 渠道）；Z.AI 渠道实测用标准 code。
                 altCode: ctx.Request.Query["authCode"].ToString());
             if (login.Capture is not null) await login.Capture.DisposeAsync();
-            return Html(result);
+            return Html(new LoopbackCaptureResult(ok, message));
         });
 
         // Device-flow polling (the UI calls this every `interval` seconds until done/expired).
@@ -568,30 +749,41 @@ public static class SubscriptionEndpoints
     /// 授权的最后一步（Astra 自己的回调和 codex 的临时接收器共用）：校验 / 换码 / 落库，
     /// 返回给浏览器看的一段提示。调用方已经把 pending 里的会话取走（<c>Take</c>）。
     /// </summary>
-    private static async Task<LoopbackCaptureResult> CompleteCallbackAsync(
+    private static async Task<(bool Ok, string Message, ProviderAccount? Account)> CompleteCallbackAsync(
         AstraDatabase db, ISecretProtector protector, OAuthClient client,
         PendingSubscriptionLogins.PendingLogin login, string code, string error, string state, string redirectUri,
         string altCode = "")
     {
         try
         {
-            if (!string.IsNullOrEmpty(error)) return new LoopbackCaptureResult(false, $"授权被拒绝：{error}");
+            if (!string.IsNullOrEmpty(error)) return (false, $"授权被拒绝：{error}", null);
             // PKCE 登录必须带着 verifier 完成；ZCode 形态没有 verifier（本就不发 code_challenge）。
             var isPkce = login.Config.UsePkce;
             if (isPkce != (login.CodeVerifier is not null))
-                return new LoopbackCaptureResult(false, "登录会话不存在或已过期，请在 Astra 中重新发起登录。");
+                return (false, "登录会话不存在或已过期，请在 Astra 中重新发起登录。", null);
             if (string.IsNullOrEmpty(code) && login.Config.Style == "zcode") code = altCode;
-            if (string.IsNullOrEmpty(code)) return new LoopbackCaptureResult(false, "回调缺少授权码。");
+            if (string.IsNullOrEmpty(code)) return (false, "回调缺少授权码。", null);
 
-            var token = isPkce
-                ? await client.ExchangeCodeAsync(login.Config, code, login.CodeVerifier!, redirectUri)
-                : await CompleteZcodeLoginAsync(client, login.Config, code, redirectUri, state);
+            OAuthClient.TokenResult token;
+            if (SubscriptionCatalog.IsClaudeLoopback(login.Config))
+            {
+                // Claude：JSON body + "授权码#state" 拆分，且 redirect_uri 要逐字回传（否则判参数错误）。
+                // 回环回调把 code 与 state 作为**两个查询参数**送回来（不像无头路径那样合成
+                // "授权码#state"），而 Claude Code 的换码总是带 state，所以这里补成 # 形态。
+                var claudeCode = code;
+                if (!claudeCode.Contains('#') && !string.IsNullOrEmpty(state)) claudeCode = $"{code}#{state}";
+                token = await client.ExchangeClaudeCodeAsync(login.Config, claudeCode, login.CodeVerifier!, redirectUri, default);
+            }
+            else if (isPkce)
+                token = await client.ExchangeCodeAsync(login.Config, code, login.CodeVerifier!, redirectUri);
+            else
+                token = await CompleteZcodeLoginAsync(client, login.Config, code, redirectUri, state);
             var account = await CompleteLoginAsync(db, protector, client, login, token);
-            return new LoopbackCaptureResult(true, $"授权完成（{account.DisplayName}）。");
+            return (true, $"授权完成（{account.DisplayName}）。", account);
         }
         catch (OAuthProtocolException e)
         {
-            return new LoopbackCaptureResult(false, $"换取令牌失败：{e.Message}");
+            return (false, $"换取令牌失败：{e.Message}", null);
         }
     }
 
@@ -731,6 +923,35 @@ public static class SubscriptionEndpoints
         return new LocalCodexLoginDto(true, email, plan, expired ? "本机令牌已过期，导入后会自动刷新" : null);
     }
 
+    /// <summary>
+    /// 本机 GitHub 授权的探测：只看不登，拿不到令牌就报「没有可用授权」。这里不验证该账号
+    /// 有没有 Copilot 订阅——那要真的换一次令牌（会打上游），留给导入那一步。
+    /// </summary>
+    private static LocalCopilotLoginDto ToLocalCopilotDto(LocalCredentialEnvironment env)
+    {
+        var found = LocalCopilotLogin.Cheap(env);
+        if (found.Count == 0)
+            return new LocalCopilotLoginDto(false, null,
+                "本机没有找到 GitHub 授权（可用 GH_TOKEN 环境变量提供，或在 VS Code 里登录 GitHub 后重试）");
+        var first = found[0];
+        return new LocalCopilotLoginDto(true, first.Source,
+            found.Count > 1 ? $"另有 {found.Count - 1} 份可用授权作为备选" : null);
+    }
+
+    /// <summary>Astra.Clients 的机器环境 → 读本机凭据用的最小环境。</summary>
+    private static LocalCredentialEnvironment CopilotEnv(ClientEnvironment env) =>
+        new(env.HomeDirectory, env.Os, env.GetEnvironmentVariable);
+
+    /// <summary>把换 Copilot 令牌的失败翻译成用户能懂的一句话。</summary>
+    private static string CopilotImportFailure(OAuthProtocolException e) => e.Error switch
+    {
+        "http_401" => "GitHub 授权已失效，请重新获取",
+        // 403 既可能是这个账号没有 Copilot 订阅，也可能是 GitHub 直接拒绝了这次换令牌请求
+        // （WAF/客户端身份），所以两种可能都写出来，不把话说死。
+        "http_403" => "该 GitHub 账号没有 Copilot 订阅，或 GitHub 拒绝了这次换令牌请求",
+        _ => e.Message,
+    };
+
     /// <summary>Best-effort string claim nested one level under a namespaced claim of a JWT.</summary>
     private static string? JwtNestedString(string? token, string ns, string claim)
     {
@@ -818,7 +1039,8 @@ public static class SubscriptionEndpoints
     private static SubscriptionPolicyDto PolicyOf(Provider provider) => new(
         SubscriptionSupport.ClientPolicyOf(provider),
         SubscriptionSupport.SwitchModeOf(provider),
-        SubscriptionSupport.IsClaudeSubscription(provider));
+        SubscriptionSupport.IsClaudeSubscription(provider),
+        SubscriptionSupport.MimicClaudeCodeOf(provider));
 
     private static IResult Html(LoopbackCaptureResult result)
     {

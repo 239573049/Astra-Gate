@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Astra.Clients.Config;
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
@@ -22,7 +23,7 @@ public class ProviderApiTests
     {
         await using var host = await TestHost.StartAsync();
         var templates = (await host.GetJsonAsync("/api/provider-templates")).AsArray();
-        Assert.Equal(25, templates.Count); // + github-copilot-subscription
+        Assert.Equal(26, templates.Count); // + nextcowork, github-copilot-subscription
         var claudeSub = templates.Single(t => t!["id"]!.GetValue<string>() == "claude-subscription")!;
         Assert.Equal("oauth-subscription", claudeSub["authScheme"]!.GetValue<string>());
         Assert.False(claudeSub["requiresApiKey"]!.GetValue<bool>());
@@ -202,6 +203,163 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Account_Quota_Reports_A_Dead_Network_As_502_Without_Disabling_The_Account()
+    {
+        // 真实事故：代理节点在 TLS 握手阶段掐连接，额度端点曾直接炸成 500 + 异常页。
+        var calls = 0;
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName)
+                .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ =>
+                {
+                    Interlocked.Increment(ref calls);
+                    throw new HttpRequestException("The SSL connection could not be established", new IOException("unexpected EOF"));
+                })));
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        await host.Db.Accounts.InsertAsync(new ProviderAccount
+        {
+            Id = "acc-net",
+            ProviderId = providerId,
+            DisplayName = "me@example.com",
+            AccessTokenEnc = protector.Protect("at-fresh"),
+            RefreshTokenEnc = protector.Protect("rt-1"),
+            ExpiresAtUtc = DateTimeOffset.UtcNow + TimeSpan.FromHours(1),
+            Status = AccountStatus.Active,
+        });
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/provider-accounts/acc-net/quota", new { });
+
+        Assert.Equal(HttpStatusCode.BadGateway, status);
+        Assert.Contains("代理", body!["error"]!.GetValue<string>());
+        Assert.Equal(2, calls); // 一次 + 一次重试
+        // 网络不通不是授权失效：账号必须保持有效，不能被禁用。
+        Assert.Equal(AccountStatus.Active, (await host.Db.Accounts.GetAsync("acc-net"))!.Status);
+    }
+
+    [Fact]
+    public async Task Claude_Subscription_Login_Uses_A_Temporary_Loopback_And_The_Json_Exchange()
+    {
+        var requests = new List<(string Path, string Body, string? ContentType)>();
+        var handler = new StubHandler(async request =>
+        {
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
+            lock (requests) requests.Add((request.RequestUri!.AbsolutePath, body, request.Content?.Headers.ContentType?.MediaType));
+            return JsonResponse("""{"access_token":"at-claude","refresh_token":"rt-claude","expires_in":3600}""");
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        // Claude Code 的登录形态：授权页在 claude.com/cai + code=true，
+        // 回调是**临时端口**的回环地址 http://localhost:{port}/callback。
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("pkce", body!["mode"]!.GetValue<string>());
+        var authorizeUrl = body["authorizeUrl"]!.GetValue<string>();
+        Assert.StartsWith("https://claude.com/cai/oauth/authorize?", authorizeUrl);
+        Assert.Contains("&response_type=code&", authorizeUrl);
+        var state = body["state"]!.GetValue<string>();
+
+        // 参数顺序必须和 Claude Code 一致（顺序不对授权端点直接回 "Invalid request format"）。
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(authorizeUrl).Query);
+        Assert.Equal(
+            "code,client_id,response_type,redirect_uri,scope,code_challenge,code_challenge_method,state",
+            string.Join(',', query.AllKeys));
+        Assert.Equal("true", query["code"]);
+        Assert.Equal("9d1c250a-e61b-44d9-88ed-5944d1962f5e", query["client_id"]);
+        // state / code_challenge 必须是 Claude Code 的形态：32 字节随机数的 base64url（43 字符）。
+        // 发 26 位 ULID 的 state 会被授权端判 "Invalid request format"。
+        Assert.Matches("^[A-Za-z0-9_-]{43}$", state);
+        Assert.Equal(state, query["state"]);
+        Assert.Matches("^[A-Za-z0-9_-]{43}$", query["code_challenge"]!);
+        var redirect = query["redirect_uri"]!;
+        Assert.StartsWith("http://localhost:", redirect);
+        Assert.EndsWith("/callback", redirect);
+        // scope 含 Claude Code 的 7 个（空格编成 '+'）。
+        Assert.Contains("user:plugins", query["scope"]);
+        Assert.DoesNotContain("%20", new Uri(authorizeUrl).Query);
+
+        // 浏览器被 302 回落环回调：接收器在进程内完成换码。
+        using var receiver = new HttpClient();
+        var callback = await receiver.GetAsync($"{redirect}?code=the-code&state={state}");
+        Assert.Equal(HttpStatusCode.OK, callback.StatusCode);
+        Assert.Contains("授权完成", await callback.Content.ReadAsStringAsync());
+
+        // 换码是 JSON，且 redirect_uri 要逐字回传同一个值。
+        var exchange = Assert.Single(requests, r => r.Path == "/v1/oauth/token");
+        Assert.Equal("application/json", exchange.ContentType);
+        var sent = JsonNode.Parse(exchange.Body)!.AsObject();
+        Assert.Equal("the-code", sent["code"]!.GetValue<string>());
+        // 回环回调给的是两个参数，换码时要合成"授权码#state"再拆开送（Claude Code 总是带 state）。
+        Assert.Equal(state, sent["state"]!.GetValue<string>());
+        Assert.Equal(redirect, sent["redirect_uri"]!.GetValue<string>());
+        Assert.Equal("authorization_code", sent["grant_type"]!.GetValue<string>());
+
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal("at-claude", protector.Unprotect(account.AccessTokenEnc!));
+        Assert.Equal("rt-claude", protector.Unprotect(account.RefreshTokenEnc!));
+
+        // 收完回调，临时端口立刻释放，不会留在进程里。
+        using var probe = new System.Net.Sockets.TcpListener(IPAddress.Loopback, new Uri(redirect).Port);
+        probe.Start();
+        probe.Stop();
+    }
+
+    [Fact]
+    public async Task Claude_Manual_Redirect_Override_Falls_Back_To_Pasting_The_Code()
+    {
+        // Claude Code 的无头兜底：实例把 redirect_uri 覆盖成非回环地址，回调回不到本机，
+        // 只能由用户把授权页上的 code 粘回来。
+        var handler = new StubHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("""{"error":"invalid_request","error_description":"参数错误"}""", Encoding.UTF8, "application/json"),
+        }));
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{providerId}", new
+        {
+            settings = new { subscription_oauth = new { redirect_uri = "https://platform.claude.com/oauth/code/callback" } },
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/login", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("paste", body!["mode"]!.GetValue<string>());
+        Assert.Contains("redirect_uri=" + Uri.EscapeDataString("https://platform.claude.com/oauth/code/callback"),
+            body["authorizeUrl"]!.GetValue<string>());
+        var state = body["state"]!.GetValue<string>();
+
+        // 空粘贴：直接拒绝，不打上游。
+        (status, body) = await host.SendAsync(HttpMethod.Post,
+            $"/api/providers/{providerId}/accounts/login/{state}/complete", new { code = "  " });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("授权码", body!["error"]!.GetValue<string>());
+
+        // 上游换码失败（参数错误）：报成 400 并把原因带回来。
+        (status, body) = await host.SendAsync(HttpMethod.Post,
+            $"/api/providers/{providerId}/accounts/login/{state}/complete", new { code = "ac-bad" });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("参数错误", body!["error"]!.GetValue<string>());
+        Assert.Empty(await host.Db.Accounts.ListAsync(providerId));
+
+        // 未知会话（或已被消费掉）报 404，前端据此结束等待。
+        (status, body) = await host.SendAsync(HttpMethod.Post,
+            $"/api/providers/{providerId}/accounts/login/{state}/complete", new { code = "ac-1" });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.Contains("过期", body!["error"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Codex_Subscription_Login_Uses_The_Browser_Pkce_Flow()
     {
         var requests = new List<(string Path, string Body, string? ContentType)>();
@@ -340,11 +498,15 @@ public class ProviderApiTests
                 "/login/device/code" => JsonResponse("""{"device_code":"dc-1","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}"""),
                 "/login/oauth/access_token" => JsonResponse("""{"access_token":"gho_1","token_type":"bearer","scope":"repo workflow"}"""),
                 "/copilot_internal/v2/token" => JsonResponse("""{"token":"copilot-tok","expires_at":4102444800,"refresh_in":1800,"sku":"copilot_individual","endpoints":{"api":"https://api.githubcopilot.com"}}"""),
+                "/models" => JsonResponse("""{"data":[{"id":"claude-sonnet-5","supported_endpoints":["/v1/messages"]}]}"""),
                 _ => JsonResponse("{}"),
             };
         });
         await using var host = await TestHost.StartAsync(builder =>
-            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+        {
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+        });
 
         var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
         Assert.Equal(HttpStatusCode.OK, status);
@@ -362,7 +524,7 @@ public class ProviderApiTests
         Assert.Equal("done", body!["status"]!.GetValue<string>());
 
         // 设备码申请 → 换 GitHub token（form + client_id + scope）→ 换 Copilot 短时令牌
-        Assert.Equal(["/login/device/code", "/login/oauth/access_token", "/copilot_internal/v2/token"], requests.Select(r => r.Path));
+        Assert.Equal(["/login/device/code", "/login/oauth/access_token", "/copilot_internal/v2/token", "/models"], requests.Select(r => r.Path));
         Assert.Contains("client_id=Iv1.b507a08c87ecfe98", requests[0].Body);
         Assert.Contains("scope=repo+workflow", requests[0].Body);
         Assert.Contains("grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Adevice_code", requests[1].Body);
@@ -373,6 +535,173 @@ public class ProviderApiTests
         Assert.Equal("copilot-tok", protector.Unprotect(account.AccessTokenEnc!));   // 访问令牌 = Copilot 短时令牌
         Assert.Equal("gho_1", protector.Unprotect(account.RefreshTokenEnc!));        // 刷新槽 = GitHub token
         Assert.Equal("copilot_individual", account.Plan);
+        // 登录同步没有新增模型，也必须把能力回填到模板预置的模型行。
+        Assert.Equal([ApiProtocol.Anthropic],
+            (await host.Db.Providers.GetModelAsync(providerId, "claude-sonnet-5"))!.UpstreamProtocols);
+    }
+
+    [Fact]
+    public async Task Copilot_Account_Can_Be_Imported_From_The_Machines_GitHub_Token()
+    {
+        var requests = new List<(string Path, string Auth)>();
+        var handler = new StubHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var auth = request.Headers.TryGetValues("Authorization", out var values) ? string.Join(" ", values) : "";
+            lock (requests) requests.Add((path, auth));
+            return Task.FromResult(path switch
+            {
+                "/copilot_internal/v2/token" => JsonResponse("""{"token":"copilot-tok","expires_at":4102444800,"refresh_in":1800,"sku":"copilot_pro","endpoints":{"api":"https://api.githubcopilot.com"}}"""),
+                "/copilot_internal/user" => JsonResponse("""{"login":"octocat","copilot_plan":"individual","quota_reset_date":"2026-11-01","quota_snapshots":{"premium_models":{"entitlement":300,"remaining":250,"percent_remaining":83.3,"unlimited":false,"overage_count":0,"overage_permitted":false}}}"""),
+                "/models" => JsonResponse("""{"data":[{"id":"claude-sonnet-4","supported_endpoints":["/v1/messages"]},{"id":"claude-sonnet-5","supported_endpoints":["/v1/messages"]}]}"""),
+                _ => JsonResponse("{}"),
+            });
+        });
+        var githubToken = "gho_" + new string('b', 36);
+        await using var host = await TestHost.StartAsync(builder =>
+        {
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            // 假 home + 一个假的 GH_TOKEN：本机探测的第一顺位来源就是环境变量，所以导入不会去读
+            // 系统凭据存储（测试绝不碰开发机的真实凭据）。
+            builder.Services.AddSingleton(new ClientEnvironment(
+                Path.Combine(Path.GetTempPath(), "astra-copilot-import-home"), "osx",
+                name => name == "GH_TOKEN" ? githubToken : null));
+        });
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+        var existingModel = (await host.Db.Providers.GetModelAsync(providerId, "claude-sonnet-5"))!;
+        existingModel.Enabled = false;
+        existingModel.SortOrder = 77;
+        existingModel.Overrides.DisplayName = "My Claude";
+        existingModel.UpstreamProtocols = [ApiProtocol.OpenAIResponses];
+        await host.Db.Providers.UpdateModelAsync(existingModel);
+
+        // 探测只报来源，绝不回令牌。
+        var probe = await host.GetJsonAsync("/api/subscription/copilot/local-login");
+        Assert.True(probe["available"]!.GetValue<bool>());
+        Assert.Contains("GH_TOKEN", probe["source"]!.GetValue<string>());
+        Assert.DoesNotContain(githubToken, probe.ToJsonString());
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/import-copilot", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("active", body!["account"]!["status"]!.GetValue<string>());
+
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Equal("copilot-tok", protector.Unprotect(account.AccessTokenEnc!));   // 访问令牌 = Copilot 短时令牌
+        Assert.Equal(githubToken, protector.Unprotect(account.RefreshTokenEnc!));    // 刷新槽 = 本机那份 GitHub 授权
+        // 换 Copilot 令牌用的就是探测到的那份授权。
+        Assert.Contains(requests, r => r.Path == "/copilot_internal/v2/token" && r.Auth == $"token {githubToken}");
+        Assert.Equal("copilot_pro", account.Plan);
+        var refreshed = (await host.Db.Providers.GetModelByIdAsync(existingModel.Id))!;
+        Assert.Equal([ApiProtocol.Anthropic], refreshed.UpstreamProtocols);
+        Assert.False(refreshed.Enabled);
+        Assert.Equal(77, refreshed.SortOrder);
+        Assert.Equal("My Claude", refreshed.Overrides.DisplayName);
+        Assert.Equal([ApiProtocol.Anthropic],
+            (await host.Db.Providers.GetModelAsync(providerId, "claude-sonnet-4"))!.UpstreamProtocols);
+        Assert.Equal(0, await host.App.Services.GetRequiredService<ProviderProbe>().SyncModelsFromUpstreamAsync(providerId));
+        Assert.Equal([ApiProtocol.Anthropic], (await host.Db.Providers.GetModelByIdAsync(existingModel.Id))!.UpstreamProtocols);
+    }
+
+    [Fact]
+    public async Task Import_Copilot_Rejects_A_GitHub_Account_Without_Copilot()
+    {
+        // 找得到 GitHub 授权，但它的账号没有 Copilot 订阅：上游对换令牌回 403。
+        // 这份失败必须报出来，而不是落一个永远 403 的账号。
+        var handler = new StubHandler(request =>
+            Task.FromResult(request.RequestUri!.AbsolutePath == "/copilot_internal/v2/token"
+                ? new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("""{"message":"Copilot not enabled"}""", Encoding.UTF8, "application/json") }
+                : JsonResponse("{}")));
+        var githubToken = "gho_" + new string('c', 36);
+        await using var host = await TestHost.StartAsync(builder =>
+        {
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddSingleton(new ClientEnvironment(
+                Path.Combine(Path.GetTempPath(), "astra-copilot-import-home"), "osx",
+                name => name == "GH_TOKEN" ? githubToken : null));
+        });
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/import-copilot", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("没有 Copilot 订阅", body!["error"]!.GetValue<string>());
+        Assert.Empty(await host.Db.Accounts.ListAsync(providerId));
+    }
+
+    [Fact]
+    public async Task Import_Copilot_Reports_When_No_Local_GitHub_Authorization_Exists()
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        // 空 home 里既没有 GH_TOKEN 也没有 Copilot 插件配置。
+        Assert.False((await host.GetJsonAsync("/api/subscription/copilot/local-login"))["available"]!.GetValue<bool>());
+
+        // 手填一个不被识别的 token：必须报「这不是 GitHub 令牌」，绝不能自己去读系统凭据存储
+        //（那会碰到开发机的真实凭据）。
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/import-copilot",
+            new { token = "not-a-github-token" });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("GitHub", body!["error"]!.GetValue<string>());
+        Assert.Empty(await host.Db.Accounts.ListAsync(providerId));
+    }
+
+    [Fact]
+    public async Task Copilot_Cached_Model_Protocols_Do_Not_Wait_For_Another_Accounts_Discovery()
+    {
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var discoveries = 0;
+        var handler = new StubHandler(async request =>
+        {
+            Interlocked.Increment(ref discoveries);
+            if (request.Headers.Authorization?.Parameter == "blocked-token")
+            {
+                started.TrySetResult();
+                await release.Task;
+            }
+            return JsonResponse("""{"data":[{"id":"claude-discovered","supported_endpoints":["/v1/messages"]}]}""");
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var id = body!["id"]!.GetValue<string>();
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        foreach (var name in new[] { "cached", "blocked" })
+            await host.Db.Accounts.InsertAsync(new ProviderAccount
+            {
+                Id = name, ProviderId = id, DisplayName = name, Status = AccountStatus.Active,
+                AccessTokenEnc = protector.Protect(name + "-token"), ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+            });
+        var provider = (await host.Db.Providers.GetAsync(id))!;
+        var model = new ProviderModel { ProviderId = id, ModelId = "claude-discovered" };
+        var resolver = host.App.Services.GetRequiredService<IModelProtocolResolver>();
+        Assert.Equal([ApiProtocol.Anthropic], await resolver.ResolveAsync(provider, model, "cached", CancellationToken.None));
+        var blocked = resolver.ResolveAsync(provider, model, "blocked", CancellationToken.None);
+        try
+        {
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal([ApiProtocol.Anthropic], await resolver.ResolveAsync(provider, model, "cached", CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(1)));
+            Assert.False(blocked.IsCompleted);
+        }
+        finally
+        {
+            release.TrySetResult();
+            await blocked;
+        }
+        Assert.Equal(2, discoveries);
     }
 
     [Fact]

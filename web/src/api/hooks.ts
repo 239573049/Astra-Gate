@@ -7,13 +7,18 @@ import type {
   BillingResult,
   BillingSimulateRequest,
   ClientInfo,
+  ClientInstallJob,
   ClientKind,
   ConfigPreview,
   DisableResult,
   DailyActivity,
   EnableRequest,
   ImportedCodexAccount,
+  ImportResult,
+  ImportSelection,
+  ImportSource,
   LocalCodexLogin,
+  LocalCopilotLogin,
   Model,
   ModelDetail,
   ModelField,
@@ -44,8 +49,10 @@ import type {
   RequestDetail,
   RequestSummary,
   Settings,
+  SettingsPatch,
   StatsSummary,
   SubscriptionLoginStart,
+  SubscriptionPolicy,
   SubscriptionPollResult,
   SyncPreview,
   TimeseriesPoint,
@@ -70,6 +77,7 @@ export const keys = {
   templates: ['provider-templates'] as const,
   quotaTemplates: ['provider-quota-templates'] as const,
   providers: ['providers'] as const,
+  importSources: ['import-sources'] as const,
   provider: (id: string) => ['provider', id] as const,
   providerModels: (id: string) => ['provider-models', id] as const,
   remoteModels: (id: string) => ['remote-models', id] as const,
@@ -78,11 +86,14 @@ export const keys = {
   tokens: ['tokens'] as const,
   clientModels: (kind: string) => ['client-models', kind] as const,
   backups: (kind: string) => ['backups', kind] as const,
+  clientInstallJob: (kind: string) => ['client-install-job', kind] as const,
   privacy: ['privacy'] as const,
   privacyEvents: (q: PrivacyEventQuery) => ['privacy-events', q] as const,
   privacyEventStats: (...args: unknown[]) => ['privacy-event-stats', ...args] as const,
   providerAccounts: (id: string) => ['provider-accounts', id] as const,
+  subscriptionPolicy: (id: string) => ['subscription-policy', id] as const,
   localCodexLogin: ['local-codex-login'] as const,
+  localCopilotLogin: ['local-copilot-login'] as const,
   resetCredits: (accountId: string) => ['reset-credits', accountId] as const,
   requests: (q: RequestQuery) => ['requests', q] as const,
   request: (id: string) => ['request', id] as const,
@@ -127,7 +138,7 @@ export const useSettings = () =>
 export function useUpdateSettings() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (patch: Partial<Settings>) => api<Settings>('PATCH', '/api/settings', patch),
+    mutationFn: (patch: SettingsPatch) => api<Settings>('PATCH', '/api/settings', patch),
     onSuccess: (s) => qc.setQueryData(keys.settings, s),
   });
 }
@@ -265,6 +276,27 @@ function invalidateProviders(qc: ReturnType<typeof useQueryClient>, id?: string)
   void qc.invalidateQueries({ queryKey: id ? keys.provider(id) : ['provider'] });
   void qc.invalidateQueries({ queryKey: keys.clients });
   void qc.invalidateQueries({ queryKey: ['client-models'] });
+}
+
+/** Read-only scan of the other apps' provider lists; keys never come back, only masks. Refetched on every open. */
+export const useImportSources = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.importSources,
+    queryFn: () => api<ImportSource[]>('GET', '/api/providers/import/sources'),
+    enabled,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+export function useImportProviders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (selections: ImportSelection[]) => api<ImportResult>('POST', '/api/providers/import', selections),
+    onSuccess: () => {
+      invalidateProviders(qc);
+      void qc.invalidateQueries({ queryKey: keys.importSources });
+    },
+  });
 }
 
 export function useCreateProvider() {
@@ -514,6 +546,49 @@ export function useFetchProviderAccountQuota(providerId: string) {
   });
 }
 
+/** Switching endpoints answer with the provider's whole (re-ordered, re-flagged) account list. */
+function useAccountListMutation<V>(providerId: string, fn: (v: V) => Promise<ProviderAccount[]>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (list) => qc.setQueryData(keys.providerAccounts(providerId), list),
+  });
+}
+
+/** "Switch to this account": it becomes the provider's current account for the next request. */
+export const useActivateProviderAccount = (providerId: string) =>
+  useAccountListMutation(providerId, (id: string) =>
+    api<ProviderAccount[]>('POST', `/api/provider-accounts/${enc(id)}/activate`));
+
+export const useUpdateProviderAccount = (providerId: string) =>
+  useAccountListMutation(providerId, ({ id, ...patch }: { id: string; enabled?: boolean; displayName?: string }) =>
+    api<ProviderAccount[]>('PATCH', `/api/provider-accounts/${enc(id)}`, patch));
+
+/** New failover order (first = tried first). */
+export const useReorderProviderAccounts = (providerId: string) =>
+  useAccountListMutation(providerId, (ids: string[]) =>
+    api<ProviderAccount[]>('PUT', `/api/providers/${enc(providerId)}/accounts/order`, { ids }));
+
+export const useSubscriptionPolicy = (providerId: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.subscriptionPolicy(providerId),
+    queryFn: () => api<SubscriptionPolicy>('GET', `/api/providers/${enc(providerId)}/subscription-policy`),
+    enabled,
+  });
+
+export function useUpdateSubscriptionPolicy(providerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: Partial<Pick<SubscriptionPolicy, 'clientPolicy' | 'switchMode' | 'mimicClaudeCode'>>) =>
+      api<SubscriptionPolicy>('PUT', `/api/providers/${enc(providerId)}/subscription-policy`, patch),
+    onSuccess: (policy) => {
+      qc.setQueryData(keys.subscriptionPolicy(providerId), policy);
+      // The policy lives in the provider's settings JSON: keep the provider form in sync.
+      void qc.invalidateQueries({ queryKey: keys.provider(providerId) });
+    },
+  });
+}
+
 export function useDeleteProviderAccount(providerId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -537,8 +612,7 @@ export const usePollProviderLogin = (providerId: string) =>
   });
 
 /** Whether this machine already has a usable `codex login` (~/.codex/auth.json). */
-export const useLocalCodexLogin = (enabled = true) =>
-  useQuery({
+export const useLocalCodexLogin = (enabled = true) =>  useQuery({
     queryKey: keys.localCodexLogin,
     queryFn: () => api<LocalCodexLogin>('GET', '/api/subscription/codex/local-login'),
     enabled,
@@ -551,6 +625,52 @@ export function useImportCodexAccount(providerId: string) {
   return useMutation({
     mutationFn: () => api<ImportedCodexAccount>('POST', `/api/providers/${enc(providerId)}/accounts/import-codex`, {}),
     onSuccess: () => invalidateProviderAccounts(qc, providerId),
+  });
+}
+
+/**
+ * Finishes a manual-paste login (Claude): the authorization page shows the code because the client's
+ * registered redirect_uri is not a loopback address, so the user pastes it back here.
+ */
+export const useCompleteProviderLogin = (providerId: string) =>
+  useMutation({
+    mutationFn: (vars: { state: string; code: string }) =>
+      api<SubscriptionPollResult>(
+        'POST',
+        `/api/providers/${enc(providerId)}/accounts/login/${enc(vars.state)}/complete`,
+        { code: vars.code },
+      ),
+  });
+
+/**
+ * Whether this machine already holds a GitHub authorization that could back a Copilot account
+ * (the VS Code GitHub session, GH_TOKEN, or the Copilot plugin config).
+ */
+export const useLocalCopilotLogin = (enabled = true) =>
+  useQuery({
+    queryKey: keys.localCopilotLogin,
+    queryFn: () => api<LocalCopilotLogin>('GET', '/api/subscription/copilot/local-login'),
+    enabled,
+    retry: false,
+  });
+
+/**
+ * Adopts a GitHub authorization from this machine (or a pasted token) as a Copilot account;
+ * the pass-through model list is refreshed in the same call.
+ */
+export function useImportCopilotAccount(providerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (token?: string) =>
+      api<ImportedCodexAccount>(
+        'POST',
+        `/api/providers/${enc(providerId)}/accounts/import-copilot`,
+        { token: token && token.trim().length > 0 ? token.trim() : null },
+      ),
+    onSuccess: (_r, _token) => {
+      invalidateProviderAccounts(qc, providerId);
+      void qc.invalidateQueries({ queryKey: keys.localCopilotLogin });
+    },
   });
 }
 
@@ -579,7 +699,12 @@ export function useConsumeResetCredit(providerId: string) {
 // ---------- clients ----------
 
 export const useClients = () =>
-  useQuery({ queryKey: keys.clients, queryFn: () => api<ClientInfo[]>('GET', '/api/clients') });
+  useQuery({
+    queryKey: keys.clients,
+    queryFn: () => api<ClientInfo[]>('GET', '/api/clients'),
+    // While an install / update runs, keep the list (busy marks, versions) current.
+    refetchInterval: (q) => (q.state.data?.some((c) => c.install?.busy) ? 2000 : false),
+  });
 
 /** Rewrites every enabled client whose Astra settings are stale (e.g. after the port changed). */
 export const useReapplyClients = () =>
@@ -646,6 +771,46 @@ export const useRestoreBackup = () =>
       api<ClientInfo>('POST', `/api/clients/${v.kind}/backups/${enc(v.id)}/restore`),
     (v) => [keys.backups(v.kind)],
   );
+
+/** Fetches the clients' latest versions (npm registry; the server keeps them 6 h unless forced) and returns the refreshed list. */
+export function useCheckClientUpdates() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (force: boolean) => api<ClientInfo[]>('POST', '/api/clients/check-updates', { force }),
+    onSuccess: (list) => qc.setQueryData(keys.clients, list),
+  });
+}
+
+/** The current or last install / update of a client; polls while it runs. */
+export const useClientInstallJob = (kind: ClientKind | undefined, enabled = true) =>
+  useQuery({
+    queryKey: keys.clientInstallJob(kind ?? ''),
+    queryFn: () => api<ClientInstallJob>('GET', `/api/clients/${kind}/install`),
+    enabled: Boolean(kind) && enabled,
+    retry: false,
+    refetchInterval: (q) => (q.state.data?.state === 'running' ? 800 : false),
+  });
+
+export function useStartClientInstall() {
+  const qc = useQueryClient();
+  return useMutation({
+    /** elevated: run the npm command with admin rights (the system shows its own password prompt). */
+    mutationFn: (v: { kind: ClientKind; action: ClientInstallJob['action']; elevated?: boolean }) =>
+      api<ClientInstallJob>('POST', `/api/clients/${v.kind}/install`, { action: v.action, elevated: v.elevated ?? false }),
+    onSuccess: (job) => {
+      qc.setQueryData(keys.clientInstallJob(job.kind), job);
+      void qc.invalidateQueries({ queryKey: keys.clients });
+    },
+  });
+}
+
+export function useCancelClientInstall() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (kind: ClientKind) => api<ClientInstallJob>('POST', `/api/clients/${kind}/install/cancel`, {}),
+    onSuccess: (job) => qc.setQueryData(keys.clientInstallJob(job.kind), job),
+  });
+}
 
 // ---------- tokens ----------
 
@@ -716,6 +881,8 @@ export const useRequest = (id: string | null) =>
     queryKey: keys.request(id ?? ''),
     queryFn: () => api<RequestDetail>('GET', `/api/requests/${enc(id!)}`),
     enabled: Boolean(id),
+    // An in-flight request is served from the live feed; follow it until it finishes.
+    refetchInterval: (query) => (query.state.data?.status === 'pending' ? 1000 : false),
   });
 
 /** The viewer's UTC offset in minutes, so timeseries buckets follow local days and hours. */

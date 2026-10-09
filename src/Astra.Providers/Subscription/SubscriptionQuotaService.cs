@@ -363,16 +363,50 @@ public sealed class SubscriptionQuotaService(
     private async Task<(HttpStatusCode Status, string ContentType, JsonObject? Payload)> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         using var client = httpClientFactory.CreateClient(HttpClientName);
-        using var response = await client.SendAsync(request, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
-        var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+        HttpResponseMessage response;
         try
         {
-            return (response.StatusCode, contentType, JsonNode.Parse(body) as JsonObject);
+            response = await SendWithOneRetryAsync(client, request, ct);
         }
-        catch (System.Text.Json.JsonException)
+        catch (Exception e) when (e is HttpRequestException || (e is TaskCanceledException && !ct.IsCancellationRequested))
         {
-            return (response.StatusCode, contentType, null);
+            // 传输层失败（握手被掐、代理不通、超时）不是授权问题，也不该炸成 500 + 异常页：
+            // 报成一条能指向原因的错误。Astra 的外网请求按 HTTPS_PROXY / 系统代理走，代理挂了就是这个症状。
+            var host = request.RequestUri?.Host ?? "上游";
+            throw new OAuthProtocolException("network",
+                $"无法连接 {host}：{(e.InnerException ?? e).Message}（Astra 通过 HTTPS_PROXY / 系统代理访问外网，请确认代理可用后重试）");
+        }
+        using (response)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            var contentType = response.Content.Headers.ContentType?.MediaType ?? "";
+            try
+            {
+                return (response.StatusCode, contentType, JsonNode.Parse(body) as JsonObject);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return (response.StatusCode, contentType, null);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 对幂等的 GET 在"建连 / TLS 握手"阶段失败时用一条全新的连接重试一次：代理节点偶发掐连接
+    /// 是最常见的瞬时故障（实测 25 次新握手 0 次失败，线上却出现过单次 "unexpected EOF"），
+    /// 一次重试几乎总能过。有响应（哪怕是 4xx/5xx）不重试；POST 等非幂等请求一律不重试。
+    /// </summary>
+    private static async Task<HttpResponseMessage> SendWithOneRetryAsync(HttpClient client, HttpRequestMessage request, CancellationToken ct)
+    {
+        try
+        {
+            return await client.SendAsync(request, ct);
+        }
+        catch (HttpRequestException) when (request.Method == HttpMethod.Get && request.RequestUri is not null && !ct.IsCancellationRequested)
+        {
+            using var again = new HttpRequestMessage(HttpMethod.Get, request.RequestUri);
+            foreach (var (name, values) in request.Headers) again.Headers.TryAddWithoutValidation(name, values);
+            return await client.SendAsync(again, ct);
         }
     }
 

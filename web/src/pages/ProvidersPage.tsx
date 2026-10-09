@@ -1,4 +1,4 @@
-import { FlaskConical, Plus, Server } from 'lucide-react';
+import { Download, FlaskConical, Plus, Server } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -18,6 +18,7 @@ import { RadioCards } from '../components/arc/radio-cards/radio-cards';
 import { Sparkline } from '../components/arc/sparkline/sparkline';
 import { Stepper } from '../components/arc/stepper/stepper';
 import { CLIENT_META, ProviderIcon } from '../components/icons';
+import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
 import { Page } from '../components/layout/Page';
 import { ProviderQuotaLine } from '../components/ProviderQuotaSection';
 import { ProviderTestDialog } from '../components/ProviderTestDialog';
@@ -51,6 +52,7 @@ export function ProvidersPage() {
   const [params, setParams] = useSearchParams();
   const providers = useProviders();
   const [adding, setAdding] = useState(params.get('new') === '1');
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     if (params.get('new') === '1') {
@@ -87,9 +89,14 @@ export function ProvidersPage() {
       title={t('nav.providers')}
       subtitle={providers.data ? t('providers.count', { count: providers.data.length }) : undefined}
       actions={
-        <Button variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
-          {t('providers.add')}
-        </Button>
+        <>
+          <Button icon={<Download className="size-3.5" />} onClick={() => setImporting(true)}>
+            {t('providers.import')}
+          </Button>
+          <Button variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
+            {t('providers.add')}
+          </Button>
+        </>
       }
     >
       <div className="mx-auto max-w-[1100px]">
@@ -102,9 +109,14 @@ export function ProvidersPage() {
               title={t('providers.empty')}
               detail={t('providers.emptyDetail')}
               action={
-                <Button variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
-                  {t('providers.add')}
-                </Button>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button variant="primary" icon={<Plus className="size-3.5" />} onClick={() => setAdding(true)}>
+                    {t('providers.add')}
+                  </Button>
+                  <Button icon={<Download className="size-3.5" />} onClick={() => setImporting(true)}>
+                    {t('providers.import')}
+                  </Button>
+                </div>
               }
             />
           </div>
@@ -124,6 +136,7 @@ export function ProvidersPage() {
           </div>
         )}
       </div>
+      <ImportProvidersSheet open={importing} onOpenChange={setImporting} />
       <AddProviderSheet open={adding} onOpenChange={setAdding} onCreated={(p) => navigate(`/providers/${p.id}`)} />
       {/* Rendered outside the cards on purpose: a dialog portaled from inside a clickable card would still bubble
           its clicks up React's tree and open the provider behind it. */}
@@ -201,7 +214,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
         }
       }}
       // Same translucent content layer as `.card`, so the window background still shows through.
-      style={{ backgroundColor: 'color-mix(in oklab, var(--surface) 84%, transparent)' }}
+      style={{ backgroundColor: 'var(--surface)' }}
       title={p.name}
       description={protocols.map((x) => PROTOCOL_OPTIONS.find((o) => o.value === x)?.label ?? x).join(' / ')}
       media={
@@ -288,7 +301,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
   );
 }
 
-const CATEGORY_ORDER = ['official', 'subscription', 'cn', 'aggregator', 'local', 'custom'] as const;
+const CATEGORY_ORDER = ['recommended', 'official', 'subscription', 'cn', 'aggregator', 'local', 'custom'] as const;
 
 function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (p: Provider) => void }) {
   const { t } = useI18n();

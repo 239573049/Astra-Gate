@@ -52,6 +52,15 @@ namespace Astra.Server;
 [JsonSerializable(typeof(ProviderQuotaDto))]
 [JsonSerializable(typeof(ProviderQuotaTestDto))]
 [JsonSerializable(typeof(ProviderQuotaErrorDto))]
+// provider import
+[JsonSerializable(typeof(ImportSourceDto))]
+[JsonSerializable(typeof(ImportCandidateDto))]
+[JsonSerializable(typeof(ImportEndpointDto))]
+[JsonSerializable(typeof(ImportExistingDto))]
+[JsonSerializable(typeof(ImportSelectionDto))]
+[JsonSerializable(typeof(ImportResultDto))]
+[JsonSerializable(typeof(ImportedProviderDto))]
+[JsonSerializable(typeof(ImportSkippedDto))]
 // provider templates
 [JsonSerializable(typeof(TemplateUpdateDto))]
 [JsonSerializable(typeof(RemoteModelDto))]
@@ -67,6 +76,11 @@ namespace Astra.Server;
 [JsonSerializable(typeof(TokenRewriteResult))]
 [JsonSerializable(typeof(ReappliedDto))]
 [JsonSerializable(typeof(ClientEndpoints.BindingInput))]
+[JsonSerializable(typeof(ClientInstallDto))]
+[JsonSerializable(typeof(ClientCopyDto))]
+[JsonSerializable(typeof(ClientInstallJobDto))]
+[JsonSerializable(typeof(ClientInstallRequest))]
+[JsonSerializable(typeof(ClientUpdateCheckRequest))]
 // tokens
 [JsonSerializable(typeof(TokenDto))]
 [JsonSerializable(typeof(TokenStatsDto))]
@@ -75,6 +89,7 @@ namespace Astra.Server;
 // requests and stats
 [JsonSerializable(typeof(RequestEndpoints.RequestSummaryDto))]
 [JsonSerializable(typeof(RequestEndpoints.RequestDetailDto))]
+[JsonSerializable(typeof(RequestEndpoints.RequestLiveEventDto))]
 [JsonSerializable(typeof(RequestEndpoints.UsageItemDto))]
 [JsonSerializable(typeof(RequestEndpoints.BodiesDto))]
 [JsonSerializable(typeof(RequestEndpoints.PageDto<RequestEndpoints.RequestSummaryDto>))]
@@ -107,11 +122,15 @@ namespace Astra.Server;
 [JsonSerializable(typeof(SubscriptionEndpoints.SubscriptionPolicyPatch))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginModeDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginDeviceDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.LoginPasteDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.CompleteLoginRequest))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginCliDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginPollDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginDoneDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.PollFailureDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LocalCodexLoginDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.LocalCopilotLoginDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.LocalCopilotImport))]
 [JsonSerializable(typeof(SubscriptionEndpoints.ImportedAccountDto))]
 // auth
 [JsonSerializable(typeof(SystemEndpoints.LoginRequest))]
@@ -126,12 +145,17 @@ namespace Astra.Server;
 [JsonSerializable(typeof(List<ClientInfoDto>))]
 [JsonSerializable(typeof(List<ClientBackupDto>))]
 [JsonSerializable(typeof(List<ProviderDto>))]
+[JsonSerializable(typeof(List<ImportSourceDto>))]
+[JsonSerializable(typeof(List<ImportSelectionDto>))]
 [JsonSerializable(typeof(List<TokenDto>))]
 [JsonSerializable(typeof(List<ModelDto>))]
 [JsonSerializable(typeof(List<RequestEndpoints.DailyActivityDto>))]
 [JsonSerializable(typeof(List<RequestEndpoints.TimeseriesPointDto>))]
 [JsonSerializable(typeof(List<RequestEndpoints.TopModelDto>))]
 [JsonSerializable(typeof(List<PriceKeyInfo>))]
+// The provider model list is materialised as a List before it leaves the endpoint (an interface-typed
+// root makes the serializer probe the whole interface graph), so the List itself is a root type.
+[JsonSerializable(typeof(List<ProviderModelDto>))]
 // Endpoints that hand back an interface-typed collection: the declared type is the root the
 // serializer resolves, so the interface itself needs metadata.
 [JsonSerializable(typeof(IReadOnlyList<ClientInfoDto>))]

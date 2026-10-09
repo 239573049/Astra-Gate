@@ -11,9 +11,10 @@
 /* Relative, so a hovered cell's bubble can be placed over the grid without moving anything. */
 .plot { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 16px auto; column-gap: 6px; row-gap: 4px; min-width: fit-content; }
 
-.months { grid-area: 1 / 2; display: flex; gap: var(--gap); }
-/* The label rides the column of its month's first day and may run on into the quieter columns beside it, which is how month names read on a calendar. */
-.month { width: 0; overflow: visible; white-space: nowrap; color: var(--text-muted); font-size: var(--text-xs); line-height: 1; }
+.months { grid-area: 1 / 2; display: flex; min-width: 0; gap: var(--gap); }
+/* One header per week column, sized exactly like `.week` so each label sits over its column. The label starts at its
+   month's first-day column and may run on into the quieter columns beside it, which is how month names read on a calendar. */
+.month { flex: 1 1 0; min-width: var(--cell); overflow: visible; white-space: nowrap; color: var(--text-muted); font-size: var(--text-xs); line-height: 1; }
 
 .weekdays { grid-area: 2 / 1; display: flex; flex-direction: column; gap: var(--gap); }
 .weekday { display: flex; height: var(--cell); flex: none; align-items: center; justify-content: flex-end; color: var(--text-muted); font-size: var(--text-xs); line-height: 1; white-space: nowrap; }

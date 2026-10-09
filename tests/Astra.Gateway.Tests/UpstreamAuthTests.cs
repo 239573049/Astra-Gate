@@ -96,6 +96,54 @@ public class UpstreamAuthResolverTests
     }
 
     /// <summary>
+    /// 上游按模型区分协议时（GitHub Copilot 的 Claude 只支持 Messages），Responses 入站必须翻译：
+    /// 直通会让上游回 model_not_supported。没有约束时行为不变。
+    /// </summary>
+    [Fact]
+    public void Per_Model_Protocol_Constraint_Forces_Translation_Instead_Of_Passthrough()
+    {
+        var provider = new Provider
+        {
+            Id = "p-copilot",
+            Name = "GitHub Copilot 订阅",
+            TemplateId = "github-copilot-subscription",
+            Endpoints =
+            [
+                new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://api.githubcopilot.com" },
+                new ProviderEndpoint { Protocol = ApiProtocol.OpenAIResponses, BaseUrl = "https://api.githubcopilot.com" },
+                new ProviderEndpoint { Protocol = ApiProtocol.Anthropic, BaseUrl = "https://api.githubcopilot.com" },
+            ],
+            PreferredUpstreamProtocols = [ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses, ApiProtocol.Anthropic],
+        };
+
+        // 无约束：Responses 直通。
+        Assert.Equal(ApiProtocol.OpenAIResponses,
+            GatewayRouter.SelectEndpoint(provider, ApiProtocol.OpenAIResponses, null).Protocol);
+
+        // Claude 模型声明只支持 Messages：Responses 入站改走 Anthropic（翻译）。
+        Assert.Equal(ApiProtocol.Anthropic,
+            GatewayRouter.SelectEndpoint(provider, ApiProtocol.OpenAIResponses, [ApiProtocol.Anthropic]).Protocol);
+
+        // 支持 Responses 的模型照旧直通。
+        Assert.Equal(ApiProtocol.OpenAIResponses,
+            GatewayRouter.SelectEndpoint(provider, ApiProtocol.OpenAIResponses, [ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses]).Protocol);
+    }
+
+    [Fact]
+    public void A_Model_Without_Any_Configured_Supported_Endpoint_Is_Not_Sent_To_An_Unsupported_Protocol()
+    {
+        var provider = new Provider
+        {
+            Name = "Copilot",
+            Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIResponses, BaseUrl = "https://api.githubcopilot.com" }],
+        };
+        var error = Assert.Throws<GatewayException>(() =>
+            GatewayRouter.SelectEndpoint(provider, ApiProtocol.OpenAIResponses, [ApiProtocol.Anthropic]));
+        Assert.Equal(503, error.Status);
+        Assert.Contains("anthropic", error.Message);
+    }
+
+    /// <summary>
     /// base64url 段长度 %4==3 时要补一个 '='（不是两个）：补错的实现会抛异常、claim 静默变 null
     /// —— 大约四分之一的真实 JWT 段落落在这个余数上。两个 vector 分别是 %4==3 与 %4==2。
     /// </summary>
@@ -243,7 +291,9 @@ public class UpstreamAuthResolverTests
 
         Assert.Equal("Bearer at-NEW", auth!.HeaderValue);
         var body = Assert.Single(handler.Bodies);
-        Assert.Contains("grant_type=refresh_token", body);
+        // Claude（Anthropic）的换令牌端点是 JSON body（不是表单）——sub2api 的 Claude 客户端如此。
+        Assert.Contains("grant_type", body);
+        Assert.Contains("\"refresh_token\"", body);
         var stored = await db.Accounts.GetAsync("acc-1");
         Assert.Equal("at-NEW", new FakeProtector().Unprotect(stored!.AccessTokenEnc!));
         Assert.Equal(AccountStatus.Active, stored.Status);

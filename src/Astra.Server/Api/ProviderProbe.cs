@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -61,9 +62,13 @@ public sealed class ProviderTestRun(ApiProtocol protocol, string modelId, Func<P
 /// </summary>
 public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, UpstreamAuthResolver auth,
     EffectiveModelResolver models, SettingsService settings, UsageWriter writer, CodecRegistry codecs,
-    PrivacyGuardService privacy, BodyStore bodies)
+    PrivacyGuardService privacy, BodyStore bodies, ILogger<ProviderProbe> logger) : IModelProtocolResolver
 {
     public const string HttpClientName = "astra-provider-probe";
+
+    private readonly ConcurrentDictionary<(string ProviderId, string? AccountId), SemaphoreSlim> _modelProtocolGates = new();
+    private readonly ConcurrentDictionary<(string ProviderId, string? AccountId), ModelProtocolSnapshot> _modelProtocolCache = new();
+    private sealed record ModelProtocolSnapshot(DateTimeOffset ExpiresAtUtc, IReadOnlyList<RemoteModelDto> Models);
 
     /// <summary>Used when the caller sends no prompt.</summary>
     public const string DefaultTestPrompt = "Reply with OK.";
@@ -171,8 +176,13 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 using var client = CreateClient(p);
                 using var request = await RequestAsync(p, HttpMethod.Post, UpstreamUrls.For(endpoint, run.ModelId, options.Stream),
                     protocol, options.Stream, deadline.Token);
-                request.Content = new StringContent(guard.Body, Encoding.UTF8, "application/json");
-                if (capture is not null) capture[BodyStore.UpstreamRequest] = Redact(guard.Body, p, request);
+                // 模拟 Claude Code（subscription.mimic_claude_code）：测试请求和网关请求同形，
+                // 否则"测试配置"对非 Haiku 模型的结论和真实请求不一致。
+                var outbound = protocol == ApiProtocol.Anthropic && SubscriptionSupport.MimicClaudeCodeOf(p)
+                    ? ClaudeCodeMimicry.ApplyBody(guard.Body, p.Id, null)
+                    : guard.Body;
+                request.Content = new StringContent(outbound, Encoding.UTF8, "application/json");
+                if (capture is not null) capture[BodyStore.UpstreamRequest] = Redact(outbound, p, request);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 httpMs = sw.ElapsedMilliseconds;
                 record.HttpStatus = (int)response.StatusCode;
@@ -470,9 +480,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     // ------------------------------------------------------------------ upstream
 
     private async Task<HttpRequestMessage> RequestAsync(Provider p, HttpMethod method, string url, ApiProtocol protocol,
-        bool stream, CancellationToken ct)
+        bool stream, CancellationToken ct, string? accountId = null)
     {
-        var credentials = await auth.ResolveAsync(p.Id, null, ct) ?? UpstreamAuth.None;
+        var credentials = await auth.ResolveAsync(p.Id, accountId, ct) ?? UpstreamAuth.None;
         if (credentials.QueryName is { } q && credentials.QueryValue is { } value) url = WithQuery(url, q, value);
         var request = new HttpRequestMessage(method, url);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(stream ? "text/event-stream" : "application/json"));
@@ -480,8 +490,14 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         if (protocol == ApiProtocol.Anthropic && !request.Headers.Contains("anthropic-version"))
             request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
         // Claude subscription OAuth tokens are rejected without the claude-code / oauth betas (same as the gateway's compat path).
+        // With subscription.mimic_claude_code the probe presents the full Claude Code identity, like the gateway does.
         if (protocol == ApiProtocol.Anthropic && SubscriptionSupport.IsClaudeSubscription(p))
-            ClaudeOAuthHeaders.ApplyCompat(request, new HeaderDictionary());
+        {
+            if (SubscriptionSupport.MimicClaudeCodeOf(p))
+                ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? p.Id, null);
+            else
+                ClaudeOAuthHeaders.ApplyCompat(request, new HeaderDictionary());
+        }
         if (credentials.HeaderName is { } header)
         {
             request.Headers.Remove(header);
@@ -500,7 +516,56 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         }, false) { Timeout = TimeSpan.FromSeconds(TestTimeoutSec + 10) };
     }
 
-    public async Task<IReadOnlyList<RemoteModelDto>> ModelsAsync(string providerId, CancellationToken ct)
+    /// <summary>
+    /// Learns missing Copilot model capabilities before a generation request. Cached per provider/account to avoid
+    /// probing on every call, including for models not saved locally; existing model rows are backfilled separately
+    /// from their editable settings. Other providers retain their ordinary endpoint selection.
+    /// </summary>
+    public async Task<IReadOnlyList<ApiProtocol>> ResolveAsync(Provider provider, ProviderModel model, string? accountId, CancellationToken ct)
+    {
+        if (model.UpstreamProtocols.Count > 0 || string.IsNullOrEmpty(model.ModelId)
+            || SubscriptionSupport.ProviderKeyOf(provider) != "github-copilot-subscription")
+            return model.UpstreamProtocols;
+
+        var key = (provider.Id, accountId);
+        if (_modelProtocolCache.TryGetValue(key, out var cached) && cached.ExpiresAtUtc > DateTimeOffset.UtcNow)
+            return cached.Models.FirstOrDefault(m => m.Id == model.ModelId)?.UpstreamProtocols ?? model.UpstreamProtocols;
+        var gate = _modelProtocolGates.GetOrAdd(key, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct);
+        try
+        {
+            // A concurrent login or request may already have filled this row while we waited.
+            var stored = await db.Providers.GetModelAsync(provider.Id, model.ModelId, ct);
+            if (stored?.UpstreamProtocols is { Count: > 0 } known) return known;
+            if (!_modelProtocolCache.TryGetValue(key, out cached) || cached.ExpiresAtUtc <= DateTimeOffset.UtcNow)
+            {
+                IReadOnlyList<RemoteModelDto> remote;
+                var lifetime = TimeSpan.FromMinutes(5);
+                try
+                {
+                    remote = await ModelsAsync(provider.Id, ct, accountId);
+                    await RefreshModelProtocolsAsync(provider.Id, remote, ct);
+                }
+                catch (AdminApiException e)
+                {
+                    // Best effort, like login-time sync; retry unavailable discovery sooner than a successful list.
+                    logger.LogWarning("Provider {Provider}: model protocol discovery failed (HTTP {Status}); using configured endpoints until retry",
+                        provider.Name, e.StatusCode);
+                    remote = [];
+                    lifetime = TimeSpan.FromMinutes(1);
+                }
+                cached = new ModelProtocolSnapshot(DateTimeOffset.UtcNow + lifetime, remote);
+                _modelProtocolCache[key] = cached;
+            }
+            return cached.Models.FirstOrDefault(m => m.Id == model.ModelId)?.UpstreamProtocols ?? model.UpstreamProtocols;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<RemoteModelDto>> ModelsAsync(string providerId, CancellationToken ct, string? accountId = null)
     {
         var p = await ProviderEndpoints.RequireAsync(db, providerId, ct);
         var snapshot = Json.Deserialize<ProviderTemplate>(p.TemplateSnapshotJson);
@@ -521,7 +586,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             using var client = CreateClient(p);
             for (var page = 0; page < MaxPages; page++)
             {
-                using var request = await RequestAsync(p, HttpMethod.Get, url, endpoint.Protocol, false, deadline.Token);
+                using var request = await RequestAsync(p, HttpMethod.Get, url, endpoint.Protocol, false, deadline.Token, accountId);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 var body = TryObject(await ReadResponseAsync(response, deadline.Token));
                 if (!response.IsSuccessStatusCode) throw new AdminApiException(502, ErrorMessage(body, response.StatusCode, p, request), new { httpStatus = (int)response.StatusCode });
@@ -589,6 +654,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         {
             return 0;
         }
+        // Template defaults and pre-existing rows need the same capabilities, even when nothing new is added.
+        await RefreshModelProtocolsAsync(providerId, remote, ct);
         var toAdd = remote.Where(m => !m.AlreadyAdded).ToList();
         if (toAdd.Count == 0) return 0;
         var added = await PlanModels(p, toAdd.Select(m => m.Id).ToList(), ct);
@@ -599,6 +666,16 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             if (constraints.TryGetValue(model.ModelId, out var protocols)) model.UpstreamProtocols = [.. protocols];
         await db.Providers.InsertModelsAsync(added, ct);
         return added.Count;
+    }
+
+    private async Task RefreshModelProtocolsAsync(string providerId, IReadOnlyList<RemoteModelDto> remote, CancellationToken ct)
+    {
+        var constraints = remote.Where(m => m.UpstreamProtocols is { Count: > 0 })
+            .ToDictionary(m => m.Id, m => m.UpstreamProtocols!, StringComparer.Ordinal);
+        if (constraints.Count == 0) return;
+        foreach (var model in await db.Providers.ListModelsAsync(providerId, ct))
+            if (constraints.TryGetValue(model.ModelId, out var protocols) && !model.UpstreamProtocols.SequenceEqual(protocols))
+                await db.Providers.UpdateModelProtocolsAsync(model.Id, protocols, ct);
     }
 
     /// <summary>Persists planned provider models for a set of upstream ids (shared by the sync paths).</summary>

@@ -8,6 +8,7 @@ using Astra.Core.Privacy;
 using Astra.Core.Requests;
 using Astra.Core.Tokens;
 using Astra.Gateway.Pipeline;
+using Astra.Server.Api;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Astra.Server.IntegrationTests;
@@ -72,11 +73,14 @@ public sealed class GatewayFixture : IAsyncDisposable
         string authScheme = AuthSchemes.Bearer, bool routeOAuthThroughUpstream = false)
     {
         var upstream = new FakeUpstream(respond);
-        // 订阅令牌刷新的 HTTP 也要可测：把 OAuthClient 的 named client 指到同一个假上游。
-        Action<Microsoft.AspNetCore.Builder.WebApplicationBuilder>? configure = routeOAuthThroughUpstream
-            ? b => b.Services.AddHttpClient(Astra.Providers.Subscription.OAuthClient.HttpClientName)
-                .ConfigurePrimaryHttpMessageHandler(() => upstream)
-            : null;
+        // 模型能力查询和可选的订阅令牌刷新都指向假上游，测试不访问真实提供商。
+        Action<Microsoft.AspNetCore.Builder.WebApplicationBuilder> configure = b =>
+        {
+            b.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => upstream);
+            if (routeOAuthThroughUpstream)
+                b.Services.AddHttpClient(Astra.Providers.Subscription.OAuthClient.HttpClientName)
+                    .ConfigurePrimaryHttpMessageHandler(() => upstream);
+        };
         var host = await TestHost.StartAsync(configure);
         host.App.Services.GetRequiredService<GatewayHttpClients>().HandlerFactory = _ => upstream;
         var protector = host.App.Services.GetRequiredService<ISecretProtector>();
@@ -369,6 +373,13 @@ public class GatewayPipelineTests
     {
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeDesktop, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
         await SetRoleMapAsync(gw, """{"sonnet":"gpt-5"}""");
+        // Both APIs exist, but the mapped model supports only Chat: select using its id, not the role id.
+        gw.Provider.Endpoints.Add(new ProviderEndpoint { Protocol = ApiProtocol.Anthropic, BaseUrl = GatewayFixture.BaseUrlFor(ApiProtocol.Anthropic) });
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel
+        {
+            ProviderId = gw.Provider.Id, ModelId = "gpt-5", SystemModelId = "gpt-5", UpstreamProtocols = [ApiProtocol.OpenAIChat],
+        });
         var response = await gw.PostAsync("/v1/messages",
             """{"model":"claude-sonnet-5-5","max_tokens":64,"messages":[{"role":"user","content":"hi"}]}""", null, ("anthropic-version", "2023-06-01"));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -378,6 +389,8 @@ public class GatewayPipelineTests
         var record = await gw.RecordOfAsync(response);
         Assert.Equal("gpt-5", record.UpstreamModel);
         Assert.Equal("gpt-5", record.ResponseModel);
+        Assert.Equal("openai-chat", record.UpstreamProtocol);
+        Assert.False(record.Passthrough);
         Assert.True(record.CostNanoUsd > 0, "billing uses the mapped (priced) model");
     }
 
@@ -798,7 +811,8 @@ public class GatewayPipelineTests
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, respond,
             authScheme: AuthSchemes.OAuthSubscription, routeOAuthThroughUpstream: true);
         gw.Provider.TemplateId = "claude-subscription"; // catalog defaults: verified PKCE endpoints + client id
-        gw.Provider.Settings = JsonNode.Parse("""{"subscription_oauth":{"verified":true,"client_id":"test-client"}}""")!.AsObject();
+        // OpenCode is not Claude Code: lift the Claude subscription's default "Claude Code only" client policy.
+        gw.Provider.Settings = JsonNode.Parse("""{"subscription_oauth":{"verified":true,"client_id":"test-client"},"subscription":{"client_policy":"any"}}""")!.AsObject();
         await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
 
         var protector = gw.Host.App.Services.GetRequiredService<ISecretProtector>();
@@ -822,7 +836,9 @@ public class GatewayPipelineTests
         // 401 → refresh (token endpoint) → retry with the rotated token.
         Assert.True(gw.Upstream.Requests.Count >= 3);
         var refresh = gw.Upstream.Requests.Single(r => r.Url.AbsolutePath.Contains("oauth/token"));
-        Assert.Contains("grant_type=refresh_token", refresh.Body);
+        // Claude 的刷新是 JSON body（Anthropic 那套端点不是表单）。
+        Assert.Contains("\"grant_type\"", refresh.Body);
+        Assert.Contains("refresh_token", refresh.Body);
         Assert.Contains("rt-1", refresh.Body);
 
         var stored = await gw.Host.Db.Accounts.GetAsync("acc-1");

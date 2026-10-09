@@ -75,7 +75,7 @@ export const TrayPanelView = forwardRef<HTMLDivElement, TrayPanelViewProps>(func
     <div
       ref={ref}
       className={cn(
-        'chrome flex max-h-full flex-col overflow-hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--surface)] text-[13px] text-[var(--foreground)]',
+        'chrome flex max-h-full flex-col overflow-hidden rounded-[14px] border border-[var(--border-strong)] bg-[var(--surface-raised)] text-[13px] text-[var(--foreground)]',
         className,
       )}
     >

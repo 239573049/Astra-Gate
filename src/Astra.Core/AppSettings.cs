@@ -34,6 +34,23 @@ public sealed class AppSettings
     /// </summary>
     public int QuotaAutoIntervalMinutes { get; set; } = 30;
 
+    /// <summary>
+    /// Outbound proxy (<see cref="SystemProxy"/>): "system" = HTTPS_PROXY-style variables, then the OS setting;
+    /// "custom" = <see cref="ProxyUrl"/>; "direct" = never proxy. A provider's own httpProxy still wins.
+    /// </summary>
+    public string ProxyMode { get; set; } = "system";
+
+    /// <summary>Custom proxy, scheme + host + port only (http / https / socks5); credentials are kept apart.</summary>
+    public string? ProxyUrl { get; set; }
+
+    public string? ProxyUsername { get; set; }
+
+    /// <summary>Proxy password protected with ISecretProtector; the API only reports whether one is set.</summary>
+    public string? ProxyPasswordProtected { get; set; }
+
+    /// <summary>NO_PROXY-style hosts (comma separated) that stay direct in custom mode; loopback always does.</summary>
+    public string? ProxyBypass { get; set; }
+
     public AppSettings Clone() => Json.Deserialize<AppSettings>(Json.Serialize(this))!;
 }
 

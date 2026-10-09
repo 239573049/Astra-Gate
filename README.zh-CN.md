@@ -96,7 +96,11 @@ astra client enable codex --provider deepseek --model deepseek-chat
 ## 支持的客户端
 
 `codex` · `claude-code` · `gemini-cli` · `opencode` · `claude-desktop` · `grok-build` ·
-`pi` · `hermes-agent` · `minimax-code` · `copilot-cli` · `vscode-copilot`
+`pi` · `hermes-agent` · `minimax-code` · `copilot-cli` · `vscode-copilot` · `crush` · `qwen-code` ·
+`droid` · `kimi-code` · `zed` · `vscode-insiders` · `vscodium` · `omp` · `mimo-code` ·
+`deepseek-harness`
+
+Zed 不会从设置文件读取 API Key，启用后需在 Zed 的提供商设置里粘贴一次 Astra 令牌。
 
 接管会在首次写入前备份原文件，永久保留首写备份、另保留最近 20 份滚动备份，并且
 还原时会跳过你后来自己改过的值。`astra restore-all`（或卸载）可以在服务端不运行的

@@ -42,6 +42,13 @@ executable needs its native companion library beside it (see Native AOT), so any
 copies the binary must copy the companions too — `scripts/pack-platform.mjs` and
 `packages/update-core` both do.
 
+The Docker image (root `Dockerfile`, `compose.yaml`, published to `ghcr.io/<owner>/<repo>` by the
+`docker` job in `release.yml`) is a fourth consumer of that output: it compiles nothing, it
+`COPY`s `docker-bin/<amd64|arm64>/` — the unpacked `npm/server-linux-{x64,arm64}` package
+(binary + `libe_sqlite3.so` + `wwwroot/`) — onto `mcr.microsoft.com/dotnet/runtime-deps` (glibc, on
+purpose: the release RIDs are not `linux-musl-*`). `Dockerfile.dockerignore` limits its context;
+the root `.dockerignore` belongs to `docs/Dockerfile`.
+
 ## Commands
 
 .NET, from the repo root (the single `Astra.sln` is picked up automatically):
@@ -50,7 +57,7 @@ copies the binary must copy the companions too — `scripts/pack-platform.mjs` a
   `TreatWarningsAsErrors`; CI adds the flag too). New warnings break the build.
 - Test all: `dotnet test --no-build` (after building). Targeted: `dotnet test tests/Astra.Gateway.Tests`.
 - Run: `dotnet run --project src/Astra.Server -- serve` — subcommands are listed in the
-  `Program.cs` header comment (`serve`, `migrate`, `restore-all`, `set-password`, `version`).
+  `Program.cs` header comment (`serve`, `migrate`, `restore-all`, `set-password`, `healthcheck`, `version`).
 - Publish (release): `dotnet publish src/Astra.Server -c Release -r <rid> --self-contained true
   -p:PublishAot=true -o out/publish` — Native AOT; never pass `-p:PublishSingleFile=true`
   (see Native AOT).
@@ -107,7 +114,11 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 - `~/.astra/` (override with `ASTRA_HOME`), layout in `Astra.Core/AstraPaths.cs`. `config.json`
   is read before startup (`ServerOptions`); `runtime.json` records the pid/port/apiVersion
   actually in use — the port can drift at startup (`PortPicker`), so never assume the configured
-  port; read `runtime.json`.
+  port; read `runtime.json`. In containers the environment overrides config.json
+  (`ServerOptions.ApplyEnvironment`: `ASTRA_HOST`, `ASTRA_PORT`, `ASTRA_PUBLIC_URL`,
+  `ASTRA_STRICT_PORT`, `ASTRA_ADMIN_PASSWORD[_FILE]`; precedence flags > env > config.json) and
+  `ASTRA_STRICT_PORT` disables the drift. `GatewayBaseUrl` is `ASTRA_PUBLIC_URL` when set, else
+  `LocalUrl` (what `healthcheck` probes).
 - Everything else lives in SQLite (`Astra.Data`, Dapper.AOT, WAL; see Native AOT).
   Runtime-editable settings are one `AppSettings` JSON blob stored under key `"app"`
   (`SettingsService`); adding a setting is a property on `AppSettings` plus endpoint/UI wiring —
@@ -223,6 +234,11 @@ runtime needed on the target).
 7. **A new JSON type crossing a boundary**: register it in the owning assembly's
    `JsonSerializerContext` (see Native AOT); the guard test
    (`tests/Astra.Server.IntegrationTests/JsonRegistrationTests.cs`) fails otherwise.
+8. **Server startup configuration or release packaging**: the container surface is the env vars in
+   `ServerOptions.ApplyEnvironment` (tests: `ServerOptionsEnvironmentTests`), the `healthcheck`
+   subcommand, `Dockerfile` / `compose.yaml`, the `docker` job in `release.yml`, and
+   `docs/content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects
+   `/api/health`, `/api/auth/status` (`required: true`) and the SPA at `/`.
 
 ## Conventions
 
@@ -273,7 +289,8 @@ runtime needed on the target).
 - Release publish order matters: `@aidotnet/server-*` and `@aidotnet/desktop-*` packages must
   be on npm before the `astragate` / `@aidotnet/astra-gate` CLI tarballs, because the CLI's `optionalDependencies` resolve
   at install time (`.github/workflows/release.yml`). Scoped tarballs are named without `@`/`+`
-  (`aidotnet-server-*.tgz`) and the workflow globs rely on that.
+  (`aidotnet-server-*.tgz`) and the workflow globs rely on that. The `docker` job runs after
+  `publish` (it unpacks the `pkg-linux-*` artifacts), so an image never exists for an unreleased version.
 - Update flow ownership: the server only checks the feed (`UpdateCheckWorker`,
   `GET /api/update/status`, `POST /api/update/check`); applies happen out of process in the CLI
   or desktop via `packages/update-core` (staged download → sha256 → swap → restart → rollback,

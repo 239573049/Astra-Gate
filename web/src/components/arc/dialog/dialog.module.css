@@ -1,6 +1,10 @@
 .overlay { position: fixed; inset: 0; z-index: 50; background: oklch(10% 0 0 / .46); backdrop-filter: blur(7px); }
 /* Centered with auto margins (like a native modal dialog) so transform stays free for the entrance spring. */
-.content { position: fixed; z-index: 51; inset: 0; width: min(calc(100vw - var(--space-8)), 440px); height: fit-content; max-height: calc(100vh - var(--space-8)); max-height: calc(100dvh - var(--space-8)); margin: auto; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--surface-raised); color: var(--foreground); box-shadow: var(--shadow-floating); }
+/* Same thin overlay-style scrollbar as the `.scroll` utility (web/src/styles/index.css): the default
+   scrollbar reads as a bright slab on the dark surface. */
+.content { position: fixed; z-index: 51; inset: 0; width: min(calc(100vw - var(--space-8)), 440px); height: fit-content; max-height: calc(100vh - var(--space-8)); max-height: calc(100dvh - var(--space-8)); margin: auto; overflow: auto; scrollbar-width: thin; scrollbar-color: var(--label-3) transparent; border: 1px solid var(--border); border-radius: var(--radius-surface); background: var(--surface-raised); color: var(--foreground); box-shadow: var(--shadow-floating); }
+.content::-webkit-scrollbar { width: 10px; height: 10px; }
+.content::-webkit-scrollbar-thumb { background: var(--label-3); border: 3px solid transparent; border-radius: 999px; background-clip: content-box; }
 /* Motion animates both layers. Keyframes only run when DialogContent sits under a bare Radix root. */
 .keyframes.overlay[data-state="open"] { animation: overlay-in var(--duration-standard) var(--ease-enter) both; }
 .keyframes.overlay[data-state="closed"] { animation: overlay-out var(--duration-fast) var(--ease-standard) both; }

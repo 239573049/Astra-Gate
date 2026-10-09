@@ -1,7 +1,8 @@
-import { ArrowRight, Check, RefreshCw, ScrollText } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { ArrowRight, Check, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useClients, useProviders, useRequest, useRequests, useTokens, type RequestQuery } from '../api/hooks';
+import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
 import type { ClientKind, RequestDetail, RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
 import { Alert } from '../components/arc/alert/alert';
@@ -74,9 +75,20 @@ export function RequestsPage() {
   const tokens = useTokens();
 
   const query: RequestQuery = { model: debouncedModel, ...filters, page, pageSize: PAGE_SIZE };
-  const requests = useRequests(query, page === 1);
+  // Page 1 follows the live feed: requests show up as they arrive and update in place. Polling is only the
+  // fallback for when the live stream is down.
+  // The page re-renders only when a live row joins or leaves the list; each row's progress (TTFT, status, cost)
+  // re-renders just that row's cells (LiveCell).
+  useLiveRequestFeed(page === 1);
+  const liveConnected = useLiveRequestsConnected();
+  const liveRows = useLiveRequestList();
+  const requests = useRequests(query, page === 1 && !liveConnected);
   const data = requests.data;
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
+  const storedIds = new Set((data?.items ?? []).map((r) => r.id));
+  // In-flight rows not in the stored page yet, narrowed by the same filters the server applies.
+  const liveOnly = page === 1 ? liveRows.filter((r) => !storedIds.has(r.id) && matchesFilters(r, debouncedModel, filters)) : [];
+  const items = [...liveOnly, ...(data?.items ?? [])];
 
   useCommandListener((cmd) => {
     if (cmd === 'find') searchRef.current?.focus();
@@ -120,7 +132,7 @@ export function RequestsPage() {
     setPage(1);
   };
 
-  const rows: Row[] = (data?.items ?? []).map((r) => ({
+  const rows: Row[] = items.map((r) => ({
     id: r.id,
     time: Date.parse(r.startedAtUtc),
     client: clientName(r),
@@ -141,42 +153,60 @@ export function RequestsPage() {
       key: 'model',
       label: t('requests.col.model'),
       render: (_, row) => (
-        <button type="button" className="block w-full min-w-0 text-left" onClick={() => setSelected(row.id)} aria-label={t('requests.openDetail', { model: row.model || row.id })}>
-          <span className="flex min-w-0 items-center gap-1.5">
-            <span className="block min-w-0 truncate font-medium hover:text-[var(--accent)]" title={row.model}>{row.model || '—'}</span>
-            <ReasoningBadge r={row.r} />
-          </span>
-          <span className="block text-[11px]">
-            <ResponseModelTag r={row.r} labeled />
-          </span>
-          <span className="block truncate text-[11px]">
-            <ProtocolTag r={row.r} />
-          </span>
-        </button>
+        <LiveCell r={row.r}>
+          {(r) => (
+            <button type="button" className="block w-full min-w-0 text-left" onClick={() => setSelected(r.id)} aria-label={t('requests.openDetail', { model: r.requestedModel || r.id })}>
+              <span className="flex min-w-0 items-center gap-1.5">
+                <span className="block min-w-0 truncate font-medium hover:text-[var(--accent)]" title={r.requestedModel ?? ''}>{r.requestedModel || '—'}</span>
+                <ReasoningBadge r={r} />
+              </span>
+              <span className="block text-[11px]">
+                <ResponseModelTag r={r} labeled />
+              </span>
+              <span className="block truncate text-[11px]">
+                <ProtocolTag r={r} />
+              </span>
+            </button>
+          )}
+        </LiveCell>
       ),
     },
-    { key: 'client', label: t('requests.col.client'), width: 110 },
-    { key: 'token', label: t('requests.col.token'), width: 110, render: (v) => <span className="block truncate">{String(v || '—')}</span> },
-    { key: 'provider', label: t('requests.col.provider'), width: 130, render: (v) => <span className="block truncate">{String(v || '—')}</span> },
+    { key: 'client', label: t('requests.col.client'), width: 110, render: (_, row) => <LiveCell r={row.r}>{(r) => clientName(r)}</LiveCell> },
+    {
+      key: 'token',
+      label: t('requests.col.token'),
+      width: 110,
+      render: (_, row) => <LiveCell r={row.r}>{(r) => <span className="block truncate">{r.tokenName || '—'}</span>}</LiveCell>,
+    },
+    {
+      key: 'provider',
+      label: t('requests.col.provider'),
+      width: 130,
+      render: (_, row) => <LiveCell r={row.r}>{(r) => <span className="block truncate">{r.providerName || '—'}</span>}</LiveCell>,
+    },
     {
       key: 'status',
       label: t('requests.col.status'),
       width: 104,
-      render: (_, row) => {
-        const failed = row.r.status !== 'success' && row.r.status !== 'client_cancelled';
-        if (!failed) return <StatusBadge status={row.r.status} http={row.r.httpStatus} />;
-        return (
-          <button
-            type="button"
-            className="cursor-pointer rounded-full text-left hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
-            title={t('requests.viewError')}
-            aria-label={`${t(`status.${row.r.status}` as 'status.success')}: ${t('requests.viewError')}`}
-            onClick={() => setSelected(row.id)}
-          >
-            <StatusBadge status={row.r.status} http={row.r.httpStatus} hint={t('requests.viewError')} />
-          </button>
-        );
-      },
+      render: (_, row) => (
+        <LiveCell r={row.r}>
+          {(r) => {
+            const failed = r.status !== 'success' && r.status !== 'client_cancelled' && r.status !== 'pending';
+            if (!failed) return <StatusBadge status={r.status} http={r.httpStatus} />;
+            return (
+              <button
+                type="button"
+                className="cursor-pointer rounded-full text-left hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
+                title={t('requests.viewError')}
+                aria-label={`${t(`status.${r.status}` as 'status.success')}: ${t('requests.viewError')}`}
+                onClick={() => setSelected(r.id)}
+              >
+                <StatusBadge status={r.status} http={r.httpStatus} hint={t('requests.viewError')} />
+              </button>
+            );
+          }}
+        </LiveCell>
+      ),
     },
     {
       key: 'ttft',
@@ -184,27 +214,41 @@ export function RequestsPage() {
       numeric: true,
       width: 112,
       render: (_, row) => (
-        <div className="num whitespace-nowrap">
-          <div title="TTFT">{formatMs(row.r.ttftMs)}</div>
-          <div className="text-[11px] text-[var(--text-muted)]" title={t('requests.detail.tps')}>{formatTps(row.r.outputTps)}</div>
-        </div>
+        <LiveCell r={row.r}>
+          {(r) => (
+            <div className="num whitespace-nowrap">
+              {r.status === 'pending' && r.ttftMs == null ? (
+                <div title={t('requests.elapsed')}>
+                  <Elapsed since={r.startedAtUtc} />
+                </div>
+              ) : (
+                <div title="TTFT">{formatMs(r.ttftMs)}</div>
+              )}
+              <div className="text-[11px] text-[var(--text-muted)]" title={t('requests.detail.tps')}>{formatTps(r.outputTps)}</div>
+            </div>
+          )}
+        </LiveCell>
       ),
     },
-    { key: 'tokens', label: t('requests.col.tokens'), numeric: true, width: 116, render: (_, row) => <TokenTotalsCell usage={row.r} /> },
-    { key: 'cache', label: t('requests.col.cache'), numeric: true, width: 136, render: (_, row) => <CacheUsageCell usage={row.r} /> },
+    { key: 'tokens', label: t('requests.col.tokens'), numeric: true, width: 116, render: (_, row) => <LiveCell r={row.r}>{(r) => <TokenTotalsCell usage={r} />}</LiveCell> },
+    { key: 'cache', label: t('requests.col.cache'), numeric: true, width: 136, render: (_, row) => <LiveCell r={row.r}>{(r) => <CacheUsageCell usage={r} />}</LiveCell> },
     {
       key: 'cost',
       label: t('requests.col.cost'),
       numeric: true,
       width: 92,
-      render: (_, row) => <span className={cn(row.r.usageSource === 'missing' && 'text-[var(--warning)]')}>{formatNanos(row.r.costNanoUsd)}</span>,
+      render: (_, row) => (
+        <LiveCell r={row.r}>
+          {(r) => <span className={cn(r.usageSource === 'missing' && 'text-[var(--warning)]')}>{formatNanos(r.costNanoUsd)}</span>}
+        </LiveCell>
+      ),
     },
   ];
 
   return (
     <Page
       title={t('nav.requests')}
-      subtitle={data ? t('requests.total', { count: formatTokens(data.total) }) : undefined}
+      subtitle={data ? t('requests.total', { count: formatTokens(data.total + liveOnly.length) }) : undefined}
       actions={
         <Button
           variant="plain"
@@ -261,7 +305,7 @@ export function RequestsPage() {
 
       {requests.isLoading && <Spinner lines={4} className="py-6" />}
       {requests.isError && <Alert tone="danger" title={t('common.error')}>{errorText(requests.error)}</Alert>}
-      {data && data.items.length === 0 && (
+      {data && items.length === 0 && (
         <EmptyState
           icon={<ScrollText className="size-6" />}
           title={t(hasFilters ? 'requests.filteredEmpty' : 'requests.empty')}
@@ -269,7 +313,7 @@ export function RequestsPage() {
           action={hasFilters ? <Button onClick={clearFilters}>{t('requests.clearFilters')}</Button> : undefined}
         />
       )}
-      {data && data.items.length > 0 && (
+      {data && items.length > 0 && (
         <SortableDataTable<Row>
           caption={t('nav.requests')}
           rows={rows}
@@ -294,8 +338,51 @@ function requestClientName(r: Pick<RequestSummary, 'clientKind' | 'tokenId'>, t:
   return r.tokenId ? t('requests.direct') : '—';
 }
 
+/** Client-side mirror of the server's list filters (RequestRepository), for live rows not stored yet. */
+function matchesFilters(r: RequestSummary, model: string, filters: Record<FilterId, string>): boolean {
+  if (filters.client && r.clientKind !== filters.client) return false;
+  if (filters.token && r.tokenId !== filters.token) return false;
+  if (filters.provider && r.providerId !== filters.provider) return false;
+  if (filters.status && r.status !== filters.status) return false;
+  if (model) {
+    const needle = model.toLowerCase();
+    const names = [r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel];
+    if (!names.some((m) => m?.toLowerCase().includes(needle))) return false;
+  }
+  return true;
+}
+
+/**
+ * Renders one cell from the freshest copy of its request: the live feed's while the request is in flight (or just
+ * finished and awaiting the list refetch), else the stored row. Subscribes to that request alone, so a progress
+ * event re-renders only the cells of its own row.
+ */
+function LiveCell({ r, children }: { r: RequestSummary; children: (r: RequestSummary) => ReactNode }) {
+  return <>{children(useLiveRequest(r.id) ?? r)}</>;
+}
+
+/** Live "time since the request arrived" for a request still waiting on its first token. */
+function Elapsed({ since }: { since: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 200);
+    return () => clearInterval(timer);
+  }, []);
+  return <>{formatMs(Math.max(0, now - Date.parse(since)))}</>;
+}
+
 function StatusBadge({ status, http, hint }: { status: string; http?: number | null; hint?: string }) {
   const { t } = useI18n();
+  if (status === 'pending') {
+    return (
+      <Badge tone="accent" title={hint}>
+        <span className="inline-flex items-center gap-1">
+          <LoaderCircle className="size-3 animate-spin" aria-hidden="true" />
+          {t('status.pending')}
+        </span>
+      </Badge>
+    );
+  }
   const tone = status === 'success' ? 'green' : status === 'client_cancelled' ? 'orange' : 'red';
   const key = `status.${status}` as 'status.success';
   return (
@@ -420,7 +507,7 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
   const raw: { title: string; content: string }[] = [];
   if (r?.usageRaw != null) raw.push({ title: t('requests.detail.usageRaw'), content: pretty(r.usageRaw) });
   if (r?.pricingSnapshot) raw.push({ title: t('requests.detail.pricingSnapshot'), content: pretty(r.pricingSnapshot) });
-  for (const k of ['clientRequest', 'upstreamRequest', 'upstreamResponse', 'clientResponse'] as const) {
+  for (const k of ['clientRequest', 'upstreamRequest', 'upstreamRequestHeaders', 'upstreamResponse', 'clientResponse'] as const) {
     const body = r?.bodies?.[k];
     if (body) raw.push({ title: t(`requests.body.${k}`), content: pretty(body) });
   }
@@ -444,6 +531,7 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
               <KV label={t('requests.col.client')}>{requestClientName(r, t)}</KV>
               <KV label={t('requests.col.token')}>{r.tokenName ?? '—'}</KV>
               <KV label={t('requests.col.provider')}>{r.providerName ?? '—'}</KV>
+              {r.accountId && <KV label={t('requests.detail.account')}>{r.accountName ?? r.accountId}</KV>}
               <KV label={t('requests.detail.protocol')}>
                 <ProtocolTag r={r} />
               </KV>

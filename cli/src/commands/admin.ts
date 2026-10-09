@@ -274,4 +274,124 @@ export async function runProviderRemove(id: string): Promise<void> {
   success(`Provider "${id}" removed.`);
 }
 
+// ---------- provider import ----------
+
+export const IMPORT_SOURCES = ['cc-switch', 'alma', 'claude-code', 'codex', 'magpie'] as const;
+
+interface ImportCandidateRow {
+  ref: string;
+  source: string;
+  name: string;
+  endpoints: { protocol: string; baseUrl: string }[];
+  hasKey: boolean;
+  keyMasked?: string | null;
+  models: string[];
+  status: 'new' | 'same' | 'sameHost' | 'off' | 'skip';
+  existing?: { name: string } | null;
+  skipReason?: string | null;
+  ignoredFields: string[];
+}
+
+interface ImportSourceRow {
+  id: string;
+  name: string;
+  path?: string | null;
+  found: boolean;
+  error?: string | null;
+  items: ImportCandidateRow[];
+}
+
+interface ImportResultRow {
+  added: { id: string; name: string }[];
+  skipped: { ref: string; reason: string }[];
+}
+
+const SKIP_TEXT: Record<string, string> = {
+  'official-login': 'official login (not importable)',
+  'no-base-url': 'no base URL',
+  'unsupported-protocol': 'unsupported protocol',
+  'points-to-astra': 'points at Astra itself',
+  'invalid-base-url': 'invalid base URL',
+  'no-inline-key': 'key comes from an environment variable',
+};
+
+function importNote(c: ImportCandidateRow): string {
+  const notes: string[] = [];
+  if (c.skipReason) notes.push(SKIP_TEXT[c.skipReason] ?? c.skipReason);
+  if (c.status === 'same' && c.existing) notes.push(`already added as "${c.existing.name}"`);
+  if (c.status === 'sameHost' && c.existing) notes.push(`same address as "${c.existing.name}"`);
+  if (c.ignoredFields.length > 0) notes.push(`ignores ${c.ignoredFields.join(', ')}`);
+  return notes.join('; ');
+}
+
+/**
+ * Lists providers found in other apps (read-only), or with `yes` imports them. The server re-reads the sources on
+ * import, so no key ever passes through the CLI; selection is by `ref`, and by default only status `new` entries.
+ */
+export async function runProviderImport(opts: { from?: string; yes?: boolean; only?: string[] }): Promise<void> {
+  if (opts.from && !(IMPORT_SOURCES as readonly string[]).includes(opts.from)) {
+    throw new AstraError(`Unknown import source "${opts.from}".`, `Sources: ${IMPORT_SOURCES.join(', ')}`);
+  }
+  if (opts.only?.length && !opts.yes) {
+    throw new AstraError('--only needs --yes.', 'Run without options first to see the refs, then add --yes.');
+  }
+  const query = opts.from ? `?source=${encodeURIComponent(opts.from)}` : '';
+  const sources = await api<ImportSourceRow[]>(`/api/providers/import/sources${query}`);
+  const all = sources.flatMap((s) => s.items);
+
+  if (!opts.yes) {
+    for (const s of sources) {
+      const state = s.error ? `error: ${s.error}` : s.found ? `${s.items.length} found` : 'not found';
+      console.log(`${s.name}${s.path ? `  (${s.path})` : ''} — ${state}`);
+      if (s.items.length > 0) {
+        printTable(
+          s.items.map((c) => [
+            c.ref,
+            c.status,
+            c.name,
+            c.endpoints.map((e) => `${e.protocol} ${e.baseUrl}`).join(' | '),
+            c.hasKey ? (c.keyMasked ?? '••••') : '-',
+            String(c.models.length),
+            importNote(c),
+          ]),
+          ['REF', 'STATUS', 'NAME', 'ENDPOINTS', 'KEY', 'MODELS', 'NOTE'],
+        );
+      }
+      console.log('');
+    }
+    const fresh = all.filter((c) => c.status === 'new').length;
+    console.log(
+      fresh > 0
+        ? `Nothing was changed (sources are only read). Run again with --yes to import the ${fresh} new entr${fresh === 1 ? 'y' : 'ies'}, or --yes --only <ref>… to pick.`
+        : 'Nothing new to import.',
+    );
+    return;
+  }
+
+  let chosen: ImportCandidateRow[];
+  if (opts.only?.length) {
+    chosen = [];
+    for (const ref of opts.only) {
+      const found = all.find((c) => c.ref === ref);
+      if (!found) throw new AstraError(`No importable entry "${ref}".`, 'Run `astra provider import` to see the refs.');
+      if (found.status === 'skip' || found.status === 'same') {
+        throw new AstraError(`"${ref}" cannot be imported (${found.status === 'same' ? 'already added' : importNote(found)}).`);
+      }
+      chosen.push(found);
+    }
+  } else {
+    chosen = all.filter((c) => c.status === 'new');
+  }
+  if (chosen.length === 0) {
+    console.log('Nothing to import.');
+    return;
+  }
+  const result = await api<ImportResultRow>('/api/providers/import', {
+    method: 'POST',
+    body: chosen.map((c) => ({ source: c.source, ref: c.ref })),
+  });
+  for (const a of result.added) success(`Imported: ${a.name} (id: ${a.id}).`);
+  for (const k of result.skipped) console.log(`Skipped ${k.ref}: ${SKIP_TEXT[k.reason] ?? k.reason}`);
+}
+
 export const KNOWN_CLIENT_KINDS: readonly string[] = CLIENT_KINDS;

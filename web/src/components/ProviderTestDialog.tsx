@@ -418,7 +418,7 @@ function ModelPicker({ value, models, onChange }: { value: string; models: strin
         <>
           {/* Catches the click that closes the list. */}
           <div className="fixed inset-0 z-40" onMouseDown={() => setOpen(false)} />
-          <ul className="absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface)] py-1 shadow-lg">
+          <ul className="absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-auto rounded-lg border border-[var(--border)] bg-[var(--surface-raised)] py-1 shadow-lg">
             {matches.length === 0 ? (
               <li className="px-3 py-2 text-[12px] text-[var(--text-muted)]">{t('providers.testDialog.noModels')}</li>
             ) : (

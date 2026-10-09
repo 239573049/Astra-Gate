@@ -64,6 +64,7 @@ public static class ProviderEndpoints
         });
         group.MapGet("/{id}", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
             Results.Ok(await ToDtoAsync(await RequireAsync(db, id, ct), db, catalog, secrets, quota, ct)));
+        group.MapImportEndpoints();
 
         group.MapPost("", async (JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets,
             ProviderQuotaManager quota, CancellationToken ct) =>
@@ -183,12 +184,31 @@ public static class ProviderEndpoints
             foreach (var m in await db.Providers.ListModelsAsync(id, ct)) result.Add(await ToModelDtoAsync(p, m, resolver, ct));
             return Results.Ok(result);
         });
-        group.MapPost("/{id}/models", async (string id, JsonObject body, AstraDatabase db, EffectiveModelResolver resolver, CancellationToken ct) =>
+        group.MapPost("/{id}/models", async (string id, JsonObject body, AstraDatabase db, EffectiveModelResolver resolver,
+            ProviderProbe probe, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
             var ids = Read<List<string>>(body["modelIds"]);
             ValidateModelIds(ids);
             var added = await PlanModelsAsync(db, p, ids, ct);
+            // 手动加模型时也带上上游的 per-model 协议约束（Copilot 的 Claude 只支持 Messages）——
+            // 否则从"从上游获取"加进来的模型会和自动同步进来的行为不一致。只对**声明了模型清单端点**
+            // 的提供商做这次上游查询（否则加模型会凭空多打一次网络请求）。
+            if (DeclaresModelList(p))
+            {
+                try
+                {
+                    var remote = await probe.ModelsAsync(id, ct);
+                    var constraints = remote.Where(m => m.UpstreamProtocols is { Count: > 0 })
+                        .ToDictionary(m => m.Id, m => m.UpstreamProtocols!, StringComparer.Ordinal);
+                    foreach (var model in added)
+                        if (constraints.TryGetValue(model.ModelId, out var protocols)) model.UpstreamProtocols = [.. protocols];
+                }
+                catch (Exception e) when (e is AdminApiException or HttpRequestException or IOException or Astra.Providers.Subscription.SubscriptionAuthException)
+                {
+                    // 上游列表拿不到就不带约束（行为退回改造前）。
+                }
+            }
             await db.Providers.InsertModelsAsync(added, ct);
             var result = new List<ProviderModelDto>();
             foreach (var m in added) result.Add(await ToModelDtoAsync(p, m, resolver, ct));
@@ -362,6 +382,10 @@ public static class ProviderEndpoints
             throw new AdminApiException(400, "订阅提供商的额度在登录账号里查看");
     }
 
+    /// <summary>Does the provider's template declare a model-list endpoint (so the upstream can be asked)?</summary>
+    private static bool DeclaresModelList(Provider p) =>
+        Json.Deserialize<ProviderTemplate>(p.TemplateSnapshotJson)?.ModelListEndpoint is not null;
+
     internal static async Task<Provider> RequireAsync(AstraDatabase db, string id, CancellationToken ct) =>
         await db.Providers.GetAsync(id, ct) ?? throw new AdminApiException(404, "Provider not found");
 
@@ -392,7 +416,7 @@ public static class ProviderEndpoints
             BillingResultDto.SourceId(e.Pricing.Source), e.Pricing.PriceKey, e.Pricing.Multiplier, PricingJson.ToNode(e.Pricing.Schedule));
     }
 
-    private static async Task<List<ProviderModel>> PlanModelsAsync(AstraDatabase db, Provider p, IReadOnlyList<string> ids, CancellationToken ct)
+    internal static async Task<List<ProviderModel>> PlanModelsAsync(AstraDatabase db, Provider p, IReadOnlyList<string> ids, CancellationToken ct)
     {
         ValidateModelIds(ids);
         var existing = (await db.Providers.ListModelsAsync(p.Id, ct)).ToDictionary(m => m.ModelId, StringComparer.Ordinal);
@@ -410,7 +434,7 @@ public static class ProviderEndpoints
         return result;
     }
 
-    private static string Snapshot(ProviderTemplate template, string? variantId)
+    internal static string Snapshot(ProviderTemplate template, string? variantId)
     {
         var node = JsonNode.Parse(Json.Serialize(template))!.AsObject();
         if (variantId is not null) node["variant_id"] = variantId;
@@ -513,7 +537,7 @@ public static class ProviderEndpoints
         }
     }
 
-    private static void Validate(Provider p)
+    internal static void Validate(Provider p)
     {
         if (string.IsNullOrWhiteSpace(p.Name)) throw new AdminApiException(400, "Provider name is required");
         if (p.Endpoints.Count == 0 || p.Endpoints.Any(e => e is null) || p.Endpoints.Select(e => e.Protocol).Distinct().Count() != p.Endpoints.Count)
@@ -529,14 +553,18 @@ public static class ProviderEndpoints
         if (p.ExtraHeaders.Keys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != p.ExtraHeaders.Count)
             throw new AdminApiException(400, "Extra header names must be unique (case-insensitive)");
         foreach (var (key, value) in p.ExtraHeaders)
-            if (!System.Text.RegularExpressions.Regex.IsMatch(key, "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$") || value is null || value.Any(char.IsControl) ||
-                key.Equals("Host", StringComparison.OrdinalIgnoreCase) || key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) ||
-                key.Equals("Connection", StringComparison.OrdinalIgnoreCase) || key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase) ||
-                key.Equals("X-Astra-Admin", StringComparison.OrdinalIgnoreCase) || key.Equals("X-Astra-Runtime-Token", StringComparison.OrdinalIgnoreCase))
+            if (!IsValidExtraHeader(key, value))
                 throw new AdminApiException(400, "Invalid or reserved extra header");
     }
 
-    private static void ValidateModelIds(IReadOnlyList<string> ids)
+    /// <summary>A well-formed, non-reserved extra header (also used to filter headers on import).</summary>
+    internal static bool IsValidExtraHeader(string key, string? value) =>
+        System.Text.RegularExpressions.Regex.IsMatch(key, "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$") && value is not null && !value.Any(char.IsControl) &&
+        !key.Equals("Host", StringComparison.OrdinalIgnoreCase) && !key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) &&
+        !key.Equals("Connection", StringComparison.OrdinalIgnoreCase) && !key.Equals("Transfer-Encoding", StringComparison.OrdinalIgnoreCase) &&
+        !key.Equals("X-Astra-Admin", StringComparison.OrdinalIgnoreCase) && !key.Equals("X-Astra-Runtime-Token", StringComparison.OrdinalIgnoreCase);
+
+    internal static void ValidateModelIds(IReadOnlyList<string> ids)
     {
         if (ids.Count > 2000 || ids.Any(id => string.IsNullOrWhiteSpace(id) || id.Length > 512 || id.Any(char.IsControl)))
             throw new AdminApiException(400, "Invalid model IDs (up to 2000 non-empty IDs, max 512 characters each)");

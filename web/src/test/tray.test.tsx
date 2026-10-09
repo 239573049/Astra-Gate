@@ -51,6 +51,9 @@ const account = (over: Partial<ProviderAccount> = {}): ProviderAccount => ({
   displayName: 'me@example.com',
   status: 'active',
   createdAt: '2026-10-01T00:00:00Z',
+  enabled: true,
+  isCurrent: false,
+  sortOrder: 0,
   quota: {
     session: { usedPercent: 1, windowMinutes: 300, resetsAtUtc: '2026-10-08T14:00:00Z' },
     weekly: { usedPercent: 36, windowMinutes: 10_080, resetsAtUtc: '2026-10-12T00:00:00Z' },

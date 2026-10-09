@@ -15,6 +15,9 @@ public class OAuthClientTests
         private readonly HttpStatusCode _status;
         public List<(string Url, string Body, IReadOnlyDictionary<string, string> Headers)> Requests { get; } = [];
 
+        /// <summary>Media type of each request body, in order (JSON vs form matters for the Claude endpoints).</summary>
+        public List<string?> ContentTypes { get; } = [];
+
         public StubHandler(Func<HttpRequestMessage, string> respond, HttpStatusCode status = HttpStatusCode.OK)
         {
             _respond = respond;
@@ -27,6 +30,7 @@ public class OAuthClientTests
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var (name, values) in request.Headers) headers[name] = string.Join(",", values);
             Requests.Add((request.RequestUri!.ToString(), body, headers));
+            ContentTypes.Add(request.Content?.Headers.ContentType?.MediaType);
             return new HttpResponseMessage(_status)
             {
                 Content = new StringContent(_respond(request), Encoding.UTF8, "application/json"),
@@ -50,9 +54,81 @@ public class OAuthClientTests
         Verified = true,
     };
 
+    /// <summary>
+    /// Claude（Anthropic）的换码形状与常规 OAuth 不同：JSON body + 把"授权码#state"拆开成两个字段 +
+    /// redirect_uri 必须逐字等于授权时用的那个（回环地址）。少一样上游就报「参数错误」。
+    /// </summary>
     [Fact]
-    public void Authorize_Url_Carries_Pkce_State_And_Scopes()
+    public async Task Claude_Exchange_Splits_The_State_And_Posts_Json_With_The_Callback_Redirect()
     {
+        var config = SubscriptionCatalog.Find("claude-subscription")!;
+        var handler = new StubHandler(_ => """{"access_token":"at-c","refresh_token":"rt-c","expires_in":3600}""");
+        var client = new OAuthClient(new StubFactory(handler));
+
+        var token = await client.ExchangeClaudeCodeAsync(config, "ac-1#st-9", "the-verifier", "http://localhost:55522/callback");
+
+        Assert.Equal("at-c", token.AccessToken);
+        Assert.Equal("rt-c", token.RefreshToken);
+        var (url, body, _) = Assert.Single(handler.Requests);
+        Assert.Equal("https://platform.claude.com/v1/oauth/token", url);
+        Assert.Equal("application/json", Assert.Single(handler.ContentTypes));
+        var json = JsonNode.Parse(body)!.AsObject();
+        Assert.Equal("ac-1", json["code"]!.GetValue<string>());        // state 不能留在 code 里
+        Assert.Equal("st-9", json["state"]!.GetValue<string>());       // 但要单独发
+        Assert.Equal(config.ClientId, json["client_id"]!.GetValue<string>());
+        Assert.Equal("http://localhost:55522/callback", json["redirect_uri"]!.GetValue<string>());
+        Assert.Equal("the-verifier", json["code_verifier"]!.GetValue<string>());
+        Assert.Equal("authorization_code", json["grant_type"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Claude_Exchange_Sends_No_State_Field_When_The_Code_Has_None()
+    {
+        var config = SubscriptionCatalog.Find("claude-subscription")!;
+        var handler = new StubHandler(_ => """{"access_token":"at-c"}""");
+        var client = new OAuthClient(new StubFactory(handler));
+
+        await client.ExchangeClaudeCodeAsync(config, "ac-only", "v", "http://localhost:1/callback");
+
+        var json = JsonNode.Parse(Assert.Single(handler.Requests).Body)!.AsObject();
+        Assert.Equal("ac-only", json["code"]!.GetValue<string>());
+        Assert.False(json.ContainsKey("state"));
+    }
+
+    [Fact]
+    public async Task Claude_Refresh_Posts_Json_Not_A_Form()
+    {
+        var config = SubscriptionCatalog.Find("claude-subscription")!;
+        var handler = new StubHandler(_ => """{"access_token":"at-c2","expires_in":7200}""");
+        var client = new OAuthClient(new StubFactory(handler));
+
+        var token = await client.RefreshAsync(config, "rt-old");
+
+        Assert.Equal("at-c2", token.AccessToken);
+        var (_, body, _) = Assert.Single(handler.Requests);
+        Assert.Equal("application/json", Assert.Single(handler.ContentTypes));
+        var json = JsonNode.Parse(body)!.AsObject();
+        Assert.Equal("refresh_token", json["grant_type"]!.GetValue<string>());
+        Assert.Equal("rt-old", json["refresh_token"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Claude_Exchange_Surfaces_The_Upstream_Error_Body()
+    {
+        var config = SubscriptionCatalog.Find("claude-subscription")!;
+        var handler = new StubHandler(_ => """{"error":"invalid_request","error_description":"参数错误"}""",
+            System.Net.HttpStatusCode.BadRequest);
+        var client = new OAuthClient(new StubFactory(handler));
+
+        var error = await Assert.ThrowsAsync<OAuthProtocolException>(
+            () => client.ExchangeClaudeCodeAsync(config, "ac", "v", "http://localhost:1/callback"));
+
+        Assert.Equal("invalid_request", error.Error);
+        Assert.Contains("参数错误", error.Message);
+    }
+
+    [Fact]
+    public void Authorize_Url_Carries_Pkce_State_And_Scopes()    {
         var url = OAuthClient.BuildAuthorizeUrl(PkceConfig, "http://127.0.0.1:17321/api/oauth/callback",
             "state-123", "challenge-456");
 
@@ -218,6 +294,25 @@ public class OAuthClientTests
 
         Assert.Equal("http_403", error.Error);
         Assert.Contains("Copilot", error.Message);
+    }
+
+    /// <summary>
+    /// 上游的错误体不一定是 JSON：api.github.com 对不认识的客户端直接回 "403 Forbidden. …" 纯文本。
+    /// 这类响应必须还是报成 http_403（“这个账号没有 Copilot”），而不是先解析 JSON 失败后
+    /// 变成看不懂的 invalid_token_response。真实事故：本机读到的 VS Code 令牌撞上的就是这个。
+    /// </summary>
+    [Fact]
+    public async Task Copilot_Token_Exchange_Tolerates_A_Non_Json_Error_Body()
+    {
+        var config = SubscriptionCatalog.Find("github-copilot-subscription")!;
+        var handler = new StubHandler(_ => "403 Forbidden. For more on scraping GitHub and how it may affect your rights, please review our Terms of Service.",
+            System.Net.HttpStatusCode.Forbidden);
+        var client = new OAuthClient(new StubFactory(handler));
+
+        var error = await Assert.ThrowsAsync<OAuthProtocolException>(() => client.CopilotTokenAsync(config, "gho_x"));
+
+        Assert.Equal("http_403", error.Error);
+        Assert.Contains("403 Forbidden", error.Message);
     }
 
     [Fact]

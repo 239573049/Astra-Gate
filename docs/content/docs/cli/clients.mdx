@@ -15,7 +15,7 @@ astra client enable codex --provider deepseek --token 工作电脑   # 指定写
 astra client disable codex              # 停用并还原配置
 ```
 
-客户端标识：`codex`、`claude-code`、`gemini-cli`、`opencode`、`claude-desktop`、`grok-build`、`pi`、`hermes-agent`、`minimax-code`、`copilot-cli`、`vscode-copilot`。
+客户端标识：`codex`、`claude-code`、`gemini-cli`、`opencode`、`claude-desktop`、`grok-build`、`pi`、`hermes-agent`、`minimax-code`、`copilot-cli`、`vscode-copilot`、`crush`、`qwen-code`、`droid`、`kimi-code`、`zed`、`vscode-insiders`、`vscodium`、`omp`、`mimo-code`、`deepseek-harness`。
 
 启用流程与控制台一致：先备份（首次修改前的备份永久保留），再写入网关地址与令牌。`--provider` 使用提供商的 ID 或名称（`astra provider list` 可查）；`--token` 使用令牌的 ID 或名称（`astra token list` 可查），不传时沿用该客户端当前的令牌，从未设置过则使用默认令牌。
 
@@ -43,6 +43,17 @@ astra provider remove <id>
 ```
 
 `--template` 与 `--variant` 取值见 `astra provider templates`。更细的配置（价格表、倍率、代理、请求头、订阅账号）请用控制台。
+
+### 从其他应用导入
+
+```bash
+astra provider import                      # 只列出 CC Switch / Alma / Claude Code / Codex / Magpie 里发现的提供商，不写入
+astra provider import --from magpie        # 只看某个来源：cc-switch | alma | claude-code | codex | magpie
+astra provider import --yes                # 导入状态为 new 的条目
+astra provider import --yes --only magpie:relay --only codex:my-relay   # 只导入指定的 ref
+```
+
+列表里的 `REF` 用于 `--only`。来源只读，API Key 由服务端直接读取并加密保存，不经过 CLI；已存在（同地址同 Key）与无法导入的条目会被拒绝。控制台里的导入面板行为一致，详见「控制台 → 提供商」。
 
 ## 离线还原：restore-all
 

@@ -18,7 +18,7 @@ vi.mock('../src/lib/http.js', async (importOriginal) => {
   };
 });
 
-import { runClientEnable, runTokenList } from '../src/commands/admin';
+import { runClientEnable, runProviderImport, runTokenList } from '../src/commands/admin';
 import { AstraError } from '../src/errors';
 
 const PROVIDERS = [{ id: 'p1', name: 'Alpha' }];
@@ -84,5 +84,63 @@ describe('token commands', () => {
     expect(out).toContain('$1.50');
     expect(out).toContain('$12.25');
     expect(out).not.toContain('sk-astra-');
+  });
+});
+
+describe('provider import', () => {
+  let log: ReturnType<typeof vi.spyOn>;
+
+  const SOURCES = [
+    {
+      id: 'magpie',
+      name: 'Magpie',
+      path: '/home/u/.config/magpie/providers.json',
+      found: true,
+      items: [
+        { ref: 'magpie:a', source: 'magpie', name: 'Relay A', endpoints: [{ protocol: 'openai-chat', baseUrl: 'https://a.example/v1' }], hasKey: true, keyMasked: 'sk-…1234', models: [], status: 'new', ignoredFields: [] },
+        { ref: 'magpie:b', source: 'magpie', name: 'Relay B', endpoints: [{ protocol: 'anthropic', baseUrl: 'https://b.example' }], hasKey: true, keyMasked: 'sk-…5678', models: ['m'], status: 'same', existing: { name: 'Existing B' }, ignoredFields: [] },
+        { ref: 'magpie:c', source: 'magpie', name: 'Login', endpoints: [], hasKey: false, models: [], status: 'skip', skipReason: 'official-login', ignoredFields: [] },
+      ],
+    },
+  ];
+
+  beforeEach(() => {
+    calls.length = 0;
+    responses.clear();
+    responses.set('GET /api/providers/import/sources', SOURCES);
+    responses.set('GET /api/providers/import/sources?source=magpie', SOURCES);
+    responses.set('POST /api/providers/import', { added: [{ id: 'n1', name: 'Relay A' }], skipped: [] });
+    log = vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => log.mockRestore());
+
+  it('only lists by default and never writes', async () => {
+    await runProviderImport({});
+    expect(calls).toEqual([{ path: '/api/providers/import/sources', method: 'GET', body: undefined }]);
+    const output = log.mock.calls.map((c) => String(c[0])).join('\n');
+    expect(output).toContain('Relay A');
+    expect(output).toContain('already added as "Existing B"');
+    expect(output).toContain('official login');
+    expect(output).toContain('Run again with --yes to import the 1 new entry');
+  });
+
+  it('with --yes imports the new entries by source and ref', async () => {
+    await runProviderImport({ yes: true });
+    expect(calls.at(-1)).toEqual({ path: '/api/providers/import', method: 'POST', body: [{ source: 'magpie', ref: 'magpie:a' }] });
+  });
+
+  it('passes --from as a query and rejects unknown sources', async () => {
+    await runProviderImport({ from: 'magpie' });
+    expect(calls[0]?.path).toBe('/api/providers/import/sources?source=magpie');
+    await expect(runProviderImport({ from: 'nope' })).rejects.toBeInstanceOf(AstraError);
+  });
+
+  it('--only needs --yes and refuses entries that cannot be imported', async () => {
+    await expect(runProviderImport({ only: ['magpie:a'] })).rejects.toBeInstanceOf(AstraError);
+    await expect(runProviderImport({ yes: true, only: ['magpie:b'] })).rejects.toBeInstanceOf(AstraError);
+    await expect(runProviderImport({ yes: true, only: ['magpie:zzz'] })).rejects.toBeInstanceOf(AstraError);
+    await runProviderImport({ yes: true, only: ['magpie:a'] });
+    expect(calls.at(-1)?.method).toBe('POST');
   });
 });

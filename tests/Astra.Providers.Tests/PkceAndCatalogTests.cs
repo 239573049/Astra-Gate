@@ -122,6 +122,37 @@ public class SubscriptionCatalogTests
         Assert.Equal("https://auth.openai.com/api/accounts/deviceauth/usercode", openai.DeviceCodeUrl);
         Assert.Equal("https://auth.openai.com/api/accounts/deviceauth/token", openai.DeviceTokenUrl);
 
+        // Claude：端点、client_id 与 scope 逐字取自 Claude Code 自己的二进制
+        // （claude-code-darwin-arm64/claude 内嵌的 OAuth 配置与授权 URL 构造函数）。
+        var claude = SubscriptionCatalog.Find("claude-subscription")!;
+        Assert.Equal("9d1c250a-e61b-44d9-88ed-5944d1962f5e", claude.ClientId);
+        Assert.Equal("https://claude.com/cai/oauth/authorize", claude.AuthorizeUrl);
+        Assert.Equal("https://platform.claude.com/v1/oauth/token", claude.TokenUrl);
+        Assert.Equal("claude-loopback", claude.Style);
+        Assert.True(SubscriptionCatalog.IsClaudeLoopback(claude));
+        Assert.Equal("true", claude.ExtraAuthorizeParams["code"]); // 授权链接必须带 code=true
+        // 默认走回环（临时端口），不是无头兜底：后者只在实例显式覆盖 redirect_uri 时才用。
+        Assert.Equal("", claude.RedirectUriOverride);
+        Assert.False(SubscriptionCatalog.IsPasteLogin(claude));
+        // Claude Code 的 yDr()。
+        Assert.Equal(
+            ["org:create_api_key", "user:profile", "user:inference", "user:sessions:claude_code",
+             "user:mcp_servers", "user:file_upload", "user:plugins"],
+            claude.Scopes);
+
+        // 授权 URL 必须逐字复刻 Claude Code 的**参数顺序**：顺序不对上游直接回 "Invalid request format"。
+        var authorize = OAuthClient.BuildAuthorizeUrl(claude, "http://localhost:55522/callback", "st-1", "ch-1");
+        Assert.Equal(
+            "https://claude.com/cai/oauth/authorize?"
+            + "code=true&client_id=" + claude.ClientId
+            + "&response_type=code&redirect_uri=http%3A%2F%2Flocalhost%3A55522%2Fcallback"
+            + "&scope=" + string.Join('+', claude.Scopes.Select(s => s.Replace(":", "%3A")))
+            + "&code_challenge=ch-1&code_challenge_method=S256&state=st-1",
+            authorize);
+        // 只有 Claude 是回环 + 参数顺序敏感的那条链路。
+        Assert.All(SubscriptionCatalog.All.Where(c => c.ProviderKey != "claude-subscription"),
+            c => Assert.False(SubscriptionCatalog.IsClaudeLoopback(c), c.ProviderKey));
+
         var grok = SubscriptionCatalog.Find("grok-subscription")!;
         Assert.Equal("https://auth.x.ai/oauth2/device/code", grok.DeviceCodeUrl); // xai-org/grok-build device_code.rs
         Assert.Equal("https://auth.x.ai/oauth2/token", grok.TokenUrl);
@@ -154,6 +185,35 @@ public class SubscriptionCatalogTests
         Assert.Equal("https://api.z.ai/api/auth/z/login", zcode.BusinessLoginUrl);
         Assert.Equal("ZCode/3.10.2", zcode.ExtraHeaders["User-Agent"]);
         Assert.False(zcode.UsePkce);
+    }
+
+    /// <summary>
+    /// Claude 的收尾是"用户把授权页上的 code 粘回来"，所以要能把三种粘贴形态都还原成换码要的东西：
+    /// 完整回调地址、页面回显的"授权码#state"、以及只有授权码。收整条地址而不是光秃秃一个 code，
+    /// 是为了让 state 一起回来（它是 CSRF 防线）。
+    /// </summary>
+    [Fact]
+    public void Pasted_Code_Parses_A_Callback_Url_A_Hash_Value_And_A_Bare_Code()
+    {
+        var url = SubscriptionCatalog.ParsePastedCode(
+            "https://platform.claude.com/oauth/code/callback?code=ac%2F1&state=st-9");
+        Assert.Equal("ac/1#st-9", url.Raw);
+        Assert.Equal("st-9", url.State);
+
+        var hash = SubscriptionCatalog.ParsePastedCode("ac-1#st-9");
+        Assert.Equal("ac-1#st-9", hash.Raw);
+        Assert.Equal("st-9", hash.State);
+
+        var bare = SubscriptionCatalog.ParsePastedCode("  ac-1  ");
+        Assert.Equal("ac-1", bare.Raw);
+        Assert.Null(bare.State);
+
+        // 换码时只发 # 前面的授权码，state 单独发。
+        Assert.Equal("ac-1", SubscriptionCatalog.CodeWithoutState("ac-1#st-9"));
+        Assert.Equal("ac-1", SubscriptionCatalog.CodeWithoutState("ac-1"));
+
+        Assert.Equal("", SubscriptionCatalog.ParsePastedCode(null).Raw);
+        Assert.Equal("", SubscriptionCatalog.ParsePastedCode("   ").Raw);
     }
 }
 
@@ -194,6 +254,7 @@ public class ProviderTemplateCatalogTests
         { "ollama", "http://127.0.0.1:11434/v1" },
         { "lm-studio", "http://127.0.0.1:1234/v1" },
         { "routin", "https://api.routin.ai/plan/v1" },
+        { "nextcowork", "https://nextco.work/v1" },
         { "openai-subscription", "https://chatgpt.com/backend-api/codex" },
         { "custom-responses", "http://127.0.0.1:8000/v1" },
     };
@@ -219,6 +280,22 @@ public class ProviderTemplateCatalogTests
             [ApiProtocol.OpenAIResponses, ApiProtocol.OpenAIChat, ApiProtocol.Anthropic],
             deepseek.Endpoints.Select(e => e.Protocol));
         Assert.All(deepseek.Endpoints, e => Assert.StartsWith("https://api.deepseek.com/", e.BaseUrl));
+    }
+
+    /// <summary>
+    /// NextCoWork 认可的 API Key 通道只有 <c>x-api-key</c>：它的 <c>Authorization: Bearer</c> 会被解析成控制台
+    /// 登录态 JWT（实测 /v1/messages、/v1/chat/completions、/v1/models 都报 invalid_credentials），
+    /// 所以模板必须固定 x-api-key，三个协议共用。
+    /// </summary>
+    [Fact]
+    public void NextCoWork_Ships_All_Three_Protocols_With_XApiKey_Auth()
+    {
+        var template = _catalog.Get("nextcowork")!;
+        Assert.Equal(AuthSchemes.XApiKey, template.Auth.Scheme);
+        Assert.Equal([ApiProtocol.OpenAIResponses, ApiProtocol.OpenAIChat, ApiProtocol.Anthropic],
+            template.PreferredUpstreamProtocols);
+        Assert.All(template.Endpoints, e => Assert.Equal("https://nextco.work/v1", e.BaseUrl));
+        Assert.Equal("/models", template.ModelListEndpoint?.Path);
     }
 
     /// <summary>Subscription templates pin the fixed identity headers the upstream CLI clients send.</summary>

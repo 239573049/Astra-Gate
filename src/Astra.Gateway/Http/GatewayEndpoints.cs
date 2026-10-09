@@ -160,6 +160,8 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
                 {
                     // Same relay as /v1/messages: Claude Code's own headers, only the credential and OAuth beta change.
                     ClaudeOAuthHeaders.ApplyRelay(request, ctx.Request.Headers, model, route.Provider.ExtraHeaders, "2023-06-01");
+                    // count_tokens needs the token-counting beta on top (sub2api computeFinalCountTokensAnthropicBeta).
+                    ClaudeOAuthHeaders.EnsureCountTokensBeta(request);
                 }
                 else
                 {
@@ -170,7 +172,11 @@ public sealed class GatewayAuxiliary(GatewayRouter router, AstraDatabase db, Cod
                         if (ctx.Request.Headers["anthropic-beta"].ToString() is { Length: > 0 } beta) request.Headers.TryAddWithoutValidation("anthropic-beta", beta);
                     }
                     foreach (var (name, value) in route.Provider.ExtraHeaders) request.Headers.TryAddWithoutValidation(name, value);
-                    if (claudeOAuth) ClaudeOAuthHeaders.ApplyCompat(request, ctx.Request.Headers);
+                    if (claudeOAuth)
+                    {
+                        ClaudeOAuthHeaders.ApplyCompat(request, ctx.Request.Headers);
+                        ClaudeOAuthHeaders.EnsureCountTokensBeta(request);
+                    }
                 }
                 if (credentials.HeaderName is not null) request.Headers.TryAddWithoutValidation(credentials.HeaderName, credentials.HeaderValue);
                 using var response = await http.For(route.Provider).SendAsync(request, ct);

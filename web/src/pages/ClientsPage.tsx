@@ -1,9 +1,14 @@
-import { Archive, Check, Copy, FolderOpen, KeyRound, Plus, RotateCcw } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Archive, Check, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
 import {
+  keys,
   useBackups,
+  useCancelClientInstall,
+  useCheckClientUpdates,
+  useClientInstallJob,
   useClientModels,
   useClients,
   useDisableClient,
@@ -14,14 +19,14 @@ import {
   useProviders,
   useRestoreBackup,
   useSetBinding,
+  useStartClientInstall,
   useTokens,
 } from '../api/hooks';
-import type { ClientInfo, ClientKind, ConfigPreview, Provider } from '../api/types';
+import type { ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
-import { CLIENT_META, CLIENT_ORDER, ClientGlyph, ClientIcon, ProviderIcon } from '../components/icons';
+import { CLIENT_META, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
-import { Badge, Button, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
+import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
 import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
@@ -33,60 +38,173 @@ import { dirnameOf, systemActions } from '../shell/systemActions';
 export function ClientsPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const { toast } = useFeedback();
   const params = useParams<{ kind?: string }>();
   const clients = useClients();
+  const checkUpdates = useCheckClientUpdates();
   const byKind = useMemo(() => new Map((clients.data ?? []).map((c) => [c.kind, c])), [clients.data]);
   const kind: ClientKind = CLIENT_ORDER.includes(params.kind as ClientKind) ? (params.kind as ClientKind) : 'codex';
   const client = byKind.get(kind);
 
+  // Latest versions are fetched once per visit; the server keeps them six hours, so this is usually instant.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => checkUpdates.mutate(false), []);
+
+  const checkNow = () =>
+    checkUpdates.mutate(true, {
+      onSuccess: (list) => {
+        const count = list.filter((c) => c.install?.updateAvailable && c.install.blocker !== 'shadowed').length;
+        toast(count > 0 ? t('clients.updatesFound', { count }) : t('clients.allUpToDate'), count > 0 ? undefined : 'success');
+      },
+      onError: (e) => toast(errorText(e), 'error'),
+    });
+
   return (
-    <Page title={t('nav.clients')} subtitle={t('clients.subtitle')}>
-      <Tabs className="mx-auto max-w-[720px]" value={kind} onValueChange={(k) => navigate(`/clients/${k}`, { replace: true })}>
-        <ClientTabs clients={byKind} />
-        {clients.isLoading && <Spinner lines={4} className="mt-6" />}
-        {clients.isError && (
-          <div className="mt-6">
-            <Alert tone="danger" title={t('common.error')}>{errorText(clients.error)}</Alert>
+    <Page
+      title={t('nav.clients')}
+      subtitle={t('clients.subtitle')}
+      actions={
+        <Button icon={<RefreshCw className="size-3.5" />} loading={checkUpdates.isPending} onClick={checkNow}>
+          {t('clients.checkUpdates')}
+        </Button>
+      }
+    >
+      {/* Master-detail: client list on the left, the selected client's panel on the right. Below the container
+          breakpoint the list folds into a horizontal strip above the panel. The panel is capped so rows stay
+          readable on wide windows, and centers in whatever space the list leaves. */}
+      <div className="@container mx-auto max-w-[1200px]">
+        <div className="flex flex-col gap-4 @3xl:flex-row @3xl:items-start @3xl:gap-5">
+          <ClientList clients={clients.data} loading={clients.isLoading} selected={kind} onSelect={(k) => navigate(`/clients/${k}`, { replace: true })} />
+          <div className="mx-auto w-full max-w-[760px] min-w-0 flex-1">
+            {clients.isLoading && <Spinner lines={4} />}
+            {clients.isError && <Alert tone="danger" title={t('common.error')}>{errorText(clients.error)}</Alert>}
+            {client && <ClientPanel client={client} />}
           </div>
-        )}
-        {client && (
-          <TabsContent value={kind} className="pt-5">
-            <ClientPanel client={client} />
-          </TabsContent>
-        )}
-      </Tabs>
+        </div>
+      </div>
     </Page>
   );
 }
 
 /** Clients whose config lists the bound provider's models (ClientKinds.WithModelList on the server). */
-const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>(['opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot']);
+const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
+  'opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot',
+  'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy',
+]);
 
-/** Fixed client tabs (cc-switch style): official logo and an enabled mark; the name shows only on the selected tab or on hover. */
-function ClientTabs({ clients }: { clients: Map<ClientKind, ClientInfo> }) {
+type ClientGroup = 'installed' | 'notInstalled' | 'comingSoon';
+const GROUP_ORDER: ClientGroup[] = ['installed', 'notInstalled', 'comingSoon'];
+
+function groupOf(c: ClientInfo): ClientGroup {
+  if (c.availability === 'coming_soon') return 'comingSoon';
+  // An enabled client has a config Astra wrote, so it counts as installed even if detection missed the binary.
+  return c.detection.installed || c.enabled || c.install?.installed ? 'installed' : 'notInstalled';
+}
+
+/** The installed version: probed from the client itself, else whatever detection reported. */
+function versionOf(c: ClientInfo): string | null {
+  return c.install?.version ?? c.detection.version ?? null;
+}
+
+/**
+ * Client list (the master side): grouped by install state in CLIENT_ORDER, each row shows the detected
+ * version and an enabled / drifted mark. Narrow containers render it as a horizontal strip without groups.
+ */
+function ClientList({
+  clients,
+  loading,
+  selected,
+  onSelect,
+}: {
+  clients: ClientInfo[] | undefined;
+  loading: boolean;
+  selected: ClientKind;
+  onSelect: (k: ClientKind) => void;
+}) {
   const { t } = useI18n();
+  const byKind = new Map((clients ?? []).map((c) => [c.kind, c]));
+  const groups = GROUP_ORDER.map((g) => ({
+    group: g,
+    items: CLIENT_ORDER.flatMap((k) => {
+      const c = byKind.get(k);
+      return c && groupOf(c) === g ? [c] : [];
+    }),
+  })).filter((g) => g.items.length > 0);
+
   return (
-    <TabsList aria-label={t('nav.clients')}>
-      {CLIENT_ORDER.map((k) => {
-        const c = clients.get(k);
-        // min-w-0! beats the unlayered .trigger min-width so collapsed tabs hug their glyph.
-        return (
-          <TabsTrigger key={k} value={k} aria-label={CLIENT_META[k].name} className={cn('group min-w-0!', c?.availability === 'coming_soon' && 'opacity-60')}>
-            <span className="inline-flex items-center whitespace-nowrap">
-              <ClientGlyph kind={k} size={18} />
-              {/* Name collapses to nothing (grid 0fr → 1fr) and unfurls on hover or when the tab is selected. */}
-              <span className="grid grid-cols-[0fr] overflow-hidden transition-[grid-template-columns] duration-[var(--duration-standard)] ease-[var(--ease-enter)] motion-reduce:transition-none group-hover:grid-cols-[1fr] group-data-[state=active]:grid-cols-[1fr]">
-                <span className="min-w-0 overflow-hidden pl-2 whitespace-nowrap opacity-0 transition-opacity duration-[var(--duration-standard)] ease-[var(--ease-enter)] motion-reduce:transition-none group-hover:opacity-100 group-data-[state=active]:opacity-100">
-                  {CLIENT_META[k].name}
-                </span>
-              </span>
-              {c?.enabled && <Check className="ml-2 size-3.5 text-[var(--success)]" strokeWidth={2.5} aria-label={t('clients.enabled')} />}
-            </span>
-          </TabsTrigger>
-        );
-      })}
-    </TabsList>
+    <nav aria-label={t('nav.clients')} className="card shrink-0 p-1.5 @3xl:sticky @3xl:top-0 @3xl:w-[232px]">
+      {loading && <Spinner lines={6} className="p-2" />}
+      <div className="flex gap-1 overflow-x-auto @3xl:flex-col @3xl:gap-0 @3xl:overflow-visible">
+        {groups.map(({ group, items }) => (
+          <div key={group} className="contents @3xl:block">
+            <h3 className="hidden px-2.5 pt-2 pb-1 text-[11px] font-medium text-[var(--text-muted)] @3xl:block">
+              {t(`clients.group.${group}` as 'clients.group.installed')} · {items.length}
+            </h3>
+            {items.map((c) => (
+              <ClientListItem key={c.kind} client={c} active={c.kind === selected} onSelect={() => onSelect(c.kind)} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </nav>
   );
+}
+
+function ClientListItem({ client, active, onSelect }: { client: ClientInfo; active: boolean; onSelect: () => void }) {
+  const { t } = useI18n();
+  const dim = groupOf(client) !== 'installed';
+  const version = versionOf(client);
+  // Shadowed: the latest version is already installed behind the copy that runs — PATH needs fixing, not an update.
+  const shadowed = client.install?.blocker === 'shadowed';
+  const update = client.install?.updateAvailable && !shadowed ? client.install.latestVersion : null;
+  return (
+    <button
+      type="button"
+      aria-label={CLIENT_META[client.kind].name}
+      aria-current={active ? 'page' : undefined}
+      onClick={onSelect}
+      className={cn(
+        'flex shrink-0 items-center gap-2.5 rounded-[var(--radius-control)] px-2.5 py-1.5 text-left transition-colors @3xl:w-full',
+        active ? 'bg-[var(--accent-subtle)]' : 'hover:bg-[var(--surface-muted)]',
+      )}
+    >
+      <span className={cn('inline-flex', dim && !active && 'opacity-60')}>
+        <ClientIcon kind={client.kind} size={24} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className={cn('block truncate text-[13px] whitespace-nowrap', active && 'font-medium')}>{CLIENT_META[client.kind].name}</span>
+        {version && (
+          <span className="hidden truncate text-[11px] text-[var(--text-secondary)] @3xl:block">
+            {version}
+            {update && <span className="text-[var(--warning)]"> → {update}</span>}
+          </span>
+        )}
+      </span>
+      {client.install?.busy && <ProgressSpinner />}
+      {update && !client.install?.busy && (
+        <Badge tone="orange" title={t('clients.updateTo', { version: update })}>
+          {t('clients.updateBadge')}
+        </Badge>
+      )}
+      {shadowed && !client.install?.busy && (
+        <Badge tone="orange" title={t('clients.shadowed.title', { version: client.install?.latestVersion ?? '' })}>
+          {t('clients.shadowedBadge')}
+        </Badge>
+      )}
+      {client.status === 'drifted' ? (
+        <span title={t('clients.drifted')} aria-label={t('clients.drifted')} className="inline-flex">
+          <Dot tone="orange" />
+        </span>
+      ) : client.enabled ? (
+        <Check className="size-3.5 shrink-0 text-[var(--success)]" strokeWidth={2.5} aria-label={t('clients.enabled')} />
+      ) : null}
+    </button>
+  );
+}
+
+/** Small inline activity indicator (an install / update is running). */
+function ProgressSpinner() {
+  return <LoaderCircle className="size-3.5 shrink-0 animate-spin text-[var(--text-secondary)] motion-reduce:animate-none" aria-hidden />;
 }
 
 function statusBadge(c: ClientInfo, t: ReturnType<typeof useI18n>['t']) {
@@ -116,6 +234,8 @@ function ClientPanel({ client }: { client: ClientInfo }) {
     .map((tk) => ({ value: tk.id, label: tk.enabled ? tk.name : t('clients.tokenDisabled', { name: tk.name }), disabled: !tk.enabled }));
   const [enableOpen, setEnableOpen] = useState(false);
   const [backupsOpen, setBackupsOpen] = useState(false);
+  /** Install sheet: the action to confirm and run, "log" to watch the current / last run, null when closed. */
+  const [installAction, setInstallAction] = useState<InstallSheetMode | null>(null);
   const soon = client.availability === 'coming_soon';
   const name = CLIENT_META[client.kind].name;
   const enabledProviders = (providers.data ?? []).filter((p) => p.enabled);
@@ -223,7 +343,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
             soon
               ? client.availabilityReason ?? t('clients.comingSoonDetail')
               : [
-                  client.detection.installed ? t('clients.detected', { version: client.detection.version ?? '' }) : t('clients.notDetected'),
+                  groupOf(client) === 'installed' ? t('clients.detected', { version: versionOf(client) ?? '' }) : t('clients.notDetected'),
                   configPath,
                 ]
                   .filter(Boolean)
@@ -231,6 +351,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
           }
           className="py-3"
         >
+          {!soon && <InstallActions client={client} onOpen={setInstallAction} />}
           {client.enabled ? (
             <Button onClick={() => void doDisable()} loading={disable.isPending}>
               {t('clients.disableRestore')}
@@ -396,6 +517,8 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </Group>
       )}
 
+      {!soon && client.install && <VersionGroup client={client} onShowLog={() => setInstallAction('log')} />}
+
       {!soon && (
         <Group title={t('clients.maintenance')}>
           {configPath && (
@@ -412,7 +535,307 @@ function ClientPanel({ client }: { client: ClientInfo }) {
 
       <EnableSheet open={enableOpen} onOpenChange={setEnableOpen} client={client} model={model} extras={extras} tokenId={tokenId} />
       <BackupsSheet open={backupsOpen} onOpenChange={setBackupsOpen} client={client} />
+      <InstallSheet mode={installAction} onClose={() => setInstallAction(null)} client={client} />
     </>
+  );
+}
+
+type InstallSheetMode = ClientInstallJob['action'] | 'log';
+
+/**
+ * Header buttons: install a missing client, update an outdated one, or open the download page of a manual one.
+ * When npm's global directories belong to root, the button says so up front: running it will ask for the
+ * administrator password (macOS does not let any app elevate silently).
+ */
+function InstallActions({ client, onOpen }: { client: ClientInfo; onOpen: (mode: InstallSheetMode) => void }) {
+  const { t } = useI18n();
+  const inst = client.install;
+  if (!inst) return null;
+  const admin = inst.needsAdmin ? (
+    <span className="inline-flex items-center gap-1 text-[11px] text-[var(--warning)]">
+      <ShieldAlert className="size-3" aria-hidden />
+      {t('clients.admin.badge')}
+    </span>
+  ) : null;
+  const adminTip = inst.needsAdmin ? t(inst.adminAvailable ? 'clients.admin.tip' : 'clients.admin.tipManual') : undefined;
+  if (inst.busy) {
+    return (
+      <Button icon={<ProgressSpinner />} onClick={() => onOpen('log')}>
+        {t('clients.installRunning')}
+      </Button>
+    );
+  }
+  if (inst.updateAvailable && inst.updateCommand && inst.latestVersion) {
+    return (
+      <Button icon={<CircleArrowUp className="size-3.5" />} title={adminTip} onClick={() => onOpen('update')}>
+        {t('clients.updateTo', { version: inst.latestVersion })}
+        {admin}
+      </Button>
+    );
+  }
+  if (inst.updateAvailable && inst.blocker === 'shadowed') {
+    return (
+      <Button
+        icon={<ShieldAlert className="size-3.5" />}
+        onClick={() => document.getElementById(SHADOWED_ALERT_ID)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+      >
+        {t('clients.shadowedBadge')}
+      </Button>
+    );
+  }
+  if (!inst.installed && inst.installCommand) {
+    return (
+      <Button icon={<Download className="size-3.5" />} title={adminTip} onClick={() => onOpen('install')}>
+        {t('clients.install')}
+        {admin}
+      </Button>
+    );
+  }
+  if (!inst.installed && inst.method === 'manual') {
+    return (
+      <Button icon={<ExternalLink className="size-3.5" />} onClick={() => window.open(inst.homepageUrl, '_blank', 'noreferrer')}>
+        {t('clients.download')}
+      </Button>
+    );
+  }
+  return null;
+}
+
+const SHADOWED_ALERT_ID = 'client-shadowed-alert';
+
+/** Installed vs latest version, how the client is installed, and why an action is unavailable. */
+function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: () => void }) {
+  const { t, locale } = useI18n();
+  const inst = client.install!;
+  const job = useClientInstallJob(client.kind);
+  const value = (text: string, muted = false) => (
+    <span className={cn('text-[13px] tabular-nums selectable', muted && 'text-[var(--text-secondary)]')}>{text}</span>
+  );
+  const blocker =
+    inst.blocker === 'external-install'
+      ? t('clients.blocker.external-install', { path: inst.executable ?? '' })
+      : inst.blocker
+        ? t(`clients.blocker.${inst.blocker}` as 'clients.blocker.npm-missing')
+        : undefined;
+  const others = inst.otherCopies ?? [];
+  // A newer copy behind the one that runs: an earlier install/update went where the terminal does not look first.
+  const shadowing = others.find((c) => c.newer);
+  return (
+    <>
+      {shadowing && (
+        <div id={SHADOWED_ALERT_ID} className="mb-3">
+          <Alert tone="warning" title={t('clients.shadowed.title', { version: shadowing.version })}>
+            {t('clients.shadowed.detail', {
+              path: inst.executable ?? '',
+              version: inst.version ?? '',
+              other: shadowing.path,
+              dir: dirnameOf(shadowing.path),
+            })}
+          </Alert>
+        </div>
+      )}
+      {!shadowing && inst.notOnPath && inst.executable && (
+        <div className="mb-3">
+          <Alert tone="warning" title={t('clients.notOnPath.title')}>
+            {t('clients.notOnPath.detail', { dir: dirnameOf(inst.executable) })}
+          </Alert>
+        </div>
+      )}
+    <Group title={t('clients.versionTitle')} footer={blocker}>
+      <Row label={t('clients.currentVersion')} detail={inst.installed ? inst.executable : undefined}>
+        {inst.installed ? value(inst.version ?? t('clients.versionUnknown'), !inst.version) : value(t('clients.notInstalled'), true)}
+      </Row>
+      {others.map((c) => (
+        <Row key={c.path} label={t('clients.otherCopy')} detail={c.path}>
+          {c.newer && <Badge tone="orange">{t('clients.otherCopyNewer')}</Badge>}
+          {value(c.version, !c.newer)}
+        </Row>
+      ))}
+      {inst.method === 'npm' && (
+        <Row
+          label={t('clients.latestVersion')}
+          detail={inst.latestError ?? (inst.latestCheckedAt ? t('clients.checkedAt', { time: formatDateTime(inst.latestCheckedAt, locale) }) : undefined)}
+        >
+          {inst.updateAvailable && <Badge tone="orange">{t('clients.updateBadge')}</Badge>}
+          {value(inst.latestVersion ?? t('clients.latestUnknown'), !inst.latestVersion)}
+        </Row>
+      )}
+      <Row
+        label={t('clients.installMethod')}
+        detail={t(`clients.method.${inst.method}` as 'clients.method.npm', { package: inst.package ?? '' })}
+      >
+        <Button size="sm" variant="plain" icon={<ExternalLink className="size-3" />} onClick={() => window.open(inst.homepageUrl, '_blank', 'noreferrer')}>
+          {t('clients.homepage')}
+        </Button>
+      </Row>
+      {job.data && (
+        <Row
+          icon={<ScrollText className="size-4 text-[var(--text-secondary)]" />}
+          label={t('clients.installLog')}
+          detail={`${job.data.command} · ${t(`clients.job.${job.data.state}` as 'clients.job.running')}`}
+          onClick={onShowLog}
+        />
+      )}
+    </Group>
+    </>
+  );
+}
+
+/**
+ * Runs an install / update after showing the exact command, then streams its output (polled). With mode "log"
+ * it only shows the current or last run. Closing the sheet does not stop a run; "Stop" does.
+ */
+function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null; onClose: () => void; client: ClientInfo }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const qc = useQueryClient();
+  const open = mode !== null;
+  const job = useClientInstallJob(client.kind, open || Boolean(client.install?.busy));
+  const start = useStartClientInstall();
+  const cancel = useCancelClientInstall();
+  const [started, setStarted] = useState(false);
+  const logRef = useRef<HTMLPreElement>(null);
+  const lastState = useRef<string | undefined>(undefined);
+  const name = CLIENT_META[client.kind].name;
+  const inst = client.install;
+  const action = mode === 'install' || mode === 'update' ? mode : null;
+  const command = action === 'install' ? inst?.installCommand : action === 'update' ? inst?.updateCommand : null;
+  const data = job.data;
+  // Confirm first unless a run is already going (or the sheet was opened just to watch the log).
+  const confirming = action !== null && !started && data?.state !== 'running';
+  const needsAdmin = Boolean(inst?.needsAdmin);
+  const canElevate = Boolean(inst?.adminAvailable);
+  // A failed run that hit a permission error can be retried with admin rights (once; an elevated run is final).
+  const retryAsAdmin = data?.state === 'failed' && data.hint === 'permission-denied' && !data.elevated && canElevate;
+
+  useEffect(() => {
+    if (open) setStarted(false);
+  }, [open, mode]);
+
+  // A run that just finished: refresh versions and say so (also when the sheet was closed meanwhile).
+  useEffect(() => {
+    const state = data?.state;
+    if (lastState.current === 'running' && state && state !== 'running') {
+      void qc.invalidateQueries({ queryKey: keys.clients });
+      if (state === 'succeeded' && data.hint) toast(t('clients.notEffectiveToast', { name }));
+      else if (state === 'succeeded') toast(t(data.action === 'install' ? 'clients.installedToast' : 'clients.updatedToast', { name }), 'success');
+    }
+    lastState.current = state;
+  }, [data?.state, data?.action, data?.hint, name, qc, t, toast]);
+
+  useEffect(() => {
+    const el = logRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [data?.log.length]);
+
+  const run = (which: ClientInstallJob['action'], elevated: boolean) =>
+    start.mutate({ kind: client.kind, action: which, elevated }, { onSuccess: () => setStarted(true), onError: (e) => toast(errorText(e), 'error') });
+
+  const copy = async (text: string) => {
+    if (await systemActions.copy(text)) toast(t('common.copied'));
+  };
+
+  const title = t((action ?? data?.action) === 'update' ? 'clients.updateTitle' : 'clients.installTitle', { name });
+  const statusTone = { running: 'info', succeeded: 'success', failed: 'danger', cancelled: 'warning' } as const;
+  const codeBox = 'rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-[12px] break-all whitespace-pre-wrap selectable';
+  // The one-time fix that makes admin rights unnecessary from then on.
+  const fix = inst?.adminFixCommand ? (
+    <div className="flex flex-col gap-2">
+      <p className="text-[11px] text-[var(--text-secondary)]">{t('clients.admin.fixTip')}</p>
+      <div className="flex items-start gap-2">
+        <pre className={cn(codeBox, 'min-w-0 flex-1')}>{inst.adminFixCommand}</pre>
+        <Button size="sm" icon={<Copy className="size-3" />} aria-label={t('common.copy')} onClick={() => void copy(inst.adminFixCommand!)} />
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <Sheet
+      open={open}
+      onOpenChange={(o) => !o && onClose()}
+      width={620}
+      title={title}
+      description={confirming ? t('clients.installRunDetail') : undefined}
+      footer={
+        confirming ? (
+          <>
+            <Button onClick={onClose}>{t('common.cancel')}</Button>
+            {needsAdmin && !canElevate ? (
+              // No system prompt here (e.g. Linux without pkexec): the user runs it in a terminal.
+              <Button variant="primary" icon={<Copy className="size-3.5" />} disabled={!command} onClick={() => void copy(`sudo ${command}`)}>
+                {t('clients.admin.copyCommand')}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                icon={needsAdmin ? <ShieldAlert className="size-3.5" /> : undefined}
+                disabled={!command}
+                loading={start.isPending}
+                onClick={() => action && run(action, needsAdmin)}
+              >
+                {needsAdmin ? t('clients.admin.start') : t('clients.installStart')}
+              </Button>
+            )}
+          </>
+        ) : data?.state === 'running' ? (
+          <>
+            {/* An elevated command runs as root under the system prompt; it cannot be stopped from here. */}
+            {!data.elevated && (
+              <Button variant="destructive" loading={cancel.isPending} onClick={() => cancel.mutate(client.kind, { onError: (e) => toast(errorText(e), 'error') })}>
+                {t('clients.installStop')}
+              </Button>
+            )}
+            <Button onClick={onClose}>{t('common.close')}</Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={onClose}>{t('common.done')}</Button>
+            {retryAsAdmin && (
+              <Button variant="primary" icon={<ShieldAlert className="size-3.5" />} loading={start.isPending} onClick={() => run(data.action, true)}>
+                {t('clients.admin.retry')}
+              </Button>
+            )}
+          </>
+        )
+      }
+    >
+      {confirming ? (
+        <div className="flex flex-col gap-3">
+          {needsAdmin && (
+            <Alert tone="warning" title={t('clients.admin.title')}>
+              {t(canElevate ? 'clients.admin.prompt' : 'clients.admin.manual')}
+            </Alert>
+          )}
+          {command ? <pre className={codeBox}>{needsAdmin ? `sudo ${command}` : command}</pre> : <Alert tone="warning" title={t('clients.installUnavailable')} />}
+          {inst?.method === 'npm' && <p className="text-[11px] text-[var(--text-muted)]">{t('clients.installNpmNote')}</p>}
+          {needsAdmin && fix}
+        </div>
+      ) : data ? (
+        <div className="flex flex-col gap-3">
+          <Alert
+            tone={data.state === 'succeeded' && data.hint ? 'warning' : statusTone[data.state]}
+            title={t(data.state === 'succeeded' && data.hint ? 'clients.job.notEffective' : (`clients.job.${data.state}` as 'clients.job.running'))}
+          >
+            {data.state === 'running' && data.elevated
+              ? t('clients.admin.running')
+              : data.hint
+                ? t(`clients.hint.${data.hint}` as 'clients.hint.timeout') + (retryAsAdmin ? t('clients.admin.retryHint') : '')
+                : undefined}
+          </Alert>
+          <pre
+            ref={logRef}
+            className="scroll max-h-[340px] min-h-[160px] rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap selectable"
+          >
+            {data.log.join('\n')}
+          </pre>
+          {data.hint === 'permission-denied' && fix}
+        </div>
+      ) : job.isLoading ? (
+        <Spinner lines={4} />
+      ) : (
+        <EmptyState icon={<ScrollText className="size-6" />} title={t('clients.noInstallLog')} />
+      )}
+    </Sheet>
   );
 }
 

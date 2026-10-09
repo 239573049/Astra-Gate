@@ -5,12 +5,15 @@ namespace Astra.Gateway.Pipeline;
 
 /// <summary>
 /// Debug body capture: bodies/&lt;yyyy-MM-dd&gt;/&lt;requestId&gt;.&lt;part&gt;.txt. The body ref stored on the request is
-/// "&lt;yyyy-MM-dd&gt;/&lt;requestId&gt;". Secrets are never written: callers pass bodies, headers are not stored.
+/// "&lt;yyyy-MM-dd&gt;/&lt;requestId&gt;". Secrets are never written: callers pass bodies; the one header part
+/// (<see cref="UpstreamRequestHeaders"/>) is redacted by its writer (credentials keep scheme + last 4 only).
 /// </summary>
 public sealed class BodyStore(AstraPaths paths)
 {
     public const string ClientRequest = "client-request";
     public const string UpstreamRequest = "upstream-request";
+    /// <summary>JSON: the outbound URL + final request headers (credentials redacted to scheme + last 4).</summary>
+    public const string UpstreamRequestHeaders = "upstream-request-headers";
     public const string UpstreamResponse = "upstream-response";
     public const string ClientResponse = "client-response";
 

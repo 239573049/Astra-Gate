@@ -7,7 +7,7 @@
   padding: 0.875rem 0.875rem 0.875rem 1rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  background: color-mix(in oklab, var(--surface) 94%, var(--background));
+  background: var(--surface-raised);
   color: var(--foreground);
   letter-spacing: var(--tracking-body);
   box-shadow: var(--shadow-floating);
@@ -21,7 +21,7 @@
   place-items: center;
   border: 1px solid color-mix(in oklab, var(--success) 24%, var(--border));
   border-radius: var(--radius-pill);
-  background: color-mix(in oklab, var(--success) 10%, var(--surface));
+  background: color-mix(in oklab, var(--success) 10%, var(--surface-raised));
   color: var(--success);
 }
 

@@ -40,6 +40,28 @@ public sealed class OAuthClient(IHttpClientFactory factory)
     public static string BuildAuthorizeUrl(
         SubscriptionOAuthConfig config, string redirectUri, string state, string codeChallenge)
     {
+        // Claude（Anthropic）对参数**顺序**敏感：顺序不对时授权端点直接回 "Invalid request format"。
+        // 这里逐字复刻 Claude Code 自己的构造顺序（其二进制里的 builder）：
+        //   code=true → client_id → response_type → redirect_uri → scope → code_challenge →
+        //   code_challenge_method=S256 → state（可选的 orgUUID / login_hint 在最后）
+        // 空格按 URLSearchParams 编成 '+'（Claude Code 与 sub2api 都是这个形态）。
+        if (config.Style == "claude-loopback")
+        {
+            var claudeQuery = new List<string> { "code=true" };
+            claudeQuery.Add($"client_id={SearchParam(config.ClientId)}");
+            claudeQuery.Add("response_type=code");
+            claudeQuery.Add($"redirect_uri={SearchParam(redirectUri)}");
+            if (config.Scopes.Count > 0)
+                claudeQuery.Add($"scope={SearchParam(string.Join(' ', config.Scopes))}");
+            claudeQuery.Add($"code_challenge={SearchParam(codeChallenge)}");
+            claudeQuery.Add("code_challenge_method=S256");
+            claudeQuery.Add($"state={SearchParam(state)}");
+            // code 已经在最前面发过了；其它额外参数（orgUUID / login_hint 之类）按 Claude Code 放在最后。
+            foreach (var (key, value) in config.ExtraAuthorizeParams)
+                if (key != "code") claudeQuery.Add($"{SearchParam(key)}={SearchParam(value)}");
+            return $"{config.AuthorizeUrl}?{string.Join('&', claudeQuery)}";
+        }
+
         var query = new List<string>
         {
             $"response_type=code",
@@ -59,6 +81,11 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         return $"{config.AuthorizeUrl}{(config.AuthorizeUrl.Contains('?') ? '&' : '?')}{string.Join('&', query)}";
     }
 
+    /// <summary>URLSearchParams 形态的参数编码：空格编成 '+'（Claude Code 的授权端点按这个形态匹配）。</summary>
+    private static string SearchParam(string value) =>
+        Uri.EscapeDataString(value).Replace("%20", "+");
+
+
     public async Task<TokenResult> ExchangeCodeAsync(
         SubscriptionOAuthConfig config, string code, string codeVerifier, string redirectUri, CancellationToken ct = default)
     {
@@ -75,6 +102,15 @@ public sealed class OAuthClient(IHttpClientFactory factory)
 
     public async Task<TokenResult> RefreshAsync(SubscriptionOAuthConfig config, string refreshToken, CancellationToken ct = default)
     {
+        // Anthropic 那套换令牌端点是 JSON body（不是表单）——sub2api 的 Claude 客户端就是这么发的。
+        if (config.Style == "claude-loopback")
+            return await PostTokenJsonAsync(config, new JsonObject
+            {
+                ["grant_type"] = "refresh_token",
+                ["refresh_token"] = refreshToken,
+                ["client_id"] = config.ClientId,
+            }, ct);
+
         var form = new Dictionary<string, string>
         {
             ["grant_type"] = "refresh_token",
@@ -82,6 +118,60 @@ public sealed class OAuthClient(IHttpClientFactory factory)
             ["client_id"] = config.ClientId,
         };
         return await SendTokenRequestAsync(config, form, ct);
+    }
+
+    /// <summary>
+    /// Anthropic（Claude）的换码：JSON body，<c>redirect_uri</c> 必须逐字等于发起授权时用的那个
+    /// （回环地址或实例覆盖值）；<c>code</c> 是"授权码#state"形态时要把 state 拆出来单独发
+    /// ——只发授权码会被判「参数错误」（Claude Code 自己的换码也是这个形状）。
+    /// </summary>
+    public async Task<TokenResult> ExchangeClaudeCodeAsync(
+        SubscriptionOAuthConfig config, string code, string codeVerifier, string redirectUri, CancellationToken ct = default)
+    {
+        var raw = code.Trim();
+        var body = new JsonObject
+        {
+            ["grant_type"] = "authorization_code",
+            ["code"] = SubscriptionCatalog.CodeWithoutState(raw),
+            ["client_id"] = config.ClientId,
+            // 回调地址必须与授权时一致：漏发或不一致都会被判参数错误。
+            ["redirect_uri"] = redirectUri.Length > 0 ? redirectUri : SubscriptionCatalog.ClaudeCodeCallback,
+        };
+        if (codeVerifier.Length > 0) body["code_verifier"] = codeVerifier;
+        var hash = raw.IndexOf('#');
+        if (hash >= 0 && hash + 1 < raw.Length) body["state"] = raw[(hash + 1)..];
+        return await PostTokenJsonAsync(config, body, ct);
+    }
+
+    /// <summary>换令牌端点的 JSON body 形态（Anthropic）：Accept 要同时接受 json 与 text/plain。</summary>
+    private async Task<TokenResult> PostTokenJsonAsync(SubscriptionOAuthConfig config, JsonObject body, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, config.TokenUrl)
+        {
+            Content = new StringContent(body.ToJsonString(), Encoding.UTF8, "application/json"),
+        };
+        ApplyExtraHeaders(request, config);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain", 0.9));
+        using var client = Create();
+        using var response = await client.SendAsync(request, ct);
+        var text = await response.Content.ReadAsStringAsync(ct);
+        var json = TryParse(text);
+        if (json is null)
+            throw new OAuthProtocolException($"http_{(int)response.StatusCode}",
+                text.Length is > 0 and <= 300 ? text.Trim() : "换令牌响应不是 JSON");
+        var error = Optional(json, "error");
+        if (error is not null)
+            throw new OAuthProtocolException(error, Optional(json, "error_description") ?? Optional(json, "message"));
+        if (!response.IsSuccessStatusCode)
+            throw new OAuthProtocolException($"http_{(int)response.StatusCode}",
+                Optional(json, "message") ?? (text.Length <= 300 ? text : null));
+        return new TokenResult(
+            Required(json, "access_token"),
+            Optional(json, "refresh_token"),
+            IntOptional(json, "expires_in"),
+            Optional(json, "id_token"),
+            Optional(json, "scope"));
     }
 
     public async Task<DeviceStart> StartDeviceAsync(SubscriptionOAuthConfig config, CancellationToken ct = default)
@@ -280,13 +370,18 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var response = await Create().SendAsync(request, ct);
         var text = await response.Content.ReadAsStringAsync(ct);
-        var json = Parse(text);
         if (!response.IsSuccessStatusCode)
         {
-            // 401/403 → GitHub token 失效或没有 Copilot 订阅；403 也可能是没开 Copilot。
+            // 先看状态码再解析：上游的错误体不一定是 JSON——api.github.com 对不认识的客户端会直接回
+            // "403 Forbidden. …" 纯文本。若先 Parse，这种响应会被报成 invalid_token_response，
+            // 把"这个账号没有 Copilot 订阅"变成一个看不懂的 JSON 错误。
+            var error = TryParse(text);
             throw new OAuthProtocolException($"http_{(int)response.StatusCode}",
-                Optional(json, "message") ?? Optional(json, "error") ?? (text.Length <= 200 ? text : null));
+                error is null
+                    ? (text.Length is > 0 and <= 200 ? text.Trim() : null)
+                    : Optional(error, "message") ?? Optional(error, "error"));
         }
+        var json = Parse(text);
         var token = Required(json, "token");
         var expiresAt = IntOptional(json, "expires_at");
         var refreshIn = IntOptional(json, "refresh_in");
@@ -431,6 +526,19 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         catch (JsonException e)
         {
             throw new OAuthProtocolException("invalid_token_response", e.Message);
+        }
+    }
+
+    /// <summary>Like <see cref="Parse"/> but returns null instead of throwing (for error bodies, which need not be JSON).</summary>
+    private static JsonObject? TryParse(string body)
+    {
+        try
+        {
+            return JsonNode.Parse(body) as JsonObject;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 

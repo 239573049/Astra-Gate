@@ -3,7 +3,7 @@ import { Activity, ArrowRight, RefreshCw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 
-import { useActivityHeatmap, useRequests, useSettings, useStatsSummary, useTimeseries, useTokens, useTopModels } from '../api/hooks';
+import { useActivityHeatmap, useClients, useRequests, useSettings, useStatsSummary, useTimeseries, useTokens, useTopModels } from '../api/hooks';
 import type { ClientKind, Range, RequestSummary, TimeseriesPoint } from '../api/types';
 import { ActivityHeatmap } from '../components/arc/activity-heatmap/activity-heatmap';
 import { BarChart } from '../components/arc/bar-chart/bar-chart';
@@ -28,6 +28,7 @@ import {
   type BreakdownRow,
   type Measure,
 } from '../lib/stats';
+import { filterableClients } from '../lib/clientFilter';
 import { cacheHitRatio } from '../lib/usage';
 import { RequestDetailSheet } from './RequestsPage';
 
@@ -264,15 +265,16 @@ function ActivitySection({ clientKind, tokenId }: { clientKind?: ClientKind; tok
 }
 
 /**
- * cc-switch style client switcher on Arc's segmented control: "All" plus one official logo per supported
- * client. Logo segments carry no visible text, so the client name rides along visually hidden (accessible
+ * cc-switch style client switcher on Arc's segmented control: "All" plus one official logo per installed
+ * client (not-installed clients are left out; the selected one stays). Logo segments carry no visible text, so the client name rides along visually hidden (accessible
  * name) and as a hover title.
  */
 function ClientFilter({ value, onChange }: { value: ClientFilterValue; onChange: (v: ClientFilterValue) => void }) {
   const { t } = useI18n();
+  const clients = useClients();
   const items: SegmentItem<ClientFilterValue>[] = [
     { value: 'all', label: t('overview.allClients') },
-    ...CLIENT_ORDER.map((k) => ({
+    ...filterableClients(clients.data, CLIENT_ORDER, value).map((k) => ({
       value: k,
       label: '',
       accessory: (

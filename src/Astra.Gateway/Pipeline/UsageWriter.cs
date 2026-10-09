@@ -8,9 +8,9 @@ namespace Astra.Gateway.Pipeline;
 
 /// <summary>
 /// Background writer for request records: batches of up to 50 or every second, one transaction per batch.
-/// Drains the queue on shutdown so no finished request is lost.
+/// Drains the queue on shutdown so no finished request is lost. Written records leave the <see cref="LiveRequestFeed"/>.
 /// </summary>
-public sealed class UsageWriter(AstraDatabase db, ILogger<UsageWriter> logger) : BackgroundService
+public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<UsageWriter> logger) : BackgroundService
 {
     private const int BatchSize = 50;
     private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(1);
@@ -102,6 +102,7 @@ public sealed class UsageWriter(AstraDatabase db, ILogger<UsageWriter> logger) :
         }
         finally
         {
+            live.Persisted(batch);
             batch.Clear();
             Interlocked.Add(ref _pending, -count);
         }

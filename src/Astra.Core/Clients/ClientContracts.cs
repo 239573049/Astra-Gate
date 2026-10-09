@@ -14,12 +14,31 @@ public static class ClientKinds
     public const string MiniMaxCode = "minimax-code";
     public const string CopilotCli = "copilot-cli";
     public const string VsCodeCopilot = "vscode-copilot";
+    public const string Crush = "crush";
+    public const string QwenCode = "qwen-code";
+    public const string Droid = "droid";
+    public const string KimiCode = "kimi-code";
+    public const string Zed = "zed";
+    public const string VsCodeInsiders = "vscode-insiders";
+    public const string VsCodium = "vscodium";
+    public const string Omp = "omp";
+    public const string MiMoCode = "mimo-code";
+    public const string DeepSeekHarness = "deepseek-harness";
+    public const string WorkBuddy = "workbuddy";
 
     public static readonly IReadOnlyList<string> All =
-        [Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot];
+    [
+        Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot,
+        Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
+        DeepSeekHarness, WorkBuddy,
+    ];
 
     /// <summary>Clients whose configuration lists the bound provider's models (kept current when that list changes).</summary>
-    public static readonly IReadOnlyList<string> WithModelList = [OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot];
+    public static readonly IReadOnlyList<string> WithModelList =
+    [
+        OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
+        Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy,
+    ];
 
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch

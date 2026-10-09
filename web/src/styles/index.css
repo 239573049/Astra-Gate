@@ -29,7 +29,11 @@
   --label-2: rgb(0 0 0 / 0.55);
   --label-3: rgb(0 0 0 / 0.3);
   --separator: rgb(0 0 0 / 0.09);
-  --surface: #ffffff;
+  /* --surface is the translucent content material (cards, tables, controls) laid over the wallpaper; floating
+     layers (menus, popovers, toasts, dialogs) and reduced transparency use the opaque --surface-solid. */
+  --surface-solid: #ffffff;
+  --surface: color-mix(in oklab, #ffffff 78%, transparent);
+  --control-selected: #ffffff;
   --canvas: #eef0f5;
   --fill: rgb(120 120 128 / 0.14);
   --fill-2: rgb(120 120 128 / 0.07);
@@ -50,7 +54,9 @@
   --label-2: rgb(255 255 255 / 0.56);
   --label-3: rgb(255 255 255 / 0.3);
   --separator: rgb(255 255 255 / 0.1);
-  --surface: #2a2a2d;
+  --surface-solid: #2a2a2d;
+  --surface: color-mix(in oklab, #3a3a3e 42%, transparent);
+  --control-selected: rgb(255 255 255 / 0.16);
   --canvas: #161618;
   --fill: rgb(120 120 128 / 0.28);
   --fill-2: rgb(120 120 128 / 0.14);
@@ -75,8 +81,9 @@
   --font-body: var(--font-sans);
   --font-display: var(--font-sans);
   --background: var(--canvas);
-  --surface-raised: var(--surface);
-  --surface-muted: color-mix(in oklab, var(--label) 6%, var(--surface));
+  --surface-raised: var(--surface-solid);
+  /* A fill, not a layer: it tints whatever material it sits on instead of covering it. */
+  --surface-muted: color-mix(in oklab, var(--label) 6%, transparent);
   --foreground: var(--label);
   --text-secondary: var(--label-2);
   --text-muted: color-mix(in oklab, var(--label) 46%, transparent);
@@ -218,7 +225,7 @@
 
   /* Content layer: lists, tables, forms. More opaque than glass for readability. */
   .card {
-    background-color: color-mix(in oklab, var(--surface) 84%, transparent);
+    background-color: var(--surface);
     border: 0.5px solid var(--separator);
     border-radius: 14px;
     /* Rounded rows need clipping, but a Combobox popover is positioned inside the card (no portal), so an open
@@ -231,14 +238,17 @@
   }
 
   @media (prefers-reduced-transparency: reduce) {
+    :root[data-theme] {
+      --surface: var(--surface-solid);
+    }
     .glass,
     :root.refract .glass:not(.no-refract) {
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
-      background-color: var(--surface);
+      background-color: var(--surface-solid);
     }
     .card {
-      background-color: var(--surface);
+      background-color: var(--surface-solid);
     }
   }
 
@@ -262,7 +272,7 @@
     height: 28px;
     border-radius: 8px;
     padding: 0 10px;
-    background: color-mix(in oklab, var(--surface) 70%, transparent);
+    background: var(--surface);
     border: 0.5px solid var(--separator);
     box-shadow: inset 0 0.5px 1px rgb(0 0 0 / 0.06);
     outline: none;

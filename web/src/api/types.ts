@@ -135,6 +135,24 @@ export interface Provider {
   quotaCheckedAtUtc?: string | null;
 }
 
+// ---------- provider import (from CC Switch / Alma / Claude Code / Codex / Magpie) ----------
+export type ImportStatus = 'new' | 'same' | 'sameHost' | 'off' | 'skip';
+export interface ImportCandidate {
+  ref: string; source: string; name: string; fromApp?: string | null;
+  endpoints: { protocol: ApiProtocol; baseUrl: string }[]; authScheme: AuthScheme;
+  hasKey: boolean; keyMasked?: string | null; keyFingerprint?: string | null;
+  models: string[]; headers: string[]; templateId?: string | null;
+  status: ImportStatus; existing?: { id: string; name: string } | null;
+  off: boolean; skipReason?: string | null; ignoredFields: string[];
+}
+export interface ImportSource {
+  id: string; name: string; path?: string | null; found: boolean; error?: string | null; items: ImportCandidate[];
+}
+export interface ImportSelection { source: string; ref: string }
+export interface ImportResult {
+  added: { id: string; name: string }[]; skipped: { ref: string; reason: string }[];
+}
+
 // ---------- provider balance / quota query ----------
 export type QuotaErrorCode =
   | "config" | "no_key" | "unauthorized" | "no_endpoint" | "rate_limited" | "upstream"
@@ -254,7 +272,9 @@ export interface ProviderModel {
 // ---------- clients ----------
 export type ClientKind =
   | "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build"
-  | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot";
+  | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot"
+  | "crush" | "qwen-code" | "droid" | "kimi-code" | "zed"
+  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy";
 export interface ClientInfo {
   kind: ClientKind; name: string; protocol: ApiProtocol;
   availability: "available" | "coming_soon"; availabilityReason?: string | null; mode: "switch" | "coexist";
@@ -266,7 +286,45 @@ export interface ClientInfo {
   configOutdated?: boolean;
   /** Token written into this client's config (as "<token>.<kind>"); "default" when never chosen. */
   tokenId?: string | null;
+  install?: ClientInstall | null;
 }
+/**
+ * How the client is installed and kept up to date. latestVersion comes from the npm registry (only after
+ * POST /api/clients/check-updates). blocker: why install/update is unavailable — "npm-missing",
+ * "vscode-missing" or "external-install" (installed another way, no updater of its own).
+ */
+export interface ClientInstall {
+  method: "npm" | "vscode-extension" | "manual";
+  package?: string | null; homepageUrl: string;
+  installed: boolean; executable?: string | null; version?: string | null;
+  latestVersion?: string | null; latestCheckedAt?: string | null; latestError?: string | null; updateAvailable: boolean;
+  installCommand?: string | null; updateCommand?: string | null; updateVia?: "npm" | "self" | null;
+  blocker?: "npm-missing" | "vscode-missing" | "external-install" | "shadowed" | null; busy: boolean;
+  /** npm's global directories are not writable for this user (root-owned): the npm command needs admin rights. */
+  needsAdmin?: boolean;
+  /** Astra can show the system's admin prompt (macOS osascript / Linux pkexec) and run npm elevated. */
+  adminAvailable?: boolean;
+  /** One-time terminal fix (`sudo chown -R "$(whoami)" …`) after which installs no longer need admin rights. */
+  adminFixCommand?: string | null;
+  /** Other copies of the command behind the one that runs (terminal PATH order); a newer one is shadowed. */
+  otherCopies?: { path: string; version: string; newer: boolean }[] | null;
+  /** The running copy is outside the user's terminal PATH (e.g. only in ~/.npm-global/bin). */
+  notOnPath?: boolean;
+}
+/**
+ * hint — failed runs: "permission-denied" (npm -g cannot write its global directories), "admin-cancelled" (the admin
+ * prompt was dismissed), "timeout"; succeeded runs that did not take effect: "shadowed" (the new version sits behind
+ * an older copy on PATH), "unchanged", "not-on-path". elevated: ran with admin rights (output may only arrive at the
+ * end; cannot be stopped).
+ */
+export interface ClientInstallJob {
+  kind: ClientKind; action: "install" | "update"; state: "running" | "succeeded" | "failed" | "cancelled";
+  command: string; startedAt: string; finishedAt?: string | null; exitCode?: number | null; log: string[];
+  hint?: "permission-denied" | "admin-cancelled" | "timeout" | "shadowed" | "unchanged" | "not-on-path" | null; elevated?: boolean;
+}
+// POST /api/clients/check-updates body {force?} -> ClientInfo[]
+// POST /api/clients/{kind}/install body {action: "install"|"update", elevated?} -> ClientInstallJob ; GET same path -> current/last job (404 none)
+// POST /api/clients/{kind}/install/cancel -> ClientInstallJob
 /** tokenId: omitted keeps the client's current token (default token when it has none). */
 export interface EnableRequest { providerId?: string | null; model?: string | null; extras?: Record<string, unknown> | null; tokenId?: string | null }
 export interface ConfigChange { file: string; format: "toml" | "json" | "env" | "yaml"; keyPath: string; before?: string | null; after?: string | null }
@@ -312,7 +370,8 @@ export interface TokenMutationResult { token?: Token | null; rewritten: ClientKi
 // DELETE /api/tokens/{id} -> TokenMutationResult       (default token: 409; clients move to the default token)
 
 // ---------- requests & stats ----------
-export type RequestStatus = "success" | "upstream_error" | "gateway_error" | "client_cancelled" | "blocked";
+/** "pending" only ever comes from the live feed: the gateway is still handling the request (never stored). */
+export type RequestStatus = "success" | "upstream_error" | "gateway_error" | "client_cancelled" | "blocked" | "pending";
 export interface RequestSummary {
   id: string; startedAtUtc: string; clientKind?: string | null; providerId?: string | null; providerName?: string | null;
   inboundProtocol: ApiProtocol; upstreamProtocol?: ApiProtocol | null; passthrough: boolean;
@@ -332,6 +391,8 @@ export interface RequestSummary {
   costNanoUsd: number; usageSource: "reported" | "missing";
   /** Token that authenticated the request (current name, or the snapshot once the token was deleted). */
   tokenId?: string | null; tokenName?: string | null;
+  /** Subscription account that served the request (after any failover); name is null once the account is deleted. */
+  accountId?: string | null; accountName?: string | null;
 }
 export interface RequestUsageItem {
   tokenType: string; tokens: number; isPerCall: boolean; unitPrice: string; baseUnitPrice?: string | null;
@@ -344,12 +405,19 @@ export interface RequestDetail extends RequestSummary {
   billingTrace: BillingTraceStep[]; billingDescription?: string | null; usageItems: RequestUsageItem[];
   userAgent?: string | null;
   /** Present only when debug body capture was on for this request. */
-  bodies?: { clientRequest?: string | null; upstreamRequest?: string | null; upstreamResponse?: string | null; clientResponse?: string | null } | null;
+  bodies?: { clientRequest?: string | null; upstreamRequest?: string | null; upstreamRequestHeaders?: string | null;
+    upstreamResponse?: string | null; clientResponse?: string | null } | null;
   /** Privacy guard outcome (plan §6.7); present when the guard produced a report for this request. */
   privacy?: PrivacyReport | null;
 }
 // GET /api/requests?from=&to=&client=&token=&provider=&model=&status=&page=1&pageSize=50 -> Page<RequestSummary>
-// GET /api/requests/{id} -> RequestDetail
+// GET /api/requests/{id} -> RequestDetail (served from the live feed while the request is in flight)
+/** One frame of GET /api/requests/live (SSE): the in-flight snapshot first, then every change. */
+export interface RequestLiveEvent {
+  /** started / updated: the row as it stands now; persisted: the row is in the database and list queries return it. */
+  type: "started" | "updated" | "persisted";
+  request: RequestSummary;
+}
 export interface StatsSummary {
   range: Range; costUsd: number; requests: number; successRate: number;
   inputTokens: number; outputTokens: number;
@@ -431,7 +499,29 @@ export interface ProviderAccount {
   quota?: AccountQuota | null;
   /** codex 的额度重置卡快照（列表接口实时刷新）。 */
   credits?: ResetCreditList | null;
+  /** User switch: a disabled account is never used for requests. */
+  enabled: boolean;
+  /** The account requests go to right now (unless a client / token pins another one). */
+  isCurrent: boolean;
+  /** Failover order (ascending); the list comes back sorted by it. */
+  sortOrder: number;
+  /** Rate-limited until then (automatic failover skips it meanwhile). */
+  cooldownUntilUtc?: string | null;
+  lastError?: string | null;
 }
+/** Who may use a subscription provider and how its accounts switch. */
+export interface SubscriptionPolicy {
+  clientPolicy: 'claude-code-only' | 'any';
+  switchMode: 'manual' | 'failover';
+  /** Claude Pro/Max subscription: the client policy is shown (and defaults to Claude Code only). */
+  claudeSubscription: boolean;
+  /** Non-Claude-Code callers present a Claude Code identity (see the gateway's ClaudeCodeMimicry). */
+  mimicClaudeCode: boolean;
+}
+// GET|PUT /api/providers/{id}/subscription-policy  (PUT body: Partial<{clientPolicy, switchMode, mimicClaudeCode}>) -> SubscriptionPolicy
+// POST /api/provider-accounts/{id}/activate -> ProviderAccount[]   (409 {error, status} when the login is dead)
+// PATCH /api/provider-accounts/{id} body {enabled?, displayName?} -> ProviderAccount[]
+// PUT /api/providers/{id}/accounts/order body {ids} -> ProviderAccount[]
 /** One rate-limit reset card (codex); `status` is available | redeemed | expired. */
 export interface ResetCredit {
   id: string; reset_type?: string | null; is_supported_by_plan?: boolean | null; status: string;
@@ -453,9 +543,14 @@ export type SubscriptionLoginStart =
   | { mode: "pkce"; state: string; authorizeUrl: string }
   | { mode: "device"; state: string; userCode: string; verificationUrl?: string | null; interval: number }
   // Server-mediated flow (ZAI CLI): open the authorize URL, then the server polls until done.
-  | { mode: "cli"; state: string; authorizeUrl: string; interval: number };
+  | { mode: "cli"; state: string; authorizeUrl: string; interval: number }
+  // Manual paste (Claude): the client's registered redirect_uri is not a loopback address, so the
+  // authorization page shows the code and the user pastes it back to finish the login.
+  | { mode: "paste"; state: string; authorizeUrl: string };
 // POST /api/providers/{id}/accounts/login body {accountId?} -> SubscriptionLoginStart
 //   (400 {error, needsVerification: true} while the provider's OAuth flow is unverified)
+// POST /api/providers/{id}/accounts/login/{state}/complete body {code} -> {status:"done", account}
+//   (400 {status:"error", error} when the pasted code could not be exchanged)
 export type SubscriptionPollResult =
   | { status: "pending" | "slow_down" }
   | { status: "done"; account: ProviderAccount }
@@ -472,6 +567,21 @@ export interface ImportedCodexAccount {
   warning?: string | null;
 }
 // POST /api/providers/{id}/accounts/import-codex -> ImportedCodexAccount
+/**
+ * A GitHub authorization already present on this machine (the VS Code GitHub session, GH_TOKEN, or the
+ * Copilot plugin config) that could back a Copilot account; the token itself never crosses the wire.
+ */
+export interface LocalCopilotLogin {
+  available: boolean; source?: string | null; detail?: string | null;
+}
+// GET /api/subscription/copilot/local-login -> LocalCopilotLogin
+export interface ImportCopilotRequest {
+  /** A GitHub token the user pasted; omitted/empty means "probe this machine". */
+  token?: string | null;
+  /** Adopts the token into an existing account row instead of creating a new one. */
+  accountId?: string | null;
+}
+// POST /api/providers/{id}/accounts/import-copilot body ImportCopilotRequest -> ImportedCodexAccount
 
 // ---------- settings ----------
 export interface Settings {
@@ -480,10 +590,17 @@ export interface Settings {
   updateChannel: "stable" | "beta"; updateAutoCheck: boolean;
   /** Background balance / quota refresh of API-key providers, minutes (0 = off; providers may override). */
   quotaAutoIntervalMinutes: number;
+  /** Outbound proxy: system = env vars, then the OS setting; custom = proxyUrl; direct = never. Providers' own proxy wins. */
+  proxyMode: ProxyMode; proxyUrl: string | null; proxyUsername: string | null; hasProxyPassword: boolean;
+  /** NO_PROXY-style hosts, comma separated, that stay direct in custom mode. */
+  proxyBypass: string | null;
   /** Read-only here (changed via CLI / config.json): */
   port: number; host: string; dataDir: string; gatewayBaseUrl: string;
 }
-// GET /api/settings -> Settings ; PATCH /api/settings body Partial<Settings> -> Settings
+export type ProxyMode = "system" | "custom" | "direct";
+/** proxyPassword is write-only (null / "" clears it); reads only report hasProxyPassword. */
+export type SettingsPatch = Partial<Settings> & { proxyPassword?: string | null };
+// GET /api/settings -> Settings ; PATCH /api/settings body SettingsPatch -> Settings
 
 // ---------- update feed ----------
 // GET /api/update/status ; POST /api/update/check

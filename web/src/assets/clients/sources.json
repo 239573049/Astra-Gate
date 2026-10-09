@@ -1,5 +1,5 @@
 {
-  "downloadedAt": "2026-10-06T19:04:29.974Z",
+  "downloadedAt": "2026-10-09T00:00:00.000Z",
   "usage": "Marks are used solely to identify supported clients. Copyright and trademarks remain with their respective owners; bundling them does not imply endorsement or grant trademark rights.",
   "sources": {
     "codex": {
@@ -55,6 +55,69 @@
       "kind": "vendor",
       "note": "Official Grok brand icon; not a separate Grok Build lockup.",
       "sha256": "a3487e9bfbe49df853c51c5bdbf980bfb3bec782bfdd398a9bf333bb648b832f"
+    },
+    "crush": {
+      "file": "crush.png",
+      "source": "https://charm.land/touchicon_180w.6171b4d7a2751a37.png",
+      "website": "https://github.com/charmbracelet/crush",
+      "mark": "Charm",
+      "kind": "vendor",
+      "note": "Official Charm touch icon; Crush has no standalone square icon.",
+      "sha256": "9ff2ab436eeccdf3e4ea512dd30ec829369238aa580a6b9879b855d4d0760f88"
+    },
+    "droid": {
+      "file": "droid.svg",
+      "source": "https://factory.ai/favicon.svg",
+      "website": "https://factory.ai/",
+      "mark": "Factory",
+      "kind": "vendor",
+      "note": "Official Factory favicon used to identify Droid.",
+      "sha256": "416ea4962d7b0b8be8bec7f7190c13c22d5f20fdcac401aa72886fd5c81d2fb2"
+    },
+    "zed": {
+      "file": "zed.png",
+      "source": "https://raw.githubusercontent.com/zed-industries/zed/main/crates/zed/resources/app-icon.png",
+      "website": "https://zed.dev/",
+      "mark": "Zed",
+      "kind": "product",
+      "note": "Official Zed app icon; macOS padding cropped and downscaled to 256px locally.",
+      "sha256": "8c289f8f23ebe8313482634c143cd89596d3aaf46cd907e9c20e2c322b7f9f86"
+    },
+    "vscode-insiders": {
+      "file": "vscode-insiders.png",
+      "source": "https://code.visualstudio.com/assets/branding/insiders-logo.png",
+      "website": "https://code.visualstudio.com/insiders/",
+      "mark": "Visual Studio Code Insiders",
+      "kind": "product",
+      "note": "Official Insiders logo from the VS Code branding assets.",
+      "sha256": "0c8b255cb1f641bcaf2b9b705f99957dae9c3999b91168c795a0a3a33171fd28"
+    },
+    "vscodium": {
+      "file": "vscodium.svg",
+      "source": "https://vscodium.com/img/favicon.svg",
+      "website": "https://vscodium.com/",
+      "mark": "VSCodium",
+      "kind": "product",
+      "note": "Official VSCodium favicon.",
+      "sha256": "3f316a52ae4b1fd1e052d9f515fcb759d5426a357e46052086e76b0f37e09a01"
+    },
+    "omp": {
+      "file": "omp.png",
+      "source": "https://omp.sh/favicon.png",
+      "website": "https://omp.sh/",
+      "mark": "oh-my-pi",
+      "kind": "product",
+      "note": "Official oh-my-pi favicon.",
+      "sha256": "36b1bfb9ab058ce3e982aca7f6cd36e042deed81a626b2fc402486512b8f219c"
+    },
+    "workbuddy": {
+      "file": "workbuddy.svg",
+      "source": "https://download.codebuddy.cn/web/workbuddy/788eb1c5ba3681efa98cf7b58ae688e293c1bb34/assets/logo.svg",
+      "website": "https://www.workbuddy.cn/",
+      "mark": "WorkBuddy",
+      "kind": "product",
+      "note": "Official WorkBuddy favicon served by workbuddy.cn.",
+      "sha256": "10ccbc099e7bc3d5ff12c315c4edd7b21386aa7166c1ec19997b3d55010d5c7d"
     }
   }
 }

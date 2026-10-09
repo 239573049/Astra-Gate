@@ -1,7 +1,16 @@
 {
-  "downloadedAt": "2026-10-07T16:05:00.000Z",
+  "downloadedAt": "2026-10-08T00:00:00.000Z",
   "usage": "Marks are used solely to identify supported providers. Copyright and trademarks remain with their respective owners; bundling them does not imply endorsement or grant trademark rights.",
   "sources": {
+    "nextcowork": {
+      "file": "nextcowork.png",
+      "source": "https://nextco.work/icon.png",
+      "website": "https://nextco.work",
+      "mark": "NextCoWork",
+      "kind": "vendor",
+      "note": "Official NextCoWork app icon, downloaded from the vendor site and downscaled to 256px locally; no @lobehub/icons brand component exists for this provider.",
+      "sha256": "400553c3de8c7aad9c87767aca815513bd1d2f9a81f29ce9f7658c1b364560a8"
+    },
     "routin": {
       "file": "routin.png",
       "source": "https://routin.ai/favicon.png",

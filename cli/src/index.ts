@@ -14,6 +14,7 @@ import {
   runClientList,
   runClientStatus,
   runProviderAdd,
+  runProviderImport,
   runProviderList,
   runProviderRemove,
   runTokenList,
@@ -165,6 +166,13 @@ provider
   .action((opts: { template: string; variant?: string; key: string; name?: string }) =>
     runProviderAdd(opts),
   );
+provider
+  .command('import')
+  .description('Import providers from CC Switch, Alma, Claude Code, Codex or Magpie (lists only, unless --yes)')
+  .option('--from <source>', 'Only this source: cc-switch | alma | claude-code | codex | magpie')
+  .option('--yes', 'Import the new entries (or those named with --only)')
+  .option('--only <ref...>', 'With --yes: import only these refs (see the listing)')
+  .action((opts: { from?: string; yes?: boolean; only?: string[] }) => runProviderImport(opts));
 provider
   .command('remove')
   .description('Remove a provider')

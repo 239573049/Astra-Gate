@@ -36,5 +36,17 @@ public static class ClientEndpoints
             Results.Ok(await clients.RestoreBackupAsync(kind, backupId, ct)));
         group.MapGet("/{kind}/models", async (string kind, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.ModelsAsync(kind, ct)));
+
+        // Versions, update checks and installs (ClientInstallService). check-updates fetches the latest versions
+        // from the npm registry (cached for six hours unless forced) and returns the refreshed client list.
+        group.MapPost("/check-updates", async (ClientUpdateCheckRequest? body, ClientInstallService installs, ClientService clients, CancellationToken ct) =>
+        {
+            await installs.CheckUpdatesAsync(body?.Force ?? false, ct);
+            return Results.Ok((await clients.ListAsync(ct)).ToList());
+        });
+        group.MapPost("/{kind}/install", (string kind, ClientInstallRequest body, ClientInstallService installs) =>
+            Results.Ok(installs.Start(kind, body.Action, body.Elevated ?? false)));
+        group.MapGet("/{kind}/install", (string kind, ClientInstallService installs) => Results.Ok(installs.Get(kind)));
+        group.MapPost("/{kind}/install/cancel", (string kind, ClientInstallService installs) => Results.Ok(installs.Cancel(kind)));
     }
 }

@@ -31,6 +31,12 @@ public sealed record GatewayRoute(TokenRecord Token, ClientRecord? Client, strin
         Client?.Kind == ClientKinds.ClaudeDesktop ? ClaudeDesktopRoles.Map(ClaudeDesktopRoles.Parse(Client.ExtraJson), requested) : requested;
 }
 
+/// <summary>Resolves a model's supported upstream protocols, discovering missing capabilities when needed.</summary>
+public interface IModelProtocolResolver
+{
+    Task<IReadOnlyList<ApiProtocol>> ResolveAsync(Provider provider, ProviderModel model, string? accountId, CancellationToken ct);
+}
+
 /// <summary>
 /// Authenticates the gateway token (plan §6.1, tokens) and resolves the provider: "&lt;token&gt;.&lt;kind&gt;" routes through
 /// that client's binding, a bare token is a direct call to the token's own default provider.
@@ -99,6 +105,7 @@ public sealed class GatewayRouter(AstraDatabase db)
     /// for them must be translated rather than passed through (the Responses endpoint answers
     /// <c>model_not_supported</c>). <paramref name="supportedProtocols"/> comes from the provider model row
     /// (<c>upstream_protocols</c>, learned from the upstream model list); null/empty means "no constraint".
+    /// Explicit constraints never fall back to an unsupported protocol when its endpoint is missing.
     /// </summary>
     public static ProviderEndpoint SelectEndpoint(Provider provider, ApiProtocol inbound, IReadOnlyList<ApiProtocol>? supportedProtocols)
     {
@@ -110,7 +117,8 @@ public sealed class GatewayRouter(AstraDatabase db)
             if (provider.EndpointFor(protocol) is { } endpoint) return endpoint;
         foreach (var protocol in provider.PreferredUpstreamProtocols)
             if (supportedProtocols.Contains(protocol) && provider.EndpointFor(protocol) is { } preferred) return preferred;
-        return SelectEndpoint(provider, inbound);
+        throw new GatewayException(503, "api_error",
+            $"提供商 {provider.Name} 未配置该模型支持的上游协议端点（{string.Join(", ", supportedProtocols.Select(p => p.ToId()))}）。请在提供商设置中添加对应端点。");
     }
 
     /// <summary>

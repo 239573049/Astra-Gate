@@ -21,3 +21,5 @@ desktop/renderer/
 desktop/server-bundle/
 .plan/
 promo/
+# Staged server artifacts for ./Dockerfile
+docker-bin/

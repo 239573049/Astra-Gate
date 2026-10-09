@@ -5,17 +5,22 @@ import { useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client';
 import {
   keys,
+  useCompleteProviderLogin,
   useFetchProviderAccountQuota,
   useImportCodexAccount,
+  useImportCopilotAccount,
   useLocalCodexLogin,
+  useLocalCopilotLogin,
   usePollProviderLogin,
   useProviderAccounts,
+  useReorderProviderAccounts,
   useStartProviderLogin,
 } from '../api/hooks';
 import type { Provider, SubscriptionLoginStart } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
-import { Button, Group, Spinner } from './ui/controls';
+import { Button, Group, Input, Spinner } from './ui/controls';
 import { SubscriptionAccountCard } from './SubscriptionAccountCard';
+import { SubscriptionPolicy } from './SubscriptionPolicy';
 import { errorText, Sheet, useFeedback } from './ui/overlays';
 import { useI18n } from '../i18n';
 
@@ -34,11 +39,19 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   const accounts = useProviderAccounts(provider.id, isSubscription);
   const start = useStartProviderLogin(provider.id);
   const poll = usePollProviderLogin(provider.id);
+  const complete = useCompleteProviderLogin(provider.id);
   const quota = useFetchProviderAccountQuota(provider.id);
   // 只有 ChatGPT 订阅有"本机 codex 登录态"可导入。
   const isCodex = provider.templateId === 'openai-subscription';
   const local = useLocalCodexLogin(isSubscription && isCodex);
   const importCodex = useImportCodexAccount(provider.id);
+  // Copilot 的本机凭据住在系统凭据存储里（VS Code 的 GitHub 会话）——macOS 上读它要弹系统授权框，
+  // 所以探测只覆盖无副作用的来源，真正的读取发生在点「导入」的那一刻（那是用户的明确同意）。
+  const isCopilot = provider.templateId === 'github-copilot-subscription';
+  const localCopilot = useLocalCopilotLogin(isSubscription && isCopilot);
+  const importCopilot = useImportCopilotAccount(provider.id);
+  const [copilotToken, setCopilotToken] = useState('');
+  const reorder = useReorderProviderAccounts(provider.id);
 
   const [loginOpen, setLoginOpen] = useState(false);
   const [login, setLogin] = useState<SubscriptionLoginStart | null>(null);
@@ -46,6 +59,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   const [loginError, setLoginError] = useState<string | null>(null);
   // 手动"立即验证"的进行中状态（设备码/CLI 流程）。
   const [checking, setChecking] = useState(false);
+  // Claude 的收尾：授权页把 code 显示出来，用户粘回来（client 注册的回调不是回环地址，回不来）。
+  const [pasted, setPasted] = useState('');
   const baseline = useRef<Set<string>>(new Set());
   const quotaAttempted = useRef<Set<string>>(new Set());
 
@@ -56,6 +71,17 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
         toast(t('providers.subscription.importOk', { name }), r.warning ? 'info' : 'success');
         if (r.warning) toast(r.warning, 'error');
         void local.refetch();
+      },
+      onError: (e) => toast(errorText(e), 'error'),
+    });
+
+  const runCopilotImport = () =>
+    importCopilot.mutate(copilotToken, {
+      onSuccess: (r) => {
+        const name = r.account.displayName || r.account.accountEmail || r.account.id;
+        toast(t('providers.subscription.importOk', { name }), r.warning ? 'info' : 'success');
+        if (r.warning) toast(r.warning, 'error');
+        setCopilotToken('');
       },
       onError: (e) => toast(errorText(e), 'error'),
     });
@@ -179,8 +205,37 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
     }
   };
 
+  /** 把授权页上显示的 code 交给服务端换令牌（Claude）。 */
+  const submitPasted = async () => {
+    if (!login || login.mode !== 'paste' || pasted.trim().length === 0) return;
+    setChecking(true);
+    try {
+      const r = await complete.mutateAsync({ state: login.state, code: pasted.trim() });
+      if (r.status === 'done') {
+        setPasted('');
+        finish(true, r.account.displayName || r.account.accountEmail || r.account.id);
+      } else {
+        finish(false, undefined, 'error' in r ? (r.error ?? r.status) : r.status);
+      }
+    } catch (e) {
+      finish(false, undefined, errorText(e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  /** Swaps the account at <index> with its neighbour in the failover order. */
+  const move = (index: number, delta: -1 | 1) => {
+    const ids = (accounts.data ?? []).map((a) => a.id);
+    const other = index + delta;
+    if (other < 0 || other >= ids.length) return;
+    [ids[index], ids[other]] = [ids[other]!, ids[index]!];
+    reorder.mutate(ids, { onError: (e) => toast(errorText(e), 'error') });
+  };
+
   return (
     <>
+      <SubscriptionPolicy provider={provider} />
       <Group title={t('providers.subscription')} footer={t('providers.subscription.footer')}>
         {accounts.isLoading && <Spinner className="my-4" />}
         {!accounts.isLoading && (accounts.data?.length ?? 0) === 0 && (
@@ -188,8 +243,14 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
             {t('providers.subscription.none')}
           </div>
         )}
-        {accounts.data?.map((a) => (
-          <SubscriptionAccountCard key={a.id} provider={provider} account={a} onRelogin={startLogin} />
+        {accounts.data?.map((a, i, list) => (
+          <SubscriptionAccountCard
+            key={a.id}
+            provider={provider}
+            account={a}
+            onRelogin={startLogin}
+            onMove={list.length > 1 ? { up: i > 0 ? () => move(i, -1) : undefined, down: i < list.length - 1 ? () => move(i, 1) : undefined } : undefined}
+          />
         ))}
         <div className="flex flex-wrap items-center gap-2 px-4 py-2">
           <Button size="sm" icon={<Plus className="size-3.5" />} loading={start.isPending} onClick={() => startLogin()}>
@@ -207,6 +268,30 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
               {t('providers.subscription.importCodex')}
             </Button>
           )}
+          {/* Copilot 的长期凭据是一份 GitHub token（Copilot 短时令牌由它换来），本机常见来源是
+              VS Code 的 GitHub 会话。探测只在顺手能拿到时提示；拿不到也保留按钮——
+              点它才是去读系统凭据存储、或使用下面手填 token 的时机。 */}
+          {isCopilot && (
+            <>
+              <Button
+                size="sm"
+                icon={<Download className="size-3.5" />}
+                loading={importCopilot.isPending}
+                onClick={runCopilotImport}
+                title={t('providers.subscription.importCopilotHint')}
+              >
+                {t('providers.subscription.importCopilot')}
+              </Button>
+              <Input
+                className="w-56"
+                mono
+                value={copilotToken}
+                onChange={(e) => setCopilotToken(e.target.value)}
+                placeholder={t('providers.subscription.importCopilotPlaceholder')}
+                aria-label={t('providers.subscription.importCopilotToken')}
+              />
+            </>
+          )}
         </div>
         {isCodex && local.data?.available && (
           <div className="px-4 pb-2 text-[11px] text-[var(--text-muted)]">
@@ -214,6 +299,16 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
               who: local.data.accountEmail ?? local.data.plan ?? t('providers.subscription.unknownAccount'),
             })}
             {local.data.detail ? ` · ${local.data.detail}` : ''}
+          </div>
+        )}
+        {isCopilot && (
+          <div className="px-4 pb-2 text-[11px] text-[var(--text-muted)]">
+            {localCopilot.data?.available
+              ? t('providers.subscription.localCopilotFound', {
+                  source: localCopilot.data.source ?? '',
+                })
+              : t('providers.subscription.localCopilotHint')}
+            {localCopilot.data?.detail ? ` · ${localCopilot.data.detail}` : ''}
           </div>
         )}
       </Group>
@@ -234,6 +329,29 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
           <Alert tone="danger" title={t('providers.subscription.loginFailed')}>
             {loginError}
           </Alert>
+        )}
+        {login?.mode === 'paste' && (
+          <div className="flex flex-col gap-3">
+            <Alert tone="info" title={t('providers.subscription.pasteTitle')}>
+              {t('providers.subscription.pasteDetail')}
+            </Alert>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={() => window.open(login.authorizeUrl, '_blank', 'noopener')}>
+                {t('providers.subscription.openAuthorize')}
+              </Button>
+            </div>
+            <Input
+              mono
+              value={pasted}
+              onChange={(e) => setPasted(e.target.value)}
+              placeholder={t('providers.subscription.pastePlaceholder')}
+              aria-label={t('providers.subscription.pasteCode')}
+            />
+            {/* 授权页上显示的通常是「授权码#state」，直接整段粘过来即可。 */}
+            <Button variant="primary" loading={checking} onClick={() => void submitPasted()}>
+              {t('providers.subscription.pasteSubmit')}
+            </Button>
+          </div>
         )}
         {login?.mode === 'pkce' && (
           <div className="flex flex-col gap-3">
