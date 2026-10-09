@@ -3,6 +3,8 @@
  * (not under ~/.astra — nothing else reads them).
  */
 
+import { EMPTY_REMINDER_STATE, parseReminderState, type UpdateReminderState } from './updateReminder';
+
 /** What the menu bar shows next to the tray icon (macOS title; the icon tooltip on Windows / Linux). */
 export const TRAY_TITLE_MODES = ['none', 'requests', 'tokens', 'cost', 'quota', 'alerts'] as const;
 export type TrayTitleMode = (typeof TRAY_TITLE_MODES)[number];
@@ -21,6 +23,8 @@ export interface DesktopPrefs {
   /** The one-time "still running in the tray" hint was shown after the first window close. */
   closeHintShown: boolean;
   tray: TrayPrefs;
+  /** Update reminder circuit-breaker state (see shared/updateReminder.ts). */
+  updateReminder: UpdateReminderState;
 }
 
 export const DEFAULT_TRAY_PREFS: TrayPrefs = {
@@ -37,10 +41,18 @@ export const DEFAULT_TRAY_PREFS: TrayPrefs = {
   },
 };
 
-export const DEFAULT_PREFS: DesktopPrefs = { closeHintShown: false, tray: DEFAULT_TRAY_PREFS };
+export const DEFAULT_PREFS: DesktopPrefs = {
+  closeHintShown: false,
+  tray: DEFAULT_TRAY_PREFS,
+  updateReminder: EMPTY_REMINDER_STATE,
+};
 
 function defaults(): DesktopPrefs {
-  return { ...DEFAULT_PREFS, tray: { ...DEFAULT_TRAY_PREFS, sections: { ...DEFAULT_TRAY_PREFS.sections } } };
+  return {
+    ...DEFAULT_PREFS,
+    tray: { ...DEFAULT_TRAY_PREFS, sections: { ...DEFAULT_TRAY_PREFS.sections } },
+    updateReminder: { ...EMPTY_REMINDER_STATE },
+  };
 }
 
 /**
@@ -70,5 +82,9 @@ export function parsePrefs(text: string | null | undefined): DesktopPrefs {
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return defaults();
   const o = raw as Record<string, unknown>;
-  return { closeHintShown: o.closeHintShown === true, tray: parseTrayPrefs(o.tray) };
+  return {
+    closeHintShown: o.closeHintShown === true,
+    tray: parseTrayPrefs(o.tray),
+    updateReminder: parseReminderState(o.updateReminder),
+  };
 }

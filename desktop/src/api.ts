@@ -56,6 +56,29 @@ export async function fetchVersion(base: string, timeoutMs = 2000): Promise<Serv
   return out;
 }
 
+/** GET /api/update/status — whether the user lets Astra check for updates automatically. Null when unreadable. */
+export async function fetchUpdateAutoCheck(base: string, timeoutMs = 3000): Promise<boolean | null> {
+  try {
+    const raw = await requestJson<{ autoCheck?: unknown }>(base, '/api/update/status', { timeoutMs });
+    return typeof raw?.autoCheck === 'boolean' ? raw.autoCheck : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * POST /api/update/check — makes the server poll the feed now, so a launch-time check does not
+ * read a result cached for up to 12h. Best effort: false on any failure (the cached status is used).
+ */
+export async function refreshUpdateCheck(base: string, timeoutMs = 20_000): Promise<boolean> {
+  try {
+    await requestJson(base, '/api/update/check', { method: 'POST', headers: adminHeaders(), timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function asArray(raw: unknown): Record<string, unknown>[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null);

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { navHash, NAV_ORDER } from '../src/shared/chrome';
 import { DEFAULT_TRAY_PREFS, parsePrefs, parseTrayPrefs } from '../src/shared/prefs';
+import { EMPTY_REMINDER_STATE } from '../src/shared/updateReminder';
 import {
   buildTrayMenuTemplate,
   trayStateKey,
@@ -186,7 +187,7 @@ describe('navHash', () => {
 
 describe('parsePrefs', () => {
   it('falls back to defaults on missing or malformed input', () => {
-    const defaults = { closeHintShown: false, tray: DEFAULT_TRAY_PREFS };
+    const defaults = { closeHintShown: false, tray: DEFAULT_TRAY_PREFS, updateReminder: EMPTY_REMINDER_STATE };
     expect(parsePrefs(null)).toEqual(defaults);
     expect(parsePrefs('nope')).toEqual(defaults);
     expect(parsePrefs('[1]')).toEqual(defaults);

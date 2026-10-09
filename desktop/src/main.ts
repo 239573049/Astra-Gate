@@ -123,6 +123,15 @@ async function main(): Promise<void> {
         return v.version ?? null;
       },
     },
+    // Launch-time check + reminder; the circuit breaker state persists in desktop-prefs.json.
+    reminder: {
+      load: () => loadPrefs().updateReminder,
+      save: (updateReminder) => savePrefs({ ...loadPrefs(), updateReminder }),
+      // A visible window gets a dialog; a tray-only app (login launch, window closed) a quiet notification.
+      mode: () => (mainWindow?.isVisible() ? 'dialog' : 'notification'),
+      locale: () => app.getLocale(),
+      bringToFront: bringAppToFront,
+    },
     log: (line) => console.log(`[astra] ${line}`),
   });
   app.on('second-instance', () => {
@@ -199,7 +208,7 @@ async function main(): Promise<void> {
   setInterval(() => {
     void refreshTray();
   }, 10_000);
-  // Background update checks (12h cadence, first one shortly after boot).
+  // Update checks: one right after launch (with a reminder when something is pending), then every 12h.
   updater!.start();
 
   if (!startHidden) await showMainWindow();

@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron';
+import { app, dialog, Notification } from 'electron';
 import * as fs from 'node:fs';
 import { autoUpdater } from 'electron-updater';
 import {
@@ -11,7 +11,15 @@ import {
   type ServerControl,
   type UpdateManifest,
 } from '@aidotnet/update-core';
+import { fetchUpdateAutoCheck, refreshUpdateCheck } from './api';
 import { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
+import {
+  decideReminder,
+  recordReminder,
+  reminderLabels,
+  skipVersion,
+  type UpdateReminderState,
+} from './shared/updateReminder';
 
 /**
  * Update plumbing for the desktop app, covering three surfaces:
@@ -37,6 +45,22 @@ export function isDesktopUpdateAvailable(manifest: UpdateManifest, currentVersio
   return isNewerVersion(manifest.version, currentVersion);
 }
 
+/**
+ * Launch / background reminders. The circuit breaker (cooldown, per-version cap, skip) lives in
+ * shared/updateReminder.ts; this only wires persistence and the surface it is shown on.
+ */
+export interface UpdateReminderOptions {
+  load: () => UpdateReminderState;
+  save: (state: UpdateReminderState) => void;
+  /** 'notification' for a quiet launch (login item, hidden window), 'dialog' otherwise. */
+  mode: () => 'dialog' | 'notification';
+  /** OS locale for the reminder texts; a getter because `app.getLocale()` is only valid after ready. */
+  locale: () => string;
+  /** macOS: a menu-bar app is not frontmost, so dialogs would open behind other apps. */
+  bringToFront?: () => void;
+  now?: () => number;
+}
+
 export interface UpdateControllerOptions {
   home: string;
   installDesktopPath: string | null;
@@ -51,6 +75,8 @@ export interface UpdateControllerOptions {
   desktopPackage: string;
   /** Server lifecycle controls, wired to the ServiceManager by main.ts. */
   control: ServerControl;
+  /** Omit to disable reminders (the tray entry still appears). */
+  reminder?: UpdateReminderOptions;
   log: (line: string) => void;
 }
 
@@ -72,6 +98,9 @@ export class UpdateController {
   /** True when the pending manifest is also newer than this app (mac npm track updates both). */
   private desktopUpdatePending = false;
   private dmgDownloadedVersion: string | null = null;
+  /** DMG track: a newer app version was found but is still downloading. */
+  private dmgAvailableVersion: string | null = null;
+  private reminding = false;
 
   constructor(private readonly o: UpdateControllerOptions) {
     let realExePath = '';
@@ -90,6 +119,7 @@ export class UpdateController {
       autoUpdater.on('update-downloaded', (info) => {
         this.dmgDownloadedVersion = info.version ?? null;
         this.o.log(`desktop update downloaded: ${this.dmgDownloadedVersion}`);
+        void this.maybeRemind();
       });
       autoUpdater.on('error', (err) => {
         this.o.log(`desktop updater error: ${err.message}`);
@@ -98,15 +128,29 @@ export class UpdateController {
     o.log(`update track: ${this.track}`);
   }
 
-  /** Periodic background checks; manual checks call check() directly. */
-  start(intervalMs = 12 * 60 * 60 * 1000, initialMs = 5 * 60 * 1000): void {
+  /**
+   * Background checks: one shortly after launch, then every 12h. Both can remind the user
+   * (subject to the circuit breaker); manual checks call check() directly and never do.
+   */
+  start(intervalMs = 12 * 60 * 60 * 1000, initialMs = 3_000): void {
     if (this.track === 'disabled' || this.timer) return;
     this.timer = setInterval(() => {
-      void this.check();
+      void this.backgroundCheck();
     }, intervalMs);
     setTimeout(() => {
-      void this.check();
+      void this.backgroundCheck();
     }, initialMs);
+  }
+
+  /** check() + reminder, unless the user turned automatic update checks off in Settings. */
+  async backgroundCheck(): Promise<void> {
+    const base = this.o.apiBase();
+    if (base && (await fetchUpdateAutoCheck(base)) === false) {
+      this.o.log('automatic update checks are turned off — skipping the background check');
+      return;
+    }
+    await this.check();
+    await this.maybeRemind();
   }
 
   stop(): void {
@@ -175,7 +219,8 @@ export class UpdateController {
     try {
       const result = await autoUpdater.checkForUpdates();
       const v = result?.updateInfo?.version;
-      if (v && v !== app.getVersion() && !this.dmgDownloadedVersion) {
+      this.dmgAvailableVersion = v && v !== app.getVersion() ? v : null;
+      if (this.dmgAvailableVersion && !this.dmgDownloadedVersion) {
         return `Desktop app ${v} is available (downloading in the background).`;
       }
       return '';
@@ -187,6 +232,8 @@ export class UpdateController {
 
   private async checkServerAndManifest(): Promise<string> {
     const base = this.o.apiBase();
+    // The server only polls the feed every 12h; ask it to poll now so a launch-time check is fresh.
+    if (base) await refreshUpdateCheck(base);
     // Gated on the SERVER's version, like the apply gate below: a server left
     // behind by an older install must surface even when this app is current.
     const serverVersion = (await this.o.control.probeVersion()) ?? app.getVersion();
@@ -309,6 +356,87 @@ export class UpdateController {
   applyDesktopDmgUpdate(): void {
     if (!this.dmgDownloadedVersion) throw new Error('No downloaded desktop update.');
     autoUpdater.quitAndInstall();
+  }
+
+  /** Version a reminder would be about, or null when there is nothing (ready) to install. */
+  private reminderVersion(): string | null {
+    if (this.dmgDownloadedVersion) return this.dmgDownloadedVersion;
+    // The app update is still downloading: the 'update-downloaded' event reminds once it is ready.
+    if (this.track === 'dmg' && this.dmgAvailableVersion) return null;
+    return this.pendingManifest?.version ?? null;
+  }
+
+  /**
+   * Tells the user about a pending update unless the circuit breaker says otherwise. The
+   * reminder is recorded BEFORE it is shown, so even a crash or force-quit mid-dialog counts.
+   */
+  async maybeRemind(): Promise<void> {
+    const r = this.o.reminder;
+    if (!r || this.reminding) return;
+    const version = this.reminderVersion();
+    if (!version) return;
+    const now = (r.now ?? Date.now)();
+    const state = r.load();
+    const decision = decideReminder(state, version, now);
+    if (!decision.remind) {
+      this.o.log(`update reminder for ${version} suppressed (${decision.reason})`);
+      return;
+    }
+    r.save(recordReminder(state, version, now));
+    this.reminding = true;
+    try {
+      if (r.mode() === 'notification') this.showReminderNotification(version);
+      else await this.showReminderDialog(version);
+    } finally {
+      this.reminding = false;
+    }
+  }
+
+  private showReminderNotification(version: string): void {
+    if (!Notification.isSupported()) return;
+    const t = reminderLabels(this.o.reminder!.locale());
+    const n = new Notification({ title: t.message(version), body: t.notificationBody });
+    n.on('click', () => {
+      void this.checkInteractive();
+    });
+    n.show();
+  }
+
+  private async showReminderDialog(version: string): Promise<void> {
+    const r = this.o.reminder!;
+    const t = reminderLabels(r.locale());
+    const notes = this.pendingManifest?.notes?.trim();
+    r.bringToFront?.();
+    const { response } = await dialog.showMessageBox({
+      type: 'info',
+      title: 'Astra',
+      message: t.message(version),
+      detail: notes ? (notes.length > 600 ? `${notes.slice(0, 600)}…` : notes) : undefined,
+      buttons: [t.update, t.later, t.skip],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    });
+    if (response === 2) {
+      r.save(skipVersion(r.load(), version));
+      return;
+    }
+    if (response !== 0) return;
+    try {
+      const outcome = await this.applyFromUi();
+      if (outcome === 'server') {
+        await dialog.showMessageBox({ type: 'info', title: 'Astra', message: t.updated, buttons: ['OK'], noLink: true });
+      }
+    } catch (err) {
+      await dialog.showMessageBox({
+        type: 'error',
+        title: 'Astra',
+        message: t.failed,
+        detail: err instanceof Error ? err.message : String(err),
+        buttons: ['OK'],
+        noLink: true,
+      });
+    }
   }
 
   /** Full interactive flow for the tray item. */
