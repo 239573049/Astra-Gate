@@ -43,6 +43,21 @@ export function writeInstallInfo(home: string, info: InstallInfo): void {
   fs.writeFileSync(file, `${JSON.stringify(info, null, 2)}\n`);
 }
 
+/**
+ * Undoes applyServerInfo for installs that had no managed server before (the
+ * bundled server of a standalone installer): without a serverPath the
+ * resolvers fall back to the bundled binary. Removes the file when nothing
+ * else was recorded in it.
+ */
+export function clearServerInfo(home: string, existing: InstallInfo | null): void {
+  const { serverPath: _serverPath, serverVersion: _serverVersion, updatedAt: _updatedAt, ...rest } = existing ?? {};
+  if (Object.keys(rest).length > 0) {
+    writeInstallInfo(home, { ...rest, updatedAt: new Date().toISOString() });
+  } else {
+    fs.rmSync(path.join(home, 'install.json'), { force: true });
+  }
+}
+
 export function applyServerInfo(existing: InstallInfo | null, server: { serverPath: string; serverVersion?: string }): InstallInfo {
   return {
     ...(existing ?? {}),

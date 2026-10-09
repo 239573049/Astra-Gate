@@ -80,7 +80,7 @@ function harness(tmp: string, sub = 'main'): Harness {
   const opts: ApplyServerUpdateOptions = {
     home,
     manifest,
-    platformKey: 'darwin-arm64',
+    platformKey: 'osx-arm64',
     serverPackage: '@aidotnet/server-darwin-arm64',
     platform: 'darwin',
     currentServerPath: oldBinary,
@@ -104,7 +104,7 @@ describe('applyServerUpdate', () => {
 
   it('end-to-end success: stages, swaps to a managed path, restarts and lands idle', async () => {
     const h = harness(tmp);
-    h.manifest.platforms = { 'darwin-arm64': { server: h.opts.serverPackage, serverSha256: REAL_SHA } };
+    h.manifest.platforms = { 'osx-arm64': { server: h.opts.serverPackage, serverSha256: REAL_SHA } };
 
     const result = await applyServerUpdate(h.opts);
 
@@ -197,7 +197,7 @@ describe('applyServerUpdate', () => {
 
     // Checksum mismatch follows the same path (fresh home so counters stay independent).
     const h2 = harness(tmp, 'checksum');
-    h2.manifest.platforms = { 'darwin-arm64': { serverSha256: 'deadbeef' } };
+    h2.manifest.platforms = { 'osx-arm64': { serverSha256: 'deadbeef' } };
     await expect(applyServerUpdate(h2.opts)).rejects.toThrow(/Checksum mismatch/);
     expect(readInstallInfo(h2.home)?.serverPath).toBe(h2.oldBinary);
     expect(readUpdateState(updatePaths(h2.home).stateFile)).toMatchObject({ phase: 'failed', failedCount: 1 });
@@ -309,5 +309,46 @@ describe('applyServerUpdate', () => {
     await applyServerUpdate(h.opts);
 
     expect(fs.readFileSync(path.join(serverDir, 'wwwroot', 'index.html'), 'utf8')).toBe('old-ui');
+  });
+
+  it('verifies the checksum from the manifest entry keyed by the platform key', async () => {
+    const h = harness(tmp);
+    h.manifest.platforms = {
+      'osx-arm64': { server: h.opts.serverPackage, serverSha256: 'deadbeef' },
+      'darwin-arm64': { server: h.opts.serverPackage, serverSha256: REAL_SHA },
+    };
+    await expect(applyServerUpdate(h.opts)).rejects.toThrow(/Checksum mismatch/);
+  });
+
+  describe('rollback without a previous managed binary (standalone installer)', () => {
+    function installerHarness(sub: string, previous: Record<string, string> | null): Harness {
+      const h = harness(tmp, sub);
+      fs.rmSync(path.join(h.home, 'install.json'));
+      if (previous) fs.writeFileSync(path.join(h.home, 'install.json'), JSON.stringify(previous));
+      h.opts.currentServerPath = null; // the server is bundled, the desktop app passes null
+      h.control.versionToReport = '0.1.0'; // restarted server does not report the new version
+      return h;
+    }
+
+    it('removes install.json so the bundled server wins again', async () => {
+      const h = installerHarness('no-install', null);
+
+      await expect(applyServerUpdate(h.opts)).rejects.toThrow(/reports 0.1.0/);
+
+      expect(readInstallInfo(h.home)).toBeNull();
+      expect(readUpdateState(updatePaths(h.home).stateFile)).toMatchObject({ phase: 'failed', failedCount: 1 });
+      expect(h.control.starts).toBe(2);
+    });
+
+    it('keeps unrelated install.json fields and drops only the server pointer', async () => {
+      const h = installerHarness('desktop-only', { desktopPath: '/apps/Astra.app', desktopVersion: '0.1.0' });
+
+      await expect(applyServerUpdate(h.opts)).rejects.toThrow(/reports 0.1.0/);
+
+      const install = readInstallInfo(h.home);
+      expect(install).toMatchObject({ desktopPath: '/apps/Astra.app', desktopVersion: '0.1.0' });
+      expect(install?.serverPath).toBeUndefined();
+      expect(install?.serverVersion).toBeUndefined();
+    });
   });
 });

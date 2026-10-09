@@ -1,5 +1,6 @@
 import {
   applyServerInfo,
+  clearServerInfo,
   readInstallInfo,
   writeInstallInfo,
   type InstallInfo,
@@ -228,6 +229,12 @@ async function rollback(
     if (restorePath) {
       log(`Rolling back to ${restorePath}`);
       writeInstallInfo(o.home, applyServerInfo(previousInstall, { serverPath: restorePath }));
+    } else {
+      // No managed binary existed before (standalone installer: the server ships inside
+      // the app). install.json still points at the failed binary and, being newer, would
+      // keep winning — drop the pointer so the resolvers fall back to the bundled one.
+      log('Rolling back to the server bundled with the app');
+      clearServerInfo(o.home, previousInstall);
     }
     if (await o.control.isRunning()) await o.control.stop();
     const serverDir = updatePaths(o.home).serverDir;

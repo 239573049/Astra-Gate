@@ -17,7 +17,7 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 - **模型** — 启用时写入客户端配置的默认模型。Claude Code 还提供 Opus / Sonnet / Haiku 三档选择，对应 `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`（Haiku 档兼作快速/后台模型）。所有模型选项默认留空，留空就不写入，配置文件里已有的同名设置也不会被改动；修改后需要重新写入客户端配置；
 - **维护** — 复制配置文件路径、配置备份。
 
-支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot，以及 Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness、WorkBuddy。
+支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot，以及 Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness、WorkBuddy、Muse Code、NextCoWork。
 
 后加入的几个客户端由 Astra 写入这些位置（括号内为可覆盖目录的环境变量）：
 
@@ -37,9 +37,10 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 | **omp（oh-my-pi）** | `~/.omp/agent/models.yml`、`config.yml`（`PI_CODING_AGENT_DIR`） | 新增 `providers.astra`（`openai-completions`，含模型列表）；选了模型时设置 `modelRoles.default` 为 `astra/<模型>` |
 | **MiMo Code** | `~/.config/mimocode/mimocode.json(c)`（Windows `%LOCALAPPDATA%\mimocode`） | 与 OpenCode 相同的 `provider.astra`；选了模型时设置 `model`。该客户端的 `MIMOCODE_HOME` 对路径的影响没有文档，设置了会提示 |
 | **DeepSeek Harness** | `~/.dsh/profiles/desktop/cordis.patch.yml`、`~/.dsh/profiles/web/cordis.patch.yml`（取其中已存在的；`DSH_HOME`）和 `~/.dsh/.env` | 在 `llm-pi-ai` 行里新增 `providers.astra`（自定义模型 API，`openai-completions`，含模型列表），保留你已有的提供商；选了模型时把 `agent-default-model` 行的 `provider` / `model` 改为 Astra（其 `reasoningEffort` 暂时移除，自定义模型没有声明档位，停用时还原）。Harness 的配置里不放明文密钥，只放 `apiKeyEnv` 引用，所以令牌写进 `~/.dsh/.env` 的 `ASTRA_GATEWAY_API_KEY`（优先级最低，不会盖过你在 Harness 里保存的密钥或启动环境里的变量）。Harness 还没创建过 desktop / web 配置时请先启动一次；`$DSH_HOME/cordis.patch.yml`（家目录层）里若也有 `llm-pi-ai` 行，它会盖过 profile 里的，卡片会提示 |
+| **Muse Code** | 用户的 shell 配置文件 `~/.zshrc`（只存在 `~/.bashrc` 时用它）；检测目录为 `~/.config/muse`。Muse 没有可写入的端点配置项 | 在 rc 文件里写入一段 `# >>> astra muse-code >>>` 受管块，定义 `muse` shell 函数：`muse exec` 与无子命令的交互式 `muse` 会带上 `--base-url <网关>/v1`、`META_API_KEY`（本客户端的网关令牌）和 `MUSE_MODEL` 运行，仅限这一次调用；`resume`、`login` 等其它子命令照常使用你的 Meta 账号。`MUSE_MODEL` 取你选的模型，未选时取绑定提供商的第一个模型（Muse 不带 `--model` 时的默认模型解析会报 "no visible models"）。需要重新打开终端。模型列表由网关的 `/muse-code/models`（主机根路径，不在 `/v1` 下）提供 |
 | **WorkBuddy** | `~/.workbuddy/models.json` | 在 `models` 数组里为每个模型新增一条自定义模型（Chat Completions，`url` 为完整的 `/v1/chat/completions` 地址，显示名 `Astra: <模型>`），不动你已有的条目。WorkBuddy 会读取这里配置的模型并可在「设置 → 模型」里查看；文件热加载。0.3.0 及更早的 Astra 误写入 CodeBuddy 的 `~/.codebuddy/models.json`，重新「应用」后会把那里的 Astra 条目清掉。Astra 不设默认模型，请在模型选择器的自定义模型分组里挑选。若你设置了 `availableModels`，需把 Astra 的模型 id 加进去才会显示 |
 
-Pi、MiniMax Code、Copilot CLI、VS Code 系列、Crush、Qwen Code、Droid、Kimi Code、Zed、omp、MiMo Code、DeepSeek Harness、WorkBuddy 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
+Pi、MiniMax Code、Copilot CLI、VS Code 系列、Crush、Qwen Code、Droid、Kimi Code、Zed、omp、MiMo Code、DeepSeek Harness、WorkBuddy、NextCoWork 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
 
 ### 安装与更新
 

@@ -25,25 +25,31 @@ public static class ClientKinds
     public const string MiMoCode = "mimo-code";
     public const string DeepSeekHarness = "deepseek-harness";
     public const string WorkBuddy = "workbuddy";
+    public const string MuseCode = "muse-code";
+    public const string NextCoWork = "nextcowork";
 
     public static readonly IReadOnlyList<string> All =
     [
         Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
-        DeepSeekHarness, WorkBuddy,
+        DeepSeekHarness, WorkBuddy, MuseCode, NextCoWork,
     ];
 
-    /// <summary>Clients whose configuration lists the bound provider's models (kept current when that list changes).</summary>
+    /// <summary>
+    /// Clients whose configuration lists the bound provider's models (kept current when that list changes). Muse Code
+    /// writes no list, but takes its default model from it when none is selected (its model catalog needs one).
+    /// </summary>
     public static readonly IReadOnlyList<string> WithModelList =
     [
         OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
-        Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy,
+        Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, NextCoWork,
+        MuseCode,
     ];
 
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
-        Codex or GrokBuild => ApiProtocol.OpenAIResponses,
+        Codex or GrokBuild or MuseCode => ApiProtocol.OpenAIResponses,
         ClaudeCode or ClaudeDesktop => ApiProtocol.Anthropic,
         GeminiCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,

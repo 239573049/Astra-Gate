@@ -29,8 +29,32 @@ internal abstract class ConfigEditorOps
         ConfigFileFormat.Json => new JsonOps(new JsoncEditor(text)),
         ConfigFileFormat.Env => new EnvOps(new DotEnvEditor(text)),
         ConfigFileFormat.Yaml => new YamlOps(new YamlEditor(text)),
+        ConfigFileFormat.ShellBlock => new ShellBlockOps(new ShellBlockEditor(text)),
         _ => throw new ArgumentOutOfRangeException(nameof(format)),
     };
+
+    private sealed class ShellBlockOps : ConfigEditorOps
+    {
+        private ShellBlockEditor _editor;
+
+        public ShellBlockOps(ShellBlockEditor editor) => _editor = editor;
+
+        public override string Text => _editor.Text;
+
+        // The key path is the block id; the value is the block body (raw text, like .env values).
+        public override string? Read(ConfigChange change) => _editor.Get(change.KeyPath);
+
+        public override void Apply(ConfigChange change, List<string> warnings)
+        {
+            _ = warnings;
+            if (change.After is null) { Remove(change); return; }
+            _editor = _editor.Set(change.KeyPath, ConfigValueCodec.DecodeToSource(ConfigFileFormat.ShellBlock, change.After)!);
+        }
+
+        public override void RestoreSource(ConfigChange change, string source) => _editor = _editor.Set(change.KeyPath, source);
+
+        public override void Remove(ConfigChange change) => _editor = _editor.Remove(change.KeyPath);
+    }
 
     private sealed class TomlOps : ConfigEditorOps
     {

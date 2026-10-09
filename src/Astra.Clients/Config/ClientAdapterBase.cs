@@ -72,7 +72,8 @@ public abstract class ClientAdapterBase : IClientAdapter
 
     /// <summary>The file format of a config file, derived from its name.</summary>
     protected static ConfigFileFormat FormatOfPath(string path) =>
-        path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ? ConfigFileFormat.Toml
+        Path.GetFileName(path) is ".zshrc" or ".bashrc" or ".zprofile" or ".bash_profile" ? ConfigFileFormat.ShellBlock
+        : path.EndsWith(".toml", StringComparison.OrdinalIgnoreCase) ? ConfigFileFormat.Toml
         : path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase)
             ? ConfigFileFormat.Yaml
         : path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".jsonc", StringComparison.OrdinalIgnoreCase)

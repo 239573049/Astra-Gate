@@ -321,6 +321,22 @@ public class GatewayPipelineTests
     }
 
     [Fact]
+    public async Task Muse_Code_Catalog_Path_Serves_The_Bound_Models_In_The_OpenAI_List_Shape()
+    {
+        // The native muse CLI fetches <origin>/muse-code/models at the host root, not under its /v1 base URL.
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.MuseCode, ApiProtocol.OpenAIResponses, _ => FakeUpstream.Json("{}"));
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "muse-spark-1.3" });
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/muse-code/models");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {gw.Key}");
+        var response = await gw.Host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var list = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+        Assert.Equal("list", list["object"]!.GetValue<string>());
+        Assert.Equal(["muse-spark-1.3"], list["data"]!.AsArray().Select(m => m!["id"]!.GetValue<string>()));
+    }
+
+    [Fact]
     public async Task A_Client_Bound_To_Several_Providers_Routes_Each_Model_To_The_First_Provider_Serving_It()
     {
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));

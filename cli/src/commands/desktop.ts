@@ -196,7 +196,9 @@ async function updateServer(home: string, manifest: UpdateManifest, force: boole
   await applyServerUpdate({
     home,
     manifest,
-    platformKey: `${plat.platform}-${plat.arch}`,
+    // manifest.platforms is keyed by .NET RID (osx-arm64), not process.platform (darwin-arm64):
+    // a wrong key silently drops the sha256 check.
+    platformKey: plat.rid,
     serverPackage: plat.serverPackage,
     platform: plat.platform,
     currentServerPath: readInstallJson(home)?.serverPath ?? null,

@@ -118,6 +118,15 @@
       "kind": "product",
       "note": "Official WorkBuddy favicon served by workbuddy.cn.",
       "sha256": "10ccbc099e7bc3d5ff12c315c4edd7b21386aa7166c1ec19997b3d55010d5c7d"
+    },
+    "nextcowork": {
+      "file": "nextcowork.png",
+      "source": "https://nextco.work/icon.png",
+      "website": "https://nextco.work/",
+      "mark": "NextCoWork",
+      "kind": "product",
+      "note": "Official NextCoWork app icon, downscaled to 256px locally; the same file as assets/providers/nextcowork.png.",
+      "sha256": "400553c3de8c7aad9c87767aca815513bd1d2f9a81f29ce9f7658c1b364560a8"
     }
   }
 }

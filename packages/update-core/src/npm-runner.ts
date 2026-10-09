@@ -16,8 +16,6 @@ export interface LocateNpmOptions {
   env?: NodeJS.ProcessEnv;
   platform?: string;
   execPath?: string;
-  /** Resolve through the user's login shell when PATH lookups fail (GUI processes). */
-  allowShellResolve?: boolean;
 }
 
 export function locateNpm(o: LocateNpmOptions = {}): NpmCommand {
@@ -126,19 +124,107 @@ export interface NpmRunnerOptions {
   npm?: NpmCommand;
   /** Default 10 minutes — platform packages are 80-120 MB. */
   installTimeoutMs?: number;
+  /** Test seam — replaces the login-shell PATH lookup used when `node` is not on PATH. */
+  loginShellPath?: () => Promise<string | null>;
+  /** Test seam — replaces the well-known prefixes probed for node. */
+  wellKnownBinDirs?: string[];
 }
 
 function npmCommand(o: NpmRunnerOptions): NpmCommand {
   return o.npm ?? locateNpm(o);
 }
 
+function dirHasExecutable(dir: string, name: string): boolean {
+  try {
+    fs.accessSync(path.join(dir, name), fs.constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const NODE_BIN_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
+const SHELL_PATH_MARKER = /__ASTRA_PATH_START__([\s\S]*?)__ASTRA_PATH_END__/;
+let cachedLoginShellPath: Promise<string | null> | null = null;
+
+/** Asks the user's login shell for its PATH (nvm / volta / fnm / Homebrew live there). */
+function readLoginShellPath(env: NodeJS.ProcessEnv, timeoutMs = 5_000): Promise<string | null> {
+  return new Promise((resolve) => {
+    let out = '';
+    let done = false;
+    let timer: NodeJS.Timeout | null = null;
+    const finish = (value: string | null): void => {
+      if (done) return;
+      done = true;
+      if (timer) clearTimeout(timer);
+      resolve(value);
+    };
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(env.SHELL || '/bin/zsh', ['-ilc', 'printf "__ASTRA_PATH_START__%s__ASTRA_PATH_END__" "$PATH"'], {
+        env,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      finish(null);
+      return;
+    }
+    timer = setTimeout(() => {
+      try {
+        child.kill('SIGKILL');
+      } catch {
+        /* ignore */
+      }
+      finish(null);
+    }, timeoutMs);
+    child.stdout?.on('data', (d: Buffer) => {
+      out += d.toString();
+    });
+    child.on('error', () => finish(null));
+    child.on('close', () => finish(SHELL_PATH_MARKER.exec(out)?.[1] || null));
+  });
+}
+
+/**
+ * GUI processes (Finder / Dock launched Electron) start with launchd's minimal
+ * PATH (/usr/bin:/bin:/usr/sbin:/sbin), where npm's `#!/usr/bin/env node`
+ * shebang cannot find node and nvm / Homebrew installs are invisible. When node
+ * is not on the child's PATH, append the well-known prefixes and then the login
+ * shell's PATH. Existing entries keep precedence; a terminal launch (node
+ * already on PATH) is returned untouched. Windows GUI processes inherit the
+ * user PATH, so nothing is done there.
+ */
+export async function withNodeOnPath(
+  env: NodeJS.ProcessEnv,
+  npm: NpmCommand,
+  o: Pick<NpmRunnerOptions, 'platform' | 'loginShellPath' | 'wellKnownBinDirs'> = {},
+): Promise<NodeJS.ProcessEnv> {
+  if ((o.platform ?? process.platform) === 'win32') return env;
+  const current = (env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  const hasNode = (dirs: string[]): boolean => dirs.some((d) => dirHasExecutable(d, 'node'));
+  if (hasNode(current)) return env;
+
+  const extra = [...(path.isAbsolute(npm.command) ? [path.dirname(npm.command)] : []), ...(o.wellKnownBinDirs ?? NODE_BIN_DIRS)];
+  let merged = [...current, ...extra.filter((d) => !current.includes(d))];
+  if (!hasNode(merged)) {
+    const lookup = o.loginShellPath ?? (() => (cachedLoginShellPath ??= readLoginShellPath(env)));
+    const shellPath = await lookup();
+    if (shellPath) {
+      const shellDirs = shellPath.split(path.delimiter).filter(Boolean);
+      merged = [...merged, ...shellDirs.filter((d) => !merged.includes(d))];
+    }
+  }
+  return { ...env, PATH: merged.join(path.delimiter) };
+}
+
 /** `npm install --prefix <prefix> <spec>` — the primitive behind staging and desktop installs. */
 export async function npmInstallIntoPrefix(prefix: string, spec: string, o: NpmRunnerOptions = {}): Promise<void> {
   const npm = npmCommand(o);
+  const env = await withNodeOnPath(npmChildEnv(o.env), npm, o);
   const r = await runCapture(
     npm.command,
     [...npm.args, 'install', '--prefix', prefix, '--no-audit', '--no-fund', '--loglevel', 'error', spec],
-    { env: npmChildEnv(o.env), platform: o.platform, timeoutMs: o.installTimeoutMs ?? 600_000 },
+    { env, platform: o.platform, timeoutMs: o.installTimeoutMs ?? 600_000 },
   );
   if (r.code !== 0) {
     throw new Error(`Failed to install ${spec}: ${r.stderr.trim() || `npm exited with code ${r.code}`}`);
@@ -148,8 +234,9 @@ export async function npmInstallIntoPrefix(prefix: string, spec: string, o: NpmR
 /** Best-effort `npm view <pkg> <field>`; throws on failure. */
 export async function npmView(pkg: string, field: string, o: NpmRunnerOptions = {}): Promise<string> {
   const npm = npmCommand(o);
+  const env = await withNodeOnPath(npmChildEnv(o.env), npm, o);
   const r = await runCapture(npm.command, [...npm.args, 'view', pkg, field, '--loglevel', 'error'], {
-    env: npmChildEnv(o.env),
+    env,
     platform: o.platform,
     timeoutMs: 60_000,
   });

@@ -23,7 +23,7 @@ public sealed class EnableContext
     /// <c>ClaudeCodeModels.Slots</c>; an empty slot is never written) and the older single-key "smallFastModel";
     /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode, pi, minimax-code, copilot-cli and
     /// vscode-copilot and every other client in <c>ClientKinds.WithModelList</c> (crush, qwen-code, droid, kimi-code, zed,
-    /// vscode-insiders, vscodium, omp, mimo-code, deepseek-harness, workbuddy) "models" ({"…": {"id":…,"name":…, optional "contextWindow", "maxOutputTokens",
+    /// vscode-insiders, vscodium, omp, mimo-code, deepseek-harness, workbuddy, nextcowork) "models" ({"…": {"id":…,"name":…, optional "contextWindow", "maxOutputTokens",
     /// "vision", "reasoning"}}, the bound provider's enabled models).
     /// </summary>
     public JsonObject? Extras { get; init; }
@@ -52,6 +52,12 @@ public enum ConfigFileFormat
 
     /// <summary>YAML block mapping; values are exchanged as JSON text, like <see cref="Json"/>.</summary>
     Yaml,
+
+    /// <summary>
+    /// POSIX shell rc file: one Astra-managed <c># &gt;&gt;&gt; astra &lt;id&gt; &gt;&gt;&gt;</c> block. The key path is the block id; the
+    /// value is the block body, exchanged like <see cref="Env"/> (raw text, JSON-quoted in plans and state).
+    /// </summary>
+    ShellBlock,
 }
 
 /// <summary>Whether a config change targets a plain key or a whole container (TOML table, owned JSON element).</summary>

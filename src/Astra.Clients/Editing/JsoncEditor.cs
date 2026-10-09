@@ -74,6 +74,9 @@ public sealed class JsoncEditor
 
         var segments = SplitPath(path);
         var data = _blank && IsSelector(segments[0]) ? "[]"u8.ToArray() : _data;
+        // A document that is just "[]" holds nothing to keep: an object key replaces it with "{}" (WorkBuddy's own
+        // models.json starts out as "[]" and its daemon reads a bare array as an empty config).
+        if (!IsSelector(segments[0]) && Encoding.UTF8.GetString(data).Trim() == "[]") data = "{}"u8.ToArray();
         for (var i = 0; i < segments.Length - 1; i++)
         {
             if (IsSelector(segments[i]))

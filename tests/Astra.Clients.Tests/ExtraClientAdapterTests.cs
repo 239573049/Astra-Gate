@@ -772,6 +772,21 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
     }
 
     [Fact]
+    public void BareEmptyArrayFile_IsTreatedAsAnEmptyConfig()
+    {
+        // WorkBuddy creates ~/.workbuddy/models.json as "[]"; its daemon reads that as no models.
+        Home.WriteFile(_config, "[]");
+        var plan = _adapter.PlanEnable(TestGateway.Context("astra-wb-6", null, Hints.Extra("a")));
+        Assert.NotEmpty(plan.Diffs); // the preview works too
+        Applier.Apply(plan);
+        var json = Hints.Jsonc(Home.ReadFile(_config));
+        Assert.Equal(["a"], json["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
+        Assert.True(_adapter.Inspect().Enabled);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Empty(Assert.IsType<JsonObject>(Hints.Jsonc(Home.ReadFile(_config)))); // no Astra entries left; still an empty config
+    }
+
+    [Fact]
     public void LegacyCodeBuddyEntries_AreRemovedOnTheNextApply()
     {
         // Astra ≤ 0.3.0 wrote WorkBuddy's models into ~/.codebuddy/models.json (CodeBuddy's file).
@@ -785,5 +800,123 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
         Assert.Empty(Hints.Jsonc(Home.ReadFile(legacy))["models"]!.AsArray());
         Assert.Equal(["a"], Hints.Jsonc(Home.ReadFile(_config))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+    }
+}
+
+public class NextCoWorkClientAdapterTests : AdapterTestBase
+{
+    private const string Original = """
+        {
+          "version": 1,
+          "providers": {
+            "mine": { "name": "Mine", "protocol": "anthropic", "baseUrl": "https://example.com", "apiKey": "k" }
+          }
+        }
+        """;
+
+    private readonly NextCoWorkClientAdapter _adapter;
+    private readonly string _config;
+
+    public NextCoWorkClientAdapterTests()
+    {
+        _adapter = new NextCoWorkClientAdapter(Home.Env, Store);
+        _config = Home.File(".next-cowork", "providers.json");
+    }
+
+    [Fact]
+    public void Enable_AddsOneProvider_LeavesUserProviders_DisableRestoresBytes()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.1", "glm-5");
+        ((JsonObject)extra["models"]!["gpt-5.1"]!)["contextWindow"] = 400_000;
+        ((JsonObject)extra["models"]!["gpt-5.1"]!)["maxOutputTokens"] = 32_000;
+        ((JsonObject)extra["models"]!["gpt-5.1"]!)["vision"] = true;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-1", "gpt-5.1", extra)));
+
+        var providers = Hints.Jsonc(Home.ReadFile(_config))["providers"]!.AsObject();
+        Assert.Equal(["mine", "astra"], providers.Select(p => p.Key));
+        Assert.Equal("k", providers["mine"]!["apiKey"]!.GetValue<string>());
+
+        var ours = providers["astra"]!;
+        Assert.Equal("openai-chat", ours["protocol"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", ours["baseUrl"]!.GetValue<string>());
+        Assert.Equal("astra-nc-1", ours["apiKey"]!.GetValue<string>());
+        // Defaults (priority 50, enabled) are NextCoWork's: leaving them out keeps the entry untouched by its normaliser.
+        Assert.Null(ours["priority"]);
+        Assert.Null(ours["enabled"]);
+
+        var models = ours["models"]!.AsObject();
+        Assert.Equal(["gpt-5.1", "glm-5"], models.Select(m => m.Key));
+        Assert.Equal("gpt-5.1", models["gpt-5.1"]!["upstreamModel"]!.GetValue<string>());
+        Assert.Equal(400_000, models["gpt-5.1"]!["contextWindow"]!.GetValue<long>());
+        Assert.Equal(32_000, models["gpt-5.1"]!["maxOutputTokens"]!.GetValue<long>());
+        Assert.True(models["gpt-5.1"]!["capabilities"]!["vision"]!.GetValue<bool>());
+        Assert.Null(models["glm-5"]!["capabilities"]);
+        Assert.Null(models["gpt-5.1"]!["capabilities"]!["thinking"]);
+        Assert.True(_adapter.Inspect().Enabled);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+        Assert.False(_adapter.Inspect().Enabled);
+    }
+
+    [Fact]
+    public void ModelsOnlyAppearWhenTheProviderHasThem_AndSelectedModelIsAlwaysListed()
+    {
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-2", "only-selected", null)));
+        var models = Hints.Jsonc(Home.ReadFile(_config))["providers"]!["astra"]!["models"]!.AsObject();
+        Assert.Equal(["only-selected"], models.Select(m => m.Key));
+
+        Applier.Disable(_adapter.PlanDisable());
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-3", null, null)));
+        Assert.Null(Hints.Jsonc(Home.ReadFile(_config))["providers"]!["astra"]!["models"]);
+    }
+
+    [Fact]
+    public void KeyRotationAndRefreshedModelList_ReplaceOnlyOurProvider()
+    {
+        Home.WriteFile(_config, Original);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-4", null, Hints.Extra("a", "b"))));
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-5", null, Hints.Extra("a"))));
+        var providers = Hints.Jsonc(Home.ReadFile(_config))["providers"]!.AsObject();
+        Assert.Equal("astra-nc-5", providers["astra"]!["apiKey"]!.GetValue<string>());
+        Assert.Equal(["a"], providers["astra"]!["models"]!.AsObject().Select(m => m.Key));
+        Assert.Equal("k", providers["mine"]!["apiKey"]!.GetValue<string>());
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+    }
+
+    [Fact]
+    public void FileOriginallyAbsent_CreatedThenDeleted()
+    {
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-6", null, Hints.Extra("a"))));
+        Assert.True(Home.FileExists(_config));
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.False(Home.FileExists(_config));
+    }
+
+    [Fact]
+    public void EntryEditedInNextCoWork_IsDriftAndIsNotOverwrittenByDisable()
+    {
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-7", null, Hints.Extra("a"))));
+        // NextCoWork re-saves the provider with explicit defaults when the user touches it in its settings.
+        var edited = Home.ReadFile(_config).Replace("\"name\":\"Astra\"", "\"name\":\"My Astra\"");
+        Assert.NotEqual(Home.ReadFile(_config), edited);
+        Home.WriteFile(_config, edited);
+
+        Assert.Contains("providers.astra", _adapter.Inspect().DriftedKeys);
+        Assert.True(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Contains("My Astra", Home.ReadFile(_config));
+    }
+
+    [Fact]
+    public void Detect_FollowsTheConfigDirectory_AndPathsAreFixed()
+    {
+        Assert.False(_adapter.Detect().Detected);
+        Home.WriteFile(_config, Original);
+        Assert.True(_adapter.Detect().Detected);
+        Assert.Equal([_config], _adapter.ConfigPaths());
+        Assert.Equal(ClientMode.Coexist, _adapter.Mode);
+        Assert.Equal(Astra.Core.ApiProtocol.OpenAIChat, ClientKinds.ProtocolOf(_adapter.Kind));
     }
 }

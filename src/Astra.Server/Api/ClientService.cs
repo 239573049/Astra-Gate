@@ -491,7 +491,7 @@ public sealed class ClientService(
         ClientKinds.Crush => "Crush", ClientKinds.QwenCode => "Qwen Code", ClientKinds.Droid => "Droid",
         ClientKinds.KimiCode => "Kimi Code", ClientKinds.Zed => "Zed", ClientKinds.VsCodeInsiders => "VS Code Insiders", ClientKinds.VsCodium => "VSCodium",
         ClientKinds.Omp => "omp (oh-my-pi)", ClientKinds.MiMoCode => "MiMo Code", ClientKinds.DeepSeekHarness => "DeepSeek Harness",
-        ClientKinds.WorkBuddy => "WorkBuddy",
+        ClientKinds.WorkBuddy => "WorkBuddy", ClientKinds.MuseCode => "Muse Code", ClientKinds.NextCoWork => "NextCoWork",
         _ => kind,
     };
 }

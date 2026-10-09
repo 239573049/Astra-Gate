@@ -43,6 +43,10 @@ public static class GatewayEndpoints
             a.ListModelsAsync(c, c.Request.Headers.ContainsKey("anthropic-version") ? ApiProtocol.Anthropic : ApiProtocol.OpenAIChat))
             .ExcludeFromDescription();
         app.MapGet("/v1beta/models", (HttpContext c, GatewayAuxiliary a) => a.ListModelsAsync(c, ApiProtocol.Gemini)).ExcludeFromDescription();
+        // Muse Code (native CLI) fetches its model catalog from the host root, not from its --base-url: GET <origin>/muse-code/models
+        // (the responses call goes to <base>/responses). The OpenAI list shape ({"data":[…]}) is what it parses.
+        app.MapGet("/muse-code/models", (HttpContext c, GatewayAuxiliary a) => a.ListModelsAsync(c, ApiProtocol.OpenAIChat))
+            .ExcludeFromDescription();
         return app;
     }
 }

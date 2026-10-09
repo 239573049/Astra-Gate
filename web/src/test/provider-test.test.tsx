@@ -16,7 +16,7 @@ vi.mock('@lobehub/icons', () => {
   return {
     Anthropic: stub('anthropic'), Claude: stub('claude'), ClaudeCode: stub('claude-code'), Codex: stub('codex'),
     DeepSeek: stub('deepseek'), Gemini: stub('gemini'), GeminiCLI: stub('gemini-cli'), GithubCopilot: stub('github-copilot'),
-    Grok: stub('grok'), HermesAgent: stub('hermes-agent'), Kimi: stub('kimi'), LmStudio: stub('lm-studio'), Minimax: stub('minimax'),
+    Grok: stub('grok'), HermesAgent: stub('hermes-agent'), Kimi: stub('kimi'), LmStudio: stub('lm-studio'), Meta: stub('meta'), Minimax: stub('minimax'),
     Moonshot: stub('moonshot'), Ollama: stub('ollama'), OpenAI: stub('openai'), OpenCode: stub('opencode'),
     OpenRouter: stub('openrouter'), Pi: stub('pi'), Qwen: stub('qwen'), SiliconCloud: stub('siliconcloud'),
     Volcengine: stub('volcengine'), XAI: stub('xai'), XiaomiMiMo: stub('xiaomi-mimo'), Zhipu: stub('zhipu'),

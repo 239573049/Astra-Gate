@@ -79,6 +79,8 @@ public static class ClientInstallCatalog
         new(ClientKinds.DeepSeekHarness, ClientInstallMethod.Manual, "dsh", null, "https://www.deepseek.com/en/harness/"),
         new(ClientKinds.MiMoCode, ClientInstallMethod.Npm, "mimo", "@mimo-ai/cli", "https://github.com/XiaomiMiMo/MiMo-Code"),
         new(ClientKinds.WorkBuddy, ClientInstallMethod.Manual, null, null, "https://www.workbuddy.cn/"),
+        new(ClientKinds.MuseCode, ClientInstallMethod.Manual, "muse", null, "https://dev.meta.ai/docs/muse-code"),
+        new(ClientKinds.NextCoWork, ClientInstallMethod.Manual, null, null, "https://nextco.work/"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

@@ -1,6 +1,6 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
-import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, OpenCode, Pi, XiaomiMiMo } from '@lobehub/icons';
+import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo } from '@lobehub/icons';
 import { Code, Monitor, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType, CSSProperties } from 'react';
 import type { ClientKind } from '../api/types';
@@ -11,6 +11,7 @@ import nextcoworkLogo from '../assets/providers/nextcowork.png';
 // Clients without a @lobehub/icons mark: the vendor's own icon, provenance in assets/clients/sources.json.
 import crushLogo from '../assets/clients/crush.png';
 import droidLogo from '../assets/clients/droid.svg';
+import nextcoworkClientLogo from '../assets/clients/nextcowork.png';
 import ompLogo from '../assets/clients/omp.png';
 import vscodeInsidersLogo from '../assets/clients/vscode-insiders.png';
 import vscodiumLogo from '../assets/clients/vscodium.svg';
@@ -40,13 +41,15 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'mimo-code': { name: 'MiMo Code' },
   'deepseek-harness': { name: 'DeepSeek Harness' },
   workbuddy: { name: 'WorkBuddy' },
+  'muse-code': { name: 'Muse Code' },
+  nextcowork: { name: 'NextCoWork' },
 };
 
 export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
   'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
-  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy',
+  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'muse-code', 'nextcowork',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -99,6 +102,8 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   'mimo-code': { Mark: XiaomiMiMo, Avatar: XiaomiMiMo.Avatar, badge: SquareTerminal },
   'deepseek-harness': { Mark: DeepSeek.Color, Avatar: DeepSeek.Avatar, badge: Monitor },
   workbuddy: logo(workbuddyLogo),
+  'muse-code': { Mark: Meta.Color, Avatar: Meta.Avatar, badge: SquareTerminal },
+  nextcowork: logo(nextcoworkClientLogo),
 };
 
 function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {

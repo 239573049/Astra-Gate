@@ -67,6 +67,7 @@ export const CLIENT_KINDS = [
   'mimo-code',
   'deepseek-harness',
   'workbuddy',
+  'muse-code',
 ] as const;
 
 export type ClientKind = (typeof CLIENT_KINDS)[number];

@@ -29,6 +29,7 @@ vi.mock('@lobehub/icons', () => {
     HermesAgent: stub('hermes-agent'),
     Kimi: stub('kimi'),
     LmStudio: stub('lm-studio'),
+    Meta: stub('meta'),
     Minimax: stub('minimax'),
     Moonshot: stub('moonshot'),
     Ollama: stub('ollama'),
@@ -79,6 +80,8 @@ describe('client brand icons', () => {
     'mimo-code': { brand: 'xiaomi-mimo', mark: 'mono', badge: true },
     'deepseek-harness': { brand: 'deepseek', mark: 'color', badge: true },
     workbuddy: { brand: null, mark: 'logo', badge: false },
+    'muse-code': { brand: 'meta', mark: 'color', badge: true },
+    nextcowork: { brand: null, mark: 'logo', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

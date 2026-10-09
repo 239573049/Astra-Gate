@@ -79,6 +79,7 @@ vi.mock('@lobehub/icons', () => {
     HermesAgent: stub('hermes-agent'),
     Kimi: stub('kimi'),
     LmStudio: stub('lm-studio'),
+    Meta: stub('meta'),
     Minimax: stub('minimax'),
     Moonshot: stub('moonshot'),
     Ollama: stub('ollama'),
