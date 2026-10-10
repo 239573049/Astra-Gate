@@ -8,6 +8,8 @@ import {
   installDesktopClient,
   isApiVersionCompatible,
   isNewerVersion,
+  type ApplyServerUpdateOptions,
+  type ApplyServerUpdateResult,
   type ServerControl,
   type UpdateManifest,
 } from '@aidotnet/update-core';
@@ -77,6 +79,8 @@ export interface UpdateControllerOptions {
   control: ServerControl;
   /** Omit to disable reminders (the tray entry still appears). */
   reminder?: UpdateReminderOptions;
+  /** Test seam forwarded to update-core's applyServerUpdate (see the note on applyServerUpdate). */
+  applyServerUpdate?: (opts: ApplyServerUpdateOptions) => Promise<ApplyServerUpdateResult>;
   log: (line: string) => void;
 }
 
@@ -92,7 +96,11 @@ export type UiApplyOutcome = 'server' | 'desktop' | 'none';
 
 export class UpdateController {
   readonly track: UpdateTrack;
-  private busy = false;
+  /** Single-flight lock over check() / applyFromUi(): the owner token, null when free. */
+  private busy: symbol | null = null;
+  /** Resolves when the lock is handed back; claimed together with `busy`. */
+  private held: Promise<void> = Promise.resolve();
+  private released: (() => void) | null = null;
   private timer: NodeJS.Timeout | null = null;
   private pendingManifest: UpdateManifest | null = null;
   /** True when the pending manifest is also newer than this app (mac npm track updates both). */
@@ -142,15 +150,48 @@ export class UpdateController {
     }, initialMs);
   }
 
-  /** check() + reminder, unless the user turned automatic update checks off in Settings. */
+  /**
+   * A background check never queues behind a running apply: it waits for the lock and then
+   * runs its own check, so a manual "Update now" cannot be followed by a stale reminder.
+   */
   async backgroundCheck(): Promise<void> {
     const base = this.o.apiBase();
     if (base && (await fetchUpdateAutoCheck(base)) === false) {
       this.o.log('automatic update checks are turned off — skipping the background check');
       return;
     }
-    await this.check();
+    const held = await this.claimWhenFree();
+    try {
+      await this.runCheck();
+    } finally {
+      // Hand the lock back before reminding: the dialog's "Update" button applies.
+      this.release(held);
+    }
     await this.maybeRemind();
+  }
+
+  /** Takes the lock, resolving immediately when it is free; otherwise waits for the current holder. */
+  private async claimWhenFree(): Promise<symbol> {
+    while (this.busy !== null) await this.held;
+    return this.claim()!;
+  }
+
+  /** Claims the single-flight lock: the token to release with, or null when someone else holds it. */
+  private claim(): symbol | null {
+    if (this.busy !== null) return null;
+    const token = Symbol('update');
+    this.busy = token;
+    this.held = new Promise((resolve) => {
+      this.released = resolve;
+    });
+    return token;
+  }
+
+  /** Releases the lock only when `token` is the current holder, so the holder's own path is never unlocked twice. */
+  private release(token: symbol): void {
+    if (this.busy !== token) return;
+    this.busy = null;
+    this.released?.();
   }
 
   stop(): void {
@@ -168,8 +209,22 @@ export class UpdateController {
    * returned message (surfaces in dialogs, the log otherwise).
    */
   async check(): Promise<UpdateSummary> {
-    if (this.busy) return { message: 'An update check is already running.', action: 'none' };
-    this.busy = true;
+    const held = this.claim();
+    if (!held) return { message: 'An update check is already running.', action: 'none' };
+    try {
+      return await this.runCheck();
+    } finally {
+      this.release(held);
+    }
+  }
+
+  /**
+   * The in-flight run, without the lock. `applyFromUi` calls this directly: it
+   * already owns the lock, and the public check() would refuse (its guard sees
+   * the lock) and leave the pending manifest null, silently turning the apply
+   * into a no-op.
+   */
+  private async runCheck(): Promise<UpdateSummary> {
     try {
       const parts: string[] = [];
 
@@ -210,8 +265,6 @@ export class UpdateController {
       const message = err instanceof Error ? err.message : String(err);
       this.o.log(`update check failed: ${message}`);
       return { message: `Update check failed: ${message}`, action: 'none' };
-    } finally {
-      this.busy = false;
     }
   }
 
@@ -269,7 +322,12 @@ export class UpdateController {
     return null;
   }
 
-  /** Applies the server update through the shared staged-swap state machine. */
+  /**
+   * Applies the server update through the shared staged-swap state machine.
+   * The executor is injectable purely for tests: unit tests have no real server
+   * to restart, and every real caller leaves `applyServerUpdate` unset, which
+   * falls back to the imported function.
+   */
   async applyServerUpdate(): Promise<void> {
     const manifest = this.pendingManifest;
     if (!manifest) throw new Error('No pending server update — check for updates first.');
@@ -277,7 +335,8 @@ export class UpdateController {
     if (blocked) throw new Error(blocked);
     const platform = this.o.platform ?? process.platform;
     const ridPrefix = platform === 'darwin' ? 'osx' : platform === 'win32' ? 'win' : 'linux';
-    await applyServerUpdate({
+    const apply = this.o.applyServerUpdate ?? applyServerUpdate;
+    await apply({
       home: this.o.home,
       manifest,
       platformKey: `${ridPrefix}-${process.arch}`,
@@ -303,14 +362,17 @@ export class UpdateController {
    * re-check found nothing newer.
    */
   async applyFromUi(): Promise<UiApplyOutcome> {
-    if (this.busy) throw new Error('An update is already running.');
-    this.busy = true;
+    const held = this.claim();
+    if (!held) throw new Error('An update is already running.');
     try {
       if (this.dmgDownloadedVersion) {
         this.applyDesktopDmgUpdate(); // quitAndInstall — the app exits
         return 'desktop';
       }
-      if (!this.pendingManifest) await this.check();
+      // We hold the lock, so this must be the lock-free runCheck: the public
+      // check() would refuse (its guard sees our lock) and leave the manifest
+      // null, silently turning "Update now" into "up to date".
+      if (!this.pendingManifest) await this.runCheck();
       if (!this.pendingManifest) return 'none';
       const updateDesktop =
         this.desktopUpdatePending &&
@@ -324,7 +386,7 @@ export class UpdateController {
       }
       return 'server';
     } finally {
-      this.busy = false;
+      this.release(held);
     }
   }
 

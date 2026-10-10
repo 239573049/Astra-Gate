@@ -180,4 +180,56 @@ describe('launch-time update check and reminder', () => {
     expect(electron.showMessageBox).not.toHaveBeenCalled();
     expect(controller.hasUpdate).toBe(true);
   });
+
+  it('applies an available update without a prior check, instead of reporting up to date', async () => {
+    const applied: unknown[] = [];
+    const controller = launch({
+      applyServerUpdate: async (opts) => {
+        applied.push(opts);
+        return { from: opts.currentVersion, to: opts.manifest.version, serverPath: '/tmp/astra-server' };
+      },
+    });
+
+    // The download button is shown from /api/update/status, which can be newer
+    // than the in-memory check: apply must run its own check.
+    await expect(controller.applyFromUi()).resolves.toBe('server');
+    expect(applied).toHaveLength(1);
+  });
+
+  it('applies while a background check is still running', async () => {
+    const applied: unknown[] = [];
+    const controller = launch({
+      applyServerUpdate: async (opts) => {
+        applied.push(opts);
+        return { from: opts.currentVersion, to: opts.manifest.version, serverPath: '/tmp/astra-server' };
+      },
+    });
+
+    const background = controller.backgroundCheck();
+    await expect(controller.applyFromUi()).resolves.toBe('server');
+    await background;
+    expect(applied).toHaveLength(1);
+  });
+
+  it('still refuses a concurrent apply', async () => {
+    let entered = (): void => {};
+    const started = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release = (): void => {};
+    const controller = launch({
+      applyServerUpdate: () => {
+        entered();
+        return new Promise<never>((_resolve, reject) => {
+          release = () => reject(new Error('released by the test'));
+        });
+      },
+    });
+    const first = controller.applyFromUi();
+    await started; // the executor is parked, so the lock is definitely held
+    await expect(controller.applyFromUi()).rejects.toThrow('already running');
+    await expect(controller.check()).resolves.toMatchObject({ action: 'none' });
+    release();
+    await expect(first).rejects.toThrow('released by the test');
+  });
 });

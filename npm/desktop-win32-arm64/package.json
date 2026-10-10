@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/desktop-win32-arm64",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Astra desktop app for Windows (ARM64).",
   "license": "MIT",
   "os": [
