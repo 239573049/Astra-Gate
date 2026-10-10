@@ -1,6 +1,6 @@
 {
   "name": "astragate",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Astra — a local AI gateway. Install, start, stop and manage the astra-server from the terminal.",
   "license": "MIT",
   "type": "module",
@@ -31,12 +31,12 @@
     "commander": "^12.1.0"
   },
   "optionalDependencies": {
-    "@aidotnet/server-darwin-arm64": "0.5.0",
-    "@aidotnet/server-darwin-x64": "0.5.0",
-    "@aidotnet/server-linux-arm64": "0.5.0",
-    "@aidotnet/server-linux-x64": "0.5.0",
-    "@aidotnet/server-win32-arm64": "0.5.0",
-    "@aidotnet/server-win32-x64": "0.5.0"
+    "@aidotnet/server-darwin-arm64": "0.5.1",
+    "@aidotnet/server-darwin-x64": "0.5.1",
+    "@aidotnet/server-linux-arm64": "0.5.1",
+    "@aidotnet/server-linux-x64": "0.5.1",
+    "@aidotnet/server-win32-arm64": "0.5.1",
+    "@aidotnet/server-win32-x64": "0.5.1"
   },
   "devDependencies": {
     "@aidotnet/update-core": "workspace:*",
