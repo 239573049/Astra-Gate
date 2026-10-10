@@ -657,6 +657,104 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Import_Copilot_Batch_Reports_Every_Token_And_Never_Echoes_Them()
+    {
+        var good1 = "gho_" + new string('a', 36);
+        var good2 = "gho_" + new string('b', 36);
+        var noCopilot = "gho_" + new string('c', 36);
+        var handler = new StubHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var auth = request.Headers.TryGetValues("Authorization", out var values) ? string.Join(" ", values) : "";
+            return Task.FromResult(path switch
+            {
+                "/copilot_internal/v2/token" when auth.EndsWith(noCopilot, StringComparison.Ordinal) =>
+                    new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent("""{"message":"Copilot not enabled"}""", Encoding.UTF8, "application/json") },
+                "/copilot_internal/v2/token" => JsonResponse("""{"token":"copilot-tok","expires_at":4102444800,"refresh_in":1800,"sku":"copilot_pro"}"""),
+                "/copilot_internal/user" => JsonResponse("""{"login":"octocat","copilot_plan":"individual"}"""),
+                "/models" => JsonResponse("""{"data":[{"id":"claude-sonnet-4","supported_endpoints":["/v1/messages"]}]}"""),
+                _ => JsonResponse("{}"),
+            });
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+        {
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+        });
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+        var url = $"/api/providers/{providerId}/accounts/import-copilot/batch";
+
+        // 注释、空行、逗号分隔、引号、同批重复、坏格式、没有 Copilot 订阅的账号，一起来。
+        var text = $"# my tokens\n{good1}\n\n\"{good2}\", {noCopilot}\n{good1}\nnot-a-token\n";
+        (status, body) = await host.SendAsync(HttpMethod.Post, url, new { tokens = text });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["imported", "imported", "failed", "duplicate", "invalid_format"],
+            body!["items"]!.AsArray().Select(i => i!["status"]!.GetValue<string>()));
+        Assert.Equal(2, body["imported"]!.GetValue<int>());
+        Assert.Equal(1, body["duplicates"]!.GetValue<int>());
+        Assert.Equal(2, body["failed"]!.GetValue<int>());
+        Assert.Contains("没有 Copilot 订阅", body["items"]![2]!["message"]!.GetValue<string>());
+        Assert.NotNull(body["items"]![0]!["account"]);
+        // 响应里只有脱敏片段，绝不出现完整令牌。
+        var raw = body.ToJsonString();
+        foreach (var token in new[] { good1, good2, noCopilot }) Assert.DoesNotContain(token, raw);
+        Assert.Equal("gho_••••aaaa", body["items"]![0]!["source"]!.GetValue<string>());
+
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var accounts = await host.Db.Accounts.ListAsync(providerId);
+        Assert.Equal(2, accounts.Count);
+        Assert.Equal([good1, good2], accounts.Select(a => protector.Unprotect(a.RefreshTokenEnc!)));
+
+        // 再导入一次：库里已有的 GitHub token 按重复跳过，不新建账号。
+        (status, body) = await host.SendAsync(HttpMethod.Post, url, new { tokens = good1 });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("duplicate", body!["items"]![0]!["status"]!.GetValue<string>());
+        Assert.Contains("已存在账号", body["items"]![0]!["message"]!.GetValue<string>());
+        Assert.Equal(0, body["imported"]!.GetValue<int>());
+        Assert.Equal(2, (await host.Db.Accounts.ListAsync(providerId)).Count);
+    }
+
+    [Fact]
+    public async Task Import_Copilot_Batch_Validates_Its_Input()
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        var providerId = body!["id"]!.GetValue<string>();
+        var url = $"/api/providers/{providerId}/accounts/import-copilot/batch";
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, url, new { tokens = "  \n# only a comment\n" });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+
+        var tooMany = string.Join('\n', Enumerable.Range(0, SubscriptionEndpoints.MaxBatchImport + 1).Select(i => "gho_" + i.ToString("D36")));
+        (status, body) = await host.SendAsync(HttpMethod.Post, url, new { tokens = tooMany });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("200", body!["error"]!.GetValue<string>());
+        Assert.Empty(await host.Db.Accounts.ListAsync(providerId));
+
+        // 只有 Copilot 订阅支持。
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        (status, _) = await host.SendAsync(HttpMethod.Post,
+            $"/api/providers/{body!["id"]!.GetValue<string>()}/accounts/import-copilot/batch", new { tokens = "gho_" + new string('d', 36) });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/providers/missing/accounts/import-copilot/batch", new { tokens = "x" });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+    }
+
+    [Fact]
+    public void Batch_Token_List_Parsing_Handles_Pasted_Formats()
+    {
+        Assert.Equal(["a1", "b2", "c3", "d4", "a1"],
+            SubscriptionEndpoints.ParseTokenList("# header\r\na1\r\n\r\n  \"b2\" , 'c3'; d4\n#a1\na1"));
+        Assert.Empty(SubscriptionEndpoints.ParseTokenList(null));
+        Assert.Equal("••••", SubscriptionEndpoints.MaskToken("short"));
+        Assert.Equal("gho_••••zzzz", SubscriptionEndpoints.MaskToken("gho_" + new string('x', 32) + "zzzz"));
+    }
+
+    [Fact]
     public async Task Copilot_Cached_Model_Protocols_Do_Not_Wait_For_Another_Accounts_Discovery()
     {
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

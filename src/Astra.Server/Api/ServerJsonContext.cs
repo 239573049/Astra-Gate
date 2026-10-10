@@ -143,6 +143,10 @@ namespace Astra.Server;
 [JsonSerializable(typeof(UpdateManifest))]
 [JsonSerializable(typeof(UpdateCheckState))]
 [JsonSerializable(typeof(UpdateEndpoints.UpdateStatusDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.BatchCopilotImport))]
+[JsonSerializable(typeof(SubscriptionEndpoints.BatchImportResultDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.BatchImportItemDto))]
+[JsonSerializable(typeof(List<SubscriptionEndpoints.BatchImportItemDto>))]
 // collections used as roots
 [JsonSerializable(typeof(List<SyncChangeDto>))]
 [JsonSerializable(typeof(List<ClientInfoDto>))]

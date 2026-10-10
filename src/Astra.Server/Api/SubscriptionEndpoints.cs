@@ -88,6 +88,30 @@ public static class SubscriptionEndpoints
     /// </summary>
     public sealed record LocalCopilotImport(string? Token, string? AccountId);
 
+    /// <summary>Body of the batch Copilot import: GitHub tokens separated by newlines / commas / whitespace.</summary>
+    public sealed record BatchCopilotImport(string? Tokens);
+
+    /// <summary>Outcome values of <see cref="BatchImportItemDto.Status"/>.</summary>
+    public static class BatchImportStatus
+    {
+        public const string Imported = "imported";
+        public const string Duplicate = "duplicate";
+        public const string InvalidFormat = "invalid_format";
+        public const string Failed = "failed";
+    }
+
+    /// <summary>
+    /// One token of a batch import. <see cref="Source"/> is the masked token (never the token itself);
+    /// <see cref="Message"/> is the failure / duplicate reason, or a warning on an imported account.
+    /// </summary>
+    public sealed record BatchImportItemDto(int Index, string Source, string Status, string? Message, ProviderAccountDto? Account);
+
+    /// <summary>Per-token results of a batch import plus totals.</summary>
+    public sealed record BatchImportResultDto(List<BatchImportItemDto> Items, int Imported, int Duplicates, int Failed);
+
+    /// <summary>Most tokens accepted by one batch import.</summary>
+    public const int MaxBatchImport = 200;
+
     /// <summary>A subscription account as shown in the admin API; tokens are never included.</summary>
     public sealed record ProviderAccountDto(
         string Id, string ProviderId, string DisplayName, string? AccountEmail, string? Plan, string Status,
@@ -109,7 +133,7 @@ public static class SubscriptionEndpoints
 
     /// <summary>
     /// Subscription policy of a provider: who may use it (<c>claude-code-only</c> | <c>any</c>), how accounts switch
-    /// (<c>manual</c> | <c>failover</c>), whether <see cref="ClaudeSubscription"/> marks the family whose client policy
+    /// (<c>manual</c> | <c>failover</c> | <c>balanced</c>), whether <see cref="ClaudeSubscription"/> marks the family whose client policy
     /// applies by default, and whether non-Claude-Code callers present a Claude Code identity (mimic).
     /// </summary>
     public sealed record SubscriptionPolicyDto(string ClientPolicy, string SwitchMode, bool ClaudeSubscription, bool MimicClaudeCode);
@@ -363,6 +387,111 @@ public static class SubscriptionEndpoints
                 warning = e.Message;
             }
             return Results.Ok(new ImportedAccountDto(ToDto(account), snapshot, warning));
+        });
+
+        // 批量导入 GitHub token（每行一个）：逐条走与单个导入相同的换令牌 + 落库，单条失败不影响其它。
+        // 顺序执行以免触发 GitHub 的速率限制；已存在的账号（同一份 GitHub token）按重复跳过，不改库。
+        // 响应里只有脱敏后的 token 片段。
+        app.MapPost("/api/providers/{providerId}/accounts/import-copilot/batch", async (
+            string providerId, BatchCopilotImport? body, AstraDatabase db, ISecretProtector protector,
+            OAuthClient client, SubscriptionQuotaService quotaService, ProviderProbe probe, CancellationToken ct) =>
+        {
+            var provider = await db.Providers.GetAsync(providerId, ct);
+            if (provider is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
+            if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
+                return Results.BadRequest(new ErrorOnlyDto("该提供商不是订阅类型（auth_scheme ≠ oauth-subscription）"));
+            var config = SubscriptionSupport.EffectiveConfig(provider);
+            if (config.ProviderKey != "github-copilot-subscription")
+                return Results.BadRequest(new ErrorOnlyDto("只有 GitHub Copilot 订阅可以批量导入 GitHub 令牌"));
+
+            var tokens = ParseTokenList(body?.Tokens);
+            if (tokens.Count == 0) return Results.BadRequest(new ErrorOnlyDto("没有可导入的令牌（每行一个 GitHub token）"));
+            if (tokens.Count > MaxBatchImport)
+                return Results.BadRequest(new ErrorOnlyDto($"一次最多导入 {MaxBatchImport} 个令牌，当前 {tokens.Count} 个，请分批导入"));
+
+            // 已有账号的 GitHub token（刷新槽里的密文解开后比较）；解不开的不参与去重。
+            var known = new List<(string Token, string Name)>();
+            foreach (var existing in await db.Accounts.ListAsync(providerId, ct))
+            {
+                if (existing.RefreshTokenEnc is null) continue;
+                try
+                {
+                    known.Add((protector.Unprotect(existing.RefreshTokenEnc), existing.DisplayName));
+                }
+                catch (Exception)
+                {
+                    // 密文无法解密的旧账号不参与去重
+                }
+            }
+
+            var items = new List<BatchImportItemDto>(tokens.Count);
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var imported = 0;
+            var duplicates = 0;
+            var failed = 0;
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var token = tokens[i];
+                var index = i + 1;
+                var source = MaskToken(token);
+
+                if (!LocalCopilotLogin.LooksLikeGitHubToken(token))
+                {
+                    failed++;
+                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.InvalidFormat,
+                        "这不是可识别的 GitHub 令牌（应以 gho_ / ghp_ / github_pat_ 开头）", null));
+                    continue;
+                }
+                if (!seen.Add(token))
+                {
+                    duplicates++;
+                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Duplicate, "本次输入中重复", null));
+                    continue;
+                }
+                var match = known.FirstOrDefault(k => TokensEqual(k.Token, token));
+                if (match.Token is not null)
+                {
+                    duplicates++;
+                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Duplicate, $"已存在账号：{match.Name}", null));
+                    continue;
+                }
+
+                try
+                {
+                    var result = new OAuthClient.TokenResult(token, token, null, null, null);
+                    var login = new PendingSubscriptionLogins.PendingLogin(
+                        Ulid.NewUlid(), providerId, null, config, token, null,
+                        DateTimeOffset.UtcNow + LoginTtl, null, null, null, null);
+                    var account = await CompleteLoginAsync(db, protector, client, login, result);
+                    known.Add((token, account.DisplayName));
+
+                    // 顺手验一次额度（失败不致命，只留一条提示）。
+                    string? warning = null;
+                    try
+                    {
+                        var (updated, _) = await quotaService.FetchAsync(provider, account, config, ct);
+                        account = updated;
+                    }
+                    catch (Exception e) when (e is SubscriptionAuthException or OAuthProtocolException)
+                    {
+                        warning = e.Message;
+                    }
+                    imported++;
+                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Imported, warning, ToDto(account)));
+                }
+                catch (Exception e) when (e is OAuthProtocolException or HttpRequestException)
+                {
+                    failed++;
+                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Failed,
+                        e is OAuthProtocolException oauth ? CopilotImportFailure(oauth) : e.Message, null));
+                }
+            }
+
+            // 模型清单归上游管：一批导入只同步一次，失败不影响导入结果。
+            if (imported > 0) await probe.SyncModelsFromUpstreamAsync(providerId, ct);
+
+            return Results.Ok(new BatchImportResultDto(items, imported, duplicates, failed));
         });
 
         app.MapDelete("/api/provider-accounts/{id}", async (string id, AstraDatabase db) =>
@@ -964,6 +1093,36 @@ public static class SubscriptionEndpoints
     /// <summary>Astra.Clients 的机器环境 → 读本机凭据用的最小环境。</summary>
     private static LocalCredentialEnvironment CopilotEnv(ClientEnvironment env) =>
         new(env.HomeDirectory, env.Os, env.GetEnvironmentVariable);
+
+    /// <summary>
+    /// Splits pasted text into tokens: one per line, also separated by commas / semicolons / whitespace. Blank lines
+    /// and <c>#</c> comment lines are ignored, surrounding quotes are stripped. Order is kept; duplicates are kept too
+    /// (the caller reports them).
+    /// </summary>
+    internal static List<string> ParseTokenList(string? text)
+    {
+        var tokens = new List<string>();
+        if (string.IsNullOrWhiteSpace(text)) return tokens;
+        foreach (var line in text.Split('\n'))
+        {
+            var trimmed = line.Trim();
+            if (trimmed.Length == 0 || trimmed[0] == '#') continue;
+            foreach (var piece in trimmed.Split([',', ';', ' ', '\t', '\r'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                var token = piece.Trim('"', '\'');
+                if (token.Length > 0) tokens.Add(token);
+            }
+        }
+        return tokens;
+    }
+
+    /// <summary>First and last four characters only — enough to recognise a token, useless to anyone else.</summary>
+    internal static string MaskToken(string token) =>
+        token.Length <= 12 ? "••••" : $"{token[..4]}••••{token[^4..]}";
+
+    private static bool TokensEqual(string a, string b) =>
+        System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+            System.Text.Encoding.UTF8.GetBytes(a), System.Text.Encoding.UTF8.GetBytes(b));
 
     /// <summary>把换 Copilot 令牌的失败翻译成用户能懂的一句话。</summary>
     private static string CopilotImportFailure(OAuthProtocolException e) => e.Error switch

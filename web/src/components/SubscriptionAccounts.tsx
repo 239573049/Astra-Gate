@@ -20,6 +20,7 @@ import type { Provider, SubscriptionLoginStart } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
 import { Button, Group, Input, Spinner } from './ui/controls';
 import { SubscriptionAccountCard } from './SubscriptionAccountCard';
+import { CopilotBatchImport } from './CopilotBatchImport';
 import { SubscriptionPolicy } from './SubscriptionPolicy';
 import { errorText, Sheet, useFeedback } from './ui/overlays';
 import { useI18n } from '../i18n';
@@ -290,6 +291,7 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
                 placeholder={t('providers.subscription.importCopilotPlaceholder')}
                 aria-label={t('providers.subscription.importCopilotToken')}
               />
+              <CopilotBatchImport providerId={provider.id} />
             </>
           )}
         </div>

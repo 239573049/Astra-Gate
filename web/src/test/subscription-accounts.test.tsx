@@ -26,11 +26,12 @@ const spies = vi.hoisted(() => ({
   reorder: vi.fn(),
   updatePolicy: vi.fn(),
   policy: { clientPolicy: 'claude-code-only', switchMode: 'manual', claudeSubscription: true, mimicClaudeCode: false } as {
-    clientPolicy: 'claude-code-only' | 'any'; switchMode: 'manual' | 'failover'; claudeSubscription: boolean; mimicClaudeCode: boolean;
+    clientPolicy: 'claude-code-only' | 'any'; switchMode: 'manual' | 'failover' | 'balanced'; claudeSubscription: boolean; mimicClaudeCode: boolean;
   },
   // Flipped per test: whether this machine already has a `codex login`.
   localCodex: { available: false } as { available: boolean; accountEmail?: string; plan?: string; detail?: string },
   importCopilot: vi.fn(),
+  batchImport: vi.fn(),
   // Flipped per test: whether a local GitHub authorization is visible to the cheap probe.
   localCopilot: { available: false } as { available: boolean; source?: string; detail?: string },
   complete: vi.fn(),
@@ -49,6 +50,7 @@ vi.mock('../api/hooks', () => ({
   useImportCodexAccount: () => ({ mutate: spies.importCodex, isPending: false }),
   useLocalCopilotLogin: () => ({ data: spies.localCopilot, refetch: vi.fn() }),
   useImportCopilotAccount: () => ({ mutate: spies.importCopilot, isPending: false }),
+  useBatchImportCopilotAccounts: () => ({ mutate: spies.batchImport, isPending: false }),
   useActivateProviderAccount: () => ({ mutate: spies.activate, isPending: false }),
   useUpdateProviderAccount: () => ({ mutate: spies.update, isPending: false }),
   useReorderProviderAccounts: () => ({ mutate: spies.reorder, isPending: false }),
@@ -96,6 +98,7 @@ beforeEach(() => {
   spies.remove.mockReset();
   spies.importCodex.mockReset();
   spies.importCopilot.mockReset();
+  spies.batchImport.mockReset();
   spies.complete.mockReset();
   spies.poll.mockReset();
   spies.activate.mockReset();
@@ -251,6 +254,59 @@ describe('SubscriptionAccounts', () => {
     fireEvent.change(screen.getByLabelText('GitHub token'), { target: { value: 'gho_pasted' } });
     fireEvent.click(screen.getByRole('button', { name: /Import local GitHub authorization/ }));
     expect(spies.importCopilot).toHaveBeenCalledWith('gho_pasted', expect.anything());
+  });
+
+  it('batch-imports pasted GitHub tokens and lists every outcome (Copilot only)', async () => {
+    const copilotProvider = {
+      id: 'p4',
+      name: 'GitHub Copilot 订阅',
+      authScheme: 'oauth-subscription',
+      templateId: 'github-copilot-subscription',
+    } as unknown as Provider;
+    spies.batchImport.mockImplementation((_text: string, opts?: { onSuccess?: (r: unknown) => void }) =>
+      opts?.onSuccess?.({
+        imported: 1, duplicates: 1, failed: 1,
+        items: [
+          { index: 1, source: 'gho_••••aaaa', status: 'imported', account: { ...accounts[0], displayName: 'octocat' } },
+          { index: 2, source: 'gho_••••bbbb', status: 'duplicate', message: 'Existing account: me' },
+          { index: 3, source: 'gho_••••cccc', status: 'failed', message: 'No Copilot subscription' },
+        ],
+      }));
+
+    show(<SubscriptionAccounts provider={copilotProvider} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Batch import tokens' }));
+
+    const box = await screen.findByLabelText('GitHub tokens (one per line)');
+    // Nothing recognised yet: the import button is off. Comments, blanks and separators are not counted.
+    expect(screen.getByText('0 token(s) recognised')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import' })).toBeDisabled();
+    fireEvent.change(box, { target: { value: '# mine\ngho_aaa\n\n"gho_bbb", gho_ccc' } });
+    expect(screen.getByText('3 token(s) recognised')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(spies.batchImport).toHaveBeenCalledWith('# mine\ngho_aaa\n\n"gho_bbb", gho_ccc', expect.anything());
+
+    // Every token shows up masked with its outcome; the pasted text stays so failures can be fixed and retried.
+    expect(await screen.findByText('gho_••••aaaa')).toBeInTheDocument();
+    expect(screen.getByText('Imported')).toBeInTheDocument();
+    expect(screen.getByText('Duplicate')).toBeInTheDocument();
+    expect(screen.getByText('Failed')).toBeInTheDocument();
+    expect(screen.getByText('No Copilot subscription')).toBeInTheDocument();
+    expect(screen.getByLabelText('GitHub tokens (one per line)')).toHaveValue('# mine\ngho_aaa\n\n"gho_bbb", gho_ccc');
+
+    // Other subscriptions have no batch import.
+    cleanup();
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.queryByRole('button', { name: 'Batch import tokens' })).toBeNull();
+  });
+
+  it('offers the balanced switch mode', () => {
+    spies.policy = { clientPolicy: 'any', switchMode: 'balanced', claudeSubscription: false, mimicClaudeCode: false };
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    expect(screen.getByText(/Spreads requests over all usable accounts/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Automatic failover'));
+    expect(spies.updatePolicy).toHaveBeenCalledWith({ switchMode: 'failover' }, expect.anything());
   });
 
   it('surfaces the coming-soon hint when the provider flow is not verified yet', async () => {

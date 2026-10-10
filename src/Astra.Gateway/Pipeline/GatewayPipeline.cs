@@ -24,6 +24,7 @@ public sealed class GatewayPipeline(
     CodecRegistry codecs,
     GatewayHttpClients http,
     UpstreamAuthResolver auth,
+    AccountScheduler scheduler,
     EffectiveModelResolver models,
     IModelProtocolResolver modelProtocols,
     SettingsService settings,
@@ -70,6 +71,7 @@ public sealed class GatewayPipeline(
         Provider? provider = null;
         IResponseDecoder? decoder = null;
         IResponseEncoder? encoder = null;
+        AccountScheduler.Lease? accountLease = null;
 
         try
         {
@@ -250,7 +252,9 @@ public sealed class GatewayPipeline(
             var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
             // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
             if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
-            var (sent, accountId) = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, claudeMode, upstreamModel, ctx.Request, capture, ct);
+            var (sent, accountId, lease) = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, claudeMode, upstreamModel,
+                StickyKeys.Of(inbound, body, ctx.Request.Headers), ctx.Request, capture, ct);
+            accountLease = lease;
             using var response = sent;
             record.AccountId = accountId;
             record.TtfbMs = sw.ElapsedMilliseconds;
@@ -351,6 +355,8 @@ public sealed class GatewayPipeline(
         }
         finally
         {
+            // Balanced mode: the account's in-flight slot is held until the whole response has been streamed back.
+            accountLease?.Dispose();
             record.ResponseModel = decoder?.ResponseModel;
             Finish(record, observer, sw, effective, provider, s.Locale);
             if (capture is not null)
@@ -365,80 +371,105 @@ public sealed class GatewayPipeline(
 
     // ------------------------------------------------------------------ upstream
 
-    private async Task<(HttpResponseMessage Response, string? AccountId)> SendAsync(
+    private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, string body, bool stream, bool passthrough,
-        ClaudeHeaderMode claudeMode, string upstreamModel, HttpRequest clientRequest, BodyCapture? capture, CancellationToken ct)
+        ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, CancellationToken ct)
     {
         var provider = route.Provider;
         var subscription = provider.AuthScheme == AuthSchemes.OAuthSubscription;
         // Plan §5.4: in failover mode a rate-limited or dead account hands the request to the next usable account
         // (which also becomes the provider's current account, so the following requests stay on it).
-        var failover = subscription && SubscriptionSupport.SwitchModeOf(provider) == SwitchModes.Failover;
+        // Balanced mode fails over the same way, but picks every account through the scheduler and leaves
+        // the provider's current account alone.
+        var switchMode = subscription ? SubscriptionSupport.SwitchModeOf(provider) : SwitchModes.Manual;
+        var failover = switchMode is SwitchModes.Failover or SwitchModes.Balanced;
+        // Balanced: spread new conversations over the usable accounts and keep a conversation (stickyKey) on its
+        // account. An account pinned by the token / client binding is never rescheduled.
+        var balanced = switchMode == SwitchModes.Balanced && route.AccountId is null;
         // 模拟 Claude Code（subscription.mimic_claude_code）：只作用于 compat 路径（调用方不是 Claude Code 本身）。
         var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
         var claudeSessionId = clientRequest.Headers["x-claude-code-session-id"].ToString();
         var client = http.For(provider);
         var accountId = route.AccountId;
         var tried = new List<string>();
-        while (true)
+        AccountScheduler.Lease? lease = null;
+        var handedOver = false;
+        try
         {
-            UpstreamAuth credentials;
-            try
+            while (true)
             {
-                credentials = await auth.ResolveAsync(provider.Id, accountId, ct) ?? UpstreamAuth.None;
-            }
-            catch (SubscriptionAuthException e)
-            {
-                throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
-            }
-
-            var request = Build(credentials);
-            // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
-            // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
-            capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
-            var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
-            {
-                // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
-                response.Dispose();
-                var used = credentials.AccountId ?? accountId;
+                if (balanced)
+                {
+                    // Pick (and hold an in-flight slot on) the account for this attempt; accounts that already failed
+                    // this request are excluded. No usable account → the plain selection below reports it.
+                    lease?.Dispose();
+                    lease = scheduler.Pick(provider.Id, await auth.ListAccountsAsync(provider.Id, ct), stickyKey, tried);
+                    if (lease is not null) accountId = lease.AccountId;
+                }
+                UpstreamAuth credentials;
                 try
                 {
-                    credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);
+                    credentials = await auth.ResolveAsync(provider.Id, accountId, ct) ?? UpstreamAuth.None;
                 }
                 catch (SubscriptionAuthException e)
                 {
-                    if (failover && used is not null && await FailOverAsync(used, null, e.Message) is { } next)
+                    throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
+                }
+
+                var request = Build(credentials);
+                // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
+                // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
+                capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
+                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
+                {
+                    // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
+                    response.Dispose();
+                    var used = credentials.AccountId ?? accountId;
+                    try
                     {
+                        credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);
+                    }
+                    catch (SubscriptionAuthException e)
+                    {
+                        if (failover && used is not null && await FailOverAsync(used, null, e.Message) is { } next)
+                        {
+                            accountId = next;
+                            continue;
+                        }
+                        throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号需要重新登录：{e.Message}");
+                    }
+                    request = Build(credentials);
+                    capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
+                    response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                }
+                if (failover && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
+                {
+                    var until = RateLimitResetOf(response, DateTimeOffset.UtcNow);
+                    if (await FailOverAsync(limited, until, $"429 限流，冷却至 {until.UtcDateTime:yyyy-MM-dd HH:mm} UTC") is { } next)
+                    {
+                        response.Dispose();
                         accountId = next;
                         continue;
                     }
-                    throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号需要重新登录：{e.Message}");
                 }
-                request = Build(credentials);
-                capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
-                response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                // 失败时的请求日志（用户要求的排查手段）：地址 + 最终出去的请求头（凭据脱敏）。
+                if (!response.IsSuccessStatusCode && subscription)
+                    logger.LogWarning("Upstream {Status} for {Provider} → {Url}; sent: {Headers}",
+                        (int)response.StatusCode, provider.Name, url, DescribeRequest(request));
+                handedOver = true;
+                return (response, credentials.AccountId, lease);
             }
-            if (failover && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
-            {
-                var until = RateLimitResetOf(response, DateTimeOffset.UtcNow);
-                if (await FailOverAsync(limited, until, $"429 限流，冷却至 {until.UtcDateTime:yyyy-MM-dd HH:mm} UTC") is { } next)
-                {
-                    response.Dispose();
-                    accountId = next;
-                    continue;
-                }
-            }
-            // 失败时的请求日志（用户要求的排查手段）：地址 + 最终出去的请求头（凭据脱敏）。
-            if (!response.IsSuccessStatusCode && subscription)
-                logger.LogWarning("Upstream {Status} for {Provider} → {Url}; sent: {Headers}",
-                    (int)response.StatusCode, provider.Name, url, DescribeRequest(request));
-            return (response, credentials.AccountId);
+        }
+        finally
+        {
+            // Failures must not leak an in-flight slot; on success the caller owns the lease.
+            if (!handedOver) lease?.Dispose();
         }
 
         async Task<string?> FailOverAsync(string from, DateTimeOffset? cooldownUntil, string reason)
         {
             tried.Add(from);
-            var next = await auth.FailOverAsync(provider.Id, from, cooldownUntil, reason, tried, ct);
+            var next = await auth.FailOverAsync(provider.Id, from, cooldownUntil, reason, tried, setCurrent: switchMode != SwitchModes.Balanced, ct: ct);
             if (next is not null)
                 logger.LogInformation("Provider {Provider}: account {From} → {To} ({Reason})", provider.Name, from, next, reason);
             return next;

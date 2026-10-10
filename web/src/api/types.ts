@@ -527,7 +527,7 @@ export interface ProviderAccount {
 /** Who may use a subscription provider and how its accounts switch. */
 export interface SubscriptionPolicy {
   clientPolicy: 'claude-code-only' | 'any';
-  switchMode: 'manual' | 'failover';
+  switchMode: 'manual' | 'failover' | 'balanced';
   /** Claude Pro/Max subscription: the client policy is shown (and defaults to Claude Code only). */
   claudeSubscription: boolean;
   /** Non-Claude-Code callers present a Claude Code identity (see the gateway's ClaudeCodeMimicry). */
@@ -622,5 +622,25 @@ export type SettingsPatch = Partial<Settings> & { proxyPassword?: string | null 
 export interface UpdateStatus {
   current: string; available?: string | null; lastCheckAt?: string | null; notes?: string | null;
   error?: string | null; channel: string; autoCheck: boolean; feedConfigured: boolean;
+export interface BatchCopilotImportRequest {
+  /** GitHub tokens, one per line (commas / whitespace also separate; `#` lines are comments). */
+  tokens: string;
+}
+export type BatchImportStatus = "imported" | "duplicate" | "invalid_format" | "failed";
+export interface BatchImportItem {
+  /** 1-based position in the parsed input. */
+  index: number;
+  /** The masked token (first / last four characters); the full token is never returned. */
+  source: string;
+  status: BatchImportStatus;
+  /** Failure / duplicate reason, or a warning on an imported account. */
+  message?: string | null;
+  account?: ProviderAccount | null;
+}
+export interface BatchImportResult {
+  items: BatchImportItem[]; imported: number; duplicates: number; failed: number;
+}
+// POST /api/providers/{id}/accounts/import-copilot/batch body BatchCopilotImportRequest -> BatchImportResult
+//   (400 {error} when empty, over 200 tokens, or the provider is not GitHub Copilot)
 }
 

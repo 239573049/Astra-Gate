@@ -132,7 +132,15 @@ public static class SwitchModes
     /// <summary>A rate-limited (429) account cools down and the next usable account becomes current automatically.</summary>
     public const string Failover = "failover";
 
-    public static readonly IReadOnlyList<string> All = [Manual, Failover];
+    /// <summary>
+    /// Requests are spread over all usable accounts (fewest in flight first) and a conversation — one
+    /// <c>prompt_cache_key</c>, one Claude Code session — stays on one account while it is usable. Rate-limited or dead
+    /// accounts cool down and the request moves on, without touching the provider's "current" account.
+    /// See <see cref="AccountScheduler"/>.
+    /// </summary>
+    public const string Balanced = "balanced";
+
+    public static readonly IReadOnlyList<string> All = [Manual, Failover, Balanced];
 }
 
 /// <summary>Resolved upstream credentials for one provider instance.</summary>
@@ -188,6 +196,10 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token, ChatGptAccountHeader(token)) with { AccountId = account.Id };
     }
 
+    /// <summary>The provider's accounts in failover order (what <see cref="AccountScheduler"/> picks from).</summary>
+    public Task<IReadOnlyList<ProviderAccount>> ListAccountsAsync(string providerId, CancellationToken ct = default) =>
+        db.Accounts.ListAsync(providerId, ct);
+
     /// <summary>Upstream answered 401/403: force-refresh the account once and resolve again.</summary>
     public async Task<UpstreamAuth> ResolveAfterUnauthorizedAsync(string providerId, string? accountId, CancellationToken ct = default)
     {
@@ -205,18 +217,19 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
     /// Automatic failover (plan §5.4, switch mode <see cref="SwitchModes.Failover"/>): puts <paramref name="accountId"/>
     /// on cooldown until <paramref name="cooldownUntil"/> (null = leave its state alone, e.g. a grant that just died),
     /// then makes the first usable account not yet <paramref name="tried"/> the provider's current account.
-    /// Returns that account's id, or null when nothing is left to fail over to.
+    /// Returns that account's id, or null when nothing is left to fail over to. With <paramref name="setCurrent"/> false
+    /// (balanced mode) the provider's current account is left alone.
     /// </summary>
     public async Task<string?> FailOverAsync(
         string providerId, string accountId, DateTimeOffset? cooldownUntil, string reason,
-        IReadOnlyCollection<string> tried, CancellationToken ct = default)
+        IReadOnlyCollection<string> tried, bool setCurrent = true, CancellationToken ct = default)
     {
         if (cooldownUntil is not null) await db.Accounts.SetCooldownAsync(accountId, cooldownUntil, reason, ct);
         var now = DateTimeOffset.UtcNow;
         var next = (await db.Accounts.ListAsync(providerId, ct))
             .FirstOrDefault(a => a.Id != accountId && !tried.Contains(a.Id) && SubscriptionSupport.IsUsable(a, now));
         if (next is null) return null;
-        await db.Accounts.SetCurrentAsync(providerId, next.Id, ct);
+        if (setCurrent) await db.Accounts.SetCurrentAsync(providerId, next.Id, ct);
         return next.Id;
     }
 

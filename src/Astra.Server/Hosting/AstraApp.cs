@@ -95,6 +95,7 @@ public static class AstraApp
         builder.Services.AddSingleton<SubscriptionQuotaService>();
         builder.Services.AddSingleton<UpstreamAuthResolver>();
         // Gateway (plan §6): codecs are registered by GatewayCodecs.Register; the pipeline picks them per protocol.
+        builder.Services.AddSingleton<AccountScheduler>();
         GatewayCodecs.Register(builder.Services);
         builder.Services.AddSingleton<CodecRegistry>();
         builder.Services.AddSingleton<ClientRouting>();

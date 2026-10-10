@@ -18,6 +18,7 @@ import type {
   ImportResult,
   ImportSelection,
   ImportSource,
+  BatchImportResult,
   LocalCodexLogin,
   LocalCopilotLogin,
   Model,
@@ -694,6 +695,26 @@ export const useResetCredits = (accountId: string | null, enabled = true) =>
   useQuery({
     queryKey: keys.resetCredits(accountId ?? ''),
     queryFn: () => api<ResetCreditList>('GET', `/api/provider-accounts/${enc(accountId!)}/reset-credits`),
+/**
+ * Batch import: many pasted GitHub tokens (one per line) become Copilot accounts in one call. The result lists
+ * every token (masked) with its outcome — imported / duplicate / invalid_format / failed.
+ */
+export function useBatchImportCopilotAccounts(providerId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (tokens: string) =>
+      api<BatchImportResult>(
+        'POST',
+        `/api/providers/${enc(providerId)}/accounts/import-copilot/batch`,
+        { tokens },
+      ),
+    onSuccess: () => {
+      invalidateProviderAccounts(qc, providerId);
+      void qc.invalidateQueries({ queryKey: keys.localCopilotLogin });
+    },
+  });
+}
+
     enabled: Boolean(accountId) && enabled,
     retry: false,
   });

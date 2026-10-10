@@ -61,7 +61,13 @@ export function SubscriptionPolicy({ provider }: { provider: Provider }) {
       )}
       <Row
         label={t('providers.subscription.policy.switchMode')}
-        detail={t(p.switchMode === 'failover' ? 'providers.subscription.policy.failoverDetail' : 'providers.subscription.policy.manualDetail')}
+        detail={t(
+          p.switchMode === 'balanced'
+            ? 'providers.subscription.policy.balancedDetail'
+            : p.switchMode === 'failover'
+              ? 'providers.subscription.policy.failoverDetail'
+              : 'providers.subscription.policy.manualDetail',
+        )}
       >
         <Segmented
           ariaLabel={t('providers.subscription.policy.switchMode')}
@@ -70,6 +76,7 @@ export function SubscriptionPolicy({ provider }: { provider: Provider }) {
           items={[
             { value: 'manual', label: t('providers.subscription.policy.manual') },
             { value: 'failover', label: t('providers.subscription.policy.failover') },
+            { value: 'balanced', label: t('providers.subscription.policy.balanced') },
           ]}
         />
       </Row>
