@@ -10,15 +10,18 @@ import type {
   ClientInfo,
   ClientInstallJob,
   ClientKind,
+  ClaudeDirectRequest,
+  ClaudeDirectSelect,
+  ClaudeDirectState,
   ConfigPreview,
   DisableResult,
   DailyActivity,
   EnableRequest,
   ImportedCodexAccount,
+  BatchImportResult,
   ImportResult,
   ImportSelection,
   ImportSource,
-  BatchImportResult,
   LocalCodexLogin,
   LocalCopilotLogin,
   Model,
@@ -86,6 +89,8 @@ export const keys = {
   remoteModels: (id: string) => ['remote-models', id] as const,
   templateUpdate: (id: string) => ['template-update', id] as const,
   clients: ['clients'] as const,
+  claudeDirect: ['claude-direct'] as const,
+  claudeDirectRequests: (id: string) => ['claude-direct-requests', id] as const,
   tokens: ['tokens'] as const,
   clientModels: (kind: string) => ['client-models', kind] as const,
   backups: (kind: string) => ['backups', kind] as const,
@@ -690,11 +695,6 @@ export function useImportCopilotAccount(providerId: string) {
   });
 }
 
-/** codex reset cards (live list — statuses change when a card is used or expires). */
-export const useResetCredits = (accountId: string | null, enabled = true) =>
-  useQuery({
-    queryKey: keys.resetCredits(accountId ?? ''),
-    queryFn: () => api<ResetCreditList>('GET', `/api/provider-accounts/${enc(accountId!)}/reset-credits`),
 /**
  * Batch import: many pasted GitHub tokens (one per line) become Copilot accounts in one call. The result lists
  * every token (masked) with its outcome — imported / duplicate / invalid_format / failed.
@@ -715,6 +715,11 @@ export function useBatchImportCopilotAccounts(providerId: string) {
   });
 }
 
+/** codex reset cards (live list — statuses change when a card is used or expires). */
+export const useResetCredits = (accountId: string | null, enabled = true) =>
+  useQuery({
+    queryKey: keys.resetCredits(accountId ?? ''),
+    queryFn: () => api<ResetCreditList>('GET', `/api/provider-accounts/${enc(accountId!)}/reset-credits`),
     enabled: Boolean(accountId) && enabled,
     retry: false,
   });
@@ -855,6 +860,57 @@ export function useCancelClientInstall() {
     onSuccess: (job) => qc.setQueryData(keys.clientInstallJob(job.kind), job),
   });
 }
+
+// ---------- Claude Code direct profiles ----------
+
+const CLAUDE_DIRECT = '/api/clients/claude-code/direct';
+
+/**
+ * Native Claude login profiles of the Astra launcher (loopback-only). Only pass `enabled` for Claude Code:
+ * another client never queries this endpoint.
+ */
+export const useClaudeDirect = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.claudeDirect,
+    queryFn: () => api<ClaudeDirectState>('GET', CLAUDE_DIRECT),
+    enabled,
+    retry: false,
+  });
+
+/** Creates a profile; no login happens here (the user runs `astra claude --profile <id> --login` in a terminal). */
+export function useCreateClaudeProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api<ClaudeDirectState>('POST', `${CLAUDE_DIRECT}/profiles`, { name }),
+    onSuccess: (state) => qc.setQueryData(keys.claudeDirect, state),
+  });
+}
+
+/**
+ * Switches the launcher's mode / selected profile, or records the statistics consent of that profile.
+ * Asking for direct without a profile is a 404: create one first (the profile group is always available).
+ */
+export function useSelectClaudeDirect() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ClaudeDirectSelect) => api<ClaudeDirectState>('PUT', CLAUDE_DIRECT, body),
+    onSuccess: (state) => {
+      qc.setQueryData(keys.claudeDirect, state);
+      // Consent off stops ingestion immediately: drop any cached statistics as well.
+      void qc.invalidateQueries({ queryKey: ['claude-direct-requests'] });
+    },
+  });
+}
+
+/** The profile's most recent reported requests (at most 100, newest first); polls only when `live`. */
+export const useClaudeDirectRequests = (profileId: string | null | undefined, live: boolean) =>
+  useQuery({
+    queryKey: keys.claudeDirectRequests(profileId ?? ''),
+    queryFn: () => api<ClaudeDirectRequest[]>('GET', `${CLAUDE_DIRECT}/profiles/${enc(profileId!)}/requests`),
+    enabled: Boolean(profileId),
+    retry: false,
+    refetchInterval: live ? 5000 : false,
+  });
 
 // ---------- tokens ----------
 

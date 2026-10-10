@@ -123,7 +123,9 @@ public sealed class RetentionService(AstraDatabase db, SettingsService settings,
                 var s = settings.Current;
                 if (s.RequestRetentionDays is { } days)
                 {
-                    var removed = await db.Requests.DeleteOlderThanAsync(DateTimeOffset.UtcNow.AddDays(-days), stoppingToken);
+                    var before = DateTimeOffset.UtcNow.AddDays(-days);
+                    var removed = await db.Requests.DeleteOlderThanAsync(before, stoppingToken);
+                    await new Astra.Data.Repositories.ClaudeDirectRequestRepository(db.Factory).DeleteOlderThanAsync(before, stoppingToken);
                     if (removed > 0) logger.LogInformation("Retention: removed {Count} request records", removed);
                 }
                 bodies.Cleanup(s.BodyRetentionDays);

@@ -11,6 +11,7 @@ export interface HomePaths {
   dbFile: string;
   keysDir: string;
   desktopPrefix: string;
+  claudeProfilesDir: string;
 }
 
 /** Data directory: ASTRA_HOME if set, else ~/.astra */
@@ -30,5 +31,6 @@ export function homePaths(home: string): HomePaths {
     dbFile: path.join(home, 'astra.db'),
     keysDir: path.join(home, 'keys'),
     desktopPrefix: path.join(home, 'desktop'),
+    claudeProfilesDir: path.join(home, 'claude-profiles'),
   };
 }

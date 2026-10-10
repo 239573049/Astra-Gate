@@ -11,6 +11,7 @@ import {
   useBackups,
   useCancelClientInstall,
   useCheckClientUpdates,
+  useClaudeDirect,
   useClientInstallJob,
   useClientModels,
   useClients,
@@ -28,6 +29,7 @@ import {
 } from '../api/hooks';
 import type { ClientBinding, ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
+import { ClaudeDirectPanel } from '../components/ClaudeDirectPanel';
 import { CLIENT_META, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
@@ -250,6 +252,10 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   const accounts = useProviderAccounts(boundProvider?.id, isSubscriptionBinding);
   const isDesktopClient = client.kind === 'claude-desktop';
   const isClaudeCode = client.kind === 'claude-code';
+  // Claude Code's connection mode (Astra launcher): in direct mode the client talks to Anthropic itself, so the
+  // gateway-only groups below are meaningless. Unknown state counts as gateway, which is also the server default.
+  const direct = useClaudeDirect(isClaudeCode);
+  const isDirectMode = isClaudeCode && direct.data?.mode === 'direct';
   const savedRoles = rolesOf(client.extras);
   const [roles, setRoles] = useState<RoleMap>(savedRoles);
   const hasRole = ROLES.some((r) => roles[r]);
@@ -327,7 +333,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
           label={
             <span className="flex items-center gap-2">
               <span className="text-[15px] font-medium">{name}</span>
-              {statusBadge(client, t)}
+              {isDirectMode ? <Badge>{t('clients.claudeDirect.direct')}</Badge> : statusBadge(client, t)}
             </span>
           }
           detail={
@@ -335,7 +341,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
               ? client.availabilityReason ?? t('clients.comingSoonDetail')
               : [
                   groupOf(client) === 'installed' ? t('clients.detected', { version: versionOf(client) ?? '' }) : t('clients.notDetected'),
-                  configPath,
+                  isDirectMode ? null : configPath,
                 ]
                   .filter(Boolean)
                   .join(' · ')
@@ -343,7 +349,11 @@ function ClientPanel({ client }: { client: ClientInfo }) {
           className="py-3"
         >
           {!soon && <InstallActions client={client} onOpen={setInstallAction} />}
-          {client.enabled ? (
+          {isDirectMode ? (
+            <Button variant="primary" onClick={() => document.getElementById(CLAUDE_DIRECT_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+              {t('clients.claudeDirect.configure')}
+            </Button>
+          ) : client.enabled ? (
             <Button onClick={() => void doDisable()} loading={disable.isPending}>
               {t('clients.disableRestore')}
             </Button>
@@ -358,11 +368,11 @@ function ClientPanel({ client }: { client: ClientInfo }) {
             </Button>
           )}
         </Row>
-        {client.appliedAt && (
+        {!isDirectMode && client.appliedAt && (
           <Row label={<span className="text-[12px] text-[var(--text-secondary)]">{t('clients.appliedAt', { time: formatDateTime(client.appliedAt, locale) })}</span>} />
         )}
       </Group>
-      {client.warnings.length > 0 && (
+      {!isDirectMode && client.warnings.length > 0 && (
         <div className="mb-5 flex flex-col gap-2">
           {client.warnings.map((w, i) => (
             <Alert key={i} tone="warning" title={w} />
@@ -370,9 +380,9 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </div>
       )}
 
-      <ProviderBindings client={client} providers={providers.data ?? []} loading={providers.isLoading} soon={soon} />
+      {!isDirectMode && <ProviderBindings client={client} providers={providers.data ?? []} loading={providers.isLoading} soon={soon} />}
 
-      {isSubscriptionBinding && (
+      {!isDirectMode && isSubscriptionBinding && (
         <Group title={t('clients.accountTitle')} footer={t('clients.accountFooter')}>
           {accounts.isLoading ? (
             <div className="p-4">
@@ -405,7 +415,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </Group>
       )}
 
-      {!soon && (
+      {!soon && !isDirectMode && (
         <Group title={t('clients.tokenTitle')} footer={client.enabled ? t('clients.tokenFooterEnabled') : t('clients.tokenFooter')}>
           <Row label={t('clients.token')}>
             <Select className="max-w-[300px]" ariaLabel={t('clients.token')} value={tokenId} onChange={setTokenId} options={tokenOptions} />
@@ -419,7 +429,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </Group>
       )}
 
-      {!soon && client.providerId && isDesktopClient && (
+      {!soon && !isDirectMode && client.providerId && isDesktopClient && (
         <Group title={t('clients.roleMapTitle')} footer={client.enabled ? t('clients.roleMapFooterEnabled') : t('clients.roleMapFooter')}>
           {ROLES.map((r) => (
             <Row key={r} label={t(`clients.role.${r}` as 'clients.role.sonnet')}>
@@ -443,7 +453,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </Group>
       )}
 
-      {!soon && client.providerId && !isDesktopClient && (
+      {!soon && !isDirectMode && client.providerId && !isDesktopClient && (
         <Group title={t('clients.modelTitle')} footer={modelFooter}>
           <Row label={t('clients.defaultModel')}>
             <Select
@@ -478,7 +488,9 @@ function ClientPanel({ client }: { client: ClientInfo }) {
 
       {!soon && client.install && <VersionGroup client={client} onShowLog={() => setInstallAction('log')} />}
 
-      {!soon && (
+      {isClaudeCode && <div id={CLAUDE_DIRECT_ANCHOR_ID}><ClaudeDirectPanel enabled={isClaudeCode} /></div>}
+
+      {!soon && !isDirectMode && (
         <Group title={t('clients.maintenance')}>
           {configPath && (
             <Row
@@ -728,6 +740,9 @@ function InstallActions({ client, onOpen }: { client: ClientInfo; onOpen: (mode:
 }
 
 const SHADOWED_ALERT_ID = 'client-shadowed-alert';
+
+/** Anchor of the Claude Code direct panel, so the header button can scroll to it. */
+const CLAUDE_DIRECT_ANCHOR_ID = 'claude-direct-panel';
 
 /** Installed vs latest version, how the client is installed, and why an action is unavailable. */
 function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: () => void }) {

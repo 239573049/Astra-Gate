@@ -3,6 +3,10 @@ using Astra.Core;
 
 namespace Astra.Server.IntegrationTests;
 
+// Fallback tracking is process-global; unrelated parallel tests must not contaminate this guard.
+[CollectionDefinition("JSON registration guard", DisableParallelization = true)]
+public sealed class JsonRegistrationCollection;
+
 /// <summary>
 /// Guards the source-generated JSON metadata: every type that crosses a JSON boundary must be
 /// registered in an assembly's <c>JsonSerializerContext</c> (see <see cref="JsonContexts"/>).
@@ -11,12 +15,13 @@ namespace Astra.Server.IntegrationTests;
 /// exactly why the mistake is easy to make and invisible until a Native AOT build throws at runtime.
 /// This test exercises the admin API and then asserts the fallback was never used.
 /// </summary>
+[Collection("JSON registration guard")]
 public sealed class JsonRegistrationTests
 {
     [Fact]
     public async Task AdminApi_payloads_are_all_served_from_generated_metadata()
     {
-        await using var host = await TestHost.StartAsync();
+        await using var host = await ClaudeDirectTests.LocalHost();
 
         // Exercise every response shape we can reach without a provider or an upstream.
         string[] gets =
@@ -25,7 +30,7 @@ public sealed class JsonRegistrationTests
             "/api/privacy/events", "/api/privacy/events/stats", "/api/providers", "/api/clients", "/api/tokens",
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/provider-quota/templates",
-            "/api/providers/import/sources",
+            "/api/providers/import/sources", "/api/clients/claude-code/direct",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -70,6 +75,13 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Delete, "/api/provider-accounts/missing");
         await host.SendAsync(HttpMethod.Get, "/api/models/missing");
         await host.SendAsync(HttpMethod.Get, "/api/nope");
+
+        var native = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/direct/profiles", new { name = "Guard" });
+        Assert.Equal(HttpStatusCode.OK, native.Status);
+        var profileId = native.Body!["profiles"]![0]!["id"]!.GetValue<string>();
+        await host.SendAsync(HttpMethod.Put, "/api/clients/claude-code/direct", new { mode = "direct", profileId, telemetryEnabled = true });
+        await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/direct/prepare", new { profileId, action = "run" });
+        await host.GetJsonAsync($"/api/clients/claude-code/direct/profiles/{profileId}/requests");
 
         var unregistered = JsonContexts.FallbackTypes;
         Assert.True(unregistered.Count == 0,

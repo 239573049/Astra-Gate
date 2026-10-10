@@ -21,6 +21,7 @@ import {
 } from './commands/admin.js';
 import { runSetPassword } from './commands/config.js';
 import { runRestoreAll } from './commands/restore-all.js';
+import { runClaude } from './commands/claude.js';
 import { VERSION } from './version.js';
 
 function addStartOptions(cmd: Command): Command {
@@ -185,6 +186,14 @@ program
   .command('set-password')
   .description('Set the admin password (required before binding to a non-loopback address)')
   .action(() => runSetPassword());
+
+program
+  .command('claude')
+  .description('Run the official Claude Code CLI with a native Astra profile')
+  .option('--profile <id>', 'Native Claude profile id (32 hex characters)')
+  .option('--login', 'Sign the profile in with a Claude subscription')
+  .option('--status', 'Show the official sign-in state of the profile')
+  .action((opts: { profile?: string; login?: boolean; status?: boolean }) => runClaude(opts));
 
 program
   .command('restore-all')

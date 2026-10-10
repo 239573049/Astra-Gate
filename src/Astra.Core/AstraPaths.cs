@@ -21,6 +21,7 @@ public sealed class AstraPaths
     public string ClientBackupsDir => Path.Combine(BackupsDir, "client-configs");
     public string DbBackupsDir => Path.Combine(BackupsDir, "db");
     public string BodiesDir => Path.Combine(Root, "bodies");
+    public string ClaudeProfilesDir => Path.Combine(Root, "claude-profiles");
 
     public void EnsureCreated()
     {

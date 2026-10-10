@@ -7,6 +7,10 @@
 .media { position: relative; overflow: hidden; background: var(--surface-muted); }
 .zoom { display: grid; min-height: 112px; place-items: center; }
 .content { padding: var(--space-5); }
+.card[data-density="compact"] .zoom { min-height: 80px; }
+.card[data-density="compact"] .content { padding: 14px; }
+.card[data-density="compact"] .description { margin-top: 4px; }
+.card[data-density="compact"] .footer { margin-top: 12px; }
 /* Fit-content width keeps the title's box the shape of its text, so it scales evenly when it grows into the quick look. */
 .title { width: fit-content; max-width: 100%; margin: 0; font-size: var(--text-lg); font-weight: 500; letter-spacing: var(--tracking-body); line-height: 1.3; text-wrap: balance; }
 .trigger { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }

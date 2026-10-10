@@ -74,6 +74,7 @@ public static class AstraApp
         builder.Services.AddSingleton(ClientEnvironment.Real);
         builder.Services.AddSingleton<ClientInstallService>();
         builder.Services.AddSingleton<ClientService>();
+        builder.Services.AddSingleton<ClaudeDirectService>();
         builder.Services.AddSingleton<TokenService>();
         builder.Services.AddHostedService<TokenMigrationWorker>();
         builder.Services.AddSingleton<ProviderTemplateCatalog>();
@@ -94,8 +95,8 @@ public static class AstraApp
         builder.Services.AddSingleton<SubscriptionTokenService>();
         builder.Services.AddSingleton<SubscriptionQuotaService>();
         builder.Services.AddSingleton<UpstreamAuthResolver>();
-        // Gateway (plan §6): codecs are registered by GatewayCodecs.Register; the pipeline picks them per protocol.
         builder.Services.AddSingleton<AccountScheduler>();
+        // Gateway (plan §6): codecs are registered by GatewayCodecs.Register; the pipeline picks them per protocol.
         GatewayCodecs.Register(builder.Services);
         builder.Services.AddSingleton<CodecRegistry>();
         builder.Services.AddSingleton<ClientRouting>();
@@ -181,6 +182,7 @@ public static class AstraApp
         app.MapModelSyncEndpoints();
         app.MapRequestEndpoints();
         app.MapClientEndpoints();
+        app.MapClaudeDirectEndpoints();
         app.MapTokenEndpoints();
         app.MapProviderEndpoints();
         app.MapPrivacyEndpoints();

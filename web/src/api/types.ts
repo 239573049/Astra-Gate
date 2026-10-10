@@ -351,6 +351,31 @@ export interface BackupInfo { id: string; createdAt: string; files: string[]; fi
 // GET /api/clients/{kind}/backups -> BackupInfo[] ; POST /api/clients/{kind}/backups/{id}/restore -> ClientInfo
 // GET /api/clients/{kind}/models -> string[]   (enabled models of every bound provider, each id once, for model pickers)
 
+// ---------- Claude Code direct profiles (native login, Astra launcher only) ----------
+export type ClaudeDirectMode = "gateway" | "direct";
+/** One isolated native Claude login; the directory and its credentials never leave this machine. */
+export interface ClaudeDirectProfile { id: string; name: string; telemetryEnabled: boolean; configDirectory: string }
+/** Which connection the Astra launcher uses; the user's default `claude` is never changed by this selection. */
+export interface ClaudeDirectState { mode: ClaudeDirectMode; profileId?: string | null; profiles: ClaudeDirectProfile[] }
+/** Body of the mode / profile selection; telemetryEnabled is the statistics consent of that profile. */
+export interface ClaudeDirectSelect { mode: ClaudeDirectMode; profileId?: string | null; telemetryEnabled?: boolean }
+/**
+ * One request a Claude Code profile made on its own direct connection and reported to us. This is client
+ * telemetry, not gateway traffic — prompts, responses and tool arguments are never stored. Money is
+ * integer nano-USD, estimated by the client itself.
+ */
+export interface ClaudeDirectRequest {
+  id: string; profileId: string; sessionId: string; accountUuid?: string | null; model: string;
+  occurredAtUtc: string; status: "success" | "error";
+  inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number;
+  durationMs?: number | null; estimatedCostNanoUsd?: number | null;
+}
+// GET /api/clients/claude-code/direct -> ClaudeDirectState
+// POST /api/clients/claude-code/direct/profiles body {name} -> ClaudeDirectState
+// PUT /api/clients/claude-code/direct body ClaudeDirectSelect -> ClaudeDirectState
+// GET /api/clients/claude-code/direct/profiles/{id}/requests -> ClaudeDirectRequest[]   (newest first, at most 100)
+// These endpoints answer a loopback caller only; a remote one gets 403 (and the panel shows why).
+
 // ---------- tokens ----------
 /** Usage of one token: `today` from the request log (server-local day), `total` from lifetime counters. */
 export interface TokenStats {
@@ -597,6 +622,26 @@ export interface ImportCopilotRequest {
   accountId?: string | null;
 }
 // POST /api/providers/{id}/accounts/import-copilot body ImportCopilotRequest -> ImportedCodexAccount
+export interface BatchCopilotImportRequest {
+  /** GitHub tokens, one per line (commas / whitespace also separate; `#` lines are comments). */
+  tokens: string;
+}
+export type BatchImportStatus = "imported" | "duplicate" | "invalid_format" | "failed";
+export interface BatchImportItem {
+  /** 1-based position in the parsed input. */
+  index: number;
+  /** The masked token (first / last four characters); the full token is never returned. */
+  source: string;
+  status: BatchImportStatus;
+  /** Failure / duplicate reason, or a warning on an imported account. */
+  message?: string | null;
+  account?: ProviderAccount | null;
+}
+export interface BatchImportResult {
+  items: BatchImportItem[]; imported: number; duplicates: number; failed: number;
+}
+// POST /api/providers/{id}/accounts/import-copilot/batch body BatchCopilotImportRequest -> BatchImportResult
+//   (400 {error} when empty, over 200 tokens, or the provider is not GitHub Copilot)
 
 // ---------- settings ----------
 export interface Settings {
@@ -622,25 +667,5 @@ export type SettingsPatch = Partial<Settings> & { proxyPassword?: string | null 
 export interface UpdateStatus {
   current: string; available?: string | null; lastCheckAt?: string | null; notes?: string | null;
   error?: string | null; channel: string; autoCheck: boolean; feedConfigured: boolean;
-export interface BatchCopilotImportRequest {
-  /** GitHub tokens, one per line (commas / whitespace also separate; `#` lines are comments). */
-  tokens: string;
-}
-export type BatchImportStatus = "imported" | "duplicate" | "invalid_format" | "failed";
-export interface BatchImportItem {
-  /** 1-based position in the parsed input. */
-  index: number;
-  /** The masked token (first / last four characters); the full token is never returned. */
-  source: string;
-  status: BatchImportStatus;
-  /** Failure / duplicate reason, or a warning on an imported account. */
-  message?: string | null;
-  account?: ProviderAccount | null;
-}
-export interface BatchImportResult {
-  items: BatchImportItem[]; imported: number; duplicates: number; failed: number;
-}
-// POST /api/providers/{id}/accounts/import-copilot/batch body BatchCopilotImportRequest -> BatchImportResult
-//   (400 {error} when empty, over 200 tokens, or the provider is not GitHub Copilot)
 }
 

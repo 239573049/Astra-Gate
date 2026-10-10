@@ -7,6 +7,7 @@ export interface AstraPaths {
   runtimeFile: string;
   installFile: string;
   logsDir: string;
+  claudeProfilesDir: string;
   /** Path of the server's log file for a given day: astra-YYYYMMDD.log. */
   logFile: (date: Date) => string;
 }
@@ -30,6 +31,7 @@ export function astraPaths(
     runtimeFile: path.join(home, 'runtime.json'),
     installFile: path.join(home, 'install.json'),
     logsDir: path.join(home, 'logs'),
+    claudeProfilesDir: path.join(home, 'claude-profiles'),
     logFile: (date: Date) => path.join(home, 'logs', logFileName(date)),
   };
 }

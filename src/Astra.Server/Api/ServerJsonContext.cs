@@ -83,6 +83,14 @@ namespace Astra.Server;
 [JsonSerializable(typeof(ClientInstallJobDto))]
 [JsonSerializable(typeof(ClientInstallRequest))]
 [JsonSerializable(typeof(ClientUpdateCheckRequest))]
+// Native Claude profiles and opt-in client-side statistics (never subscription credentials).
+[JsonSerializable(typeof(ClaudeDirectProfileDto))]
+[JsonSerializable(typeof(ClaudeDirectStateDto))]
+[JsonSerializable(typeof(ClaudeDirectCreateInput))]
+[JsonSerializable(typeof(ClaudeDirectSelectInput))]
+[JsonSerializable(typeof(ClaudeDirectPrepareInput))]
+[JsonSerializable(typeof(ClaudeDirectLaunchDto))]
+[JsonSerializable(typeof(List<Astra.Data.Repositories.ClaudeDirectRequest>))]
 // tokens
 [JsonSerializable(typeof(TokenDto))]
 [JsonSerializable(typeof(TokenStatsDto))]
@@ -135,6 +143,10 @@ namespace Astra.Server;
 [JsonSerializable(typeof(SubscriptionEndpoints.LocalCopilotLoginDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LocalCopilotImport))]
 [JsonSerializable(typeof(SubscriptionEndpoints.ImportedAccountDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.BatchCopilotImport))]
+[JsonSerializable(typeof(SubscriptionEndpoints.BatchImportResultDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.BatchImportItemDto))]
+[JsonSerializable(typeof(List<SubscriptionEndpoints.BatchImportItemDto>))]
 // auth
 [JsonSerializable(typeof(SystemEndpoints.LoginRequest))]
 // server-owned documents
@@ -143,10 +155,6 @@ namespace Astra.Server;
 [JsonSerializable(typeof(UpdateManifest))]
 [JsonSerializable(typeof(UpdateCheckState))]
 [JsonSerializable(typeof(UpdateEndpoints.UpdateStatusDto))]
-[JsonSerializable(typeof(SubscriptionEndpoints.BatchCopilotImport))]
-[JsonSerializable(typeof(SubscriptionEndpoints.BatchImportResultDto))]
-[JsonSerializable(typeof(SubscriptionEndpoints.BatchImportItemDto))]
-[JsonSerializable(typeof(List<SubscriptionEndpoints.BatchImportItemDto>))]
 // collections used as roots
 [JsonSerializable(typeof(List<SyncChangeDto>))]
 [JsonSerializable(typeof(List<ClientInfoDto>))]

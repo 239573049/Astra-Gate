@@ -122,7 +122,7 @@ export function ProvidersPage() {
           </div>
         )}
         {providers.data && providers.data.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-4">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] items-start gap-3">
             {providers.data.map((p) => (
               <ProviderCard
                 key={p.id}
@@ -203,6 +203,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
   return (
     // The whole card opens the provider; like Row it holds its own controls, so it cannot be a <button>.
     <Card
+      data-density="compact"
       role="button"
       tabIndex={0}
       aria-label={p.name}
@@ -219,12 +220,12 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
       description={protocols.map((x) => PROTOCOL_OPTIONS.find((o) => o.value === x)?.label ?? x).join(' / ')}
       media={
         <div
-          className="flex flex-col justify-between gap-3 self-stretch justify-self-stretch p-4"
+          className="flex flex-col justify-between gap-2 self-stretch justify-self-stretch p-3"
           style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%)' }}
         >
           <div className="flex items-start justify-between gap-2">
             <span className={cn('transition-[filter,opacity]', !p.enabled && 'opacity-50 grayscale')}>
-              <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={40} />
+              <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={32} />
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_80%,transparent)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)]">
               <Dot tone={state.tone} />
@@ -262,7 +263,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
       }
     >
       {(p.templateUpdateAvailable || p.boundClients.length > 0) && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
+        <div className="mt-2 flex flex-wrap gap-1">
           {p.templateUpdateAvailable && <Badge tone="accent">{t('providers.templateUpdate')}</Badge>}
           {p.boundClients.map((k) => (
             <Badge key={k} tone="green">
@@ -276,7 +277,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
         <ProviderQuotaLine provider={p} />
       </div>
       {/* Scrubbing the trend must not open the provider. */}
-      <div className="mt-4" onClick={stopClick}>
+      <div className="mt-3" onClick={stopClick}>
         {totalRequests > 0 ? (
           <Sparkline
             label={t('providers.card.requests7d')}
@@ -284,6 +285,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
             labels={days.map((d) => d.slice(5))}
             value={formatTokens(totalRequests, true)}
             change={formatUsd(usage?.costUsd ?? 0)}
+            width={320}
             height={36}
             formatValue={(v) => formatTokens(v, true)}
           />
@@ -291,7 +293,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
           // Same footprint as the sparkline, so cards with and without traffic line up.
           <div className="grid gap-3">
             <div className="text-[13px] text-[var(--text-secondary)]">{t('providers.card.requests7d')}</div>
-            <div className="grid h-9 place-items-center border-b border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)]">
+            <div className="grid aspect-[320/36] place-items-center border-b border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)]">
               {t('providers.card.noRequests')}
             </div>
           </div>
