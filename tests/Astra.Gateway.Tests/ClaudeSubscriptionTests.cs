@@ -129,6 +129,22 @@ public class ClaudeSubscriptionTests
         Assert.Equal("not json", ClaudeOAuthHeaders.PromoteCacheControlTtl("not json"));
     }
 
+    /// <summary>客户端的 cacheTtl 选项：只补没有 ttl 的块（可指定 5m），不增删断点，已有 ttl 不动。</summary>
+    [Fact]
+    public void Client_Cache_Ttl_Option_Fills_Missing_Ttl_Without_Adding_Breakpoints()
+    {
+        const string body = """
+            {"system":[{"type":"text","text":"a"},{"type":"text","text":"b","cache_control":{"type":"ephemeral"}}],
+             "messages":[{"role":"user","content":[{"type":"text","text":"hi","cache_control":{"type":"ephemeral","ttl":"1h"}}]}]}
+            """;
+
+        var result = System.Text.Json.Nodes.JsonNode.Parse(ClaudeOAuthHeaders.PromoteCacheControlTtl(body, "5m"))!;
+
+        Assert.Equal("5m", result["system"]![1]!["cache_control"]!["ttl"]!.GetValue<string>());
+        Assert.Equal("1h", result["messages"]![0]!["content"]![0]!["cache_control"]!["ttl"]!.GetValue<string>());
+        Assert.Null(result["system"]![0]!["cache_control"]);
+    }
+
     [Fact]
     public void Compat_Beta_Puts_The_Required_Betas_First_Without_Duplicates() =>
         Assert.Equal("claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-1m-2025-08-07",

@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Billing;
+using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Requests;
 using Astra.Gateway.Protocol;
@@ -237,6 +238,7 @@ public sealed class GatewayPipeline(
             // 模拟 Claude Code（subscription.mimic_claude_code，见 ClaudeCodeMimicry）：把最终发往
             // 上游的请求体改写成 CLI 的形状（3 块 system + metadata.user_id）。直通与翻译两条路
             // 都在这里收口，改的是同一份 upstreamText。
+            var clientCacheTtl = ClientOptions.GetCacheTtl(route.Client?.ExtraJson);
             if (claudeMimic)
                 upstreamText = ClaudeCodeMimicry.ApplyBody(upstreamText, route.AccountId ?? provider.Id,
                     ctx.Request.Headers["x-claude-code-session-id"].ToString());
@@ -245,8 +247,11 @@ public sealed class GatewayPipeline(
             // 唯一的体差异是 cache_control 没有 ttl:"1h"（计费块、metadata 两种模式都有）。头里的 beta 同理要
             // 补 oauth + extended-cache-ttl（见 ClaudeOAuthHeaders.MergeRelayBeta）：头体必须自洽，
             // 只补头不补体，就是"声明订阅身份却带着 API-key 形态的体"，上游回 403 Request not allowed。
+            // 客户端专属的 cacheTtl 选项（ClientOptions）优先于 Relay 的默认 1h；只给没有 ttl 的块补，不增删断点。
             else if (claudeMode == ClaudeHeaderMode.Relay)
-                upstreamText = ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamText);
+                upstreamText = ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamText, clientCacheTtl ?? "1h");
+            else if (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
+                upstreamText = ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamText, clientCacheTtl);
             capture?.Set(BodyStore.UpstreamRequest, upstreamText);
 
             var url = UpstreamUrls.For(endpoint, upstreamModel, stream);

@@ -30,6 +30,7 @@ import {
 import type { ClientBinding, ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
 import { ClaudeDirectPanel } from '../components/ClaudeDirectPanel';
+import { ClientOptionsGroup } from '../components/ClientOptionsGroup';
 import { CLIENT_META, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
@@ -37,6 +38,7 @@ import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/format';
+import { clientOptionsKey, clientOptionsOf, type ClientOptionValues } from '../lib/clientOptions';
 import { CLAUDE_CODE_MODELS, modelSlotsKey, modelSlotsOf, type ModelSlots } from '../lib/modelSlots';
 import { ROLES, roleKey, rolesOf, type RoleMap } from '../lib/roleMap';
 import { dirnameOf, systemActions } from '../shell/systemActions';
@@ -273,11 +275,18 @@ function ClientPanel({ client }: { client: ClientInfo }) {
     : client.enabled
       ? t('clients.modelFooterEnabled')
       : t('clients.modelFooter');
+  // Client-specific options (extras.options), rendered from the descriptors the server reports.
+  const optionDescriptors = client.options ?? [];
+  const savedOptions = clientOptionsOf(client.extras, optionDescriptors);
+  const [options, setOptions] = useState<ClientOptionValues>(savedOptions);
+  const optionsChanged = clientOptionsKey(options) !== clientOptionsKey(savedOptions);
   const extras = isDesktopClient
     ? { ...client.extras, roleMap: roles }
     : isClaudeCode
-      ? { ...client.extras, models: slots }
-      : undefined;
+      ? { ...client.extras, models: slots, options }
+      : optionDescriptors.length > 0
+        ? { ...client.extras, options }
+        : undefined;
 
   useEffect(() => setModel(client.selectedModel ?? null), [client.kind, client.selectedModel]);
   useEffect(() => setAccount(client.accountId ?? ''), [client.kind, client.providerId, client.accountId]);
@@ -286,6 +295,8 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   useEffect(() => setRoles(rolesOf(client.extras)), [client.kind, roleKey(savedRoles)]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setSlots(modelSlotsOf(client.extras)), [client.kind, modelSlotsKey(savedSlots)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setOptions(clientOptionsOf(client.extras, client.options)), [client.kind, clientOptionsKey(savedOptions)]);
 
   const saveAccount = () => {
     if (!client.providerId) return;
@@ -484,6 +495,19 @@ function ClientPanel({ client }: { client: ClientInfo }) {
             </Row>
           )}
         </Group>
+      )}
+
+      {!soon && !isDirectMode && optionDescriptors.length > 0 && (
+        <>
+          <ClientOptionsGroup descriptors={optionDescriptors} values={options} onChange={setOptions} enabled={client.enabled} />
+          {client.enabled && optionsChanged && (
+            <div className="-mt-3 mb-5 flex justify-end">
+              <Button size="sm" variant="primary" onClick={() => setEnableOpen(true)}>
+                {t('common.apply')}
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {!soon && client.install && <VersionGroup client={client} onShowLog={() => setInstallAction('log')} />}

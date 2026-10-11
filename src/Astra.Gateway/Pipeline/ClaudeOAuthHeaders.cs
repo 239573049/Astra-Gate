@@ -102,16 +102,17 @@ public static class ClaudeOAuthHeaders
     /// Relay body counterpart of <see cref="MergeRelayBeta"/>: in subscription mode Claude Code's
     /// <c>cache_control</c> blocks are <c>{"type":"ephemeral","ttl":"1h"}</c>; in auth-token mode they are
     /// <c>{"type":"ephemeral"}</c> (captured: system[1], system[2] and the last message block differ in exactly
-    /// this way, nothing else in the body does). Adds <c>ttl:"1h"</c> to every ephemeral block that has none.
+    /// this way, nothing else in the body does). Adds <paramref name="ttl"/> (default <c>"1h"</c>) to every ephemeral block that has none; existing ttl values and the set of
+    /// breakpoints are never changed (also used for a client's "cacheTtl" option, see <c>ClientOptions</c>).
     /// Returns the input untouched when it is not a JSON object or nothing needs to change.
     /// </summary>
-    public static string PromoteCacheControlTtl(string body)
+    public static string PromoteCacheControlTtl(string body, string ttl = "1h")
     {
         try
         {
             if (System.Text.Json.Nodes.JsonNode.Parse(body) is not System.Text.Json.Nodes.JsonObject root) return body;
             var changed = false;
-            Promote(root, ref changed);
+            Promote(root, ttl, ref changed);
             return changed ? root.ToJsonString() : body;
         }
         catch (Exception)
@@ -119,7 +120,7 @@ public static class ClaudeOAuthHeaders
             return body; // best effort: never drop a request because the rewrite failed
         }
 
-        static void Promote(System.Text.Json.Nodes.JsonNode? node, ref bool changed)
+        static void Promote(System.Text.Json.Nodes.JsonNode? node, string ttl, ref bool changed)
         {
             switch (node)
             {
@@ -127,13 +128,13 @@ public static class ClaudeOAuthHeaders
                     if (obj["cache_control"] is System.Text.Json.Nodes.JsonObject cc
                         && cc["type"]?.GetValue<string>() == "ephemeral" && cc["ttl"] is null)
                     {
-                        cc["ttl"] = "1h";
+                        cc["ttl"] = ttl;
                         changed = true;
                     }
-                    foreach (var (_, child) in obj.ToList()) Promote(child, ref changed);
+                    foreach (var (_, child) in obj.ToList()) Promote(child, ttl, ref changed);
                     break;
                 case System.Text.Json.Nodes.JsonArray arr:
-                    foreach (var child in arr) Promote(child, ref changed);
+                    foreach (var child in arr) Promote(child, ttl, ref changed);
                     break;
             }
         }

@@ -9,6 +9,8 @@ namespace Astra.Clients.Adapters;
 /// <c>~/.claude/settings.json</c> (honoring CLAUDE_CONFIG_DIR), temporarily removes a present
 /// <c>env.ANTHROPIC_API_KEY</c> (recorded), and optionally pins the model selection env vars
 /// (<see cref="ClaudeCodeModels.Slots"/>, extras key "models"; the older "smallFastModel" extra still works).
+/// The "options" extras (<see cref="ClientOptions"/>) add the <c>[1m]</c> model suffix, <c>MAX_THINKING_TOKENS</c> and
+/// <c>DISABLE_PROMPT_CACHING</c>; the cache TTL option is applied by the gateway, not written here.
 /// Warns on <c>apiKeyHelper</c>. Everything else is untouched.
 /// </summary>
 public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
@@ -24,6 +26,7 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_AUTH_TOKEN",
         .. ClaudeCodeModels.Slots,
+        .. ClientOptions.ConfigKeyPaths(ClientKinds.ClaudeCode).Select(p => p["env.".Length..]),
     ];
 
     private const string ApiKeyPath = "env.ANTHROPIC_API_KEY";
@@ -55,11 +58,20 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
         // Model slots are written only when a model was picked; an empty slot is never touched. The older
         // single-key "smallFastModel" extra still sets the Haiku tier, unless the slot map already does.
         var slots = ClaudeCodeModels.Parse(ctx.Extras);
+        var context1M = ClientOptions.GetBool(ctx.Extras, ClientOptions.Context1M);
         foreach (var (slot, model) in slots)
-            changes.Add(EnvKey(file, slot, model));
+        {
+            var wants1M = context1M && ctx.ModelsWithoutContext1M?.Contains(model) != true;
+            changes.Add(EnvKey(file, slot, wants1M ? ClaudeCodeModels.With1M(slot, model) : model));
+        }
         var smallFast = ctx.ExtraString("smallFastModel");
         if (!string.IsNullOrEmpty(smallFast) && slots.All(s => s.Key != "ANTHROPIC_DEFAULT_HAIKU_MODEL"))
             changes.Add(EnvKey(file, "ANTHROPIC_DEFAULT_HAIKU_MODEL", smallFast));
+
+        if (ClientOptions.GetInt(ctx.Extras, ClientOptions.MaxThinkingTokens) is { } thinking)
+            changes.Add(EnvKey(file, "MAX_THINKING_TOKENS", thinking.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.DisablePromptCaching))
+            changes.Add(EnvKey(file, "DISABLE_PROMPT_CACHING", "1"));
 
         // An existing ANTHROPIC_API_KEY would fight the gateway auth token: remove it (recorded, restored on disable).
         var apiKeyBefore = CurrentValue(file, ConfigFileFormat.Json, ApiKeyPath);

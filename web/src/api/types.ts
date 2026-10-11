@@ -297,6 +297,15 @@ export interface ClientInfo {
   /** Token written into this client's config (as "<token>.<kind>"); "default" when never chosen. */
   tokenId?: string | null;
   install?: ClientInstall | null;
+  /** Client-specific options this client supports (stored in extras.options); empty or absent = none. */
+  options?: ClientOptionDescriptor[] | null;
+}
+/**
+ * One client-specific option. scope "config": written into the client's own config on apply; "gateway": applied by the
+ * gateway to that client's requests. type "bool" | "int" | "enum" (choices); default "" = leave the client alone.
+ */
+export interface ClientOptionDescriptor {
+  key: string; type: 'bool' | 'int' | 'enum'; default: string; scope: 'config' | 'gateway'; choices?: string[] | null;
 }
 /**
  * How the client is installed and kept up to date. latestVersion comes from the npm registry or the client's own

@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Privacy;
 using Astra.Server.Api;
@@ -78,6 +79,8 @@ namespace Astra.Server;
 [JsonSerializable(typeof(ClientEndpoints.BindingInput))]
 [JsonSerializable(typeof(ClientEndpoints.BindingsInput))]
 [JsonSerializable(typeof(ClientBindingDto))]
+[JsonSerializable(typeof(ClientOptionDescriptor))]
+[JsonSerializable(typeof(List<ClientOptionDescriptor>))]
 [JsonSerializable(typeof(ClientInstallDto))]
 [JsonSerializable(typeof(ClientCopyDto))]
 [JsonSerializable(typeof(ClientInstallJobDto))]

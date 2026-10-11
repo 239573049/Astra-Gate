@@ -28,6 +28,12 @@ public sealed class EnableContext
     /// </summary>
     public JsonObject? Extras { get; init; }
 
+    /// <summary>
+    /// Model ids known to have a context window below 1M. Claude Code's "context1m" option leaves these without the
+    /// <c>[1m]</c> suffix; models whose window is unknown are assumed to accept it. Computed per request, never persisted.
+    /// </summary>
+    public IReadOnlySet<string>? ModelsWithoutContext1M { get; init; }
+
     /// <summary>Returns a string extra value, or null.</summary>
     public string? ExtraString(string name)
     {

@@ -29,6 +29,18 @@ public static class ClaudeCodeModels
         return result;
     }
 
+    /// <summary>The 1M-context marker Claude Code understands as a model-name suffix.</summary>
+    public const string OneMillionSuffix = "[1m]";
+
+    /// <summary>
+    /// The model with the <c>[1m]</c> suffix (Claude Code then sends the 1M-context beta header itself); unchanged when it
+    /// already has it. The Haiku tier never gets it — Haiku has no 1M variant.
+    /// </summary>
+    public static string With1M(string slot, string model) =>
+        slot == "ANTHROPIC_DEFAULT_HAIKU_MODEL" || model.EndsWith(OneMillionSuffix, StringComparison.OrdinalIgnoreCase)
+            ? model
+            : model + OneMillionSuffix;
+
     public static IReadOnlyList<KeyValuePair<string, string>> Parse(string? extraJson)
     {
         if (string.IsNullOrWhiteSpace(extraJson)) return [];

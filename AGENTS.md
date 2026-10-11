@@ -231,6 +231,11 @@ runtime needed on the target).
    `astra-server restore-all` is an offline subcommand that depends on this data. Adapter tests
    must use a fake home (`ClientEnvironment`, `tests/Astra.Clients.Tests/TestHome.cs`) — never
    the developer's real client configs.
+   Client-specific options (`ClientOptions` in `Astra.Core/Clients`, stored under `extras.options` in
+   `clients.extra_json`, no migration): a new option is one `ClientOptionDescriptor` plus its consumer — the adapter
+   (scope `config`, also add its key path to `ClientOptions.ConfigKeyPaths` so unsetting/disable restore it) or the
+   gateway (scope `gateway`, read via `route.Client.ExtraJson`) — and zh/en `clients.option.<key>[.hint]` keys; the web
+   panel renders from the descriptors the server reports on `ClientInfoDto.Options`.
 7. **A new JSON type crossing a boundary**: register it in the owning assembly's
    `JsonSerializerContext` (see Native AOT); the guard test
    (`tests/Astra.Server.IntegrationTests/JsonRegistrationTests.cs`) fails otherwise.

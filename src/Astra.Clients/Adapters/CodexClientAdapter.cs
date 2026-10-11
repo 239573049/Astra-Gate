@@ -48,6 +48,12 @@ public sealed class CodexClientAdapter(ClientEnvironment env, IClientConfigState
         // Stored "after" values are JSON texts of RAW TOML source (a TOML string includes its quotes).
         var changes = new List<ConfigChange> { TopKey(file, "model_provider", JsonString(TomlRaw(ProviderId))) };
         if (!string.IsNullOrEmpty(ctx.Model)) changes.Add(TopKey(file, "model", JsonString(TomlRaw(ctx.Model))));
+        if (ClientOptions.GetInt(ctx.Extras, ClientOptions.ContextWindow) is { } window)
+            changes.Add(TopKey(file, "model_context_window", JsonString(window.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        if (ClientOptions.GetInt(ctx.Extras, ClientOptions.AutoCompactTokenLimit) is { } compact)
+            changes.Add(TopKey(file, "model_auto_compact_token_limit", JsonString(compact.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ReasoningEffort) is { } effort)
+            changes.Add(TopKey(file, "model_reasoning_effort", JsonString(TomlRaw(effort))));
         changes.AddRange(ProviderTableChanges(file, ctx));
         return BuildPlan(changes);
     }
@@ -56,7 +62,7 @@ public sealed class CodexClientAdapter(ClientEnvironment env, IClientConfigState
     {
         var file = ConfigFile;
         var changes = new List<ConfigChange>();
-        foreach (var key in new[] { "model_provider", "model" })
+        foreach (var key in new[] { "model_provider", "model" }.Concat(ClientOptions.ConfigKeyPaths(Kind)))
         {
             var before = CurrentValue(file, ConfigFileFormat.Toml, key);
             if (before is not null) changes.Add(new ConfigChange(file, ConfigFileFormat.Toml, key, before, null));

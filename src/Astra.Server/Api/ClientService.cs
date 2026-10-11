@@ -19,7 +19,8 @@ public sealed record ClientInfoDto(
     string Kind, string Name, ApiProtocol Protocol, string Availability, string? AvailabilityReason, string Mode,
     ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
     JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
-    bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null);
+    bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null,
+    List<ClientOptionDescriptor>? Options = null);
 public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
 public sealed record ConfigChangeDto(string File, string Format, string KeyPath, string? Before, string? After);
 public sealed record ClientDisableDto(IReadOnlyList<string> Restored, IReadOnlyList<string> Drifted, ClientInfoDto Client);
@@ -280,6 +281,11 @@ public sealed class ClientService(
         if (input.ContainsKey("extras"))
         {
             if (input["extras"] is not null and not JsonObject) throw new AdminApiException(400, "extras must be an object");
+            if (input["extras"]?[ClientOptions.ExtrasKey] is { } options)
+            {
+                if (options is not JsonObject optionsObject) throw new AdminApiException(400, "extras.options must be an object");
+                if (ClientOptions.Validate(kind, optionsObject) is { } invalid) throw new AdminApiException(400, invalid);
+            }
             next.ExtraJson = input["extras"]?.ToJsonString();
         }
         // Plan §7.5: the gateway maps Claude Desktop's role ids, so at least one role must point at a model.
@@ -319,7 +325,19 @@ public sealed class ClientService(
             }
             extras["models"] = list;
         }
-        return new EnableContext { GatewayBaseUrl = server.GatewayBaseUrl, LocalKey = key, Model = record.SelectedModel, Extras = extras };
+        // Claude Code's 1M option: models known to have a smaller window must not get the [1m] suffix.
+        HashSet<string>? without1M = null;
+        if (kind == ClientKinds.ClaudeCode && ClientOptions.GetBool(extras, ClientOptions.Context1M))
+        {
+            without1M = [];
+            foreach (var (id, _, _, effective) in await routing.ListModelsAsync(targets, ct))
+                if (effective.ContextWindow is { } window && window < 1_000_000) without1M.Add(id);
+        }
+        return new EnableContext
+        {
+            GatewayBaseUrl = server.GatewayBaseUrl, LocalKey = key, Model = record.SelectedModel, Extras = extras,
+            ModelsWithoutContext1M = without1M,
+        };
     }
 
     private ConfigChangePlan EnablePlan(IClientAdapter adapter, EnableContext context, JsonObject input)
@@ -332,6 +350,7 @@ public sealed class ClientService(
         var candidates = new List<string> { ModelKeyOf(adapter.Kind) };
         // Claude Code's optional tiers only come back through PlanDisable (PlanEnable writes just the chosen ones).
         if (adapter.Kind == ClientKinds.ClaudeCode) candidates.AddRange(ClaudeCodeModels.Slots.Select(slot => $"env.{slot}"));
+        candidates.AddRange(ClientOptions.ConfigKeyPaths(adapter.Kind));
         var written = plan.Changes.Where(c => c.After is not null).Select(c => (c.File, c.KeyPath)).ToHashSet();
         var changes = plan.Changes.ToList();
         foreach (var change in old.Changes.Where(c => candidates.Contains(c.KeyPath) && !written.Contains((c.File, c.KeyPath))))
@@ -386,7 +405,8 @@ public sealed class ClientService(
             record?.SelectedModel,
             Json.Deserialize<JsonObject>(record?.ExtraJson) ?? new JsonObject(), record?.AppliedAt, warnings, true, outdated,
             record?.TokenId ?? TokenIds.Default, install,
-            bindings.Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList());
+            bindings.Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList(),
+            ClientOptions.For(adapter.Kind).ToList());
     }
 
     /// <summary>
