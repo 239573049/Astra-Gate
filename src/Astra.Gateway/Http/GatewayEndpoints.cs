@@ -163,7 +163,8 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
                 json["model"] = model; // Claude Desktop role id / provider model mapping → provider model
                 body = json.ToJsonString(GatewayJson.Options);
             }
-            var url = endpoint is null ? null : UpstreamUrls.CountTokens(endpoint, model);
+            // A plugin's provider is estimated locally: its plugin serves conversations, not token counting.
+            var url = endpoint is null || route.Provider.AuthScheme == AuthSchemes.Plugin ? null : UpstreamUrls.CountTokens(endpoint, model);
             if (url is not null)
             {
                 var claudeOAuth = SubscriptionSupport.IsClaudeSubscription(route.Provider) && protocol == ApiProtocol.Anthropic;

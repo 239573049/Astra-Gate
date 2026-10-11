@@ -243,6 +243,23 @@ public static partial class SubscriptionEndpoints
                 return (account, adopted, null);
             }
 
+            case CredentialKinds.GrokSso:
+            {
+                // SSO cookie 只用来在 accounts.x.ai 上批准一次设备码授权；cookie 本身不落库，账号存换出来的 OAuth 令牌。
+                OAuthClient.TokenResult token;
+                try
+                {
+                    token = await XaiSsoDeviceFlow.ConvertAsync(config, parsed.Secret, ct);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    throw new OAuthProtocolException("xAI SSO 换取超时，请稍后重试", null);
+                }
+                var (account, adopted) = await CompleteLoginWithResultAsync(db, protector, client, Login(), token,
+                    source: source, adoptByEmail: true, nameHint: shown);
+                return (account, adopted, null);
+            }
+
             case CredentialKinds.ClaudeCredentials:
             {
                 var token = parsed.Secret.Length > 0

@@ -55,11 +55,12 @@ export interface MenuItem {
   onSelect: () => void;
 }
 
-export function Menu({ label, icon, items }: { label: string; icon?: ReactNode; items: MenuItem[] }) {
+export function Menu({ label, icon, items, iconOnly }: { label: string; icon?: ReactNode; items: MenuItem[]; iconOnly?: boolean }) {
   return (
     <DropdownMenu
       label={label}
       icon={icon}
+      iconOnly={iconOnly}
       items={items.map((it) => ({
         label: it.label,
         icon: it.icon,

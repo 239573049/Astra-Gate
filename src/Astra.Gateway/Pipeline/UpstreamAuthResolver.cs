@@ -166,6 +166,9 @@ public sealed record UpstreamAuth(
     /// <summary>The account's own proxy (overrides the provider's); null = the provider's / system proxy.</summary>
     public string? Proxy { get; init; }
 
+    /// <summary>A plugin provider's account as plugin-auth.json keys it (id, or id#slot); null for every other provider.</summary>
+    public string? PluginKey { get; init; }
+
     /// <summary>Applies the credentials (and any fixed client header) to an outgoing upstream request.</summary>
     public void Apply(HttpRequestMessage request)
     {
@@ -193,6 +196,13 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
     {
         var provider = await db.Providers.GetAsync(providerId, ct);
         if (provider is null) return null;
+
+        if (provider.AuthScheme == AuthSchemes.Plugin)
+        {
+            // A plugin's provider: the plugin adds the account's sign-in itself; the request only says which account.
+            var (_, signedIn, _) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
+            return UpstreamAuth.None with { AccountId = signedIn.Id, Proxy = signedIn.HttpProxy, PluginKey = PluginKeyOf(signedIn) };
+        }
 
         if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
             return BuildStatic(provider, protector);
@@ -240,6 +250,10 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         if (setCurrent) await db.Accounts.SetCurrentAsync(providerId, next.Id, ct);
         return next.Id;
     }
+
+    /// <summary>Where plugin-auth.json keeps a plugin account (its <c>extra.plugin_key</c>).</summary>
+    public static string? PluginKeyOf(ProviderAccount account) =>
+        account.Extra["plugin_key"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var key) ? key : null;
 
     private static UpstreamAuth? BuildStatic(Provider provider, ISecretProtector protector) =>
         provider.ApiKeyEnc is null ? UpstreamAuth.None : Build(provider.AuthScheme, protector.Unprotect(provider.ApiKeyEnc));

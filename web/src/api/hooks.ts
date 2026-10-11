@@ -2,6 +2,17 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 
 import { api, apiStream, enc, qs, type SseMessage } from './client';
 import type {
+  MarketListing,
+  MarketSearchResult,
+  PluginAuthMethod,
+  PluginCheckinState,
+  MagpieImportPreview,
+  PluginHostStatus,
+  PluginJob,
+  PluginList,
+  PluginPrompt,
+  PluginSignIn,
+  PluginUsage,
   AccountImportInfo,
   AccountImportRequest,
   AuthStatus,
@@ -104,6 +115,16 @@ export const keys = {
   subscriptionPolicy: (id: string) => ['subscription-policy', id] as const,
   localCodexLogin: ['local-codex-login'] as const,
   localCopilotLogin: ['local-copilot-login'] as const,
+  plugins: ['plugins'] as const,
+  pluginJob: (id: string) => ['plugin-job', id] as const,
+  pluginHost: ['plugin-host'] as const,
+  pluginMarket: ['plugin-market'] as const,
+  pluginSearch: (q: string) => ['plugin-search', q] as const,
+  pluginMethods: (provider: string) => ['plugin-methods', provider] as const,
+  pluginSignIn: (provider: string, flow: string) => ['plugin-sign-in', provider, flow] as const,
+  pluginUsage: (provider: string, account: string) => ['plugin-usage', provider, account] as const,
+  pluginCheckin: (provider: string) => ['plugin-checkin', provider] as const,
+  magpieImport: ['magpie-import'] as const,
   accountImportInfo: (id: string) => ['account-import-info', id] as const,
   resetCredits: (accountId: string) => ['reset-credits', accountId] as const,
   requests: (q: RequestQuery) => ['requests', q] as const,
@@ -1040,3 +1061,167 @@ export const useActivityHeatmap = (days = 365, client?: string, token?: string) 
     refetchInterval: 60_000,
     placeholderData: (prev) => prev,
   });
+
+// ---------- plugins ----------
+
+export const usePlugins = () =>
+  useQuery({ queryKey: keys.plugins, queryFn: () => api<PluginList>('GET', '/api/plugins'), refetchInterval: 10_000 });
+
+export const usePluginHost = (enabled = true) =>
+  useQuery({ queryKey: keys.pluginHost, queryFn: () => api<PluginHostStatus>('GET', '/api/plugins/host'), enabled, refetchInterval: 15_000 });
+
+/** A plugin job, followed while it runs. */
+export const usePluginJob = (id: string | null) =>
+  useQuery({
+    queryKey: keys.pluginJob(id ?? ''),
+    queryFn: () => api<PluginJob>('GET', `/api/plugins/jobs/${enc(id!)}`),
+    enabled: Boolean(id),
+    refetchInterval: (q) => (q.state.data?.state === 'running' || !q.state.data ? 1000 : false),
+  });
+
+function usePluginMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.plugins });
+      void qc.invalidateQueries({ queryKey: keys.pluginHost });
+      void qc.invalidateQueries({ queryKey: keys.clients });
+      void qc.invalidateQueries({ queryKey: keys.providers });
+    },
+  });
+}
+
+/** Installs a plugin: an npm package, a git repository (github:owner/repo) or a path. Returns the job. */
+export const useAddPlugin = () =>
+  usePluginMutation((vars: { spec: string; source?: string }) => api<PluginJob>('POST', '/api/plugins', vars));
+
+export const useUpdatePlugin = () =>
+  usePluginMutation((spec?: string) => api<PluginJob>('POST', '/api/plugins/update', { spec }));
+
+export const useRemovePlugin = () =>
+  usePluginMutation((spec: string) => api<PluginJob>('DELETE', `/api/plugins${qs({ spec })}`));
+
+/** enabled switches it on or off; options (an object, or null to clear) sets its options. */
+export const usePatchPlugin = () =>
+  usePluginMutation((vars: { spec: string; enabled?: boolean; options?: Record<string, unknown> | null }) =>
+    api<PluginList>('PATCH', `/api/plugins${qs({ spec: vars.spec })}`, { enabled: vars.enabled, options: vars.options }));
+
+export const useReorderPlugins = () => usePluginMutation((specs: string[]) => api<PluginList>('PUT', '/api/plugins/order', { specs }));
+
+export const usePreferPlugin = () =>
+  usePluginMutation((vars: { spec: string; provider: string }) => api<PluginList>('POST', '/api/plugins/prefer', vars));
+
+export const useInstallBun = () => usePluginMutation(() => api<PluginJob>('POST', '/api/plugins/runtime/install'));
+
+export const usePluginMarket = (enabled = true) =>
+  useQuery({ queryKey: keys.pluginMarket, queryFn: () => api<MarketListing[]>('GET', '/api/plugins/market'), enabled, staleTime: 10 * 60_000 });
+
+export const usePluginSearch = (q: string) =>
+  useQuery({
+    queryKey: keys.pluginSearch(q),
+    queryFn: () => api<MarketSearchResult[]>('GET', `/api/plugins/search${qs({ q })}`),
+    enabled: q.trim().length >= 2,
+    staleTime: 10 * 60_000,
+  });
+
+// signing in to a plugin's provider ({provider} is the provider row id, "plugin-<id>")
+
+export const usePluginMethods = (provider: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.pluginMethods(provider),
+    queryFn: () => api<PluginAuthMethod[]>('GET', `/api/plugin-providers/${enc(provider)}/methods`),
+    enabled,
+  });
+
+export const pluginPrompt = (provider: string, method: number, inputs: Record<string, string>) =>
+  api<{ prompt: PluginPrompt | null }>('POST', `/api/plugin-providers/${enc(provider)}/prompt`, { method, inputs });
+
+export const pluginValidate = (provider: string, method: number, key: string, value: string) =>
+  api<{ error: string | null }>('POST', `/api/plugin-providers/${enc(provider)}/validate`, { method, key, value });
+
+function invalidatePluginAccounts(qc: ReturnType<typeof useQueryClient>, provider: string) {
+  void qc.invalidateQueries({ queryKey: keys.providerAccounts(provider) });
+  void qc.invalidateQueries({ queryKey: keys.providers });
+}
+
+export const useStartPluginSignIn = (provider: string) =>
+  useMutation({
+    mutationFn: (vars: { method: number; inputs: Record<string, string>; account?: string }) =>
+      api<PluginSignIn>('POST', `/api/plugin-providers/${enc(provider)}/sign-in`, vars),
+  });
+
+/** A browser sign-in, followed until it is done or failed. */
+export const usePluginSignIn = (provider: string, flow: string | null) => {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: keys.pluginSignIn(provider, flow ?? ''),
+    queryFn: async () => {
+      const s = await api<PluginSignIn>('GET', `/api/plugin-providers/${enc(provider)}/sign-in/${enc(flow!)}`);
+      if (s.state === 'done') invalidatePluginAccounts(qc, provider);
+      return s;
+    },
+    enabled: Boolean(flow),
+    refetchInterval: (q) => (q.state.data?.state === 'waiting' || !q.state.data ? 1500 : false),
+  });
+};
+
+export const useSubmitPluginCode = (provider: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { flow: string; code: string }) =>
+      api<PluginSignIn>('POST', `/api/plugin-providers/${enc(provider)}/sign-in/${enc(vars.flow)}/code`, { code: vars.code }),
+    onSuccess: (s) => {
+      qc.setQueryData(keys.pluginSignIn(provider, s.id), s);
+      if (s.state === 'done') invalidatePluginAccounts(qc, provider);
+    },
+  });
+};
+
+export const usePluginApiKey = (provider: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { method: number; inputs: Record<string, string>; key: string }) =>
+      api<{ account: string | null }>('POST', `/api/plugin-providers/${enc(provider)}/api-key`, vars),
+    onSuccess: () => invalidatePluginAccounts(qc, provider),
+  });
+};
+
+export const usePluginSignOut = (provider: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (account: string) => api<unknown>('POST', `/api/plugin-providers/${enc(provider)}/accounts/${enc(account)}/sign-out`),
+    onSuccess: () => invalidatePluginAccounts(qc, provider),
+  });
+};
+
+export const usePluginUsage = (provider: string, account: string, enabled: boolean) =>
+  useQuery({
+    queryKey: keys.pluginUsage(provider, account),
+    queryFn: () => api<PluginUsage>('GET', `/api/plugin-providers/${enc(provider)}/accounts/${enc(account)}/usage`),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+export const usePluginCheckin = (provider: string) =>
+  useQuery({ queryKey: keys.pluginCheckin(provider), queryFn: () => api<PluginCheckinState>('GET', `/api/plugin-providers/${enc(provider)}/checkin`) });
+
+/** on: switch the daily check-in on or off; omitted: check in every account now. */
+export const usePluginCheckinAction = (provider: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (on?: boolean) =>
+      on === undefined
+        ? api<PluginCheckinState>('POST', `/api/plugin-providers/${enc(provider)}/checkin`)
+        : api<PluginCheckinState>('PUT', `/api/plugin-providers/${enc(provider)}/checkin`, { on }),
+    onSuccess: (state) => qc.setQueryData(keys.pluginCheckin(provider), state),
+  });
+};
+
+/** What importing from a magpie install on this machine would bring. */
+export const useMagpieImportPreview = (enabled = true) =>
+  useQuery({ queryKey: keys.magpieImport, queryFn: () => api<MagpieImportPreview>('GET', '/api/plugins/import-magpie'), enabled, staleTime: 60_000 });
+
+export const useImportMagpie = () =>
+  usePluginMutation((signIns: boolean) => api<PluginJob>('POST', '/api/plugins/import-magpie', { signIns }));

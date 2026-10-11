@@ -2,7 +2,7 @@
 // in a normal browser it is absent and the shell is "web".
 
 export type ThemeSource = 'system' | 'light' | 'dark';
-export type NavTarget = 'overview' | 'requests' | 'clients' | 'tokens' | 'providers' | 'models' | 'privacy' | 'settings';
+export type NavTarget = 'overview' | 'requests' | 'clients' | 'tokens' | 'providers' | 'models' | 'plugins' | 'privacy' | 'settings';
 export type MenuCommand =
   | `nav:${NavTarget}`
   | 'find'

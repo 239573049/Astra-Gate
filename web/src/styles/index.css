@@ -118,6 +118,12 @@
   --tracking-display: -0.01em;
 }
 
+/* Dark mode: the strong accent (a selected tab's label, an info badge's text) sits on a dark fill, so it is
+   lightened rather than darkened — 82% toward black read as dark blue on the selected tab's grey. */
+:root[data-theme='dark'] {
+  --accent-strong: color-mix(in oklab, var(--accent) 70%, white);
+}
+
 /* Visually hides the label of an Arc field that sits in a toolbar or table (it stays the accessible name). */
 .astra-label-hidden label {
   position: absolute;

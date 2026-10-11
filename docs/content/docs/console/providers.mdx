@@ -42,11 +42,12 @@ description: 添加上游服务商、配置密钥与计费、测试连接
   | --- | --- |
   | Claude Pro/Max | refresh token（`sk-ant-ort01-`）、`claude setup-token`（`sk-ant-oat01-`，长期令牌、不刷新、不查额度）、Claude Code 的 `.credentials.json` |
   | ChatGPT（Codex） | `~/.codex/auth.json` 的内容、refresh token |
-  | Grok | refresh token |
+  | Grok | refresh token、Grok Web SSO（`sso` cookie 的值 / `sso=…; sso-rw=…` / `email----password----2fa----sso` 组合行） |
   | Kimi Coding Plan | API Key（`sk-kimi-`）、refresh token |
   | Z.AI / 智谱 GLM Coding Plan | API Key |
   | GitHub Copilot | GitHub token（`gho_` / `ghp_` / `github_pat_`）、直连 Copilot 令牌 |
 
+  Grok SSO 会用该 cookie 在 accounts.x.ai 上代为批准一次设备码授权，换出 OAuth 令牌后建账号；SSO cookie 本身不会保存，每条最长约 90 秒，按顺序处理。
   refresh token 会先换一次令牌以验证可用；同一邮箱的账号会被更新而不是重复添加。refresh token 通常只能用一次，
   导入后原来使用它的客户端可能需要重新登录。API Key 账户不过期、不刷新，被上游拒绝（401）即标记失效；
   导入时额度查询拒绝这把 Key 就不会建账号。结果只显示首尾几位：已导入 / 已更新 / 重复 / 格式错误 / 失败。

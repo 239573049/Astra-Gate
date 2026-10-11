@@ -69,7 +69,7 @@ public sealed class ProviderQuotaService(IHttpClientFactory httpClientFactory, Q
     {
         var (provider, config) = (query.Provider, query.Config);
         var secrets = query.SecretValues.Values.Append(query.ApiKey ?? "").Where(s => s.Length >= 4).ToList();
-        if (provider.AuthScheme == AuthSchemes.OAuthSubscription)
+        if (AuthSchemes.UsesAccounts(provider.AuthScheme))
             return Fail(QuotaErrors.Config, "订阅提供商的额度在登录账号里查看", null);
         var template = Effective(provider, config);
         if (template is null)

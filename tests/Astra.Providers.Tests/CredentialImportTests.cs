@@ -93,4 +93,26 @@ public class CredentialImportTests
         Assert.Equal("rt", parsed.RefreshToken);
         Assert.Equal("id", parsed.IdToken);
     }
+
+    private const string Jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4In0.c2lnbmF0dXJl";
+
+    [Fact]
+    public void Grok_Sso_Entries_Stay_Whole_And_Are_Normalized()
+    {
+        var combo = $"a@b.com----pw----TOTP----{Jwt}";
+        var cookie = $"sso={Jwt}; sso-rw={Jwt}";
+        Assert.Equal([combo, cookie, Jwt], CredentialImport.SplitEntries($"{combo}\n{cookie}\n{Jwt}"));
+
+        foreach (var entry in new[] { combo, cookie, "cookie: " + cookie, Jwt })
+        {
+            var parsed = CredentialImport.Classify("grok-subscription", entry, asApiKey: false, out var error);
+            Assert.Null(error);
+            Assert.Equal(CredentialKinds.GrokSso, parsed!.Kind);
+            Assert.Equal(Jwt, parsed.Secret);
+        }
+
+        Assert.Null(CredentialImport.Classify("grok-subscription", "a@b.com----pw----x", false, out var bad));
+        Assert.Contains("Grok SSO", bad);
+        Assert.Contains("grok-sso", CredentialImport.FormatsOf("grok-subscription").Formats);
+    }
 }

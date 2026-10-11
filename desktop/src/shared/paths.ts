@@ -7,6 +7,8 @@ export interface AstraPaths {
   runtimeFile: string;
   installFile: string;
   logsDir: string;
+  /** Plugins (sign-ins, npm packages, Bun): kept as files, owner-only. */
+  pluginsDir: string;
   /** Path of the server's log file for a given day: astra-YYYYMMDD.log. */
   logFile: (date: Date) => string;
 }
@@ -30,6 +32,7 @@ export function astraPaths(
     runtimeFile: path.join(home, 'runtime.json'),
     installFile: path.join(home, 'install.json'),
     logsDir: path.join(home, 'logs'),
+    pluginsDir: path.join(home, 'plugins'),
     logFile: (date: Date) => path.join(home, 'logs', logFileName(date)),
   };
 }

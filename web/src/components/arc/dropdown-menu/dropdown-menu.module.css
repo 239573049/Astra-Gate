@@ -6,6 +6,8 @@
 .trigger:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .item:focus-visible { outline: none; }
 .triggerIcon { display: inline-flex; flex: none; color: var(--text-secondary); }
+/* Icon-only: a square ghost button that only shows its border on hover/open. */
+.triggerIconOnly { justify-content: center; width: var(--control-height-sm); padding: 0; border-color: transparent; background: transparent; }
 .label { position: relative; display: inline-flex; min-width: 0; flex: 0 1 auto; overflow-x: clip; }
 .labelMeasure { position: absolute; top: 0; left: 0; visibility: hidden; white-space: nowrap; pointer-events: none; }
 .labelText { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

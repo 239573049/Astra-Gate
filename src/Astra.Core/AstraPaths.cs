@@ -22,13 +22,39 @@ public sealed class AstraPaths
     public string DbBackupsDir => Path.Combine(BackupsDir, "db");
     public string BodiesDir => Path.Combine(Root, "bodies");
 
+    /// <summary>
+    /// Plugins: the one part of the data dir kept as files rather than in SQLite, because the plugin host
+    /// (magpie's host.js) and Bun need files — the sign-ins in OpenCode's auth.json shape, the npm
+    /// packages, Bun itself. Owner-only.
+    /// </summary>
+    public string PluginsDir => Path.Combine(Root, "plugins");
+
+    /// <summary>Plugin sign-ins, OpenCode's auth.json in shape (plaintext by that format; the folder is owner-only).</summary>
+    public string PluginAuthFile => Path.Combine(PluginsDir, "plugin-auth.json");
+
+    /// <summary>Where <c>bun add</c> installs plugin packages (its package.json, node_modules, bun.lock).</summary>
+    public string PluginPackagesDir => Path.Combine(PluginsDir, "packages");
+
+    /// <summary>The Bun Astra downloads to run the plugin host: runtime/bun-&lt;version&gt;/.</summary>
+    public string PluginRuntimeDir => Path.Combine(PluginsDir, "runtime");
+
+    /// <summary>host.js and pi.js, written out of the server binary by content hash: host/&lt;hash&gt;/.</summary>
+    public string PluginHostDir => Path.Combine(PluginsDir, "host");
+
+    /// <summary>The models.dev catalog handed to the host, which builds OpenCode's provider info from it.</summary>
+    public string PluginModelsDevFile => Path.Combine(PluginsDir, "models-dev.json");
+
+    /// <summary>The plugin market's cached listings.</summary>
+    public string PluginMarketDir => Path.Combine(PluginsDir, "market");
+
     public void EnsureCreated()
     {
-        foreach (var dir in new[] { Root, KeysDir, LogsDir, BackupsDir, ClientBackupsDir, DbBackupsDir, BodiesDir })
+        foreach (var dir in new[] { Root, KeysDir, LogsDir, BackupsDir, ClientBackupsDir, DbBackupsDir, BodiesDir, PluginsDir })
         {
             Directory.CreateDirectory(dir);
         }
         RestrictToOwner(KeysDir);
+        RestrictToOwner(PluginsDir);
     }
 
     public static void RestrictToOwner(string path)

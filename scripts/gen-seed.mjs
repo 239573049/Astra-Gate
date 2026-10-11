@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const SEED_VERSION = 2;
+const SEED_VERSION = 3;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "src/Astra.Core/Seed/models.json");
 const source = process.argv[2] ?? "https://models.dev/api.json";
@@ -161,6 +161,49 @@ for (const [providerId, cfg] of Object.entries(VENDORS)) {
   }
 }
 
+// Hand-maintained models: served only inside subscriptions (Grok Build / Cursor) and never listed on
+// models.dev — like EXTRA_ALIASES below, but they carry their own published price, because aliasing
+// them to the base model would bill the standard rate. Source cited per model.
+const EXTRA_MODELS = [
+  // Grok 4.7 Fast = Grok 4.7 on faster infrastructure: 2x standard token rates, 1.5x long-context
+  // (>=200k). Source: docs.x.ai/developers/pricing, "Grok 4.7 Fast pricing (Cursor and Grok Build
+  // only)" (checked 2026-10-11). The Grok Build CLI proxy (cli-chat-proxy.grok.com) serves it as
+  // "dgrok-4.7-build-fast".
+  {
+    id: "grok-4.7-build-fast",
+    display_name: "Grok 4.7 Fast",
+    vendor: "xai",
+    family: "grok",
+    aliases: ["dgrok-4.7-build-fast"],
+    context_window: 500000,
+    max_output_tokens: 500000,
+    capabilities: { vision: true, tools: true, reasoning: true, prompt_cache: true, pdf: true, structured_output: true },
+    pricing: {
+      currency: "USD",
+      unit: "per_1m_tokens",
+      base: { input: 4, cache_read: 1, output: 12 },
+      context_tiers: [
+        {
+          name: ">200K",
+          threshold_input_tokens: 200000,
+          mode: "whole",
+          output_policy: "highest",
+          prices: { input: 6, cache_read: 1.5, output: 18 },
+        },
+      ],
+    },
+    provider_pricing: {},
+    _vendorProvider: "xai",
+  },
+];
+
+for (const m of EXTRA_MODELS) {
+  const key = `${m._vendorProvider}/${normalize(m.id)}`;
+  if (byKey.has(key)) continue; // models.dev lists it now — the catalog entry wins
+  byKey.set(key, m);
+  models.push(m);
+}
+
 const findSystemModel = (providerId, m) => {
   if (m.canonical_model_id) {
     const [vp, ...rest] = m.canonical_model_id.split("/");
@@ -218,6 +261,7 @@ const seed = {
     "https://models.dev/api.json",
     "https://api-docs.deepseek.com/quick_start/pricing",
     "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching (1h cache write = 2x input)",
+    "https://docs.x.ai/developers/pricing (Grok 4.7 Fast: 2x standard / 1.5x long-context; Cursor and Grok Build only)",
   ],
   models,
 };

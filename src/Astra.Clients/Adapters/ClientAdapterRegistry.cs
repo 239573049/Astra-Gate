@@ -1,16 +1,33 @@
 using Astra.Core.Clients;
+using Astra.Core.Plugins;
 
 using Astra.Clients.Config;
 
 namespace Astra.Clients.Adapters;
 
-/// <summary>The client adapters in <see cref="ClientKinds.All"/> order.</summary>
+/// <summary>The client adapters in <see cref="ClientKinds.All"/> order, then the clients plugins add.</summary>
 public sealed class ClientAdapterRegistry
 {
     public ClientAdapterRegistry(IReadOnlyList<IClientAdapter> adapters) => All = adapters;
 
-    /// <summary>Builds the default registry for a machine environment.</summary>
-    public static ClientAdapterRegistry CreateDefault(ClientEnvironment env, IClientConfigStateStore store) => new(
+    /// <summary>
+    /// Builds the default registry for a machine environment: the built-in clients, then the clients plugins add —
+    /// those loaded now (<paramref name="agents"/>), and the snapshots of plugin clients that were enabled while
+    /// their plugin was here (<paramref name="remembered"/>), which can still be restored.
+    /// </summary>
+    public static ClientAdapterRegistry CreateDefault(ClientEnvironment env, IClientConfigStateStore store,
+        IAgentPluginCatalog? agents = null, IEnumerable<AgentPluginDescriptor>? remembered = null)
+    {
+        var adapters = BuiltIn(env, store);
+        var loaded = agents?.List() ?? [];
+        foreach (var agent in loaded) adapters.Add(new PluginClientAdapter(env, store, agent, agents));
+        foreach (var agent in remembered ?? [])
+            if (adapters.All(a => a.Kind != ClientKinds.PluginPrefix + agent.Id))
+                adapters.Add(new PluginClientAdapter(env, store, agent, null));
+        return new ClientAdapterRegistry(adapters);
+    }
+
+    private static List<IClientAdapter> BuiltIn(ClientEnvironment env, IClientConfigStateStore store) =>
     [
         new CodexClientAdapter(env, store),
         new ClaudeCodeClientAdapter(env, store),
@@ -36,7 +53,7 @@ public sealed class ClientAdapterRegistry
         new WorkBuddyClientAdapter(env, store),
         new MuseCodeClientAdapter(env, store),
         new NextCoWorkClientAdapter(env, store),
-    ]);
+    ];
 
     public IReadOnlyList<IClientAdapter> All { get; }
 

@@ -57,7 +57,8 @@ the root `.dockerignore` belongs to `docs/Dockerfile`.
   `TreatWarningsAsErrors`; CI adds the flag too). New warnings break the build.
 - Test all: `dotnet test --no-build` (after building). Targeted: `dotnet test tests/Astra.Gateway.Tests`.
 - Run: `dotnet run --project src/Astra.Server -- serve` — subcommands are listed in the
-  `Program.cs` header comment (`serve`, `migrate`, `restore-all`, `set-password`, `healthcheck`, `version`).
+  `Program.cs` header comment (`serve`, `migrate`, `restore-all`, `set-password`, `healthcheck`, `version`,
+  `plugin-selftest`).
 - Publish (release): `dotnet publish src/Astra.Server -c Release -r <rid> --self-contained true
   -p:PublishAot=true -o out/publish` — Native AOT; never pass `-p:PublishSingleFile=true`
   (see Native AOT).
@@ -86,10 +87,27 @@ Known command hazards:
 ### .NET dependency direction (set by csproj references — do not invert)
 
 ```
-Astra.Core  <-  Astra.Data, Astra.Clients, Astra.Providers  <-  Astra.Gateway  <-  Astra.Server
-(domain, zero      (persistence / client config                (pipeline,         (host, wires
- NuGet refs)        take-over, provider templates)              protocol IR)       everything)
+Astra.Core  <-  Astra.Data, Astra.Clients, Astra.Providers, Astra.Plugins  <-  Astra.Gateway  <-  Astra.Server
+(domain, zero      (persistence / client config take-over /                 (pipeline,         (host, wires
+ NuGet refs)        provider templates / plugin runtime)                     protocol IR)       everything)
 ```
+
+`Astra.Plugins` runs magpie-compatible plugins (magpie plugins must keep running unmodified — keep the
+names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_PROXY`). Design rationale:
+`.plan/plugins.md`.
+
+- Gateway middleware (`Middleware/`) and agent plugins (`Agents/`) run in process on Jint
+  (`Js/JsRuntime.cs`; host interop is JSON text and `JsValue` only — never `AllowClr` or CLR wrappers,
+  which is what keeps it AOT-safe). Middleware runs in `GatewayPipeline.HandleAsync` before the privacy
+  guard, on agent requests only. Agent plugins are clients `plugin-<id>` (`PluginClientAdapter`); their
+  row keeps the descriptor (`extras.plugin`) so `restore-all` works without the plugin.
+- Provider plugins run in magpie's own `host.js` / `pi.js` (vendored unmodified in `Host/`, MIT;
+  `Host/VENDORED.md` records commit and hashes, `HostAssetsTests` checks them, refresh with
+  `scripts/vendor-magpie-host.mjs`) under the pinned Bun `BunRuntime` downloads (`ASTRA_BUN` overrides).
+  `PluginProviderSync` mirrors them into providers `plugin-<id>` with `AuthSchemes.Plugin` (deliberately
+  not in `AuthSchemes.All`), `plugin://` endpoints, and accounts whose `extra.plugin_key` names the
+  sign-in in plugin-auth.json; the gateway sends their requests through `PluginFetchHandler`.
+- Tests that need Bun use `[BunFact]` (skip without one); CI installs the pinned Bun.
 
 - Domain logic (billing, pricing, models, privacy) belongs in `Astra.Core`; persistence in
   `Astra.Data` repositories; HTTP and protocol handling in `Astra.Gateway`; endpoints in
@@ -120,6 +138,11 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   `ASTRA_STRICT_PORT` disables the drift. `GatewayBaseUrl` is `ASTRA_PUBLIC_URL` when set, else
   `LocalUrl` (what `healthcheck` probes).
 - Everything else lives in SQLite (`Astra.Data`, Dapper.AOT, WAL; see Native AOT).
+  The one exception is `~/.astra/plugins/` (`AstraPaths.PluginsDir`, owner-only): magpie's plugin host
+  and Bun need files — `plugin-auth.json` (plugin sign-ins in OpenCode's auth.json shape, plaintext by
+  that format, never logged or returned by the API), `packages/` (`bun add` / npm tarball installs),
+  `runtime/` (the downloaded Bun), `host/<hash>/` (the vendored host.js / pi.js). The installed-plugin
+  list itself is SQLite (`plugins`, `plugin_provider_prefs`); the host gets it in its `init` call.
   Runtime-editable settings are one `AppSettings` JSON blob stored under key `"app"`
   (`SettingsService`); adding a setting is a property on `AppSettings` plus endpoint/UI wiring —
   no migration needed.
@@ -148,7 +171,7 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 
 ## Native AOT
 
-`src/Astra.Server` publishes as a self-contained Native AOT binary (~30 MB executable, no .NET
+`src/Astra.Server` publishes as a self-contained Native AOT binary (~40 MB executable, no .NET
 runtime needed on the target).
 
 - Publish: `dotnet publish src/Astra.Server -c Release -r <rid> --self-contained true
@@ -158,14 +181,21 @@ runtime needed on the target).
   `Condition="'$(PublishAot)' != 'true'"` property group, and a command-line
   `-p:PublishSingleFile=true` overrides that group and breaks the AOT build. AOT output is
   multi-file by design — see the companion bullet below.
-- Build gate: the six shipped projects (`Astra.Core`, `Astra.Data`, `Astra.Clients`,
-  `Astra.Providers`, `Astra.Gateway`, `Astra.Server`) set
+- Build gate: the seven shipped projects (`Astra.Core`, `Astra.Data`, `Astra.Clients`,
+  `Astra.Providers`, `Astra.Plugins`, `Astra.Gateway`, `Astra.Server`) set
   `<IsAotCompatible>true</IsAotCompatible>`, so a plain `dotnet build -warnaserror` fails on
   AOT-hostile code (IL2026/IL3050 become errors via `TreatWarningsAsErrors`) — fix the code, do
   not weaken the gate. `Astra.Gateway` and `Astra.Server` also set
   `<EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>`: the SDK only
   auto-enables the Request Delegate Generator when `PublishTrimmed`/`PublishAot` is set, so
   without it a plain build analyses differently from the publish.
+- The one sanctioned exception is Jint's: its unused CLR-interop and System.Text.Json paths
+  trip ILC's IL2026/IL2104/IL3053, which ILC cannot collapse for a package marked trimmable.
+  `Astra.Server.csproj` passes `--nowarnaserr` for those three codes to the ILC step only (Roslyn's
+  analyzer gate is untouched), `release.yml` runs `scripts/check-aot-warnings.mjs` over the
+  publish log and fails on any IL warning not from Jint, then runs `astra-server plugin-selftest`
+  on the binary (AOT can break at run time what the JIT never shows). Do not widen the exception
+  to other codes or assemblies.
 - JSON is source-generated: `JsonContexts` (`src/Astra.Core/JsonContexts.cs`) is the registry
   and every assembly contributes its own `JsonSerializerContext` via `[ModuleInitializer]`
   (`src/Astra.Core/JsonContext.cs`, `src/Astra.Providers/Templates/ProviderJsonContext.cs`,
@@ -239,7 +269,9 @@ runtime needed on the target).
 7. **A new JSON type crossing a boundary**: register it in the owning assembly's
    `JsonSerializerContext` (see Native AOT); the guard test
    (`tests/Astra.Server.IntegrationTests/JsonRegistrationTests.cs`) fails otherwise.
-8. **Server startup configuration or release packaging**: the container surface is the env vars in
+8. **Bun version** (`BunRuntime.Version` + its SHA-256 table, from the release's SHASUMS256.txt) and
+   `ci.yml`'s `oven-sh/setup-bun` `bun-version` move together.
+9. **Server startup configuration or release packaging**: the container surface is the env vars in
    `ServerOptions.ApplyEnvironment` (tests: `ServerOptionsEnvironmentTests`), the `healthcheck`
    subcommand, `Dockerfile` / `compose.yaml`, the `docker` job in `release.yml`, and
    `docs/content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { platformInfo } from '../src/lib/platform';
+import { isClientKind, platformInfo } from '../src/lib/platform';
 import { AstraError } from '../src/errors';
 
 describe('platformInfo', () => {
@@ -27,5 +27,19 @@ describe('platformInfo', () => {
     expect(() => platformInfo('openbsd', 'arm64')).toThrow(AstraError);
     expect(() => platformInfo('linux', 'arm')).toThrow(AstraError);
     expect(() => platformInfo('win32', 'ia32')).toThrow(AstraError);
+  });
+});
+
+describe('isClientKind', () => {
+  it('accepts built-in kinds and plugin-<agent id>', () => {
+    expect(isClientKind('codex')).toBe(true);
+    expect(isClientKind('plugin-aider')).toBe(true);
+    expect(isClientKind('plugin-my.agent_2')).toBe(true);
+  });
+
+  it('rejects unknown kinds and malformed plugin ids', () => {
+    expect(isClientKind('nope')).toBe(false);
+    expect(isClientKind('plugin-')).toBe(false);
+    expect(isClientKind('plugin-Upper')).toBe(false);
   });
 });

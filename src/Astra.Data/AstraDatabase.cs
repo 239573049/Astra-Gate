@@ -21,6 +21,7 @@ public sealed class AstraDatabase
         Tokens = new TokenRepository(factory);
         ClientConfigState = new ClientConfigStateStore(factory);
         Requests = new RequestRepository(factory);
+        Plugins = new PluginRepository(factory);
         Migrations = new MigrationRunner(factory, paths);
         Seed = new SeedImporter(factory);
     }
@@ -35,6 +36,7 @@ public sealed class AstraDatabase
     public TokenRepository Tokens { get; }
     public ClientConfigStateStore ClientConfigState { get; }
     public RequestRepository Requests { get; }
+    public PluginRepository Plugins { get; }
     public MigrationRunner Migrations { get; }
     public SeedImporter Seed { get; }
 

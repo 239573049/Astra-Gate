@@ -14,5 +14,6 @@
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
     <ProjectReference Include="..\Astra.Data\Astra.Data.csproj" />
     <ProjectReference Include="..\Astra.Providers\Astra.Providers.csproj" />
+    <ProjectReference Include="..\Astra.Plugins\Astra.Plugins.csproj" />
   </ItemGroup>
 </Project>

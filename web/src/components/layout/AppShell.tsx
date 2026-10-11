@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, type Transition } from 'motion/react';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 
 import { useHealth, useSettings } from '../../api/hooks';
@@ -170,7 +170,10 @@ export function AppShell() {
         >
           <ConnectionBanner />
           <div className="relative min-h-0 flex-1">
-            <Outlet />
+            {/* Pages are lazy chunks (App.tsx): the shell stays up while one loads. */}
+            <Suspense fallback={null}>
+              <Outlet />
+            </Suspense>
           </div>
         </motion.main>
       </div>

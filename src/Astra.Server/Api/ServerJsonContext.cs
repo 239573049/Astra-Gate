@@ -19,6 +19,28 @@ namespace Astra.Server;
 /// settings value — add it here; an unregistered type silently falls back to reflection, which works
 /// today and fails under Native AOT.
 /// </summary>
+// plugins
+[JsonSerializable(typeof(PluginDto))]
+[JsonSerializable(typeof(PluginAgentDto))]
+[JsonSerializable(typeof(PluginAuthMethodDto))]
+[JsonSerializable(typeof(List<PluginAuthMethodDto>))]
+[JsonSerializable(typeof(PluginSignInDto))]
+[JsonSerializable(typeof(PluginPromptInput))]
+[JsonSerializable(typeof(PluginValidateInput))]
+[JsonSerializable(typeof(PluginSignInInput))]
+[JsonSerializable(typeof(PluginApiKeyInput))]
+[JsonSerializable(typeof(PluginCodeInput))]
+[JsonSerializable(typeof(PluginCheckinDto))]
+[JsonSerializable(typeof(PluginCheckinStateDto))]
+[JsonSerializable(typeof(PluginCheckinSwitch))]
+[JsonSerializable(typeof(MagpiePluginDto))]
+[JsonSerializable(typeof(MagpieImportPreviewDto))]
+[JsonSerializable(typeof(MagpieImportInput))]
+[JsonSerializable(typeof(PluginsDto))]
+[JsonSerializable(typeof(PluginAddInput))]
+[JsonSerializable(typeof(PluginUpdateInput))]
+[JsonSerializable(typeof(PluginOrderInput))]
+[JsonSerializable(typeof(PluginPreferInput))]
 // envelopes shared by several endpoints
 [JsonSerializable(typeof(ErrorBody))]
 [JsonSerializable(typeof(ErrorOnlyDto))]

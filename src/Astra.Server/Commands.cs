@@ -1,6 +1,9 @@
 using Astra.Clients.Adapters;
 using Astra.Clients.Config;
+using System.Text.Json.Nodes;
 using Astra.Core;
+using Astra.Core.Clients;
+using Astra.Core.Plugins;
 using Astra.Data;
 
 namespace Astra.Server;
@@ -19,7 +22,14 @@ public static class Commands
     {
         var db = await AstraDatabase.InitializeAsync(paths, importSeed: false);
         var env = environment ?? ClientEnvironment.Real;
-        var registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState);
+        // Clients plugins added are restored from the descriptor their row keeps: no plugin code runs offline.
+        var remembered = (await db.Clients.ListAsync())
+            .Where(r => ClientKinds.IsPluginKind(r.Kind))
+            .Select(r => Json.Deserialize<JsonObject>(r.ExtraJson)?[Api.ClientService.PluginExtrasKey]?.ToJsonString())
+            .Select(j => j is null ? null : Json.Deserialize<AgentPluginDescriptor>(j))
+            .OfType<AgentPluginDescriptor>()
+            .ToList();
+        var registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState, remembered: remembered);
         var applier = new ClientConfigApplier(db.ClientConfigState, env, paths.ClientBackupsDir);
         var incomplete = false;
         foreach (var adapter in registry.All)

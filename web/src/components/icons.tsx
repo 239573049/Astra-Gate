@@ -1,7 +1,7 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
 import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo } from '@lobehub/icons';
-import { Code, Monitor, SquareTerminal, type LucideIcon } from 'lucide-react';
+import { Code, Monitor, Puzzle, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType, CSSProperties } from 'react';
 import type { ClientKind } from '../api/types';
 // Vendors without a @lobehub/icons brand component ship their own downloaded mark.
@@ -44,6 +44,14 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'muse-code': { name: 'Muse Code' },
   nextcowork: { name: 'NextCoWork' },
 };
+
+/**
+ * A client's display name. Agent plugins add clients of kind "plugin-<id>" that no table here knows: they show the
+ * name the server reports (<paramref>fallback</paramref>), else their plugin id.
+ */
+export function clientName(kind: string, fallback?: string | null): string {
+  return CLIENT_META[kind as ClientKind]?.name ?? (fallback || (kind.startsWith('plugin-') ? kind.slice('plugin-'.length) : kind));
+}
 
 export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
@@ -106,8 +114,35 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   nextcowork: logo(nextcoworkClientLogo),
 };
 
+// An agent plugin's client: a puzzle piece on a tile colored by its id.
+function pluginBrand(kind: string): { Mark: BrandMark; Avatar: ComponentType<IconAvatarProps>; badge?: LucideIcon } {
+  return {
+    Mark: function PluginMark({ size = 18 }) {
+      return <Puzzle aria-hidden style={{ width: size, height: size }} />;
+    },
+    Avatar: function PluginAvatar({ size = 28, style }: IconAvatarProps) {
+      const px = Number(size);
+      return (
+        <span className="inline-flex items-center justify-center text-white" style={{ width: px, height: px, background: hashColor(kind), ...style }}>
+          <Puzzle style={{ width: px * 0.55, height: px * 0.55 }} />
+        </span>
+      );
+    },
+  };
+}
+
+const pluginBrands = new Map<string, ReturnType<typeof pluginBrand>>();
+// one component pair per plugin kind, so a re-render doesn't remount its icon
+function brandOf(kind: ClientKind) {
+  const known = CLIENT_BRANDS[kind] as (typeof CLIENT_BRANDS)[ClientKind] | undefined;
+  if (known) return known;
+  let brand = pluginBrands.get(kind);
+  if (!brand) pluginBrands.set(kind, (brand = pluginBrand(kind)));
+  return brand;
+}
+
 function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {
-  const BadgeIcon = CLIENT_BRANDS[kind].badge;
+  const BadgeIcon = brandOf(kind).badge;
   if (!BadgeIcon) return null;
   const box = Math.max(9, Math.round(size * 0.5));
   return (
@@ -127,7 +162,7 @@ function ClientBadge({ kind, size }: { kind: ClientKind; size: number }) {
  * the library's SVG carries its own <title>, so it is hidden and callers supply the accessible name.
  */
 export function ClientGlyph({ kind, size = 18 }: { kind: ClientKind; size?: number }) {
-  const { Mark } = CLIENT_BRANDS[kind];
+  const { Mark } = brandOf(kind);
   return (
     <span aria-hidden className="relative inline-flex shrink-0 items-center justify-center text-[var(--foreground)]" style={{ width: size, height: size }}>
       <Mark size={size} aria-hidden />
@@ -138,7 +173,7 @@ export function ClientGlyph({ kind, size = 18 }: { kind: ClientKind; size?: numb
 
 /** A client's brand avatar (mark on its brand tile), for headers and larger identity spots. */
 export function ClientIcon({ kind, size = 28 }: { kind: ClientKind; size?: number }) {
-  const { Avatar } = CLIENT_BRANDS[kind];
+  const { Avatar } = brandOf(kind);
   return (
     <span aria-hidden className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
       <Avatar size={size} shape="square" style={{ borderRadius: Math.round(size * 0.28) }} />

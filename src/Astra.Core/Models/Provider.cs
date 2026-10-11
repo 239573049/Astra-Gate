@@ -24,6 +24,15 @@ public static class AuthSchemes
 
     public static readonly IReadOnlyList<string> All =
         [Bearer, XApiKey, XGoogApiKey, QueryKey, None, OAuthSubscription];
+
+    /// <summary>
+    /// The provider is a plugin's (a magpie / OpenCode provider plugin): its accounts are the plugin's sign-ins and
+    /// its requests go through the plugin host. Not in <see cref="All"/>: only plugin sync creates such providers.
+    /// </summary>
+    public const string Plugin = "plugin";
+
+    /// <summary>Whether the provider's credentials are accounts (subscription logins, plugin sign-ins) rather than one key.</summary>
+    public static bool UsesAccounts(string scheme) => scheme is OAuthSubscription or Plugin;
 }
 
 /// <summary>A configured AI provider instance.</summary>

@@ -86,6 +86,29 @@ public class PrivacyGuardServiceTests
     }
 
     [Fact]
+    public async Task Redactions_In_Separate_Strings_Get_Distinct_Placeholders()
+    {
+        var db = await NewDb();
+        var guard = new PrivacyGuardService(db);
+        await guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = false;
+            s.DefaultAction = PrivacyActions.Redact;
+        }));
+        const string twoStrings = """
+            {"model":"claude-x","system":"ops mail alice@example.com","messages":[{"role":"user","content":"cc bob@example.com"}]}
+            """;
+
+        var result = guard.Inspect(twoStrings, "claude-code");
+
+        Assert.Equal(2, result.RestoreMap.Count);
+        Assert.Equal(["alice@example.com", "bob@example.com"], result.RestoreMap.Values.Order().ToArray());
+        var restorer = new ChunkRestorer(result.RestoreMap);
+        Assert.Equal(twoStrings, restorer.Push(result.Body) + restorer.Flush());
+    }
+
+    [Fact]
     public async Task Block_Rejects_The_Request_And_Keeps_The_Original_Body()
     {
         var db = await NewDb();

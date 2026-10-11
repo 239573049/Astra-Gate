@@ -32,6 +32,17 @@
     <ProjectReference Include="..\Astra.Providers\Astra.Providers.csproj" />
     <ProjectReference Include="..\Astra.Gateway\Astra.Gateway.csproj" />
     <ProjectReference Include="..\Astra.Clients\Astra.Clients.csproj" />
+    <ProjectReference Include="..\Astra.Plugins\Astra.Plugins.csproj" />
+  </ItemGroup>
+  <!-- Jint's own CLR-interop and System.Text.Json paths (never used: no AllowClr, JSON-text interop only)
+       trip ILC's trim/AOT analysis, and ILC can't collapse them for a package marked trimmable. This keeps
+       them warnings for the ILC step alone — Roslyn's analyzer gate on our code is untouched — and
+       scripts/check-aot-warnings.mjs fails the release on any IL warning not from Jint. plugin-selftest
+       proves the published binary runs the plugin runtime. -->
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <IlcArg Include="--nowarnaserr:IL2026" />
+    <IlcArg Include="--nowarnaserr:IL2104" />
+    <IlcArg Include="--nowarnaserr:IL3053" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Astra.Server.IntegrationTests" />

@@ -20,6 +20,12 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # The provider-plugin tests run magpie's host.js on a real Bun (BunFact skips them without one).
+      # Keep in step with BunRuntime.Version.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
       - name: Build (warnings are errors)
         run: dotnet build -warnaserror
 

@@ -88,9 +88,14 @@ public sealed partial class PrivacyDetector
     }
 
     /// <summary>Detects and applies the configured actions. Placeholder originals are returned, never stored.</summary>
-    public PrivacyApplyResult Apply(string text, EffectivePrivacyPolicy policy)
+    public PrivacyApplyResult Apply(string text, EffectivePrivacyPolicy policy) => Apply(text, policy, null);
+
+    // numbering: the result whose counters number the placeholders. ApplyJson passes its merged result so
+    // placeholders stay unique across the body's strings (each would otherwise restart at #1).
+    private PrivacyApplyResult Apply(string text, EffectivePrivacyPolicy policy, PrivacyApplyResult? numbering)
     {
         var result = new PrivacyApplyResult { Text = text };
+        numbering ??= result;
         foreach (var rule in policy.Rules)
         {
             var action = policy.ActionFor(rule.Id, rule.Category);
@@ -104,7 +109,7 @@ public sealed partial class PrivacyDetector
 
             var evaluator = new MatchEvaluator(_ =>
             {
-                var placeholder = PlaceholderFor(rule.Category, result.CounterFor(rule.Category));
+                var placeholder = PlaceholderFor(rule.Category, numbering.CounterFor(rule.Category));
                 result.Redactions.Add(new PrivacyRedaction
                 {
                     Placeholder = placeholder,
@@ -157,7 +162,7 @@ public sealed partial class PrivacyDetector
         {
             case JsonValue value when value.TryGetValue<string>(out var s):
             {
-                var r = Apply(s, policy);
+                var r = Apply(s, policy, merged);
                 if (r.Text != s) value.ReplaceTextWith(r.Text);
                 Merge(merged, r);
                 break;

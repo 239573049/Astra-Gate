@@ -178,9 +178,25 @@ jobs:
 
       - name: Publish server binary (self-contained, Native AOT)
         shell: bash
-        run: >-
-          dotnet publish src/Astra.Server -c Release -r "$RID"
-          --self-contained true -p:PublishAot=true -o out/publish
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          dotnet publish src/Astra.Server -c Release -r "$RID" \
+            --self-contained true -p:PublishAot=true -o out/publish 2>&1 | tee out/publish.log
+
+      # astra-server.csproj keeps Jint's IL2026/IL2104/IL3053 as warnings for
+      # the ILC step; any other IL warning still fails the release here.
+      - name: Check AOT warnings
+        shell: bash
+        run: node scripts/check-aot-warnings.mjs out/publish.log
+
+      # AOT can break at run time what the JIT build never shows: run the
+      # in-process plugin runtime's checks on the binary just published. Not on
+      # osx-x64, which is cross-built on Apple silicon and not run here.
+      - name: Self-test the plugin runtime
+        if: matrix.rid != 'osx-x64'
+        shell: bash
+        run: out/publish/astra-server${{ startsWith(matrix.rid, 'win') && '.exe' || '' }} plugin-selftest
 
       - name: Verify versions are in sync
         shell: bash

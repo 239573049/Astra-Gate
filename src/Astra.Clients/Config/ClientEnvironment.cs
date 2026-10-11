@@ -13,6 +13,7 @@ public sealed class ClientEnvironment
     private readonly bool _readLoginShellPath;
     private readonly Lock _shellPathLock = new();
     private (IReadOnlyList<string> Dirs, DateTimeOffset At)? _shellPath;
+    private bool _shellPathRefreshing;
 
     public ClientEnvironment(string homeDirectory, string os, Func<string, string?>? environmentVariableLookup = null,
         IReadOnlyList<string>? extraToolDirectories = null, IReadOnlyList<string>? applicationDirectories = null,
@@ -160,7 +161,8 @@ public sealed class ClientEnvironment
     private const string PathEnd = "__ASTRA_PATH_END__";
 
     /// <summary>
-    /// PATH as the user's interactive login shell sets it (macOS / Linux; cached for five minutes). A server started
+    /// PATH as the user's interactive login shell sets it (macOS / Linux; cached, and re-read in the background once
+    /// older than five minutes — the stale value is served meanwhile, since a slow rc file can take seconds). A server started
     /// by the desktop app inherits launchd's minimal PATH, so without this Astra would judge a different copy of a
     /// client than the one the user runs in a terminal (e.g. a fresh copy in ~/.npm-global/bin while the terminal
     /// still runs an older one from ~/.local/bin). Empty in tests, on Windows, for non-POSIX shells, or on failure.
@@ -170,7 +172,23 @@ public sealed class ClientEnvironment
         if (!_readLoginShellPath || Os == "windows") return [];
         lock (_shellPathLock)
         {
-            if (_shellPath is { } cached && DateTimeOffset.UtcNow - cached.At < TimeSpan.FromMinutes(5)) return cached.Dirs;
+            if (_shellPath is { } cached)
+            {
+                if (DateTimeOffset.UtcNow - cached.At >= TimeSpan.FromMinutes(5) && !_shellPathRefreshing)
+                {
+                    _shellPathRefreshing = true;
+                    _ = Task.Run(() =>
+                    {
+                        var fresh = ReadLoginShellPath();
+                        lock (_shellPathLock)
+                        {
+                            _shellPath = (fresh, DateTimeOffset.UtcNow);
+                            _shellPathRefreshing = false;
+                        }
+                    });
+                }
+                return cached.Dirs;
+            }
             var dirs = ReadLoginShellPath();
             _shellPath = (dirs, DateTimeOffset.UtcNow);
             return dirs;

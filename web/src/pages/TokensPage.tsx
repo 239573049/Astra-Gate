@@ -344,7 +344,7 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
   const [providerId, setProviderId] = useState('');
   const [accountId, setAccountId] = useState('');
   const provider = providers.find((p) => p.id === providerId);
-  const isSubscription = provider?.authScheme === 'oauth-subscription';
+  const isSubscription = provider?.authScheme === 'oauth-subscription' || provider?.authScheme === 'plugin';
   const accounts = useProviderAccounts(provider?.id, isSubscription);
 
   useEffect(() => {

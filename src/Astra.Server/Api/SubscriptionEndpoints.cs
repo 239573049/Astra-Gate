@@ -277,8 +277,11 @@ public static partial class SubscriptionEndpoints
         {
             var provider = await db.Providers.GetAsync(providerId);
             if (provider is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
-            if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
+            if (!AuthSchemes.UsesAccounts(provider.AuthScheme))
                 return Results.BadRequest(new ErrorOnlyDto("该提供商不是订阅类型（auth_scheme ≠ oauth-subscription）"));
+            // a plugin's provider has accounts to switch between, but none of the Claude-subscription rules
+            if (provider.AuthScheme == AuthSchemes.Plugin && (body.ClientPolicy is not null || body.MimicClaudeCode is not null))
+                return Results.BadRequest(new ErrorOnlyDto("插件提供商只能设置账号切换方式"));
             if (body.ClientPolicy is { } policy && !ClientPolicies.All.Contains(policy))
                 return Results.BadRequest(new ErrorOnlyDto($"未知的客户端策略：{policy}"));
             if (body.SwitchMode is { } mode && !SwitchModes.All.Contains(mode))

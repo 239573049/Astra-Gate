@@ -46,6 +46,32 @@ public static class ClientKinds
         MuseCode,
     ];
 
+    /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>
+    public const string PluginPrefix = "plugin-";
+
+    /// <summary>Whether <paramref name="kind"/> is a client a plugin adds: "plugin-" and magpie's agent id rule.</summary>
+    public static bool IsPluginKind(string kind) =>
+        kind.StartsWith(PluginPrefix, StringComparison.Ordinal) && IsAgentId(kind.AsSpan(PluginPrefix.Length));
+
+    /// <summary>The magpie agent id of a plugin client kind ("aider" of "plugin-aider").</summary>
+    public static string AgentIdOf(string kind) => IsPluginKind(kind) ? kind[PluginPrefix.Length..] : kind;
+
+    /// <summary>A built-in client kind, or a plugin's.</summary>
+    public static bool IsKnown(string kind) => All.Contains(kind) || IsPluginKind(kind);
+
+    /// <summary>Whether a client's configuration is written from the bound provider's model list: plugin clients' are
+    /// (their connect is given the models).</summary>
+    public static bool HasModelList(string kind) => WithModelList.Contains(kind) || IsPluginKind(kind);
+
+    // magpie's agent id: ^[a-z0-9][a-z0-9._-]{0,63}$
+    private static bool IsAgentId(ReadOnlySpan<char> id)
+    {
+        if (id.Length is 0 or > 64 || !(char.IsAsciiLetterLower(id[0]) || char.IsAsciiDigit(id[0]))) return false;
+        foreach (var c in id)
+            if (!(char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c is '.' or '_' or '-')) return false;
+        return true;
+    }
+
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {

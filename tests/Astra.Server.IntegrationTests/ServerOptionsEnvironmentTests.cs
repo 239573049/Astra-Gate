@@ -21,7 +21,15 @@ public class ServerOptionsEnvironmentTests
         Assert.Null(o.PublicUrl);
         Assert.False(o.StrictPort);
         Assert.Null(o.AdminPasswordHash);
+        Assert.False(o.PluginsOff);
     }
+
+    [Theory]
+    [InlineData("off", true)]
+    [InlineData("0", true)]
+    [InlineData("on", false)]
+    public void ASTRA_PLUGINS_off_switches_plugins_off(string value, bool off) =>
+        Assert.Equal(off, Apply(new() { ["ASTRA_PLUGINS"] = value }).PluginsOff);
 
     [Fact]
     public void Environment_Overrides_The_Loaded_Config()

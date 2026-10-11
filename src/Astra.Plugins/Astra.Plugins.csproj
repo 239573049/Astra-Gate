@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- AOT analyzer gate (IL2026/IL3050 are errors); does not flow through ProjectReference, so set per project. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Runs magpie-compatible gateway middleware and agent plugins in process. Host interop is kept to
+         JSON text and JsValue (no AllowClr, no CLR wrappers), which is what keeps it AOT-safe. -->
+    <PackageReference Include="Jint" Version="4.16.4" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- magpie's plugin host, unmodified (Host/VENDORED.md); written out by HostAssets. -->
+    <EmbeddedResource Include="Host\host.js" LogicalName="Astra.Plugins.Host.host.js" />
+    <EmbeddedResource Include="Host\pi.js" LogicalName="Astra.Plugins.Host.pi.js" />
+    <!-- magpie's built-in copy of magpie-community's registry.json, for when GitHub can't be reached -->
+    <EmbeddedResource Include="Market\market.json" LogicalName="Astra.Plugins.Market.market.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Astra.Plugins.Tests" />
+  </ItemGroup>
+</Project>

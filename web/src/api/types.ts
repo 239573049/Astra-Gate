@@ -116,7 +116,7 @@ export interface ProviderTemplate {
   priceKey?: string | null; defaultPriceMultiplier?: number | null;
   variants?: { id: string; name: string; priceKey?: string | null; endpointsOverride?: TemplateEndpoint[] | null }[] | null;
 }
-export type AuthScheme = "bearer" | "x-api-key" | "x-goog-api-key" | "query-key" | "none" | "oauth-subscription";
+export type AuthScheme = "bearer" | "x-api-key" | "x-goog-api-key" | "query-key" | "none" | "oauth-subscription" | "plugin";
 // GET /api/provider-templates -> ProviderTemplate[]
 
 export interface Provider {
@@ -574,8 +574,8 @@ export interface ProviderAccount {
   /** Masked key of an api_key account (the key itself never crosses the wire). */
   keyMasked?: string | null;
 }
-export type AccountKind = "oauth" | "api_key";
-export type AccountSource = "login" | "local" | "token" | "batch";
+export type AccountKind = "oauth" | "api_key" | "plugin";
+export type AccountSource = "login" | "local" | "token" | "batch" | "plugin";
 /** Who may use a subscription provider and how its accounts switch. */
 export interface SubscriptionPolicy {
   clientPolicy: 'claude-code-only' | 'any';
@@ -718,3 +718,86 @@ export interface UpdateStatus {
   error?: string | null; channel: string; autoCheck: boolean; feedConfigured: boolean;
 }
 
+
+// ---------- plugins (magpie-compatible: provider plugins, gateway middleware, agents, pi extensions) ----------
+export type PluginKind = "provider" | "middleware" | "agent" | "pi";
+
+/** A gateway middleware's hooks and counters, or why it didn't load. */
+export interface MiddlewareState {
+  hooks: string[]; events?: string[] | null; error?: string | null; calls: number; avgMicros: number; failures: number;
+  lastError?: string | null;
+}
+
+/** The client a plugin adds (kind "plugin-<id>" on the Clients page), or why it didn't load. */
+export interface PluginAgent { id?: string | null; kind?: string | null; name?: string | null; error?: string | null }
+
+export interface Plugin {
+  spec: string; name: string; shortName: string; version?: string | null; enabled: boolean; kinds: PluginKind[];
+  source?: string | null; options?: Record<string, unknown> | null; optionsExample?: Record<string, unknown> | null;
+  icon?: string | null; isPath: boolean; error?: string | null; middleware?: MiddlewareState | null; agent?: PluginAgent | null;
+}
+
+/** Bun, which provider plugins run on: where it is, whether it is being fetched, why the last fetch failed. */
+export interface BunStatus { path?: string | null; version?: string | null; downloading: boolean; error?: string | null; target?: string | null }
+
+// GET /api/plugins
+/** off: ASTRA_PLUGINS=off on the server — none runs, none can be installed. */
+export interface PluginList { plugins: Plugin[]; preferences: Record<string, string>; runtime: BunStatus; off?: boolean }
+
+/** An install / update / removal, followed until it ends (GET /api/plugins/jobs/{id}). */
+export interface PluginJob {
+  id: string; action: string; target: string; state: "running" | "succeeded" | "failed"; startedAt: string;
+  finishedAt?: string | null; log: string[]; error?: string | null; result?: string | null;
+}
+
+/** How the plugin host fared: the plugins it loaded, the provider ids each signs in to. */
+export interface PluginHostStatus {
+  running: boolean; startError?: string | null; goneReason?: string | null;
+  plugins: { spec: string; error?: string | null; provides: string[]; servedBy: Record<string, string> }[];
+  /** What plugins showed lately (their toasts), newest first. */
+  recent?: { at: string; variant: string; title: string; message: string }[];
+}
+
+// GET /api/plugins/market
+export interface MarketListing {
+  package: string; name: string; icon?: string | null; kind: PluginKind; providers: string[]; replaces?: string | null;
+  summary: Record<string, string>; latest?: string | null; description?: string | null; license?: string | null;
+}
+
+// GET /api/plugins/search?q=
+export interface MarketSearchResult {
+  spec: string; name: string; description?: string | null; version?: string | null; source: "npm" | "github"; kind: PluginKind; stars: number;
+}
+
+/** A way a plugin provider signs in: "oauth" (a browser page) or "api" (a key). */
+export interface PluginAuthMethod { index: number; type: "oauth" | "api" | string; label: string; placeholder?: string | null }
+
+/** A question a sign-in method asks before it starts. */
+export interface PluginPrompt {
+  type: "text" | "select"; key: string; message: string; placeholder?: string | null;
+  options?: { label: string; value: string; hint?: string | null }[] | null;
+}
+
+/** A browser sign-in under way: open the page; then paste the code it shows, or wait for the plugin to notice. */
+export interface PluginSignIn {
+  id: string; state: "waiting" | "done" | "failed"; url?: string | null; instructions?: string | null; pasteCode: boolean;
+  deviceCode?: string | null; account?: string | null; error?: string | null;
+}
+
+/** An account's allowance, as the plugin tells it. */
+export interface PluginUsage {
+  plan?: string | null; until?: string | null; error?: string | null; user?: string | null;
+  windows?: { name: string; used?: number | null; resetsAt?: number | null; display?: string | null; amount?: number | null; limit?: number | null; unit?: string | null; aside?: boolean | null }[] | null;
+}
+
+/** A plugin provider's daily check-in: whether its plugin presses one, whether it is on, each account's result today. */
+export interface PluginCheckinState {
+  supported: boolean; on: boolean;
+  accounts: { accountId: string; account: string; day?: string | null; outcome?: "claimed" | "done" | "ineligible" | "inactive" | "captcha" | "failed" | null; message?: string | null; credit?: number | null; streak?: number | null; at?: string | null }[];
+}
+
+// GET /api/plugins/import-magpie ; POST /api/plugins/import-magpie {signIns?} -> PluginJob
+export interface MagpieImportPreview {
+  found: boolean; path: string; signIns: number; error?: string | null;
+  plugins: { spec: string; off: boolean; hasOptions: boolean; installed: boolean }[];
+}

@@ -17,7 +17,7 @@ import { PasswordField } from '../components/arc/password-field/password-field';
 import { RadioCards } from '../components/arc/radio-cards/radio-cards';
 import { Sparkline } from '../components/arc/sparkline/sparkline';
 import { Stepper } from '../components/arc/stepper/stepper';
-import { CLIENT_META, ClientIcon, ProviderIcon } from '../components/icons';
+import { CLIENT_META, clientName, ClientIcon, ProviderIcon } from '../components/icons';
 import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
 import { Page } from '../components/layout/Page';
 import { ProviderQuotaLine } from '../components/ProviderQuotaSection';
@@ -180,12 +180,14 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
   const { toast } = useFeedback();
 
   const protocols = [...new Set(p.endpoints.map((e) => e.protocol))];
-  const missingKey = !p.hasApiKey && p.authScheme !== 'none' && p.authScheme !== 'oauth-subscription';
+  const missingKey = !p.hasApiKey && p.authScheme !== 'none' && p.authScheme !== 'oauth-subscription' && p.authScheme !== 'plugin';
   const pricing = [p.priceKey ? t('providers.priceKeyShort', { key: p.priceKey }) : null, p.priceMultiplier !== 1 ? `×${p.priceMultiplier}` : null]
     .filter(Boolean)
     .join(' · ');
   const credential =
-    p.authScheme === 'oauth-subscription'
+    p.authScheme === 'plugin'
+      ? t('providers.card.plugin')
+      : p.authScheme === 'oauth-subscription'
       ? t('providers.card.subscription')
       : p.authScheme === 'none'
         ? t('providers.card.noAuth')
@@ -271,7 +273,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
         {p.templateUpdateAvailable && <Badge tone="accent">{t('providers.templateUpdate')}</Badge>}
         {p.boundClients.slice(0, maxClients).map((k) =>
           k in CLIENT_META ? (
-            <span key={k} title={CLIENT_META[k as ClientKind].name} className="inline-flex shrink-0">
+            <span key={k} title={clientName(k)} className="inline-flex shrink-0">
               <ClientIcon kind={k as ClientKind} size={18} />
             </span>
           ) : (
@@ -318,6 +320,7 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
   );
 }
 
+const PLUGIN_CHOICE = 'plugin:';
 const CATEGORY_ORDER = ['recommended', 'official', 'subscription', 'cn', 'aggregator', 'local', 'custom'] as const;
 
 function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (p: Provider) => void }) {
@@ -337,6 +340,7 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
       ),
     [providers.data],
   );
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [template, setTemplate] = useState<ProviderTemplate | 'custom' | null>(null);
   // Step 1 selection (radio cards); "Continue" moves it into `template` (step 2).
@@ -367,6 +371,17 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
     const list = (templates.data ?? []).filter((x) => !q || x.name.toLowerCase().includes(q) || x.id.includes(q));
     return CATEGORY_ORDER.map((c) => ({ category: c, items: list.filter((x) => x.category === c) })).filter((g) => g.items.length);
   }, [templates.data, search]);
+
+  // 插件提供的提供商由插件同步生成（无需创建），选中即打开它，在里面登录账号。
+  const pluginProviders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (providers.data ?? []).filter(
+      (p) =>
+        p.authScheme === 'plugin' &&
+        !(p.settings.plugin as { absent?: boolean } | undefined)?.absent &&
+        (!q || p.name.toLowerCase().includes(q) || p.id.includes(q)),
+    );
+  }, [providers.data, search]);
 
   const pick = (tpl: ProviderTemplate | 'custom') => {
     setTemplate(tpl);
@@ -407,7 +422,13 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
   const tpl = template && template !== 'custom' ? template : null;
   const proceed = () => {
     if (choice === 'custom') pick('custom');
-    else {
+    else if (choice?.startsWith(PLUGIN_CHOICE)) {
+      const found = pluginProviders.find((p) => PLUGIN_CHOICE + p.id === choice);
+      if (found) {
+        onOpenChange(false);
+        onCreated(found);
+      }
+    } else {
       const found = (templates.data ?? []).find((x) => x.id === choice);
       // 已创建实例的订阅模版不允许继续（双保险：置灰已不可选）。
       if (found && !addedSubscriptionTemplateIds.has(found.id)) pick(found);
@@ -479,6 +500,37 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
               />
             </section>
           ))}
+          <section>
+            <h3 className="mb-2 text-[12px] font-medium text-[var(--text-secondary)]">{t('providers.category.plugin')}</h3>
+            {pluginProviders.length > 0 ? (
+              <RadioCards
+                name="provider-template-plugin"
+                aria-label={t('providers.category.plugin')}
+                minColumnWidth={170}
+                value={choice?.startsWith(PLUGIN_CHOICE) ? choice : null}
+                onValueChange={setChoice}
+                options={pluginProviders.map((p) => ({
+                  value: PLUGIN_CHOICE + p.id,
+                  label: p.name,
+                  description: t('providers.pluginProvided'),
+                  icon: <ProviderIcon name={p.name} icon={p.icon} colorKey={p.id} size={24} />,
+                }))}
+              />
+            ) : (
+              <div className="flex flex-wrap items-center gap-3 rounded-[var(--radius-md)] border border-dashed border-[var(--border)] px-3 py-2.5">
+                <p className="min-w-0 flex-1 text-[12px] text-[var(--text-secondary)]">{t('providers.pluginHint')}</p>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate('/plugins/market');
+                  }}
+                >
+                  {t('plugins.browseMarket')}
+                </Button>
+              </div>
+            )}
+          </section>
           <section>
             <h3 className="mb-2 text-[12px] font-medium text-[var(--text-secondary)]">{t('providers.custom')}</h3>
             <RadioCards

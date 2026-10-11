@@ -25,6 +25,9 @@ public static class CredentialKinds
 
     /// <summary>Codex's <c>auth.json</c>.</summary>
     public const string CodexAuthJson = "codex_auth_json";
+
+    /// <summary>A Grok Web SSO cookie: converted to Grok OAuth tokens through a device-code approval, never stored itself.</summary>
+    public const string GrokSso = "grok_sso";
 }
 
 /// <summary>One classified import entry. <see cref="Secret"/> is the access token / key / refresh token by kind.</summary>
@@ -48,7 +51,7 @@ public static class CredentialImport
     {
         "claude-subscription" => new(false, ["claude-refresh-token", "claude-setup-token", "claude-credentials-json"]),
         "openai-subscription" => new(false, ["codex-auth-json", "refresh-token"]),
-        "grok-subscription" => new(false, ["refresh-token"]),
+        "grok-subscription" => new(false, ["refresh-token", "grok-sso"]),
         "kimi-subscription" => new(true, ["kimi-api-key", "refresh-token"]),
         "zcode-subscription" => new(true, ["zai-api-key"]),
         "bigmodel-subscription" => new(true, ["bigmodel-api-key"]),
@@ -93,6 +96,9 @@ public static class CredentialImport
         {
             var t = line.Trim();
             if (t.StartsWith('{')) entries.Add(t);
+            // Grok SSO 的 cookie 文本（sso=…; sso-rw=…）与组合行（email----password----…----sso）自带分隔符，整行是一条。
+            else if (t.Length > 0 && t[0] != '#' && XaiSsoNormalizer.LooksLikeSso(t) && (t.Contains(XaiSsoNormalizer.ComboSeparator) || t.Contains('=')))
+                entries.Add(t);
             else entries.AddRange(SplitTokens(t));
         }
         return entries;
@@ -175,6 +181,13 @@ public static class CredentialImport
             case "grok-subscription":
                 if (entry.StartsWith("xai-", StringComparison.Ordinal))
                     return Fail(out error, "这是 xAI API Key（按量计费），请添加到 xAI 提供商，而不是 Grok 订阅");
+                if (XaiSsoNormalizer.LooksLikeSso(entry))
+                {
+                    var sso = XaiSsoNormalizer.Normalize(entry);
+                    return LooksOpaque(sso, 20)
+                        ? new ParsedCredential(CredentialKinds.GrokSso, sso)
+                        : Fail(out error, "没有在这一行里找到 Grok SSO（应为 sso cookie 的值，或 email----password----…----sso 组合行）");
+                }
                 return LooksOpaque(entry, 20)
                     ? new ParsedCredential(CredentialKinds.RefreshToken, entry)
                     : Fail(out error, "这不是可识别的 refresh token");

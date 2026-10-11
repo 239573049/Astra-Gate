@@ -81,10 +81,14 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     private static readonly TimeSpan LatestTtl = TimeSpan.FromHours(6);
 
     private static readonly TimeSpan ProbeTimeout = TimeSpan.FromSeconds(10);
+    /// <summary>Cached probes older than this are refreshed in the background (and still served meanwhile).</summary>
+    private static readonly TimeSpan ProbeTtl = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan JobTimeout = TimeSpan.FromMinutes(15);
     private const int MaxLogLines = 2000;
 
     private readonly ConcurrentDictionary<string, (string Fingerprint, string? Version, DateTimeOffset At)> _probes = new();
+    private readonly ConcurrentDictionary<string, Lock> _probeLocks = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, byte> _refreshing = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, LatestEntry> _latest = new();
     private readonly SemaphoreSlim _checkMutex = new(1, 1);
     private readonly Lock _jobLock = new();
@@ -92,6 +96,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     private readonly Lock _npmLock = new();
     private Job? _running;
     private (string NpmPath, string? Root, DateTimeOffset At)? _npm;
+    private bool _npmRefreshing;
 
     private sealed record LatestEntry(string? Version, DateTimeOffset CheckedAt, string? Error);
 
@@ -288,16 +293,34 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
 
     /// <summary>
     /// <c>&lt;command&gt; --version</c>, cached per executable path until it changes (size or mtime of the resolved
-    /// file) and for at most ten minutes — a wrapper script (like a ~/.local/bin launcher) does not change when the
-    /// copy it starts is updated. Null unless the command exits with 0 and prints a version (an error such as
-    /// "requires node 18.0.0" must not read as the client's version).
+    /// file). Past <see cref="ProbeTtl"/> the cached version is still returned and a background probe refreshes it — a
+    /// wrapper script (like a ~/.local/bin launcher) does not change when the copy it starts is updated, but listing
+    /// clients must not wait on a process. Null unless the command exits with 0 and prints a version (an error such
+    /// as "requires node 18.0.0" must not read as the client's version).
     /// </summary>
     private string? ProbeVersion(string exe, string resolved)
     {
         var fingerprint = Fingerprint(exe, resolved);
-        if (_probes.TryGetValue(exe, out var cached) && cached.Fingerprint == fingerprint
-            && DateTimeOffset.UtcNow - cached.At < TimeSpan.FromMinutes(10))
+        if (_probes.TryGetValue(exe, out var cached) && cached.Fingerprint == fingerprint)
+        {
+            if (DateTimeOffset.UtcNow - cached.At >= ProbeTtl && _refreshing.TryAdd(exe, 0))
+                _ = Task.Run(() =>
+                {
+                    try { RunProbe(exe, fingerprint); }
+                    finally { _refreshing.TryRemove(exe, out _); }
+                });
             return cached.Version;
+        }
+        // The startup warm-up and a first listing can ask at the same time: one probe per executable.
+        lock (_probeLocks.GetOrAdd(exe, _ => new Lock()))
+        {
+            if (_probes.TryGetValue(exe, out cached) && cached.Fingerprint == fingerprint) return cached.Version;
+            return RunProbe(exe, fingerprint);
+        }
+    }
+
+    private string? RunProbe(string exe, string fingerprint)
+    {
         string? version = null;
         try
         {
@@ -330,7 +353,10 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         }
     }
 
-    /// <summary>npm and its global root (<c>npm root -g</c>, cached for 10 minutes or until npm moves).</summary>
+    /// <summary>
+    /// npm and its global root (<c>npm root -g</c>, cached until npm moves; past <see cref="ProbeTtl"/> the cached root
+    /// is returned while a background run refreshes it).
+    /// </summary>
     private (string? Path, string? Root) NpmInfo()
     {
         var npm = env.FindTool("npm");
@@ -338,20 +364,41 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         // Listing describes every client in parallel; only one of them should spawn npm on a cold cache.
         lock (_npmLock)
         {
-            if (_npm is { } c && c.NpmPath == npm && DateTimeOffset.UtcNow - c.At < TimeSpan.FromMinutes(10)) return (npm, c.Root);
-            string? root = null;
-            try
+            if (_npm is { } c && c.NpmPath == npm)
             {
-                var (exit, output) = RunCapture(new ToolCommand(npm, ["root", "-g"]), TimeSpan.FromSeconds(15));
-                var line = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault(Path.IsPathRooted);
-                if (exit == 0) root = line;
+                if (DateTimeOffset.UtcNow - c.At >= ProbeTtl && !_npmRefreshing)
+                {
+                    _npmRefreshing = true;
+                    _ = Task.Run(() =>
+                    {
+                        var fresh = NpmRoot(npm);
+                        lock (_npmLock)
+                        {
+                            _npm = (npm, fresh, DateTimeOffset.UtcNow);
+                            _npmRefreshing = false;
+                        }
+                    });
+                }
+                return (npm, c.Root);
             }
-            catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
-            {
-                logger.LogDebug(ex, "npm root -g 失败");
-            }
+            var root = NpmRoot(npm);
             _npm = (npm, root, DateTimeOffset.UtcNow);
             return (npm, root);
+        }
+    }
+
+    private string? NpmRoot(string npm)
+    {
+        try
+        {
+            var (exit, output) = RunCapture(new ToolCommand(npm, ["root", "-g"]), TimeSpan.FromSeconds(15));
+            var line = output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).FirstOrDefault(Path.IsPathRooted);
+            return exit == 0 ? line : null;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
+        {
+            logger.LogDebug(ex, "npm root -g 失败");
+            return null;
         }
     }
 
@@ -532,7 +579,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     /// </summary>
     public ClientInstallJobDto Start(string kind, string? action, bool elevated = false)
     {
-        var spec = ClientInstallCatalog.Get(kind) ?? (ClientKinds.All.Contains(kind)
+        var spec = ClientInstallCatalog.Get(kind) ?? (ClientKinds.IsKnown(kind)
             ? throw new AdminApiException(409, "该客户端暂不支持在 Astra 中安装")
             : throw new AdminApiException(404, "Unknown client kind"));
         if (action is not ("install" or "update")) throw new AdminApiException(400, "action must be \"install\" or \"update\"");

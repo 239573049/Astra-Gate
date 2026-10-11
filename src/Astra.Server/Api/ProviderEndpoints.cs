@@ -407,7 +407,7 @@ public static class ProviderEndpoints
 
     private static void RequireApiKeyProvider(Provider p)
     {
-        if (p.AuthScheme == AuthSchemes.OAuthSubscription)
+        if (AuthSchemes.UsesAccounts(p.AuthScheme))
             throw new AdminApiException(400, "订阅提供商的额度在登录账号里查看");
     }
 

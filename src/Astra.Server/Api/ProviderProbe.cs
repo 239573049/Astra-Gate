@@ -62,7 +62,8 @@ public sealed class ProviderTestRun(ApiProtocol protocol, string modelId, Func<P
 /// </summary>
 public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, UpstreamAuthResolver auth,
     EffectiveModelResolver models, SettingsService settings, UsageWriter writer, CodecRegistry codecs,
-    PrivacyGuardService privacy, BodyStore bodies, ILogger<ProviderProbe> logger) : IModelProtocolResolver
+    PrivacyGuardService privacy, BodyStore bodies, Astra.Plugins.Host.PluginFetchHandler pluginTransport,
+    Astra.Plugins.Host.PluginProviders pluginProviders, ILogger<ProviderProbe> logger) : IModelProtocolResolver
 {
     public const string HttpClientName = "astra-provider-probe";
 
@@ -496,6 +497,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         var credentials = await auth.ResolveAsync(p.Id, accountId, ct) ?? UpstreamAuth.None;
         if (credentials.QueryName is { } q && credentials.QueryValue is { } value) url = WithQuery(url, q, value);
         var request = new HttpRequestMessage(method, url);
+        if (credentials.PluginKey is { } pluginKey) request.Options.Set(Astra.Plugins.Host.PluginFetchHandler.AccountOption, pluginKey);
+        if (p.AuthScheme == AuthSchemes.Plugin && credentials.Proxy is { Length: > 0 } pluginProxy)
+            request.Options.Set(Astra.Plugins.Host.PluginFetchHandler.ProxyOption, pluginProxy);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(stream ? "text/event-stream" : "application/json"));
         foreach (var (key, val) in p.ExtraHeaders) request.Headers.TryAddWithoutValidation(key, val);
         if (protocol == ApiProtocol.Anthropic && !request.Headers.Contains("anthropic-version"))
@@ -519,6 +523,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
 
     private HttpClient CreateClient(Provider provider)
     {
+        // a plugin's provider is reached through its plugin (plugin:// endpoints), never over the network directly
+        if (provider.AuthScheme == AuthSchemes.Plugin)
+            return new HttpClient(pluginTransport, disposeHandler: false) { Timeout = TimeSpan.FromSeconds(TestTimeoutSec + 10) };
         if (provider.HttpProxy is null) return http.CreateClient(HttpClientName);
         return new HttpClient(new SocketsHttpHandler
         {
@@ -579,6 +586,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     public async Task<IReadOnlyList<RemoteModelDto>> ModelsAsync(string providerId, CancellationToken ct, string? accountId = null)
     {
         var p = await ProviderEndpoints.RequireAsync(db, providerId, ct);
+        if (p.AuthScheme == AuthSchemes.Plugin) return await PluginModelsAsync(p, ct);
         var snapshot = Json.Deserialize<ProviderTemplate>(p.TemplateSnapshotJson);
         var spec = snapshot?.ModelListEndpoint;
         var endpoint = spec is not null && p.EndpointFor(spec.Protocol) is { FullUrl: false } declared ? declared :
@@ -647,6 +655,30 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             foundProtocols.TryGetValue(x.Key, out var protocols) ? protocols : null)).ToList();
     }
 
+    // A plugin's provider: its models are the ones its plugin lists (each on the wire API its AI SDK package speaks),
+    // not an upstream /models — the vendor behind it may have none.
+    private async Task<IReadOnlyList<RemoteModelDto>> PluginModelsAsync(Provider p, CancellationToken ct)
+    {
+        List<Astra.Plugins.Host.PluginProviderInfo> listed;
+        try
+        {
+            listed = await pluginProviders.ListAsync(ct: ct);
+        }
+        catch (Astra.Plugins.Host.PluginHostException e)
+        {
+            throw new AdminApiException(502, "The plugin could not list its models: " + e.Message);
+        }
+        var id = Gateway.Pipeline.GatewayPipeline.PluginProviderOf(p);
+        var provider = listed.FirstOrDefault(x => x.Id == id)
+                       ?? throw new AdminApiException(409, "No installed plugin serves this provider now");
+        if (provider.ListError is { } error) throw new AdminApiException(502, "The plugin could not list its models: " + error);
+        var candidates = await db.Models.GetMatcherCandidatesAsync(ct);
+        var existing = (await db.Providers.ListModelsAsync(p.Id, ct)).Select(m => m.ModelId).ToHashSet(StringComparer.Ordinal);
+        return provider.Models.OrderBy(m => m.Id, StringComparer.Ordinal).Select(m => new RemoteModelDto(m.Id, m.Name,
+            ModelIdMatcher.Match(m.UpstreamId, candidates, null), existing.Contains(m.Id),
+            [Astra.Plugins.Host.PluginProviders.ProtocolOf(id, m)])).ToList();
+    }
+
     /// <summary>
     /// Server-syncs a provider's model list from its upstream <c>/models</c> (best effort).
     /// Subscription providers whose catalog is server-driven rather than a fixed list — GitHub
@@ -667,6 +699,16 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         }
         // Template defaults and pre-existing rows need the same capabilities, even when nothing new is added.
         await RefreshModelProtocolsAsync(providerId, remote, ct);
+        // A model catalog filled in later (seed upgrade, models.dev sync) can make previously
+        // unlinked rows resolvable; refresh those links so request-time billing sees a system model.
+        foreach (var model in await db.Providers.ListModelsAsync(providerId, ct))
+        {
+            if (model.SystemModelId is not null) continue;
+            var link = remote.FirstOrDefault(m => m.Id == model.ModelId && m.LinkedSystemModelId is not null)?.LinkedSystemModelId;
+            if (link is null) continue;
+            model.SystemModelId = link;
+            await db.Providers.UpdateModelAsync(model, ct);
+        }
         var toAdd = remote.Where(m => !m.AlreadyAdded).ToList();
         if (toAdd.Count == 0) return 0;
         var added = await PlanModels(p, toAdd.Select(m => m.Id).ToList(), ct);

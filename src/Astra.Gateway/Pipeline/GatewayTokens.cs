@@ -47,15 +47,17 @@ public static class GatewayTokens
     {
         token = key;
         clientKind = null;
-        var dot = key.LastIndexOf('.');
-        if (dot >= 0)
+        // The token has a fixed length, so the kind is whatever follows it: a plugin's agent id may have dots of its own.
+        var length = Prefix.Length + RandomLength;
+        if (key.Length > length)
         {
-            var kind = key[(dot + 1)..];
-            if (!ClientKinds.All.Contains(kind)) return false;
-            token = key[..dot];
+            if (key[length] != '.') return false;
+            var kind = key[(length + 1)..];
+            if (!ClientKinds.IsKnown(kind)) return false;
+            token = key[..length];
             clientKind = kind;
         }
-        if (!token.StartsWith(Prefix, StringComparison.Ordinal) || token.Length != Prefix.Length + RandomLength) return false;
+        if (!token.StartsWith(Prefix, StringComparison.Ordinal) || token.Length != length) return false;
         foreach (var c in token.AsSpan(Prefix.Length))
             if (!char.IsAsciiLetterOrDigit(c)) return false;
         return true;

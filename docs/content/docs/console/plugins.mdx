@@ -1,0 +1,62 @@
+---
+title: 插件
+description: 兼容 magpie 的插件：提供商插件、网关中间件与客户端插件的安装、配置和工作方式
+---
+
+Astra 的插件与 [magpie](https://github.com/yetone/magpie) 兼容：为 magpie 编写的插件（包括 [magpie-community/plugins](https://github.com/magpie-community/plugins) 里的社区插件）无需修改即可在 Astra 中使用。插件分三类，一个包也可以同时属于几类：
+
+| 类型 | 是什么 | 在哪里运行 |
+| --- | --- | --- |
+| 提供商插件 | OpenCode 插件（`@opencode-ai/plugin` v1），负责某个订阅的登录、模型列表与请求 | 独立的 Bun 进程（插件宿主，即 magpie 的 `host.js`） |
+| 网关中间件 | `package.json` 的 `magpie.middleware` 或 `*.middleware.js`，在网关里改写请求与回复 | Astra 进程内（Jint JavaScript 引擎） |
+| 客户端插件 | `magpie.agent` 或 `*.agent.js`，让 Astra 能接入一个它本身不认识的客户端 | Astra 进程内 |
+
+pi 扩展（`pi-coding-agent` 的扩展包）由插件宿主通过 pi 自己的加载器运行，表现为提供商插件。
+
+## 安装插件
+
+在控制台左侧打开 **插件**：
+
+- **插件市场**：列出 magpie-community 的社区清单（每 6 小时更新，拿不到时用内置副本），以及 npm 与 GitHub `magpie-plugin` 主题的搜索结果。点 **安装** 即可。
+- **添加插件**：填写 npm 包（可带版本，如 `opencode-gemini-auth@1.2.0`）、Git 仓库（`github:用户/仓库`）或本机文件、文件夹的绝对路径。本地路径适合开发自己的插件，改动保存后下一次请求就会用上。
+
+安装以后台任务进行，窗口里会实时显示日志。CLI 里对应 `astra plugin add <spec>`、`astra plugin list` 等命令。
+
+<Callout type="warn">
+提供商插件在插件宿主中拥有你的全部权限，能看到经过它的请求；中间件能读取并改写所有请求与回复。只安装你信任的插件。npm 包一律以 `--ignore-scripts` 安装，安装脚本不会运行。
+</Callout>
+
+## Bun 与插件宿主
+
+只有提供商插件需要 Bun。第一次需要时，Astra 会下载固定版本的 Bun（与 magpie 相同）到数据目录的 `plugins/runtime/`，并用官方 SHA-256 校验。也可以用环境变量 `ASTRA_BUN` 指定一个已有的 Bun。
+
+纯中间件、纯客户端插件直接从 npm 下载压缩包（校验完整性哈希）安装，完全不需要 Bun。
+
+插件宿主在需要时才启动；插件列表或代理设置变化时会自动重启，旧宿主处理完手上的请求再退出。**运行环境** 标签页显示 Bun 与宿主的状态和加载错误。
+
+## 提供商插件
+
+安装后，插件提供的每个服务商会出现在 **提供商** 页面（ID 形如 `plugin-zcode`）。在详情页的 **账户** 标签里用插件自己的方式登录：
+
+- **API 密钥**：直接填写；
+- **浏览器登录**：先回答插件的问题（如区域、团队），打开登录页面；页面若显示代码，粘贴回来即可，否则插件会自己察觉登录完成。
+
+登录信息保存在数据目录的 `plugins/plugin-auth.json`（OpenCode 的 auth.json 格式，仅当前用户可读）。之后这个提供商与其他订阅一样：可以绑定到客户端、多个账号故障转移或均衡、为账号单独设置代理。每个模型按插件声明的 AI SDK 包走对应的协议（Anthropic、OpenAI Responses、Gemini 或 Chat Completions），Astra 会在客户端协议与之不同时自动转换。
+
+两个插件声明同一个服务商时，默认由列表中靠后的一个提供；在插件行上点 **用它提供** 可以改选。
+
+## 网关中间件
+
+中间件的列表顺序就是执行顺序，可用上下箭头调整。每个中间件会显示它的钩子、调用次数、平均耗时、失败次数和最近一次错误。
+
+- `onRequest(body, ctx)`：在隐私护栏之前看到客户端发出的请求（客户端自己的协议格式）；返回对象即替换请求，`ctx.reject(status, message)` 拒绝请求；
+- `onEvent(event, ctx)`：流式回复的每个事件，返回 `null` 丢弃该事件；
+- `onResponse(body, ctx)`：非流式回复，`ctx.status` 是状态码。
+
+每个钩子有时间限制（请求与整段回复 250 ms，单个事件 50 ms）。出错或超时会原样放行，只计入失败次数，不会让请求失败。中间件只能 `import` 插件目录内的相对文件，没有网络和文件系统访问。
+
+中间件的选项在插件行的 **选项** 中以 JSON 编辑（插件中读作 `ctx.options`），首次打开时会填入插件给出的示例。
+
+## 客户端插件
+
+客户端插件会在 **客户端** 页面增加一项（类型形如 `plugin-aider`）。启用方式与内置客户端相同：选择提供商和模型后，Astra 只修改插件指定的那个配置文件里的键，并像内置客户端一样先备份原值，停用时原样恢复。删除插件前，它添加的客户端会先恢复原来的配置；即使插件已删除，`astra restore-all` 也能离线恢复。

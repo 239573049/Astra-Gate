@@ -20,6 +20,9 @@ public static class AccountKinds
 
     /// <summary>A static API key the subscription's endpoint accepts: never refreshed, never expires.</summary>
     public const string ApiKey = "api_key";
+
+    /// <summary>A plugin's sign-in: the credential stays in plugin-auth.json; <c>extra.plugin_key</c> names it there.</summary>
+    public const string Plugin = "plugin";
 }
 
 /// <summary>How an account was added (column <c>source</c>; null for accounts older than the column).</summary>
@@ -29,6 +32,9 @@ public static class AccountSources
     public const string Local = "local";
     public const string Token = "token";
     public const string Batch = "batch";
+
+    /// <summary>Signed in through a provider plugin.</summary>
+    public const string Plugin = "plugin";
 }
 
 /// <summary>

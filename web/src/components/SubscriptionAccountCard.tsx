@@ -1,8 +1,8 @@
-import { ArrowDown, ArrowRightLeft, ArrowUp, Gauge, Globe, Power, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowRightLeft, ArrowUp, Ellipsis, Gauge, Globe, Power, RotateCcw, Trash2 } from 'lucide-react';
 
 import type { AccountQuota, ProviderAccount } from '../api/types';
 import { Checkbox } from './arc/checkbox/checkbox';
-import { Badge, Button } from './ui/controls';
+import { Button } from './ui/controls';
 import { Menu, type MenuItem } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
 import { cn } from '../lib/cn';
@@ -30,6 +30,24 @@ const STATUS_KEY: Record<ProviderAccount['status'], MessageKey> = {
   expired: 'providers.subscription.status.expired',
   revoked: 'providers.subscription.status.revoked',
 };
+
+/**
+ * 顶部色块的颜色按套餐家族区分（半透明渐变，深浅主题都能用）：
+ * max / ultra = 蓝，pro / plus = 绿，team / business / enterprise = 紫，API Key = 灰，其余 = 灰。
+ */
+function planGradient(plan: string | undefined, isKey: boolean): string {
+  const p = (plan ?? '').toLowerCase();
+  const rgb = isKey
+    ? '110,115,135'
+    : /max|ultra/.test(p)
+      ? '47,124,246'
+      : /pro|plus|premium/.test(p)
+        ? '52,195,143'
+        : /team|business|enterprise|allegro|vivace/.test(p)
+          ? '130,100,230'
+          : '110,115,135';
+  return `linear-gradient(135deg, rgba(${rgb},.34), rgba(${rgb},.08))`;
+}
 
 /** Per-account actions; the card only renders them, the account list owns the mutations. */
 export interface AccountActions {
@@ -137,44 +155,52 @@ export function SubscriptionAccountCard({
     },
   ];
 
+  const statusText = state === 'disabled' ? t('providers.subscription.disabled') : t(STATUS_KEY[account.status]);
+  const kindText = t(isKey ? 'providers.accounts.kind.api_key' : 'providers.accounts.kind.oauth');
+  const hasQuota = Boolean(account.quota?.session?.usedPercent != null || account.quota?.weekly?.usedPercent != null || account.quota?.credits?.usedPercent != null);
+
   return (
     <div
       data-testid="account-card"
       className={cn(
-        'group card relative cursor-pointer px-2.5 pb-2 pt-2 transition-colors hover:bg-[var(--fill)]',
+        'group card relative flex aspect-square min-w-0 cursor-pointer flex-col overflow-hidden transition-colors hover:bg-[var(--fill)]',
         account.isCurrent && 'ring-1 ring-[var(--accent)]',
         selected && 'bg-[var(--accent-subtle)]',
         state === 'disabled' && 'opacity-55',
       )}
       onClick={() => (selecting ? onToggleSelect(account.id) : actions.open(account))}
     >
-      {/* 冷却 / 失效：左侧色条，扫一眼就能看出哪几张有问题。 */}
-      {(state === 'cooling' || state === 'dead') && (
-        <span aria-hidden className="absolute bottom-2 left-0 top-2 w-[2px] rounded-full" style={{ background: STATE_DOT[state] }} />
-      )}
-
-      <div className="flex min-w-0 items-center gap-1.5">
-        <span
-          className={cn('flex size-5 shrink-0 items-center justify-center', !selecting && !selected && 'max-sm:flex sm:hidden sm:group-hover:flex')}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Checkbox
-            checked={selected}
-            onCheckedChange={() => onToggleSelect(account.id)}
-            aria-label={t('providers.accounts.select', { name })}
-          />
-        </span>
-        {!selecting && !selected && (
-          <span
-            aria-hidden
-            className="hidden size-5 shrink-0 items-center justify-center rounded-md bg-[var(--surface-muted)] text-[10.5px] font-semibold uppercase text-[var(--text-secondary)] sm:flex sm:group-hover:hidden"
-          >
-            {name.charAt(0)}
-          </span>
+      {/* 顶部色块：状态 + 套餐名（颜色按套餐家族）；冷却 / 失效时在左侧再加一条色边。 */}
+      <div className="relative shrink-0 px-3 pb-3 pt-2.5" style={{ background: planGradient(plan, isKey) }}>
+        {(state === 'cooling' || state === 'dead') && (
+          <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: STATE_DOT[state] }} />
         )}
+        <div className="flex items-center gap-1.5">
+          <span className={cn('flex size-5 items-center justify-center', !selecting && !selected && 'hidden group-hover:flex')} onClick={(e) => e.stopPropagation()}>
+            <Checkbox checked={selected} onCheckedChange={() => onToggleSelect(account.id)} aria-label={t('providers.accounts.select', { name })} />
+          </span>
+          <span className="flex items-center gap-1 text-[11px] text-[var(--text-secondary)]">
+            <span role="img" aria-label={statusText} className="size-1.5 shrink-0 rounded-full" style={{ background: STATE_DOT[state] }} />
+            <span aria-hidden>{statusText}</span>
+          </span>
+          {account.httpProxy && (
+            <span title={`${t('providers.accounts.proxyBadge')}: ${account.httpProxy}`} className="shrink-0 text-[var(--text-muted)]">
+              <Globe className="size-3.5" aria-label={t('providers.accounts.proxyBadge')} />
+            </span>
+          )}
+          <span className="-mr-1.5 ml-auto shrink-0" onClick={(e) => e.stopPropagation()}>
+            <Menu iconOnly label={t('common.more')} icon={<Ellipsis className="size-4" />} items={menu} />
+          </span>
+        </div>
+        <div className="mt-1.5 truncate text-[17px] font-bold tracking-[.01em]" title={plan || kindText}>
+          {plan || kindText}
+        </div>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2.5">
         <button
           type="button"
-          className="min-w-0 flex-1 truncate text-left text-[12.5px] font-medium outline-none focus-visible:underline"
+          className="block max-w-full truncate text-left text-[13px] font-medium outline-none focus-visible:underline"
           title={name}
           onClick={(e) => {
             e.stopPropagation();
@@ -184,67 +210,58 @@ export function SubscriptionAccountCard({
         >
           {name}
         </button>
-        {account.isCurrent && <Badge tone="accent">{t('providers.subscription.current')}</Badge>}
-        {plan && <Badge tone="accent" className="max-w-24 truncate">{plan}</Badge>}
-        {account.httpProxy && (
-          <span title={`${t('providers.accounts.proxyBadge')}: ${account.httpProxy}`} className="shrink-0 text-[var(--text-muted)]">
-            <Globe className="size-3" aria-label={t('providers.accounts.proxyBadge')} />
-          </span>
-        )}
-        <span
-          role="img"
-          aria-label={state === 'disabled' ? t('providers.subscription.disabled') : t(STATUS_KEY[account.status])}
-          className="size-1.5 shrink-0 rounded-full"
-          style={{ background: STATE_DOT[state] }}
-        />
-        <span className="-my-1 -mr-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-          <Menu label={t('common.more')} icon={<span className="text-[15px] leading-none">⋯</span>} items={menu} />
-        </span>
-      </div>
-
-      <div className="ml-[26px] mt-0.5 flex min-w-0 items-center gap-1 whitespace-nowrap text-[10.5px] text-[var(--text-muted)]">
-        <span className="text-[var(--text-secondary)]">{t(isKey ? 'providers.accounts.kind.api_key' : 'providers.accounts.kind.oauth')}</span>
-        {account.source && (
-          <>
-            <span aria-hidden>·</span>
-            <span>{t(`providers.accounts.source.${account.source}` as MessageKey)}</span>
-          </>
-        )}
-        {meta && (
-          <>
-            <span aria-hidden>·</span>
-            <span className="truncate" style={{ color: meta.tone }} title={meta.text}>
-              {meta.text}
+        <div className="mt-0.5 flex min-w-0 items-center gap-1 whitespace-nowrap text-[11px] text-[var(--text-muted)]">
+          {account.isCurrent && (
+            <span className="flex shrink-0 items-center gap-1 text-[var(--success)]">
+              <span aria-hidden>●</span>
+              <span>{t('providers.subscription.current')}</span>
             </span>
-          </>
-        )}
-        <span className="ml-auto pl-1 opacity-0 group-hover:opacity-100">{t('providers.accounts.order', { n: index + 1 })}</span>
-      </div>
-
-      {state === 'dead' ? (
-        <div className="ml-[26px] mt-1.5 flex items-center gap-2">
-          <span className="text-[10.5px] text-[var(--text-muted)]">{t('providers.accounts.signedOut')}</span>
-          {!isKey && (
-            <Button
-              size="sm"
-              className="ml-auto"
-              onClick={(e) => {
-                e.stopPropagation();
-                actions.relogin(account);
-              }}
-            >
-              {t('providers.subscription.relogin')}
-            </Button>
           )}
+          {account.isCurrent && <span aria-hidden>·</span>}
+          <span className="shrink-0">{kindText}</span>
+          {account.source && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="truncate">{t(`providers.accounts.source.${account.source}` as MessageKey)}</span>
+            </>
+          )}
+          <span className="ml-auto shrink-0 pl-1 opacity-0 group-hover:opacity-100">{t('providers.accounts.order', { n: index + 1 })}</span>
         </div>
-      ) : (
-        <QuotaStrip quota={account.quota ?? null} pending={quotaPending} />
-      )}
+
+        {/* 冷却 / 失效 / 没有额度的账户：把一句话状态放在这里（到期时间、冷却至、失效原因）。 */}
+        {meta && (state === 'cooling' || state === 'dead' || !hasQuota) && (
+          <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: meta.tone ?? 'var(--text-muted)' }} title={meta.text}>
+            {meta.text}
+          </div>
+        )}
+
+        {state === 'dead' ? (
+          <div className="mt-auto flex items-center gap-2 pt-2">
+            <span className="text-[11px] text-[var(--text-muted)]">{t('providers.accounts.signedOut')}</span>
+            {!isKey && (
+              <Button
+                size="sm"
+                className="ml-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  actions.relogin(account);
+                }}
+              >
+                {t('providers.subscription.relogin')}
+              </Button>
+            )}
+          </div>
+        ) : (
+          <QuotaStrip quota={account.quota ?? null} pending={quotaPending} />
+        )}
+      </div>
     </div>
   );
 }
 
-/** Up to two thin quota bars (session / weekly, else credits) in one row. */
+const SEGMENTS = 10;
+
+/** Up to two segmented quota bars (session / weekly, else credits) at the card's bottom; the reset time is the tooltip. */
 function QuotaStrip({ quota, pending }: { quota: AccountQuota | null; pending?: boolean }) {
   const { t, locale } = useI18n();
   const bars: { key: string; label: string; percent: number; reset?: string | null }[] = [];
@@ -267,16 +284,17 @@ function QuotaStrip({ quota, pending }: { quota: AccountQuota | null; pending?: 
   if (bars.length === 0) return null;
 
   return (
-    <div className={cn('ml-[26px] mt-1.5 flex gap-3', pending && 'opacity-60')}>
+    <div className={cn('mt-auto flex flex-col gap-2 pt-2', pending && 'opacity-60')}>
       {bars.slice(0, 2).map((b) => {
         const percent = Math.max(0, Math.min(100, Math.round(b.percent)));
         const tone = percent >= 90 ? 'var(--danger)' : percent >= 70 ? 'var(--warning)' : 'var(--accent)';
+        const lit = Math.round((percent / 100) * SEGMENTS);
         const reset = b.reset ? t('providers.subscription.quotaResets', { when: formatDateTime(b.reset, locale) }) : undefined;
         return (
-          <div key={b.key} className="min-w-0 flex-1" title={reset}>
-            <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+          <div key={b.key} className="min-w-0" title={reset}>
+            <div className="flex justify-between text-[11px] text-[var(--text-secondary)]">
               <span>{b.label}</span>
-              <span className="font-mono tabular-nums text-[var(--text-secondary)]">{percent}%</span>
+              <span className="font-mono tabular-nums">{percent}%</span>
             </div>
             <div
               role="progressbar"
@@ -284,9 +302,11 @@ function QuotaStrip({ quota, pending }: { quota: AccountQuota | null; pending?: 
               aria-valuenow={percent}
               aria-valuemin={0}
               aria-valuemax={100}
-              className="mt-0.5 h-[3px] overflow-hidden rounded-full bg-[var(--surface-muted)]"
+              className="mt-0.5 flex gap-[3px]"
             >
-              <div className="h-full rounded-full" style={{ width: `${percent}%`, background: tone }} />
+              {Array.from({ length: SEGMENTS }, (_, i) => (
+                <i key={i} className="h-[5px] flex-1 rounded-[2px] bg-[var(--surface-muted)]" style={i < lit ? { background: tone } : undefined} />
+              ))}
             </div>
           </div>
         );

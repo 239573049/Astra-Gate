@@ -76,6 +76,24 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Get, "/api/models/missing");
         await host.SendAsync(HttpMethod.Get, "/api/nope");
 
+        // Plugins: a local middleware (no network), its job, options, order, pick, export and removal.
+        var pluginDir = Directory.CreateTempSubdirectory("astra-guard-plugin-").FullName;
+        File.WriteAllText(Path.Combine(pluginDir, "package.json"), """{"name":"guard-mw","version":"1.0.0","magpie":{"middleware":"./g.middleware.js","options":{"a":1}}}""");
+        File.WriteAllText(Path.Combine(pluginDir, "g.middleware.js"), "export function onRequest(b) { return b }");
+        await host.GetJsonAsync("/api/plugins");
+        await host.GetJsonAsync("/api/plugins/runtime");
+        var addJob = await host.SendAsync(HttpMethod.Post, "/api/plugins", new { spec = pluginDir });
+        var jobId = addJob.Body!["id"]!.GetValue<string>();
+        for (var i = 0; i < 50 && (await host.GetJsonAsync($"/api/plugins/jobs/{jobId}"))!["state"]!.GetValue<string>() == "running"; i++)
+            await Task.Delay(50);
+        var spec = Uri.EscapeDataString(pluginDir);
+        await host.SendAsync(HttpMethod.Patch, $"/api/plugins?spec={spec}", new { options = new { a = 2 } });
+        await host.SendAsync(HttpMethod.Put, "/api/plugins/order", new { specs = new[] { pluginDir } });
+        await host.SendAsync(HttpMethod.Post, "/api/plugins/prefer", new { spec = pluginDir, provider = "guard" });
+        await host.GetJsonAsync("/api/plugins/export");
+        await host.SendAsync(HttpMethod.Delete, $"/api/plugins?spec={spec}");
+        await host.SendAsync(HttpMethod.Get, "/api/plugins/jobs/missing");
+
         var claude = await ClaudeDirectTests.AddClaudeProviderAsync(host);
         await ClaudeDirectTests.AddAccountAsync(host, claude, "guard-acc", "Guard");
         await host.SendAsync(HttpMethod.Put, "/api/clients/claude-code/direct", new { mode = "direct", accountId = "guard-acc", telemetryEnabled = true });

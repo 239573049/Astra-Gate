@@ -9,7 +9,7 @@ import { ActivityHeatmap } from '../components/arc/activity-heatmap/activity-hea
 import { BarChart } from '../components/arc/bar-chart/bar-chart';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
-import { CLIENT_META, CLIENT_ORDER, ClientGlyph, ClientIcon } from '../components/icons';
+import { CLIENT_META, clientName, CLIENT_ORDER, ClientGlyph, ClientIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, CodeBlock, EmptyState, Segmented, Spinner, type SegmentItem } from '../components/ui/controls';
 import { Select } from '../components/ui/overlays';
@@ -161,7 +161,7 @@ export function OverviewPage() {
           {clientKind ? (
             <EmptyState
               icon={<ClientIcon kind={clientKind} size={32} />}
-              title={t('overview.clientEmpty.title', { client: CLIENT_META[clientKind].name })}
+              title={t('overview.clientEmpty.title', { client: clientName(clientKind) })}
               detail={t('overview.clientEmpty.detail', { range: rangeLabel })}
             />
           ) : tokenId ? (
@@ -278,9 +278,9 @@ function ClientFilter({ value, onChange }: { value: ClientFilterValue; onChange:
       value: k,
       label: '',
       accessory: (
-        <span className="inline-flex items-center" title={CLIENT_META[k].name}>
+        <span className="inline-flex items-center" title={clientName(k)}>
           <ClientGlyph kind={k} size={18} />
-          <span className="sr-only">{CLIENT_META[k].name}</span>
+          <span className="sr-only">{clientName(k)}</span>
         </span>
       ),
     })),

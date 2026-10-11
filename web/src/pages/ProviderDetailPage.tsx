@@ -31,6 +31,7 @@ import { Page } from '../components/layout/Page';
 import { PricingEditor } from '../components/PricingEditor';
 import { ProviderTestDialog } from '../components/ProviderTestDialog';
 import { ProviderQuotaSection } from '../components/ProviderQuotaSection';
+import { PluginAccounts } from '../components/PluginAccounts';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, Field, Group, Input, KV, NumberInput, Row, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
@@ -75,7 +76,7 @@ export function ProviderDetailPage() {
           <TabsList aria-label={p.name}>
             <TabsTrigger value="models">{t('providers.tab.models')}</TabsTrigger>
             <TabsTrigger value="accounts">
-              {t(p.authScheme === 'oauth-subscription' ? 'providers.tab.accounts' : 'providers.tab.apiKey')}
+              {t(p.authScheme === 'oauth-subscription' || p.authScheme === 'plugin' ? 'providers.tab.accounts' : 'providers.tab.apiKey')}
             </TabsTrigger>
             <TabsTrigger value="settings">{t('providers.tab.settings')}</TabsTrigger>
           </TabsList>
@@ -83,7 +84,13 @@ export function ProviderDetailPage() {
             <ModelsTab provider={p} models={models.data} loading={models.isLoading} selected={selectedPm} onSelect={setSelectedPm} />
           </TabsContent>
           <TabsContent value="accounts" className="pt-4">
-            {p.authScheme === 'oauth-subscription' ? <SubscriptionAccounts provider={p} /> : <ApiKeyTab provider={p} />}
+            {p.authScheme === 'plugin' ? (
+              <PluginAccounts provider={p} />
+            ) : p.authScheme === 'oauth-subscription' ? (
+              <SubscriptionAccounts provider={p} />
+            ) : (
+              <ApiKeyTab provider={p} />
+            )}
           </TabsContent>
           <TabsContent value="settings" className="pt-4">
             <SettingsTab provider={p} />

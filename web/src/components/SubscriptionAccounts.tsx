@@ -469,7 +469,7 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
       ) : visible.length === 0 ? (
         <div className="px-4 py-5 text-center text-[12px] text-[var(--text-secondary)]">{t('providers.accounts.noMatch')}</div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-2">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-3">
           {visible.map(({ a, index }) => (
             <SubscriptionAccountCard
               key={a.id}
@@ -652,8 +652,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   );
 }
 
-/** The provider's account switching mode, inline in the pool bar. */
-function SwitchModePicker({ policy, onChange }: { policy: Policy; onChange: (mode: Policy['switchMode']) => void }) {
+/** The provider's account switching mode, inline in the pool bar (also on a plugin provider's accounts). */
+export function SwitchModePicker({ policy, onChange }: { policy: Policy; onChange: (mode: Policy['switchMode']) => void }) {
   const { t } = useI18n();
   return (
     <Segmented

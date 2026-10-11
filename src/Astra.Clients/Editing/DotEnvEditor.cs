@@ -159,7 +159,9 @@ public sealed class DotEnvEditor
     }
 
     /// <summary>Quotes a value only when needed (safe characters stay unquoted).</summary>
-    private static string FormatValue(string value)
+    /// <summary>A value as its raw source text: as it is when it has only safe characters, else double-quoted
+    /// with escaping ("" for empty) — what <see cref="Set"/> writes and <see cref="SetRaw"/> accepts.</summary>
+    public static string FormatValue(string value)
     {
         if (value.Length == 0) return "\"\"";
         var safe = true;

@@ -34,11 +34,25 @@ public class GatewayTokensTests
     }
 
     [Theory]
+    [InlineData("plugin-aider")]
+    [InlineData("plugin-my.agent_2")]
+    public void Plugin_Client_Kinds_Parse_Even_With_Dots(string kind)
+    {
+        var token = GatewayTokens.Generate();
+        Assert.True(GatewayTokens.TryParse(GatewayTokens.ForClient(token, kind), out var parsed, out var parsedKind));
+        Assert.Equal(token, parsed);
+        Assert.Equal(kind, parsedKind);
+    }
+
+    [Theory]
     [InlineData("sk-not-astra")]
     [InlineData("sk-astra-short")]
     [InlineData("sk-astra-0123456789abcdefghijABCDEFGHIJ!!")]
     [InlineData("sk-astra-0123456789abcdefghijABCDEFGHIJKL.unknown-client")]
     [InlineData("astra-codex-0123456789abcdefghijABCDEFGHIJKL")]
+    [InlineData("sk-astra-0123456789abcdefghijABCDEFGHIJKL.plugin-")]
+    [InlineData("sk-astra-0123456789abcdefghijABCDEFGHIJKL.plugin-Upper")]
+    [InlineData("sk-astra-0123456789abcdefghijABCDEFGHIJKLx.codex")]
     public void Malformed_Keys_And_Unknown_Suffixes_Are_Rejected(string key) =>
         Assert.False(GatewayTokens.TryParse(key, out _, out _));
 

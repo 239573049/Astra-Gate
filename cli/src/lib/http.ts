@@ -35,7 +35,7 @@ export function adminHeaders(mutating: boolean, runtimeToken?: string): Record<s
 export interface ApiRequestOptions {
   base: string;
   path: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   runtimeToken?: string;
   timeoutMs?: number;

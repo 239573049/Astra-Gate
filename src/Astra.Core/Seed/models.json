@@ -1,10 +1,11 @@
 {
- "seed_version": 2,
- "generated_at": "2026-10-08",
+ "seed_version": 3,
+ "generated_at": "2026-10-11",
  "sources": [
   "https://models.dev/api.json",
   "https://api-docs.deepseek.com/quick_start/pricing",
-  "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching (1h cache write = 2x input)"
+  "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching (1h cache write = 2x input)",
+  "https://docs.x.ai/developers/pricing (Grok 4.7 Fast: 2x standard / 1.5x long-context; Cursor and Grok Build only)"
  ],
  "models": [
   {
@@ -810,17 +811,6 @@
     }
    },
    "provider_pricing": {
-    "openrouter": {
-     "upstream_model_id": "qwen/qwen3-8b",
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 0.117,
-       "output": 0.455
-      }
-     }
-    },
     "siliconflow": {
      "upstream_model_id": "Qwen/Qwen3-8B",
      "pricing": {
@@ -1176,45 +1166,6 @@
     }
    },
    "provider_pricing": {
-    "openrouter": {
-     "upstream_model_id": "qwen/qwen3-coder-plus",
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 0.65,
-       "cache_read": 0.13,
-       "cache_write_5m": 0.8125,
-       "output": 3.25
-      },
-      "context_tiers": [
-       {
-        "name": ">32K",
-        "threshold_input_tokens": 32000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 1.17,
-         "cache_read": 0.234,
-         "cache_write_5m": 1.4625,
-         "output": 5.85
-        }
-       },
-       {
-        "name": ">128K",
-        "threshold_input_tokens": 128000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 1.95,
-         "cache_read": 0.39,
-         "cache_write_5m": 2.4375,
-         "output": 9.75
-        }
-       }
-      ]
-     }
-    },
     "alibaba-cn": {
      "pricing": {
       "currency": "USD",
@@ -1279,45 +1230,6 @@
     }
    },
    "provider_pricing": {
-    "openrouter": {
-     "upstream_model_id": "qwen/qwen3-max",
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 0.78,
-       "cache_read": 0.156,
-       "cache_write_5m": 0.975,
-       "output": 3.9
-      },
-      "context_tiers": [
-       {
-        "name": ">32K",
-        "threshold_input_tokens": 32000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 1.56,
-         "cache_read": 0.312,
-         "cache_write_5m": 1.95,
-         "output": 7.8
-        }
-       },
-       {
-        "name": ">128K",
-        "threshold_input_tokens": 128000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 1.95,
-         "cache_read": 0.39,
-         "cache_write_5m": 2.4375,
-         "output": 9.75
-        }
-       }
-      ]
-     }
-    },
     "alibaba-cn": {
      "pricing": {
       "currency": "USD",
@@ -1378,8 +1290,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.15,
-       "output": 1.5
+       "input": 0.1,
+       "cache_read": 0.07,
+       "output": 1.1
       }
      }
     },
@@ -1745,9 +1658,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.15,
-       "cache_read": 0.05,
-       "output": 1
+       "input": 0.08,
+       "cache_read": 0.04,
+       "output": 0.75
       }
      }
     },
@@ -1805,9 +1718,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.45,
-       "cache_read": 0.22,
-       "output": 3
+       "input": 0.55,
+       "cache_read": 0.225,
+       "output": 3.5
       }
      }
     },
@@ -2028,9 +1941,8 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.3,
-       "cache_read": 0.03,
-       "output": 2
+       "input": 0.32,
+       "output": 3.2
       }
      }
     },
@@ -2077,9 +1989,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.15,
-       "cache_read": 0.05,
-       "output": 1
+       "input": 0.1,
+       "cache_read": 0.1,
+       "output": 0.95
       }
      }
     },
@@ -2193,31 +2105,6 @@
     }
    },
    "provider_pricing": {
-    "openrouter": {
-     "upstream_model_id": "qwen/qwen3.6-max-preview",
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 1.027,
-       "cache_write_5m": 1.28375,
-       "output": 6.162
-      },
-      "context_tiers": [
-       {
-        "name": ">128K",
-        "threshold_input_tokens": 128000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 1.58,
-         "cache_write_5m": 1.975,
-         "output": 9.48
-        }
-       }
-      ]
-     }
-    },
     "alibaba-cn": {
      "pricing": {
       "currency": "USD",
@@ -2634,7 +2521,6 @@
       "base": {
        "input": 0.15,
        "cache_read": 0.016,
-       "cache_write_5m": 0.2,
        "output": 0.47
       }
      }
@@ -2688,7 +2574,6 @@
       "base": {
        "input": 2,
        "cache_read": 0.25,
-       "cache_write_5m": 2.5,
        "output": 6
       }
      }
@@ -3448,22 +3333,7 @@
        "cache_write_5m": 6.25,
        "cache_write_1h": 10,
        "output": 25
-      },
-      "context_tiers": [
-       {
-        "name": ">200K",
-        "threshold_input_tokens": 200000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 10,
-         "cache_read": 1,
-         "cache_write_5m": 12.5,
-         "cache_write_1h": 20,
-         "output": 37.5
-        }
-       }
-      ]
+      }
      }
     },
     "google-vertex-anthropic": {
@@ -3607,22 +3477,7 @@
        "cache_write_5m": 6.25,
        "cache_write_1h": 10,
        "output": 25
-      },
-      "context_tiers": [
-       {
-        "name": ">200K",
-        "threshold_input_tokens": 200000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 10,
-         "cache_read": 1,
-         "cache_write_5m": 12.5,
-         "cache_write_1h": 20,
-         "output": 37.5
-        }
-       }
-      ]
+      }
      }
     },
     "google-vertex-anthropic": {
@@ -3736,22 +3591,7 @@
        "cache_write_5m": 6.25,
        "cache_write_1h": 10,
        "output": 25
-      },
-      "context_tiers": [
-       {
-        "name": ">200K",
-        "threshold_input_tokens": 200000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 10,
-         "cache_read": 1,
-         "cache_write_5m": 12.5,
-         "cache_write_1h": 20,
-         "output": 37.5
-        }
-       }
-      ]
+      }
      }
     },
     "google-vertex-anthropic": {
@@ -4209,22 +4049,7 @@
        "cache_write_5m": 3.75,
        "cache_write_1h": 6,
        "output": 15
-      },
-      "context_tiers": [
-       {
-        "name": ">200K",
-        "threshold_input_tokens": 200000,
-        "mode": "whole",
-        "output_policy": "highest",
-        "prices": {
-         "input": 6,
-         "cache_read": 0.6,
-         "cache_write_5m": 7.5,
-         "cache_write_1h": 12,
-         "output": 22.5
-        }
-       }
-      ]
+      }
      }
     },
     "google-vertex-anthropic": {
@@ -4433,7 +4258,7 @@
       "unit": "per_1m_tokens",
       "base": {
        "input": 2,
-       "cache_read": 0.2,
+       "cache_read": 0.1,
        "cache_write_5m": 2.5,
        "cache_write_1h": 4,
        "output": 10
@@ -4461,7 +4286,7 @@
       "unit": "per_1m_tokens",
       "base": {
        "input": 2,
-       "cache_read": 0.2,
+       "cache_read": 0.1,
        "cache_write_5m": 2.5,
        "cache_write_1h": 4,
        "output": 10
@@ -5053,9 +4878,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.0104,
-       "cache_read": 0.0104,
-       "output": 1.28
+       "input": 0.018,
+       "cache_read": 0.018,
+       "output": 0.64
       }
      }
     },
@@ -5273,9 +5098,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 1.32,
-       "cache_read": 0.044,
-       "output": 3.96
+       "input": 0.66,
+       "cache_read": 0.022,
+       "output": 1.98
       }
      }
     },
@@ -5690,18 +5515,6 @@
        "output": 1.5
       }
      }
-    },
-    "google-vertex": {
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 0.25,
-       "cache_read": 0.025,
-       "input_audio": 0.5,
-       "output": 1.5
-      }
-     }
     }
    }
   },
@@ -6088,19 +5901,7 @@
      "output": 3.75
     }
    },
-   "provider_pricing": {
-    "google-vertex": {
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 1.5,
-       "cache_read": 0.15,
-       "output": 9
-      }
-     }
-    }
-   }
+   "provider_pricing": {}
   },
   {
    "id": "gemini-flash-lite-latest",
@@ -6128,20 +5929,7 @@
      "output": 2.5
     }
    },
-   "provider_pricing": {
-    "google-vertex": {
-     "pricing": {
-      "currency": "USD",
-      "unit": "per_1m_tokens",
-      "base": {
-       "input": 0.25,
-       "cache_read": 0.025,
-       "input_audio": 0.5,
-       "output": 1.5
-      }
-     }
-    }
-   }
+   "provider_pricing": {}
   },
   {
    "id": "MiniMax-M2",
@@ -6610,9 +6398,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.465,
-       "cache_read": 0.0975,
-       "output": 2.45
+       "input": 0.65,
+       "cache_read": 0.15,
+       "output": 3.41
       }
      }
     },
@@ -6810,9 +6598,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.65,
-       "cache_read": 0.43,
-       "output": 15
+       "input": 0.8,
+       "cache_read": 0.55,
+       "output": 10
       }
      }
     },
@@ -7594,6 +7382,15 @@
        "input": 1.25,
        "cache_read": 0.125,
        "output": 10
+      },
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 2.5,
+         "cache_read": 0.25,
+         "output": 20
+        }
+       }
       }
      }
     }
@@ -7660,6 +7457,15 @@
        "input": 1.75,
        "cache_read": 0.125,
        "output": 14
+      },
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 3.5,
+         "cache_read": 0.35,
+         "output": 28
+        }
+       }
       }
      }
     }
@@ -7930,7 +7736,16 @@
          "output": 22.5
         }
        }
-      ]
+      ],
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 5,
+         "cache_read": 0.5,
+         "output": 30
+        }
+       }
+      }
      }
     }
    }
@@ -7996,6 +7811,15 @@
        "input": 0.75,
        "cache_read": 0.075,
        "output": 4.5
+      },
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 1.5,
+         "cache_read": 0.15,
+         "output": 9
+        }
+       }
       }
      }
     }
@@ -8247,7 +8071,16 @@
          "output": 45
         }
        }
-      ]
+      ],
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 12.5,
+         "cache_read": 1.25,
+         "output": 75
+        }
+       }
+      }
      }
     }
    }
@@ -8626,7 +8459,17 @@
          "output": 45
         }
        }
-      ]
+      ],
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 8,
+         "cache_read": 0.8,
+         "cache_write_5m": 10,
+         "output": 40
+        }
+       }
+      }
      }
     }
    }
@@ -8759,7 +8602,17 @@
          "output": 18
         }
        }
-      ]
+      ],
+      "service_tiers": {
+       "priority": {
+        "prices": {
+         "input": 4,
+         "cache_read": 0.4,
+         "cache_write_5m": 5,
+         "output": 24
+        }
+       }
+      }
      }
     }
    }
@@ -8874,17 +8727,7 @@
          "output": 75
         }
        }
-      ],
-      "service_tiers": {
-       "ultrafast": {
-        "prices": {
-         "input": 60,
-         "cache_read": 6,
-         "cache_write_5m": 75,
-         "output": 300
-        }
-       }
-      }
+      ]
      }
     },
     "azure": {
@@ -9227,6 +9070,14 @@
        "cache_read": 0.2,
        "cache_write_5m": 5,
        "output": 20
+      }
+     },
+     "ultrafast": {
+      "prices": {
+       "input": 12,
+       "cache_read": 0.6,
+       "cache_write_5m": 15,
+       "output": 60
       }
      }
     }
@@ -10231,6 +10082,31 @@
       ]
      }
     },
+    "google-vertex": {
+     "upstream_model_id": "xai/grok-4.7",
+     "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+       "input": 2,
+       "cache_read": 0.5,
+       "output": 6
+      },
+      "context_tiers": [
+       {
+        "name": ">200K",
+        "threshold_input_tokens": 200000,
+        "mode": "whole",
+        "output_policy": "highest",
+        "prices": {
+         "input": 4,
+         "cache_read": 1,
+         "output": 12
+        }
+       }
+      ]
+     }
+    },
     "amazon-bedrock": {
      "upstream_model_id": "global.xai.grok-4.7",
      "pricing": {
@@ -10244,6 +10120,48 @@
      }
     }
    }
+  },
+  {
+   "id": "grok-4.7-build-fast",
+   "display_name": "Grok 4.7 Fast",
+   "vendor": "xai",
+   "family": "grok",
+   "aliases": [
+    "dgrok-4.7-build-fast"
+   ],
+   "context_window": 500000,
+   "max_output_tokens": 500000,
+   "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "prompt_cache": true,
+    "pdf": true,
+    "structured_output": true
+   },
+   "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+     "input": 4,
+     "cache_read": 1,
+     "output": 12
+    },
+    "context_tiers": [
+     {
+      "name": ">200K",
+      "threshold_input_tokens": 200000,
+      "mode": "whole",
+      "output_policy": "highest",
+      "prices": {
+       "input": 6,
+       "cache_read": 1.5,
+       "output": 18
+      }
+     }
+    ]
+   },
+   "provider_pricing": {}
   },
   {
    "id": "grok-build-0.1",
@@ -10547,9 +10465,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.43,
-       "cache_read": 0.08,
-       "output": 1.75
+       "input": 0.5,
+       "cache_read": 0.1,
+       "output": 2
       }
      }
     },
@@ -11060,9 +10978,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.171,
-       "cache_read": 0.15,
-       "output": 12
+       "input": 0.06,
+       "cache_read": 0.059,
+       "output": 7
       }
      }
     },
@@ -11187,9 +11105,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.049,
-       "cache_read": 0.048,
-       "output": 3.39
+       "input": 0.07,
+       "cache_read": 0.05,
+       "output": 4.8
       }
      }
     },

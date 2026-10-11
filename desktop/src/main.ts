@@ -195,15 +195,15 @@ async function main(): Promise<void> {
   lastBoot = { apiBase: running.apiBase, apiVersionMismatch: running.apiVersionMismatch };
   if (running.apiVersionMismatch) await showMismatchDialog(running.apiVersion);
 
-  // Created hidden right away: it opens instantly and keeps the menu-bar title current.
   trayPanel = new TrayPanel({
     platform: process.platform,
     url: rendererUrl(TRAY_PANEL_HASH),
     webPreferences: rendererWebPreferences,
   });
-  trayPanel.ensure();
 
-  await refreshTray();
+  // Not awaited: the first /api/clients after a server start probes every client's version, and the
+  // window must not wait for the tray.
+  void refreshTray();
   // Poll health + client/provider bindings every 10s to keep the tray current.
   setInterval(() => {
     void refreshTray();
@@ -211,7 +211,16 @@ async function main(): Promise<void> {
   // Update checks: one right after launch (with a reminder when something is pending), then every 12h.
   updater!.start();
 
-  if (!startHidden) await showMainWindow();
+  // The panel is created hidden ahead of its first use (it opens instantly and keeps the menu-bar title
+  // current), but after the main window has painted so the two renderers do not load at the same time.
+  const panel = trayPanel;
+  if (startHidden) {
+    panel.ensure();
+    return;
+  }
+  await showMainWindow();
+  if (mainWindow) mainWindow.once('ready-to-show', () => panel.ensure());
+  else panel.ensure();
 }
 
 /** Start (or adopt) the service, looping on a retry dialog on failure. Null = user chose Quit. */

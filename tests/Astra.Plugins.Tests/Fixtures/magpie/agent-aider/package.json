@@ -1,0 +1,11 @@
+{
+  "name": "@magpie-community/agent-aider",
+  "version": "0.1.0",
+  "description": "Aider (aider.chat) as a magpie agent: pick one of magpie's models for it on the Agents page",
+  "type": "module",
+  "files": ["aider.agent.js", "README.md"],
+  "keywords": ["magpie", "magpie-agent", "aider", "llm-gateway"],
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/magpie-community/plugins.git", "directory": "packages/aider" },
+  "magpie": { "agent": "./aider.agent.js" }
+}

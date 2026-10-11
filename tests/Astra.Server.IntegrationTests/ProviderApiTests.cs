@@ -1048,11 +1048,11 @@ public class ProviderApiTests
         Assert.True((await host.GetJsonAsync($"/api/providers/{id}"))["templateUpdateAvailable"]!.GetValue<bool>());
         var preview = await host.GetJsonAsync($"/api/providers/{id}/template-update");
         Assert.Equal(3, preview["currentVersion"]!.GetValue<int>());
-        Assert.Equal(4, preview["latestVersion"]!.GetValue<int>());
+        Assert.Equal(5, preview["latestVersion"]!.GetValue<int>());
 
         (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/template-update");
         Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(4, body!["templateVersion"]!.GetValue<int>());
+        Assert.Equal(5, body!["templateVersion"]!.GetValue<int>());
         Assert.False(body["templateUpdateAvailable"]!.GetValue<bool>());
         Assert.Equal(expectedVersion, body["extraHeaders"]!["x-grok-client-version"]!.GetValue<string>());
         Assert.Equal("keep-me", body["extraHeaders"]!["X-Custom"]!.GetValue<string>());
@@ -1061,6 +1061,37 @@ public class ProviderApiTests
         Assert.Equal(expectedVersion, updated.ExtraHeaders["x-grok-client-version"]);
         var snapshot = Json.Deserialize<ProviderTemplate>(updated.TemplateSnapshotJson)!;
         Assert.Equal("1.0.13", snapshot.DefaultHeaders["x-grok-client-version"]);
+    }
+
+    [Fact]
+    public async Task Model_Sync_Relinks_Stored_Rows_When_The_Catalog_Catches_Up()
+    {
+        // 账号先于目录存在（订阅代理已列出、种子/模型目录还没有的 id）会落库为未关联；
+        // 之后的模型列表同步必须按最新目录把这些行重新挂上，请求计价才有系统模型可用。
+        var handler = new StubHandler(request => Task.FromResult(request.RequestUri!.AbsolutePath == "/v1/models"
+            ? JsonResponse("""{"data":[{"id":"grok-4.7-build-fast"},{"id":"grok-4.7"}]}""")
+            : JsonResponse("{}")));
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers",
+            new { templateId = "xai", apiKey = "xai-test", models = new[] { "grok-4.7-build-fast", "grok-4.7", "brand-new-model" } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var providerId = body!["id"]!.GetValue<string>();
+
+        foreach (var modelId in new[] { "grok-4.7-build-fast", "brand-new-model" })
+        {
+            var row = (await host.Db.Providers.GetModelAsync(providerId, modelId))!;
+            row.SystemModelId = null;
+            await host.Db.Providers.UpdateModelAsync(row);
+        }
+
+        var added = await host.App.Services.GetRequiredService<ProviderProbe>().SyncModelsFromUpstreamAsync(providerId);
+        Assert.Equal(0, added); // 远端列表里的 id 都已有行，只补链接不新增
+        Assert.Equal("grok-4.7-build-fast",
+            (await host.Db.Providers.GetModelAsync(providerId, "grok-4.7-build-fast"))!.SystemModelId);
+        Assert.Equal("grok-4.7", (await host.Db.Providers.GetModelAsync(providerId, "grok-4.7"))!.SystemModelId);
+        Assert.Null((await host.Db.Providers.GetModelAsync(providerId, "brand-new-model"))!.SystemModelId);
     }
 
     [Fact]

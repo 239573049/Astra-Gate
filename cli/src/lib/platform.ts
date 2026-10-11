@@ -70,4 +70,14 @@ export const CLIENT_KINDS = [
   'muse-code',
 ] as const;
 
-export type ClientKind = (typeof CLIENT_KINDS)[number];
+/** A client a plugin adds (a magpie agent plugin): "plugin-" and magpie's agent id. */
+export type PluginClientKind = `plugin-${string}`;
+
+export type ClientKind = (typeof CLIENT_KINDS)[number] | PluginClientKind;
+
+const PLUGIN_CLIENT_KIND = /^plugin-[a-z0-9][a-z0-9._-]{0,63}$/;
+
+/** Whether `kind` is a built-in client kind or a plugin's. */
+export function isClientKind(kind: string): kind is ClientKind {
+  return (CLIENT_KINDS as readonly string[]).includes(kind) || PLUGIN_CLIENT_KIND.test(kind);
+}

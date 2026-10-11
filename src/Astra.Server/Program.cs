@@ -13,6 +13,8 @@ namespace Astra.Server;
 ///   set-password               read a new admin password from stdin (required for non-loopback hosts)
 ///   healthcheck                GET /api/health on the configured address; exit 0 when healthy (Docker HEALTHCHECK)
 ///   version                    print {"version","apiVersion"}
+///   plugin-selftest            run the in-process plugin runtime checks; exit 0 when all pass (CI runs it on
+///                              each Native AOT binary, since AOT can break at run time what the JIT never shows)
 /// serve and healthcheck also read ASTRA_HOST / ASTRA_PORT / ASTRA_PUBLIC_URL / ASTRA_STRICT_PORT /
 /// ASTRA_ADMIN_PASSWORD[_FILE] (see ServerOptions.ApplyEnvironment); flags win over the environment,
 /// the environment over config.json.
@@ -42,6 +44,8 @@ public static class Program
                     return SetPassword(paths);
                 case "healthcheck":
                     return await HealthCheckAsync(paths, rest);
+                case "plugin-selftest":
+                    return PluginSelfTest();
                 default:
                     Console.Error.WriteLine($"Unknown command '{command}'. Commands: serve, restore-all [--purge], migrate, set-password, healthcheck, version");
                     return 64;
@@ -52,6 +56,13 @@ public static class Program
             Console.Error.WriteLine(ex.Message);
             return 64;
         }
+    }
+
+    private static int PluginSelfTest()
+    {
+        var results = Plugins.Diagnostics.PluginSelfTest.Run(r =>
+            Console.WriteLine($"{(r.Ok ? "ok  " : "FAIL")} {r.Name}: {r.Detail}"));
+        return results.All(r => r.Ok) ? 0 : 1;
     }
 
     private static async Task<int> ServeAsync(AstraPaths paths, string[] args)

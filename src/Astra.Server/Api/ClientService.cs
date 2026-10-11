@@ -4,6 +4,7 @@ using Astra.Clients.Config;
 using Astra.Clients.Editing;
 using Astra.Core;
 using Astra.Core.Clients;
+using Astra.Core.Plugins;
 using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
@@ -32,14 +33,19 @@ public sealed record TokenRewriteResult(IReadOnlyList<string> Rewritten, IReadOn
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
-    ClientInstallService installs, ClientRouting routing)
+    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents)
 {
-    private readonly ClientAdapterRegistry _registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState);
+    /// <summary>The key in a plugin client's extras holding its plugin's descriptor, for restoring it offline.</summary>
+    public const string PluginExtrasKey = "plugin";
+
+    private volatile ClientAdapterRegistry _registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState);
+    private (long Generation, string Remembered) _registryKey = (-1, "");
     private readonly ClientConfigApplier _applier = new(db.ClientConfigState, env, paths.ClientBackupsDir);
     private readonly SemaphoreSlim _writes = new(1, 1);
 
     public async Task<IReadOnlyList<ClientInfoDto>> ListAsync(CancellationToken ct = default)
     {
+        await RefreshRegistryAsync(ct);
         // Probes every client's version in parallel up front (cached afterwards), so InfoAsync below stays cheap.
         var install = await installs.DescribeAllAsync(ct);
         var result = new List<ClientInfoDto>();
@@ -55,6 +61,7 @@ public sealed class ClientService(
     public async Task<ClientInfoDto> SetBindingAsync(string kind, string providerId, string? accountId, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var adapter = Require(kind);
             await RequireProviderAsync(providerId, ct);
             var bindings = await db.Clients.ListBindingsAsync(kind, ct);
@@ -65,7 +72,7 @@ public sealed class ClientService(
                 _ => await RequireAccountAsync(providerId, accountId, ct),
             };
             await db.Clients.ReplaceBindingsAsync(kind, WithPrimary(bindings, kind, providerId, pinned), ct);
-            if (ClientKinds.WithModelList.Contains(kind)) await SyncModelListCoreAsync(kind, null, ct);
+            if (ClientKinds.HasModelList(kind)) await SyncModelListCoreAsync(kind, null, ct);
             return await InfoAsync(adapter, ct);
         }, ct);
 
@@ -77,6 +84,7 @@ public sealed class ClientService(
     public async Task<ClientInfoDto> SetBindingsAsync(string kind, IReadOnlyList<ClientBindingDto> input, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var adapter = Require(kind);
             if (input.Count == 0) throw new AdminApiException(400, "Choose at least one provider");
             if (input.Select(b => b.ProviderId).Distinct().Count() != input.Count) throw new AdminApiException(400, "Each provider can be bound only once");
@@ -94,7 +102,7 @@ public sealed class ClientService(
                 next.Add(new ClientBinding { ClientKind = kind, ProviderId = b.ProviderId, AccountId = pinned });
             }
             await db.Clients.ReplaceBindingsAsync(kind, next, ct);
-            if (ClientKinds.WithModelList.Contains(kind)) await SyncModelListCoreAsync(kind, null, ct);
+            if (ClientKinds.HasModelList(kind)) await SyncModelListCoreAsync(kind, null, ct);
             return await InfoAsync(adapter, ct);
         }, ct);
 
@@ -114,8 +122,10 @@ public sealed class ClientService(
     public async Task<bool> SyncModelListsAsync(string? providerId, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var changed = false;
-            foreach (var kind in ClientKinds.WithModelList) changed |= await SyncModelListCoreAsync(kind, providerId, ct);
+            foreach (var kind in _registry.All.Select(a => a.Kind).Where(ClientKinds.HasModelList))
+                changed |= await SyncModelListCoreAsync(kind, providerId, ct);
             return changed;
         }, ct);
 
@@ -136,7 +146,7 @@ public sealed class ClientService(
             var context = await ContextAsync(kind, targets, record, key, ct);
             var plan = adapter.PlanEnable(context); // rewrites the Astra provider as a whole so its recorded applied value stays exact
             if (plan.Diffs.Count == 0) return false;
-            _applier.Apply(plan);
+            Apply(adapter, plan);
             record.ExtraJson = context.Extras?.ToJsonString();
             record.AppliedAt = DateTimeOffset.UtcNow;
             await db.Clients.UpsertAsync(record, CancellationToken.None);
@@ -151,6 +161,7 @@ public sealed class ClientService(
     public async Task<ClientPreviewDto> PreviewAsync(string kind, JsonObject input, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var (adapter, record, context, _, _, warnings) = await PrepareAsync(kind, input, ct);
             var plan = EnablePlan(adapter, context, input);
             return new ClientPreviewDto(plan.Changes.Select(c => new ConfigChangeDto(c.File,
@@ -160,9 +171,10 @@ public sealed class ClientService(
     public async Task<ClientInfoDto> EnableAsync(string kind, JsonObject input, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var (adapter, record, context, providerId, tokenId, _) = await PrepareAsync(kind, input, ct);
             var plan = EnablePlan(adapter, context, input); // parse/validate before writing
-            _applier.Apply(plan);
+            Apply(adapter, plan);
             record.Enabled = true;
             record.TokenId = tokenId;
             record.SelectedModel = context.Model;
@@ -180,6 +192,7 @@ public sealed class ClientService(
     public async Task<ClientDisableDto> DisableAsync(string kind, bool force, CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var adapter = Require(kind);
             var plan = adapter.PlanDisable();
             var report = force ? _applier.ForceRestore(plan) : _applier.Disable(plan);
@@ -243,7 +256,7 @@ public sealed class ClientService(
                     var context = await ContextAsync(record.Kind, targets, record, key, ct);
                     var plan = adapter.PlanEnable(context);
                     if (plan.Diffs.Count == 0) continue;
-                    _applier.Apply(plan);
+                    Apply(adapter, plan);
                     record.ExtraJson = context.Extras?.ToJsonString();
                     record.AppliedAt = DateTimeOffset.UtcNow;
                     await db.Clients.UpsertAsync(record, CancellationToken.None);
@@ -258,9 +271,13 @@ public sealed class ClientService(
             return new TokenRewriteResult(rewritten, skipped);
         }, ct);
 
+    /// <summary>Whether the client is enabled in Astra.</summary>
+    public async Task<bool> IsEnabledAsync(string kind, CancellationToken ct) => (await db.Clients.GetAsync(kind, ct))?.Enabled == true;
+
     /// <summary>The model ids the client can use: enabled models of its usable bound providers, each id once.</summary>
     public async Task<IReadOnlyList<string>> ModelsAsync(string kind, CancellationToken ct)
     {
+        await RefreshRegistryAsync(ct);
         Require(kind);
         var targets = await routing.TargetsAsync(await db.Clients.ListBindingsAsync(kind, ct), ct);
         return (await routing.ListModelsAsync(targets, ct)).Select(m => m.Id).ToList();
@@ -308,7 +325,10 @@ public sealed class ClientService(
     private async Task<EnableContext> ContextAsync(string kind, IReadOnlyList<RouteTarget> targets, ClientRecord record, string key, CancellationToken ct)
     {
         var extras = Json.Deserialize<JsonObject>(record.ExtraJson) ?? new JsonObject();
-        if (ClientKinds.WithModelList.Contains(kind) && targets.Count > 0)
+        // A plugin's client keeps its plugin's descriptor, so it can be restored once the plugin is gone (restore-all).
+        if (_registry.Get(kind) is PluginClientAdapter plugin)
+            extras[PluginExtrasKey] = JsonNode.Parse(Json.Serialize(plugin.Agent));
+        if (ClientKinds.HasModelList(kind) && targets.Count > 0)
         {
             // Every bound provider's models and mapped ids, each id once (ClientRouting): the gateway routes each to its
             // provider. A mapped id carries its target model's capabilities under its own name.
@@ -347,7 +367,7 @@ public sealed class ClientService(
         // Clearing a model selection restores what Astra had written for it (and whatever was there before); a
         // key the client owns that never held one of our values is left alone.
         var old = adapter.PlanDisable();
-        var candidates = new List<string> { ModelKeyOf(adapter.Kind) };
+        var candidates = new List<string> { adapter is PluginClientAdapter plugin ? plugin.ModelKeyPath : ModelKeyOf(adapter.Kind) };
         // Claude Code's optional tiers only come back through PlanDisable (PlanEnable writes just the chosen ones).
         if (adapter.Kind == ClientKinds.ClaudeCode) candidates.AddRange(ClaudeCodeModels.Slots.Select(slot => $"env.{slot}"));
         candidates.AddRange(ClientOptions.ConfigKeyPaths(adapter.Kind));
@@ -397,7 +417,7 @@ public sealed class ClientService(
         var detection = inspected?.Detection ?? adapter.Detect();
         var outdated = enabled && !drifted && await OutdatedPlanAsync(adapter, record!, bindings, ct) is not null;
         var primary = bindings.Count > 0 ? bindings[0] : null;
-        return new ClientInfoDto(adapter.Kind, NameOf(adapter.Kind), ClientKinds.ProtocolOf(adapter.Kind),
+        return new ClientInfoDto(adapter.Kind, adapter is PluginClientAdapter p ? p.Agent.Name : NameOf(adapter.Kind), ClientKinds.ProtocolOf(adapter.Kind),
             adapter.Availability == ClientAvailability.Available ? "available" : "coming_soon", adapter.UnavailableReason,
             adapter.Mode == ClientMode.Coexist ? "coexist" : "switch",
             new ClientDetectionDto(detection.Detected, configPaths.Any(File.Exists), detection.Version ?? install?.Version, configPaths),
@@ -441,6 +461,7 @@ public sealed class ClientService(
     public async Task<IReadOnlyList<string>> ReapplyOutdatedAsync(CancellationToken ct) =>
         await MutateAsync(async () =>
         {
+            await RefreshRegistryAsync(ct);
             var updated = new List<string>();
             foreach (var adapter in _registry.All)
             {
@@ -449,8 +470,8 @@ public sealed class ClientService(
                 if (!status.Enabled || status.DriftedKeys.Count > 0) continue;
                 var bindings = await db.Clients.ListBindingsAsync(adapter.Kind, ct);
                 if (await OutdatedPlanAsync(adapter, record, bindings, ct) is not { } plan) continue;
-                _applier.Apply(plan);
-                if (ClientKinds.WithModelList.Contains(adapter.Kind))
+                Apply(adapter, plan);
+                if (ClientKinds.HasModelList(adapter.Kind))
                 {
                     // Keep the stored model list in step with what was just written.
                     var key = await ClientKeyAsync(record, ct) ?? throw new InvalidOperationException("Token key vanished during reapply");
@@ -475,6 +496,34 @@ public sealed class ClientService(
     }
 
     private IClientAdapter Require(string kind) => _registry.Get(kind) ?? throw new AdminApiException(404, "Unknown client kind");
+
+    /// <summary>Applies a plan; a plugin client then puts back the keys its connect stopped returning.</summary>
+    private void Apply(IClientAdapter adapter, ConfigChangePlan plan)
+    {
+        _applier.Apply(plan);
+        if (adapter is PluginClientAdapter plugin && plugin.PlanRestoreStale() is { IsEmpty: false } stale) _applier.Disable(stale);
+    }
+
+    /// <summary>
+    /// Rebuilds the adapter list when the clients plugins add changed: the agents loaded now, and the plugin clients
+    /// enabled before whose plugin is gone (from the descriptor their row keeps), which can still be disabled.
+    /// </summary>
+    private async Task RefreshRegistryAsync(CancellationToken ct)
+    {
+        await agents.RefreshAsync(ct);
+        var remembered = new List<AgentPluginDescriptor>();
+        foreach (var record in await db.Clients.ListAsync(ct))
+        {
+            if (!ClientKinds.IsPluginKind(record.Kind)) continue;
+            if (Json.Deserialize<JsonObject>(record.ExtraJson)?[PluginExtrasKey] is JsonObject snapshot
+                && Json.Deserialize<AgentPluginDescriptor>(snapshot.ToJsonString()) is { } descriptor)
+                remembered.Add(descriptor);
+        }
+        var key = (agents.Generation, string.Join('|', remembered.Select(d => d.Id)));
+        if (key == _registryKey) return;
+        _registry = ClientAdapterRegistry.CreateDefault(env, db.ClientConfigState, agents, remembered);
+        _registryKey = key;
+    }
 
     internal async Task<Astra.Core.Models.Provider> RequireProviderAsync(string id, CancellationToken ct)
     {

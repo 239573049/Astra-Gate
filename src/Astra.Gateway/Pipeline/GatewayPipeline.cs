@@ -8,7 +8,10 @@ using Astra.Core.Billing;
 using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Requests;
+using Astra.Gateway.Plugins;
 using Astra.Gateway.Protocol;
+using Astra.Plugins.Host;
+using Astra.Plugins.Middleware;
 using Astra.Providers.Subscription;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -33,8 +36,13 @@ public sealed class GatewayPipeline(
     BodyStore bodies,
     UsageWriter usageWriter,
     LiveRequestFeed live,
+    MiddlewareEngine middleware,
+    PluginFetchHandler pluginTransport,
     ILogger<GatewayPipeline> logger)
 {
+    // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
+    private readonly HttpClient _pluginClient = new(pluginTransport, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+
     private const long MaxRequestBytes = 64L * 1024 * 1024;
     private const int MaxErrorBodyBytes = 1024 * 1024;
     private const string DefaultAnthropicVersion = "2023-06-01";
@@ -73,6 +81,8 @@ public sealed class GatewayPipeline(
         IResponseDecoder? decoder = null;
         IResponseEncoder? encoder = null;
         AccountScheduler.Lease? accountLease = null;
+        MiddlewareRun? middlewareRun = null;
+        MiddlewareResponseStream? middlewareStream = null;
 
         try
         {
@@ -87,6 +97,24 @@ public sealed class GatewayPipeline(
 
             var rawBody = await ReadBodyAsync(ctx.Request, ct);
             capture?.Set(BodyStore.ClientRequest, rawBody);
+
+            // Gateway middleware plugins (magpie-compatible; .plan/plugins.md) see the agent's body in its own
+            // API first, before the privacy guard — which still applies to whatever they send on — and the
+            // reply on its way back to the agent. A reject is answered in the agent's API's error shape.
+            middlewareRun = await middleware.BeginAsync(
+                GatewayMiddleware.Info(inbound, rawBody, ctx.Request.Path,
+                    route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream), ct);
+            if (middlewareRun is not null)
+            {
+                var (changed, reject) = middlewareRun.Request(Encoding.UTF8.GetBytes(rawBody));
+                if (reject is not null)
+                {
+                    record.Status = RequestStatus.Blocked;
+                    throw GatewayMiddleware.Rejected(reject);
+                }
+                rawBody = Encoding.UTF8.GetString(changed);
+                middlewareStream = MiddlewareResponseStream.Install(ctx, middlewareRun);
+            }
 
             // Privacy guard (plan §6.7): runs on the client body before anything leaves the machine.
             var guard = privacy.Inspect(rawBody, route.ClientKind);
@@ -360,6 +388,18 @@ public sealed class GatewayPipeline(
         }
         finally
         {
+            if (middlewareStream is not null)
+            {
+                try
+                {
+                    await middlewareStream.CompleteAsync(CancellationToken.None);
+                }
+                catch (Exception e) when (e is IOException or OperationCanceledException or ObjectDisposedException)
+                {
+                    // the client went away while the held reply was written
+                }
+            }
+            middlewareRun?.Dispose();
             // Balanced mode: the account's in-flight slot is held until the whole response has been streamed back.
             accountLease?.Dispose();
             record.ResponseModel = decoder?.ResponseModel;
@@ -376,12 +416,18 @@ public sealed class GatewayPipeline(
 
     // ------------------------------------------------------------------ upstream
 
+    /// <summary>The provider id the plugin knows a plugin provider by (its <c>settings.plugin.provider</c>).</summary>
+    public static string PluginProviderOf(Provider provider) =>
+        provider.Settings["plugin"]?["provider"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var id) ? id : provider.Id;
+
     private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, string body, bool stream, bool passthrough,
         ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, CancellationToken ct)
     {
         var provider = route.Provider;
-        var subscription = provider.AuthScheme == AuthSchemes.OAuthSubscription;
+        var plugin = provider.AuthScheme == AuthSchemes.Plugin;
+        // A plugin provider's sign-ins are accounts too: chosen, failed over and balanced the same way.
+        var subscription = AuthSchemes.UsesAccounts(provider.AuthScheme);
         // Plan §5.4: in failover mode a rate-limited or dead account hands the request to the next usable account
         // (which also becomes the provider's current account, so the following requests stay on it).
         // Balanced mode fails over the same way, but picks every account through the scheduler and leaves
@@ -421,7 +467,8 @@ public sealed class GatewayPipeline(
                 }
 
                 // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
-                var client = credentials.Proxy is { Length: > 0 } accountProxy ? http.For(accountProxy) : http.For(provider);
+                var client = plugin ? _pluginClient
+                    : credentials.Proxy is { Length: > 0 } accountProxy ? http.For(accountProxy) : http.For(provider);
                 var request = Build(credentials);
                 // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
                 // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
@@ -433,7 +480,14 @@ public sealed class GatewayPipeline(
                     var used = credentials.AccountId ?? accountId;
                     try
                     {
-                        credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);
+                        if (plugin)
+                        {
+                            // the plugin renews its own sign-in: its loader is asked again, once
+                            if (credentials.PluginKey is { } key)
+                                await pluginTransport.Providers.ReloadAsync(PluginProviderOf(provider), key, ct);
+                        }
+                        else
+                            credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);
                     }
                     catch (SubscriptionAuthException e)
                     {
@@ -514,6 +568,14 @@ public sealed class GatewayPipeline(
             {
                 Content = new StringContent(body, Encoding.UTF8, "application/json"),
             };
+            if (plugin)
+            {
+                // which of the plugin's accounts, its own proxy, and the conversation (the plugin's session)
+                if (a.PluginKey is { } key) request.Options.Set(PluginFetchHandler.AccountOption, key);
+                if (a.Proxy is { Length: > 0 } proxy) request.Options.Set(PluginFetchHandler.ProxyOption, proxy);
+                if (stickyKey is { Length: > 0 }) request.Headers.TryAddWithoutValidation(PluginFetchHandler.ConversationHeader, stickyKey);
+                WorkPlace.Tell(request, body);
+            }
             if (claudeMode == ClaudeHeaderMode.Relay)
             {
                 // Claude Code → Claude subscription: its own headers verbatim, only the credential and the OAuth beta change.

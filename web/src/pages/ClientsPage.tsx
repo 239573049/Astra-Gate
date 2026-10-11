@@ -31,7 +31,7 @@ import type { ClientBinding, ClientInfo, ClientInstallJob, ClientKind, ConfigPre
 import { Alert } from '../components/arc/alert/alert';
 import { ClaudeDirectPanel } from '../components/ClaudeDirectPanel';
 import { ClientOptionsGroup } from '../components/ClientOptionsGroup';
-import { CLIENT_META, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
+import { clientName, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
 import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays';
@@ -51,7 +51,7 @@ export function ClientsPage() {
   const clients = useClients();
   const checkUpdates = useCheckClientUpdates();
   const byKind = useMemo(() => new Map((clients.data ?? []).map((c) => [c.kind, c])), [clients.data]);
-  const kind: ClientKind = CLIENT_ORDER.includes(params.kind as ClientKind) ? (params.kind as ClientKind) : 'codex';
+  const kind: ClientKind = orderOf(clients.data).includes(params.kind as ClientKind) ? (params.kind as ClientKind) : 'codex';
   const client = byKind.get(kind);
 
   // Latest versions are fetched once per visit; the server keeps them six hours, so this is usually instant.
@@ -101,6 +101,12 @@ const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'muse-code',
 ]);
 
+/** The built-in clients in their order, then the clients agent plugins add ("plugin-<id>"), by name. */
+function orderOf(clients: ClientInfo[] | undefined): ClientKind[] {
+  const plugins = (clients ?? []).filter((c) => !CLIENT_ORDER.includes(c.kind)).sort((a, b) => a.name.localeCompare(b.name));
+  return [...CLIENT_ORDER, ...plugins.map((c) => c.kind)];
+}
+
 type ClientGroup = 'installed' | 'notInstalled' | 'comingSoon';
 const GROUP_ORDER: ClientGroup[] = ['installed', 'notInstalled', 'comingSoon'];
 
@@ -134,7 +140,7 @@ function ClientList({
   const byKind = new Map((clients ?? []).map((c) => [c.kind, c]));
   const groups = GROUP_ORDER.map((g) => ({
     group: g,
-    items: CLIENT_ORDER.flatMap((k) => {
+    items: orderOf(clients).flatMap((k) => {
       const c = byKind.get(k);
       return c && groupOf(c) === g ? [c] : [];
     }),
@@ -169,7 +175,7 @@ function ClientListItem({ client, active, onSelect }: { client: ClientInfo; acti
   return (
     <button
       type="button"
-      aria-label={CLIENT_META[client.kind].name}
+      aria-label={clientName(client.kind, client.name)}
       aria-current={active ? 'page' : undefined}
       onClick={onSelect}
       className={cn(
@@ -181,7 +187,7 @@ function ClientListItem({ client, active, onSelect }: { client: ClientInfo; acti
         <ClientIcon kind={client.kind} size={24} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className={cn('block truncate text-[13px] whitespace-nowrap', active && 'font-medium')}>{CLIENT_META[client.kind].name}</span>
+        <span className={cn('block truncate text-[13px] whitespace-nowrap', active && 'font-medium')}>{clientName(client.kind, client.name)}</span>
         {version && (
           <span className="hidden truncate text-[11px] text-[var(--text-secondary)] @3xl:block">
             {version}
@@ -246,11 +252,12 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   /** Install sheet: the action to confirm and run, "log" to watch the current / last run, null when closed. */
   const [installAction, setInstallAction] = useState<InstallSheetMode | null>(null);
   const soon = client.availability === 'coming_soon';
-  const name = CLIENT_META[client.kind].name;
+  const name = clientName(client.kind, client.name);
   const enabledProviders = (providers.data ?? []).filter((p) => p.enabled);
   const configPath = client.detection.configPaths[0];
   const boundProvider = enabledProviders.find((p) => p.id === client.providerId);
-  const isSubscriptionBinding = boundProvider?.authScheme === 'oauth-subscription';
+  // providers with accounts (subscriptions, plugin sign-ins) let a client pin one
+  const isSubscriptionBinding = boundProvider?.authScheme === 'oauth-subscription' || boundProvider?.authScheme === 'plugin';
   const accounts = useProviderAccounts(boundProvider?.id, isSubscriptionBinding);
   const isDesktopClient = client.kind === 'claude-desktop';
   const isClaudeCode = client.kind === 'claude-code';
@@ -582,7 +589,7 @@ function ProviderBindings({ client, providers, loading, soon }: { client: Client
       { kind: client.kind, bindings: next },
       {
         onSuccess: () =>
-          toast(MODEL_LIST_CLIENTS.has(client.kind) && client.enabled ? t('clients.providersModelsSynced', { client: CLIENT_META[client.kind].name }) : done),
+          toast(MODEL_LIST_CLIENTS.has(client.kind) && client.enabled ? t('clients.providersModelsSynced', { client: clientName(client.kind, client.name) }) : done),
         onError: (e) => {
           setOrder(previous);
           toast(errorText(e), 'error');
@@ -865,7 +872,7 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
   const [started, setStarted] = useState(false);
   const logRef = useRef<HTMLPreElement>(null);
   const lastState = useRef<string | undefined>(undefined);
-  const name = CLIENT_META[client.kind].name;
+  const name = clientName(client.kind, client.name);
   const inst = client.install;
   const action = mode === 'install' || mode === 'update' ? mode : null;
   const command = action === 'install' ? inst?.installCommand : action === 'update' ? inst?.updateCommand : null;
@@ -1030,7 +1037,7 @@ function EnableSheet({
   const { toast } = useFeedback();
   const preview = usePreviewEnable();
   const enable = useEnableClient();
-  const name = CLIENT_META[client.kind].name;
+  const name = clientName(client.kind, client.name);
   const req = extras ? { providerId: client.providerId, model, extras, tokenId } : { providerId: client.providerId, model, tokenId };
 
   useEffect(() => {

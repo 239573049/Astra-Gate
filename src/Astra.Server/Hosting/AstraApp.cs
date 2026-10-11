@@ -6,6 +6,9 @@ using Astra.Data;
 using Astra.Gateway.Http;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Astra.Plugins;
+using Astra.Plugins.Packages;
+using Astra.Plugins.Runtime;
 using Astra.Providers.Quota;
 using Astra.Providers.Subscription;
 using Astra.Providers.Templates;
@@ -73,6 +76,7 @@ public static class AstraApp
         builder.Services.AddSingleton(database);
         builder.Services.AddSingleton(ClientEnvironment.Real);
         builder.Services.AddSingleton<ClientInstallService>();
+        builder.Services.AddHostedService<ClientProbeWarmup>();
         builder.Services.AddSingleton<ClientService>();
         builder.Services.AddSingleton<ClaudeDirectService>();
         builder.Services.AddSingleton<TokenService>();
@@ -111,6 +115,51 @@ public static class AstraApp
         builder.Services.AddSingleton<ProviderQuotaService>();
         builder.Services.AddSingleton<ProviderQuotaManager>();
         builder.Services.AddHostedService<ProviderQuotaWorker>();
+        // Plugins (magpie-compatible; .plan/plugins.md): the installed list, Bun, the vendored host files and installs.
+        builder.Services.AddSingleton(sp => new PluginCatalog(database.Plugins, paths, o.Server.PluginsOff));
+        builder.Services.AddSingleton(sp => new BunRuntime(paths,
+            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName)));
+        builder.Services.AddSingleton(sp => new NpmTarballFetcher(
+            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName)));
+        builder.Services.AddSingleton(sp => new HostAssets(paths));
+        builder.Services.AddSingleton<PluginJobs>();
+        builder.Services.AddSingleton(sp => new Astra.Plugins.Market.PluginMarket(paths,
+            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName)));
+        builder.Services.AddSingleton(sp => new PluginInstaller(
+            sp.GetRequiredService<PluginCatalog>(), sp.GetRequiredService<BunRuntime>(), sp.GetRequiredService<NpmTarballFetcher>(),
+            () => sp.GetRequiredService<ClientEnvironment>().ToolSearchPath()));
+        builder.Services.AddSingleton(sp =>
+        {
+            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Astra.Plugins");
+            return new Astra.Plugins.Middleware.MiddlewareEngine(sp.GetRequiredService<PluginCatalog>(), (level, line) =>
+                log.Log(level switch { "error" => LogLevel.Warning, "warn" => LogLevel.Warning, "debug" => LogLevel.Debug, _ => LogLevel.Information }, "{Line}", line));
+        });
+        builder.Services.AddSingleton(sp =>
+        {
+            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Astra.Plugins");
+            return new Astra.Plugins.Agents.AgentPluginCatalog(sp.GetRequiredService<PluginCatalog>(), (level, line) =>
+                log.Log(level == "warn" ? LogLevel.Warning : LogLevel.Information, "{Line}", line));
+        });
+        builder.Services.AddSingleton<Astra.Core.Plugins.IAgentPluginCatalog>(sp => sp.GetRequiredService<Astra.Plugins.Agents.AgentPluginCatalog>());
+        builder.Services.AddSingleton<PluginService>();
+        // Provider plugins: the Bun host (magpie's host.js), its providers, the gateway's transport to them, and the sync
+        // that mirrors them into providers / models / accounts.
+        builder.Services.AddSingleton(sp =>
+        {
+            var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Astra.Plugins.Host");
+            return new Astra.Plugins.Host.PluginHost(sp.GetRequiredService<PluginCatalog>(), sp.GetRequiredService<BunRuntime>(),
+                sp.GetRequiredService<HostAssets>(), paths, () => sp.GetRequiredService<ClientEnvironment>().ToolSearchPath(),
+                (level, line) => log.Log(level is "error" or "warn" ? LogLevel.Warning : LogLevel.Information, "{Line}", line),
+                new ModelsDevCatalog(paths, () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName)));
+        });
+        builder.Services.AddSingleton<Astra.Plugins.Host.PluginProviders>();
+        builder.Services.AddSingleton<Astra.Plugins.Host.PluginFetchHandler>();
+        builder.Services.AddSingleton<PluginProviderSync>();
+        builder.Services.AddSingleton<PluginSignInService>();
+        builder.Services.AddSingleton<PluginCheckinService>();
+        builder.Services.AddSingleton<MagpieImportService>();
+        builder.Services.AddHostedService<PluginCheckinWorker>();
+        builder.Services.AddHostedService<PluginProviderWorker>();
         builder.Services.AddSingleton<UpdateCheckService>();
         builder.Services.AddHostedService<UpdateCheckWorker>();
         builder.Services.AddSingleton<RuntimeFile>();
@@ -138,6 +187,10 @@ public static class AstraApp
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
         builder.Services.AddHttpClient(ClientInstallService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
+        // npm tarballs and Bun itself (~40 MB): a long outer bound.
+        builder.Services.AddHttpClient(PluginService.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(5))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
         builder.Services.AddOpenApi();
@@ -188,6 +241,7 @@ public static class AstraApp
         app.MapPrivacyEndpoints();
         app.MapSubscriptionEndpoints();
         app.MapUpdateEndpoints();
+        app.MapPluginEndpoints();
         app.MapGatewayEndpoints();
 
         // SPA fallback for everything that is not an API / gateway route.

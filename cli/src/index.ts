@@ -1,9 +1,19 @@
 import process from 'node:process';
-import { Argument, Command } from 'commander';
+import { Argument, Command, InvalidArgumentError } from 'commander';
 import { ApiError } from './lib/http.js';
 import { AstraError } from './errors.js';
 import { fail } from './ui.js';
-import { CLIENT_KINDS } from './lib/platform.js';
+import { CLIENT_KINDS, isClientKind, type ClientKind } from './lib/platform.js';
+
+/** A client kind argument: a built-in one, or plugin-<agent id> for a client a plugin adds. */
+function clientKindArgument(): Argument {
+  return new Argument('<kind>', `Client kind (${CLIENT_KINDS.join(', ')}, or plugin-<id>)`).argParser(
+    (value: string): ClientKind => {
+      if (!isClientKind(value)) throw new InvalidArgumentError(`Unknown client kind "${value}".`);
+      return value;
+    },
+  );
+}
 import { runStart, runStop, runRestart, runStatus, runLogs, runOpen } from './commands/manage.js';
 import { runAutostart } from './commands/autostart.js';
 import { runInstall, runUninstallClient, runUpdate } from './commands/desktop.js';
@@ -20,6 +30,16 @@ import {
   runTokenList,
 } from './commands/admin.js';
 import { runSetPassword } from './commands/config.js';
+import {
+  runPluginAdd,
+  runPluginList,
+  runPluginMarket,
+  runPluginOptions,
+  runPluginRemove,
+  runPluginSwitch,
+  runPluginUpdate,
+  runPluginUse,
+} from './commands/plugin.js';
 import { runRestoreAll } from './commands/restore-all.js';
 import { runClaude } from './commands/claude.js';
 import { VERSION } from './version.js';
@@ -124,12 +144,12 @@ client
 client
   .command('status')
   .description('Show one client in detail')
-  .addArgument(new Argument('<kind>', 'Client kind').choices([...CLIENT_KINDS]))
-  .action((kind: (typeof CLIENT_KINDS)[number]) => runClientStatus(kind));
+  .addArgument(clientKindArgument())
+  .action((kind: ClientKind) => runClientStatus(kind));
 client
   .command('enable')
   .description('Enable a client and point it at Astra')
-  .addArgument(new Argument('<kind>', 'Client kind').choices([...CLIENT_KINDS]))
+  .addArgument(clientKindArgument())
   .requiredOption('--provider <id-or-name>', 'Provider id or name to bind')
   .option('--model <model>', 'Model to write into the client configuration')
   .option(
@@ -137,14 +157,14 @@ client
     "Token to write into the client configuration (default: the client's current token, else the default token)",
   )
   .action(
-    (kind: (typeof CLIENT_KINDS)[number], opts: { provider: string; model?: string; token?: string }) =>
+    (kind: ClientKind, opts: { provider: string; model?: string; token?: string }) =>
       runClientEnable(kind, opts),
   );
 client
   .command('disable')
   .description('Disable a client and restore its original configuration')
-  .addArgument(new Argument('<kind>', 'Client kind').choices([...CLIENT_KINDS]))
-  .action((kind: (typeof CLIENT_KINDS)[number]) => runClientDisable(kind));
+  .addArgument(clientKindArgument())
+  .action((kind: ClientKind) => runClientDisable(kind));
 
 const token = program.command('token').description('Manage tokens (credentials clients use to reach Astra)');
 token
@@ -179,6 +199,51 @@ provider
   .description('Remove a provider')
   .argument('<id>', 'Provider id')
   .action((id: string) => runProviderRemove(id));
+
+const plugin = program
+  .command('plugin')
+  .alias('plugins')
+  .description('Manage plugins (magpie-compatible provider plugins, gateway middleware and clients)');
+plugin.command('list').alias('ls').description('List installed plugins').option('--json', 'Print JSON').action((opts: { json?: boolean }) => runPluginList(opts));
+plugin
+  .command('add')
+  .alias('install')
+  .description('Install a plugin: an npm package, a git repository (github:owner/repo) or a path')
+  .argument('<spec>', 'What to install')
+  .action((spec: string) => runPluginAdd(spec));
+plugin
+  .command('remove')
+  .aliases(['rm', 'uninstall'])
+  .description('Remove a plugin (a client it added gets its configuration back first)')
+  .argument('<name>', 'Spec, package name or short name')
+  .action((name: string) => runPluginRemove(name));
+plugin.command('on').description('Switch a plugin on').argument('<name>').action((name: string) => runPluginSwitch(name, true));
+plugin.command('off').description('Switch a plugin off').argument('<name>').action((name: string) => runPluginSwitch(name, false));
+plugin
+  .command('update')
+  .alias('upgrade')
+  .description("Update a plugin to npm's newest (every plugin when none is named)")
+  .argument('[name]')
+  .action((name?: string) => runPluginUpdate(name));
+plugin
+  .command('options')
+  .alias('config')
+  .description('Show a plugin\'s options, set them from JSON, or clear them with "off"')
+  .argument('<name>')
+  .argument('[json]')
+  .action((name: string, json?: string) => runPluginOptions(name, json));
+plugin
+  .command('use')
+  .alias('prefer')
+  .description('Have a plugin serve a provider another plugin signs in to as well')
+  .argument('<name>')
+  .argument('<provider>', "The provider's id, as OpenCode knows it")
+  .action((name: string, provider: string) => runPluginUse(name, provider));
+plugin
+  .command('market')
+  .description("List the market's plugins, or search npm and GitHub")
+  .argument('[query]')
+  .action((query?: string) => runPluginMarket(query));
 
 program
   .command('config')

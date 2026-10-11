@@ -26,6 +26,9 @@ public sealed class ServerOptions
     /// <summary>ASTRA_STRICT_PORT: fail when the port is taken instead of moving to the next free one (published container ports must not drift).</summary>
     [JsonIgnore] public bool StrictPort { get; set; }
 
+    /// <summary><c>ASTRA_PLUGINS=off</c>: no installed plugin runs and none can be installed (the list is kept).</summary>
+    [JsonIgnore] public bool PluginsOff { get; set; }
+
     public bool IsLoopback => Host is "127.0.0.1" or "localhost" or "::1" or "[::1]";
 
     /// <summary>Base URL clients are pointed at (no trailing slash, no /v1): <see cref="PublicUrl"/> when set, else <see cref="LocalUrl"/>.</summary>
@@ -92,6 +95,8 @@ public sealed class ServerOptions
         }
         if (Nonblank(get("ASTRA_STRICT_PORT")) is { } strict)
             StrictPort = strict.ToLowerInvariant() is "1" or "true" or "yes" or "on";
+        if (Nonblank(get("ASTRA_PLUGINS")) is { } plugins)
+            PluginsOff = plugins.ToLowerInvariant() is "0" or "false" or "no" or "off";
 
         var password = Nonblank(get("ASTRA_ADMIN_PASSWORD"));
         if (password is null && Nonblank(get("ASTRA_ADMIN_PASSWORD_FILE")) is { } file)

@@ -12,6 +12,7 @@ describe('astraPaths', () => {
     expect(p.runtimeFile).toBe(path.join(p.home, 'runtime.json'));
     expect(p.installFile).toBe(path.join(p.home, 'install.json'));
     expect(p.logsDir).toBe(path.join(p.home, 'logs'));
+    expect(p.pluginsDir).toBe(path.join(p.home, 'plugins'));
   });
 
   it('honors ASTRA_HOME override', () => {
