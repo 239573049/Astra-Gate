@@ -72,7 +72,7 @@ function GeneralSettings() {
   const version = useVersion();
   const auth = useAuthStatus();
   const logout = useLogout();
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
   const s = settings.data;
 
   const patch = (p: Partial<Settings>) => update.mutate(p, { onError: (e) => toast(errorText(e), 'error') });
@@ -150,6 +150,20 @@ function GeneralSettings() {
               ) : (
                 <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('common.copy')} onClick={() => void copy(s.dataDir)} />
               )}
+            </Row>
+            <Row label={t('settings.requireKey')} detail={t('settings.requireKeyHint')}>
+              <Switch
+                checked={s.requireGatewayKey}
+                label={t('settings.requireKey')}
+                onChange={async (requireGatewayKey) => {
+                  if (
+                    !requireGatewayKey &&
+                    !(await confirm({ title: t('settings.requireKeyOffConfirm'), detail: t('settings.requireKeyOffDetail'), confirmLabel: t('settings.requireKeyOff'), destructive: true }))
+                  )
+                    return;
+                  patch({ requireGatewayKey });
+                }}
+              />
             </Row>
             <Row label={t('settings.streamIdle')} detail={t('settings.streamIdleHint')}>
               <DeferredNumber label={t('settings.streamIdle')} value={s.streamIdleTimeoutSec} onCommit={(v) => patch({ streamIdleTimeoutSec: v ?? 300 })} suffix=" s" />

@@ -125,6 +125,7 @@ public sealed class RetentionService(AstraDatabase db, SettingsService settings,
                 {
                     var before = DateTimeOffset.UtcNow.AddDays(-days);
                     var removed = await db.Requests.DeleteOlderThanAsync(before, stoppingToken);
+                    // Direct Claude Code statistics follow the same retention as the gateway request log.
                     await new Astra.Data.Repositories.ClaudeDirectRequestRepository(db.Factory).DeleteOlderThanAsync(before, stoppingToken);
                     if (removed > 0) logger.LogInformation("Retention: removed {Count} request records", removed);
                 }

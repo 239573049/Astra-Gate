@@ -10,6 +10,7 @@ public sealed record RequestQuery
 {
     public DateTimeOffset? From { get; init; }
     public DateTimeOffset? To { get; init; }
+    /// <summary>Comma-separated client kinds; a row matches any of them. The same holds for TokenId, ProviderId and Status.</summary>
     public string? ClientKind { get; init; }
     public string? TokenId { get; init; }
     public string? ProviderId { get; init; }
@@ -27,6 +28,10 @@ public sealed class RequestPage
 {
     public IReadOnlyList<RequestRecord> Items { get; init; } = [];
     public long Total { get; init; }
+
+    /// <summary>Summed cost of every matching row (all pages), in nanodollars.</summary>
+    public long TotalCostNanoUsd { get; init; }
+
     public int Page { get; init; }
     public int PageSize { get; init; }
 }
@@ -222,12 +227,12 @@ public sealed class RequestRepository
          WHERE 1=1
            AND (@from IS NULL OR started_at_utc >= @from)
            AND (@to IS NULL OR started_at_utc <= @to)
-           AND (@client_kind IS NULL OR @client_kind = '' OR client_kind = @client_kind)
-           AND (@token_id IS NULL OR @token_id = '' OR token_id = @token_id)
-           AND (@provider_id IS NULL OR @provider_id = '' OR provider_id = @provider_id)
+           AND (@client_kind IS NULL OR @client_kind = '' OR instr(',' || @client_kind || ',', ',' || client_kind || ',') > 0)
+           AND (@token_id IS NULL OR @token_id = '' OR instr(',' || @token_id || ',', ',' || token_id || ',') > 0)
+           AND (@provider_id IS NULL OR @provider_id = '' OR instr(',' || @provider_id || ',', ',' || provider_id || ',') > 0)
            AND (@model IS NULL OR (requested_model LIKE @model ESCAPE '\' OR upstream_model LIKE @model ESCAPE '\'
                 OR system_model_id LIKE @model ESCAPE '\' OR response_model LIKE @model ESCAPE '\'))
-           AND (@status IS NULL OR @status = '' OR status = @status)
+           AND (@status IS NULL OR @status = '' OR instr(',' || @status || ',', ',' || status || ',') > 0)
         """;
 
     private const string PrivacyWhereSql = """
@@ -457,7 +462,9 @@ public sealed class RequestRepository
         var pageSize = Math.Clamp(query.PageSize, 1, 200);
 
         await using var conn = await _factory.OpenAsync(ct);
-        var total = await conn.ExecuteScalarAsync<long>($"SELECT COUNT(*) FROM requests{RequestWhereSql}", p);
+        // Count and cost share one pass over the matching rows.
+        var totals = await conn.QuerySingleAsync<QueryTotalsRow>(
+            $"SELECT COUNT(*) AS Total, COALESCE(SUM(cost_nanousd), 0) AS CostNanoUsd FROM requests{RequestWhereSql}", p);
         var items = (await conn.QueryAsync<RequestRecord>(
             $"{RequestSelect}{RequestWhereSql} ORDER BY started_at_utc DESC, id DESC LIMIT @limit OFFSET @offset", new
             {
@@ -465,7 +472,7 @@ public sealed class RequestRepository
                 limit = pageSize,
                 offset = (page - 1) * pageSize,
             })).ToList();
-        return new RequestPage { Items = items, Total = total, Page = page, PageSize = pageSize };
+        return new RequestPage { Items = items, Total = totals.Total, TotalCostNanoUsd = totals.CostNanoUsd, Page = page, PageSize = pageSize };
     }
 
     /// <summary>
@@ -758,6 +765,12 @@ internal sealed class TopModelRow
     public long TotalInputTokens { get; set; }
     public long TotalOutputTokens { get; set; }
     public long TotalCacheReadTokens { get; set; }
+}
+
+internal sealed class QueryTotalsRow
+{
+    public long Total { get; set; }
+    public long CostNanoUsd { get; set; }
 }
 
 internal sealed class RateRow

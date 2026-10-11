@@ -77,7 +77,10 @@ public sealed class GatewayHttpClients : IDisposable
     /// <summary>Overrides the transport (tests point the gateway at an in-process fake upstream).</summary>
     public Func<string?, HttpMessageHandler>? HandlerFactory { get; set; }
 
-    public HttpClient For(Provider provider) => _clients.GetOrAdd(provider.HttpProxy ?? "", key => Create(key.Length == 0 ? null : key));
+    public HttpClient For(Provider provider) => For(provider.HttpProxy);
+
+    /// <summary>The client for one proxy URL (a subscription account's own proxy, or the provider's); null = system proxy.</summary>
+    public HttpClient For(string? proxy) => _clients.GetOrAdd(proxy ?? "", key => Create(key.Length == 0 ? null : key));
 
     private HttpClient Create(string? proxy)
     {

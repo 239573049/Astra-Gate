@@ -11,12 +11,15 @@ public static class SubscriptionSupport
     /// <summary>Catalog key of a provider: template id, else price_key, else the instance id.</summary>
     public static string ProviderKeyOf(Provider provider) => provider.TemplateId ?? provider.PriceKey ?? provider.Id;
 
-    /// <summary>Catalog defaults merged with the instance's <c>settings_json.subscription_oauth</c> overrides.</summary>
+    /// <summary>
+    /// Catalog defaults merged with the instance's <c>settings_json.subscription_oauth</c> overrides; carries the
+    /// provider's <see cref="Provider.HttpProxy"/> so OAuth traffic leaves the same way as its requests.
+    /// </summary>
     public static SubscriptionOAuthConfig EffectiveConfig(Provider provider) =>
         SubscriptionCatalog.Effective(
             SubscriptionCatalog.Find(ProviderKeyOf(provider))
             ?? new SubscriptionOAuthConfig { ProviderKey = ProviderKeyOf(provider), DisplayName = provider.Name },
-            provider.Settings);
+            provider.Settings).WithHttpProxy(provider.HttpProxy);
 
     /// <summary>Upstream auth scheme a subscription account acts as (settings key subscription.upstream_scheme).</summary>
     public static string UpstreamSchemeOf(Provider provider)
@@ -160,6 +163,9 @@ public sealed record UpstreamAuth(
     /// <summary>The subscription account these credentials belong to; null for static API keys.</summary>
     public string? AccountId { get; init; }
 
+    /// <summary>The account's own proxy (overrides the provider's); null = the provider's / system proxy.</summary>
+    public string? Proxy { get; init; }
+
     /// <summary>Applies the credentials (and any fixed client header) to an outgoing upstream request.</summary>
     public void Apply(HttpRequestMessage request)
     {
@@ -193,7 +199,8 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
 
         var (_, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
-        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token, ChatGptAccountHeader(token)) with { AccountId = account.Id };
+        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token, ChatGptAccountHeader(token))
+            with { AccountId = account.Id, Proxy = account.HttpProxy };
     }
 
     /// <summary>The provider's accounts in failover order (what <see cref="AccountScheduler"/> picks from).</summary>
@@ -210,7 +217,8 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         if (refreshed.AccessTokenEnc is null)
             throw new SubscriptionAuthException(account.Id, "刷新后仍没有访问令牌，请重新登录");
         var accessToken = protector.Unprotect(refreshed.AccessTokenEnc);
-        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), accessToken, ChatGptAccountHeader(accessToken)) with { AccountId = account.Id };
+        return Build(SubscriptionSupport.UpstreamSchemeOf(provider), accessToken, ChatGptAccountHeader(accessToken))
+            with { AccountId = account.Id, Proxy = refreshed.HttpProxy };
     }
 
     /// <summary>

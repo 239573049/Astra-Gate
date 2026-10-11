@@ -56,6 +56,37 @@ public class ProviderAccountStoreTests
     }
 
     [Fact]
+    public async Task Kind_Source_And_Proxy_Round_Trip()
+    {
+        var db = await TestDb.InitializeAsync();
+        await db.Providers.InsertAsync(new Provider { Id = "p1", Name = "Kimi", AuthScheme = AuthSchemes.OAuthSubscription });
+        var key = Sample("acc-key", "p1");
+        key.Kind = AccountKinds.ApiKey;
+        key.Source = AccountSources.Batch;
+        key.HttpProxy = "socks5://127.0.0.1:1080";
+        await db.Accounts.InsertAsync(key);
+        await db.Accounts.InsertAsync(Sample("acc-oauth", "p1"));
+
+        var got = (await db.Accounts.GetAsync("acc-key"))!;
+        Assert.Equal(AccountKinds.ApiKey, got.Kind);
+        Assert.Equal(AccountSources.Batch, got.Source);
+        Assert.Equal("socks5://127.0.0.1:1080", got.HttpProxy);
+
+        // Defaults for rows written without them (and for every account older than the columns).
+        var oauth = (await db.Accounts.GetAsync("acc-oauth"))!;
+        Assert.Equal(AccountKinds.OAuth, oauth.Kind);
+        Assert.Null(oauth.Source);
+        Assert.Null(oauth.HttpProxy);
+
+        // UpdateAsync leaves the proxy alone; it has its own writer.
+        got.Plan = "andante";
+        await db.Accounts.UpdateAsync(got);
+        Assert.Equal("socks5://127.0.0.1:1080", (await db.Accounts.GetAsync("acc-key"))!.HttpProxy);
+        Assert.True(await db.Accounts.SetHttpProxyAsync("acc-key", null));
+        Assert.Null((await db.Accounts.GetAsync("acc-key"))!.HttpProxy);
+    }
+
+    [Fact]
     public async Task UpdateTokens_Rotates_Access_Keeps_Refresh_When_Absent_And_Reactives()
     {
         var db = await TestDb.InitializeAsync();

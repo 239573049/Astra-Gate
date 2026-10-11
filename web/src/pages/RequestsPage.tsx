@@ -1,21 +1,21 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Check, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { keys, useClients, useProviders, useRequest, useRequestRate, useRequests, useTokens, type RequestQuery } from '../api/hooks';
+import { keys, useRequest, useRequestRate, useRequests, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
 import type { ClientKind, RateStats, RequestDetail, RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
 import { Alert } from '../components/arc/alert/alert';
-import { FilterToolbar, type FilterChip, type FilterField } from '../components/arc/filter-toolbar/filter-toolbar';
 import { Pagination } from '../components/arc/pagination/pagination';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
 import { Tooltip } from '../components/arc/tooltip/tooltip';
 import { PricingSourceBadge } from '../components/Billing';
 import { CLIENT_META } from '../components/icons';
 import { Page } from '../components/layout/Page';
+import { EMPTY_REQUEST_FILTERS, RequestFilters, type RequestFilterId, type RequestFilterValues } from '../components/RequestFilters';
 import { CacheUsageCell, TokenTotalsCell, TokenTypeLabel, TokenUsageSummary } from '../components/TokenUsage';
-import { Badge, Button, CodeBlock, DetailSection, EmptyState, KV, SearchField, Spinner } from '../components/ui/controls';
+import { Badge, Button, CodeBlock, DetailSection, EmptyState, KV, Spinner } from '../components/ui/controls';
 import { errorText, Sheet } from '../components/ui/overlays';
 import { useI18n, type MessageKey, type TFunction } from '../i18n';
 import { cn } from '../lib/cn';
@@ -24,7 +24,6 @@ import { formatDateTime, formatMs, formatNanos, formatPercent, formatTime, forma
 import { useCommandListener } from '../shell/commands';
 
 const PAGE_SIZE = 50;
-const STATUSES = ['success', 'blocked', 'upstream_error', 'gateway_error', 'client_cancelled'] as const;
 
 const PRIVACY_CATEGORY_KEY: Record<string, MessageKey> = {
   api_key: 'settings.privacy.category.api_key',
@@ -46,8 +45,6 @@ const PRIVACY_ACTION_KEY: Record<string, MessageKey> = {
   redact: 'settings.privacy.action.redact',
 };
 
-type FilterId = 'client' | 'token' | 'provider' | 'status';
-
 /** One table row; sortable columns hold plain values, the full record rides along for rendering. */
 type Row = {
   id: string;
@@ -65,21 +62,37 @@ type Row = {
 };
 
 export function RequestsPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [model, setModel] = useState('');
-  const [filters, setFilters] = useState<Record<FilterId, string>>({ client: '', token: '', provider: '', status: '' });
+  const [filters, setFilters] = useState<RequestFilterValues>(EMPTY_REQUEST_FILTERS);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debouncedModel = useDebounced(model.trim());
-  const clients = useClients();
-  const providers = useProviders();
-  const tokens = useTokens();
+  // Checking several values in one open menu settles into a single query instead of one per click.
+  const debouncedFilters = useDebounced(filters);
+  // Comma-joined lists: the server matches any listed value (RequestRepository).
+  const listFilters = {
+    client: debouncedFilters.client.join(','),
+    token: debouncedFilters.token.join(','),
+    provider: debouncedFilters.provider.join(','),
+    status: debouncedFilters.status.join(','),
+  };
   // Header rate readout: the trailing window under the same filters as the list (paging excluded), every 5 s.
   const qc = useQueryClient();
-  const rate = useRequestRate({ client: filters.client, token: filters.token, provider: filters.provider, status: filters.status, model: debouncedModel });
+  const rate = useRequestRate({ ...listFilters, model: debouncedModel });
 
-  const query: RequestQuery = { model: debouncedModel, ...filters, page, pageSize: PAGE_SIZE };
+  const query: RequestQuery = { model: debouncedModel, ...listFilters, page, pageSize: PAGE_SIZE };
+  // Sets, so matching live rows stays O(1) per filter however many values are picked.
+  const liveFilters = useMemo(
+    () => ({
+      client: new Set(debouncedFilters.client),
+      token: new Set(debouncedFilters.token),
+      provider: new Set(debouncedFilters.provider),
+      status: new Set(debouncedFilters.status),
+    }),
+    [debouncedFilters],
+  );
   // Page 1 follows the live feed: requests show up as they arrive and update in place. Polling is only the
   // fallback for when the live stream is down.
   // The page re-renders only when a live row joins or leaves the list; each row's progress (TTFT, status, cost)
@@ -90,54 +103,98 @@ export function RequestsPage() {
   const requests = useRequests(query, page === 1 && !liveConnected);
   const data = requests.data;
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
-  const storedIds = new Set((data?.items ?? []).map((r) => r.id));
   // In-flight rows not in the stored page yet, narrowed by the same filters the server applies.
-  const liveOnly = page === 1 ? liveRows.filter((r) => !storedIds.has(r.id) && matchesFilters(r, debouncedModel, filters)) : [];
-  const items = [...liveOnly, ...(data?.items ?? [])];
+  const liveOnly = useMemo(() => {
+    if (page !== 1) return [];
+    const storedIds = new Set((data?.items ?? []).map((r) => r.id));
+    return liveRows.filter((r) => !storedIds.has(r.id) && matchesFilters(r, debouncedModel, liveFilters));
+  }, [page, data, liveRows, debouncedModel, liveFilters]);
+  // Stable between data changes, so typing, filter clicks and rate polls leave the memoized table alone.
+  const items = useMemo(() => [...liveOnly, ...(data?.items ?? [])], [liveOnly, data]);
 
   useCommandListener((cmd) => {
     if (cmd === 'find') searchRef.current?.focus();
   });
 
-  const clientName = (r: RequestSummary) => requestClientName(r, t);
+  const hasFilters = model.trim() !== '' || Object.values(filters).some((v) => v.length > 0);
 
-  // Keep query ids separate from displayed labels, including providers with the same name.
-  const fieldOptions: Record<FilterId, { value: string; label: string }[]> = {
-    client: (clients.data ?? []).map((c) => ({ value: c.kind, label: c.name })),
-    token: (tokens.data ?? []).map((tk) => ({ value: tk.id, label: tk.name })),
-    provider: (providers.data ?? []).map((p) => ({ value: p.id, label: p.name })),
-    status: STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) })),
-  };
-  const fieldLabels: Record<FilterId, string> = {
-    client: t('requests.col.client'),
-    token: t('requests.col.token'),
-    provider: t('requests.col.provider'),
-    status: t('requests.col.status'),
-  };
-  const fields: FilterField[] = (Object.keys(fieldOptions) as FilterId[]).map((id) => ({
-    id,
-    label: fieldLabels[id],
-    options: fieldOptions[id],
-  }));
-  const chips: FilterChip[] = (Object.keys(filters) as FilterId[])
-    .filter((id) => filters[id])
-    .map((id) => ({ id, label: fieldLabels[id], value: filters[id], valueLabel: fieldOptions[id].find((o) => o.value === filters[id])?.label ?? filters[id] }));
-  if (model.trim()) chips.unshift({ id: 'model', label: t('requests.col.model'), value: model.trim() });
-  const hasFilters = chips.length > 0;
-  const filterText = (filter: FilterChip) => `${filter.label}: ${filter.valueLabel ?? filter.value ?? ''}`;
-
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setModel('');
-    setFilters({ client: '', token: '', provider: '', status: '' });
+    setFilters(EMPTY_REQUEST_FILTERS);
     setPage(1);
-  };
+  }, []);
 
-  const setFilter = (id: FilterId, value: string) => {
-    setFilters((f) => ({ ...f, [id]: value }));
+  const setFilter = useCallback((id: RequestFilterId, values: string[]) => {
+    setFilters((f) => ({ ...f, [id]: values }));
     setPage(1);
-  };
+  }, []);
 
-  const rows: Row[] = items.map((r) => ({
+  return (
+    <Page
+      title={t('nav.requests')}
+      subtitle={data ? t('requests.total', { count: formatTokens(data.total + liveOnly.length) }) : undefined}
+      actions={
+        <>
+          {data && <TotalCost nanos={data.totalCostNanoUsd} />}
+          <LiveRate rate={rate.data} />
+          <Button
+            variant="plain"
+            icon={<RefreshCw className={cn('size-4', requests.isFetching && 'animate-spin')} />}
+            aria-label={t('common.refresh')}
+            onClick={() => {
+              void requests.refetch();
+              void qc.invalidateQueries({ queryKey: keys.stats('rate') });
+            }}
+          />
+        </>
+      }
+    >
+      <div className="mb-3">
+        <RequestFilters
+          model={model}
+          onModelChange={(v) => {
+            setModel(v);
+            setPage(1);
+          }}
+          searchRef={searchRef}
+          filters={filters}
+          onFilterChange={setFilter}
+          onClear={clearFilters}
+        />
+      </div>
+
+      {requests.isLoading && <Spinner lines={4} className="py-6" />}
+      {requests.isError && <Alert tone="danger" title={t('common.error')}>{errorText(requests.error)}</Alert>}
+      {data && items.length === 0 && (
+        <EmptyState
+          icon={<ScrollText className="size-6" />}
+          title={t(hasFilters ? 'requests.filteredEmpty' : 'requests.empty')}
+          detail={t(hasFilters ? 'requests.filteredEmpty.detail' : 'requests.empty.detail')}
+          action={hasFilters ? <Button onClick={clearFilters}>{t('requests.clearFilters')}</Button> : undefined}
+        />
+      )}
+      {data && items.length > 0 && (
+        <RequestTable items={items} onOpen={setSelected} />
+      )}
+      {data && pages > 1 && (
+        <div className="mt-4 flex justify-center">
+          <Pagination page={page} pageCount={pages} onPageChange={setPage} label={t('requests.page', { page, pages })} />
+        </div>
+      )}
+      <RequestDetailSheet id={selected} onClose={() => setSelected(null)} />
+    </Page>
+  );
+}
+
+/**
+ * The request list. Memoized on `items`: the page re-renders on every keystroke, filter click and rate poll,
+ * and re-rendering 50 rows of live cells each time made filtering feel sluggish.
+ */
+const RequestTable = memo(function RequestTable({ items, onOpen }: { items: RequestSummary[]; onOpen: (id: string) => void }) {
+  const { t, locale } = useI18n();
+  const clientName = useCallback((r: RequestSummary) => requestClientName(r, t), [t]);
+
+  const rows = useMemo<Row[]>(() => items.map((r) => ({
     id: r.id,
     time: Date.parse(r.startedAtUtc),
     client: clientName(r),
@@ -150,9 +207,9 @@ export function RequestsPage() {
     cache: r.cacheReadTokens,
     cost: r.costNanoUsd ?? 0,
     r,
-  }));
+  })), [items, clientName]);
 
-  const columns: DataColumn<Row>[] = [
+  const columns = useMemo<DataColumn<Row>[]>(() => [
     { key: 'time', label: t('requests.col.time'), width: 92, render: (_, row) => <span className="num">{formatTime(row.r.startedAtUtc, locale)}</span> },
     {
       key: 'model',
@@ -160,7 +217,7 @@ export function RequestsPage() {
       render: (_, row) => (
         <LiveCell r={row.r}>
           {(r) => (
-            <button type="button" className="block w-full min-w-0 text-left" onClick={() => setSelected(r.id)} aria-label={t('requests.openDetail', { model: r.requestedModel || r.id })}>
+            <button type="button" className="block w-full min-w-0 text-left" onClick={() => onOpen(r.id)} aria-label={t('requests.openDetail', { model: r.requestedModel || r.id })}>
               <span className="flex min-w-0 items-center gap-1.5">
                 <span className="block min-w-0 truncate font-medium hover:text-[var(--accent)]" title={r.requestedModel ?? ''}>{r.requestedModel || '—'}</span>
                 <ReasoningBadge r={r} />
@@ -204,7 +261,7 @@ export function RequestsPage() {
                 className="cursor-pointer rounded-full text-left hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--accent)]"
                 title={t('requests.viewError')}
                 aria-label={`${t(`status.${r.status}` as 'status.success')}: ${t('requests.viewError')}`}
-                onClick={() => setSelected(r.id)}
+                onClick={() => onOpen(r.id)}
               >
                 <StatusBadge status={r.status} http={r.httpStatus} hint={t('requests.viewError')} />
               </button>
@@ -248,100 +305,10 @@ export function RequestsPage() {
         </LiveCell>
       ),
     },
-  ];
+  ], [t, locale, clientName, onOpen]);
 
-  return (
-    <Page
-      title={t('nav.requests')}
-      subtitle={data ? t('requests.total', { count: formatTokens(data.total + liveOnly.length) }) : undefined}
-      actions={
-        <>
-          <LiveRate rate={rate.data} />
-          <Button
-            variant="plain"
-            icon={<RefreshCw className={cn('size-4', requests.isFetching && 'animate-spin')} />}
-            aria-label={t('common.refresh')}
-            onClick={() => {
-              void requests.refetch();
-              void qc.invalidateQueries({ queryKey: keys.stats('rate') });
-            }}
-          />
-        </>
-      }
-    >
-      <div className="mb-3">
-        <FilterToolbar
-          label={t('requests.filters')}
-          leading={
-            <SearchField
-              inputRef={searchRef}
-              className="w-full"
-              value={model}
-              onChange={(v) => {
-                setModel(v);
-                setPage(1);
-              }}
-              placeholder={t('requests.searchModel')}
-              clearLabel={t('common.clearSearch')}
-            />
-          }
-          filters={chips}
-          messages={{
-            empty: t('requests.noFilters'),
-            clearAll: t('requests.clearFilters'),
-            back: t('requests.backToFilters'),
-            noOptions: t('common.noResults'),
-            cleared: t('requests.filtersCleared'),
-            remove: (filter) => t('requests.removeFilter', { filter: filterText(filter) }),
-            added: (filter) => t('requests.filterAdded', { filter: filterText(filter) }),
-            changed: (filter) => t('requests.filterChanged', { filter: filterText(filter) }),
-            removed: (filter) => t('requests.filterRemoved', { filter: filterText(filter) }),
-          }}
-          onRemove={(id) => {
-            if (id === 'model') {
-              setModel('');
-              setPage(1);
-            } else setFilter(id as FilterId, '');
-          }}
-          onClearAll={clearFilters}
-          addFilter={{
-            fields,
-            label: t('requests.addFilter'),
-            onAdd: (chip) => {
-              if (chip.value) setFilter(chip.id as FilterId, chip.value);
-            },
-          }}
-        />
-      </div>
-
-      {requests.isLoading && <Spinner lines={4} className="py-6" />}
-      {requests.isError && <Alert tone="danger" title={t('common.error')}>{errorText(requests.error)}</Alert>}
-      {data && items.length === 0 && (
-        <EmptyState
-          icon={<ScrollText className="size-6" />}
-          title={t(hasFilters ? 'requests.filteredEmpty' : 'requests.empty')}
-          detail={t(hasFilters ? 'requests.filteredEmpty.detail' : 'requests.empty.detail')}
-          action={hasFilters ? <Button onClick={clearFilters}>{t('requests.clearFilters')}</Button> : undefined}
-        />
-      )}
-      {data && items.length > 0 && (
-        <SortableDataTable<Row>
-          caption={t('nav.requests')}
-          rows={rows}
-          columns={columns}
-          rowKey="id"
-          emptyMessage={t('requests.empty')}
-        />
-      )}
-      {data && pages > 1 && (
-        <div className="mt-4 flex justify-center">
-          <Pagination page={page} pageCount={pages} onPageChange={setPage} label={t('requests.page', { page, pages })} />
-        </div>
-      )}
-      <RequestDetailSheet id={selected} onClose={() => setSelected(null)} />
-    </Page>
-  );
-}
+  return <SortableDataTable<Row> caption={t('nav.requests')} rows={rows} columns={columns} rowKey="id" emptyMessage={t('requests.empty')} />;
+});
 
 /** Client name; a request authenticated by a bare token (no client suffix) is a direct call. */
 function requestClientName(r: Pick<RequestSummary, 'clientKind' | 'tokenId'>, t: TFunction): string {
@@ -350,11 +317,11 @@ function requestClientName(r: Pick<RequestSummary, 'clientKind' | 'tokenId'>, t:
 }
 
 /** Client-side mirror of the server's list filters (RequestRepository), for live rows not stored yet. */
-function matchesFilters(r: RequestSummary, model: string, filters: Record<FilterId, string>): boolean {
-  if (filters.client && r.clientKind !== filters.client) return false;
-  if (filters.token && r.tokenId !== filters.token) return false;
-  if (filters.provider && r.providerId !== filters.provider) return false;
-  if (filters.status && r.status !== filters.status) return false;
+function matchesFilters(r: RequestSummary, model: string, filters: Record<RequestFilterId, Set<string>>): boolean {
+  if (filters.client.size && !filters.client.has(r.clientKind ?? '')) return false;
+  if (filters.token.size && !filters.token.has(r.tokenId ?? '')) return false;
+  if (filters.provider.size && !filters.provider.has(r.providerId ?? '')) return false;
+  if (filters.status.size && !filters.status.has(r.status)) return false;
   if (model) {
     const needle = model.toLowerCase();
     const names = [r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel];
@@ -380,6 +347,19 @@ function Elapsed({ since }: { since: string }) {
     return () => clearInterval(timer);
   }, []);
   return <>{formatMs(Math.max(0, now - Date.parse(since)))}</>;
+}
+
+/** Header pill with the summed cost of every request matching the filters (all pages, from the list query itself). */
+function TotalCost({ nanos }: { nanos: number }) {
+  const { t } = useI18n();
+  return (
+    <Tooltip side="bottom" content={t('requests.totalCost.hint')}>
+      <div className="flex items-baseline gap-1 rounded-full border border-[var(--border)] px-3.5 py-1.5">
+        <span className="text-[10.5px] text-[var(--text-muted)]">{t('requests.totalCost')}</span>
+        <span className="num text-[12px]">{formatNanos(nanos)}</span>
+      </div>
+    </Tooltip>
+  );
 }
 
 /** Header pill with the live RPM / TPM / cache-hit ratio of the trailing window; hidden until the first answer arrives. */

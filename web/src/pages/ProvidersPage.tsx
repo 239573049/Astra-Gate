@@ -17,7 +17,7 @@ import { PasswordField } from '../components/arc/password-field/password-field';
 import { RadioCards } from '../components/arc/radio-cards/radio-cards';
 import { Sparkline } from '../components/arc/sparkline/sparkline';
 import { Stepper } from '../components/arc/stepper/stepper';
-import { CLIENT_META, ProviderIcon } from '../components/icons';
+import { CLIENT_META, ClientIcon, ProviderIcon } from '../components/icons';
 import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
 import { Page } from '../components/layout/Page';
 import { ProviderQuotaLine } from '../components/ProviderQuotaSection';
@@ -122,7 +122,7 @@ export function ProvidersPage() {
           </div>
         )}
         {providers.data && providers.data.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] items-start gap-3">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
             {providers.data.map((p) => (
               <ProviderCard
                 key={p.id}
@@ -199,10 +199,14 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
       : { tone: 'green' as const, label: t('providers.card.active') };
   const requests = usage?.requests ?? days.map(() => 0);
   const totalRequests = requests.reduce((a, b) => a + b, 0);
+  const maxClients = p.templateUpdateAvailable ? 5 : 8;
 
   return (
     // The whole card opens the provider; like Row it holds its own controls, so it cannot be a <button>.
+    // Uniform, compact height: the title is one line, the description is clamped to two lines with a
+    // reserved minimum, and the footer is pinned to the bottom of the content column.
     <Card
+      className="flex flex-col [&>div:first-child>div]:min-h-0! [&>div:last-child]:flex [&>div:last-child]:flex-1 [&>div:last-child]:flex-col [&>div:last-child]:p-3 [&>div:last-child>:last-child]:mt-auto! [&>div:last-child>:last-child]:min-h-[44px] [&>div:last-child>:last-child]:pt-2 [&>div:last-child>h3]:line-clamp-1 [&>div:last-child>h3]:text-[15px] [&>div:last-child>p]:line-clamp-2 [&>div:last-child>p]:min-h-[2lh] [&>div:last-child>p]:text-[12px]"
       data-density="compact"
       role="button"
       tabIndex={0}
@@ -220,12 +224,12 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
       description={protocols.map((x) => PROTOCOL_OPTIONS.find((o) => o.value === x)?.label ?? x).join(' / ')}
       media={
         <div
-          className="flex flex-col justify-between gap-2 self-stretch justify-self-stretch p-3"
+          className="flex flex-col justify-between gap-1.5 self-stretch justify-self-stretch px-3 py-2.5"
           style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%)' }}
         >
           <div className="flex items-start justify-between gap-2">
             <span className={cn('transition-[filter,opacity]', !p.enabled && 'opacity-50 grayscale')}>
-              <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={32} />
+              <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={28} />
             </span>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_80%,transparent)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)]">
               <Dot tone={state.tone} />
@@ -262,22 +266,33 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
         </div>
       }
     >
-      {(p.templateUpdateAvailable || p.boundClients.length > 0) && (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {p.templateUpdateAvailable && <Badge tone="accent">{t('providers.templateUpdate')}</Badge>}
-          {p.boundClients.map((k) => (
-            <Badge key={k} tone="green">
-              {CLIENT_META[k as ClientKind]?.name ?? k}
-            </Badge>
-          ))}
-        </div>
-      )}
-      {/* Balance / quota of the provider's usage query; its refresh button must not open the provider. */}
-      <div onClick={stopClick}>
+      {/* Fixed one-row slot (also when empty), so every card keeps the same height. Overflow collapses into "+N". */}
+      <div className="mt-1.5 flex h-5 flex-nowrap items-center gap-1 overflow-hidden">
+        {p.templateUpdateAvailable && <Badge tone="accent">{t('providers.templateUpdate')}</Badge>}
+        {p.boundClients.slice(0, maxClients).map((k) =>
+          k in CLIENT_META ? (
+            <span key={k} title={CLIENT_META[k as ClientKind].name} className="inline-flex shrink-0">
+              <ClientIcon kind={k as ClientKind} size={18} />
+            </span>
+          ) : (
+            <Badge key={k} tone="green">{k}</Badge>
+          ),
+        )}
+        {p.boundClients.length > maxClients && (
+          <span
+            title={p.boundClients.slice(maxClients).map((k) => CLIENT_META[k as ClientKind]?.name ?? k).join(', ')}
+            className="shrink-0 text-[11px] text-[var(--text-muted)]"
+          >
+            +{p.boundClients.length - maxClients}
+          </span>
+        )}
+      </div>
+      {/* Balance / quota of the provider's usage query; its refresh button must not open the provider. Reserves its row when absent. */}
+      <div className="min-h-[32px] [&>div]:mt-1" onClick={stopClick}>
         <ProviderQuotaLine provider={p} />
       </div>
       {/* Scrubbing the trend must not open the provider. */}
-      <div className="mt-3" onClick={stopClick}>
+      <div className="mt-2" onClick={stopClick}>
         {totalRequests > 0 ? (
           <Sparkline
             label={t('providers.card.requests7d')}
@@ -286,14 +301,14 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
             value={formatTokens(totalRequests, true)}
             change={formatUsd(usage?.costUsd ?? 0)}
             width={320}
-            height={36}
+            height={28}
             formatValue={(v) => formatTokens(v, true)}
           />
         ) : (
           // Same footprint as the sparkline, so cards with and without traffic line up.
-          <div className="grid gap-3">
+          <div className="grid gap-2">
             <div className="text-[13px] text-[var(--text-secondary)]">{t('providers.card.requests7d')}</div>
-            <div className="grid aspect-[320/36] place-items-center border-b border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)]">
+            <div className="grid aspect-[320/28] place-items-center border-b border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)]">
               {t('providers.card.noRequests')}
             </div>
           </div>

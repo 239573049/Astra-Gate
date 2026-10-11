@@ -1,13 +1,12 @@
 import { Alert } from '../components/arc/alert/alert';
 import { useSubscriptionPolicy, useUpdateSubscriptionPolicy } from '../api/hooks';
 import type { Provider, SubscriptionPolicy as Policy } from '../api/types';
-import { Group, Row, Segmented, Switch } from './ui/controls';
+import { Group, Row, Switch } from './ui/controls';
 import { errorText, useFeedback } from './ui/overlays';
 import { useI18n } from '../i18n';
 
 /**
- * 订阅提供商的使用策略（plan §5.4）：账号切换方式（手动 / 自动故障转移），
- * 以及 Claude 订阅专有的两项——「仅限 Claude Code」客户端限制（默认开启），
+ * 订阅提供商的客户端策略（plan §5.4）：Claude 订阅专有的两项——「仅限 Claude Code」客户端限制（默认开启），
  * 与「其他客户端模拟 Claude Code」（默认关闭，见 ClaudeCodeMimicry；开启有封号风险）。
  */
 export function SubscriptionPolicy({ provider }: { provider: Provider }) {
@@ -19,10 +18,12 @@ export function SubscriptionPolicy({ provider }: { provider: Provider }) {
 
   if (!isSubscription || !policy.data) return null;
   const p = policy.data;
-  const save = (patch: Partial<Pick<Policy, 'clientPolicy' | 'switchMode' | 'mimicClaudeCode'>>) =>
+  const save = (patch: Partial<Pick<Policy, 'clientPolicy' | 'mimicClaudeCode'>>) =>
     update.mutate(patch, { onError: (e) => toast(errorText(e), 'error') });
   // 非 Claude 订阅只有在被显式设成 claude-code-only 时才显示这一行（否则没有意义）。
   const showClientPolicy = p.claudeSubscription || p.clientPolicy === 'claude-code-only';
+  // 账号切换方式在「账户」页顶部那一行里；这里只剩客户端限制，没有可设置的就整块不显示。
+  if (!showClientPolicy && !p.claudeSubscription) return null;
 
   return (
     <Group title={t('providers.subscription.policy.title')} footer={t('providers.subscription.policy.footer')}>
@@ -59,27 +60,6 @@ export function SubscriptionPolicy({ provider }: { provider: Provider }) {
             : <Alert tone="warning" title={t('providers.subscription.policy.anyWarning')} />}
         </div>
       )}
-      <Row
-        label={t('providers.subscription.policy.switchMode')}
-        detail={t(
-          p.switchMode === 'balanced'
-            ? 'providers.subscription.policy.balancedDetail'
-            : p.switchMode === 'failover'
-              ? 'providers.subscription.policy.failoverDetail'
-              : 'providers.subscription.policy.manualDetail',
-        )}
-      >
-        <Segmented
-          ariaLabel={t('providers.subscription.policy.switchMode')}
-          value={p.switchMode}
-          onChange={(v) => save({ switchMode: v })}
-          items={[
-            { value: 'manual', label: t('providers.subscription.policy.manual') },
-            { value: 'failover', label: t('providers.subscription.policy.failover') },
-            { value: 'balanced', label: t('providers.subscription.policy.balanced') },
-          ]}
-        />
-      </Row>
     </Group>
   );
 }

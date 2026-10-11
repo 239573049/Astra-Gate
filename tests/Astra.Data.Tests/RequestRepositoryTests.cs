@@ -129,6 +129,8 @@ public class RequestRepositoryTests
 
         var page1 = await db.Requests.QueryAsync(new RequestQuery { Page = 1, PageSize = 2 });
         Assert.Equal(3, page1.Total);
+        // The cost total covers every matching row, not just this page.
+        Assert.Equal(3_000_000, page1.TotalCostNanoUsd);
         Assert.Equal(1, page1.Page);
         Assert.Equal(2, page1.PageSize);
         Assert.Equal(2, page1.Items.Count);
@@ -148,6 +150,10 @@ public class RequestRepositoryTests
 
         Assert.Equal(2, (await db.Requests.QueryAsync(new RequestQuery { ClientKind = "codex" })).Total);
         Assert.Equal(1, (await db.Requests.QueryAsync(new RequestQuery { ProviderId = "p2" })).Total);
+        // Comma-separated lists match any entry, never a substring of one.
+        Assert.Equal(3, (await db.Requests.QueryAsync(new RequestQuery { ClientKind = "codex,claude-code" })).Total);
+        Assert.Equal(0, (await db.Requests.QueryAsync(new RequestQuery { ClientKind = "code" })).Total);
+        Assert.Equal(3, (await db.Requests.QueryAsync(new RequestQuery { ProviderId = "p1,p2" })).Total);
         Assert.Equal(2, (await db.Requests.QueryAsync(new RequestQuery { Status = RequestStatus.Success })).Total);
         Assert.Equal(1, (await db.Requests.QueryAsync(new RequestQuery { Model = "claude-x" })).Total);
         Assert.Equal(2, (await db.Requests.QueryAsync(new RequestQuery { Model = "gpt-5" })).Total); // success + error rows

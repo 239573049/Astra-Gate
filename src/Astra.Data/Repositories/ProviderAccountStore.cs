@@ -12,7 +12,7 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
     private const string AccountSelect = """
         SELECT id, provider_id, display_name, account_email, plan, access_token_enc, refresh_token_enc,
                expires_at_utc, status, last_refresh_at_utc, extra_json, created_at, updated_at,
-               enabled, is_current, sort_order, cooldown_until_utc, last_error
+               enabled, is_current, sort_order, cooldown_until_utc, last_error, kind, source, http_proxy
         FROM provider_accounts
         """;
 
@@ -57,10 +57,10 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
         await conn.ExecuteAsync("""
             INSERT INTO provider_accounts(id, provider_id, display_name, account_email, plan, access_token_enc,
                                           refresh_token_enc, expires_at_utc, status, last_refresh_at_utc,
-                                          extra_json, created_at, updated_at, enabled, sort_order)
+                                          extra_json, created_at, updated_at, enabled, kind, source, http_proxy, sort_order)
             VALUES (@id, @provider_id, @display_name, @account_email, @plan, @access_token_enc,
                     @refresh_token_enc, @expires_at_utc, @status, @last_refresh_at_utc,
-                    @extra_json, @created_at, @updated_at, @enabled,
+                    @extra_json, @created_at, @updated_at, @enabled, @kind, @source, @http_proxy,
                     (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM provider_accounts WHERE provider_id = @provider_id))
             """, new
         {
@@ -78,6 +78,9 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
             created_at = DateTimeOffsetHandler.ToStorage(account.CreatedAt),
             updated_at = DateTimeOffsetHandler.ToStorage(account.UpdatedAt),
             enabled = account.Enabled,
+            kind = account.Kind,
+            source = account.Source,
+            http_proxy = account.HttpProxy,
         });
     }
 
@@ -188,6 +191,15 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
             """, new { id, display_name = displayName, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0;
     }
 
+    /// <summary>Sets the account's own proxy (null = follow the provider's).</summary>
+    public async Task<bool> SetHttpProxyAsync(string id, string? httpProxy, CancellationToken ct = default)
+    {
+        await using var conn = await factory.OpenAsync(ct);
+        return await conn.ExecuteAsync("""
+            UPDATE provider_accounts SET http_proxy = @http_proxy, updated_at = @now WHERE id = @id
+            """, new { id, http_proxy = httpProxy, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0;
+    }
+
     /// <summary>Takes the account out of automatic rotation until <paramref name="untilUtc"/> (null lifts it).</summary>
     public async Task<bool> SetCooldownAsync(string id, DateTimeOffset? untilUtc, string? reason, CancellationToken ct = default)
     {
@@ -242,6 +254,9 @@ internal sealed class AccountRow
     public int SortOrder { get; set; }
     public string? CooldownUntilUtc { get; set; }
     public string? LastError { get; set; }
+    public string Kind { get; set; } = AccountKinds.OAuth;
+    public string? Source { get; set; }
+    public string? HttpProxy { get; set; }
 
     public ProviderAccount ToAccount() => new()
     {
@@ -265,5 +280,8 @@ internal sealed class AccountRow
         SortOrder = SortOrder,
         CooldownUntilUtc = CooldownUntilUtc is null ? null : DateTimeOffset.Parse(CooldownUntilUtc, CultureInfo.InvariantCulture),
         LastError = LastError,
+        Kind = Kind,
+        Source = Source,
+        HttpProxy = HttpProxy,
     };
 }

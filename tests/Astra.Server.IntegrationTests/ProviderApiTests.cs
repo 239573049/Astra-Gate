@@ -755,6 +755,60 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public void Batch_Token_List_Parsing_Keeps_Direct_Copilot_Tokens_Whole()
+    {
+        var direct = "tid=abc123;exp=4102444800;sku=copilot_pro;proxy-ep=proxy.individual.githubcopilot.com:sig";
+        Assert.Equal(["a1", "b2", direct], SubscriptionEndpoints.ParseTokenList($"a1;b2\n\"{direct}\""));
+        Assert.Equal([direct], SubscriptionEndpoints.ParseTokenList(direct));
+        Assert.Equal(["a1", "b2", direct], SubscriptionEndpoints.ParseTokenList($"a1;b2, {direct}"));
+        Assert.True(LocalCopilotLogin.LooksLikeCopilotToken(direct));
+        Assert.False(LocalCopilotLogin.LooksLikeCopilotToken("tid=abc123;sku=copilot_pro;proxy-ep=x.example.com"));
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(4102444800), LocalCopilotLogin.CopilotTokenExpiry(direct));
+    }
+
+    [Fact]
+    public async Task Import_Copilot_Batch_Accepts_Direct_Copilot_Tokens_Without_Exchanging_Them()
+    {
+        var exchanged = 0;
+        var handler = new StubHandler(request =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/copilot_internal/v2/token") Interlocked.Increment(ref exchanged);
+            return Task.FromResult(request.RequestUri.AbsolutePath == "/models"
+                ? JsonResponse("""{"data":[{"id":"claude-sonnet-4","supported_endpoints":["/v1/messages"]}]}""")
+                : JsonResponse("{}"));
+        });
+        await using var host = await TestHost.StartAsync(builder =>
+        {
+            builder.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler);
+        });
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "github-copilot-subscription" });
+        var providerId = body!["id"]!.GetValue<string>();
+        var url = $"/api/providers/{providerId}/accounts/import-copilot/batch";
+
+        var live = "tid=abc12345;exp=4102444800;sku=copilot_pro;proxy-ep=proxy.individual.githubcopilot.com:sig";
+        var expired = "tid=old12345;exp=1000000000;sku=copilot_pro:sig";
+        (status, body) = await host.SendAsync(HttpMethod.Post, url, new { tokens = $"{live}\n{expired}\n{live}" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["imported", "failed", "duplicate"], body!["items"]!.AsArray().Select(i => i!["status"]!.GetValue<string>()));
+        Assert.DoesNotContain(live, body.ToJsonString());
+        Assert.Equal(0, exchanged);
+
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+        Assert.Null(account.RefreshTokenEnc);
+        Assert.Equal(live, protector.Unprotect(account.AccessTokenEnc!));
+        Assert.Equal("copilot_pro", account.Plan);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(4102444800), account.ExpiresAtUtc);
+
+        // 再导入一次：按访问令牌去重。
+        (status, body) = await host.SendAsync(HttpMethod.Post, url, new { tokens = live });
+        Assert.Equal("duplicate", body!["items"]![0]!["status"]!.GetValue<string>());
+        Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+    }
+
+    [Fact]
     public async Task Copilot_Cached_Model_Protocols_Do_Not_Wait_For_Another_Accounts_Discovery()
     {
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

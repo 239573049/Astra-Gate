@@ -96,6 +96,22 @@ public sealed class SubscriptionOAuthConfig
     /// <summary>Extra fixed form fields for the device-code request (provider quirks, e.g. referrer).</summary>
     public IReadOnlyDictionary<string, string> ExtraDeviceParams { get; init; } =
         new Dictionary<string, string>();
+
+    /// <summary>
+    /// 这次 OAuth 往来（登录、换码、刷新、身份）要走的代理；空 = 系统代理。不来自目录：由提供商的 httpProxy
+    /// 或账号自己的代理经 <see cref="WithHttpProxy"/> 填进来，<see cref="OAuthClient"/> 据此选出口。
+    /// </summary>
+    public string HttpProxy { get; private set; } = "";
+
+    /// <summary>A copy that sends through <paramref name="proxy"/> (null / empty = system proxy); the catalog entry is never mutated.</summary>
+    public SubscriptionOAuthConfig WithHttpProxy(string? proxy)
+    {
+        var value = proxy ?? "";
+        if (value == HttpProxy) return this;
+        var copy = (SubscriptionOAuthConfig)MemberwiseClone();
+        copy.HttpProxy = value;
+        return copy;
+    }
 }
 
 public static class SubscriptionCatalog

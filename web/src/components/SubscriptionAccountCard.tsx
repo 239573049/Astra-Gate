@@ -1,222 +1,296 @@
-import { ArrowDown, ArrowUp, ArrowRightLeft, Gauge, Power, RotateCcw, Trash2 } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { ArrowDown, ArrowRightLeft, ArrowUp, Gauge, Globe, Power, RotateCcw, Trash2 } from 'lucide-react';
 
-import { ApiError } from '../api/client';
-import {
-  useActivateProviderAccount,
-  useDeleteProviderAccount,
-  useFetchProviderAccountQuota,
-  useRefreshProviderAccount,
-  useUpdateProviderAccount,
-} from '../api/hooks';
-import type { Provider, ProviderAccount } from '../api/types';
-import { Badge, Button, Group } from './ui/controls';
-import { errorText, Menu, useFeedback } from './ui/overlays';
-import { SubscriptionQuotaCard } from './SubscriptionQuotaCard';
-import { SubscriptionResetCredits } from './SubscriptionResetCredits';
+import type { AccountQuota, ProviderAccount } from '../api/types';
+import { Checkbox } from './arc/checkbox/checkbox';
+import { Badge, Button } from './ui/controls';
+import { Menu, type MenuItem } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/format';
 
-const STATUS_TONE = { active: 'green', expired: 'orange', revoked: 'red' } as const;
+/** Where an account stands for the gateway right now (drives the card's accent and the status filter). */
+export type AccountState = 'usable' | 'cooling' | 'dead' | 'disabled';
+
+export function accountState(a: ProviderAccount, now = Date.now()): AccountState {
+  if (!a.enabled) return 'disabled';
+  if (a.status !== 'active') return 'dead';
+  if (a.cooldownUntilUtc && new Date(a.cooldownUntilUtc).getTime() > now) return 'cooling';
+  return 'usable';
+}
+
+const STATE_DOT: Record<AccountState, string> = {
+  usable: 'var(--success)',
+  cooling: 'var(--warning)',
+  dead: 'var(--danger)',
+  disabled: 'var(--text-muted)',
+};
+
 const STATUS_KEY: Record<ProviderAccount['status'], MessageKey> = {
   active: 'providers.subscription.status.active',
   expired: 'providers.subscription.status.expired',
   revoked: 'providers.subscription.status.revoked',
 };
 
-/** Quota snapshots older than this are refreshed automatically when the card mounts. */
-const QUOTA_FRESH_MS = 5 * 60_000;
+/** Per-account actions; the card only renders them, the account list owns the mutations. */
+export interface AccountActions {
+  open: (a: ProviderAccount) => void;
+  activate: (a: ProviderAccount) => void;
+  toggleEnabled: (a: ProviderAccount) => void;
+  refreshQuota: (a: ProviderAccount) => void;
+  refreshToken: (a: ProviderAccount) => void;
+  relogin: (a: ProviderAccount) => void;
+  remove: (a: ProviderAccount) => void;
+}
 
 /**
- * 单个订阅账号的卡片：账号身份（邮箱 + 套餐等级 + 状态）、额度进度条、以及各类操作。
- * 每个卡片自己负责这个账号的额度/令牌刷新、切换、启停与删除；登录与排序由父级统一发起
- * （登录需要共享弹窗，排序需要整份列表）。
+ * 紧凑的账户卡片（约 76px 高，网格里一行两三张）：身份 + 当前标记 + 套餐 + 状态点 + ⋯ 菜单；
+ * 第二行是类型 · 来源 · 一句话状态；第三行是额度细条（失效时换成「重新登录」）。
+ * 点击卡片打开详情；悬停或多选时左上角出现复选框。
  */
 export function SubscriptionAccountCard({
-  provider,
   account,
-  onRelogin,
+  index,
+  actions,
+  selected,
+  selecting,
+  onToggleSelect,
   onMove,
+  quotaPending,
 }: {
-  provider: Provider;
   account: ProviderAccount;
-  onRelogin: (accountId: string) => void;
-  /** Moves the account one place up (-1) or down (+1) in the failover order; undefined at that edge. */
+  /** Position in the failover order (0-based). */
+  index: number;
+  actions: AccountActions;
+  selected: boolean;
+  /** Some card is selected: checkboxes stay visible and a click toggles the selection. */
+  selecting: boolean;
+  onToggleSelect: (id: string) => void;
+  /** Moves the account one place up / down in the failover order; undefined at that edge. */
   onMove?: { up?: () => void; down?: () => void };
+  quotaPending?: boolean;
 }) {
   const { t, locale } = useI18n();
-  const { toast, confirm } = useFeedback();
-  const quota = useFetchProviderAccountQuota(provider.id);
-  const refresh = useRefreshProviderAccount(provider.id);
-  const remove = useDeleteProviderAccount(provider.id);
-  const activate = useActivateProviderAccount(provider.id);
-  const update = useUpdateProviderAccount(provider.id);
-  const attempted = useRef(false);
-
-  const dead = account.status !== 'active';
-  const name = account.displayName || account.id;
-  const cooling = account.cooldownUntilUtc && new Date(account.cooldownUntilUtc).getTime() > Date.now()
-    ? account.cooldownUntilUtc
-    : null;
-  const isCodex = provider.templateId === 'openai-subscription';
-
-  // 进页面时拉一次额度（缺失或快照超过 5 分钟）；失败保持静默，用户可手动重试。
-  useEffect(() => {
-    if (dead || attempted.current) return;
-    const at = account.quota?.fetchedAtUtc ? new Date(account.quota.fetchedAtUtc).getTime() : 0;
-    if (Number.isFinite(at) && at > 0 && Date.now() - at < QUOTA_FRESH_MS) return;
-    attempted.current = true;
-    quota.mutate(account.id, { onError: () => {} });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account.id, dead, account.quota?.fetchedAtUtc]);
-
-  const refreshQuota = () =>
-    quota.mutate(account.id, {
-      onError: (e) => {
-        if (e instanceof ApiError && e.status === 501) toast(t('providers.subscription.quotaUnsupported'), 'error');
-        else toast(errorText(e), 'error');
-      },
-    });
-
-  const refreshToken = () =>
-    refresh.mutate(account.id, {
-      onSuccess: () => toast(t('providers.subscription.tokenRefreshed'), 'success'),
-      onError: (e) => toast(errorText(e), 'error'),
-    });
-
-  const switchTo = () =>
-    activate.mutate(account.id, {
-      onSuccess: () => toast(t('providers.subscription.activated', { name }), 'success'),
-      onError: (e) => toast(errorText(e), 'error'),
-    });
-
-  const toggleEnabled = () =>
-    update.mutate({ id: account.id, enabled: !account.enabled }, { onError: (e) => toast(errorText(e), 'error') });
-
-  const removeAccount = async () => {
-    if (
-      !(await confirm({
-        title: t('providers.subscription.logoutConfirm', { name }),
-        destructive: true,
-        confirmLabel: t('providers.subscription.logout'),
-      }))
-    )
-      return;
-    remove.mutate(account.id, { onError: (e) => toast(errorText(e), 'error') });
-  };
-
+  const state = accountState(account);
+  const name = account.displayName || account.accountEmail || account.keyMasked || account.id;
+  const isKey = account.kind === 'api_key';
   const plan = account.plan?.trim();
 
-  return (
-    <Group className={cn('overflow-hidden', (dead || !account.enabled) && 'opacity-60')}>
-      {/* 头部：身份 + 状态 + 操作（提供商 logo 在页面标题上，这里不重复） */}
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="truncate text-[13.5px] font-medium">{name}</span>
-            {account.isCurrent && <Badge tone="accent">{t('providers.subscription.current')}</Badge>}
-            {plan && <Badge tone="accent">{plan}</Badge>}
-            <Badge tone={STATUS_TONE[account.status]}>{t(STATUS_KEY[account.status])}</Badge>
-            {!account.enabled && <Badge tone="neutral">{t('providers.subscription.disabled')}</Badge>}
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--text-secondary)]">
-            {account.accountEmail && account.accountEmail !== account.displayName && <span>{account.accountEmail}</span>}
-            {account.expiresAtUtc && (
-              <span>
-                {t('providers.subscription.expires')} {new Date(account.expiresAtUtc).toLocaleString()}
-              </span>
-            )}
-            {cooling && (
-              <span className="text-[var(--orange)]" title={account.lastError ?? undefined}>
-                {t('providers.subscription.cooldown', { when: formatDateTime(cooling, locale) })}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            variant="plain"
-            icon={<Gauge className="size-3.5" />}
-            aria-label={t('providers.subscription.quotaRefresh')}
-            loading={quota.isPending && quota.variables === account.id}
-            disabled={dead}
-            onClick={refreshQuota}
-          />
-          <Menu
-            label={t('common.more')}
-            icon={<span className="text-[15px] leading-none">⋯</span>}
-            items={[
-              {
-                id: 'activate',
-                label: t('providers.subscription.activate'),
-                icon: <ArrowRightLeft className="size-3.5" />,
-                disabled: account.isCurrent || dead,
-                onSelect: switchTo,
-              },
-              {
-                id: 'toggle',
-                label: t(account.enabled ? 'providers.subscription.disable' : 'providers.subscription.enable'),
-                icon: <Power className="size-3.5" />,
-                onSelect: toggleEnabled,
-              },
-              ...(onMove
-                ? [
-                    {
-                      id: 'up',
-                      label: t('providers.subscription.moveUp'),
-                      icon: <ArrowUp className="size-3.5" />,
-                      disabled: !onMove.up,
-                      onSelect: () => onMove.up?.(),
-                    },
-                    {
-                      id: 'down',
-                      label: t('providers.subscription.moveDown'),
-                      icon: <ArrowDown className="size-3.5" />,
-                      disabled: !onMove.down,
-                      onSelect: () => onMove.down?.(),
-                    },
-                  ]
-                : []),
-              {
-                id: 'refresh',
-                separatorBefore: true,
-                label: t('providers.subscription.refreshToken'),
-                icon: <RotateCcw className="size-3.5" />,
-                disabled: account.status === 'revoked',
-                onSelect: refreshToken,
-              },
-              {
-                id: 'relogin',
-                label: t('providers.subscription.relogin'),
-                disabled: !dead,
-                onSelect: () => onRelogin(account.id),
-              },
-              {
-                id: 'remove',
-                label: t('providers.subscription.logout'),
-                icon: <Trash2 className="size-3.5" />,
-                destructive: true,
-                separatorBefore: true,
-                onSelect: () => void removeAccount(),
-              },
-            ]}
-          />
-        </div>
-      </div>
+  // 第二行的一句话状态：问题优先（冷却 / 失效），其次是令牌到期或 Key 掩码。
+  const meta =
+    state === 'cooling'
+      ? { text: t('providers.subscription.cooldown', { when: formatDateTime(account.cooldownUntilUtc!, locale) }), tone: 'var(--warning)' }
+      : state === 'dead'
+        ? { text: account.lastError || t(STATUS_KEY[account.status]), tone: 'var(--danger)' }
+        : isKey
+          ? { text: account.keyMasked ?? t('providers.accounts.neverExpires'), tone: undefined }
+          : account.expiresAtUtc
+            ? { text: t('providers.accounts.expiresAt', { when: formatDateTime(account.expiresAtUtc, locale) }), tone: undefined }
+            : null;
 
-      {/* 额度进度条 */}
-      {account.quota ? (
-        <SubscriptionQuotaCard quota={account.quota} />
-      ) : (
-        <div className="px-4 pb-3 text-[11.5px] text-[var(--text-muted)]">
-          {dead ? t('providers.subscription.quotaNoAccount') : t('providers.subscription.quotaLoading')}
-        </div>
+  const menu: MenuItem[] = [
+    {
+      id: 'activate',
+      label: t('providers.subscription.activate'),
+      icon: <ArrowRightLeft className="size-3.5" />,
+      disabled: account.isCurrent || state === 'dead',
+      onSelect: () => actions.activate(account),
+    },
+    {
+      id: 'toggle',
+      label: t(account.enabled ? 'providers.subscription.disable' : 'providers.subscription.enable'),
+      icon: <Power className="size-3.5" />,
+      onSelect: () => actions.toggleEnabled(account),
+    },
+    ...(onMove
+      ? [
+          { id: 'up', label: t('providers.subscription.moveUp'), icon: <ArrowUp className="size-3.5" />, disabled: !onMove.up, onSelect: () => onMove.up?.() },
+          { id: 'down', label: t('providers.subscription.moveDown'), icon: <ArrowDown className="size-3.5" />, disabled: !onMove.down, onSelect: () => onMove.down?.() },
+        ]
+      : []),
+    {
+      id: 'quota',
+      separatorBefore: true,
+      label: t('providers.subscription.quotaRefresh'),
+      icon: <Gauge className="size-3.5" />,
+      disabled: state === 'dead',
+      onSelect: () => actions.refreshQuota(account),
+    },
+    ...(isKey
+      ? []
+      : [
+          {
+            id: 'refresh',
+            label: t('providers.subscription.refreshToken'),
+            icon: <RotateCcw className="size-3.5" />,
+            disabled: account.status === 'revoked',
+            onSelect: () => actions.refreshToken(account),
+          },
+          { id: 'relogin', label: t('providers.subscription.relogin'), disabled: account.status === 'active', onSelect: () => actions.relogin(account) },
+        ]),
+    {
+      id: 'remove',
+      label: t('providers.subscription.logout'),
+      icon: <Trash2 className="size-3.5" />,
+      destructive: true,
+      separatorBefore: true,
+      onSelect: () => actions.remove(account),
+    },
+  ];
+
+  return (
+    <div
+      data-testid="account-card"
+      className={cn(
+        'group card relative cursor-pointer px-2.5 pb-2 pt-2 transition-colors hover:bg-[var(--fill)]',
+        account.isCurrent && 'ring-1 ring-[var(--accent)]',
+        selected && 'bg-[var(--accent-subtle)]',
+        state === 'disabled' && 'opacity-55',
+      )}
+      onClick={() => (selecting ? onToggleSelect(account.id) : actions.open(account))}
+    >
+      {/* 冷却 / 失效：左侧色条，扫一眼就能看出哪几张有问题。 */}
+      {(state === 'cooling' || state === 'dead') && (
+        <span aria-hidden className="absolute bottom-2 left-0 top-2 w-[2px] rounded-full" style={{ background: STATE_DOT[state] }} />
       )}
 
-      {/* codex 专属：额度重置卡 */}
-      {isCodex && !dead && <SubscriptionResetCredits account={account} providerId={provider.id} />}
-    </Group>
+      <div className="flex min-w-0 items-center gap-1.5">
+        <span
+          className={cn('flex size-5 shrink-0 items-center justify-center', !selecting && !selected && 'max-sm:flex sm:hidden sm:group-hover:flex')}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={selected}
+            onCheckedChange={() => onToggleSelect(account.id)}
+            aria-label={t('providers.accounts.select', { name })}
+          />
+        </span>
+        {!selecting && !selected && (
+          <span
+            aria-hidden
+            className="hidden size-5 shrink-0 items-center justify-center rounded-md bg-[var(--surface-muted)] text-[10.5px] font-semibold uppercase text-[var(--text-secondary)] sm:flex sm:group-hover:hidden"
+          >
+            {name.charAt(0)}
+          </span>
+        )}
+        <button
+          type="button"
+          className="min-w-0 flex-1 truncate text-left text-[12.5px] font-medium outline-none focus-visible:underline"
+          title={name}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (selecting) onToggleSelect(account.id);
+            else actions.open(account);
+          }}
+        >
+          {name}
+        </button>
+        {account.isCurrent && <Badge tone="accent">{t('providers.subscription.current')}</Badge>}
+        {plan && <Badge tone="accent" className="max-w-24 truncate">{plan}</Badge>}
+        {account.httpProxy && (
+          <span title={`${t('providers.accounts.proxyBadge')}: ${account.httpProxy}`} className="shrink-0 text-[var(--text-muted)]">
+            <Globe className="size-3" aria-label={t('providers.accounts.proxyBadge')} />
+          </span>
+        )}
+        <span
+          role="img"
+          aria-label={state === 'disabled' ? t('providers.subscription.disabled') : t(STATUS_KEY[account.status])}
+          className="size-1.5 shrink-0 rounded-full"
+          style={{ background: STATE_DOT[state] }}
+        />
+        <span className="-my-1 -mr-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+          <Menu label={t('common.more')} icon={<span className="text-[15px] leading-none">⋯</span>} items={menu} />
+        </span>
+      </div>
+
+      <div className="ml-[26px] mt-0.5 flex min-w-0 items-center gap-1 whitespace-nowrap text-[10.5px] text-[var(--text-muted)]">
+        <span className="text-[var(--text-secondary)]">{t(isKey ? 'providers.accounts.kind.api_key' : 'providers.accounts.kind.oauth')}</span>
+        {account.source && (
+          <>
+            <span aria-hidden>·</span>
+            <span>{t(`providers.accounts.source.${account.source}` as MessageKey)}</span>
+          </>
+        )}
+        {meta && (
+          <>
+            <span aria-hidden>·</span>
+            <span className="truncate" style={{ color: meta.tone }} title={meta.text}>
+              {meta.text}
+            </span>
+          </>
+        )}
+        <span className="ml-auto pl-1 opacity-0 group-hover:opacity-100">{t('providers.accounts.order', { n: index + 1 })}</span>
+      </div>
+
+      {state === 'dead' ? (
+        <div className="ml-[26px] mt-1.5 flex items-center gap-2">
+          <span className="text-[10.5px] text-[var(--text-muted)]">{t('providers.accounts.signedOut')}</span>
+          {!isKey && (
+            <Button
+              size="sm"
+              className="ml-auto"
+              onClick={(e) => {
+                e.stopPropagation();
+                actions.relogin(account);
+              }}
+            >
+              {t('providers.subscription.relogin')}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <QuotaStrip quota={account.quota ?? null} pending={quotaPending} />
+      )}
+    </div>
+  );
+}
+
+/** Up to two thin quota bars (session / weekly, else credits) in one row. */
+function QuotaStrip({ quota, pending }: { quota: AccountQuota | null; pending?: boolean }) {
+  const { t, locale } = useI18n();
+  const bars: { key: string; label: string; percent: number; reset?: string | null }[] = [];
+  if (quota?.session?.usedPercent != null)
+    bars.push({
+      key: 'session',
+      label: quota.session.windowMinutes ? `${Math.round(quota.session.windowMinutes / 60)}h` : t('providers.accounts.quotaShortSession'),
+      percent: quota.session.usedPercent,
+      reset: quota.session.resetsAtUtc,
+    });
+  if (quota?.weekly?.usedPercent != null)
+    bars.push({ key: 'weekly', label: t('providers.accounts.quotaShortWeekly'), percent: quota.weekly.usedPercent, reset: quota.weekly.resetsAtUtc });
+  if (bars.length < 2 && quota?.credits?.usedPercent != null)
+    bars.push({
+      key: 'credits',
+      label: t(quota.entitlement != null ? 'providers.accounts.quotaShortPremium' : 'providers.accounts.quotaShortCredits'),
+      percent: quota.credits.usedPercent,
+      reset: quota.credits.resetsAtUtc,
+    });
+  if (bars.length === 0) return null;
+
+  return (
+    <div className={cn('ml-[26px] mt-1.5 flex gap-3', pending && 'opacity-60')}>
+      {bars.slice(0, 2).map((b) => {
+        const percent = Math.max(0, Math.min(100, Math.round(b.percent)));
+        const tone = percent >= 90 ? 'var(--danger)' : percent >= 70 ? 'var(--warning)' : 'var(--accent)';
+        const reset = b.reset ? t('providers.subscription.quotaResets', { when: formatDateTime(b.reset, locale) }) : undefined;
+        return (
+          <div key={b.key} className="min-w-0 flex-1" title={reset}>
+            <div className="flex justify-between text-[10px] text-[var(--text-muted)]">
+              <span>{b.label}</span>
+              <span className="font-mono tabular-nums text-[var(--text-secondary)]">{percent}%</span>
+            </div>
+            <div
+              role="progressbar"
+              aria-label={b.label}
+              aria-valuenow={percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              className="mt-0.5 h-[3px] overflow-hidden rounded-full bg-[var(--surface-muted)]"
+            >
+              <div className="h-full rounded-full" style={{ width: `${percent}%`, background: tone }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

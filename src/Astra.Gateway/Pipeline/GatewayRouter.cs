@@ -54,22 +54,44 @@ public interface IModelProtocolResolver
 /// that client's bindings, a bare token is a direct call to the token's own default provider.
 /// Tokens are looked up by prefix and compared by hash in constant time.
 /// </summary>
-public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing)
+public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, SettingsService settings)
 {
     public async Task<GatewayRoute> ResolveAsync(HttpRequest request, CancellationToken ct)
     {
+        var open = !settings.Current.RequireGatewayKey;
         var key = GatewayTokens.Extract(request);
+        TokenRecord? token = null;
+        string? kind = null;
         if (string.IsNullOrEmpty(key))
-            throw new GatewayException(401, "authentication_error", "缺少 Astra 令牌（Authorization: Bearer / x-api-key / x-goog-api-key / ?key=）。请在 Astra 的「客户端」页面启用对应客户端，或在「令牌」页面复制令牌。");
-        if (GatewayTokens.IsLegacyKey(key))
-            throw new GatewayException(401, "authentication_error", "旧版客户端密钥已失效（Astra 已改用令牌）。请在 Astra 的「客户端」页面重新启用该客户端。");
-        if (!GatewayTokens.TryParse(key, out var secret, out var kind))
-            throw new GatewayException(401, "authentication_error", "这不是 Astra 令牌。请在 Astra 的「客户端」页面启用客户端，由 Astra 写入令牌，或在「令牌」页面复制令牌。");
+        {
+            if (!open)
+                throw new GatewayException(401, "authentication_error", "缺少 Astra 令牌（Authorization: Bearer / x-api-key / x-goog-api-key / ?key=）。请在 Astra 的「客户端」页面启用对应客户端，或在「令牌」页面复制令牌。");
+        }
+        else if (GatewayTokens.IsLegacyKey(key))
+        {
+            if (!open)
+                throw new GatewayException(401, "authentication_error", "旧版客户端密钥已失效（Astra 已改用令牌）。请在 Astra 的「客户端」页面重新启用该客户端。");
+        }
+        else if (!GatewayTokens.TryParse(key, out var secret, out kind))
+        {
+            if (!open)
+                throw new GatewayException(401, "authentication_error", "这不是 Astra 令牌。请在 Astra 的「客户端」页面启用客户端，由 Astra 写入令牌，或在「令牌」页面复制令牌。");
+        }
+        else
+        {
+            var prefix = GatewayTokens.PrefixOf(secret);
+            token = (await db.Tokens.FindByPrefixAsync(prefix, ct)).FirstOrDefault(t => GatewayTokens.Verify(secret, t.KeyHash));
+            if (token is null && !open)
+                throw new GatewayException(401, "authentication_error", "Astra 令牌无效或已重置。请在 Astra 中重新启用该客户端，或在「令牌」页面复制最新的令牌。");
+        }
 
-        var prefix = GatewayTokens.PrefixOf(secret);
-        var token = (await db.Tokens.FindByPrefixAsync(prefix, ct)).FirstOrDefault(t => GatewayTokens.Verify(secret, t.KeyHash));
         if (token is null)
-            throw new GatewayException(401, "authentication_error", "Astra 令牌无效或已重置。请在 Astra 中重新启用该客户端，或在「令牌」页面复制最新的令牌。");
+        {
+            // Key check switched off and no usable token presented: serve it as a direct call of the default token.
+            kind = null;
+            token = await db.Tokens.GetAsync(TokenIds.Default, ct)
+                    ?? throw new GatewayException(503, "api_error", "默认令牌不存在，无法在未验证密钥的情况下处理请求。");
+        }
         if (!token.Enabled)
             throw new GatewayException(403, "permission_error", $"令牌 {token.Name} 已停用。");
 

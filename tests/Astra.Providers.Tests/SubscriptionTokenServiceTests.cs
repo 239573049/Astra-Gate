@@ -186,6 +186,73 @@ public class SubscriptionTokenServiceTests
     }
 
     [Fact]
+    public async Task Api_Key_Accounts_Are_Used_As_Is_And_Revoked_When_The_Upstream_Rejects_Them()
+    {
+        var store = new InMemoryAccountStore();
+        var account = Account("sk-kimi-key", TimeSpan.Zero);
+        account.Kind = AccountKinds.ApiKey;
+        account.RefreshTokenEnc = null;
+        account.ExpiresAtUtc = null;
+        await store.InsertAsync(account);
+        var handler = new StubHandler("{}");
+        var service = new SubscriptionTokenService(store, new FakeProtector(), new StubFactory(handler), new FakeClock());
+
+        // No expiry and no refresh grant: the key is simply valid while the account is active.
+        Assert.Equal("sk-kimi-key", await service.GetValidAccessTokenAsync(account, Config));
+
+        // An upstream 401 forces a "refresh": for a key that means the key itself is dead.
+        await Assert.ThrowsAsync<SubscriptionAuthException>(() => service.RefreshAfterUnauthorizedAsync(account, Config));
+        Assert.Equal(AccountStatus.Revoked, (await store.GetAsync("acc-1"))!.Status);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Fact]
+    public async Task Refresh_Leaves_Through_The_Accounts_Own_Proxy_Before_The_Providers()
+    {
+        var store = new InMemoryAccountStore();
+        var account = Account("at-old", TimeSpan.FromSeconds(10));
+        account.HttpProxy = "http://account-proxy:8080";
+        await store.InsertAsync(account);
+        var direct = new StubHandler("""{"access_token":"at-direct","expires_in":3600}""");
+        var viaProxy = new StubHandler("""{"access_token":"at-proxied","expires_in":3600}""");
+        var proxied = new ConcurrentBag<string>();
+        ProxiedHttpClients.HandlerFactory = url =>
+        {
+            proxied.Add(url);
+            return viaProxy;
+        };
+        try
+        {
+            var service = new SubscriptionTokenService(store, new FakeProtector(), new StubFactory(direct), new FakeClock());
+            var token = await service.GetValidAccessTokenAsync(account, Config.WithHttpProxy("http://provider-proxy:8080"));
+
+            Assert.Equal("at-proxied", token);
+            Assert.Equal(["http://account-proxy:8080"], proxied);
+            Assert.Equal(0, direct.Calls);
+            // The catalog entry itself never carries a proxy.
+            Assert.Equal("", SubscriptionCatalog.Find("claude-subscription")!.HttpProxy);
+        }
+        finally
+        {
+            ProxiedHttpClients.HandlerFactory = null;
+        }
+    }
+
+    [Fact]
+    public void Account_Proxy_Wins_Over_The_Providers_And_Is_Validated()
+    {
+        var config = Config.WithHttpProxy("http://provider:1");
+        Assert.Equal("http://provider:1", ProxiedHttpClients.ProxyOf(new ProviderAccount(), config));
+        Assert.Equal("socks5://acc:2", ProxiedHttpClients.ProxyOf(new ProviderAccount { HttpProxy = "socks5://acc:2" }, config));
+        Assert.Null(ProxiedHttpClients.ProxyOf(null, Config));
+
+        Assert.Null(ProxiedHttpClients.Normalize("  "));
+        Assert.Equal("http://127.0.0.1:7890", ProxiedHttpClients.Normalize(" http://127.0.0.1:7890 "));
+        Assert.Throws<ArgumentException>(() => ProxiedHttpClients.Normalize("127.0.0.1:7890"));
+        Assert.Throws<ArgumentException>(() => ProxiedHttpClients.Normalize("ftp://host:21"));
+    }
+
+    [Fact]
     public async Task Force_Refresh_After_Unauthorized_Rotates_Even_A_Fresh_Token()
     {
         var store = new InMemoryAccountStore();

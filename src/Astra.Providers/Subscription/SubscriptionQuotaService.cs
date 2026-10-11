@@ -44,6 +44,18 @@ public sealed class SubscriptionQuotaService(
 
     private readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
+    /// <summary>
+    /// 本次调用（一个账号的额度 / 重置卡请求）的出口代理。由公开入口按账号设置；async 方法里设的值只向下流动、
+    /// 方法返回即还原，所以并发查询不同账号互不影响。null = 宿主的命名客户端（系统代理）。
+    /// </summary>
+    private readonly AsyncLocal<string?> _proxy = new();
+
+    /// <summary>
+    /// Extra flag of a Claude <c>setup-token</c> account: a long-lived inference-only token whose scope does not cover
+    /// the usage endpoint, so it has no quota probe (probing would read the 403 as a dead grant).
+    /// </summary>
+    public const string SetupTokenFlag = "setup_token";
+
     /// <summary>True when the stored snapshot exists and is younger than <see cref="FreshFor"/>.</summary>
     public static bool IsFresh(ProviderAccount account) =>
         account.Extra["quota"]?["fetchedAtUtc"] is JsonValue v
@@ -58,6 +70,8 @@ public sealed class SubscriptionQuotaService(
         // 与 Gateway 的 SubscriptionSupport.ProviderKeyOf 保持一致（模板 id 即订阅家族键）；
         // Providers 不引用 Gateway，这里本地实现同一规则。
         var family = provider.TemplateId ?? provider.PriceKey ?? provider.Id;
+        if (account.Extra[SetupTokenFlag] is JsonValue flag && flag.TryGetValue<bool>(out var setup) && setup) return (account, null);
+        _proxy.Value = ProxiedHttpClients.ProxyOf(account, config);
         var quota = family switch
         {
             "claude-subscription" => await ProbeWithRecoveryAsync(account, config, ProbeClaudeAsync, ct),
@@ -93,6 +107,7 @@ public sealed class SubscriptionQuotaService(
     public async Task<JsonObject?> ListResetCreditsAsync(
         Provider provider, ProviderAccount account, SubscriptionOAuthConfig config, CancellationToken ct = default)
     {
+        _proxy.Value = ProxiedHttpClients.ProxyOf(account, config);
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
         var payload = await GetResetCreditsAsync(account, token, ct);
         if (payload is null) return null;
@@ -110,6 +125,7 @@ public sealed class SubscriptionQuotaService(
     public async Task<JsonObject?> ConsumeResetCreditAsync(
         Provider provider, ProviderAccount account, SubscriptionOAuthConfig config, string? creditId, CancellationToken ct = default)
     {
+        _proxy.Value = ProxiedHttpClients.ProxyOf(account, config);
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
         var body = new JsonObject
         {
@@ -174,8 +190,9 @@ public sealed class SubscriptionQuotaService(
     /// </summary>
     private async Task<JsonObject?> ProbeCopilotAsync(ProviderAccount account, SubscriptionOAuthConfig config, CancellationToken ct)
     {
-        var githubToken = account.RefreshTokenEnc is null ? null : protector.Unprotect(account.RefreshTokenEnc);
-        if (githubToken is null) throw new SubscriptionAuthException(account.Id, "账号没有 GitHub 授权，请重新登录");
+        // 直接导入的 Copilot 令牌没有 GitHub token（刷新槽为空），额度接口认不了它：当作"暂不支持"，而不是报授权失效。
+        if (account.RefreshTokenEnc is null) return null;
+        var githubToken = protector.Unprotect(account.RefreshTokenEnc);
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/copilot_internal/user");
         request.Headers.TryAddWithoutValidation("Authorization", $"token {githubToken}");
@@ -381,7 +398,9 @@ public sealed class SubscriptionQuotaService(
 
     private async Task<(HttpStatusCode Status, string ContentType, JsonObject? Payload)> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
-        using var client = httpClientFactory.CreateClient(HttpClientName);
+        using var client = _proxy.Value is { } proxy
+            ? ProxiedHttpClients.Create(proxy, TimeSpan.FromSeconds(30))
+            : httpClientFactory.CreateClient(HttpClientName);
         HttpResponseMessage response;
         try
         {

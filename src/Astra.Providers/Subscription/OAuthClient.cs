@@ -34,7 +34,9 @@ public sealed class OAuthClient(IHttpClientFactory factory)
     public sealed record DevicePoll(DevicePollKind Kind, TokenResult? Token, string? Error, string? Description,
         DeviceAuthGrant? Grant = null);
 
-    private HttpClient Create() => factory.CreateClient(HttpClientName);
+    /// <summary>The config's proxy (provider / account, see <see cref="SubscriptionOAuthConfig.HttpProxy"/>) when set, else the host's client.</summary>
+    private HttpClient Create(SubscriptionOAuthConfig config) =>
+        config.HttpProxy.Length > 0 ? ProxiedHttpClients.Create(config.HttpProxy, TimeSpan.FromSeconds(100)) : factory.CreateClient(HttpClientName);
 
     /// <summary>Builds the authorization URL (response_type=code, PKCE S256 when configured).</summary>
     public static string BuildAuthorizeUrl(
@@ -153,7 +155,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain", 0.9));
-        using var client = Create();
+        using var client = Create(config);
         using var response = await client.SendAsync(request, ct);
         var text = await response.Content.ReadAsStringAsync(ct);
         var json = TryParse(text);
@@ -202,7 +204,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         using var request = new HttpRequestMessage(HttpMethod.Post, config.DeviceCodeUrl) { Content = content };
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var response = await Create().SendAsync(request, ct);
+        using var response = await Create(config).SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         var payload = Parse(body);
         return new DeviceStart(
@@ -235,7 +237,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
             };
             ApplyExtraHeaders(request, config);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            using var response = await Create().SendAsync(request, ct);
+            using var response = await Create(config).SendAsync(request, ct);
             var body = await response.Content.ReadAsStringAsync(ct);
             if (response.StatusCode is HttpStatusCode.Forbidden or HttpStatusCode.NotFound
                 || response.StatusCode == (HttpStatusCode)429)
@@ -280,7 +282,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         };
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var response = await Create().SendAsync(request, ct);
+        using var response = await Create(config).SendAsync(request, ct);
         var text = await response.Content.ReadAsStringAsync(ct);
         var json = Parse(text);
         if (!response.IsSuccessStatusCode)
@@ -406,7 +408,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         var host = config.BizHost.TrimEnd('/');
         var keyName = config.ApiKeyName.Length > 0 ? config.ApiKeyName : "zcode-api-key";
 
-        var customer = await BizRequestAsync(HttpMethod.Get, $"{host}/api/biz/customer/getCustomerInfo", oauthAccessToken, null, ct) as JsonObject;
+        var customer = await BizRequestAsync(config, HttpMethod.Get, $"{host}/api/biz/customer/getCustomerInfo", oauthAccessToken, null, ct) as JsonObject;
         var org = PickByMarker(customer?["organizations"], "默认机构", "organizationName");
         var orgId = ScalarText(org?["organizationId"]);
         var project = PickByMarker(org?["projects"], "默认项目", "projectName");
@@ -415,16 +417,16 @@ public sealed class OAuthClient(IHttpClientFactory factory)
             throw new OAuthProtocolException("biz_no_project", "账号下没有可用的机构/项目");
 
         var keysUrl = $"{host}/api/biz/v1/organization/{orgId}/projects/{projectId}/api_keys";
-        var existing = await BizRequestAsync(HttpMethod.Get, keysUrl, oauthAccessToken, null, ct);
+        var existing = await BizRequestAsync(config, HttpMethod.Get, keysUrl, oauthAccessToken, null, ct);
         var entry = (existing as JsonArray)?.OfType<JsonObject>().FirstOrDefault(r => ScalarText(r["name"]) == keyName)
-                    ?? await BizRequestAsync(HttpMethod.Post, keysUrl, oauthAccessToken,
+                    ?? await BizRequestAsync(config, HttpMethod.Post, keysUrl, oauthAccessToken,
                         new JsonObject { ["name"] = keyName }.ToJsonString(), ct) as JsonObject;
         var apiKey = ScalarText(entry?["apiKey"])
                      ?? throw new OAuthProtocolException("invalid_token_response", "供应 API Key 失败：响应里没有 apiKey");
 
         try
         {
-            var copied = await BizRequestAsync(HttpMethod.Get,
+            var copied = await BizRequestAsync(config, HttpMethod.Get,
                 $"{keysUrl}/copy/{Uri.EscapeDataString(apiKey)}", oauthAccessToken, null, ct) as JsonObject;
             if (ScalarText(copied?["secretKey"]) is { } secret) return $"{apiKey}.{secret}";
         }
@@ -437,13 +439,13 @@ public sealed class OAuthClient(IHttpClientFactory factory)
 
     /// <summary>biz API 请求：成功码是 {缺省, 0, 200, "0", "200"}（比换码那套的"非 0 即失败"宽），返回信封里的 <c>data</c>。</summary>
     private async Task<JsonNode?> BizRequestAsync(
-        HttpMethod method, string url, string oauthAccessToken, string? jsonBody, CancellationToken ct)
+        SubscriptionOAuthConfig config, HttpMethod method, string url, string oauthAccessToken, string? jsonBody, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(method, url);
         request.Headers.TryAddWithoutValidation("Authorization", oauthAccessToken);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         if (jsonBody is not null) request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
-        using var client = Create();
+        using var client = Create(config);
         using var response = await client.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
@@ -486,7 +488,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         request.Headers.TryAddWithoutValidation("Authorization", $"token {githubToken}");
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var response = await Create().SendAsync(request, ct);
+        using var response = await Create(config).SendAsync(request, ct);
         var text = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {
@@ -532,7 +534,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         if (authorization is not null) request.Headers.TryAddWithoutValidation("Authorization", authorization);
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        using var client = Create();
+        using var client = Create(config);
         using var response = await client.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         var json = Parse(body);
@@ -559,7 +561,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             ApplyExtraHeaders(request, config);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            using var client = Create();
+            using var client = Create(config);
             using var response = await client.SendAsync(request, ct);
             if (!response.IsSuccessStatusCode) return (null, null);
             var json = Parse(await response.Content.ReadAsStringAsync(ct));
@@ -614,7 +616,7 @@ public sealed class OAuthClient(IHttpClientFactory factory)
         ApplyExtraHeaders(request, config);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        using var client = Create();
+        using var client = Create(config);
         using var response = await client.SendAsync(request, ct);
         var body = await response.Content.ReadAsStringAsync(ct);
         var json = Parse(body);

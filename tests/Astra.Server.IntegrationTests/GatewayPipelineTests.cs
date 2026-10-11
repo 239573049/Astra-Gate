@@ -192,6 +192,29 @@ public class GatewayPipelineTests
     }
 
     [Fact]
+    public async Task Without_The_Key_Requirement_Keyless_Calls_Use_The_Default_Token()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        var token = (await gw.Host.Db.Tokens.GetAsync(TokenIds.Default))!;
+        token.ProviderId = gw.Provider.Id;
+        await gw.Host.Db.Tokens.UpdateAsync(token);
+        var body = """{"model":"gpt-5","messages":[{"role":"user","content":"hi"}]}""";
+
+        using (var request = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent(body, Encoding.UTF8, "application/json") })
+            Assert.Equal(HttpStatusCode.Unauthorized, (await gw.Host.Client.SendAsync(request)).StatusCode);
+
+        await gw.Host.App.Services.GetRequiredService<SettingsService>().UpdateAsync(s => s.RequireGatewayKey = false);
+
+        using (var request = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions") { Content = new StringContent(body, Encoding.UTF8, "application/json") })
+            Assert.Equal(HttpStatusCode.OK, (await gw.Host.Client.SendAsync(request)).StatusCode);
+        var junk = await gw.PostAsync("/v1/chat/completions", body, key: "sk-not-an-astra-key");
+        Assert.Equal(HttpStatusCode.OK, junk.StatusCode);
+        Assert.Null((await gw.RecordOfAsync(junk)).ClientKind);
+        // A valid token with a client suffix still routes through that client.
+        Assert.Equal(HttpStatusCode.OK, (await gw.PostAsync("/v1/chat/completions", body)).StatusCode);
+    }
+
+    [Fact]
     public async Task Disabled_Clients_And_Providers_Get_Clear_Errors()
     {
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
@@ -975,5 +998,48 @@ public class GatewayPipelineTests
         var record = await gw.RecordOfAsync(response);
         Assert.Equal(RequestStatus.Success, record.Status);
         Assert.Contains("订阅额度", record.BillingDescription); // equivalent-cost labelling (plan §5.4)
+    }
+
+    [Fact]
+    public async Task Subscription_Requests_Leave_Through_The_Accounts_Own_Proxy_Else_The_Providers()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion),
+            authScheme: AuthSchemes.OAuthSubscription);
+        var proxies = new List<string?>();
+        gw.Host.App.Services.GetRequiredService<GatewayHttpClients>().HandlerFactory = proxy =>
+        {
+            lock (proxies) proxies.Add(proxy);
+            return gw.Upstream;
+        };
+        gw.Provider.TemplateId = "kimi-subscription";
+        gw.Provider.HttpProxy = "http://provider-proxy:8080";
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+
+        var protector = gw.Host.App.Services.GetRequiredService<ISecretProtector>();
+        foreach (var (id, proxy) in new[] { ("acc-own", "socks5://account-proxy:1080"), ("acc-inherit", (string?)null) })
+            await gw.Host.Db.Accounts.InsertAsync(new ProviderAccount
+            {
+                Id = id,
+                ProviderId = gw.Provider.Id,
+                DisplayName = id,
+                Kind = AccountKinds.ApiKey,
+                AccessTokenEnc = protector.Protect($"sk-kimi-{id}"),
+                Status = AccountStatus.Active,
+                HttpProxy = proxy,
+            });
+
+        foreach (var account in new[] { "acc-own", "acc-inherit" })
+        {
+            await gw.Host.Db.Clients.SetBindingAsync(new ClientBinding
+            { ClientKind = ClientKinds.OpenCode, ProviderId = gw.Provider.Id, AccountId = account });
+            var response = await gw.PostAsync("/v1/chat/completions", """{"model":"gpt-5","messages":[{"role":"user","content":"hi"}]}""");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        // One pooled client per proxy: the first request used the account's proxy, the second the provider's.
+        Assert.Equal(["socks5://account-proxy:1080", "http://provider-proxy:8080"], proxies);
+        // API keys go out as is (no refresh, no token exchange).
+        Assert.Equal(["Bearer sk-kimi-acc-own", "Bearer sk-kimi-acc-inherit"],
+            gw.Upstream.Requests.Select(r => r.Headers["authorization"]));
     }
 }

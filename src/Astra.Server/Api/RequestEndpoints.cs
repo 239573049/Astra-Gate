@@ -56,6 +56,9 @@ public static class RequestEndpoints
 
     public sealed record PageDto<T>(IReadOnlyList<T> Items, long Total, int Page, int PageSize);
 
+    /// <summary>A request-log page plus the summed cost of every matching request (all pages).</summary>
+    public sealed record RequestPageDto(IReadOnlyList<RequestSummaryDto> Items, long Total, int Page, int PageSize, long TotalCostNanoUsd);
+
     public sealed record StatsSummaryDto(string Range, decimal CostUsd, long Requests, double SuccessRate,
         long InputTokens, long OutputTokens, long CacheReadTokens, long CacheWriteTokens, long ReasoningTokens, double? AvgTtftMs);
 
@@ -78,7 +81,8 @@ public static class RequestEndpoints
         string Locale, bool DebugBodies, int BodyRetentionDays, int? RequestRetentionDays, EffortBudgets EffortBudgets,
         int StreamIdleTimeoutSec, string UpdateChannel, bool UpdateAutoCheck,
         int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes,
-        string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass);
+        string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass,
+        bool RequireGatewayKey);
 
     public static void MapRequestEndpoints(this IEndpointRouteBuilder app)
     {
@@ -98,7 +102,7 @@ public static class RequestEndpoints
                 PageSize = int.TryParse(q["pageSize"], out var size) ? Math.Clamp(size, 1, 500) : 50,
             };
             var result = await db.Requests.QueryAsync(query, ct);
-            return Results.Ok(new PageDto<RequestSummaryDto>(result.Items.Select(ToSummary).ToList(), result.Total, result.Page, result.PageSize));
+            return Results.Ok(new RequestPageDto(result.Items.Select(ToSummary).ToList(), result.Total, result.Page, result.PageSize, result.TotalCostNanoUsd));
         });
 
         // Live request log (server-sent events): the in-flight snapshot first, then every change as it happens.
@@ -251,6 +255,7 @@ public static class RequestEndpoints
                             if (locale is "zh" or "en") s.Locale = locale;
                             else error = "locale must be zh or en";
                             break;
+                        case "requireGatewayKey": s.RequireGatewayKey = value?.GetValue<bool>() ?? true; break;
                         case "debugBodies": s.DebugBodies = value?.GetValue<bool>() ?? false; break;
                         case "bodyRetentionDays": s.BodyRetentionDays = Math.Clamp(value?.GetValue<int>() ?? 7, 1, 3650); break;
                         case "requestRetentionDays":
@@ -326,17 +331,23 @@ public static class RequestEndpoints
         s.Locale, s.DebugBodies, s.BodyRetentionDays, s.RequestRetentionDays, s.EffortBudgets, s.StreamIdleTimeoutSec,
         s.UpdateChannel, s.UpdateAutoCheck,
         server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes,
-        s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass);
+        s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
+        s.RequireGatewayKey);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:
-    /// same client / token / provider equality and case-insensitive model contains-match, without the LIKE escaping.
+    /// same client / token / provider any-of match (comma-separated lists) and case-insensitive model contains-match,
+    /// without the LIKE escaping.
     /// </summary>
     private static bool MatchesWindowFilters(RequestRecord r, RequestQuery f) =>
-        (string.IsNullOrEmpty(f.ClientKind) || r.ClientKind == f.ClientKind)
-        && (string.IsNullOrEmpty(f.TokenId) || r.TokenId == f.TokenId)
-        && (string.IsNullOrEmpty(f.ProviderId) || r.ProviderId == f.ProviderId)
+        AnyOf(f.ClientKind, r.ClientKind)
+        && AnyOf(f.TokenId, r.TokenId)
+        && AnyOf(f.ProviderId, r.ProviderId)
         && (string.IsNullOrWhiteSpace(f.Model) || ModelContains(r, f.Model.Trim()));
+
+    /// <summary>True when the list filter is unset, or <paramref name="value"/> is one of its comma-separated entries.</summary>
+    private static bool AnyOf(string? list, string? value) =>
+        string.IsNullOrEmpty(list) || (value is not null && list.Split(',').Contains(value));
 
     private static bool ModelContains(RequestRecord r, string term) =>
         Contains(r.RequestedModel, term) || Contains(r.UpstreamModel, term)

@@ -389,7 +389,6 @@ public sealed class GatewayPipeline(
         // 模拟 Claude Code（subscription.mimic_claude_code）：只作用于 compat 路径（调用方不是 Claude Code 本身）。
         var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
         var claudeSessionId = clientRequest.Headers["x-claude-code-session-id"].ToString();
-        var client = http.For(provider);
         var accountId = route.AccountId;
         var tried = new List<string>();
         AccountScheduler.Lease? lease = null;
@@ -416,6 +415,8 @@ public sealed class GatewayPipeline(
                     throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
                 }
 
+                // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
+                var client = credentials.Proxy is { Length: > 0 } accountProxy ? http.For(accountProxy) : http.For(provider);
                 var request = Build(credentials);
                 // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
                 // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。

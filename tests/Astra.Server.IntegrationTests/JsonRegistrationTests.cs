@@ -76,12 +76,12 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Get, "/api/models/missing");
         await host.SendAsync(HttpMethod.Get, "/api/nope");
 
-        var native = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/direct/profiles", new { name = "Guard" });
-        Assert.Equal(HttpStatusCode.OK, native.Status);
-        var profileId = native.Body!["profiles"]![0]!["id"]!.GetValue<string>();
-        await host.SendAsync(HttpMethod.Put, "/api/clients/claude-code/direct", new { mode = "direct", profileId, telemetryEnabled = true });
-        await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/direct/prepare", new { profileId, action = "run" });
-        await host.GetJsonAsync($"/api/clients/claude-code/direct/profiles/{profileId}/requests");
+        var claude = await ClaudeDirectTests.AddClaudeProviderAsync(host);
+        await ClaudeDirectTests.AddAccountAsync(host, claude, "guard-acc", "Guard");
+        await host.SendAsync(HttpMethod.Put, "/api/clients/claude-code/direct", new { mode = "direct", accountId = "guard-acc", telemetryEnabled = true });
+        await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/direct/prepare", new { accountId = "guard-acc" });
+        await host.GetJsonAsync("/api/clients/claude-code/direct");
+        await host.GetJsonAsync("/api/clients/claude-code/direct/accounts/guard-acc/requests");
 
         var unregistered = JsonContexts.FallbackTypes;
         Assert.True(unregistered.Count == 0,

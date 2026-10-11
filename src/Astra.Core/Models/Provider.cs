@@ -94,11 +94,15 @@ public sealed class Provider
         return map;
     }
 
-    /// <summary>The model id to send upstream for <paramref name="requested"/>: its <see cref="ModelMap"/> entry, else itself.</summary>
+    /// <summary>
+    /// The model id to send upstream for <paramref name="requested"/>: its <see cref="ModelMap"/> entry, else itself.
+    /// GitHub Copilot additionally gets Claude ids in its dotted form (<c>claude-haiku-4-5</c> → <c>claude-haiku-4.5</c>,
+    /// see <see cref="CopilotModelIds"/>) when the map has no entry for the request.
+    /// </summary>
     public string MapModel(string requested) =>
         Settings[ModelMapKey] is JsonObject o && o[requested] is JsonValue v && v.TryGetValue<string>(out var target) && target.Length > 0
             ? target
-            : requested;
+            : CopilotModelIds.IsCopilot(this) ? CopilotModelIds.ToUpstream(requested) : requested;
 }
 
 /// <summary>A model offered by a provider. Only <see cref="ModelId"/> is required; everything else inherits.</summary>

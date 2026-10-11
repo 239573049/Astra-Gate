@@ -12,6 +12,25 @@ public static class AccountStatus
     public static readonly IReadOnlyList<string> All = [Active, Expired, Revoked];
 }
 
+/// <summary>What kind of credential a subscription account holds (column <c>kind</c>).</summary>
+public static class AccountKinds
+{
+    /// <summary>A login: access token plus a refreshable grant (or a long-lived token that simply expires).</summary>
+    public const string OAuth = "oauth";
+
+    /// <summary>A static API key the subscription's endpoint accepts: never refreshed, never expires.</summary>
+    public const string ApiKey = "api_key";
+}
+
+/// <summary>How an account was added (column <c>source</c>; null for accounts older than the column).</summary>
+public static class AccountSources
+{
+    public const string Login = "login";
+    public const string Local = "local";
+    public const string Token = "token";
+    public const string Batch = "batch";
+}
+
 /// <summary>
 /// One OAuth subscription login behind a provider whose
 /// <see cref="Provider.AuthScheme"/> is <see cref="AuthSchemes.OAuthSubscription"/> (plan §5.4).
@@ -53,6 +72,18 @@ public sealed class ProviderAccount
 
     /// <summary>Why the account was last taken out of rotation (display only).</summary>
     public string? LastError { get; set; }
+
+    /// <summary><see cref="AccountKinds"/> value.</summary>
+    public string Kind { get; set; } = AccountKinds.OAuth;
+
+    /// <summary><see cref="AccountSources"/> value; null when unknown.</summary>
+    public string? Source { get; set; }
+
+    /// <summary>
+    /// Proxy for everything sent with this account (requests, refresh, quota); null = the provider's
+    /// <see cref="Provider.HttpProxy"/>, else the system proxy.
+    /// </summary>
+    public string? HttpProxy { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }

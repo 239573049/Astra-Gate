@@ -18,7 +18,7 @@ public class MigrationTests
 
         await using var conn = await factory.OpenAsync();
         var versions = (await conn.QueryAsync<long>("SELECT version FROM schema_version")).AsList();
-        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L], versions.Order());
+        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L], versions.Order());
 
         var appliedAt = await conn.ExecuteScalarAsync<string>("SELECT applied_at FROM schema_version ORDER BY version LIMIT 1");
         Assert.NotNull(appliedAt);
@@ -59,6 +59,9 @@ public class MigrationTests
             "SELECT name FROM pragma_table_info('provider_accounts') ORDER BY name")).AsList();
         foreach (var column in new[] { "enabled", "is_current", "sort_order", "cooldown_until_utc", "last_error" })
             Assert.Contains(column, accountColumns);
+        // 0011_account_kinds: what an account holds, where it came from, and its own proxy.
+        foreach (var column in new[] { "kind", "source", "http_proxy" })
+            Assert.Contains(column, accountColumns);
         Assert.Contains("account_id", requestColumns);
         var bindingColumns = (await conn.QueryAsync<string>(
             "SELECT name FROM pragma_table_info('client_bindings') ORDER BY name")).AsList();
@@ -98,7 +101,7 @@ public class MigrationTests
             await conn.ExecuteAsync("INSERT INTO settings(key, value_json) VALUES ('marker', 'true')");
             // A database with tables but no version tracking (e.g. from before the runner existed):
             // fromVersion = 0 while the schema already exists, so a backup must be taken and the
-            // idempotent script must re-apply as a no-op. 0001 is idempotent but 0005 through 0009
+            // idempotent script must re-apply as a no-op. 0001 is idempotent but 0005 through 0011
             // are not, so the pre-0005 schema is simulated by undoing what they add.
             await conn.ExecuteAsync(UndoAfterProviderQuotaMigrations);
             await conn.ExecuteAsync(UndoProviderQuotaMigration);
@@ -116,7 +119,7 @@ public class MigrationTests
         Assert.True(new FileInfo(backup).Length > 0);
 
         await using var check = await factory.OpenAsync();
-        Assert.Equal(7, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
+        Assert.Equal(8, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
         Assert.Equal("true",
             await check.ExecuteScalarAsync<string>("SELECT value_json FROM settings WHERE key = 'marker'"));
         // 0005 was re-applied after the rollback: the reasoning columns are back.
@@ -157,7 +160,7 @@ public class MigrationTests
         var backup = Assert.Single(Directory.GetFiles(paths.DbBackupsDir));
         Assert.Contains("-v4", Path.GetFileName(backup));
         await using var check = await factory.OpenAsync();
-        Assert.Equal(10, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
+        Assert.Equal(11, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
         var record = await check.QuerySingleAsync<Astra.Core.Requests.RequestRecord>("""
             SELECT requested_model, reasoning_effort, reasoning_mode, reasoning_budget_tokens
             FROM requests WHERE id = 'r-v4'
@@ -168,8 +171,12 @@ public class MigrationTests
         Assert.Null(record.ReasoningBudgetTokens);
     }
 
-    /// <summary>Rolls a fully migrated database back to its v7 shape (what 0008, 0009 and 0010 add is removed).</summary>
+    /// <summary>Rolls a fully migrated database back to its v7 shape (what 0008 – 0011 add is removed).</summary>
     private const string UndoAfterProviderQuotaMigrations = """
+        ALTER TABLE provider_accounts DROP COLUMN kind;
+        ALTER TABLE provider_accounts DROP COLUMN source;
+        ALTER TABLE provider_accounts DROP COLUMN http_proxy;
+        DELETE FROM schema_version WHERE version = 11;
         DROP TABLE IF EXISTS claude_direct_requests;
         DELETE FROM schema_version WHERE version = 10;
         ALTER TABLE provider_models DROP COLUMN upstream_protocols_json;

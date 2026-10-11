@@ -16,6 +16,12 @@ public sealed class AppSettings
     /// <summary>Null = keep request logs forever.</summary>
     public int? RequestRetentionDays { get; set; }
 
+    /// <summary>
+    /// Whether gateway calls must present an Astra token. Off = a call without a (valid) token is served as a direct
+    /// call through the default token; a valid token (with or without a client suffix) still routes as usual.
+    /// </summary>
+    public bool RequireGatewayKey { get; set; } = true;
+
     public EffortBudgets EffortBudgets { get; set; } = new();
     public int StreamIdleTimeoutSec { get; set; } = 300;
 

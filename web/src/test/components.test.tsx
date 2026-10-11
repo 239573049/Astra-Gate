@@ -4,7 +4,7 @@ import { X } from 'lucide-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RequestQuery } from '../api/hooks';
-import type { ClientInfo, Page, Provider, RequestDetail, RequestSummary } from '../api/types';
+import type { ClientInfo, Provider, RequestDetail, RequestPage, RequestSummary } from '../api/types';
 import { FilterMenu, FilterToolbar, type FilterChip, type FilterField, type FilterMessages } from '../components/arc/filter-toolbar/filter-toolbar';
 import { Button, Field, Input, Segmented } from '../components/ui/controls';
 import { I18nProvider } from '../i18n';
@@ -129,7 +129,7 @@ const summary = (overrides: Partial<RequestSummary> & Pick<RequestSummary, 'id'>
 const providerRow = (id: string, name: string): Provider =>
   ({ id, name, enabled: true } as Provider);
 
-const pageOf = (items: RequestSummary[]): Page<RequestSummary> => ({ items, total: items.length, page: 1, pageSize: 50 });
+const pageOf = (items: RequestSummary[]): RequestPage => ({ items, total: items.length, page: 1, pageSize: 50, totalCostNanoUsd: items.reduce((sum, r) => sum + (r.costNanoUsd ?? 0), 0) });
 
 const hookResult = (data: unknown) => ({ data, isLoading: false, isError: false, error: null });
 
@@ -148,15 +148,14 @@ const showPage = () => {
   );
 };
 
-/** Drives the real two-step Add filter menu: pick a field row, then a value row. */
-async function pickMenuValue(group: HTMLElement, fieldLabel: string, optionText: string, rowId?: string) {
-  fireEvent.click(within(group).getByRole('button', { name: 'Add filter' }), { detail: 1 });
-  const fieldRow = (await screen.findAllByRole('menuitem', { name: fieldLabel }))[0]!;
-  fireEvent.click(fieldRow, { detail: 1 });
-  const rows = await screen.findAllByRole('menuitemradio', { name: optionText });
+/** Opens a filter multi-select (keyboard, as Radix opens on Enter) and toggles the option rows named `optionText`. */
+async function pickOption(group: HTMLElement, field: string, optionText: string, rowId?: string) {
+  const trigger = within(group).getByRole('button', { name: new RegExp(`^${field}:`) });
+  if (trigger.getAttribute('data-state') !== 'open') fireEvent.keyDown(trigger, { key: 'Enter' });
+  const rows = await screen.findAllByRole('menuitemcheckbox', { name: optionText });
   const target = rowId ? rows.find((row) => row.getAttribute('data-row') === rowId) : rows[0];
   expect(target).toBeDefined();
-  fireEvent.click(target!, { detail: 1 });
+  fireEvent.click(target!);
   return target!;
 }
 
@@ -353,18 +352,37 @@ describe('RequestsPage filtering', () => {
     hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
-  it('keeps the model search inside the Active filters group; trim + debounce produce the chip and the query', async () => {
+  it('keeps the model search inside the filter group; trim + debounce feed the query', async () => {
     showPage();
     const group = screen.getByRole('group', { name: 'Active filters' });
-    const input = within(group).getByLabelText('Search model IDs (keyword)');
-    expect(within(group).queryByTitle('Model: gpt-5')).toBeNull();
-
-    fireEvent.change(input, { target: { value: '  gpt-5  ' } });
-    // The chip trims at once; the query only picks the keyword up after the debounce.
-    expect(within(group).getByTitle('Model: gpt-5')).toBeInTheDocument();
+    fireEvent.change(within(group).getByLabelText('Search model IDs (keyword)'), { target: { value: '  gpt-5  ' } });
     expect(lastQuery().model).toBe('');
     await waitDebounce();
     expect(lastQuery().model).toBe('gpt-5');
+  });
+
+  it('shows client icons and joins several picked clients into one query', async () => {
+    hookSpies.useClients.mockReturnValue(hookResult([{ kind: 'codex', name: 'Codex' } as ClientInfo, { kind: 'claude-code', name: 'Claude Code' } as ClientInfo]));
+    showPage();
+    const group = screen.getByRole('group', { name: 'Active filters' });
+    const codex = await pickOption(group, 'Client', 'Codex');
+    expect(codex.querySelector('[data-testid^="lobe-"]')).not.toBeNull();
+    // The menu stays open, so the next pick is in the same pass.
+    await pickOption(group, 'Client', 'Claude Code');
+    await waitDebounce();
+    expect(lastQuery()).toMatchObject({ client: 'codex,claude-code', page: 1 });
+    expect(within(group).getByRole('button', { name: 'Client: Codex, Claude Code' })).toHaveTextContent('+1');
+
+    // Unchecking narrows the list again.
+    await pickOption(group, 'Client', 'Codex');
+    await waitDebounce();
+    expect(lastQuery().client).toBe('claude-code');
+  });
+
+  it('shows the filtered total spend from the list query in the header', () => {
+    hookSpies.useRequests.mockReturnValue(hookResult({ ...pageOf([summary({ id: 'req-1' })]), total: 120, totalCostNanoUsd: 12_340_000_000 }));
+    showPage();
+    expect(screen.getByText('Total spend').parentElement).toHaveTextContent('$12.34');
   });
 
   it('returns to page 1 when a filter changes', async () => {
@@ -373,54 +391,38 @@ describe('RequestsPage filtering', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Page 2' }));
     expect(lastQuery().page).toBe(2);
 
-    await pickMenuValue(screen.getByRole('group', { name: 'Active filters' }), 'Provider', 'Anthropic', 'prov-relay');
-    await waitFor(() => expect(lastQuery()).toMatchObject({ provider: 'prov-relay', page: 1 }));
+    await pickOption(screen.getByRole('group', { name: 'Active filters' }), 'Provider', 'Anthropic', 'prov-relay');
+    await waitDebounce();
+    expect(lastQuery()).toMatchObject({ provider: 'prov-relay', page: 1 });
   });
 
-  it('clear-all resets model, client, provider and status and returns to page 1', async () => {
+  it('clear resets model, providers and statuses and returns to page 1', async () => {
     showPage();
     const group = screen.getByRole('group', { name: 'Active filters' });
     fireEvent.change(within(group).getByLabelText('Search model IDs (keyword)'), { target: { value: 'gpt-5' } });
-    await pickMenuValue(group, 'Provider', 'Anthropic', 'prov-anthropic');
-    await pickMenuValue(group, 'Status', 'Success');
-    await waitFor(() => expect(lastQuery()).toMatchObject({ provider: 'prov-anthropic', status: 'success' }));
+    await pickOption(group, 'Provider', 'Anthropic', 'prov-anthropic');
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    await pickOption(group, 'Status', 'Success');
+    await waitDebounce();
+    expect(lastQuery()).toMatchObject({ model: 'gpt-5', provider: 'prov-anthropic', status: 'success' });
 
     fireEvent.click(within(group).getByRole('button', { name: 'Clear filters' }));
-    await waitFor(() => expect(lastQuery()).toMatchObject({ model: '', client: '', provider: '', status: '', page: 1 }));
+    await waitDebounce();
+    expect(lastQuery()).toMatchObject({ model: '', client: '', provider: '', status: '', page: 1 });
     expect(within(group).getByLabelText('Search model IDs (keyword)')).toHaveValue('');
-    expect(within(group).getByText('No filters applied')).toBeInTheDocument();
-    // Leaving chips unmount after their exit transition, so wait them out.
-    await waitFor(() => expect(within(group).queryByTitle('Provider: Anthropic')).toBeNull());
-    await waitFor(() => expect(within(group).queryByTitle('Model: gpt-5')).toBeNull());
-  });
-
-  it('removing only the model chip keeps the provider chip', async () => {
-    showPage();
-    const group = screen.getByRole('group', { name: 'Active filters' });
-    fireEvent.change(within(group).getByLabelText('Search model IDs (keyword)'), { target: { value: 'gpt-5' } });
-    await pickMenuValue(group, 'Provider', 'Anthropic', 'prov-anthropic');
-    expect(within(group).getByTitle('Model: gpt-5')).toBeInTheDocument();
-
-    fireEvent.click(within(group).getByRole('button', { name: 'Remove filter: Model: gpt-5' }));
-    await waitFor(() => expect(lastQuery()).toMatchObject({ model: '', provider: 'prov-anthropic', page: 1 }));
-    await waitFor(() => expect(within(group).queryByTitle('Model: gpt-5')).toBeNull());
-    expect(within(group).getByTitle('Provider: Anthropic')).toBeInTheDocument();
-    expect(within(group).getByLabelText('Search model IDs (keyword)')).toHaveValue('');
+    expect(within(group).getByRole('button', { name: 'Provider: All providers' })).toBeInTheDocument();
   });
 
   it('picking the second of two same-name providers queries its real id', async () => {
     showPage();
     const group = screen.getByRole('group', { name: 'Active filters' });
-    fireEvent.click(within(group).getByRole('button', { name: 'Add filter' }), { detail: 1 });
-    fireEvent.click((await screen.findAllByRole('menuitem', { name: 'Provider' }))[0]!, { detail: 1 });
-    expect(await screen.findByRole('button', { name: 'Back to filter fields' })).toBeInTheDocument();
-    const rows = await screen.findAllByRole('menuitemradio', { name: 'Anthropic' });
-    expect(rows).toHaveLength(2);
-
-    fireEvent.click(rows.find((row) => row.getAttribute('data-row') === 'prov-relay')!, { detail: 1 });
-    await waitFor(() => expect(lastQuery().provider).toBe('prov-relay'));
-    // The chip shows the shared label, never the internal id.
-    expect(within(group).getByTitle('Provider: Anthropic')).toBeInTheDocument();
+    fireEvent.keyDown(within(group).getByRole('button', { name: /^Provider:/ }), { key: 'Enter' });
+    expect(await screen.findAllByRole('menuitemcheckbox', { name: 'Anthropic' })).toHaveLength(2);
+    await pickOption(group, 'Provider', 'Anthropic', 'prov-relay');
+    await waitDebounce();
+    expect(lastQuery().provider).toBe('prov-relay');
+    // The trigger shows the shared label, never the internal id.
     expect(within(group).queryByText('prov-relay')).toBeNull();
   });
 });

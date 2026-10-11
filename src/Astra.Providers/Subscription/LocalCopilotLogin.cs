@@ -59,6 +59,35 @@ public static class LocalCopilotLogin
             || token.StartsWith("ghp_", StringComparison.Ordinal)
             || token.StartsWith("github_pat_", StringComparison.Ordinal));
 
+    /// <summary>
+    /// 可直接使用的 Copilot 令牌（不是 GitHub token）：形如 <c>tid=…;exp=1760000000;sku=…;proxy-ep=…:签名</c>，
+    /// 就是 <c>copilot_internal/v2/token</c> 换出来的那个短时令牌。必须带 <c>exp=</c>——没有到期时间就无从判断能否使用。
+    /// </summary>
+    public static bool LooksLikeCopilotToken(string? token) =>
+        !string.IsNullOrWhiteSpace(token)
+        && token.Length is > 20 and < 4000
+        && !token.Any(char.IsWhiteSpace)
+        && (token.StartsWith("tid=", StringComparison.Ordinal) || token.StartsWith("exp=", StringComparison.Ordinal))
+        && CopilotTokenExpiry(token) is not null;
+
+    /// <summary>直连令牌里的 <c>exp=</c>（Unix 秒）；没有或解析不了给 null。</summary>
+    public static DateTimeOffset? CopilotTokenExpiry(string token) =>
+        long.TryParse(CopilotTokenField(token, "exp"), out var seconds) && seconds > 0
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+            : null;
+
+    /// <summary>直连令牌里的字段值（<c>tid</c> / <c>sku</c> …），签名部分（<c>:</c> 之后）不参与。</summary>
+    public static string? CopilotTokenField(string token, string name)
+    {
+        var colon = token.IndexOf(':');
+        var body = colon >= 0 ? token[..colon] : token;
+        var prefix = name + "=";
+        foreach (var part in body.Split(';'))
+            if (part.StartsWith(prefix, StringComparison.Ordinal) && part.Length > prefix.Length)
+                return part[prefix.Length..];
+        return null;
+    }
+
     /// <summary>不产生副作用的来源：环境变量与 Copilot 插件配置。</summary>
     public static List<LocalGitHubCredential> Cheap(LocalCredentialEnvironment env) =>
         Collect([

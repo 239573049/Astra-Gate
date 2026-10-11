@@ -1,22 +1,20 @@
 import { Alert } from './arc/alert/alert';
-import { Copy, KeyRound, Plus } from 'lucide-react';
+import { Copy, KeyRound } from 'lucide-react';
 import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
-import { useClaudeDirect, useClaudeDirectRequests, useCreateClaudeProfile, useSelectClaudeDirect } from '../api/hooks';
-import type { ClaudeDirectMode, ClaudeDirectRequest } from '../api/types';
-import { Badge, Button, EmptyState, Group, Input, Row, Segmented, Spinner, Switch } from './ui/controls';
-import { errorText, useFeedback } from './ui/overlays';
+import { useClaudeDirect, useClaudeDirectRequests, useSelectClaudeDirect } from '../api/hooks';
+import type { ClaudeDirectAccount, ClaudeDirectMode, ClaudeDirectRequest } from '../api/types';
+import { Badge, Button, EmptyState, Group, Row, Segmented, Spinner, Switch } from './ui/controls';
+import { errorText, Select, useFeedback } from './ui/overlays';
 import { useI18n } from '../i18n';
 import { formatDateTime, formatMs, formatNanos, formatTokens } from '../lib/format';
 import { systemActions } from '../shell/systemActions';
 
 type ClaudeDirectRequests = ReturnType<typeof useClaudeDirectRequests>;
 
-/** One command of the Astra launcher; the profile id is the only variable part. */
-function launcherCommand(kind: 'login' | 'status' | 'run', id: string): string {
-  const tail = kind === 'login' ? ' --login' : kind === 'status' ? ' --status' : '';
-  return `astra claude --profile ${id}${tail}`;
-}
+/** The launcher command: it takes the account from the server, so it carries no id and no credential. */
+const LAUNCH_COMMAND = 'astra claude';
 
 /** Totals of the shown requests: the client's input rows, the whole input, the output, and its own cost estimate. */
 export function claudeDirectTotals(rows: ClaudeDirectRequest[]) {
@@ -33,30 +31,46 @@ export function claudeDirectTotals(rows: ClaudeDirectRequest[]) {
   );
 }
 
+/** Only an active, enabled account may carry a session; the server refuses the rest with a 409. */
+const accountUsable = (a: ClaudeDirectAccount) => a.status === 'active' && a.enabled;
+
+/** "Work · me@example.com · Pro", plus the status suffix when the account cannot be used. */
+function accountLabel(a: ClaudeDirectAccount, suffix: string): string {
+  const head = [a.name || a.id, a.email ? `· ${a.email}` : null, a.plan ? `· ${a.plan}` : null].filter(Boolean).join(' ');
+  return accountUsable(a) ? head : `${head} · ${suffix}`;
+}
+
 /**
- * The Claude Code panel for the Astra launcher's direct mode: the mode selector, the isolated native login
- * profiles, the terminal commands that log in / check / start one, and the opt-in statistics of the selected
- * profile. The user's own `claude` command and its default ~/.claude configuration are never touched.
- * Rendered for Claude Code only; that is the only client whose `enabled` is ever true here.
+ * The Claude Code panel for the Astra launcher's direct mode: the mode selector, the subscription accounts the
+ * launcher may use, the terminal command that starts one, and the opt-in statistics of the selected account.
+ * The accounts are the ones already signed in under the Claude subscription provider — nothing is created or
+ * signed in here, and the user's own `claude` command and ~/.claude configuration are never touched.
+ * `gatewayEnabled` is the client's own take-over switch (ClientsPage): while it is on, direct cannot take effect.
  */
-export function ClaudeDirectPanel({ enabled }: { enabled: boolean }) {
+export function ClaudeDirectPanel({ enabled, gatewayEnabled }: { enabled: boolean; gatewayEnabled: boolean }) {
   const { t } = useI18n();
   const { toast } = useFeedback();
+  const navigate = useNavigate();
   const state = useClaudeDirect(enabled);
-  const create = useCreateClaudeProfile();
   const select = useSelectClaudeDirect();
-  const [name, setName] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
 
   const mode = state.data?.mode ?? 'gateway';
-  const profiles = state.data?.profiles ?? [];
-  const selectedId = state.data?.profileId ?? profiles[0]?.id ?? null;
-  const selected = profiles.find((p) => p.id === selectedId);
+  const accounts = state.data?.accounts ?? [];
+  const savedId = state.data?.accountId ?? null;
+  const selectedId = savedId ?? accounts.find(accountUsable)?.id ?? null;
+  const selected = accounts.find((a) => a.id === selectedId);
   const direct = mode === 'direct';
-  // Statistics are collected only for a selected direct profile with consent on; polling follows that.
+  // While the client is taken over, any direct selection would be written over by the gateway config.
+  const warned = gatewayEnabled && (direct || state.data != null);
+  // Statistics are collected only for a selected direct account with consent on; polling follows that.
   const live = direct && selected?.telemetryEnabled === true;
   const requests = useClaudeDirectRequests(live ? selected?.id : null, live);
-  const busy = create.isPending || select.isPending;
+  const busy = select.isPending;
+
+  // The account id is the server's; the launcher reads it from there, so the command stays account-free.
+  const choose = (body: { mode: ClaudeDirectMode; accountId?: string | null; telemetryEnabled?: boolean }) =>
+    select.mutate(body, { onError: (e) => toast(errorText(e), 'error') });
 
   const copy = async (text: string) => {
     if (!(await systemActions.copy(text))) return;
@@ -66,33 +80,23 @@ export function ClaudeDirectPanel({ enabled }: { enabled: boolean }) {
 
   const switchMode = (next: ClaudeDirectMode) => {
     if (next === mode || busy || !state.data) return;
-    if (next === 'direct' && !selectedId) {
-      toast(t('clients.claudeDirect.needProfileDetail'), 'error');
+    // Direct needs an active account; without one the user is sent to the providers page instead of a dead end.
+    const target = selectedId ?? accounts.find(accountUsable)?.id ?? null;
+    if (next === 'direct' && !target) {
+      toast(t('clients.claudeDirect.needAccountToast'), 'error');
       return;
     }
-    select.mutate({ mode: next, profileId: selectedId }, { onError: (e) => toast(errorText(e), 'error') });
+    choose({ mode: next, accountId: target });
   };
 
-  const chooseProfile = (id: string) => {
-    if (busy) return;
-    select.mutate({ mode, profileId: id }, { onError: (e) => toast(errorText(e), 'error') });
+  const chooseAccount = (id: string) => {
+    if (busy || id === selectedId) return;
+    choose({ mode, accountId: id });
   };
 
   const setConsent = (on: boolean) => {
     if (!selected || busy) return;
-    select.mutate({ mode, profileId: selected.id, telemetryEnabled: on }, { onError: (e) => toast(errorText(e), 'error') });
-  };
-
-  const addProfile = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    create.mutate(trimmed, {
-      onSuccess: () => {
-        setName('');
-        toast(t('clients.claudeDirect.profileCreated', { name: trimmed }), 'success');
-      },
-      onError: (e) => toast(errorText(e), 'error'),
-    });
+    choose({ mode, accountId: selected.id, telemetryEnabled: on });
   };
 
   return (
@@ -122,86 +126,47 @@ export function ClaudeDirectPanel({ enabled }: { enabled: boolean }) {
         </div>
       )}
 
+      {warned && (
+        <div className="mb-5">
+          <Alert tone="warning" title={t('clients.claudeDirect.gatewayOnTitle')}>
+            {t('clients.claudeDirect.gatewayOnDetail')}
+          </Alert>
+        </div>
+      )}
+
       {state.data && (
-        <Group title={t('clients.claudeDirect.profilesTitle')} footer={t('clients.claudeDirect.profilesFooter')}>
-          {profiles.length === 0 && (
-            <div className="px-4 py-3 text-[12px] text-[var(--text-secondary)]">{t('clients.claudeDirect.noProfiles')}</div>
-          )}
-          {profiles.map((p) => (
-            <Row
-              key={p.id}
-              icon={<KeyRound className="size-4 text-[var(--text-secondary)]" />}
-              label={
-                <span className="flex items-center gap-2">
-                  <span className="truncate">{p.name}</span>
-                  {p.id === selectedId && <Badge tone="accent">{t('clients.claudeDirect.selectedBadge')}</Badge>}
-                  {p.telemetryEnabled && <Badge>{t('clients.claudeDirect.statsBadge')}</Badge>}
-                </span>
+        <Group title={t('clients.claudeDirect.accountsTitle')} footer={t('clients.claudeDirect.accountsFooter')}>
+          {accounts.length === 0 ? (
+            <EmptyState
+              title={t('clients.claudeDirect.noAccount')}
+              detail={t('clients.claudeDirect.noAccountDetail')}
+              action={
+                <Button variant="primary" onClick={() => navigate('/providers')}>
+                  {t('clients.claudeDirect.goProviders')}
+                </Button>
               }
-              detail={p.configDirectory}
-              selected={p.id === selectedId}
-              onClick={p.id === selectedId ? undefined : () => chooseProfile(p.id)}
-            >
-              {p.id !== selectedId && <span className="text-[11px] text-[var(--text-secondary)]">{t('clients.claudeDirect.makeSelected')}</span>}
-            </Row>
-          ))}
-          <Row label={t('clients.claudeDirect.addProfile')} detail={t('clients.claudeDirect.addProfileDetail')}>
-            <Input
-              className="w-44"
-              value={name}
-              maxLength={80}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('clients.claudeDirect.namePlaceholder')}
-              aria-label={t('clients.claudeDirect.name')}
             />
-            <Button
-              size="sm"
-              variant="primary"
-              icon={<Plus className="size-3.5" />}
-              disabled={busy || !name.trim() || profiles.length >= 20}
-              loading={create.isPending}
-              onClick={addProfile}
-            >
-              {t('common.add')}
-            </Button>
-          </Row>
-        </Group>
-      )}
-
-      {state.data && !direct && (
-        <Alert tone="info" title={t('clients.claudeDirect.gatewayTitle')}>
-          {t('clients.claudeDirect.gatewayHint')}
-        </Alert>
-      )}
-
-      {state.data && !direct && profiles.length > 0 && (
-        <Group title={t('clients.claudeDirect.launchTitle')} footer={t('clients.claudeDirect.launchFooter')}>
-          <p className="px-4 pt-3 pb-1 text-[11px] text-[var(--text-secondary)]">{t('clients.claudeDirect.launchNote')}</p>
-          {selected && (
-            <>
-              <LauncherRow command={launcherCommand('login', selected.id)} copied={copied} onCopy={copy} />
-              <LauncherRow command={launcherCommand('status', selected.id)} copied={copied} onCopy={copy} />
-            </>
+          ) : (
+            <Row label={t('clients.claudeDirect.account')}>
+              <Select
+                className="max-w-[300px]"
+                ariaLabel={t('clients.claudeDirect.account')}
+                value={selectedId}
+                onChange={chooseAccount}
+                options={accounts.map((a) => ({
+                  value: a.id,
+                  label: accountLabel(a, t('clients.claudeDirect.accountDisabledSuffix', { status: t(`providers.subscription.status.${a.status}` as 'providers.subscription.status.active') })),
+                  disabled: !accountUsable(a),
+                }))}
+              />
+            </Row>
           )}
         </Group>
-      )}
-
-      {state.data && direct && !selected && (
-        <Alert tone="warning" title={t('clients.claudeDirect.needProfile')}>
-          {t('clients.claudeDirect.needProfileDetail')}
-        </Alert>
       )}
 
       {state.data && direct && selected && (
-        <Group title={t('clients.claudeDirect.launchTitle')} footer={t('clients.claudeDirect.launchFooter')}>
-          <Alert tone="warning" title={t('clients.claudeDirect.defaultTitle')}>
-            {t('clients.claudeDirect.defaultDetail')}
-          </Alert>
-          <p className="px-4 pt-3 pb-1 text-[11px] text-[var(--text-secondary)]">{t('clients.claudeDirect.launchNote')}</p>
-          <LauncherRow command={launcherCommand('login', selected.id)} copied={copied} onCopy={copy} />
-          <LauncherRow command={launcherCommand('status', selected.id)} copied={copied} onCopy={copy} />
-          <LauncherRow command={launcherCommand('run', selected.id)} copied={copied} onCopy={copy} />
-          <p className="px-4 py-2 text-[11px] text-[var(--text-muted)]">{t('clients.claudeDirect.identityNote')}</p>
+        <Group title={t('clients.claudeDirect.launchTitle')} footer={t('clients.claudeDirect.launchNote')}>
+          <LauncherRow command={LAUNCH_COMMAND} copied={copied} onCopy={copy} />
         </Group>
       )}
 
@@ -222,7 +187,7 @@ export function ClaudeDirectPanel({ enabled }: { enabled: boolean }) {
   );
 }
 
-/** One launcher command with its copy button; only the public profile id is copied, never a credential. */
+/** The launcher command with its copy button: a fixed public command, never a credential. */
 function LauncherRow({ command, copied, onCopy }: { command: string; copied: string | null; onCopy: (text: string) => void }) {
   const { t } = useI18n();
   return (
@@ -241,7 +206,7 @@ function LauncherRow({ command, copied, onCopy }: { command: string; copied: str
   );
 }
 
-/** The selected profile's reported requests: the totals of what is shown, then one row per request. */
+/** The selected account's reported requests: the totals of what is shown, then one row per request. */
 function ClaudeDirectStats({ requests }: { requests: ClaudeDirectRequests }) {
   const { t, locale } = useI18n();
   const rows = requests.data ?? [];

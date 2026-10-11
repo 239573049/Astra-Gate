@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ClaudeDirectRequest, ClientInfo, Provider } from '../api/types';
+import type { ClaudeDirectAccount, ClaudeDirectRequest, ClientInfo, Provider } from '../api/types';
 import { ClaudeDirectPanel, claudeDirectTotals } from '../components/ClaudeDirectPanel';
 import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider, translate } from '../i18n';
@@ -14,7 +14,6 @@ import { ClientsPage } from '../pages/ClientsPage';
 const hookSpies = vi.hoisted(() => ({
   state: { data: undefined as unknown, isLoading: false, isError: false, error: null as unknown },
   requests: { data: undefined as unknown, isLoading: false, isError: false, error: null as unknown },
-  create: vi.fn(),
   select: vi.fn(),
   requestsEnabled: [] as (string | null | undefined)[],
   requestsLive: [] as boolean[],
@@ -23,16 +22,20 @@ const hookSpies = vi.hoisted(() => ({
 
 const directState = (over: Record<string, unknown> = {}) => ({
   mode: 'gateway',
-  profileId: null as string | null,
-  profiles: [] as { id: string; name: string; telemetryEnabled: boolean; configDirectory: string }[],
+  accountId: null as string | null,
+  accounts: [] as ClaudeDirectAccount[],
   ...over,
 });
 
-const profile = (id: string, name: string, telemetryEnabled = false) => ({
-  id,
-  name,
-  telemetryEnabled,
-  configDirectory: `/Users/me/.astra/claude-profiles/${id}`,
+const account = (over: Partial<ClaudeDirectAccount> = {}): ClaudeDirectAccount => ({
+  id: 'a'.repeat(32),
+  name: 'Claude Pro',
+  email: 'me@example.com',
+  plan: 'Pro',
+  status: 'active',
+  enabled: true,
+  telemetryEnabled: false,
+  ...over,
 });
 
 vi.mock('../api/hooks', () => ({
@@ -53,7 +56,6 @@ vi.mock('../api/hooks', () => ({
     hookSpies.requestsLive.push(live);
     return hookSpies.requests;
   },
-  useCreateClaudeProfile: () => ({ mutate: hookSpies.create, isPending: false }),
   useSelectClaudeDirect: () => ({ mutate: hookSpies.select, isPending: false }),
   useClients: () => ({ data: clients, isLoading: false, isError: false, error: null }),
   useProviders: () => ({ data: providers, isLoading: false, isError: false, error: null }),
@@ -137,6 +139,12 @@ class NoopResizeObserver {
   disconnect() {}
 }
 
+// Radix' select trigger only opens on a mouse pointerdown; jsdom never sets pointerType.
+const openSelect = async (name: string) => {
+  fireEvent.pointerDown(screen.getByRole('combobox', { name }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  return await screen.findAllByRole('option');
+};
+
 // ---------- fixtures ----------
 
 const claudeCode = (over: Partial<ClientInfo> = {}): ClientInfo =>
@@ -200,6 +208,9 @@ const show = (ui: React.ReactNode) => {
   );
 };
 
+/** The panel on its own, inside a router: it links out to the providers page when no account exists yet. */
+const showPanel = (ui: React.ReactNode) => show(<MemoryRouter initialEntries={['/clients/claude-code']}>{ui}</MemoryRouter>);
+
 /** The page reads its client from the route; '/clients' falls back to codex, '/clients/claude-code' selects it. */
 const showPage = (path = '/clients/claude-code') =>
   show(
@@ -213,9 +224,13 @@ const showPage = (path = '/clients/claude-code') =>
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', NoopResizeObserver);
+  // Radix' select probes pointer capture and scrolls the current item into view; jsdom implements neither.
+  Element.prototype.hasPointerCapture = () => false;
+  Element.prototype.setPointerCapture = () => {};
+  Element.prototype.releasePointerCapture = () => {};
+  Element.prototype.scrollIntoView = () => {};
   hookSpies.state = { data: directState(), isLoading: false, isError: false, error: null };
   hookSpies.requests = { data: [], isLoading: false, isError: false, error: null };
-  hookSpies.create.mockClear();
   hookSpies.select.mockClear();
   hookSpies.enabled.mockClear();
   hookSpies.requestsEnabled.length = 0;
@@ -228,75 +243,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('Claude direct profile creation', () => {
-  it('creates the first login without any profile, and calls nobody before the user asks', async () => {
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: 'missing' }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+describe('Claude direct account selection', () => {
+  it('sends nobody to the providers page and switches nothing without an account', () => {
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
-    // No profile yet: the panel says how to fix it instead of dead-ending the mode switch.
-    expect(screen.getByText(t('clients.claudeDirect.needProfile'))).toBeInTheDocument();
-    expect(screen.getByText(t('clients.claudeDirect.noProfiles'))).toBeInTheDocument();
-    expect(hookSpies.create).not.toHaveBeenCalled();
+    // No account to pick: the panel explains where accounts come from instead of dead-ending the mode switch.
+    expect(screen.getByText(t('clients.claudeDirect.noAccount'))).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t('clients.claudeDirect.goProviders') })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: t('clients.claudeDirect.direct') }));
     expect(hookSpies.select).not.toHaveBeenCalled();
-
-    // The creation row is always usable, even with the mode already on direct.
-    fireEvent.change(screen.getByRole('textbox', { name: t('clients.claudeDirect.name') }), { target: { value: '  Work account  ' } });
-    fireEvent.click(screen.getByRole('button', { name: t('common.add') }));
-
-    await waitFor(() => expect(hookSpies.create).toHaveBeenCalledTimes(1));
-    // The trimmed name only; the profile id is the server's.
-    expect(hookSpies.create.mock.calls[0][0]).toBe('Work account');
-    const options = hookSpies.create.mock.calls[0][1];
-    expect(typeof options.onError).toBe('function');
-    expect(hookSpies.create.mock.calls[0]).toHaveLength(2);
-  });
-});
-
-describe('Claude direct mode and profile selection', () => {
-  it('switches the mode, selecting a profile in the same request', async () => {
-    hookSpies.state = { data: directState({ profiles: [profile('b'.repeat(32), 'Work')] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
-
-    fireEvent.click(screen.getByRole('button', { name: t('clients.claudeDirect.direct') }));
-    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
-    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', profileId: 'b'.repeat(32) });
-    expect(typeof hookSpies.select.mock.calls[0][1].onError).toBe('function');
+    expect(screen.getByText(t('clients.claudeDirect.needAccountToast'))).toBeInTheDocument();
   });
 
-  it('reports a failed switch and leaves the control usable', async () => {
-    hookSpies.state = { data: directState({ profiles: [profile('b'.repeat(32), 'Work')] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
-
-    fireEvent.click(screen.getByRole('button', { name: t('clients.claudeDirect.direct') }));
-    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
-    // The panel hands the failure to the toast layer, so a refused switch is visible.
-    hookSpies.select.mock.calls[0][1].onError(new Error('Choose an existing native Claude profile.'));
-    expect(await screen.findByText('Choose an existing native Claude profile.')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: t('clients.claudeDirect.direct') })).toBeEnabled();
-  });
-
-  it('selects another profile without changing the mode', async () => {
-    hookSpies.state = {
-      data: directState({ mode: 'direct', profileId: 'a'.repeat(32), profiles: [profile('a'.repeat(32), 'Work'), profile('b'.repeat(32), 'Personal')] }),
-      isLoading: false,
-      isError: false,
-      error: null,
-    };
-    show(<ClaudeDirectPanel enabled />);
-
-    fireEvent.click(screen.getByText('Personal'));
-    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
-    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', profileId: 'b'.repeat(32) });
-  });
-
-  it('surfaces a loopback-only refusal instead of an empty panel', () => {
-    hookSpies.state = { data: undefined, isLoading: false, isError: true, error: new Error('Native Claude profiles and telemetry require a loopback server on this machine.') };
-    show(<ClaudeDirectPanel enabled />);
+  it('never queries a loopback-only refusal twice and says why the state is missing', () => {
+    hookSpies.state = { data: undefined, isLoading: false, isError: true, error: new Error('Direct connection settings require a loopback server on this machine.') };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
     expect(screen.getByText(t('clients.claudeDirect.loadFailed'))).toBeInTheDocument();
     expect(screen.getByText(/require a loopback server/)).toBeInTheDocument();
-    // The profile group needs the state, so it stays away rather than rendering empty controls.
-    expect(screen.queryByRole('button', { name: t('common.add') })).not.toBeInTheDocument();
+    // The account group needs the state, so it stays away rather than rendering empty controls.
+    expect(screen.queryByText(t('clients.claudeDirect.noAccount'))).not.toBeInTheDocument();
   });
 
   it('is queried for Claude Code only, and every other client keeps it disabled', () => {
@@ -313,15 +280,109 @@ describe('Claude direct mode and profile selection', () => {
   });
 });
 
+describe('Claude direct mode and account switching', () => {
+  it('switches to direct with the first usable account in the same request', async () => {
+    const id = 'b'.repeat(32);
+    hookSpies.state = { data: directState({ accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: t('clients.claudeDirect.direct') }));
+    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
+    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', accountId: id });
+    expect(typeof hookSpies.select.mock.calls[0][1].onError).toBe('function');
+  });
+
+  it('reports a refused switch (409) and leaves the control usable', async () => {
+    const id = 'b'.repeat(32);
+    hookSpies.state = { data: directState({ accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
+
+    fireEvent.click(screen.getByRole('button', { name: t('clients.claudeDirect.direct') }));
+    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
+    // The panel hands the server's message to the toast layer, so a refused switch is visible.
+    hookSpies.select.mock.calls[0][1].onError(new Error('Disable the gateway take-over for Claude Code first.'));
+    expect(await screen.findByText('Disable the gateway take-over for Claude Code first.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: t('clients.claudeDirect.direct') })).toBeEnabled();
+  });
+
+  it('picks another account without changing the mode, and skips the one already selected', async () => {
+    const first = 'a'.repeat(32);
+    const second = 'b'.repeat(32);
+    hookSpies.state = {
+      data: directState({ mode: 'direct', accountId: first, accounts: [account({ id: first, name: 'Work' }), account({ id: second, name: 'Personal', email: null, plan: null })] }),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
+
+    // The picker shows the saved account and both options, labelled name + email + plan.
+    expect(screen.getByRole('combobox', { name: t('clients.claudeDirect.account') })).toHaveTextContent('Work');
+    const options = await openSelect(t('clients.claudeDirect.account'));
+    expect(options.map((o) => o.textContent)).toEqual(['Work · me@example.com · Pro', 'Personal']);
+
+    fireEvent.click(options.filter((o) => o.textContent === 'Personal')[0]!);
+    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
+    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', accountId: second });
+
+    // Picking the one already in use is a no-op.
+    fireEvent.click(options.filter((o) => o.textContent?.startsWith('Work'))[0]!);
+    expect(hookSpies.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers unusable accounts as disabled options with their status, and never makes them the default', async () => {
+    const expired = 'a'.repeat(32);
+    const usable = 'b'.repeat(32);
+    hookSpies.state = {
+      data: directState({ accounts: [account({ id: expired, name: 'Old', status: 'expired' }), account({ id: usable, name: 'Work' })] }),
+      isLoading: false,
+      isError: false,
+      error: null,
+    };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
+
+    const options = await openSelect(t('clients.claudeDirect.account'));
+    const bad = options.find((o) => o.textContent?.startsWith('Old'))!;
+    expect(bad).toHaveAttribute('aria-disabled', 'true');
+    expect(bad.textContent).toContain(t('providers.subscription.status.expired'));
+    expect(bad.textContent).toContain(t('clients.claudeDirect.accountDisabledSuffix', { status: t('providers.subscription.status.expired') }));
+
+    // A disabled option is a dead end: nothing is sent, not even for the account it names.
+    fireEvent.pointerDown(bad, { pointerType: 'mouse' });
+    fireEvent.pointerUp(bad, { pointerType: 'mouse' });
+    fireEvent.click(bad);
+    expect(hookSpies.select).not.toHaveBeenCalled();
+
+    // The still-open popover is a modal layer, so close it before reaching for the switch below.
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('option')).not.toBeInTheDocument());
+
+    // The switch knows the expired account cannot serve and takes the active one instead.
+    fireEvent.click(screen.getByRole('button', { name: t('clients.claudeDirect.direct') }));
+    await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
+    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', accountId: usable });
+  });
+
+  it('warns that the enabled gateway take-over would override a direct connection', () => {
+    hookSpies.state = { data: directState({ accounts: [account()] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled />);
+
+    expect(screen.getByText(t('clients.claudeDirect.gatewayOnTitle'))).toBeInTheDocument();
+    expect(screen.getByText(t('clients.claudeDirect.gatewayOnDetail'))).toBeInTheDocument();
+    // The switch stays clickable; the server is what refuses it (409).
+    expect(screen.getByRole('button', { name: t('clients.claudeDirect.direct') })).toBeEnabled();
+  });
+});
+
 describe('Claude direct statistics consent', () => {
-  it('records the consent of the selected profile and stops the polling when off', async () => {
+  it('records the consent of the selected account and stops the polling when off', async () => {
     const id = 'a'.repeat(32);
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: id, profiles: [profile(id, 'Work', true)] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work', telemetryEnabled: true })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
     fireEvent.click(screen.getByRole('switch', { name: t('clients.claudeDirect.statsConsent') }));
     await waitFor(() => expect(hookSpies.select).toHaveBeenCalledTimes(1));
-    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', profileId: id, telemetryEnabled: false });
+    expect(hookSpies.select.mock.calls[0][0]).toEqual({ mode: 'direct', accountId: id, telemetryEnabled: false });
 
     // While the consent is on, the statistics poll every 5 s; the label says it is local only.
     expect(hookSpies.requestsLive).toContain(true);
@@ -331,8 +392,8 @@ describe('Claude direct statistics consent', () => {
 
   it('never polls without consent', () => {
     const id = 'a'.repeat(32);
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: id, profiles: [profile(id, 'Work', false)] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
     expect(hookSpies.requestsLive.every((live) => live === false)).toBe(true);
     // The consent is off by default: the switch is not on and no statistics query is made.
@@ -345,55 +406,52 @@ describe('Claude direct statistics consent', () => {
 
   it('shows an empty state instead of an empty table', () => {
     const id = 'a'.repeat(32);
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: id, profiles: [profile(id, 'Work', true)] }), isLoading: false, isError: false, error: null };
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work', telemetryEnabled: true })] }), isLoading: false, isError: false, error: null };
     hookSpies.requests = { data: [], isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
     expect(screen.getByText(t('clients.claudeDirect.statsEmpty'))).toBeInTheDocument();
   });
 });
 
-describe('Claude direct launch commands', () => {
-  it('copies the launcher command with the profile id and no credential', async () => {
+describe('Claude direct launch command', () => {
+  it('copies the launcher command with no account id and no credential', async () => {
     const id = 'c0ffee'.repeat(4).slice(0, 32);
     const writeText = vi.fn(async () => {});
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: id, profiles: [profile(id, 'Work')] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: t('common.copy') })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: t('common.copy') }));
 
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
-    expect(writeText).toHaveBeenCalledWith(`astra claude --profile ${id} --login`);
-    // Every launcher row is a plain command: no secret, no token, nothing but the public profile id.
-    const commands = screen.getAllByText(/^astra claude /).map((n) => n.textContent ?? '');
-    expect(commands).toEqual([
-      `astra claude --profile ${id} --login`,
-      `astra claude --profile ${id} --status`,
-      `astra claude --profile ${id}`,
-    ]);
-    expect(commands.join('\n')).not.toMatch(/token|secret|Bearer|key=/i);
+    expect(writeText).toHaveBeenCalledWith('astra claude');
+    // The account lives on the server, so the command carries no id and no credential.
+    expect(screen.getByText('astra claude')).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(id))).not.toBeInTheDocument();
+    expect(screen.getByText('astra claude').textContent).not.toMatch(/token|secret|bearer|key=/i);
   });
 
-  it('reports no login state of its own', () => {
+  it('reports no login state of its own and no account input', () => {
     const id = 'd'.repeat(32);
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: id, profiles: [profile(id, 'Work')] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
-    expect(screen.getByText(t('clients.claudeDirect.launchFooter'))).toBeInTheDocument();
-    expect(screen.getByText(t('clients.claudeDirect.identityNote'))).toBeInTheDocument();
-    expect(screen.queryByText(/signed in|logged in/i)).not.toBeInTheDocument();
+    expect(screen.getByText(t('clients.claudeDirect.launchNote'))).toBeInTheDocument();
+    expect(screen.queryByText(/signed in|logged in|--login|--status|--profile/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: t('clients.claudeDirect.account') })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t('common.add') })).not.toBeInTheDocument();
   });
 
-  it('offers the login command in gateway mode too, without any statistics', () => {
+  it('keeps the launcher out of gateway mode, where the gateway groups apply', () => {
     const id = 'e'.repeat(32);
-    hookSpies.state = { data: directState({ mode: 'gateway', profileId: id, profiles: [profile(id, 'Work')] }), isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    hookSpies.state = { data: directState({ mode: 'gateway', accountId: id, accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
-    expect(screen.getByText(`astra claude --profile ${id} --login`)).toBeInTheDocument();
-    expect(screen.getByText(t('clients.claudeDirect.gatewayHint'))).toBeInTheDocument();
+    expect(screen.queryByText('astra claude')).not.toBeInTheDocument();
     expect(screen.queryByText(t('clients.claudeDirect.statsTitle'))).not.toBeInTheDocument();
-    expect(screen.queryByText(`astra claude --profile ${id}`)).not.toBeInTheDocument();
+    expect(screen.getByText(t('clients.claudeDirect.accountsTitle'))).toBeInTheDocument();
   });
 });
 
@@ -419,9 +477,9 @@ describe('Claude direct statistics totals', () => {
 
   it('renders the totals and each request with model, status, tokens, time and account', () => {
     const id = 'a'.repeat(32);
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: id, profiles: [profile(id, 'Work', true)] }), isLoading: false, isError: false, error: null };
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work', telemetryEnabled: true })] }), isLoading: false, isError: false, error: null };
     hookSpies.requests = { data: [request(), request({ id: 'r2', model: 'claude-opus-4-1', status: 'error', accountUuid: null })], isLoading: false, isError: false, error: null };
-    show(<ClaudeDirectPanel enabled />);
+    showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
 
     // Latest 2: total input 11,000 (cache reads and creations included), total output 500.
     expect(screen.getByText(t('clients.claudeDirect.statsTotals', { count: '2' }))).toBeInTheDocument();
@@ -439,8 +497,8 @@ describe('Claude direct statistics totals', () => {
 });
 
 describe('ClientsPage in direct mode', () => {
-  it('hides gateway configuration and maintenance while exposing direct login settings', () => {
-    hookSpies.state = { data: directState({ mode: 'direct', profileId: 'f'.repeat(32) }), isLoading: false, isError: false, error: null };
+  it('hides gateway configuration and maintenance while exposing direct settings', () => {
+    hookSpies.state = { data: directState({ mode: 'direct', accountId: 'f'.repeat(32) }), isLoading: false, isError: false, error: null };
     showPage();
 
     expect(screen.queryByText(t('clients.providerTitle'))).not.toBeInTheDocument();
@@ -449,7 +507,7 @@ describe('ClientsPage in direct mode', () => {
     // The client config cannot be enabled from here in direct mode.
     expect(screen.queryByRole('button', { name: t('clients.enable') })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: t('clients.claudeDirect.configure') })).toBeInTheDocument();
-    // Default-config maintenance is unrelated to isolated profiles and stays in gateway mode.
+    // Default-config maintenance is unrelated to the direct connection and stays in gateway mode.
     expect(screen.queryByText(t('clients.maintenance'))).not.toBeInTheDocument();
     expect(screen.queryByText(t('clients.backups'))).not.toBeInTheDocument();
     expect(screen.queryByText(t('clients.copyConfigPath'))).not.toBeInTheDocument();

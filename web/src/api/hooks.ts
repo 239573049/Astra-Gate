@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 
 import { api, apiStream, enc, qs, type SseMessage } from './client';
 import type {
+  AccountImportInfo,
+  AccountImportRequest,
   AuthStatus,
   BackupInfo,
   BillingResult,
@@ -53,7 +55,7 @@ import type {
   RateStats,
   RemoteModel,
   RequestDetail,
-  RequestSummary,
+  RequestPage,
   Settings,
   SettingsPatch,
   StatsSummary,
@@ -102,6 +104,7 @@ export const keys = {
   subscriptionPolicy: (id: string) => ['subscription-policy', id] as const,
   localCodexLogin: ['local-codex-login'] as const,
   localCopilotLogin: ['local-copilot-login'] as const,
+  accountImportInfo: (id: string) => ['account-import-info', id] as const,
   resetCredits: (accountId: string) => ['reset-credits', accountId] as const,
   requests: (q: RequestQuery) => ['requests', q] as const,
   request: (id: string) => ['request', id] as const,
@@ -582,7 +585,7 @@ export const useActivateProviderAccount = (providerId: string) =>
     api<ProviderAccount[]>('POST', `/api/provider-accounts/${enc(id)}/activate`));
 
 export const useUpdateProviderAccount = (providerId: string) =>
-  useAccountListMutation(providerId, ({ id, ...patch }: { id: string; enabled?: boolean; displayName?: string }) =>
+  useAccountListMutation(providerId, ({ id, ...patch }: { id: string; enabled?: boolean; displayName?: string; httpProxy?: string }) =>
     api<ProviderAccount[]>('PATCH', `/api/provider-accounts/${enc(id)}`, patch));
 
 /** New failover order (first = tried first). */
@@ -618,11 +621,13 @@ export function useDeleteProviderAccount(providerId: string) {
   });
 }
 
+/** Starts a login; `accountId` re-logs that account in, `httpProxy` becomes the new account's own proxy. */
 export const useStartProviderLogin = (providerId: string) =>
   useMutation({
-    mutationFn: (accountId?: string) =>
+    mutationFn: (vars: { accountId?: string; httpProxy?: string } = {}) =>
       api<SubscriptionLoginStart>('POST', `/api/providers/${enc(providerId)}/accounts/login`, {
-        accountId: accountId || undefined,
+        accountId: vars.accountId || undefined,
+        httpProxy: vars.httpProxy?.trim() || undefined,
       }),
   });
 
@@ -695,22 +700,25 @@ export function useImportCopilotAccount(providerId: string) {
   });
 }
 
+export const useAccountImportInfo = (providerId: string, enabled = true) =>
+  useQuery({
+    queryKey: keys.accountImportInfo(providerId),
+    queryFn: () => api<AccountImportInfo>('GET', `/api/providers/${enc(providerId)}/accounts/import-info`),
+    enabled,
+    staleTime: Infinity,
+  });
+
 /**
- * Batch import: many pasted GitHub tokens (one per line) become Copilot accounts in one call. The result lists
- * every token (masked) with its outcome — imported / duplicate / invalid_format / failed.
+ * Unified import (refresh tokens, setup-tokens, credential JSON, API keys, GitHub tokens): every entry comes back
+ * masked with its outcome. A dry run only classifies and de-duplicates.
  */
-export function useBatchImportCopilotAccounts(providerId: string) {
+export function useImportAccounts(providerId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (tokens: string) =>
-      api<BatchImportResult>(
-        'POST',
-        `/api/providers/${enc(providerId)}/accounts/import-copilot/batch`,
-        { tokens },
-      ),
-    onSuccess: () => {
-      invalidateProviderAccounts(qc, providerId);
-      void qc.invalidateQueries({ queryKey: keys.localCopilotLogin });
+    mutationFn: (req: AccountImportRequest) =>
+      api<BatchImportResult>('POST', `/api/providers/${enc(providerId)}/accounts/import`, req),
+    onSuccess: (_r, req) => {
+      if (!req.dryRun) invalidateProviderAccounts(qc, providerId);
     },
   });
 }
@@ -861,13 +869,13 @@ export function useCancelClientInstall() {
   });
 }
 
-// ---------- Claude Code direct profiles ----------
+// ---------- Claude Code direct connection ----------
 
 const CLAUDE_DIRECT = '/api/clients/claude-code/direct';
 
 /**
- * Native Claude login profiles of the Astra launcher (loopback-only). Only pass `enabled` for Claude Code:
- * another client never queries this endpoint.
+ * The launcher's direct-connection setting and the Claude subscription accounts it can sign in with
+ * (loopback-only). Only pass `enabled` for Claude Code: another client never queries this endpoint.
  */
 export const useClaudeDirect = (enabled: boolean) =>
   useQuery({
@@ -877,18 +885,10 @@ export const useClaudeDirect = (enabled: boolean) =>
     retry: false,
   });
 
-/** Creates a profile; no login happens here (the user runs `astra claude --profile <id> --login` in a terminal). */
-export function useCreateClaudeProfile() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (name: string) => api<ClaudeDirectState>('POST', `${CLAUDE_DIRECT}/profiles`, { name }),
-    onSuccess: (state) => qc.setQueryData(keys.claudeDirect, state),
-  });
-}
-
 /**
- * Switches the launcher's mode / selected profile, or records the statistics consent of that profile.
- * Asking for direct without a profile is a 404: create one first (the profile group is always available).
+ * Switches the launcher's mode / selected account, or records the statistics consent of that account.
+ * The server answers 409 (its own message) when direct is refused: no active, enabled account, or the
+ * client's gateway take-over is still on.
  */
 export function useSelectClaudeDirect() {
   const qc = useQueryClient();
@@ -902,12 +902,12 @@ export function useSelectClaudeDirect() {
   });
 }
 
-/** The profile's most recent reported requests (at most 100, newest first); polls only when `live`. */
-export const useClaudeDirectRequests = (profileId: string | null | undefined, live: boolean) =>
+/** The account's most recent reported requests (at most 100, newest first); polls only when `live`. */
+export const useClaudeDirectRequests = (accountId: string | null | undefined, live: boolean) =>
   useQuery({
-    queryKey: keys.claudeDirectRequests(profileId ?? ''),
-    queryFn: () => api<ClaudeDirectRequest[]>('GET', `${CLAUDE_DIRECT}/profiles/${enc(profileId!)}/requests`),
-    enabled: Boolean(profileId),
+    queryKey: keys.claudeDirectRequests(accountId ?? ''),
+    queryFn: () => api<ClaudeDirectRequest[]>('GET', `${CLAUDE_DIRECT}/accounts/${enc(accountId!)}/requests`),
+    enabled: Boolean(accountId),
     retry: false,
     refetchInterval: live ? 5000 : false,
   });
@@ -971,7 +971,7 @@ export interface RequestQuery {
 export const useRequests = (q: RequestQuery, live: boolean) =>
   useQuery({
     queryKey: keys.requests(q),
-    queryFn: () => api<Page<RequestSummary>>('GET', `/api/requests${qs({ ...q })}`),
+    queryFn: () => api<RequestPage>('GET', `/api/requests${qs({ ...q })}`),
     placeholderData: (prev) => prev,
     refetchInterval: live ? 5000 : false,
   });

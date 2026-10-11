@@ -351,18 +351,24 @@ export interface BackupInfo { id: string; createdAt: string; files: string[]; fi
 // GET /api/clients/{kind}/backups -> BackupInfo[] ; POST /api/clients/{kind}/backups/{id}/restore -> ClientInfo
 // GET /api/clients/{kind}/models -> string[]   (enabled models of every bound provider, each id once, for model pickers)
 
-// ---------- Claude Code direct profiles (native login, Astra launcher only) ----------
+// ---------- Claude Code direct connection (Astra launcher only) ----------
 export type ClaudeDirectMode = "gateway" | "direct";
-/** One isolated native Claude login; the directory and its credentials never leave this machine. */
-export interface ClaudeDirectProfile { id: string; name: string; telemetryEnabled: boolean; configDirectory: string }
-/** Which connection the Astra launcher uses; the user's default `claude` is never changed by this selection. */
-export interface ClaudeDirectState { mode: ClaudeDirectMode; profileId?: string | null; profiles: ClaudeDirectProfile[] }
-/** Body of the mode / profile selection; telemetryEnabled is the statistics consent of that profile. */
-export interface ClaudeDirectSelect { mode: ClaudeDirectMode; profileId?: string | null; telemetryEnabled?: boolean }
 /**
- * One request a Claude Code profile made on its own direct connection and reported to us. This is client
+ * One subscription account of the "Claude subscription (Pro/Max)" provider that the launcher can sign in with:
+ * the tokens stay in Astra and never leave this machine.
+ */
+export interface ClaudeDirectAccount {
+  id: string; name: string; email?: string | null; plan?: string | null;
+  status: AccountStatus; enabled: boolean; telemetryEnabled: boolean;
+}
+/** Which connection the Astra launcher uses; the user's default `claude` is never changed by this selection. */
+export interface ClaudeDirectState { mode: ClaudeDirectMode; accountId?: string | null; accounts: ClaudeDirectAccount[] }
+/** Body of the mode / account selection; telemetryEnabled is the statistics consent of that account. */
+export interface ClaudeDirectSelect { mode: ClaudeDirectMode; accountId?: string | null; telemetryEnabled?: boolean }
+/**
+ * One request a Claude Code session made on its own direct connection and reported to us. This is client
  * telemetry, not gateway traffic — prompts, responses and tool arguments are never stored. Money is
- * integer nano-USD, estimated by the client itself.
+ * integer nano-USD, estimated by the client itself. profileId carries the Astra account id.
  */
 export interface ClaudeDirectRequest {
   id: string; profileId: string; sessionId: string; accountUuid?: string | null; model: string;
@@ -370,10 +376,10 @@ export interface ClaudeDirectRequest {
   inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number;
   durationMs?: number | null; estimatedCostNanoUsd?: number | null;
 }
-// GET /api/clients/claude-code/direct -> ClaudeDirectState
-// POST /api/clients/claude-code/direct/profiles body {name} -> ClaudeDirectState
+// GET /api/clients/claude-code/direct -> ClaudeDirectState   (accounts = the Claude subscription accounts)
 // PUT /api/clients/claude-code/direct body ClaudeDirectSelect -> ClaudeDirectState
-// GET /api/clients/claude-code/direct/profiles/{id}/requests -> ClaudeDirectRequest[]   (newest first, at most 100)
+//   (direct requires an active, enabled account and Claude Code's gateway take-over to be off; else 409)
+// GET /api/clients/claude-code/direct/accounts/{id}/requests -> ClaudeDirectRequest[]   (newest first, at most 100)
 // These endpoints answer a loopback caller only; a remote one gets 403 (and the panel shows why).
 
 // ---------- tokens ----------
@@ -408,6 +414,8 @@ export interface TokenMutationResult { token?: Token | null; rewritten: ClientKi
 // ---------- requests & stats ----------
 /** "pending" only ever comes from the live feed: the gateway is still handling the request (never stored). */
 export type RequestStatus = "success" | "upstream_error" | "gateway_error" | "client_cancelled" | "blocked" | "pending";
+// GET /api/requests -> RequestPage (totalCostNanoUsd sums every matching request, all pages)
+export interface RequestPage extends Page<RequestSummary> { totalCostNanoUsd: number }
 export interface RequestSummary {
   id: string; startedAtUtc: string; clientKind?: string | null; providerId?: string | null; providerName?: string | null;
   inboundProtocol: ApiProtocol; upstreamProtocol?: ApiProtocol | null; passthrough: boolean;
@@ -548,7 +556,17 @@ export interface ProviderAccount {
   /** Rate-limited until then (automatic failover skips it meanwhile). */
   cooldownUntilUtc?: string | null;
   lastError?: string | null;
+  /** oauth = a login (refreshable or long-lived token); api_key = a static key (never refreshed). */
+  kind?: AccountKind;
+  /** How the account was added; null for accounts older than the field. */
+  source?: AccountSource | null;
+  /** The account's own proxy; null = the provider's proxy, else the system proxy. */
+  httpProxy?: string | null;
+  /** Masked key of an api_key account (the key itself never crosses the wire). */
+  keyMasked?: string | null;
 }
+export type AccountKind = "oauth" | "api_key";
+export type AccountSource = "login" | "local" | "token" | "batch";
 /** Who may use a subscription provider and how its accounts switch. */
 export interface SubscriptionPolicy {
   clientPolicy: 'claude-code-only' | 'any';
@@ -560,7 +578,7 @@ export interface SubscriptionPolicy {
 }
 // GET|PUT /api/providers/{id}/subscription-policy  (PUT body: Partial<{clientPolicy, switchMode, mimicClaudeCode}>) -> SubscriptionPolicy
 // POST /api/provider-accounts/{id}/activate -> ProviderAccount[]   (409 {error, status} when the login is dead)
-// PATCH /api/provider-accounts/{id} body {enabled?, displayName?} -> ProviderAccount[]
+// PATCH /api/provider-accounts/{id} body {enabled?, displayName?, httpProxy? ("" clears)} -> ProviderAccount[]
 // PUT /api/providers/{id}/accounts/order body {ids} -> ProviderAccount[]
 /** One rate-limit reset card (codex); `status` is available | redeemed | expired. */
 export interface ResetCredit {
@@ -587,7 +605,8 @@ export type SubscriptionLoginStart =
   // Manual paste (Claude): the client's registered redirect_uri is not a loopback address, so the
   // authorization page shows the code and the user pastes it back to finish the login.
   | { mode: "paste"; state: string; authorizeUrl: string };
-// POST /api/providers/{id}/accounts/login body {accountId?} -> SubscriptionLoginStart
+// POST /api/providers/{id}/accounts/login body {accountId?, httpProxy?} -> SubscriptionLoginStart
+//   (httpProxy becomes the new account's own proxy; 400 {error} when it is not a valid proxy URL)
 //   (400 {error, needsVerification: true} while the provider's OAuth flow is unverified)
 // POST /api/providers/{id}/accounts/login/{state}/complete body {code} -> {status:"done", account}
 //   (400 {status:"error", error} when the pasted code could not be exchanged)
@@ -626,7 +645,10 @@ export interface BatchCopilotImportRequest {
   /** GitHub tokens, one per line (commas / whitespace also separate; `#` lines are comments). */
   tokens: string;
 }
-export type BatchImportStatus = "imported" | "duplicate" | "invalid_format" | "failed";
+export type BatchImportStatus = "imported" | "updated" | "duplicate" | "invalid_format" | "failed" | "ready";
+/** What an import entry was recognised as. */
+export type CredentialKind =
+  | "refresh_token" | "setup_token" | "api_key" | "github_token" | "copilot_token" | "claude_credentials" | "codex_auth_json";
 export interface BatchImportItem {
   /** 1-based position in the parsed input. */
   index: number;
@@ -636,11 +658,27 @@ export interface BatchImportItem {
   /** Failure / duplicate reason, or a warning on an imported account. */
   message?: string | null;
   account?: ProviderAccount | null;
+  kind?: CredentialKind | null;
 }
 export interface BatchImportResult {
   items: BatchImportItem[]; imported: number; duplicates: number; failed: number;
 }
 // POST /api/providers/{id}/accounts/import-copilot/batch body BatchCopilotImportRequest -> BatchImportResult
+/** What a provider's account import accepts; `formats` are ids the UI turns into hints. */
+export interface AccountImportInfo { supported: boolean; apiKey: boolean; formats: string[]; maxBatch: number }
+// GET /api/providers/{id}/accounts/import-info -> AccountImportInfo
+export interface AccountImportRequest {
+  /** One entry per line, or a credentials JSON document. */
+  text: string;
+  /** Read every entry as an API key. */
+  asApiKey?: boolean;
+  /** Classify and de-duplicate only (status "ready"); nothing is sent upstream or written. */
+  dryRun?: boolean;
+  /** Proxy for the imported accounts (empty = follow the provider). */
+  httpProxy?: string;
+}
+// POST /api/providers/{id}/accounts/import body AccountImportRequest -> BatchImportResult
+//   (dry run: `imported` counts the entries that would be imported)
 //   (400 {error} when empty, over 200 tokens, or the provider is not GitHub Copilot)
 
 // ---------- settings ----------
@@ -648,6 +686,8 @@ export interface Settings {
   locale: "zh" | "en"; debugBodies: boolean; bodyRetentionDays: number; requestRetentionDays: number | null;
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
   updateChannel: "stable" | "beta"; updateAutoCheck: boolean;
+  /** false = gateway calls work without a token (served via the default token). */
+  requireGatewayKey: boolean;
   /** Background balance / quota refresh of API-key providers, minutes (0 = off; providers may override). */
   quotaAutoIntervalMinutes: number;
   /** Outbound proxy: system = env vars, then the OS setting; custom = proxyUrl; direct = never. Providers' own proxy wins. */

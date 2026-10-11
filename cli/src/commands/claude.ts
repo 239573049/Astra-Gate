@@ -1,44 +1,35 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { AstraError } from '../errors.js';
-import { info, style, success } from '../ui.js';
+import { info, warn } from '../ui.js';
 import { readTextOrNull } from '../lib/json-file.js';
 import { apiRequest } from '../lib/http.js';
 import { ensureServerRunning } from '../lib/server-lifecycle.js';
-import { astraHome, homePaths } from '../lib/paths.js';
 
 /**
- * `astra claude` runs the official Claude Code CLI against a native login profile that Astra created
- * under <astra home>/claude-profiles/<id> (server side: ClaudeDirectService). The server only hands
- * back paths plus a small environment overlay; this command spawns a fixed argv with `shell: false`,
- * so no command, script or argument ever comes back from the network.
+ * `astra claude` runs the official Claude Code CLI with a subscription account Astra already holds. The
+ * server (ClaudeDirectService) hands back a short-lived access token plus a small environment overlay, on
+ * loopback only; this command spawns a fixed argv with `shell: false`, so no command, script or argument
+ * ever comes back from the network. The token is never printed, logged or written to disk.
  */
 
-export type ClaudeAction = 'login' | 'status' | 'run';
-
 export interface ClaudeOptions {
-  /** Native profile id; omitted, the server uses the selected profile. */
-  profile?: string;
-  login?: boolean;
+  /** Subscription account id; omitted, the server uses the account it has selected. */
+  account?: string;
   status?: boolean;
 }
 
-/** Launcher file the server writes next to the profile; the CLI only reads it. */
-const LAUNCH_FILE_NAME = 'astra-launch.json';
 const PREPARE_PATH = '/api/clients/claude-code/direct/prepare';
-const PROFILE_ID_PATTERN = /^[a-f0-9]{32}$/;
-/** The login method the launch file pins for a subscription profile. */
-const SUBSCRIPTION_LOGIN_METHOD = 'claudeai';
+const ACCOUNT_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const OFFICIAL_BASE_URL = 'https://api.anthropic.com';
-/** The only sign-in the CLI accepts: a Claude subscription, never a key or a gateway token. */
-const SUBSCRIPTION_AUTH_METHOD = 'claude.ai';
-const AUTH_STATUS_TIMEOUT_MS = 15_000;
-const AUTH_STATUS_MAX_BYTES = 64 * 1024;
+/** Tokens last hours, not days: warn when the one handed over cannot cover a normal session. */
+const TOKEN_LIFETIME_WARNING_MINUTES = 30;
 
 /**
- * Dropped from the inherited environment before the launch file is merged back in: every Anthropic
+ * Dropped from the inherited environment before the server overlay is merged in: every Anthropic
  * endpoint/credential (`ANTHROPIC_*`, which already covers `ANTHROPIC_FEDERATION_*`) and every
  * telemetry exporter variable (`OTEL_*`).
  */
@@ -59,7 +50,7 @@ const ENV_NAME_DENYLIST = [
   'BETA_TRACING_ENDPOINT',
 ];
 
-/** The only names the launch file may set; anything else in it is ignored. */
+/** The only names the server may set; anything else in its response is refused, never ignored. */
 export const LAUNCH_ENV_WHITELIST = [
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_API_KEY',
@@ -87,7 +78,10 @@ export const LAUNCH_ENV_WHITELIST = [
   'OTEL_RESOURCE_ATTRIBUTES',
 ] as const;
 
-/** Credentials a native subscription profile must not carry. */
+/** The credential the session is started with; without it the CLI would fall back to another sign-in. */
+const REQUIRED_LAUNCH_ENV_KEY = 'CLAUDE_CODE_OAUTH_TOKEN';
+
+/** Credentials a settings file must not carry into the session. */
 const CREDENTIAL_ENV_KEYS = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
@@ -101,6 +95,8 @@ const EXTERNAL_PROVIDER_ENV_KEYS = [
 ];
 /** Settings keys that hand credential handling to an external command. */
 const HELPER_SETTING_KEYS = ['apiKeyHelper', 'otelHeadersHelper'];
+/** The only `forceLoginMethod` that leaves the subscription in charge. */
+const SUBSCRIPTION_LOGIN_METHOD = 'claudeai';
 
 export interface ClaudeSpawnOptions {
   cwd: string;
@@ -121,6 +117,8 @@ export interface ClaudeDeps {
   spawn?: ClaudeSpawn;
   env?: NodeJS.ProcessEnv;
   cwd?: string;
+  /** Claude Code's user-level configuration directory; defaults to $CLAUDE_CONFIG_DIR or ~/.claude. */
+  configDir?: string;
 }
 
 const spawnOfficial: ClaudeSpawn = (command, args, options) => spawn(command, [...args], options);
@@ -128,14 +126,10 @@ const spawnOfficial: ClaudeSpawn = (command, args, options) => spawn(command, [.
 const OFFICIAL_CLI = 'claude';
 
 export interface ClaudeLaunch {
-  profileId: string;
-  configDirectory: string;
-  settingsFile: string;
-}
-
-export interface ClaudeAuthStatus {
-  loggedIn: boolean;
-  authMethod: string | null;
+  accountId: string;
+  accountName: string;
+  expiresAt: Date;
+  env: Record<string, string>;
 }
 
 export interface SettingsConflict {
@@ -144,142 +138,132 @@ export interface SettingsConflict {
 }
 
 export async function runClaude(opts: ClaudeOptions, deps: ClaudeDeps = {}): Promise<void> {
-  if (opts.login && opts.status) {
+  if (opts.account !== undefined && !ACCOUNT_ID_PATTERN.test(opts.account)) {
     throw new AstraError(
-      '--login and --status cannot be combined.',
-      'Use `astra claude --login` to sign in, or `astra claude --status` to check the sign-in state.',
-    );
-  }
-  if (opts.profile !== undefined && !PROFILE_ID_PATTERN.test(opts.profile)) {
-    throw new AstraError(
-      '--profile expects a 32-character profile id.',
-      'Pick a native profile in the Astra web UI (Clients → Claude Code) and copy its id.',
+      '--account expects an account id of up to 64 letters, digits, "_" or "-".',
+      'Pick the subscription account in the Astra web UI (Clients → Claude Code) and copy its id.',
     );
   }
 
-  const action: ClaudeAction = opts.login ? 'login' : opts.status ? 'status' : 'run';
-  const spawnImpl = deps.spawn ?? spawnOfficial;
+  const env = deps.env ?? process.env;
   const cwd = deps.cwd ?? process.cwd();
-  const launch = await prepareLaunch(action, opts.profile);
-  const childEnv = buildClaudeEnv(
-    deps.env ?? process.env,
-    readLaunchEnv(launch.settingsFile),
-    launch.configDirectory,
-  );
 
-  // Inspect before starting any Claude process: auth status itself may execute a configured helper.
-  assertNoSettingsConflicts(launch.configDirectory, cwd);
-  if (action === 'run') {
-    assertSubscriptionAuth(await probeAuthStatus(spawnImpl, childEnv, cwd));
+  // `--status` reports what Astra would hand over, so it never inspects settings nor starts anything.
+  if (opts.status) {
+    printStatus(await prepareLaunch(opts.account));
+    return;
   }
 
-  const args =
-    action === 'login'
-      ? ['auth', 'login']
-      : action === 'status'
-        ? ['auth', 'status']
-        : ['--settings', launch.settingsFile];
-  if (action === 'login') {
-    info(style.dim(`Signing in the official Claude Code CLI (profile ${launch.profileId}).`));
-  }
+  // Inspect settings before anything else: a settings file can outrank the token the server is about to issue.
+  assertNoSettingsConflicts(claudeConfigDir(env, deps.configDir), cwd);
 
-  const result = await runInherit(spawnImpl, args, childEnv, cwd);
+  const launch = await prepareLaunch(opts.account);
+  const childEnv = buildClaudeEnv(env, launch.env);
+  printLaunch(launch);
+
+  const spawnImpl = deps.spawn ?? spawnOfficial;
+  const result = await runInherit(spawnImpl, [], childEnv, cwd);
   process.exitCode = exitCodeFrom(result.code);
+}
 
-  if (action === 'login' && result.code === 0) {
-    // A successful `auth login` is not proof by itself: confirm the subscription sign-in took effect.
-    assertSubscriptionAuth(await probeAuthStatus(spawnImpl, childEnv, cwd));
-    success('Signed in — the Claude subscription profile is ready.');
-    info(style.dim(launch.configDirectory));
+function printLaunch(launch: ClaudeLaunch): void {
+  info(
+    `Using Claude subscription account "${launch.accountName}" (token valid until ${formatLocalTime(launch.expiresAt)}) — ` +
+      'requests go straight to Anthropic, not through the Astra gateway.',
+  );
+  if (launch.expiresAt.getTime() - Date.now() < TOKEN_LIFETIME_WARNING_MINUTES * 60_000) {
+    warn(
+      `The access token expires in less than ${TOKEN_LIFETIME_WARNING_MINUTES} minutes; restart this command when it does.`,
+    );
   }
 }
 
-/** Asks the server for the profile paths and refuses anything outside this machine's Astra data dir. */
-async function prepareLaunch(action: ClaudeAction, profileId?: string): Promise<ClaudeLaunch> {
+/** Names and lifetime only: no environment value and no token is ever printed. */
+function printStatus(launch: ClaudeLaunch): void {
+  info(`Account: ${launch.accountName}`);
+  info(`Token valid until: ${formatLocalTime(launch.expiresAt)}`);
+  info(
+    `Statistics (OpenTelemetry): ${launch.env['CLAUDE_CODE_ENABLE_TELEMETRY'] === '1' ? 'enabled' : 'disabled'}`,
+  );
+}
+
+function formatLocalTime(date: Date): string {
+  return date.toLocaleString();
+}
+
+/** Asks the server for the launch environment of the selected (or the named) subscription account. */
+async function prepareLaunch(accountId?: string): Promise<ClaudeLaunch> {
   const { base, runtime, started } = await ensureServerRunning();
   if (started) console.log('Server was not running — started it in the background.');
   const response = await apiRequest<unknown>({
     base,
     path: PREPARE_PATH,
     method: 'POST',
-    body: { action, ...(profileId ? { profileId } : {}) },
+    body: accountId === undefined ? {} : { accountId },
     runtimeToken: runtime?.runtimeToken,
   });
-  return validateLaunchResponse(response, astraHome());
+  return validateLaunchResponse(response);
+}
+
+/** Claude Code's user-level configuration directory: $CLAUDE_CONFIG_DIR when set, else ~/.claude. */
+export function claudeConfigDir(env: NodeJS.ProcessEnv, override?: string): string {
+  if (override) return path.resolve(override);
+  const configured = env.CLAUDE_CONFIG_DIR?.trim();
+  return configured ? configured : path.join(os.homedir(), '.claude');
 }
 
 /**
- * The server may only point at <astra home>/claude-profiles/<id>/astra-launch.json: profiles are
- * per-machine, so a path from anywhere else is refused rather than run.
+ * The server hands back environment variables only, and only the ones this command knows how to pass on:
+ * anything else — an unknown name, a value that is not a string, a missing token — is refused, never
+ * silently dropped. Errors name the offending key and never its value.
  */
-export function validateLaunchResponse(raw: unknown, home: string): ClaudeLaunch {
-  const expectedDirectory = path.resolve(homePaths(home).claudeProfilesDir);
+export function validateLaunchResponse(raw: unknown): ClaudeLaunch {
   if (!isPlainObject(raw)) throw invalidLaunch();
-  const { profileId, configDirectory, settingsFile } = raw;
-  if (typeof profileId !== 'string' || !PROFILE_ID_PATTERN.test(profileId)) throw invalidLaunch();
-  if (typeof configDirectory !== 'string' || typeof settingsFile !== 'string')
+  const { accountId, accountName, expiresAtUtc, env } = raw;
+  if (typeof accountId !== 'string' || typeof accountName !== 'string' || !isPlainObject(env))
     throw invalidLaunch();
-  if (path.resolve(configDirectory) !== path.join(expectedDirectory, profileId))
-    throw invalidLaunch();
-  const expectedSettings = path.join(expectedDirectory, profileId, LAUNCH_FILE_NAME);
-  if (path.resolve(settingsFile) !== expectedSettings) throw invalidLaunch();
-  return {
-    profileId,
-    configDirectory: path.dirname(expectedSettings),
-    settingsFile: expectedSettings,
-  };
+  const expiresAt = parseExpiry(expiresAtUtc);
+  for (const [key, value] of Object.entries(env)) {
+    if (!isAllowedEnvKey(key))
+      throw invalidLaunch(`The Astra server returned an unknown Claude launch variable: ${key}`);
+    if (typeof value !== 'string')
+      throw invalidLaunch(`The Astra server returned a non-text Claude launch variable: ${key}`);
+  }
+  if (typeof env[REQUIRED_LAUNCH_ENV_KEY] !== 'string' || env[REQUIRED_LAUNCH_ENV_KEY] === '') {
+    throw new AstraError(
+      'The Astra server returned no Claude subscription token.',
+      'Select the subscription account in the Astra web UI (Clients → Claude Code) and try again.',
+    );
+  }
+  return { accountId, accountName, expiresAt, env: { ...env } as Record<string, string> };
 }
 
-function invalidLaunch(): AstraError {
+function parseExpiry(value: unknown): Date {
+  if (typeof value !== 'string') throw invalidLaunch();
+  const expiresAt = new Date(value);
+  if (Number.isNaN(expiresAt.getTime())) throw invalidLaunch();
+  return expiresAt;
+}
+
+function isAllowedEnvKey(key: string): boolean {
+  return (LAUNCH_ENV_WHITELIST as readonly string[]).includes(key);
+}
+
+function invalidLaunch(detail?: string): AstraError {
   return new AstraError(
-    "The Astra server returned a Claude profile outside this machine's Astra data directory.",
-    'Astra only runs profiles it created under <astra home>/claude-profiles. Restart the server and try again.',
+    detail ?? 'The Astra server returned an unexpected Claude launch environment.',
+    'Restart the server (`astra restart`) and try again with an up-to-date Astra.',
   );
 }
 
-/** Reads the `env` overlay out of the launch file; its content is never printed. */
-export function readLaunchEnv(settingsFile: string): Record<string, unknown> {
-  for (const candidate of [settingsFile, path.dirname(settingsFile), path.dirname(path.dirname(settingsFile))]) {
-    try {
-      const stat = fs.lstatSync(candidate);
-      if (stat.isSymbolicLink() || (candidate === settingsFile && (!stat.isFile() || stat.size > 64 * 1024))) {
-        throw new AstraError('The native Claude launch path must be a regular, bounded local file.');
-      }
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
-  }
-  const text = readTextOrNull(settingsFile);
-  if (text === null) {
-    throw new AstraError(
-      `The Astra launch settings file is missing: ${settingsFile}`,
-      'Run the command again so the Astra server can recreate it.',
-    );
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    throw new AstraError(`The Astra launch settings file is not valid JSON: ${settingsFile}`);
-  }
-  if (!isPlainObject(parsed)) {
-    throw new AstraError(`The Astra launch settings file is not a JSON object: ${settingsFile}`);
-  }
-  if (parsed.forceLoginMethod !== SUBSCRIPTION_LOGIN_METHOD || !isPlainObject(parsed.env) ||
-    Object.keys(parsed).some((key) => key !== 'forceLoginMethod' && key !== 'env') ||
-    Object.entries(parsed.env).some(([key, value]) =>
-      !(LAUNCH_ENV_WHITELIST as readonly string[]).includes(key) || typeof value !== 'string')) {
-    throw new AstraError(`The Astra launch settings file contains unexpected settings: ${settingsFile}`);
-  }
-  return parsed.env;
-}
-
-/** Builds the child environment: the inherited one without Claude's endpoint, credential and telemetry
- * variables, plus only the whitelisted names the launch file supplies, then the absolute profile dir. */
+/**
+ * Builds the child environment: the inherited one without Claude's endpoint, credential and telemetry
+ * variables, plus the variables the server supplied. Proxy and locale variables (HTTPS_PROXY, NO_PROXY,
+ * PATH, HOME, CLAUDE_CONFIG_DIR, …) stay, and CLAUDE_CONFIG_DIR is never pointed anywhere new.
+ */
 export function buildClaudeEnv(
   baseEnv: NodeJS.ProcessEnv,
   launchEnv: Record<string, unknown>,
-  configDirectory: string,
 ): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(baseEnv)) {
@@ -291,11 +275,10 @@ export function buildClaudeEnv(
     const value = launchEnv[key];
     if (typeof value === 'string') env[key] = value;
   }
-  env.CLAUDE_CONFIG_DIR = path.resolve(configDirectory);
   return env;
 }
 
-/** Refuses to run when project or profile settings would override the profile's own sign-in. */
+/** Refuses to run when user-level or project settings would override the subscription sign-in. */
 export function assertNoSettingsConflicts(configDirectory: string, cwd: string): void {
   const conflicts: SettingsConflict[] = [];
   for (const file of settingsFilesToCheck(configDirectory, cwd)) {
@@ -306,12 +289,12 @@ export function assertNoSettingsConflicts(configDirectory: string, cwd: string):
   if (conflicts.length === 0) return;
   const detail = conflicts.map((c) => `  ${c.key}  ${c.file}`).join('\n');
   throw new AstraError(
-    `Claude settings on this machine override the native profile (${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}):`,
-    `${detail}\n  Astra never edits your settings — remove or rename these entries yourself.`,
+    `Claude settings on this machine override the subscription connection (${conflicts.length} conflict${conflicts.length === 1 ? '' : 's'}):`,
+    `${detail}\n  Astra never edits your settings — remove or rename these entries yourself.\n  If a conflict comes from the Astra gateway takeover (ANTHROPIC_BASE_URL / ANTHROPIC_AUTH_TOKEN pointing at Astra), disable it first in the Astra web UI under Clients → Claude Code.`,
   );
 }
 
-/** The profile's own settings plus the project settings Claude Code reads from cwd up to the git root. */
+/** The user-level settings Claude Code reads, plus the project settings from cwd up to the git root. */
 export function settingsFilesToCheck(configDirectory: string, cwd: string): string[] {
   const files = [path.join(configDirectory, 'settings.json')];
   const root = findGitRoot(cwd);
@@ -401,129 +384,9 @@ export function settingsConflicts(
   return conflicts;
 }
 
-/** Runs `claude auth status`, bounded in both time and output, and parses the JSON it prints. */
-async function probeAuthStatus(
-  spawnImpl: ClaudeSpawn,
-  env: NodeJS.ProcessEnv,
-  cwd: string,
-): Promise<ClaudeAuthStatus> {
-  const result = await capture(spawnImpl, ['auth', 'status'], env, cwd);
-  if (result.code !== 0) {
-    throw new AstraError(
-      'The official Claude Code CLI could not report the sign-in state of this profile.',
-      'Run `astra claude --status` to see the official output.',
-    );
-  }
-  return parseAuthStatus(result.stdout);
-}
-
-/** Only a Claude subscription (`claude.ai`) is accepted; an API key or OAuth token is not. */
-export function assertSubscriptionAuth(status: ClaudeAuthStatus): void {
-  if (status.loggedIn && status.authMethod === SUBSCRIPTION_AUTH_METHOD) return;
-  if (!status.loggedIn) {
-    throw new AstraError(
-      'This Claude profile is not signed in.',
-      'Run `astra claude --login` to sign in with a Claude subscription.',
-    );
-  }
-  throw new AstraError(
-    `This Claude profile is signed in with "${status.authMethod ?? 'an unknown method'}", not a Claude subscription.`,
-    'Sign in with a subscription: run `astra claude --login` after clearing the other credential.',
-  );
-}
-
-/** Parses `auth status` output; the raw JSON never reaches an error message. */
-export function parseAuthStatus(text: string): ClaudeAuthStatus {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.trim());
-  } catch {
-    throw unreadableAuthStatus();
-  }
-  if (!isPlainObject(parsed) || typeof parsed.loggedIn !== 'boolean') throw unreadableAuthStatus();
-  return {
-    loggedIn: parsed.loggedIn,
-    authMethod: typeof parsed.authMethod === 'string' ? parsed.authMethod : null,
-  };
-}
-
-function unreadableAuthStatus(): AstraError {
-  return new AstraError(
-    'Could not read the sign-in state of the official Claude Code CLI.',
-    'Run `astra claude --status` to see the official output.',
-  );
-}
-
 /** A child that died from a signal has a null exit code and must still count as a failure. */
 export function exitCodeFrom(code: number | null): number {
   return code ?? 1;
-}
-
-interface CapturedRun {
-  code: number | null;
-  stdout: string;
-}
-
-function capture(
-  spawnImpl: ClaudeSpawn,
-  args: readonly string[],
-  env: NodeJS.ProcessEnv,
-  cwd: string,
-): Promise<CapturedRun> {
-  return new Promise((resolve, reject) => {
-    let child: ChildProcess;
-    try {
-      child = spawnImpl(OFFICIAL_CLI, args, {
-        cwd,
-        env,
-        shell: false,
-        stdio: 'pipe',
-        windowsHide: true,
-      });
-    } catch (err) {
-      reject(spawnFailure(err));
-      return;
-    }
-    let stdout = '';
-    let bytes = 0;
-    let settled = false;
-    const finish = (action: () => void): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      action();
-    };
-    const timer = setTimeout(() => {
-      kill(child);
-      finish(() =>
-        reject(
-          new AstraError(
-            `The official Claude Code CLI did not answer within ${AUTH_STATUS_TIMEOUT_MS / 1000} seconds.`,
-          ),
-        ),
-      );
-    }, AUTH_STATUS_TIMEOUT_MS);
-
-    child.stdout?.on('data', (chunk: Buffer | string) => {
-      if (settled) return;
-      bytes += Buffer.byteLength(chunk);
-      if (bytes > AUTH_STATUS_MAX_BYTES) {
-        kill(child);
-        finish(() =>
-          reject(new AstraError('The official Claude Code CLI printed more than expected.')),
-        );
-        return;
-      }
-      stdout += chunk.toString();
-    });
-    // Drain stderr so the child cannot block on a full pipe; its content is never kept.
-    child.stderr?.on('data', () => {
-      /* discarded on purpose */
-    });
-    child.stdin?.end();
-    child.on('error', (err) => finish(() => reject(spawnFailure(err))));
-    child.on('close', (code) => finish(() => resolve({ code, stdout })));
-  });
 }
 
 interface InheritResult {
@@ -577,14 +440,6 @@ function runInherit(
   });
 }
 
-function kill(child: ChildProcess): void {
-  try {
-    child.kill('SIGKILL');
-  } catch {
-    /* already gone */
-  }
-}
-
 function spawnFailure(err: unknown): AstraError {
   const code = (err as NodeJS.ErrnoException).code;
   if (code === 'ENOENT') {
@@ -606,7 +461,7 @@ function isNonEmptyText(value: unknown): boolean {
   return typeof value === 'string' && value.trim() !== '';
 }
 
-/** For provider switches, "0"/"false" means off — the launch file itself writes 0 to disable them. */
+/** For provider switches, "0"/"false" means off — the server writes 0 to disable them. */
 function isEnabledFlag(value: unknown): boolean {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value !== 0;

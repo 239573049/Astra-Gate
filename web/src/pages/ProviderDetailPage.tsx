@@ -41,7 +41,7 @@ import { modelMapOf, type ModelMap } from '../lib/modelMap';
 import { AUTH_OPTIONS, PROTOCOL_OPTIONS } from './ProvidersPage';
 import type { ClientKind } from '../api/types';
 
-type Tab = 'models' | 'settings';
+type Tab = 'models' | 'accounts' | 'settings';
 
 export function ProviderDetailPage() {
   const { t } = useI18n();
@@ -74,10 +74,16 @@ export function ProviderDetailPage() {
         <Tabs className="mx-auto max-w-[860px]" value={tab} onValueChange={(v) => setTab(v as Tab)}>
           <TabsList aria-label={p.name}>
             <TabsTrigger value="models">{t('providers.tab.models')}</TabsTrigger>
+            <TabsTrigger value="accounts">
+              {t(p.authScheme === 'oauth-subscription' ? 'providers.tab.accounts' : 'providers.tab.apiKey')}
+            </TabsTrigger>
             <TabsTrigger value="settings">{t('providers.tab.settings')}</TabsTrigger>
           </TabsList>
           <TabsContent value="models" className="pt-4">
             <ModelsTab provider={p} models={models.data} loading={models.isLoading} selected={selectedPm} onSelect={setSelectedPm} />
+          </TabsContent>
+          <TabsContent value="accounts" className="pt-4">
+            {p.authScheme === 'oauth-subscription' ? <SubscriptionAccounts provider={p} /> : <ApiKeyTab provider={p} />}
           </TabsContent>
           <TabsContent value="settings" className="pt-4">
             <SettingsTab provider={p} />
@@ -651,6 +657,43 @@ function ProviderModelSheet({ provider, pm, onClose }: { provider: Provider; pm:
 }
 
 
+// ---------- API key tab (providers without subscription accounts) ----------
+
+function ApiKeyTab({ provider }: { provider: Provider }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateProvider(provider.id);
+  const [key, setKey] = useState('');
+
+  const save = () =>
+    update.mutate(
+      { apiKey: key },
+      {
+        onSuccess: () => {
+          setKey('');
+          toast(t('common.saved'), 'success');
+        },
+        onError: (e) => toast(errorText(e), 'error'),
+      },
+    );
+
+  return (
+    <>
+      <Group title={t('providers.section.auth')} footer={t('providers.apiKeyStored')}>
+        <Row label={t('providers.apiKey')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')}>
+          <div className="flex items-center gap-2">
+            <Input type="password" autoComplete="off" className="w-64 font-mono" aria-label={t('providers.apiKey')} placeholder={t('providers.replaceKey')} value={key} onChange={(e) => setKey(e.target.value)} />
+            <Button variant="primary" disabled={key.trim().length === 0} loading={update.isPending} onClick={save}>
+              {t('common.save')}
+            </Button>
+          </div>
+        </Row>
+      </Group>
+      <ProviderQuotaSection provider={provider} />
+    </>
+  );
+}
+
 // ---------- settings tab ----------
 
 function toUpdate(p: Provider): ProviderUpdate {
@@ -716,17 +759,12 @@ function SettingsTab({ provider }: { provider: Provider }) {
         </Row>
       </Group>
 
-      <Group title={t('providers.section.auth')} footer={t('providers.apiKeyStored')}>
-        <Row label={t('providers.apiKey')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')}>
-          <Input type="password" autoComplete="off" className="w-64 font-mono" aria-label={t('providers.apiKey')} placeholder={t('providers.replaceKey')} value={form.apiKey} onChange={(e) => set({ apiKey: e.target.value })} />
-        </Row>
+      {/* API Key 与订阅账户在各自的标签页里；这里只剩认证方式。 */}
+      <Group title={t('providers.section.auth')}>
         <Row label={t('providers.authScheme')}>
           <Select className="w-48" value={form.authScheme} onChange={(authScheme) => set({ authScheme })} options={AUTH_OPTIONS} />
         </Row>
       </Group>
-
-      <SubscriptionAccounts provider={provider} />
-      {provider.authScheme !== 'oauth-subscription' && <ProviderQuotaSection provider={provider} />}
 
       <Group
         title={t('providers.section.endpoints')}

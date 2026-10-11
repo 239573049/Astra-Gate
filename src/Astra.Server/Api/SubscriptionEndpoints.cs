@@ -31,7 +31,9 @@ public sealed class PendingSubscriptionLogins
         /// <summary>codex-cli 登录期间临时接管 1455/1457 的接收器；换码用它自己的回调地址。</summary>
         LoopbackCaptureListener? Capture = null,
         /// <summary>The exact redirect_uri sent in the authorize request (must match verbatim at exchange time).</summary>
-        string? RedirectUri = null);
+        string? RedirectUri = null,
+        /// <summary>The account's own proxy chosen for this login; stored on the account it produces (null = provider's).</summary>
+        string? AccountProxy = null);
 
     private readonly ConcurrentDictionary<string, PendingLogin> _pending = new(StringComparer.Ordinal);
 
@@ -75,11 +77,15 @@ public sealed class PendingSubscriptionLogins
 }
 
 /// <summary>Admin API for subscription accounts (plan §5.4): list, login (PKCE / device), refresh, logout.</summary>
-public static class SubscriptionEndpoints
+public static partial class SubscriptionEndpoints
 {
     private static readonly TimeSpan LoginTtl = TimeSpan.FromMinutes(10);
 
-    public sealed record LoginOptions(string? AccountId);
+    /// <summary>
+    /// Login start: <c>accountId</c> re-logs an existing account in; <c>httpProxy</c> is the proxy this account uses
+    /// from the login on (empty = the account's current one when re-logging in, else the provider's).
+    /// </summary>
+    public sealed record LoginOptions(string? AccountId, string? HttpProxy = null);
 
     /// <summary>
     /// Body of the Copilot import: <c>token</c> is an optional GitHub token the user pasted; when it is
@@ -98,13 +104,21 @@ public static class SubscriptionEndpoints
         public const string Duplicate = "duplicate";
         public const string InvalidFormat = "invalid_format";
         public const string Failed = "failed";
+
+        /// <summary>Same account as an existing row (matched by email): its credentials were replaced.</summary>
+        public const string Updated = "updated";
+
+        /// <summary>Dry run only: the entry is recognised and would be imported.</summary>
+        public const string Ready = "ready";
     }
 
     /// <summary>
     /// One token of a batch import. <see cref="Source"/> is the masked token (never the token itself);
     /// <see cref="Message"/> is the failure / duplicate reason, or a warning on an imported account.
     /// </summary>
-    public sealed record BatchImportItemDto(int Index, string Source, string Status, string? Message, ProviderAccountDto? Account);
+    public sealed record BatchImportItemDto(int Index, string Source, string Status, string? Message, ProviderAccountDto? Account,
+        /// <summary>What the entry was recognised as (<see cref="CredentialKinds"/>); null when unrecognised.</summary>
+        string? Kind = null);
 
     /// <summary>Per-token results of a batch import plus totals.</summary>
     public sealed record BatchImportResultDto(List<BatchImportItemDto> Items, int Imported, int Duplicates, int Failed);
@@ -123,10 +137,18 @@ public static class SubscriptionEndpoints
         bool IsCurrent = false,
         int SortOrder = 0,
         DateTimeOffset? CooldownUntilUtc = null,
-        string? LastError = null);
+        string? LastError = null,
+        /// <summary><see cref="AccountKinds"/>: <c>oauth</c> or <c>api_key</c>.</summary>
+        string Kind = AccountKinds.OAuth,
+        /// <summary><see cref="AccountSources"/>; null for accounts older than the column.</summary>
+        string? Source = null,
+        /// <summary>The account's own proxy (null = the provider's). A proxy URL may carry credentials, but it is the user's own setting.</summary>
+        string? HttpProxy = null,
+        /// <summary>Masked API key (<c>kind = api_key</c> only), so a key account can be recognised.</summary>
+        string? KeyMasked = null);
 
-    /// <summary>PATCH body for one account; omitted fields keep their value.</summary>
-    public sealed record AccountPatch(bool? Enabled, string? DisplayName);
+    /// <summary>PATCH body for one account; omitted fields keep their value. <c>httpProxy</c> "" clears the account's proxy.</summary>
+    public sealed record AccountPatch(bool? Enabled, string? DisplayName, string? HttpProxy = null);
 
     /// <summary>New failover order (account ids, first = tried first).</summary>
     public sealed record AccountOrder(List<string> Ids);
@@ -218,6 +240,17 @@ public static class SubscriptionEndpoints
                 if (string.IsNullOrWhiteSpace(name)) return Results.BadRequest(new ErrorOnlyDto("账号名称不能为空"));
                 await db.Accounts.SetDisplayNameAsync(id, name.Trim());
             }
+            if (body.HttpProxy is { } proxy)
+            {
+                try
+                {
+                    await db.Accounts.SetHttpProxyAsync(id, ProxiedHttpClients.Normalize(proxy));
+                }
+                catch (ArgumentException e)
+                {
+                    return Results.BadRequest(new ErrorOnlyDto(e.Message));
+                }
+            }
             if (body.Enabled is { } enabled)
             {
                 await db.Accounts.SetEnabledAsync(id, enabled);
@@ -289,7 +322,7 @@ public static class SubscriptionEndpoints
                 credentials.IdToken, null);
             var account = await CompleteLoginAsync(db, protector, null, new PendingSubscriptionLogins.PendingLogin(
                 Ulid.NewUlid(), providerId, null, config, credentials.AccessToken, null,
-                DateTimeOffset.UtcNow + LoginTtl, null, null, null, null), token);
+                DateTimeOffset.UtcNow + LoginTtl, null, null, null, null), token, source: AccountSources.Local);
 
             // 立刻验一次，确认这份凭据现在还能用（额度探测失败不致命，只回一个警告）。
             string? warning = null;
@@ -354,7 +387,8 @@ public static class SubscriptionEndpoints
                     var login = new PendingSubscriptionLogins.PendingLogin(
                         Ulid.NewUlid(), providerId, body?.AccountId, config, candidate.Token, null,
                         DateTimeOffset.UtcNow + LoginTtl, null, null, null, null);
-                    account = await CompleteLoginAsync(db, protector, client, login, token);
+                    account = await CompleteLoginAsync(db, protector, client, login, token,
+                        source: provided.Length > 0 ? AccountSources.Token : AccountSources.Local);
                     break;
                 }
                 catch (OAuthProtocolException e)
@@ -409,90 +443,11 @@ public static class SubscriptionEndpoints
             if (tokens.Count > MaxBatchImport)
                 return Results.BadRequest(new ErrorOnlyDto($"一次最多导入 {MaxBatchImport} 个令牌，当前 {tokens.Count} 个，请分批导入"));
 
-            // 已有账号的 GitHub token（刷新槽里的密文解开后比较）；解不开的不参与去重。
-            var known = new List<(string Token, string Name)>();
-            foreach (var existing in await db.Accounts.ListAsync(providerId, ct))
-            {
-                if (existing.RefreshTokenEnc is null) continue;
-                try
-                {
-                    known.Add((protector.Unprotect(existing.RefreshTokenEnc), existing.DisplayName));
-                }
-                catch (Exception)
-                {
-                    // 密文无法解密的旧账号不参与去重
-                }
-            }
-
-            var items = new List<BatchImportItemDto>(tokens.Count);
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            var imported = 0;
-            var duplicates = 0;
-            var failed = 0;
-            for (var i = 0; i < tokens.Count; i++)
-            {
-                ct.ThrowIfCancellationRequested();
-                var token = tokens[i];
-                var index = i + 1;
-                var source = MaskToken(token);
-
-                if (!LocalCopilotLogin.LooksLikeGitHubToken(token))
-                {
-                    failed++;
-                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.InvalidFormat,
-                        "这不是可识别的 GitHub 令牌（应以 gho_ / ghp_ / github_pat_ 开头）", null));
-                    continue;
-                }
-                if (!seen.Add(token))
-                {
-                    duplicates++;
-                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Duplicate, "本次输入中重复", null));
-                    continue;
-                }
-                var match = known.FirstOrDefault(k => TokensEqual(k.Token, token));
-                if (match.Token is not null)
-                {
-                    duplicates++;
-                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Duplicate, $"已存在账号：{match.Name}", null));
-                    continue;
-                }
-
-                try
-                {
-                    var result = new OAuthClient.TokenResult(token, token, null, null, null);
-                    var login = new PendingSubscriptionLogins.PendingLogin(
-                        Ulid.NewUlid(), providerId, null, config, token, null,
-                        DateTimeOffset.UtcNow + LoginTtl, null, null, null, null);
-                    var account = await CompleteLoginAsync(db, protector, client, login, result);
-                    known.Add((token, account.DisplayName));
-
-                    // 顺手验一次额度（失败不致命，只留一条提示）。
-                    string? warning = null;
-                    try
-                    {
-                        var (updated, _) = await quotaService.FetchAsync(provider, account, config, ct);
-                        account = updated;
-                    }
-                    catch (Exception e) when (e is SubscriptionAuthException or OAuthProtocolException)
-                    {
-                        warning = e.Message;
-                    }
-                    imported++;
-                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Imported, warning, ToDto(account)));
-                }
-                catch (Exception e) when (e is OAuthProtocolException or HttpRequestException)
-                {
-                    failed++;
-                    items.Add(new BatchImportItemDto(index, source, BatchImportStatus.Failed,
-                        e is OAuthProtocolException oauth ? CopilotImportFailure(oauth) : e.Message, null));
-                }
-            }
-
-            // 模型清单归上游管：一批导入只同步一次，失败不影响导入结果。
-            if (imported > 0) await probe.SyncModelsFromUpstreamAsync(providerId, ct);
-
-            return Results.Ok(new BatchImportResultDto(items, imported, duplicates, failed));
+            return Results.Ok(await ImportEntriesAsync(new ImportServices(db, protector, client, quotaService, probe),
+                provider, config, tokens, asApiKey: false, dryRun: false, accountProxy: null, AccountSources.Batch, ct));
         });
+
+        MapAccountImportEndpoints(app);
 
         app.MapDelete("/api/provider-accounts/{id}", async (string id, AstraDatabase db) =>
         {
@@ -507,6 +462,7 @@ public static class SubscriptionEndpoints
             if (account is null) return Results.NotFound(new ErrorOnlyDto("账号不存在"));
             var provider = await db.Providers.GetAsync(account.ProviderId);
             if (provider is null) return Results.NotFound(new ErrorOnlyDto("所属提供商不存在"));
+            if (account.Kind == AccountKinds.ApiKey) return Results.BadRequest(new ErrorOnlyDto("API Key 账号没有令牌可刷新"));
 
             try
             {
@@ -638,6 +594,21 @@ public static class SubscriptionEndpoints
                     "该订阅的 OAuth 流程尚未核实或配置不完整，暂不能登录（可在提供商设置中补全 subscription_oauth）", true),
                     StatusCodes.Status400BadRequest);
 
+            // 账号级代理：登录（授权页之外的所有换码 / 刷新 / 身份请求）就走这个账号将来要用的出口。
+            // 没指定时，重新登录沿用该账号已有的代理，新账号跟随提供商。
+            string? accountProxy;
+            try
+            {
+                accountProxy = ProxiedHttpClients.Normalize(body?.HttpProxy);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.BadRequest(new ErrorOnlyDto(e.Message));
+            }
+            if (accountProxy is null && body?.AccountId is { } reloginId)
+                accountProxy = (await db.Accounts.GetAsync(reloginId, ct))?.HttpProxy;
+            if (accountProxy is not null) config = config.WithHttpProxy(accountProxy);
+
             // Claude 的授权端对 state 形态严格校验（Claude Code / sub2api 都是 32 字节 base64url，
             // 43 字符）；其它家族继续用 ULID。
             var state = SubscriptionCatalog.IsClaudeLoopback(config) ? Pkce.RandomBase64Url(32) : Ulid.NewUlid();
@@ -662,7 +633,7 @@ public static class SubscriptionEndpoints
                 }
                 pending.Put(new PendingSubscriptionLogins.PendingLogin(
                     state, providerId, body?.AccountId, config, null, "cli", DateTimeOffset.UtcNow + LoginTtl,
-                    null, start.FlowId, start.PollToken));
+                    null, start.FlowId, start.PollToken, AccountProxy: accountProxy));
                 return Results.Ok(new LoginCliDto("cli", state, start.AuthorizeUrl, 3));
             }
 
@@ -678,7 +649,7 @@ public static class SubscriptionEndpoints
                     // 实例显式指定了非回环回调（= Claude Code 的无头兜底）：只能让用户把 code 粘回来。
                     pending.Put(new PendingSubscriptionLogins.PendingLogin(
                         state, providerId, body?.AccountId, config, verifier, null, DateTimeOffset.UtcNow + LoginTtl,
-                        null, null, null, null, config.RedirectUriOverride));
+                        null, null, null, null, config.RedirectUriOverride, accountProxy));
                     return Results.Ok(new LoginPasteDto("paste", state,
                         OAuthClient.BuildAuthorizeUrl(config, config.RedirectUriOverride, state, challenge)));
                 }
@@ -706,7 +677,7 @@ public static class SubscriptionEndpoints
                 var claudeRedirect = $"http://localhost:{capture.Port}{SubscriptionCatalog.ClaudeLoopbackPath}";
                 pending.Put(new PendingSubscriptionLogins.PendingLogin(
                     state, providerId, body?.AccountId, config, verifier, null, DateTimeOffset.UtcNow + LoginTtl,
-                    null, null, null, capture, claudeRedirect));
+                    null, null, null, capture, claudeRedirect, accountProxy));
                 return Results.Ok(new LoginModeDto("pkce", state,
                     OAuthClient.BuildAuthorizeUrl(config, claudeRedirect, state, challenge)));
             }
@@ -754,7 +725,7 @@ public static class SubscriptionEndpoints
                 }
                 pending.Put(new PendingSubscriptionLogins.PendingLogin(
                     state, providerId, body?.AccountId, config, verifier, null, DateTimeOffset.UtcNow + LoginTtl,
-                    null, null, null, capture, redirectUri));
+                    null, null, null, capture, redirectUri, accountProxy));
                 return Results.Ok(new LoginModeDto("pkce", state, OAuthClient.BuildAuthorizeUrl(config, redirectUri, state, challenge)));
             }
 
@@ -765,7 +736,7 @@ public static class SubscriptionEndpoints
                 ? (c, token) => c.PollDeviceAuthAsync(config, device.DeviceCode, device.UserCode, token)
                 : (c, token) => c.PollDeviceAsync(config, device.DeviceCode, token);
             pending.Put(new PendingSubscriptionLogins.PendingLogin(
-                state, providerId, body?.AccountId, config, null, device.DeviceCode, expires, poll));
+                state, providerId, body?.AccountId, config, null, device.DeviceCode, expires, poll, AccountProxy: accountProxy));
             return Results.Ok(new LoginDeviceDto(
                 "device", state, device.UserCode,
                 device.VerificationUrlComplete ?? device.VerificationUrl ?? "", device.Interval));
@@ -939,7 +910,19 @@ public static class SubscriptionEndpoints
     /// <summary>Persists the exchanged tokens (encrypted) as a new or updated account row.</summary>
     private static async Task<ProviderAccount> CompleteLoginAsync(
         AstraDatabase db, ISecretProtector protector, OAuthClient? client,
-        PendingSubscriptionLogins.PendingLogin login, OAuthClient.TokenResult token, string? emailHint = null)
+        PendingSubscriptionLogins.PendingLogin login, OAuthClient.TokenResult token, string? emailHint = null,
+        string source = AccountSources.Login) =>
+        (await CompleteLoginWithResultAsync(db, protector, client, login, token, emailHint, source)).Account;
+
+    /// <summary>
+    /// <see cref="CompleteLoginAsync"/> plus whether an existing row was reused. With <paramref name="adoptByEmail"/>
+    /// (imports) a login whose email matches an OAuth account of the same provider updates that row instead of
+    /// adding a second one for the same person. <paramref name="nameHint"/> names the account when no email is known.
+    /// </summary>
+    private static async Task<(ProviderAccount Account, bool Adopted)> CompleteLoginWithResultAsync(
+        AstraDatabase db, ISecretProtector protector, OAuthClient? client,
+        PendingSubscriptionLogins.PendingLogin login, OAuthClient.TokenResult token, string? emailHint = null,
+        string source = AccountSources.Login, bool adoptByEmail = false, string? nameHint = null)
     {
         // ZCode/ZAI 形态（"zcode" 授权码 / "zcli" CLI）：上游存的是 OAuth token，真正能发请求的
         // 是它换出来的凭据（第四跳）：Z.AI 渠道是业务 JWT，BigModel 渠道是供应出来的真 API Key。
@@ -981,6 +964,13 @@ public static class SubscriptionEndpoints
         var now = DateTimeOffset.UtcNow;
 
         var account = login.AccountId is not null ? await db.Accounts.GetAsync(login.AccountId) : null;
+        var adopted = false;
+        if (account is null && adoptByEmail && email is not null)
+        {
+            account = (await db.Accounts.ListAsync(login.ProviderId)).FirstOrDefault(a =>
+                a.Kind == AccountKinds.OAuth && string.Equals(a.AccountEmail, email, StringComparison.OrdinalIgnoreCase));
+            adopted = account is not null;
+        }
         var isNew = account is null;
         if (account is null)
         {
@@ -989,11 +979,14 @@ public static class SubscriptionEndpoints
                 Id = login.AccountId ?? Ulid.NewUlid(),
                 ProviderId = login.ProviderId,
                 CreatedAt = now,
+                Kind = AccountKinds.OAuth,
+                Source = source,
+                HttpProxy = login.AccountProxy,
             };
         }
 
         account.DisplayName = email ?? account.DisplayName ?? "";
-        if (account.DisplayName.Length == 0) account.DisplayName = login.Config.DisplayName;
+        if (account.DisplayName.Length == 0) account.DisplayName = nameHint ?? login.Config.DisplayName;
         account.AccountEmail = email ?? account.AccountEmail;
         account.Plan = plan ?? account.Plan;
         account.AccessTokenEnc = protector.Protect(token.AccessToken);
@@ -1008,7 +1001,45 @@ public static class SubscriptionEndpoints
         if (isNew)
             await db.Accounts.InsertAsync(account, CancellationToken.None);
         else
+        {
             await db.Accounts.UpdateAsync(account, CancellationToken.None);
+            // 登录时显式选了代理（或重新登录沿用的）：写回账号，之后的请求 / 刷新都走它。
+            if (login.AccountProxy is not null && login.AccountProxy != account.HttpProxy)
+            {
+                await db.Accounts.SetHttpProxyAsync(account.Id, login.AccountProxy, CancellationToken.None);
+                account.HttpProxy = login.AccountProxy;
+            }
+        }
+        return (account, adopted);
+    }
+
+    /// <summary>
+    /// 直接导入一个可用的 Copilot 短时令牌：不经 GitHub token 换取，原样加密存为访问令牌；
+    /// 刷新槽留空（没有 GitHub token 就没法续，到期后走通用路径被标成失效）。
+    /// </summary>
+    private static async Task<ProviderAccount> ImportDirectCopilotTokenAsync(
+        AstraDatabase db, ISecretProtector protector, string providerId, SubscriptionOAuthConfig config,
+        string token, DateTimeOffset expiresAt, string source = AccountSources.Batch, string? proxy = null)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var tid = LocalCopilotLogin.CopilotTokenField(token, "tid");
+        var account = new ProviderAccount
+        {
+            Id = Ulid.NewUlid(),
+            ProviderId = providerId,
+            DisplayName = tid is null ? $"{config.DisplayName} (direct)" : $"{config.DisplayName} (direct {tid[..Math.Min(8, tid.Length)]})",
+            Plan = LocalCopilotLogin.CopilotTokenField(token, "sku"),
+            AccessTokenEnc = protector.Protect(token),
+            RefreshTokenEnc = null,
+            ExpiresAtUtc = expiresAt,
+            Status = AccountStatus.Active,
+            LastRefreshAtUtc = now,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Source = source,
+            HttpProxy = proxy,
+        };
+        await db.Accounts.InsertAsync(account, CancellationToken.None);
         return account;
     }
 
@@ -1099,22 +1130,7 @@ public static class SubscriptionEndpoints
     /// and <c>#</c> comment lines are ignored, surrounding quotes are stripped. Order is kept; duplicates are kept too
     /// (the caller reports them).
     /// </summary>
-    internal static List<string> ParseTokenList(string? text)
-    {
-        var tokens = new List<string>();
-        if (string.IsNullOrWhiteSpace(text)) return tokens;
-        foreach (var line in text.Split('\n'))
-        {
-            var trimmed = line.Trim();
-            if (trimmed.Length == 0 || trimmed[0] == '#') continue;
-            foreach (var piece in trimmed.Split([',', ';', ' ', '\t', '\r'], StringSplitOptions.RemoveEmptyEntries))
-            {
-                var token = piece.Trim('"', '\'');
-                if (token.Length > 0) tokens.Add(token);
-            }
-        }
-        return tokens;
-    }
+    internal static List<string> ParseTokenList(string? text) => CredentialImport.SplitTokens(text);
 
     /// <summary>First and last four characters only — enough to recognise a token, useless to anyone else.</summary>
     internal static string MaskToken(string token) =>
@@ -1192,6 +1208,12 @@ public static class SubscriptionEndpoints
 
     private static ProviderAccountDto ToDto(ProviderAccount a) => ToDto(a, a.IsCurrent);
 
+    /// <summary>Extra key holding an API-key account's mask (written at import; the key itself stays encrypted).</summary>
+    private const string KeyMaskedExtra = "key_masked";
+
+    private static string? KeyMaskOf(ProviderAccount a) =>
+        a.Kind == AccountKinds.ApiKey && a.Extra[KeyMaskedExtra] is JsonValue v && v.TryGetValue<string>(out var mask) ? mask : null;
+
     private static ProviderAccountDto ToDto(ProviderAccount a, bool isCurrent) => new(
         a.Id,
         a.ProviderId,
@@ -1208,7 +1230,11 @@ public static class SubscriptionEndpoints
         isCurrent,
         a.SortOrder,
         a.CooldownUntilUtc,
-        a.LastError);
+        a.LastError,
+        a.Kind,
+        a.Source,
+        a.HttpProxy,
+        KeyMaskOf(a));
 
     /// <summary>The provider's accounts in failover order; <c>isCurrent</c> marks the one requests go to right now.</summary>
     private static async Task<List<ProviderAccountDto>> ListDtosAsync(AstraDatabase db, string providerId)

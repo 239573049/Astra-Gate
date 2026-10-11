@@ -88,6 +88,16 @@ public sealed class SubscriptionTokenService(
             var current = await accounts.GetAsync(account.Id, ct) ?? account;
             if (!force && IsFresh(current)) return current;
 
+            // API Key 账号没有刷新可言：被要求强制刷新只会发生在上游 401/403 之后，那就是这把 Key 本身失效了。
+            if (current.Kind == AccountKinds.ApiKey)
+            {
+                if (force) await accounts.SetStatusAsync(current.Id, AccountStatus.Revoked, ct);
+                throw new SubscriptionAuthException(current.Id, "API Key 被上游拒绝，请检查或替换这把 Key");
+            }
+
+            // 刷新与业务换取走这个账号自己的出口（账号代理 > 提供商代理 > 系统代理）。
+            config = config.WithHttpProxy(ProxiedHttpClients.ProxyOf(current, config));
+
             if (current.RefreshTokenEnc is null)
             {
                 await accounts.SetStatusAsync(current.Id, AccountStatus.Expired, ct);
@@ -193,8 +203,9 @@ public sealed class SubscriptionTokenService(
     private bool IsFresh(ProviderAccount account) =>
         account.Status == AccountStatus.Active
         && account.AccessTokenEnc is not null
-        && account.ExpiresAtUtc is { } expires
-        && expires - _clock.GetUtcNow() > RefreshLead;
+        // API Key 不过期：只要还是 active 就一直可用（失效由上游 401 → RefreshAsync 标记）。
+        && (account.Kind == AccountKinds.ApiKey
+            || (account.ExpiresAtUtc is { } expires && expires - _clock.GetUtcNow() > RefreshLead));
 
     /// <summary>Expiry of a token result; providers without expires_in get a conservative 1 hour.</summary>
     public static DateTimeOffset ExpiresAt(OAuthClient.TokenResult token, DateTimeOffset now) =>

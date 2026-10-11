@@ -148,7 +148,9 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
   const numeric = useMemo(() => new Set(columns.filter(column => column.numeric ?? (rows.some(row => typeof row[column.key] === "number") && rows.every(row => typeof row[column.key] === "number" || isEmpty(row[column.key])))).map(column => column.key)), [columns, rows]);
   const getRowKey = (row: T) => String(typeof rowKey === "function" ? rowKey(row) : row[rowKey]);
   const keys = sortedRows.map(getRowKey);
-  const order = keys.join("\u0000");
+  // Rows glide only when the sort changes. New data (a filter, a page, a live row) just renders in place:
+  // keying the layout pass on row order would measure and spring every row on each data swap.
+  const sortKey = sort ? `${sort.key}:${sort.direction}` : "";
   const selectedCount = keys.filter(key => selection.has(key)).length;
   const allSelected = keys.length > 0 && selectedCount === keys.length;
 
@@ -298,7 +300,7 @@ export function SortableDataTable<T extends Record<string, unknown>>({ rows, col
         <tbody role="rowgroup">{sortedRows.length ? sortedRows.map((row, index) => {
           const key = keys[index];
           const selected = selectable && selection.has(key);
-          return <motion.tr key={key} role="row" layout={reduced ? false : "position"} layoutDependency={order} transition={motionTokens.spring.smooth} data-selected={selected || undefined} onClick={event => onRowClick(event, key)} onMouseDown={event => { if (selectable && event.shiftKey) event.preventDefault(); }}>
+          return <motion.tr key={key} role="row" layout={reduced ? false : "position"} layoutDependency={sortKey} transition={motionTokens.spring.smooth} data-selected={selected || undefined} onClick={event => onRowClick(event, key)} onMouseDown={event => { if (selectable && event.shiftKey) event.preventDefault(); }}>
             {selectable ? <td role="cell" className={styles.selectCell}><SelectBox checked={selected} label={`Select ${String(row[columns[0]?.key] ?? key)}`} nav="row" reduced={reduced} onToggle={extend => toggleRow(key, extend)} /></td> : null}
             {columns.map((column, columnIndex) => <td key={column.key} role="cell" data-label={column.label} data-primary={columnIndex === 0 || undefined} data-sorted={sort?.key === column.key || undefined} data-numeric={numeric.has(column.key) || undefined}>{column.render ? column.render(row[column.key], row) : String(row[column.key] ?? "–")}</td>)}
           </motion.tr>;

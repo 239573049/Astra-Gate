@@ -488,7 +488,11 @@ function ClientPanel({ client }: { client: ClientInfo }) {
 
       {!soon && client.install && <VersionGroup client={client} onShowLog={() => setInstallAction('log')} />}
 
-      {isClaudeCode && <div id={CLAUDE_DIRECT_ANCHOR_ID}><ClaudeDirectPanel enabled={isClaudeCode} /></div>}
+      {isClaudeCode && (
+        <div id={CLAUDE_DIRECT_ANCHOR_ID}>
+          <ClaudeDirectPanel enabled={isClaudeCode} gatewayEnabled={client.enabled} />
+        </div>
+      )}
 
       {!soon && !isDirectMode && (
         <Group title={t('clients.maintenance')}>

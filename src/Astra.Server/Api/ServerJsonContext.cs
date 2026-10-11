@@ -83,10 +83,9 @@ namespace Astra.Server;
 [JsonSerializable(typeof(ClientInstallJobDto))]
 [JsonSerializable(typeof(ClientInstallRequest))]
 [JsonSerializable(typeof(ClientUpdateCheckRequest))]
-// Native Claude profiles and opt-in client-side statistics (never subscription credentials).
-[JsonSerializable(typeof(ClaudeDirectProfileDto))]
+// Direct Claude Code mode with an Astra subscription account, and its opt-in client-side statistics.
+[JsonSerializable(typeof(ClaudeDirectAccountDto))]
 [JsonSerializable(typeof(ClaudeDirectStateDto))]
-[JsonSerializable(typeof(ClaudeDirectCreateInput))]
 [JsonSerializable(typeof(ClaudeDirectSelectInput))]
 [JsonSerializable(typeof(ClaudeDirectPrepareInput))]
 [JsonSerializable(typeof(ClaudeDirectLaunchDto))]
@@ -102,7 +101,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(RequestEndpoints.RequestLiveEventDto))]
 [JsonSerializable(typeof(RequestEndpoints.UsageItemDto))]
 [JsonSerializable(typeof(RequestEndpoints.BodiesDto))]
-[JsonSerializable(typeof(RequestEndpoints.PageDto<RequestEndpoints.RequestSummaryDto>))]
+[JsonSerializable(typeof(RequestEndpoints.RequestPageDto))]
 [JsonSerializable(typeof(RequestEndpoints.PageDto<PrivacyEndpoints.PrivacyEventDto>))]
 [JsonSerializable(typeof(RequestEndpoints.StatsSummaryDto))]
 [JsonSerializable(typeof(RequestEndpoints.TimeseriesPointDto))]
@@ -145,6 +144,8 @@ namespace Astra.Server;
 [JsonSerializable(typeof(SubscriptionEndpoints.ImportedAccountDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.BatchCopilotImport))]
 [JsonSerializable(typeof(SubscriptionEndpoints.BatchImportResultDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.AccountImportRequest))]
+[JsonSerializable(typeof(SubscriptionEndpoints.AccountImportInfoDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.BatchImportItemDto))]
 [JsonSerializable(typeof(List<SubscriptionEndpoints.BatchImportItemDto>))]
 // auth
