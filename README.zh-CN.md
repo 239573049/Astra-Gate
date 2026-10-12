@@ -213,3 +213,7 @@ pnpm --filter @aidotnet/docs dev    # 文档站
 ## 许可证
 
 MIT。发布说明见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 友链
+
+- [LINUX DO · 新的理想型社区](https://linux.do/)

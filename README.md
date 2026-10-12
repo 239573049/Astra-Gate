@@ -2,8 +2,6 @@
 
 English | [简体中文](README.zh-CN.md)
 
-[![LINUX DO · 新的理想型社区](https://cdn3.ldstatic.com/original/4X/d/6/5/d65def8cc0c413f318bee2bcd1c774bc4ad109a8.png)](https://linux.do/)
-
 **Astra** is a local AI gateway that runs on your own machine. It sits between your AI
 clients (Codex, Claude Code, Gemini CLI, …) and AI providers (Anthropic, OpenAI, DeepSeek,
 OpenRouter, …) as a local relay:
@@ -226,3 +224,7 @@ The docs live in [`docs/content/docs`](docs/content/docs) and are served by the 
 ## License
 
 MIT. Release notes: [CHANGELOG.md](CHANGELOG.md).
+
+## Friend links
+
+- [LINUX DO · 新的理想型社区](https://linux.do/)

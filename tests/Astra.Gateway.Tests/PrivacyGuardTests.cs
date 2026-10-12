@@ -177,6 +177,232 @@ public class PrivacyGuardServiceTests
     }
 
     [Fact]
+    public async Task Policy_And_Custom_Regexes_Are_Reused_For_Repeated_And_Unknown_Clients()
+    {
+        var db = await NewDb();
+        var guard = new PrivacyGuardService(db);
+        await guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = false;
+            s.DefaultAction = PrivacyActions.Redact;
+            s.ClientDefaults = new Dictionary<string, string> { ["claude-code"] = PrivacyActions.Block };
+            s.CustomRules =
+            [
+                new PrivacyCustomRule { Id = "custom.employee", Name = "员工编号", Pattern = @"EMP-[0-9]{6}" },
+            ];
+        }));
+
+        var first = guard.EffectiveFor("claude-code");
+        var again = guard.EffectiveFor("claude-code");
+
+        // The same client kind reuses the materialized policy, custom regex included.
+        Assert.Same(first, again);
+        Assert.Throws<NotSupportedException>(() => ((IList<PrivacyRule>)first.Rules).Clear());
+        Assert.Same(first.Rules.Single(r => r.Id == "custom.employee").Regex,
+            again.Rules.Single(r => r.Id == "custom.employee").Regex);
+
+        // Clients the policy says nothing about all resolve to the same default action, so they share
+        // one entry — an unknown (and unbounded) client id never materializes a policy of its own.
+        var unknown = guard.EffectiveFor("never-seen");
+        Assert.Same(unknown, guard.EffectiveFor("another-unknown"));
+        Assert.All(Enumerable.Range(0, 50).Select(i => guard.EffectiveFor($"unknown-{i}")),
+            p => Assert.Same(unknown, p));
+    }
+
+    [Fact]
+    public async Task Update_Replaces_The_Cached_Policy_And_A_Rejected_Update_Keeps_It()
+    {
+        var db = await NewDb();
+        var guard = new PrivacyGuardService(db);
+        await guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = false;
+            s.DefaultAction = PrivacyActions.Redact;
+            s.CustomRules =
+            [
+                new PrivacyCustomRule { Id = "custom.employee", Name = "员工编号", Pattern = @"EMP-[0-9]{6}" },
+            ];
+        }));
+        var before = guard.EffectiveFor(null);
+        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
+
+        // The update publishes a new generation: its own policy, with the new rule set.
+        await guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = false;
+            s.DefaultAction = PrivacyActions.Redact;
+            s.CustomRules = [new PrivacyCustomRule { Id = "custom.ticket", Name = "工单", Pattern = @"TKT-[0-9]{4}" }];
+        }));
+
+        var after = guard.EffectiveFor(null);
+        Assert.NotSame(before, after);
+        Assert.DoesNotContain(after.Rules, r => r.Id == "custom.employee");
+        Assert.Contains(after.Rules, r => r.Id == "custom.ticket");
+        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"TKT-1234"}""", null).Body);
+
+        // A rejected update publishes nothing: neither the active generation nor the stored settings move.
+        await Assert.ThrowsAsync<ArgumentException>(() => guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.CustomRules = [new PrivacyCustomRule { Id = "custom.bad", Name = "bad", Pattern = "([" }];
+        })));
+
+        Assert.Same(after, guard.EffectiveFor(null));
+        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"TKT-1234"}""", null).Body);
+        var stored = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey);
+        Assert.NotNull(stored);
+        Assert.Equal("custom.ticket", Assert.Single(stored!.CustomRules).Id);
+    }
+
+    [Fact]
+    public async Task Mutating_Settings_Handed_In_Or_Out_Never_Reaches_The_Published_Guard()
+    {
+        var db = await NewDb();
+        var guard = new PrivacyGuardService(db);
+        var input = Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = false;
+            s.DefaultAction = PrivacyActions.Redact;
+            s.ClientDefaults = new Dictionary<string, string> { ["claude-code"] = PrivacyActions.Redact };
+            s.CustomRules =
+            [
+                new PrivacyCustomRule { Id = "custom.employee", Name = "员工编号", Pattern = @"EMP-[0-9]{6}" },
+            ];
+        });
+        var returned = await guard.UpdateAsync(input);
+
+        // The caller keeps its instance and mutates it after the call.
+        input.Enabled = false;
+        input.DefaultAction = PrivacyActions.Off;
+        input.ClientDefaults.Clear();
+        input.CustomRules.Add(new PrivacyCustomRule { Id = "custom.bad", Name = "bad", Pattern = "([" });
+        returned.DefaultAction = PrivacyActions.Off;
+        returned.CustomRules.Clear();
+
+        Assert.True(guard.Settings.Enabled);
+        Assert.Equal(PrivacyActions.Redact, guard.Settings.DefaultAction);
+        Assert.Single(guard.Settings.CustomRules);
+        Assert.Equal(PrivacyActions.Redact, guard.EffectiveFor("claude-code").ActionFor("builtin.email", PrivacyCategories.Email));
+        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
+
+        // Neither does mutating the copy the getter hands out.
+        var read = guard.Settings;
+        read.Enabled = false;
+        read.DefaultAction = PrivacyActions.Off;
+        read.ClientDefaults.Clear();
+        read.CustomRules.Clear();
+
+        Assert.True(guard.Settings.Enabled);
+        Assert.Equal(PrivacyActions.Redact, guard.Settings.DefaultAction);
+        Assert.Single(guard.Settings.CustomRules);
+        Assert.Equal(PrivacyActions.Redact, guard.EffectiveFor("claude-code").ActionFor("builtin.email", PrivacyCategories.Email));
+        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
+
+        // What was persisted is the snapshot's copy too, so the input mutations never reached the database.
+        var stored = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey);
+        Assert.NotNull(stored);
+        Assert.True(stored!.Enabled);
+        Assert.Equal(PrivacyActions.Redact, stored.DefaultAction);
+        Assert.Equal(PrivacyActions.Redact, stored.ClientDefaults["claude-code"]);
+        Assert.Single(stored.CustomRules);
+    }
+
+    [Fact]
+    public async Task Client_Defaults_And_Override_Bools_Resolve_To_Distinct_Policies()
+    {
+        var db = await NewDb();
+        var guard = new PrivacyGuardService(db);
+        await guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = true;
+            s.DefaultAction = PrivacyActions.Redact;
+            s.ClientDefaults = new Dictionary<string, string>
+            {
+                ["claude-code"] = PrivacyActions.Block,
+                ["codex"] = PrivacyActions.Warn,
+            };
+        }));
+
+        var claude = guard.EffectiveFor("claude-code");
+        var codex = guard.EffectiveFor("codex");
+        var unknown = guard.EffectiveFor("never-seen");
+
+        // Each configured client default is its own entry with its own action; everything else is the default.
+        Assert.Equal(PrivacyActions.Block, claude.ActionFor("builtin.aws-access-key", PrivacyCategories.AwsKey));
+        Assert.Equal(PrivacyActions.Warn, codex.ActionFor("builtin.aws-access-key", PrivacyCategories.AwsKey));
+        Assert.Equal(PrivacyActions.Redact, unknown.ActionFor("builtin.aws-access-key", PrivacyCategories.AwsKey));
+        Assert.NotSame(claude, codex);
+        Assert.NotSame(claude, unknown);
+        Assert.NotSame(codex, unknown);
+
+        // Override combinations are separate entries and leave the plain policy alone (the dry-run API
+        // asks for enabled: true, dryRun: false).
+        var dryRunApi = guard.EffectiveFor("codex", enabledOverride: true, dryRunOverride: false);
+        Assert.True(dryRunApi.Enabled);
+        Assert.False(dryRunApi.DryRun);
+        var disabled = guard.EffectiveFor("codex", enabledOverride: false, dryRunOverride: true);
+        Assert.False(disabled.Enabled);
+        Assert.True(disabled.DryRun);
+
+        Assert.NotSame(codex, dryRunApi);
+        Assert.NotSame(dryRunApi, disabled);
+        Assert.True(codex.Enabled);
+        Assert.True(codex.DryRun);
+        Assert.Same(codex, guard.EffectiveFor("codex"));
+    }
+
+    [Fact]
+    public async Task A_Request_Never_Mixes_Settings_From_Two_Generations()
+    {
+        var db = await NewDb();
+        var guard = new PrivacyGuardService(db);
+        await guard.UpdateAsync(Settings(s =>
+        {
+            s.Enabled = true;
+            s.DryRun = true;
+            s.DefaultAction = PrivacyActions.Redact;
+        }));
+
+        using var stop = new CancellationTokenSource();
+        var readers = Enumerable.Range(0, 4).Select(_ => Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                var result = guard.Inspect(RequestJson, "claude-code");
+                // Generation A (enabled, dry run) keeps the body and reports DryRun; generation B is a
+                // pass-through. "applied, not dry run" or a rewritten body can only come from a request
+                // reading its settings and its policy from two different generations.
+                Assert.False(result.Applied && !result.DryRun);
+                if (result.Applied) Assert.Equal(RequestJson, result.Body);
+            }
+        })).ToArray();
+
+        for (var i = 0; i < 25; i++)
+        {
+            await guard.UpdateAsync(Settings(s =>
+            {
+                s.Enabled = false;
+                s.DryRun = false;
+                s.DefaultAction = PrivacyActions.Redact;
+            }));
+            await guard.UpdateAsync(Settings(s =>
+            {
+                s.Enabled = true;
+                s.DryRun = true;
+                s.DefaultAction = PrivacyActions.Redact;
+            }));
+        }
+
+        stop.Cancel();
+        await Task.WhenAll(readers);
+    }
+
+    [Fact]
     public void Report_Json_Round_Trips()
     {
         var json = PrivacyGuardService.ReportJson(dryRun: false, blocked: true,

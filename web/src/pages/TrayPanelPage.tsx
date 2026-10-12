@@ -1,14 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { keys, useSetBinding } from '../api/hooks';
 import type { ClientInfo } from '../api/types';
 import { TrayPanelView, type TrayTab } from '../components/tray/TrayPanelView';
+import { useTrayTitle } from '../components/tray/TrayTitleSource';
 import { useTrayPrefs, useTrayState } from '../components/tray/useTrayBridge';
 import { useTrayData } from '../components/tray/useTrayData';
 import { errorText, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
-import { trayTitle, windowLength, type TrayTitleLabels } from '../lib/tray';
 import { getBridge, type TrayPanelCommand } from '../shell/bridge';
 import { systemActions } from '../shell/systemActions';
 
@@ -16,12 +16,12 @@ import { systemActions } from '../shell/systemActions';
 const SYNCED_KEYS = new Set(['astra.theme', 'astra.accent', 'astra.locale']);
 
 /**
- * The tray popover window (desktop only, route /tray, outside the app shell). The window is created hidden at
- * startup and lives as long as the app: it keeps polling today's numbers to compute the menu-bar title, reports
- * its content height so the window fits it, and forwards its buttons to the main process.
+ * The tray popover window (desktop only, route /tray, outside the app shell). It is created on first use —
+ * the app shell reports the menu-bar title until it exists — and then keeps polling today's numbers for it,
+ * reports its content height so the window fits it, and forwards its buttons to the main process.
  */
 export function TrayPanelPage() {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const qc = useQueryClient();
   const { toast } = useFeedback();
   const bridge = getBridge();
@@ -101,27 +101,7 @@ export function TrayPanelPage() {
   }, [bridge]);
 
   // Menu-bar title (macOS) and tooltip line, from the user's "menu bar text" choice.
-  const labels = useMemo<TrayTitleLabels>(
-    () => ({
-      requests: (count) => t('tray.title.requests', { count }),
-      tokens: (count) => t('tray.title.tokens', { count }),
-      cost: (amount) => t('tray.title.cost', { amount }),
-      quota: (plan, window, remaining) => t('tray.title.quota', { plan, window, remaining }),
-      failures: (count) => t('tray.title.failures', { count }),
-      stopped: t('tray.status.stopped'),
-      windowName: (row) =>
-        row.kind === 'balance'
-          ? (row.label ?? t('tray.quotaBalance'))
-          : row.kind === 'credits' || row.windowMinutes == null
-            ? t('tray.quotaCredits')
-            : windowLength(row.windowMinutes, locale),
-    }),
-    [t, locale],
-  );
-  const title = trayTitle(prefs.title, { running: state.running, summary: data.summary, plans: data.plans }, labels);
-  useEffect(() => {
-    bridge?.tray.setTitle(title.title, title.detail);
-  }, [bridge, title.title, title.detail]);
+  useTrayTitle(prefs, state, data.summary, data.plans);
 
   const command = (c: TrayPanelCommand) => void bridge?.tray.command(c);
 

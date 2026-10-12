@@ -2,8 +2,171 @@ using Astra.Core.Privacy;
 
 namespace Astra.Core.Tests;
 
-public class PrivacyDetectorTests
+public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("jwt")]
+    [InlineData("pem")]
+    [InlineData("email")]
+    [InlineData("text")]
+    public void Large_Text_Is_Fully_Scanned_Without_Timeout(string shape)
+    {
+        var text = shape switch
+        {
+            "jwt" => string.Concat(Enumerable.Repeat("eyJ", 100_000)),
+            "pem" => string.Concat(Enumerable.Repeat("-----BEGIN PRIVATE KEY-----\n", 10_000)),
+            "email" => new string('%', 300_000),
+            _ => new string('a', 1_000_000),
+        };
+        text += "\ncontact alice@example.com";
+        var policy = Policy();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var allocated = GC.GetAllocatedBytesForCurrentThread();
+        PrivacyApplyResult? result = null;
+        var error = Record.Exception(() => result = _detector.Apply(text, policy));
+        output.WriteLine($"{shape}: {clock.Elapsed.TotalMilliseconds:F2} ms; {GC.GetAllocatedBytesForCurrentThread() - allocated:N0} bytes; {error?.GetType().Name ?? "ok"}");
+        Assert.Null(error);
+        Assert.Contains(result!.Redactions, r => r.Original == "alice@example.com");
+    }
+
+    [Theory]
+    [InlineData("jwt", "eyJabcdefgh.ijklmnop.qrstuvwx eyJabcdefgh.ijklmnop.qrstuvwx")]
+    [InlineData("pem", "-----BEGIN PRIVATE KEY-----first-----BEGIN RSA PRIVATE KEY-----second-----END PRIVATE KEY-----tail-----END RSA PRIVATE KEY-----")]
+    public void Linear_Rules_Preserve_Matched_Spans(string shape, string text)
+    {
+        var category = shape == "jwt" ? PrivacyCategories.Jwt : PrivacyCategories.PrivateKey;
+        var pattern = shape == "jwt"
+            ? @"eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"
+            : @"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----";
+        var expected = PrivacyDetector.Compile(pattern, shape == "pem").Matches(text).Select(m => m.Value);
+        var policy = Policy(defaultAction: PrivacyActions.Off,
+            categoryActions: new() { [category] = PrivacyActions.Redact });
+        Assert.Equal(expected, _detector.Apply(text, policy).Redactions.Select(r => r.Original));
+    }
+
+    [Fact]
+    public void Custom_Backtracking_Timeout_Is_Not_Silently_Ignored()
+    {
+        var policy = Policy(defaultAction: PrivacyActions.Off,
+            categoryActions: new() { [PrivacyCategories.Custom] = PrivacyActions.Redact },
+            custom: [new() { Id = "custom.expensive", Pattern = "^(a+)+$" }]);
+        Assert.Throws<System.Text.RegularExpressions.RegexMatchTimeoutException>(() =>
+            _detector.Apply(new string('a', 20_000) + "!", policy));
+    }
+
+    [Fact]
+    public void Email_Optimized_Matches_Preserve_Legacy_Boundaries()
+    {
+        var legacy = PrivacyDetector.Compile(@"(?<![\w.+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![\w\-])");
+        var policy = Policy(defaultAction: PrivacyActions.Off,
+            categoryActions: new() { [PrivacyCategories.Email] = PrivacyActions.Redact });
+        var random = new Random(42);
+        string[] pieces = ["a", "%", "_", ".", "-", "+", "@", "com", " ", "é", "中", "\u0301", "\n", "a@b.co", "foo%bar@example.com", "a@b.com@c.org"];
+        for (var i = 0; i < 2_000; i++)
+        {
+            var text = string.Concat(Enumerable.Range(0, 15).Select(_ => pieces[random.Next(pieces.Length)]));
+            var expected = legacy.Matches(text).Select(m => m.Value).ToArray();
+            Assert.Equal(expected, _detector.Apply(text, policy).Redactions.Select(r => r.Original));
+            Assert.Equal(expected.Length, _detector.Scan(text, policy).Sum(h => h.Count));
+        }
+    }
+
+    [Theory]
+    [InlineData("{\"type\":\"image\",\"source\":{\"type\":\"base64\",\"media_type\":\"image/png\",\"data\":\"PAYLOAD\"}}")]
+    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"application/pdf\",\"data\":\"PAYLOAD\"}}")]
+    [InlineData("{\"type\":\"image_url\",\"image_url\":{\"url\":\"data:image/png;base64,PAYLOAD\"}}")]
+    [InlineData("{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,PAYLOAD\"}")]
+    [InlineData("{\"type\":\"file\",\"file\":{\"file_data\":\"data:application/pdf;base64,PAYLOAD\"}}")]
+    [InlineData("{\"type\":\"input_file\",\"file_data\":\"data:application/pdf;base64,PAYLOAD\"}")]
+    [InlineData("{\"type\":\"input_audio\",\"input_audio\":{\"data\":\"PAYLOAD\",\"format\":\"wav\"}}")]
+    [InlineData("{\"inlineData\":{\"mimeType\":\"image/jpeg\",\"data\":\"PAYLOAD\"}}")]
+    [InlineData("{\"inline_data\":{\"mime_type\":\"audio/wav\",\"data\":\"PAYLOAD\"}}")]
+    [InlineData("{\"type\":\"thinking\",\"thinking\":\"hello\",\"signature\":\"PAYLOAD\"}")]
+    [InlineData("{\"type\":\"redacted_thinking\",\"data\":\"PAYLOAD\"}")]
+    [InlineData("{\"type\":\"reasoning\",\"encrypted_content\":\"PAYLOAD\"}")]
+    [InlineData("{\"thoughtSignature\":\"PAYLOAD\",\"text\":\"hello\"}")]
+    public void Json_Opaque_Protocol_Payloads_Are_Not_Scanned(string block)
+    {
+        // Deliberately matches even Base64-alphabet data: skipping is structural, not heuristic.
+        var payload = new string('A', 1_000_000) + "AKIAIOSFODNN7EXAMPLE";
+        var json = "{\"messages\":[{\"content\":[" + block.Replace("PAYLOAD", payload) +
+            ",{\"type\":\"text\",\"text\":\"alice@example.com\"}]}]}";
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var result = _detector.ApplyJson(json, Policy(custom:
+            [new() { Id = "custom.payload", Pattern = "A{1000}" }]))!;
+        output.WriteLine($"opaque: {clock.Elapsed.TotalMilliseconds:F2} ms");
+        Assert.Single(result.Redactions);
+        Assert.Equal("alice@example.com", result.Redactions[0].Original);
+        Assert.Contains(payload, result.Text);
+    }
+
+    [Theory]
+    [InlineData("{\"type\":\"tool_use\",\"input\":{\"type\":\"thinking\",\"signature\":\"alice@example.com\"}}")]
+    [InlineData("{\"type\":\"tool_result\",\"content\":\"alice@example.com\"}")]
+    [InlineData("{\"type\":\"thinking\",\"thinking\":\"alice@example.com\",\"signature\":\"opaque\"}")]
+    [InlineData("{\"type\":\"text\",\"data\":\"alice@example.com\"}")]
+    [InlineData("{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://example.com/alice@example.com\"}}")]
+    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"text\",\"data\":\"alice@example.com\"}}")]
+    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"text/plain\",\"data\":\"alice@example.com\"}}")]
+    [InlineData("{\"inlineData\":{\"mimeType\":\"text/plain\",\"data\":\"alice@example.com\"}}")]
+    public void Json_Text_Unknown_Data_And_Tool_Arguments_Are_Still_Scanned(string block)
+    {
+        var result = _detector.ApplyJson("{\"messages\":[{\"content\":[" + block + "]}]}", Policy())!;
+        Assert.Contains(result.Redactions, r => r.Original == "alice@example.com");
+    }
+
+    [Theory]
+    [InlineData("\"alice@example.com\"")]
+    [InlineData("[\"alice@example.com\",null,\"bob@example.org\"]")]
+    public void Json_Root_And_Array_Strings_Are_Rewritten(string json)
+    {
+        var result = _detector.ApplyJson(json, Policy())!;
+        Assert.DoesNotContain("@", result.Text);
+        Assert.NotEmpty(result.Redactions);
+    }
+
+    [Theory]
+    [InlineData("{\"contents\":[{\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"OPAQUE\"}},{\"text\":\"alice@example.com\"}]}]}")]
+    [InlineData("{\"input\":[{\"type\":\"reasoning\",\"encrypted_content\":\"OPAQUE\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"alice@example.com\"}]}]}")]
+    [InlineData("{\"input\":[{\"type\":\"function_call_output\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,OPAQUE\"},{\"type\":\"input_text\",\"text\":\"alice@example.com\"}]}]}")]
+    public void Actual_Protocol_Paths_Skip_Only_Opaque_Values(string json)
+    {
+        var result = _detector.ApplyJson(json, Policy(custom:
+            [new() { Id = "custom.opaque", Pattern = "OPAQUE" }]))!;
+        Assert.Equal("alice@example.com", Assert.Single(result.Redactions).Original);
+        Assert.Contains("OPAQUE", result.Text);
+    }
+
+    [Theory]
+    [InlineData("{\"contents\":[{\"parts\":[{\"functionCall\":{\"args\":{\"thoughtSignature\":\"alice@example.com\"}}}]}]}")]
+    [InlineData("{\"contents\":[{\"parts\":[{\"functionResponse\":{\"response\":{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"alice@example.com\"}}}}]}]}")]
+    [InlineData("{\"messages\":[{\"content\":[{\"type\":\"tool_result\",\"content\":{\"type\":\"thinking\",\"signature\":\"alice@example.com\"}}]}]}")]
+    [InlineData("{\"messages\":[{\"content\":[{\"type\":\"tool_result\",\"content\":[{\"type\":\"thinking\",\"signature\":\"alice@example.com\"}]}]}]}")]
+    [InlineData("{\"input\":[{\"type\":\"function_call_output\",\"output\":[{\"type\":\"reasoning\",\"encrypted_content\":\"alice@example.com\"}]}]}")]
+    public void Arbitrary_Tool_Json_Does_Not_Inherit_Protocol_Skips(string json)
+    {
+        Assert.Equal("alice@example.com", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
+    }
+
+    [Fact]
+    public void Json_Warn_And_No_Match_Preserve_Original_Formatting()
+    {
+        const string json = "{  \"data\": \"alice@example.com\", \"null\": null }";
+        Assert.Same(json, _detector.ApplyJson(json, Policy(defaultAction: PrivacyActions.Warn))!.Text);
+        Assert.Same(json, _detector.ApplyJson(json, Policy(defaultAction: PrivacyActions.Off))!.Text);
+    }
+
+    [Fact]
+    public void Custom_Zero_Length_Matches_Preserve_Replacement_Semantics()
+    {
+        var policy = Policy(defaultAction: PrivacyActions.Off,
+            categoryActions: new() { [PrivacyCategories.Custom] = PrivacyActions.Redact },
+            custom: [new() { Id = "custom.empty", Pattern = "(?=a)|$" }]);
+        var result = _detector.Apply("aa", policy);
+        Assert.Equal("[REDACTED:custom#1]a[REDACTED:custom#2]a[REDACTED:custom#3]", result.Text);
+        Assert.Equal(3, result.Hits.Single().Count);
+    }
+
     private readonly PrivacyDetector _detector = new();
 
     private static EffectivePrivacyPolicy Policy(

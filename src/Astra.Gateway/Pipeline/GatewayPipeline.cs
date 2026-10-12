@@ -3,6 +3,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Unicode;
 using Astra.Core;
 using Astra.Core.Billing;
 using Astra.Core.Clients;
@@ -695,17 +696,19 @@ public sealed class GatewayPipeline(
             {
                 var read = await ReadWithIdleTimeoutAsync(stream, buffer, idleTimeoutSec, ct);
                 if (read == 0) break;
-                var text = Encoding.UTF8.GetString(buffer, 0, read);
-                upstreamCapture?.Append(text);
                 var events = parser.Feed(buffer.AsSpan(0, read));
                 if (events.Count > 0)
                 {
                     sawSseEvent = true;
                     rawPending.Clear();
                 }
-                else if (!sawSseEvent)
+                // The chunk as text is only wanted for body capture and for a body that has not turned into
+                // SSE yet: decoding every chunk of a streamed answer would allocate a string per read.
+                if (capture is not null || (!sawSseEvent && events.Count == 0))
                 {
-                    rawPending.Append(text);
+                    var text = Encoding.UTF8.GetString(buffer, 0, read);
+                    upstreamCapture?.Append(text);
+                    if (!sawSseEvent && events.Count == 0) rawPending.Append(text);
                 }
                 foreach (var sse in events) Handle(sse);
                 await FlushAsync();
@@ -844,17 +847,20 @@ public sealed class GatewayPipeline(
         int idleTimeoutSec, CancellationToken ct)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var memory = new MemoryStream();
+        // A declared length sizes the buffer once instead of doubling it (and copying) as the body arrives.
+        var declared = response.Content.Headers.ContentLength;
+        using var memory = new MemoryStream(declared is > 0 and < int.MaxValue ? (int)declared.Value : 0);
         var buffer = new byte[64 * 1024];
         int read;
         while ((read = await ReadWithIdleTimeoutAsync(stream, buffer, idleTimeoutSec, ct)) > 0) memory.Write(buffer, 0, read);
-        var text = Encoding.UTF8.GetString(memory.GetBuffer(), 0, (int)memory.Length);
-        capture?.Set(BodyStore.UpstreamResponse, text);
+        var body = memory.GetBuffer().AsMemory(0, (int)memory.Length);
 
         JsonObject? json = null;
         try
         {
-            json = JsonNode.Parse(text) as JsonObject;
+            // Parsed from its UTF-8 bytes: the body only becomes a string when something has to rewrite it.
+            // Invalid UTF-8 (a binary error page, say) is not JSON, which is what the string path found too.
+            if (Utf8.IsValid(body.Span)) json = JsonNode.Parse(body.Span) as JsonObject;
         }
         catch (JsonException)
         {
@@ -865,21 +871,29 @@ public sealed class GatewayPipeline(
         // One complete body: usage and errors are real, but there is no first-token moment to measure.
         foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds, wholeBody: true);
 
-        string output;
         if (encoder is null)
         {
-            output = text;
             ctx.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+            ctx.Response.StatusCode = 200;
+            if (capture is null && restore.Count == 0)
+            {
+                // Nothing to rewrite (no capture, nothing redacted): hand the upstream bytes over untouched.
+                await ctx.Response.Body.WriteAsync(body, ct);
+                return;
+            }
+            var passthrough = PrivacyGuardService.Restore(Encoding.UTF8.GetString(body.Span), restore);
+            capture?.Set(BodyStore.UpstreamResponse, passthrough);
+            capture?.Set(BodyStore.ClientResponse, passthrough);
+            await ctx.Response.WriteAsync(passthrough, ct);
+            return;
         }
-        else
-        {
-            if (json is null) throw new GatewayException(502, "api_error", "上游返回的不是 JSON：" + Truncate(text, 300));
-            foreach (var e in events) encoder.OnEvent(e);
-            output = encoder.BuildJson().ToJsonString(GatewayJson.Options);
-            ctx.Response.ContentType = "application/json";
-        }
-        output = PrivacyGuardService.Restore(output, restore);
+
+        if (json is null) throw new GatewayException(502, "api_error", "上游返回的不是 JSON：" + Truncate(Encoding.UTF8.GetString(body.Span), 300));
+        capture?.Set(BodyStore.UpstreamResponse, Encoding.UTF8.GetString(body.Span));
+        foreach (var e in events) encoder.OnEvent(e);
+        var output = PrivacyGuardService.Restore(encoder.BuildJson().ToJsonString(GatewayJson.Options), restore);
         capture?.Set(BodyStore.ClientResponse, output);
+        ctx.Response.ContentType = "application/json";
         ctx.Response.StatusCode = 200;
         await ctx.Response.WriteAsync(output, ct);
     }

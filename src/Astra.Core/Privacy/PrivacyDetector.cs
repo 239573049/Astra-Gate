@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
 using System.Text.Json;
@@ -17,51 +18,105 @@ public sealed partial class PrivacyDetector
     public static IReadOnlyList<BuiltinRule> BuiltInRules { get; } =
     [
         new("builtin.private-key", PrivacyCategories.PrivateKey, "PEM 私钥块",
-            Compile(@"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----", ignoreCase: true)),
+            Linear(@"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----", ignoreCase: true)),
         new("builtin.jwt", PrivacyCategories.Jwt, "JWT（三段式）",
-            Compile(@"eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}")),
+            Linear(@"eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}")),
         new("builtin.sk-ant", PrivacyCategories.ApiKey, "Anthropic API Key（sk-ant-…）",
-            Compile(@"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_\-]{20,}")),
+            SkAntRegex()),
         new("builtin.sk-openai", PrivacyCategories.ApiKey, "OpenAI 风格 API Key（sk-…）",
-            Compile(@"(?<![A-Za-z0-9])sk-[A-Za-z0-9_\-]{20,}")),
+            SkOpenAiRegex()),
         new("builtin.google-key", PrivacyCategories.ApiKey, "Google API Key（AIza…）",
-            Compile(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}")),
+            GoogleKeyRegex()),
         new("builtin.astra-local", PrivacyCategories.ApiKey, "Astra 本地客户端密钥（astra-…）",
-            Compile(@"(?<![A-Za-z0-9])astra-[a-z0-9\-]{1,32}-[A-Za-z0-9]{20,}")),
+            AstraLocalKeyRegex()),
         new("builtin.vendor-keys", PrivacyCategories.ApiKey, "xAI / Groq 风格 API Key（xai_… gsk_…）",
-            Compile(@"(?<![A-Za-z0-9])(?:xai|gsk)_[A-Za-z0-9]{20,}")),
+            VendorKeysRegex()),
         new("builtin.github-token", PrivacyCategories.ApiKey, "GitHub Token（ghp_/gho_/github_pat_…）",
-            Compile(@"(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})")),
+            GitHubTokenRegex()),
         new("builtin.gitlab-token", PrivacyCategories.ApiKey, "GitLab Token（glpat-…）",
-            Compile(@"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_\-]{16,}")),
+            GitLabTokenRegex()),
         new("builtin.slack-token", PrivacyCategories.ApiKey, "Slack Token（xox…-…）",
-            Compile(@"(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9\-]{10,}")),
+            SlackTokenRegex()),
         new("builtin.huggingface-token", PrivacyCategories.ApiKey, "Hugging Face Token（hf_…）",
-            Compile(@"(?<![A-Za-z0-9])hf_[A-Za-z0-9]{20,}")),
+            HuggingFaceTokenRegex()),
         new("builtin.stripe-key", PrivacyCategories.ApiKey, "Stripe Key（sk_live_/rk_live_/whsec_…）",
-            Compile(@"(?<![A-Za-z0-9])(?:(?:sk|rk)_live|whsec)_[A-Za-z0-9]{16,}")),
+            StripeKeyRegex()),
         new("builtin.telegram-bot", PrivacyCategories.ApiKey, "Telegram Bot Token",
-            Compile(@"(?<![A-Za-z0-9])\d{8,10}:AA[A-Za-z0-9_\-]{33}(?![A-Za-z0-9])")),
+            TelegramBotTokenRegex()),
         new("builtin.aws-access-key", PrivacyCategories.AwsKey, "AWS Access Key（AKIA/ASIA…）",
-            Compile(@"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])")),
+            AwsAccessKeyRegex()),
         new("builtin.email", PrivacyCategories.Email, "邮箱地址",
-            Compile(@"(?<![\w.+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![\w\-])")),
+            EmailRegex()),
         new("builtin.phone", PrivacyCategories.Phone, "手机号（中国大陆 / 国际）",
-            Compile(@"(?:(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\+[0-9]{1,3}[\s\-]?[0-9]{6,14}(?!\d))")),
+            PhoneRegex()),
         new("builtin.intranet-host", PrivacyCategories.Intranet, "内网 IP / 内部主机名",
-            Compile(@"(?:(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\w.])|(?<![\w.\-])[A-Za-z0-9][A-Za-z0-9\-]*(?:\.[A-Za-z0-9][A-Za-z0-9\-]*)*\.(?:internal|local|lan|corp)(?![\w\-]))",
-                ignoreCase: true)),
+            IntranetHostRegex()),
         new("builtin.credit-card", PrivacyCategories.CreditCard, "银行卡 / 信用卡号（Visa 万事达 运通 银联）",
-            Compile(@"(?<!\d)(?:4\d{12}(?:\d{3})?|5[1-5]\d{14}|3[47]\d{13}|6(?:011|5\d{2})\d{12}|62\d{14,17})(?!\d)")),
+            CreditCardRegex()),
         new("builtin.cn-id", PrivacyCategories.NationalId, "居民身份证号（中国大陆）",
-            Compile(@"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)")),
+            CnIdRegex()),
         new("builtin.us-ssn", PrivacyCategories.NationalId, "社会安全号（美国 SSN）",
-            Compile(@"(?<!\d)(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)")),
+            UsSsnRegex()),
         new("builtin.conn-string", PrivacyCategories.Credential, "数据库连接串（postgres/mysql/mongo/redis）",
-            Compile(@"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?)://[^\s:@/]+:[^\s@]+@[^\s]+", ignoreCase: true)),
+            ConnStringRegex()),
         new("builtin.credential-assignment", PrivacyCategories.Credential, "明文凭据赋值（password= / token= / api_key=）",
-            Compile(@"(?<![A-Za-z0-9])(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|access[_\-]?key)[""']?\s*[:=]\s*[""']?(?!\[REDACTED:)[^\s""']{6,}", ignoreCase: true)),
+            CredentialAssignmentRegex()),
     ];
+
+    // These delimiter-driven patterns need a linear-time engine: repeated incomplete JWT / PEM
+    // prefixes otherwise retry the entire remaining input at every prefix. Lookaround-free only.
+    private static Regex Linear(string pattern, bool ignoreCase = false) => new(
+        pattern, RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
+        (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None), TimeSpan.FromMilliseconds(500));
+
+    [GeneratedRegex(@"(?<![\w.+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![\w\-])", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex EmailRegex();
+
+    private static readonly Regex EmailCandidate = Linear(@"(?<email>[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})(?:[^\w\-]|$)");
+
+    // Keep the original email lookarounds without quadratic retries on '%' runs. The linear
+    // candidate consumes the right boundary; resume at the email end so that boundary is reusable.
+    private static IEnumerable<(int Index, int Length)> Matches(PrivacyRule rule, string text)
+    {
+        if (ReferenceEquals(rule.Regex, IntranetHostRegex()) &&
+            !text.Contains("10.", StringComparison.Ordinal) &&
+            !text.Contains("192.168.", StringComparison.Ordinal) &&
+            !text.Contains("172.", StringComparison.Ordinal) &&
+            !text.Contains(".internal", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains(".local", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains(".lan", StringComparison.OrdinalIgnoreCase) &&
+            !text.Contains(".corp", StringComparison.OrdinalIgnoreCase)) yield break;
+
+        if (ReferenceEquals(rule.Regex, EmailRegex()))
+        {
+            for (var match = EmailCandidate.Match(text); match.Success;)
+            {
+                var email = match.Groups["email"];
+                var start = email.Index;
+                var end = start + email.Length;
+                if (start > 0 && IsEmailLeftBoundary(text[start - 1]))
+                {
+                    // '%' belongs to the local part but not the original negative lookbehind.
+                    var percent = text.IndexOf('%', start, text.IndexOf('@', start) - start);
+                    start = percent < 0 ? end : percent + 1;
+                }
+                var accepted = start < end && text[start] != '@';
+                if (accepted) yield return (start, end - start);
+                // A rejected local part must not hide a second address starting after its '@'.
+                match = EmailCandidate.Match(text, accepted ? end : text.IndexOf('@', email.Index) + 1);
+            }
+            yield break;
+        }
+        for (var match = rule.Regex.Match(text); match.Success; match = match.NextMatch())
+            yield return (match.Index, match.Length);
+    }
+
+    private static bool IsEmailLeftBoundary(char c) => c is '.' or '+' or '-' ||
+        char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.UppercaseLetter
+            or System.Globalization.UnicodeCategory.LowercaseLetter or System.Globalization.UnicodeCategory.TitlecaseLetter
+            or System.Globalization.UnicodeCategory.ModifierLetter or System.Globalization.UnicodeCategory.OtherLetter
+            or System.Globalization.UnicodeCategory.NonSpacingMark or System.Globalization.UnicodeCategory.DecimalDigitNumber
+            or System.Globalization.UnicodeCategory.ConnectorPunctuation;
 
     /// <summary>Compiles a user-supplied pattern with a match timeout; throws ArgumentException when invalid.</summary>
     public static Regex Compile(string pattern, bool ignoreCase = false) => new(
@@ -81,7 +136,8 @@ public sealed partial class PrivacyDetector
         var hits = new List<PrivacyHit>();
         foreach (var rule in policy.Rules)
         {
-            var count = rule.Regex.Matches(text).Count;
+            if (policy.ActionFor(rule.Id, rule.Category) == PrivacyActions.Off) continue;
+            var count = Matches(rule, text).Count();
             if (count > 0) AddHit(hits, rule, policy, count);
         }
         return hits;
@@ -101,25 +157,37 @@ public sealed partial class PrivacyDetector
             var action = policy.ActionFor(rule.Id, rule.Category);
             if (action == PrivacyActions.Off) continue;
 
-            var matches = rule.Regex.Matches(result.Text);
-            if (matches.Count == 0) continue;
-
-            AddHit(result.Hits, rule, policy, matches.Count, CollectSamples(matches, policy));
-            if (action != PrivacyActions.Redact) continue;
-
-            var evaluator = new MatchEvaluator(_ =>
+            var input = result.Text;
+            StringBuilder? rewritten = null;
+            List<string>? samples = policy.RecordSamples ? [] : null;
+            var count = 0;
+            var cursor = 0;
+            foreach (var (index, length) in Matches(rule, input))
             {
+                count++;
+                if (samples is { Count: < MaxSamples } && length > 0)
+                {
+                    var masked = MaskSample(input.AsSpan(index, length));
+                    if (!samples.Contains(masked)) samples.Add(masked);
+                }
+                if (action != PrivacyActions.Redact) continue;
+
+                rewritten ??= new StringBuilder(input.Length);
+                rewritten.Append(input, cursor, index - cursor);
                 var placeholder = PlaceholderFor(rule.Category, numbering.CounterFor(rule.Category));
+                rewritten.Append(placeholder);
                 result.Redactions.Add(new PrivacyRedaction
                 {
                     Placeholder = placeholder,
-                    Original = _.Value,
+                    Original = input.Substring(index, length),
                     Category = rule.Category,
                     RuleId = rule.Id,
                 });
-                return placeholder;
-            });
-            result.Text = rule.Regex.Replace(result.Text, evaluator);
+                cursor = index + length;
+            }
+            if (count > 0) AddHit(result.Hits, rule, policy, count, samples);
+            if (rewritten is not null)
+                result.Text = rewritten.Append(input, cursor, input.Length - cursor).ToString();
         }
 
         result.Blocked = result.Hits.Exists(h => h.Action == PrivacyActions.Block);
@@ -127,8 +195,9 @@ public sealed partial class PrivacyDetector
     }
 
     /// <summary>
-    /// JSON-aware processing: applies the policy to every string value (objects, arrays, nested),
-    /// leaving structure and non-string values untouched. Returns null when the input is not valid JSON
+    /// JSON-aware processing: inspects string values except protocol-identified opaque media and
+    /// reasoning payloads. Text, URLs, tool arguments/results and unknown fields remain inspected.
+    /// Leaves structure and non-string values untouched. Returns null when the input is not valid JSON
     /// (callers then fall back to plain-text <see cref="Apply"/>).
     /// </summary>
     public PrivacyApplyResult? ApplyJson(string json, EffectivePrivacyPolicy policy)
@@ -150,34 +219,109 @@ public sealed partial class PrivacyDetector
         if (root is null) return null;
 
         var merged = new PrivacyApplyResult { Text = json };
-        Walk(root, policy, merged);
-        merged.Text = root.ToJsonString(Json.Wire);
+        root = Walk(root, policy, merged, JsonScope.Root);
+        if (merged.Redactions.Count > 0) merged.Text = root!.ToJsonString(Json.Wire);
         merged.Blocked = merged.Hits.Exists(h => h.Action == PrivacyActions.Block);
         return merged;
     }
 
-    private void Walk(JsonNode node, EffectivePrivacyPolicy policy, PrivacyApplyResult merged)
+    private enum JsonScope { Root, Content, ToolContent, Source, InlineData, ImageUrl, Audio, File, Ordinary }
+
+    private JsonNode? Walk(JsonNode? node, EffectivePrivacyPolicy policy, PrivacyApplyResult merged, JsonScope scope)
     {
         switch (node)
         {
             case JsonValue value when value.TryGetValue<string>(out var s):
             {
                 var r = Apply(s, policy, merged);
-                if (r.Text != s) value.ReplaceTextWith(r.Text);
                 Merge(merged, r);
-                break;
+                return r.Text == s ? node : JsonValue.Create(r.Text);
             }
             case JsonObject obj:
             {
-                foreach (var property in obj) Walk(property.Value!, policy, merged);
+                // Compute skips from original discriminators before custom rules can rewrite them.
+                var type = StringValue(obj["type"]);
+                var properties = obj.Select(p => (p.Key, p.Value,
+                    Skip: IsOpaque(scope, type, obj, p.Key, p.Value))).ToArray();
+                foreach (var (key, child, skip) in properties)
+                {
+                    if (skip) continue;
+                    var childScope = ChildScope(scope, type, key, child);
+                    var rewritten = Walk(child, policy, merged, childScope);
+                    if (!ReferenceEquals(child, rewritten)) obj[key] = rewritten;
+                }
                 break;
             }
             case JsonArray array:
             {
-                foreach (var item in array) Walk(item!, policy, merged);
+                for (var i = 0; i < array.Count; i++)
+                {
+                    var child = array[i];
+                    var rewritten = Walk(child, policy, merged, scope);
+                    if (!ReferenceEquals(child, rewritten)) array[i] = rewritten;
+                }
                 break;
             }
         }
+        return node;
+    }
+
+    private static string? StringValue(JsonNode? node) =>
+        node is JsonValue value && value.TryGetValue<string>(out var s) ? s : null;
+
+    private static JsonScope ChildScope(JsonScope scope, string? type, string key, JsonNode? child) => (scope, key) switch
+    {
+        (JsonScope.Root, "messages" or "input" or "system" or "contents" or "systemInstruction" or "system_instruction") => JsonScope.Content,
+        (JsonScope.Content, "content") when type == "tool_result" && child is JsonArray => JsonScope.ToolContent,
+        (JsonScope.Content, "content" or "parts") when child is JsonArray => JsonScope.Content,
+        (JsonScope.Content, "output") when type == "function_call_output" && child is JsonArray => JsonScope.ToolContent,
+        (JsonScope.ToolContent, "source") when type is "image" or "document" => JsonScope.Source,
+        (JsonScope.ToolContent, "image_url") when type is "image_url" or "input_image" => JsonScope.ImageUrl,
+        (JsonScope.ToolContent, "input_audio") when type == "input_audio" => JsonScope.Audio,
+        (JsonScope.ToolContent, "file") when type == "file" => JsonScope.File,
+        (JsonScope.Content, "source") when type is "image" or "document" => JsonScope.Source,
+        (JsonScope.Content, "inlineData" or "inline_data") => JsonScope.InlineData,
+        (JsonScope.Content, "image_url") when type is "image_url" or "input_image" => JsonScope.ImageUrl,
+        (JsonScope.Content, "input_audio") when type == "input_audio" => JsonScope.Audio,
+        (JsonScope.Content, "file") when type == "file" => JsonScope.File,
+        _ => JsonScope.Ordinary,
+    };
+
+    private static bool IsOpaque(JsonScope scope, string? type, JsonObject obj, string key, JsonNode? value)
+    {
+        // Arbitrary tool JSON stays inspected even when it contains fields called data/signature.
+        // Skip only opaque protocol slots, never captions, filenames, URLs or whole media objects.
+        if (value is not JsonValue scalar || !scalar.TryGetValue<string>(out var text)) return false;
+        return (scope, key) switch
+        {
+            (JsonScope.Source, "data") => type == "base64" && IsBinaryMedia(StringValue(obj["media_type"])),
+            (JsonScope.InlineData, "data") => IsBinaryMedia(StringValue(obj["mimeType"] ?? obj["mime_type"])),
+            (JsonScope.Audio, "data") => true,
+            (JsonScope.ImageUrl, "url") => IsBinaryDataUrl(text),
+            (JsonScope.File, "file_data") => IsBinaryDataUrl(text),
+            (JsonScope.Content or JsonScope.ToolContent, "image_url") when type == "input_image" => IsBinaryDataUrl(text),
+            (JsonScope.Content or JsonScope.ToolContent, "file_data") when type == "input_file" => IsBinaryDataUrl(text),
+            (JsonScope.Content, "signature") => type == "thinking",
+            (JsonScope.Content, "data") => type == "redacted_thinking",
+            (JsonScope.Content, "encrypted_content") => type == "reasoning",
+            (JsonScope.Content, "thoughtSignature" or "thought_signature") => true,
+            _ => false,
+        };
+    }
+
+    private static bool IsBinaryMedia(string? media) => media is not null &&
+        (media.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+         media.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
+         media.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
+         media.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+         media.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase));
+
+    private static bool IsBinaryDataUrl(string text)
+    {
+        if (!text.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return false;
+        var separator = text.IndexOf(';', 5);
+        return separator is > 5 and < 128 && IsBinaryMedia(text[5..separator]) &&
+            text.AsSpan(separator).StartsWith(";base64,", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <remarks><paramref name="samples"/> defaults to null so older call sites (no samples) stay valid.</remarks>
@@ -233,34 +377,85 @@ public sealed partial class PrivacyDetector
 
     private const int MaxSamples = 3;
 
-    /// <summary>Up to <see cref="MaxSamples"/> distinct matches, each masked — originals are never recorded.</summary>
-    private static List<string>? CollectSamples(MatchCollection matches, EffectivePrivacyPolicy policy)
-    {
-        if (!policy.RecordSamples) return null;
-        var samples = new List<string>();
-        foreach (Match m in matches)
-        {
-            if (m.Value.Length == 0) continue;
-            var masked = MaskSample(m.Value);
-            if (!samples.Contains(masked)) samples.Add(masked);
-            if (samples.Count >= MaxSamples) break;
-        }
-        return samples;
-    }
-
     /// <summary>Masks one matched value for the log: keeps a short head/tail, hides the middle, caps length.</summary>
-    public static string MaskSample(string value)
+    public static string MaskSample(string value) => MaskSample(value.AsSpan());
+
+    private static string MaskSample(ReadOnlySpan<char> value)
     {
-        if (string.IsNullOrEmpty(value)) return "••••";
-        var v = value.Replace("\r", "").Replace("\n", "⏎");
-        if (v.Length > 64) v = v[..64];
-        return v.Length switch
+        if (value.IsEmpty) return "••••";
+        Span<char> preview = stackalloc char[64];
+        var length = 0;
+        foreach (var c in value)
+        {
+            if (c == '\r') continue;
+            preview[length++] = c == '\n' ? '\u23ce' : c;
+            if (length == preview.Length) break;
+        }
+        var v = preview[..length];
+        return length switch
         {
             <= 4 => "••••••",
-            <= 12 => string.Concat(v.AsSpan(0, 2), "••••", v.AsSpan(v.Length - 1, 1)),
-            _ => string.Concat(v.AsSpan(0, 4), "••••", v.AsSpan(v.Length - 2, 2)),
+            <= 12 => string.Concat(v[..2], "••••", v[^1..]),
+            _ => string.Concat(v[..4], "••••", v[^2..]),
         };
     }
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_\-]{20,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex SkAntRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])sk-[A-Za-z0-9_\-]{20,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex SkOpenAiRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex GoogleKeyRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])astra-[a-z0-9\-]{1,32}-[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex AstraLocalKeyRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:xai|gsk)_[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex VendorKeysRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex GitHubTokenRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_\-]{16,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex GitLabTokenRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9\-]{10,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex SlackTokenRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])hf_[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex HuggingFaceTokenRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:(?:sk|rk)_live|whsec)_[A-Za-z0-9]{16,}", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex StripeKeyRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])\d{8,10}:AA[A-Za-z0-9_\-]{33}(?![A-Za-z0-9])", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex TelegramBotTokenRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex AwsAccessKeyRegex();
+
+    [GeneratedRegex(@"(?:(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\+[0-9]{1,3}[\s\-]?[0-9]{6,14}(?!\d))", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex PhoneRegex();
+
+    [GeneratedRegex(@"(?:(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\w.])|(?<![\w.\-])[A-Za-z0-9][A-Za-z0-9\-]*(?:\.[A-Za-z0-9][A-Za-z0-9\-]*)*\.(?:internal|local|lan|corp)(?![\w\-]))", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, 500)]
+    private static partial Regex IntranetHostRegex();
+
+    [GeneratedRegex(@"(?<!\d)(?:4\d{12}(?:\d{3})?|5[1-5]\d{14}|3[47]\d{13}|6(?:011|5\d{2})\d{12}|62\d{14,17})(?!\d)", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex CreditCardRegex();
+
+    [GeneratedRegex(@"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex CnIdRegex();
+
+    [GeneratedRegex(@"(?<!\d)(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)", RegexOptions.CultureInvariant, 500)]
+    private static partial Regex UsSsnRegex();
+
+    [GeneratedRegex(@"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?)://[^\s:@/]+:[^\s@]+@[^\s]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, 500)]
+    private static partial Regex ConnStringRegex();
+
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|access[_\-]?key)[""']?\s*[:=]\s*[""']?(?!\[REDACTED:)[^\s""']{6,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, 500)]
+    private static partial Regex CredentialAssignmentRegex();
 }
 
 /// <summary>Result of applying a policy to one piece of text / one JSON body.</summary>

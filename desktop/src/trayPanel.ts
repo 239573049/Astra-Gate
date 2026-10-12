@@ -13,9 +13,10 @@ export interface TrayPanelOptions {
 }
 
 /**
- * The tray panel: a frameless popover window that renders the web app's /tray route. It is created hidden
- * at startup (so it opens instantly and keeps the menu-bar title current), toggled from the tray icon,
- * positioned next to it, sized to its content, and hidden again when it loses focus.
+ * The tray panel: a frameless popover window that renders the web app's /tray route. It is created on first
+ * use (or by the app when it starts without a main window, since the panel is then the window that reports
+ * the menu-bar title), toggled from the tray icon, positioned next to it, sized to its content, and hidden
+ * again when it loses focus.
  */
 export class TrayPanel {
   private win: BrowserWindow | null = null;
@@ -26,6 +27,11 @@ export class TrayPanel {
   private blurHolds = 0;
 
   constructor(private readonly opts: TrayPanelOptions) {}
+
+  /** Whether the panel window is up: while it is, it is the window that reports the menu-bar title. */
+  get exists(): boolean {
+    return this.win !== null && !this.win.isDestroyed();
+  }
 
   ensure(): BrowserWindow {
     if (this.win && !this.win.isDestroyed()) return this.win;

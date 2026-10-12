@@ -11,6 +11,8 @@ import { isDesktop, isMac, platform, sidebarRailWidth } from '../../shell/bridge
 import { emitCommand, useCommands } from '../../shell/commands';
 import { systemActions } from '../../shell/systemActions';
 import { AstraLogo } from '../AstraLogo';
+import { TrayTitleSource } from '../tray/TrayTitleSource';
+import { hasTrayPanel } from '../tray/useTrayBridge';
 import { Button, Dot, Tile } from '../ui/controls';
 import { useFeedback } from '../ui/overlays';
 import { ConnectionBanner } from './ConnectionBanner';
@@ -137,6 +139,8 @@ export function AppShell() {
     <LayoutContext.Provider value={layout}>
       <div className="wallpaper relative h-full overflow-hidden">
         <RefractionFilter />
+        {/* The menu-bar title is reported from here until the tray panel window has been created. */}
+        {hasTrayPanel() && <TrayTitleSource />}
         {sidebarMode !== 'drawer' && <Sidebar rail={sidebarMode === 'rail'} />}
         <AnimatePresence>
           {sidebarMode === 'drawer' && drawerOpen && (

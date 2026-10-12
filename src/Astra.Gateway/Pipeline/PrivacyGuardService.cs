@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Astra.Core;
 using Astra.Core.Privacy;
 using Astra.Data;
@@ -26,23 +27,70 @@ public sealed record PrivacyGuardResult(
 /// Cached privacy-guard policy (settings key <c>privacy</c>) and the request-body inspection entry
 /// point. M4/M3 gateway endpoints call <see cref="Inspect"/> before dispatching upstream and feed
 /// <see cref="PrivacyGuardResult.RestoreMap"/> into a <see cref="ChunkRestorer"/> for the response.
+///
+/// The guard keeps one published <see cref="Snapshot"/> at a time: a settings generation and the
+/// <see cref="EffectivePrivacyPolicy"/> objects materialized from it. A settings update publishes a
+/// new snapshot atomically and the old one — with its cache — is simply dropped, so custom rule
+/// regexes are compiled once per generation and per resolved client/override combination instead of
+/// on every request. One request reads the snapshot once and uses that same generation's settings and
+/// policy throughout, so an update landing mid-request is never mixed into it.
 /// </summary>
 public sealed class PrivacyGuardService(AstraDatabase db)
 {
-    private volatile PrivacySettings _settings = new();
+    /// <summary>
+    /// Everything one client's policy depends on: the client's <em>resolved</em> default action and the
+    /// two request overrides. Deliberately not the raw client kind — that id is untrusted and unbounded.
+    /// </summary>
+    private readonly record struct PolicyKey(string? ClientDefault, bool? EnabledOverride, bool? DryRunOverride);
+
+    /// <summary>
+    /// One settings generation with a thread-safe, lazily populated policy cache. Settings are
+    /// owned by this snapshot. Keys are bounded by configured client defaults and override flags;
+    /// unknown client ids share the same entry.
+    /// </summary>
+    private sealed class Snapshot(PrivacySettings settings)
+    {
+        private readonly ConcurrentDictionary<PolicyKey, Lazy<EffectivePrivacyPolicy>> _policies = new();
+
+        public PrivacySettings Settings { get; } = settings;
+
+        public EffectivePrivacyPolicy PolicyFor(string? clientKind, bool? enabledOverride, bool? dryRunOverride)
+        {
+            var key = new PolicyKey(ResolvedDefault(clientKind), enabledOverride, dryRunOverride);
+            // Build reads the client kind only to look up its default action, which the key already pins,
+            // so whichever request wins the race to materialize a key gets the policy all of them mean —
+            // the Lazy keeps the compile to one, and a losing Lazy is discarded without being evaluated.
+            return _policies.GetOrAdd(key, k => new Lazy<EffectivePrivacyPolicy>(
+                () => EffectivePrivacyPolicy.Build(Settings, clientKind, k.EnabledOverride, k.DryRunOverride),
+                LazyThreadSafetyMode.ExecutionAndPublication)).Value;
+        }
+
+        private string? ResolvedDefault(string? clientKind) =>
+            clientKind is not null && Settings.ClientDefaults.TryGetValue(clientKind, out var cd) ? cd : null;
+    }
+
+    private volatile Snapshot _snapshot = new(new PrivacySettings());
     private PrivacyDetector? _detector;
 
-    public PrivacySettings Settings => _settings;
+    /// <summary>The active settings as a copy; mutating it never reaches the published snapshot.</summary>
+    public PrivacySettings Settings => _snapshot.Settings.Clone();
+
     private PrivacyDetector Detector => _detector ??= new PrivacyDetector();
 
-    public async Task LoadAsync(CancellationToken ct = default) =>
-        _settings = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey, ct) ?? new PrivacySettings();
+    public async Task LoadAsync(CancellationToken ct = default)
+    {
+        var loaded = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey, ct) ?? new PrivacySettings();
+        _snapshot = new Snapshot(loaded.Clone());
+    }
 
     /// <summary>Validates custom rule patterns, persists and activates the new settings.</summary>
     /// <exception cref="ArgumentException">A custom pattern is not a valid regex.</exception>
     public async Task<PrivacySettings> UpdateAsync(PrivacySettings next, CancellationToken ct = default)
     {
-        foreach (var rule in next.CustomRules.Where(r => r.Enabled))
+        // The published snapshot owns its own copy: a caller that keeps mutating (or reuses) the instance
+        // it passed in can no longer change what the guard runs or what is persisted for it.
+        var published = next.Clone();
+        foreach (var rule in published.CustomRules.Where(r => r.Enabled))
         {
             try
             {
@@ -53,24 +101,32 @@ public sealed class PrivacyGuardService(AstraDatabase db)
                 throw new ArgumentException($"自定义规则「{rule.Name}」不是有效的正则表达式：{e.Message}", e);
             }
         }
-        await db.Settings.SetAsync(PrivacySettings.StorageKey, next, ct);
-        _settings = next;
-        return next;
+        await db.Settings.SetAsync(PrivacySettings.StorageKey, published, ct);
+        _snapshot = new Snapshot(published);
+        return published.Clone();
     }
 
     /// <summary>Builds the policy for one client (used by the inspect path and the dry-run API).</summary>
-    public EffectivePrivacyPolicy EffectiveFor(string? clientKind, bool enabledOverride, bool dryRunOverride) =>
-        EffectivePrivacyPolicy.Build(_settings, clientKind, enabledOverride, dryRunOverride);
+    public EffectivePrivacyPolicy EffectiveFor(string? clientKind, bool enabledOverride, bool dryRunOverride)
+    {
+        var snapshot = _snapshot;
+        return snapshot.PolicyFor(clientKind, enabledOverride, dryRunOverride);
+    }
 
-    public EffectivePrivacyPolicy EffectiveFor(string? clientKind) => EffectivePrivacyPolicy.Build(_settings, clientKind);
+    public EffectivePrivacyPolicy EffectiveFor(string? clientKind)
+    {
+        var snapshot = _snapshot;
+        return snapshot.PolicyFor(clientKind, null, null);
+    }
 
     /// <summary>Inspects a client request body (JSON or plain text) against the effective policy.</summary>
     public PrivacyGuardResult Inspect(string requestBody, string? clientKind)
     {
-        var settings = _settings;
+        var snapshot = _snapshot;
+        var settings = snapshot.Settings;
         if (!settings.Enabled) return PrivacyGuardResult.PassThrough with { Body = requestBody };
 
-        var policy = EffectiveFor(clientKind);
+        var policy = snapshot.PolicyFor(clientKind, null, null);
         var applied = Detector.ApplyJson(requestBody, policy) ?? Detector.Apply(requestBody, policy);
 
         // Nothing matched: forward the original bytes untouched.

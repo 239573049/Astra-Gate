@@ -11,6 +11,15 @@
          Generator, which the SDK auto-enables for AOT publishes. Turn it on
          for plain builds too so the analyzer gate sees the same call sites. -->
     <EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>
+    <!-- Memory, not throughput: this is a one-user gateway, not a server under load. The Web SDK
+         defaults Server GC on, which gives every core its own heap (10 on a typical Apple Silicon
+         machine): each heap grows to its own peak and reserves 256 MB segments. That — not a leak —
+         was the bulk of astra-server's memory. The same 600 admin requests cost the 0.6.0 release
+         binary 183 MB RSS / 146 MB footprint / 9 segment reservations with Server GC and 105 MB /
+         69 MB / 0 with workstation GC, at 68 requests/s instead of 41; this setting gives 102 MB /
+         66 MB at 98 requests/s. The mode is fixed at publish time — the AOT binary ignores
+         DOTNET_gcServer=1, so switching back is a republish, not a flag. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>
   <PropertyGroup Condition="'$(PublishAot)' != 'true'">
     <PublishSingleFile>true</PublishSingleFile>

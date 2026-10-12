@@ -211,16 +211,17 @@ async function main(): Promise<void> {
   // Update checks: one right after launch (with a reminder when something is pending), then every 12h.
   updater!.start();
 
-  // The panel is created hidden ahead of its first use (it opens instantly and keeps the menu-bar title
-  // current), but after the main window has painted so the two renderers do not load at the same time.
+  // Launched at login: stay in the tray / menu bar, no window and no Dock icon. Only then is the panel
+  // window created up front — it is the one window that can keep the menu-bar title current.
   const panel = trayPanel;
   if (startHidden) {
     panel.ensure();
     return;
   }
   await showMainWindow();
-  if (mainWindow) mainWindow.once('ready-to-show', () => panel.ensure());
-  else panel.ensure();
+  // Otherwise the panel is created on first use (TrayPanel.show → ensure): a hidden panel window is a whole
+  // renderer process, and the main window already reports the menu-bar title while the panel does not exist.
+  if (!mainWindow) panel.ensure();
 }
 
 /** Start (or adopt) the service, looping on a retry dialog on failure. Null = user chose Quit. */
@@ -729,7 +730,11 @@ function registerIpc(): void {
     if (isTrayPanelCommand(command)) runTrayPanelCommand(command);
   });
   ipcMain.on('astra:tray-title', (event, raw: unknown) => {
-    if (!trayPanel?.isPanel(event.sender)) return;
+    // The panel window owns the menu-bar title while it exists; before it is created (and if it never is)
+    // the main window sends it — a hidden window keeps its renderer, so this works close-to-tray too.
+    if (!trayPanel?.isPanel(event.sender)) {
+      if (event.sender !== mainWindow?.webContents || trayPanel?.exists) return;
+    }
     const title = sanitizeTrayTitle(raw);
     if (title) tray?.setTitle(title.title, title.detail);
   });

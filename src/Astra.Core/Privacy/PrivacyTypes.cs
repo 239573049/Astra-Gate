@@ -117,7 +117,7 @@ public sealed class EffectivePrivacyPolicy
     public bool RecordSamples { get; init; }
 
     public string DefaultAction { get; init; }
-    public IReadOnlyList<PrivacyRule> Rules { get; set; } = [];
+    public IReadOnlyList<PrivacyRule> Rules { get; private set; } = [];
 
     private readonly Dictionary<string, string> _categoryActions;
     private readonly string? _clientDefault;
@@ -168,7 +168,7 @@ public sealed class EffectivePrivacyPolicy
                 Regex = PrivacyDetector.Compile(custom.Pattern),
             });
         }
-        policy.Rules = rules;
+        policy.Rules = rules.AsReadOnly();
         return policy;
     }
 }
