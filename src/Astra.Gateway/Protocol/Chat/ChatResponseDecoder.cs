@@ -60,7 +60,7 @@ public sealed class ChatResponseDecoder : IResponseDecoder
         {
             DecodeDelta(choice["delta"] as JsonObject, events);
             var finish = Str(choice, "finish_reason");
-            if (finish is not null)
+            if (finish is { Length: > 0 }) // some upstreams (WorkBuddy) send "" on every chunk: not a finish
             {
                 _finish = MapFinish(finish);
                 _rawFinish = finish;

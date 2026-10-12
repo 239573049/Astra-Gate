@@ -121,6 +121,40 @@ public class ChatResponseDecoderTests
     }
 
     [Fact]
+    public void Empty_Finish_Reason_Keeps_The_Block_Open()
+    {
+        // WorkBuddy sends "finish_reason":"" (and "content":"") on every chunk; that used to close the block per token.
+        var decoder = Codec.CreateResponseDecoder(Ctx);
+        var events = new List<UnifiedStreamEvent>();
+        foreach (var delta in new[]
+                 {
+                     """{"content":"","reasoning_content":"think "}""",
+                     """{"content":"","reasoning_content":"more"}""",
+                     """{"content":"Hello ","reasoning_content":""}""",
+                     """{"content":"world","reasoning_content":""}""",
+                 })
+            events.AddRange(decoder.DecodeSse(new SseEvent(null,
+                """{"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":""" + delta + ""","finish_reason":""}]}""")));
+        events.AddRange(decoder.DecodeSse(new SseEvent(null,
+            """{"id":"c1","object":"chat.completion.chunk","created":1,"model":"m","choices":[{"index":0,"delta":{"content":""},"finish_reason":"stop"}]}""")));
+        events.AddRange(decoder.DecodeSse(new SseEvent(null, "[DONE]")));
+
+        Assert.Equal(
+        [
+            "Start(c1,m)",
+            "Block(0,Reasoning,,)",
+            "Reason(0,think )",
+            "Reason(0,more)",
+            "Close(0)",
+            "Block(1,Text,,)",
+            "Text(1,Hello )",
+            "Text(1,world)",
+            "Close(1)",
+            "MsgStop(Stop,stop)",
+        ], Format(events));
+    }
+
+    [Fact]
     public void Kind_Changes_Open_New_Blocks()
     {
         var decoder = Codec.CreateResponseDecoder(Ctx);
