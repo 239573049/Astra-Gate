@@ -177,6 +177,32 @@ public class AnthropicRequestDecodeTests
         Assert.Equal("get_weather", specific.Name);
     }
 
+    [Fact]
+    public void System_Messages_Inside_Messages_Join_System()
+    {
+        // Claude Code also sends role "system" inside messages; it used to fail with "未知的 message role：system".
+        var body = JsonNode.Parse("""
+            {
+              "model": "glm-5.3",
+              "max_tokens": 100,
+              "system": "Be brief.",
+              "messages": [
+                { "role": "system", "content": "Leading note." },
+                { "role": "user", "content": "hi" },
+                { "role": "system", "content": [{ "type": "text", "text": "Later note." }] },
+                { "role": "user", "content": "again" }
+              ]
+            }
+            """)!.AsObject()!;
+
+        var r = Codec.DecodeRequest(body, new RequestDecodeContext());
+
+        Assert.Equal(["Be brief.", "Leading note.", "Later note."], r.System.Select(p => Assert.IsType<TextPart>(p).Text));
+        Assert.Equal(2, r.Messages.Count);
+        Assert.All(r.Messages, m => Assert.Equal(MessageRole.User, m.Role));
+        Assert.Single(r.Warnings, w => w.Contains("system message"));
+    }
+
     [Theory]
     [InlineData("""{"model":"m","max_tokens":1,"messages":"nope"}""", "messages")]
     [InlineData("""{"model":"m","max_tokens":1,"messages":[{"role":"wizard","content":"x"}]}""", "role")]

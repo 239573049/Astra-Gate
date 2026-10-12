@@ -43,26 +43,8 @@ internal static class AnthropicRequestCodec
             if (list.Count > 0) r.Stop = list;
         }
 
-        switch (body["system"])
-        {
-            case null:
-                break;
-            case JsonValue v when v.TryGetValue<string>(out var s):
-                r.System.Add(new TextPart(s));
-                break;
-            case JsonArray blocks:
-                foreach (var b in blocks)
-                {
-                    if (b is not JsonObject o) continue;
-                    if (Str(o, "type") == "text" && Str(o, "text") is { } text)
-                        r.System.Add(new TextPart(text)); // cache_control on system blocks is ignored here
-                    else if (Str(o, "type") is { } other)
-                        AddWarning(warnings, $"dropped unsupported system block '{other}'");
-                }
-                break;
-            default:
-                throw new ProtocolException("system 必须是字符串或 content block 数组。");
-        }
+        if (body["system"] is { } system && !AddSystem(system, r.System, warnings))
+            throw new ProtocolException("system 必须是字符串或 content block 数组。");
 
         if (body["messages"] is not JsonArray messages || messages.Count == 0)
             throw new ProtocolException("messages 必须是非空数组。");
@@ -70,6 +52,16 @@ internal static class AnthropicRequestCodec
         {
             if (m is not JsonObject msg)
                 throw new ProtocolException("每条 message 必须是对象。");
+            if (Str(msg, "role") == "system")
+            {
+                // Claude Code also sends system messages inside `messages`. The IR keeps instructions only in System,
+                // so they join it in order; one that sits after the conversation started loses its position.
+                if (r.Messages.Count > 0)
+                    AddWarning(warnings, "moved a system message from inside the conversation into system");
+                if (!AddSystem(msg["content"], r.System, warnings))
+                    throw new ProtocolException("system message 的 content 必须是字符串或 content block 数组。");
+                continue;
+            }
             var role = Str(msg, "role") switch
             {
                 "user" => MessageRole.User,
@@ -174,6 +166,29 @@ internal static class AnthropicRequestCodec
                 Extensions(r)[key] = value.DeepClone();
 
         return r;
+    }
+
+    /// <summary>Adds system content (a string or text blocks) to <paramref name="into"/>; false when the shape is invalid.</summary>
+    private static bool AddSystem(JsonNode? content, List<ContentPart> into, List<string> warnings)
+    {
+        switch (content)
+        {
+            case JsonValue v when v.TryGetValue<string>(out var s):
+                into.Add(new TextPart(s));
+                return true;
+            case JsonArray blocks:
+                foreach (var b in blocks)
+                {
+                    if (b is not JsonObject o) continue;
+                    if (Str(o, "type") == "text" && Str(o, "text") is { } text)
+                        into.Add(new TextPart(text)); // cache_control on system blocks is ignored here
+                    else if (Str(o, "type") is { } other)
+                        AddWarning(warnings, $"dropped unsupported system block '{other}'");
+                }
+                return true;
+            default:
+                return false;
+        }
     }
 
     private static ContentPart? ParseBlock(JsonObject b, List<string> warnings)

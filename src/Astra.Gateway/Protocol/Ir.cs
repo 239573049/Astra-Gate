@@ -115,7 +115,11 @@ public sealed class UnifiedRequest
     /// <summary>Model name as requested by the client (also forwarded upstream unless the pipeline maps it).</summary>
     public string Model { get; set; } = "";
 
-    /// <summary>System / developer instructions (TextPart only), in order.</summary>
+    /// <summary>
+    /// System / developer instructions (TextPart only), in order. Instructions a client sends as messages (Chat
+    /// system/developer, Anthropic role "system" inside messages) are collected here too; one that came after the
+    /// conversation started loses its position (lossy).
+    /// </summary>
     public List<ContentPart> System { get; set; } = [];
 
     public List<UnifiedMessage> Messages { get; set; } = [];
