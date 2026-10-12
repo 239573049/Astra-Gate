@@ -4,6 +4,23 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.8.0] - 2026-10-12
+
+### 新增
+
+- **插件市场改由 Astra 官网提供**：插件列表不再直接读 magpie-community 的清单，改读官网的注册表（默认 `https://astra-gate.si/api/plugin-market/registry.json`）。官网把社区清单和站内发布的插件合并在一起，并自己托管后者发布的包，因此站内托管的插件直接从官网下载，并按注册表给出的 SHA-256 校验——包的地址和哈希只来自注册表，不接受调用方传入。
+  - 官网新增插件市场网页（`/plugins`，英文版 `/en/plugins`）：按分类浏览、查看详情，每个插件页面都有「在 Astra 中安装」——复制命令，或填上本机控制台的端口打开控制台；控制台会先询问再安装，不会在你不知情时装任何东西。
+  - 控制台的市场页显示插件来源（Astra / 社区）以及「需要 Astra x.y.z+」（版本不够时安装会失败并提示所需版本）。站内托管的插件之后也向市场询问新版本，而不是向 npm。
+  - 市场地址可以在 **设置 → 插件市场** 里改，或设环境变量 `ASTRA_PLUGIN_MARKET`（环境变量优先）；「只用本地副本」（或地址设为 `off`）时不联网取清单、也没有搜索，只显示上次拿到的副本或内置副本。官网不可达时同样依次回退到这两份副本。
+  - 搜索改由注册表代理：先搜市场自己的条目，再搜 npm 与 GitHub 的 `magpie-plugin` 主题。
+  - 想在官网上发布自己的插件，见文档「插件市场与发布」；发布/下架接口由 `PLUGIN_UPLOAD_TOKEN` 控制（未设置时返回 503）。
+- **Codex 的「写入模型目录」选项**（默认关闭）：Codex 的模型目录会整体替换它内置的模型列表，所以打开后 Astra 在 `config.toml` 同目录写入 `astra-models.json` 并把 `model_catalog_json` 指向它：先完整保留 Codex 原有的模型（你自己设置过 `model_catalog_json` 时取那份目录，否则取 Codex 缓存的 `models_cache.json`），再追加所绑定提供商中 Codex 还没有的模型——每个条目都从 Codex 已有条目复制（含系统指令，缺了它 Codex 会拒绝整个文件），去掉只对 OpenAI 后端有意义的字段与能力开关。没有可复制的来源、或没有要追加的模型时不会写文件。Codex 只在启动时读目录，提供商的模型增减后需要重启 Codex。关闭选项或「禁用并还原」会撤回 `model_catalog_json` 并删掉 Astra 建的 `astra-models.json`，你自己的目录文件始终不动。
+
+### 修复
+
+- **Anthropic 协议：`messages` 里的 system 消息不再让整个请求失败**：Claude Code 会把 system 消息放进 `messages`，以前会以「未知的 message role：system」整个失败。现在它们按顺序并入 System 指令，与顶层 `system` 共用同一套「字符串或 content block 数组」解析；排在对话开始之后的会丢失原有位置，并给出告警。
+- **上游返回空的 `finish_reason` 时不再提前收尾**：有的上游（WorkBuddy）每个分片都带 `"finish_reason":""`，以前被当成结束信号，每个 token 都关一次内容块；现在按「还没结束」处理。
+
 ## [0.7.1] - 2026-10-12
 
 ### 修复
