@@ -63,13 +63,24 @@ public sealed partial class PrivacyDetector
             CredentialAssignmentRegex()),
     ];
 
+    /// <summary>
+    /// Match budget for the built-in rules. They are ours and linear (or at worst bounded) in the input
+    /// length, but one megabyte still costs a few hundred milliseconds per rule on a slow core, and the
+    /// short budget that guards the untrusted custom patterns (see <see cref="Compile"/>) failed whole
+    /// requests there: a 1 MB body took 545 ms in <c>builtin.credential-assignment</c> on a 2-core GitHub
+    /// runner, and the credential category alone costs 895 ms on 8 MB on an M-series Mac (where every rule
+    /// together needs 47 ms per MB). 5 s is ~10 MB on the slowest machine measured — a request that big is
+    /// rare, and a hit is still an error rather than a pass.
+    /// </summary>
+    private const int BuiltinTimeoutMs = 5000;
+
     // These delimiter-driven patterns need a linear-time engine: repeated incomplete JWT / PEM
     // prefixes otherwise retry the entire remaining input at every prefix. Lookaround-free only.
     private static Regex Linear(string pattern, bool ignoreCase = false) => new(
         pattern, RegexOptions.NonBacktracking | RegexOptions.CultureInvariant |
-        (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None), TimeSpan.FromMilliseconds(500));
+        (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None), TimeSpan.FromMilliseconds(BuiltinTimeoutMs));
 
-    [GeneratedRegex(@"(?<![\w.+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![\w\-])", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![\w.+\-])[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}(?![\w\-])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex EmailRegex();
 
     private static readonly Regex EmailCandidate = Linear(@"(?<email>[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,})(?:[^\w\-]|$)");
@@ -400,61 +411,61 @@ public sealed partial class PrivacyDetector
         };
     }
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_\-]{20,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])sk-ant-[A-Za-z0-9_\-]{20,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex SkAntRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])sk-[A-Za-z0-9_\-]{20,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])sk-[A-Za-z0-9_\-]{20,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex SkOpenAiRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])AIza[0-9A-Za-z_\-]{35}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex GoogleKeyRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])astra-[a-z0-9\-]{1,32}-[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])astra-[a-z0-9\-]{1,32}-[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex AstraLocalKeyRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:xai|gsk)_[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:xai|gsk)_[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex VendorKeysRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex GitHubTokenRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_\-]{16,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])glpat-[A-Za-z0-9_\-]{16,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex GitLabTokenRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9\-]{10,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9\-]{10,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex SlackTokenRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])hf_[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])hf_[A-Za-z0-9]{20,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex HuggingFaceTokenRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:(?:sk|rk)_live|whsec)_[A-Za-z0-9]{16,}", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:(?:sk|rk)_live|whsec)_[A-Za-z0-9]{16,}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex StripeKeyRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])\d{8,10}:AA[A-Za-z0-9_\-]{33}(?![A-Za-z0-9])", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])\d{8,10}:AA[A-Za-z0-9_\-]{33}(?![A-Za-z0-9])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex TelegramBotTokenRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex AwsAccessKeyRegex();
 
-    [GeneratedRegex(@"(?:(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\+[0-9]{1,3}[\s\-]?[0-9]{6,14}(?!\d))", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?:(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\+[0-9]{1,3}[\s\-]?[0-9]{6,14}(?!\d))", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex PhoneRegex();
 
-    [GeneratedRegex(@"(?:(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\w.])|(?<![\w.\-])[A-Za-z0-9][A-Za-z0-9\-]*(?:\.[A-Za-z0-9][A-Za-z0-9\-]*)*\.(?:internal|local|lan|corp)(?![\w\-]))", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, 500)]
+    [GeneratedRegex(@"(?:(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\w.])|(?<![\w.\-])[A-Za-z0-9][A-Za-z0-9\-]*(?:\.[A-Za-z0-9][A-Za-z0-9\-]*)*\.(?:internal|local|lan|corp)(?![\w\-]))", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]
     private static partial Regex IntranetHostRegex();
 
-    [GeneratedRegex(@"(?<!\d)(?:4\d{12}(?:\d{3})?|5[1-5]\d{14}|3[47]\d{13}|6(?:011|5\d{2})\d{12}|62\d{14,17})(?!\d)", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<!\d)(?:4\d{12}(?:\d{3})?|5[1-5]\d{14}|3[47]\d{13}|6(?:011|5\d{2})\d{12}|62\d{14,17})(?!\d)", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex CreditCardRegex();
 
-    [GeneratedRegex(@"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<!\d)[1-9]\d{5}(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01])\d{3}[\dXx](?!\d)", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex CnIdRegex();
 
-    [GeneratedRegex(@"(?<!\d)(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)", RegexOptions.CultureInvariant, 500)]
+    [GeneratedRegex(@"(?<!\d)(?!000|666|9\d{2})\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?!\d)", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex UsSsnRegex();
 
-    [GeneratedRegex(@"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?)://[^\s:@/]+:[^\s@]+@[^\s]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, 500)]
+    [GeneratedRegex(@"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?)://[^\s:@/]+:[^\s@]+@[^\s]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]
     private static partial Regex ConnStringRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|access[_\-]?key)[""']?\s*[:=]\s*[""']?(?!\[REDACTED:)[^\s""']{6,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, 500)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|access[_\-]?key)[""']?\s*[:=]\s*[""']?(?!\[REDACTED:)[^\s""']{6,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]
     private static partial Regex CredentialAssignmentRegex();
 }
 
