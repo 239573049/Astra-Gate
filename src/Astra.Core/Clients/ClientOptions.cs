@@ -24,6 +24,7 @@ public static class ClientOptions
     public const string ContextWindow = "contextWindow";
     public const string AutoCompactTokenLimit = "autoCompactTokenLimit";
     public const string ReasoningEffort = "reasoningEffort";
+    public const string ModelCatalog = "modelCatalog";
 
     private static readonly IReadOnlyList<ClientOptionDescriptor> ClaudeCode =
     [
@@ -38,6 +39,7 @@ public static class ClientOptions
         new(ContextWindow, "int", "", "config"),
         new(AutoCompactTokenLimit, "int", "", "config"),
         new(ReasoningEffort, "enum", "default", "config", ["default", "minimal", "low", "medium", "high"]),
+        new(ModelCatalog, "bool", "false", "config"),
     ];
 
     /// <summary>The options a client supports; empty for clients without any.</summary>
@@ -55,7 +57,8 @@ public static class ClientOptions
     public static IReadOnlyList<string> ConfigKeyPaths(string kind) => kind switch
     {
         ClientKinds.ClaudeCode => ["env.MAX_THINKING_TOKENS", "env.DISABLE_PROMPT_CACHING"],
-        ClientKinds.Codex => ["model_context_window", "model_auto_compact_token_limit", "model_reasoning_effort"],
+        // "models" is the key of the Astra-owned model catalog file (CodexClientAdapter), not of config.toml.
+        ClientKinds.Codex => ["model_context_window", "model_auto_compact_token_limit", "model_reasoning_effort", "model_catalog_json", "models"],
         _ => [],
     };
 

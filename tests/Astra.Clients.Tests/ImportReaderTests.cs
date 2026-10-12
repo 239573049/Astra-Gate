@@ -1,3 +1,4 @@
+using Astra.Clients.Adapters;
 using Astra.Clients.Import;
 using Astra.Core;
 using Astra.Core.Clients;
@@ -286,6 +287,20 @@ public sealed class ImportReaderTests : IDisposable
 
         Assert.Equal(ImportSkipReasons.NoInlineKey, r.Items.Single(i => i.Ref == "codex:env.only").SkipReason);
         Assert.Equal(ImportSkipReasons.PointsToAstra, r.Items.Single(i => i.Ref == "codex:astra").SkipReason);
+    }
+
+    [Fact]
+    public void Codex_Does_Not_Take_Models_From_Astras_Own_Catalog()
+    {
+        _home.WriteFile(CodexConfig, $"""
+            model_catalog_json = "{CodexClientAdapter.CatalogFileName}"
+
+            [model_providers.relay]
+            base_url = "https://relay.example/v1"
+            experimental_bearer_token = "tok-relay"
+            """);
+        _home.WriteFile(_home.File(".codex", CodexClientAdapter.CatalogFileName), """{"models":[{"slug":"gateway-model"}]}""");
+        Assert.Empty(Read(ImportSourceIds.Codex).Items.Single(i => i.Ref == "codex:relay").Models);
     }
 
     [Fact]

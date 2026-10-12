@@ -49,11 +49,17 @@ public sealed class CodexReader(ImportContext ctx) : IImportSource
     /// <summary>The table Astra writes into Codex's config (<c>CodexClientAdapter.ProviderId</c>).</summary>
     private const string CodexClientAdapterProviderId = Adapters.CodexClientAdapter.ProviderId;
 
-    /// <summary>Model ids listed in the JSON file <c>model_catalog_json</c> points at, when there is one.</summary>
+    /// <summary>
+    /// Model ids listed in the JSON file <c>model_catalog_json</c> points at, when there is one. Astra's own catalog
+    /// (it lists the gateway's models) is not read.
+    /// </summary>
     private List<string> CatalogModels(string? path, string codexDir)
     {
         if (path is null) return [];
         var full = Path.IsPathRooted(path) ? path : Path.Combine(codexDir, path);
+        if (string.Equals(Path.GetFullPath(full), Path.GetFullPath(Path.Combine(codexDir, Adapters.CodexClientAdapter.CatalogFileName)),
+                StringComparison.OrdinalIgnoreCase))
+            return [];
         var node = ImportJson.Parse(ctx.Env.ReadTextOrNull(full));
         return ImportJson.ModelIds(node is JsonObject o && o["models"] is JsonArray models ? models : node);
     }

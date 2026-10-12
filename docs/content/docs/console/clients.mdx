@@ -42,6 +42,16 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 
 Pi、MiniMax Code、Copilot CLI、VS Code 系列、Crush、Qwen Code、Droid、Kimi Code、Zed、omp、MiMo Code、DeepSeek Harness、WorkBuddy、NextCoWork 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
 
+### Codex 的模型目录
+
+Codex 的「选项」里有 **写入模型目录**（默认关闭）。打开后，Astra 在 `config.toml` 同目录（遵循 `CODEX_HOME`）写入 `astra-models.json`，并把 `model_catalog_json` 指向它，这样 `/model` 里就能直接选到所绑定提供商的模型：
+
+- Codex 的模型目录会**整体替换**内置模型列表，所以这个文件先完整保留 Codex 原有的模型（你自己设置过 `model_catalog_json` 时取那份目录，否则取 Codex 缓存的 `~/.codex/models_cache.json`），再追加 Codex 还没有的模型；同名模型保留 Codex 自己的条目；
+- 追加的模型复制自 Codex 原有条目（包括系统指令），再换上模型 id、显示名，以及已知的上下文窗口、是否支持图片和推理；
+- 需要先运行过一次 Codex，让它生成 `models_cache.json`（或者你自己设置过模型目录），否则不会写入目录；
+- **Codex 只在启动时读取模型目录**：提供商的模型增减后 Astra 会自动更新这个文件，但要重启 Codex 才能看到变化；
+- 关闭选项后重新应用，`model_catalog_json` 恢复原值、目录内容被撤回；「禁用并还原」时连 `astra-models.json` 一起删除。你自己的目录文件始终不会被改动。
+
 ### 安装与更新
 
 npm 分发的客户端（Codex、Claude Code、Gemini CLI、OpenCode、Grok Build、Pi、MiniMax Code、Copilot CLI、Crush、Qwen Code、Droid、Kimi Code、MiMo Code）可以在客户端页直接安装、检查并更新（`npm install -g <包>@latest`）。Hermes Agent 用它官方的安装脚本安装（macOS / Linux 为 `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`，Windows 为 `install.ps1`；Astra 会以 `--non-interactive` / `-NonInteractive` 运行，不弹交互），更新走它自带的 `hermes update`，最新版本来自 GitHub Releases。Zed、VS Code Insiders、VSCodium、omp（运行在 Bun 上）、DeepSeek Harness（桌面应用或 `npx @deepseek-ai/dsh web`）、WorkBuddy（桌面应用）和 Claude Desktop 一样只显示已安装版本和下载主页，Astra 不会替你运行安装命令。Qwen Code 需要 Node 22 及以上，Kimi Code 需要 Node 22.19 及以上；Node 太旧时 npm 会给出警告或客户端无法运行。`kimi` 命令也可能指向已归档的 Python 版 Kimi CLI，版本以 `kimi --version` 的输出为准。
