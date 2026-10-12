@@ -1,6 +1,6 @@
 import { AppWindow, ArrowDown, ArrowUp, Check, Download, Ellipsis, ExternalLink, Plus, Puzzle, RefreshCw, Settings2, ShieldCheck, Trash2 } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 
 import {
   useAddPlugin,
@@ -31,6 +31,9 @@ import { formatDateTime } from '../lib/format';
 
 type Tab = 'installed' | 'market' | 'runtime';
 type KindFilter = 'all' | 'provider' | 'middleware' | 'agent';
+
+/** What a website link may ask this page to install: an npm package name (scoped or not) or github:owner/repo. */
+const LINK_SPEC = /^(?:(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*|github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)$/;
 
 const KIND_LABEL: Record<PluginKind, MessageKey> = {
   provider: 'plugins.kind.provider',
@@ -533,6 +536,20 @@ function MarketTab({ installed, onJob }: { installed: Plugin[]; onJob: (id: stri
     add.mutate({ spec, source }, { onSuccess: (j) => onJob(j.id), onError: (e) => toast(errorText(e), 'error') });
   };
 
+  // A link from the website (…/plugins/market?install=<package>) asks the same question as the Install button;
+  // nothing is installed without the answer. Only a package or a GitHub repository can be asked for this way, never a path.
+  const [params, setParams] = useSearchParams();
+  const linked = params.get('install');
+  const asked = useRef<string | null>(null);
+  useEffect(() => {
+    if (!linked || asked.current === linked) return;
+    asked.current = linked;
+    setParams({}, { replace: true });
+    if (LINK_SPEC.test(linked)) void install(linked, 'market');
+    else toast(t('plugins.linkInvalid'), 'error');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked]);
+
   const listings = (market.data ?? []).filter((l) => kind === 'all' || l.kind === kind);
   const counts = (k: KindFilter) => (market.data ?? []).filter((l) => k === 'all' || l.kind === k).length;
   const searching = debounced.length >= 2;
@@ -571,9 +588,9 @@ function MarketTab({ installed, onJob }: { installed: Plugin[]; onJob: (id: stri
                   subtitle={r.spec}
                   icon={<PluginIcon name={r.name} kind={r.kind} />}
                   detail={r.description ?? undefined}
-                  tags={[t(KIND_LABEL[r.kind]), r.source === 'github' ? `★ ${r.stars}` : r.version ? `v${r.version}` : '']}
+                  tags={[t(KIND_LABEL[r.kind]), r.source === 'github' ? `★ ${r.stars}` : r.version ? `v${r.version}` : '', r.source === 'astra' ? t('plugins.origin.astra') : '']}
                   installed={isInstalled(r.spec, r.name)}
-                  onInstall={() => void install(r.spec, r.source === 'github' ? 'github' : 'npm')}
+                  onInstall={() => void install(r.spec, r.source === 'github' ? 'github' : r.source === 'astra' ? 'market' : 'npm')}
                 />
               ))}
             </div>
@@ -592,7 +609,12 @@ function MarketTab({ installed, onJob }: { installed: Plugin[]; onJob: (id: stri
                 subtitle={l.package}
                 icon={<PluginIcon name={l.name} icon={l.icon} kind={l.kind} />}
                 detail={l.summary[locale] ?? l.summary.en ?? l.description ?? undefined}
-                tags={[t(KIND_LABEL[l.kind]), l.latest ? `v${l.latest}` : ''].filter(Boolean)}
+                tags={[
+                  t(KIND_LABEL[l.kind]),
+                  l.latest ? `v${l.latest}` : '',
+                  l.origin === 'astra' ? t('plugins.origin.astra') : '',
+                  l.minAstraVersion ? t('plugins.minVersion', { version: l.minAstraVersion }) : '',
+                ].filter(Boolean)}
                 installed={isInstalled(l.package, l.package)}
                 onInstall={() => void install(l.package, 'market')}
               />

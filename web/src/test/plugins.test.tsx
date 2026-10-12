@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,8 +33,12 @@ const aider: Plugin = {
 };
 const list: PluginList = { plugins: [wordGuard, aider], preferences: {}, runtime: { downloading: false, version: '1.4.2', target: 'bun-darwin-aarch64' } };
 const market: MarketListing[] = [
-  { package: '@magpie-community/middleware-word-guard', name: 'Word Guard', kind: 'middleware', providers: [], summary: { en: 'Sensitive-word filter' }, latest: '0.1.1' },
-  { package: '@magpie-community/opencode-zcode-auth', name: 'ZCode', kind: 'provider', providers: ['zcode'], summary: { en: 'GLM Coding Plan' }, latest: '0.1.15' },
+  { package: '@magpie-community/middleware-word-guard', name: 'Word Guard', kind: 'middleware', providers: [], summary: { en: 'Sensitive-word filter' }, latest: '0.1.1', origin: 'upstream', tags: [], tarballs: [] },
+  { package: '@magpie-community/opencode-zcode-auth', name: 'ZCode', kind: 'provider', providers: ['zcode'], summary: { en: 'GLM Coding Plan' }, latest: '0.1.15', origin: 'upstream', tags: [], tarballs: [] },
+  {
+    package: '@astra/middleware-hosted', name: 'Hosted', kind: 'middleware', providers: [], summary: { en: 'Hosted by the site' }, latest: '1.0.0', origin: 'astra', minAstraVersion: '0.8.0', tags: [],
+    tarballs: [{ version: '1.0.0', url: 'https://market.test/p.tgz', sha256: 'a'.repeat(64), size: 10 }],
+  },
 ];
 
 vi.mock('../api/hooks', () => {
@@ -122,15 +126,39 @@ describe('PluginsPage', () => {
     expect(spies.reorder).toHaveBeenCalledWith([aider.spec, wordGuard.spec], expect.anything());
   });
 
+
   it('shows the market as cards, installed ones marked, and filters by kind', () => {
     renderAt('/plugins/market');
     expect(screen.getByText('ZCode')).toBeTruthy();
-    expect(screen.getAllByRole('button', { name: /^(Install|安装)$/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^(Install|安装)$/ })).toHaveLength(2);
     expect(screen.getAllByText(/^(Installed|已安装)$/).filter((el) => !el.closest('[role="tab"]'))).toHaveLength(1);
 
-    fireEvent.click(screen.getByText(/^(Middleware|中间件) 1$/));
+    fireEvent.click(screen.getByText(/^(Middleware|中间件) 2$/));
     expect(screen.queryByText('ZCode')).toBeNull();
     expect(screen.getByText('Word Guard')).toBeTruthy();
+  });
+
+  it('marks what the Astra site published and what it needs of Astra', () => {
+    renderAt('/plugins/market');
+    expect(screen.getByText('Hosted')).toBeTruthy();
+    expect(screen.getByText(/^(Astra 0\.8\.0\+|需要 Astra 0\.8\.0\+)$/)).toBeTruthy();
+    expect(screen.getAllByText('Astra').length).toBeGreaterThan(0);
+  });
+
+  it('asks before installing what a website link names, then installs it from the market', async () => {
+    renderAt('/plugins/market?install=%40astra%2Fmiddleware-hosted');
+    expect(spies.add).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('@astra/middleware-hosted');
+    fireEvent.click(within(dialog).getByRole('button', { name: /^(Install|安装)$/ }));
+    await waitFor(() => expect(spies.add).toHaveBeenCalledWith({ spec: '@astra/middleware-hosted', source: 'market' }, expect.anything()));
+  });
+
+  it('ignores a link that names a path rather than a package', async () => {
+    renderAt('/plugins/market?install=%2Fetc%2Fevil');
+    await screen.findByText('Hosted');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(spies.add).not.toHaveBeenCalled();
   });
 
   it('offers to import what magpie has', () => {

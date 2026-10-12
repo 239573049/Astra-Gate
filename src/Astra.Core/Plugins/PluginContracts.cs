@@ -35,6 +35,9 @@ public sealed class PluginEntry
 public static class PluginSources
 {
     public const string Market = "market";
+
+    /// <summary>A package the plugin market hosts itself: updates ask the market for newer versions, not npm.</summary>
+    public const string MarketPackage = "market-package";
     public const string Npm = "npm";
     public const string GitHub = "github";
     public const string Git = "git";

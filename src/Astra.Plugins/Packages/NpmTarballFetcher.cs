@@ -60,10 +60,63 @@ public sealed class NpmTarballFetcher(Func<HttpClient> http, string registry = "
         }
         Verify(pkg, tgz.GetBuffer().AsSpan(0, (int)tgz.Length));
 
+        tgz.Position = 0;
+        await ExtractAsync(tgz, dest, ct);
+    }
+
+    /// <summary>
+    /// Downloads <paramref name="url"/> to the file <paramref name="target"/> and checks it against the hashes the plugin
+    /// market gave (sha256 always; sha512, base64, when there is one). A file that doesn't match is deleted.
+    /// </summary>
+    public async Task DownloadVerifiedAsync(string url, string sha256, string? sha512, string target, CancellationToken ct = default)
+    {
+        using var res = await http().GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        res.EnsureSuccessStatusCode();
+        if (res.Content.Headers.ContentLength > MaxTarball) throw new InvalidDataException("the plugin's tarball is too large");
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        using var h256 = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var h512 = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
+        long total = 0;
+        try
+        {
+            await using (var body = await res.Content.ReadAsStreamAsync(ct))
+            await using (var file = File.Create(target))
+            {
+                var buffer = new byte[81920];
+                int n;
+                while ((n = await body.ReadAsync(buffer, ct)) > 0)
+                {
+                    total += n;
+                    if (total > MaxTarball) throw new InvalidDataException("the plugin's tarball is too large");
+                    h256.AppendData(buffer, 0, n);
+                    h512.AppendData(buffer, 0, n);
+                    await file.WriteAsync(buffer.AsMemory(0, n), ct);
+                }
+            }
+            if (!string.Equals(Convert.ToHexStringLower(h256.GetHashAndReset()), sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("the plugin's tarball doesn't match the sha256 the market lists for it");
+            if (sha512 is not null && Convert.ToBase64String(h512.GetHashAndReset()) != sha512)
+                throw new InvalidDataException("the plugin's tarball doesn't match the sha512 the market lists for it");
+        }
+        catch
+        {
+            if (File.Exists(target)) File.Delete(target);
+            throw;
+        }
+    }
+
+    /// <summary>Unpacks the tarball file <paramref name="tgzFile"/> into <paramref name="dest"/> (replaced whole), with the same limits as an npm install.</summary>
+    public async Task ExtractFileAsync(string tgzFile, string dest, CancellationToken ct = default)
+    {
+        await using var stream = File.OpenRead(tgzFile);
+        await ExtractAsync(stream, dest, ct);
+    }
+
+    private static async Task ExtractAsync(Stream tgz, string dest, CancellationToken ct)
+    {
         var staging = dest + ".part";
         if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
         Directory.CreateDirectory(staging);
-        tgz.Position = 0;
         await Unpack(tgz, staging, ct);
         if (Directory.Exists(dest)) Directory.Delete(dest, recursive: true);
         Directory.CreateDirectory(Path.GetDirectoryName(dest)!);

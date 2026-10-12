@@ -29,6 +29,10 @@ Canonical/hreflang/sitemap/robots/llms URLs use the fixed origin `https://astra-
 It doubles as the official website and ships as its own Docker image: `.github/workflows/docs.yml`
 builds `docs/Dockerfile` (Next standalone output; the build context is the repo root) and pushes to
 `ghcr.io/<owner>/<repo>/docs` on every `main` push that touches `docs/**` (or the lockfile / workflow).
+The site also serves the plugin market (`docs/lib/plugin-market/`, `/api/plugin-market/**`, pages under
+`/plugins` and `/en/plugins` — both languages' copy and cards live in `components/plugins/`, kept free of the
+registry store so the client components don't pull in `node:fs`): upstream magpie-community list + published
+entries/tarballs under `${DATA_DIR}/plugin-market/`; publishing needs `PLUGIN_UPLOAD_TOKEN` (see linked update 10).
 Tutorial screenshots in `docs/public/screenshots/` are captured from the live UI (`web` dev server on
 :5173 + a running astra-server) via `node docs/scripts/snap.mjs`; re-run it after UI changes instead of
 editing PNGs. `login.png` is the only mockup-rendered shot (`shots/login.html`, loopback never shows a
@@ -276,6 +280,16 @@ runtime needed on the target).
    subcommand, `Dockerfile` / `compose.yaml`, the `docker` job in `release.yml`, and
    `docs/content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects
    `/api/health`, `/api/auth/status` (`required: true`) and the SPA at `/`.
+10. **Plugin market contract**: the registry the docs site serves (`docs/lib/plugin-market/`, routes
+    `docs/app/api/plugin-market/**`, document shape in `types.ts`) is parsed by `PluginMarket.Parse`
+    (`src/Astra.Plugins/Market/PluginMarket.cs`) and shown by `web/src/api/types.ts` (`MarketListing`,
+    `MarketSearchResult`) and `cli/src/commands/plugin.ts` — a field added on one side is added on all of them,
+    and `docs/content/docs/advanced/plugin-market.mdx` lists the fields. The client reads only the docs registry
+    (default `PluginMarket.DefaultUrl`; `ASTRA_PLUGIN_MARKET` > the `pluginMarketUrl` setting > default) and never
+    asks npm or GitHub itself (search goes through the registry's `/search`). `docs/lib/plugin-market/upstream-fallback.json`
+    is a copy of `Market/market.json` (the docs image build context has no `src/`): update both together. A hosted
+    package's tarball address and hash come from the registry only (`PluginService.Add` never takes them from the
+    caller), and `PluginSources.MarketPackage` entries update through the market, not npm.
 
 ## Conventions
 

@@ -36,12 +36,18 @@ interface MarketListing {
   kind: string;
   latest?: string | null;
   summary: Record<string, string>;
+  /** astra = published on the Astra site, upstream = magpie-community's list. */
+  origin?: 'astra' | 'upstream';
+  /** Versions the market hosts itself; empty = installed from npm (or a git spec). */
+  tarballs?: { version: string }[];
+  minAstraVersion?: string | null;
 }
 
 interface SearchResult {
   spec: string;
   kind: string;
   version?: string | null;
+  /** astra (the market's own entries), npm or github. */
   source: string;
   description?: string | null;
 }
@@ -159,6 +165,12 @@ export async function runPluginUse(name: string, provider: string): Promise<void
   success(`${p.shortName} serves ${provider} now.`);
 }
 
+/** Where a listing comes from: the Astra site (hosted = it serves the package too), or magpie-community's list. */
+function marketOrigin(l: MarketListing): string {
+  if (l.origin !== 'astra') return 'community';
+  return l.tarballs && l.tarballs.length > 0 ? 'astra (hosted)' : 'astra';
+}
+
 export async function runPluginMarket(query?: string): Promise<void> {
   if (query) {
     const results = await api<SearchResult[]>(`/api/plugins/search?q=${encodeURIComponent(query)}`);
@@ -170,8 +182,8 @@ export async function runPluginMarket(query?: string): Promise<void> {
   }
   const listings = await api<MarketListing[]>('/api/plugins/market');
   printTable(
-    listings.map((l) => [l.package, l.kind, l.latest ?? '', l.summary.en ?? '']),
-    ['PACKAGE', 'KIND', 'LATEST', 'SUMMARY'],
+    listings.map((l) => [l.package, l.kind, l.latest ?? '', marketOrigin(l), l.summary.en ?? '']),
+    ['PACKAGE', 'KIND', 'LATEST', 'FROM', 'SUMMARY'],
   );
   info('Install one with `astra plugin add <package>`.');
 }

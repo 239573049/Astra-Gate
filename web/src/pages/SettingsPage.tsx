@@ -172,6 +172,8 @@ function GeneralSettings() {
 
           <ProxySettings settings={s} />
 
+          <PluginMarketSettings settings={s} />
+
           <Group title={t('settings.quota')} footer={t('settings.quota.autoIntervalHint')}>
             <Row label={t('settings.quota.autoInterval')}>
               <DeferredNumber
@@ -407,6 +409,54 @@ function ProxySettings({ settings: s }: { settings: Settings }) {
           </Row>
           <div className="flex justify-end px-4 py-2">
             <Button size="sm" disabled={!dirty || !form.url.trim() || update.isPending} onClick={save}>
+              {t('common.save')}
+            </Button>
+          </div>
+        </>
+      )}
+    </Group>
+  );
+}
+
+/**
+ * Where the plugin market comes from: the Astra site's registry unless set otherwise (an address), or kept to the
+ * local copies (empty). Saved with the button; the switch and the reset apply at once.
+ */
+function PluginMarketSettings({ settings: s }: { settings: Settings }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateSettings();
+  const offline = s.pluginMarketUrl === '';
+  const [url, setUrl] = useState(s.pluginMarketUrl ?? '');
+  useEffect(() => setUrl(s.pluginMarketUrl ?? ''), [s.pluginMarketUrl]);
+
+  const save = (pluginMarketUrl: string | null, saved = false) =>
+    update.mutate({ pluginMarketUrl }, { onSuccess: () => saved && toast(t('settings.pluginMarket.saved')), onError: (e) => toast(errorText(e), 'error') });
+
+  return (
+    <Group title={t('settings.pluginMarket')} footer={t('settings.pluginMarket.footer')}>
+      <Row label={t('settings.pluginMarket.offline')} detail={t('settings.pluginMarket.offlineHint')}>
+        <Switch checked={offline} label={t('settings.pluginMarket.offline')} onChange={(on) => save(on ? '' : null)} />
+      </Row>
+      {!offline && (
+        <>
+          <Row label={t('settings.pluginMarket.url')} detail={t('settings.pluginMarket.urlHint')}>
+            <Input
+              className="w-80"
+              mono
+              aria-label={t('settings.pluginMarket.url')}
+              placeholder={s.pluginMarketDefaultUrl}
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+            />
+          </Row>
+          <div className="flex justify-end gap-2 px-4 py-2">
+            {s.pluginMarketUrl !== null && (
+              <Button size="sm" disabled={update.isPending} onClick={() => save(null, true)}>
+                {t('settings.pluginMarket.reset')}
+              </Button>
+            )}
+            <Button size="sm" disabled={update.isPending || url.trim() === (s.pluginMarketUrl ?? '')} onClick={() => save(url.trim() || null, true)}>
               {t('common.save')}
             </Button>
           </div>

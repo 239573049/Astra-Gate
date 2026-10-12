@@ -703,6 +703,10 @@ export interface Settings {
   proxyMode: ProxyMode; proxyUrl: string | null; proxyUsername: string | null; hasProxyPassword: boolean;
   /** NO_PROXY-style hosts, comma separated, that stay direct in custom mode. */
   proxyBypass: string | null;
+  /** Plugin market registry: null = the Astra site's (pluginMarketDefaultUrl), "" = only the cached and built-in copies. */
+  pluginMarketUrl: string | null;
+  /** Read-only: the registry used while pluginMarketUrl is null. */
+  pluginMarketDefaultUrl: string;
   /** Read-only here (changed via CLI / config.json): */
   port: number; host: string; dataDir: string; gatewayBaseUrl: string;
 }
@@ -758,15 +762,25 @@ export interface PluginHostStatus {
   recent?: { at: string; variant: string; title: string; message: string }[];
 }
 
-// GET /api/plugins/market
+// GET /api/plugins/market — the registry of the plugin market (by default the Astra site's)
+export interface MarketTarball { version: string; url: string; sha256: string; sha512?: string | null; size: number }
 export interface MarketListing {
   package: string; name: string; icon?: string | null; kind: PluginKind; providers: string[]; replaces?: string | null;
   summary: Record<string, string>; latest?: string | null; description?: string | null; license?: string | null;
+  /** What adding it installs when that isn't the package (github:owner/repo). */
+  spec?: string | null;
+  /** astra = published on the site, upstream = magpie-community's list. */
+  origin: "astra" | "upstream";
+  author?: string | null; homepage?: string | null; repository?: string | null; tags: string[];
+  /** The oldest Astra that can run it. */
+  minAstraVersion?: string | null;
+  /** Versions the market hosts itself, newest first; empty = installed from npm (or spec). */
+  tarballs: MarketTarball[];
 }
 
-// GET /api/plugins/search?q=
+// GET /api/plugins/search?q= — searched by the registry's host: its own entries, then npm and GitHub
 export interface MarketSearchResult {
-  spec: string; name: string; description?: string | null; version?: string | null; source: "npm" | "github"; kind: PluginKind; stars: number;
+  spec: string; name: string; description?: string | null; version?: string | null; source: "astra" | "npm" | "github"; kind: PluginKind; stars: number;
 }
 
 /** A way a plugin provider signs in: "oauth" (a browser page) or "api" (a key). */

@@ -35,6 +35,12 @@ public sealed class AppSettings
     public string? UpdateFeedUrl { get; set; }
 
     /// <summary>
+    /// Plugin market registry address override; null = the Astra site's (the default), empty = only the copy fetched
+    /// last and the built-in one. The ASTRA_PLUGIN_MARKET environment variable wins over it.
+    /// </summary>
+    public string? PluginMarketUrl { get; set; }
+
+    /// <summary>
     /// Background balance / quota refresh for API-key providers, in minutes (ProviderQuotaWorker).
     /// 0 turns the background refresh off; a provider's own <c>settings.quota.intervalMinutes</c> wins.
     /// </summary>

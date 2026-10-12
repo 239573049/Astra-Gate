@@ -17,6 +17,8 @@ namespace Astra.Plugins;
 [JsonSerializable(typeof(Host.PluginHostMessage))]
 [JsonSerializable(typeof(Market.MarketListing))]
 [JsonSerializable(typeof(List<Market.MarketListing>))]
+[JsonSerializable(typeof(Market.MarketTarball))]
+[JsonSerializable(typeof(List<Market.MarketTarball>))]
 [JsonSerializable(typeof(Market.MarketSearchResult))]
 [JsonSerializable(typeof(List<Market.MarketSearchResult>))]
 [JsonSerializable(typeof(List<string>))]

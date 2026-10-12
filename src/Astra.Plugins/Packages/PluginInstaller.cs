@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Astra.Core.Plugins;
+using Astra.Plugins.Market;
 using Astra.Plugins.Runtime;
 using Astra.Plugins.Store;
 
@@ -11,10 +12,12 @@ namespace Astra.Plugins.Packages;
 /// Adds, updates and removes plugins, as magpie's internal/plugin/store.go does: npm and git packages
 /// go into <see cref="PluginCatalog.PackagesDir"/> with <c>bun add --ignore-scripts</c> (their install
 /// scripts never run, as in OpenCode), a path is used where it is. A package that is only gateway
-/// middleware or an agent comes straight from npm's tarball instead, so those plugins never need Bun.
+/// middleware or an agent comes straight from npm's tarball instead, so those plugins never need Bun. A package
+/// the plugin market hosts itself is fetched from the market and checked against the hash it lists (see
+/// <see cref="AddHostedAsync"/>).
 /// </summary>
 public sealed partial class PluginInstaller(
-    PluginCatalog catalog, BunRuntime bun, NpmTarballFetcher npm, Func<IEnumerable<string>?>? toolPath = null)
+    PluginCatalog catalog, BunRuntime bun, NpmTarballFetcher npm, PluginMarket market, Func<IEnumerable<string>?>? toolPath = null)
 {
     /// <summary>The package pi's extensions import pi from; the host loads them with it.</summary>
     public const string PiAgent = "@earendil-works/pi-coding-agent";
@@ -23,12 +26,27 @@ public sealed partial class PluginInstaller(
 
     private string PackagesDir => catalog.PackagesDir;
 
+    /// <summary>Where the tarballs of market-hosted plugins are kept: the packages folder's package.json points at them.</summary>
+    private string MarketPackagesDir => Path.Combine(catalog.Paths.PluginsDir, "market-packages");
+
     /// <summary>
     /// Installs <paramref name="spec"/> and adds it to the list — in place of a plugin of the same package,
     /// whose options and provider picks it keeps. Returns the entry saved (an npm spec without a version
     /// is saved as name@latest).
     /// </summary>
-    public async Task<PluginEntry> AddAsync(string spec, string? source, Action<string> log, CancellationToken ct = default)
+    public Task<PluginEntry> AddAsync(string spec, string? source, Action<string> log, CancellationToken ct = default) =>
+        AddCoreAsync(spec, source, null, log, ct);
+
+    /// <summary>
+    /// Installs <paramref name="package"/> at <paramref name="tarball"/>, a version the plugin market hosts: the tarball is
+    /// fetched, must match the market's sha256, and is unpacked as an npm package would be. The entry saved is
+    /// <c>package@latest</c>, or <c>package@version</c> when <paramref name="pinned"/>; its source is
+    /// <see cref="PluginSources.MarketPackage"/>, which is what makes updates ask the market rather than npm.
+    /// </summary>
+    public Task<PluginEntry> AddHostedAsync(string package, MarketTarball tarball, bool pinned, Action<string> log, CancellationToken ct = default) =>
+        AddCoreAsync(pinned ? $"{package}@{tarball.Version}" : package, PluginSources.MarketPackage, tarball, log, ct);
+
+    private async Task<PluginEntry> AddCoreAsync(string spec, string? source, MarketTarball? hosted, Action<string> log, CancellationToken ct)
     {
         spec = spec.Trim();
         if (spec.Length == 0) throw new ArgumentException("no plugin given");
@@ -38,7 +56,16 @@ public sealed partial class PluginInstaller(
             var before = await catalog.SnapshotAsync(ct);
             var namesBefore = before.Plugins.ToDictionary(p => p.Entry.Spec, p => PluginSpec.Name(p.Entry.Spec, PackagesDir));
             var installedNow = false;
-            if (PluginSpec.IsPath(spec))
+            if (hosted is not null)
+            {
+                var hostedName = PluginSpec.Name(spec, PackagesDir);
+                if (!PluginSpec.IsPackageName(hostedName)) throw new ArgumentException($"\"{spec}\" isn't an npm package name");
+                if (hostedName == spec) spec += "@latest";
+                await InstallHostedAsync(hostedName, hosted, log, ct);
+                installedNow = true;
+                source = PluginSources.MarketPackage;
+            }
+            else if (PluginSpec.IsPath(spec))
             {
                 spec = PluginSpec.ExpandPath(spec);
                 if (!File.Exists(spec) && !Directory.Exists(spec)) throw new FileNotFoundException($"{spec} doesn't exist");
@@ -119,7 +146,20 @@ public sealed partial class PluginInstaller(
             if (PluginSpec.IsPath(spec)) continue;
             try
             {
-                if (PluginSpec.IsGit(spec))
+                if (p.Entry.Source == PluginSources.MarketPackage)
+                {
+                    // hosted by the plugin market: it, not npm, says what is newest
+                    var pkg = PluginSpec.Name(spec, PackagesDir);
+                    // an explicit update asks the market itself, not the copy it fetched hours ago
+                    await market.RefreshAsync(ct);
+                    var found = await market.FindHostedAsync(pkg, null, ct)
+                                ?? throw new InvalidOperationException($"the plugin market doesn't host {pkg} (any more)");
+                    if (IsNewer(found.Tarball.Version, p.Manifest.Version ?? p.Entry.InstalledVersion))
+                        await AddHostedAsync(pkg, found.Tarball, false, log, ct);
+                    else
+                        log($"{spec} is up to date");
+                }
+                else if (PluginSpec.IsGit(spec))
                 {
                     await BunAsync(["update", "--ignore-scripts", PluginSpec.Name(spec, PackagesDir)], log, ct);
                 }
@@ -208,6 +248,71 @@ public sealed partial class PluginInstaller(
             throw new InvalidOperationException($"bun add {name}@{resolved.Version} installed {got ?? "nothing"}");
     }
 
+    // A package the plugin market hosts: its tarball is fetched and must match the sha256 the market lists, then it is unpacked
+    // like any npm package. The verified tarball is kept (market-packages/) and the packages folder's package.json points at
+    // it, so a later bun add or remove finds the package where bun expects it — it is not on npm. Middleware and agents (which
+    // bundle everything they import) are unpacked straight into node_modules; the rest go through bun add, which resolves their
+    // own dependencies from npm.
+    private async Task InstallHostedAsync(string name, MarketTarball tarball, Action<string> log, CancellationToken ct)
+    {
+        var staging = Path.Combine(catalog.Paths.PluginsDir, ".staging", Guid.NewGuid().ToString("N"));
+        var dest = Path.Combine(PackagesDir, "node_modules", name.Replace('/', Path.DirectorySeparatorChar));
+        var kept = Path.Combine(MarketPackagesDir, name.Replace('/', '_'), $"{tarball.Version}.tgz");
+        try
+        {
+            log($"fetching {name}@{tarball.Version} from the plugin market");
+            var file = Path.Combine(staging, "package.tgz");
+            await npm.DownloadVerifiedAsync(tarball.Url, tarball.Sha256, tarball.Sha512, file, ct);
+            var unpacked = Path.Combine(staging, "package");
+            await npm.ExtractFileAsync(file, unpacked, ct);
+            var manifest = PackageManifest.Read(unpacked);
+            if (PluginSpec.PackageName(unpacked, PackagesDir) is var inside && inside != name)
+                throw new InvalidDataException($"the market's tarball for {name} is {inside}'s");
+            if (PluginSpec.Version(unpacked) != tarball.Version)
+                throw new InvalidDataException($"the market's tarball for {name}@{tarball.Version} says it is {PluginSpec.Version(unpacked) ?? "no version"}");
+
+            Directory.CreateDirectory(Path.GetDirectoryName(kept)!);
+            File.Copy(file, kept, overwrite: true);
+            if (manifest.InProcessOnly)
+            {
+                EnsurePackagesFolder();
+                if (Directory.Exists(dest)) Directory.Delete(dest, recursive: true);
+                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                Directory.Move(unpacked, dest);
+                RecordDependency(name, kept);
+            }
+            else
+            {
+                log($"{name} runs in the plugin host, which needs Bun");
+                await BunAddAsync(kept, log, ct);
+                var got = PluginSpec.Version(dest);
+                if (got != tarball.Version)
+                    throw new InvalidOperationException($"bun add {kept} installed {got ?? "nothing"}");
+            }
+            DeleteHostedTarballs(name, except: kept);
+        }
+        catch
+        {
+            // a tarball kept for a version that didn't install would only be clutter (an older one is still in use)
+            if (File.Exists(kept) && PluginSpec.Version(dest) != tarball.Version) File.Delete(kept);
+            throw;
+        }
+        finally
+        {
+            if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true);
+        }
+    }
+
+    // The kept tarballs of a market package (one folder each), all but `except`.
+    private void DeleteHostedTarballs(string pkg, string? except = null)
+    {
+        var dir = Path.Combine(MarketPackagesDir, pkg.Replace('/', '_'));
+        if (!Directory.Exists(dir)) return;
+        foreach (var file in Directory.EnumerateFiles(dir, "*.tgz"))
+            if (file != except) File.Delete(file);
+        if (except is null) Directory.Delete(dir, recursive: true);
+    }
+
     private async Task EnsurePiAsync(string target, Action<string> log, CancellationToken ct)
     {
         if (File.Exists(Path.Combine(PackagesDir, "node_modules", PiAgent, "package.json"))
@@ -221,11 +326,14 @@ public sealed partial class PluginInstaller(
         if (bun.Current is not null && DependsOn(pkg))
         {
             await BunAsync(["remove", "--ignore-scripts", pkg], log, ct);
-            return;
         }
-        var dir = Path.Combine(PackagesDir, "node_modules", pkg.Replace('/', Path.DirectorySeparatorChar));
-        if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
-        RecordDependency(pkg, null);
+        else
+        {
+            var dir = Path.Combine(PackagesDir, "node_modules", pkg.Replace('/', Path.DirectorySeparatorChar));
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            RecordDependency(pkg, null);
+        }
+        DeleteHostedTarballs(pkg); // a package the market hosted leaves its kept tarballs behind
     }
 
     private Task BunAddAsync(string spec, Action<string> log, CancellationToken ct) =>

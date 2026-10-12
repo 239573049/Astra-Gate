@@ -82,7 +82,7 @@ public static class RequestEndpoints
         int StreamIdleTimeoutSec, string UpdateChannel, bool UpdateAutoCheck,
         int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes,
         string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass,
-        bool RequireGatewayKey);
+        bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl);
 
     public static void MapRequestEndpoints(this IEndpointRouteBuilder app)
     {
@@ -276,6 +276,15 @@ public static class RequestEndpoints
                             var feedUrl = value?.GetValue<string>();
                             s.UpdateFeedUrl = feedUrl is null ? null : feedUrl.Trim() is { Length: 0 } ? "" : feedUrl.Trim();
                             break;
+                        case "pluginMarketUrl":
+                            // JSON null resets to the Astra site's registry; "" keeps the market to its cached and built-in copies.
+                            var marketUrl = value?.GetValue<string>()?.Trim();
+                            if (marketUrl is null) s.PluginMarketUrl = null;
+                            else if (marketUrl.Length == 0) s.PluginMarketUrl = "";
+                            else if (Uri.TryCreate(marketUrl, UriKind.Absolute, out var market) && market.Scheme is "http" or "https")
+                                s.PluginMarketUrl = marketUrl;
+                            else error = "pluginMarketUrl must be an http(s) address";
+                            break;
                         case "quotaAutoIntervalMinutes":
                             // 0 turns the background balance / quota refresh off; providers may override it.
                             s.QuotaAutoIntervalMinutes = Math.Clamp(value?.GetValue<int>() ?? 30, 0, 1440);
@@ -332,7 +341,7 @@ public static class RequestEndpoints
         s.UpdateChannel, s.UpdateAutoCheck,
         server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes,
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
-        s.RequireGatewayKey);
+        s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:

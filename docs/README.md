@@ -25,11 +25,31 @@ pnpm --filter @aidotnet/docs build
 
 | Route | Description |
 | --- | --- |
-| `app/(home)` | 落地页 |
+| `app/(home)` | 落地页（`/` = zh，`/en` = en） |
+| `app/en` | 英文落地页，插件市场英文版 `/en/plugins/**` |
 | `app/docs` | 文档布局与页面 |
 | `app/api/search/route.ts` | 搜索 |
+| `app/(home)/plugins/**` | 插件市场网页（列表、详情、「在 Astra 中安装」）；英文版 `app/en/plugins/**`，页面文案与卡片都在 `components/plugins/` |
+| `app/api/plugin-market/**` | 插件市场接口：`registry.json`（Astra 客户端默认读取）、`search`、`packages`（发布 / 下载 tarball）、`entries`（发布条目 / 下架） |
 | `app/sitemap.ts` / `app/robots.ts` | sitemap.xml / robots.txt |
 | `app/llms.txt` / `app/llms-full.txt` / `app/llms.mdx/**` | 面向 AI 的文档索引 / 全文 / 单页 Markdown（GEO） |
+
+## 插件市场
+
+实现在 `lib/plugin-market/`，数据存放在 `${DATA_DIR}/plugin-market/`（与客户端发布共用 `/app/data` 卷）。
+注册表 = magpie-community 上游清单（附 npm 最新版本）+ 站内发布的条目和插件包；站内同名条目覆盖上游。
+
+| 环境变量 | 作用 |
+| --- | --- |
+| `PLUGIN_UPLOAD_TOKEN` | 发布 / 下架用的 Bearer token；未设置时写接口返回 503（与 `CLIENT_UPLOAD_TOKEN` 分开） |
+| `PLUGIN_MARKET_UPSTREAM` | 上游清单地址，默认 magpie-community 的 `registry.json`；设为 `off` 只用站内条目和仓库内置快照 |
+| `GITHUB_TOKEN` | 可选，提高搜索代理访问 GitHub 的限额 |
+
+`lib/plugin-market/upstream-fallback.json` 是上游清单的内置快照（上游不可达且没有缓存时使用），内容与
+`src/Astra.Plugins/Market/market.json` 相同；两处要一起更新。发布方法见 `content/docs/advanced/plugin-market.mdx`。
+
+页面分中英文两套（`/plugins` 与 `/en/plugins`），文案与卡片组件在 `components/plugins/`，两处共用；这些
+组件会被客户端引用，所以不要从里面 import `lib/plugin-market/registry` 之类用到 `node:fs` 的模块。
 
 ## 站点 URL
 

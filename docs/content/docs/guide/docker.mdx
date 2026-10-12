@@ -37,6 +37,7 @@ ASTRA_ADMIN_PASSWORD='换成你自己的密码' docker compose up -d
 | `ASTRA_PUBLIC_URL` | — | 外部可访问的地址，例如 `https://gate.example.com`；控制台与客户端配置里显示的网关地址用它 |
 | `ASTRA_HOME` | `/data` | 数据目录 |
 | `ASTRA_PLUGINS` | — | 设为 `off` 关闭插件：已安装的插件都不运行，也不能再安装（列表保留） |
+| `ASTRA_PLUGIN_MARKET` | — | 插件市场清单的地址，覆盖控制台设置里的地址；默认是 `https://astra-gate.si/api/plugin-market/registry.json`。设为 `off` 则只用本地缓存与内置副本（容器不能联网时用） |
 
 优先级：命令行参数 > 环境变量 > `config.json`。另外 `HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 对访问上游提供商同样生效。
 

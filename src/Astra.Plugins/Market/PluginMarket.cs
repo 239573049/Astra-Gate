@@ -2,109 +2,185 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
+using Astra.Plugins.Packages;
 using Astra.Plugins.Store;
 
 namespace Astra.Plugins.Market;
 
-/// <summary>A plugin the market suggests: magpie-community's registry entry, with what npm says of it now.</summary>
-/// <param name="Kind">provider (an OpenCode provider plugin), middleware or agent.</param>
+/// <summary>A plugin the market suggests: one entry of the registry (the docs site's: community list plus what Astra published).</summary>
+/// <param name="Kind">provider (an OpenCode provider plugin), middleware, agent or pi.</param>
 /// <param name="Providers">OpenCode's ids of the providers it signs in to.</param>
-/// <param name="Replaces">The built-in subscription (in magpie) it does the work of.</param>
+/// <param name="Replaces">The built-in subscription it does the work of.</param>
 /// <param name="Summary">By language: en, zh.</param>
-/// <param name="Latest">npm's newest version; null when npm didn't say.</param>
+/// <param name="Latest">The newest version the registry knows; null when it didn't say.</param>
+/// <param name="Spec">What adding it installs when that is not the package name (github:owner/repo); null = the package.</param>
+/// <param name="Origin">astra (published on the docs site) or upstream (magpie-community's list).</param>
+/// <param name="MinAstraVersion">The oldest Astra that can run it; null = any.</param>
+/// <param name="Tarballs">The versions the market hosts itself, newest first; empty = installed from npm (or <paramref name="Spec"/>).</param>
 public sealed record MarketListing(
     string Package, string Name, string? Icon, string Kind, List<string> Providers, string? Replaces,
-    Dictionary<string, string> Summary, string? Latest, string? Description, string? License);
+    Dictionary<string, string> Summary, string? Latest, string? Description, string? License,
+    string? Spec, string Origin, string? Author, string? Homepage, string? Repository, List<string> Tags,
+    string? MinAstraVersion, List<MarketTarball> Tarballs);
 
-/// <summary>A plugin found by a search: on npm, or on GitHub by its magpie-plugin topic.</summary>
+/// <summary>One version of a plugin the market hosts: where to fetch it and the hash it must have.</summary>
+/// <param name="Url">Absolute (resolved against the registry's address).</param>
+/// <param name="Sha256">Lower-case hex.</param>
+/// <param name="Sha512">Base64; null when the registry gave none.</param>
+public sealed record MarketTarball(string Version, string Url, string Sha256, string? Sha512, long Size);
+
+/// <summary>A plugin found by a search: one of the market's own, or on npm, or on GitHub by its magpie-plugin topic.</summary>
 /// <param name="Spec">What adding it installs: the npm package, or github:owner/repo.</param>
-/// <param name="Source">npm or github.</param>
+/// <param name="Source">astra (listed in the market), npm or github.</param>
 public sealed record MarketSearchResult(string Spec, string Name, string? Description, string? Version, string Source, string Kind, int Stars);
 
 /// <summary>
-/// The plugin market (magpie's internal/plugin/market.go): magpie-community's registry.json, fetched at most every six
-/// hours (else the copy fetched last, else the one built into Astra), each listing with npm's newest version; and
-/// searches of npm and of GitHub's <c>magpie-plugin</c> topic for the rest. <c>ASTRA_PLUGIN_MARKET</c> moves the
-/// registry; "off" keeps to the built-in copy.
+/// The plugin market. Everything comes from one registry — by default the Astra site's
+/// (<see cref="DefaultUrl"/>), which lists magpie-community's plugins, those published on the site and the
+/// packages it hosts — fetched at most every six hours (else the copy fetched last, else the one built into
+/// Astra), and searched through the site too. Which registry: <c>ASTRA_PLUGIN_MARKET</c> (<c>off</c> keeps to
+/// the cached and built-in copies), else the PluginMarketUrl setting (empty = the same), else the default.
 /// </summary>
-public sealed class PluginMarket(AstraPaths paths, Func<HttpClient> http, Func<string, string?>? getEnv = null)
+public sealed class PluginMarket(
+    AstraPaths paths, Func<HttpClient> http, Func<string, string?>? getEnv = null, Func<string?>? configuredUrl = null)
 {
-    public const string RegistryUrl = "https://raw.githubusercontent.com/magpie-community/plugins/main/registry.json";
-    private const string NpmRegistry = "https://registry.npmjs.org";
+    public const string DefaultUrl = "https://astra-gate.si/api/plugin-market/registry.json";
+    private const string RegistryFile = "registry.json";
     private static readonly TimeSpan Fresh = TimeSpan.FromHours(6);
     private static readonly TimeSpan SearchFresh = TimeSpan.FromMinutes(10);
 
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private readonly ConcurrentDictionary<string, (DateTimeOffset At, JsonObject? Info)> _npm = new();
-    private readonly ConcurrentDictionary<string, (DateTimeOffset At, List<MarketSearchResult> Results)> _searches = new();
-    private (DateTimeOffset At, List<JsonObject> List)? _registry;
+    private readonly ConcurrentDictionary<string, (DateTimeOffset At, string? Source, List<MarketSearchResult> Results)> _searches = new();
+    private (DateTimeOffset At, string? Source, List<MarketListing> List)? _registry;
 
-    private string CacheFile => Path.Combine(paths.PluginMarketDir, "registry.json");
+    private string CacheFile => Path.Combine(paths.PluginMarketDir, RegistryFile);
 
-    /// <summary>The market's listings, each with npm's word on it.</summary>
-    public async Task<List<MarketListing>> ListAsync(bool refresh = false, CancellationToken ct = default)
+    /// <summary>
+    /// The registry address in use, or null when the market is kept to its cached and built-in copies.
+    /// An address that isn't http(s) is not one: the next source down the list is used.
+    /// </summary>
+    public string? Source
     {
-        var entries = await RegistryAsync(refresh, ct);
-        var infos = await NpmInfoAsync(entries.Select(e => Str(e, "package")!).ToList(), refresh, ct);
-        return entries.Select(e =>
+        get
         {
-            var pkg = Str(e, "package")!;
-            var info = infos.GetValueOrDefault(pkg);
-            var summary = new Dictionary<string, string>();
-            if (e["summary"] is JsonObject s)
-                foreach (var (lang, text) in s)
-                    if (text is JsonValue v && v.TryGetValue<string>(out var t)) summary[lang] = t;
-            return new MarketListing(pkg, Str(e, "name") ?? pkg, Str(e, "icon"), Str(e, "kind") ?? "provider",
-                (e["providers"] as JsonArray)?.Select(p => p?.ToString() ?? "").Where(p => p.Length > 0).ToList() ?? [],
-                Str(e, "replaces"), summary, Str(info, "version"), Str(info, "description"), Str(info, "license"));
-        }).ToList();
+            var env = (getEnv ?? Environment.GetEnvironmentVariable)("ASTRA_PLUGIN_MARKET")?.Trim();
+            if (env == "off") return null;
+            if (!string.IsNullOrEmpty(env) && IsHttp(env)) return env;
+            var configured = configuredUrl?.Invoke();
+            if (configured is null) return DefaultUrl;
+            configured = configured.Trim();
+            return configured.Length == 0 ? null : IsHttp(configured) ? configured : DefaultUrl;
+        }
     }
 
-    /// <summary>Plugins found by <paramref name="query"/> on npm (OpenCode, magpie and pi packages) and on GitHub's magpie-plugin topic.</summary>
+    /// <summary>The market's listings.</summary>
+    public async Task<List<MarketListing>> ListAsync(bool refresh = false, CancellationToken ct = default) =>
+        (await RegistryAsync(refresh, ct)).List;
+
+    /// <summary>
+    /// Fetches the registry now. Unlike <see cref="ListAsync"/> a registry that can't be fetched is an error, not a fall back
+    /// to the cached copy: an update that can't ask the market must say so rather than find nothing newer. Does nothing
+    /// when the market is kept to its local copies.
+    /// </summary>
+    public async Task RefreshAsync(CancellationToken ct = default)
+    {
+        if (Source is not null) await RegistryAsync(true, ct, strict: true);
+    }
+
+    /// <summary>One listing by package name; null when the market has none.</summary>
+    public async Task<MarketListing?> FindAsync(string package, CancellationToken ct = default) =>
+        (await ListAsync(false, ct)).FirstOrDefault(l => l.Package == package);
+
+    /// <summary>
+    /// The version of <paramref name="package"/> the market hosts (the newest when <paramref name="version"/> is null);
+    /// null when it hosts none, or not that one.
+    /// </summary>
+    public async Task<(MarketListing Listing, MarketTarball Tarball)?> FindHostedAsync(
+        string package, string? version = null, CancellationToken ct = default)
+    {
+        if (await FindAsync(package, ct) is not { } listing) return null;
+        var tarball = version is null ? listing.Tarballs.FirstOrDefault() : listing.Tarballs.FirstOrDefault(t => t.Version == version);
+        return tarball is null ? null : (listing, tarball);
+    }
+
+    /// <summary>Whether an Astra at <paramref name="current"/> is new enough for a plugin that needs <paramref name="min"/> (null = any).</summary>
+    public static bool MeetsMinVersion(string? min, string current) => min is null || !PluginInstaller.IsNewer(min, current);
+
+    /// <summary>
+    /// Plugins found by <paramref name="query"/>: the registry's host searches its own entries, npm (OpenCode, magpie and pi
+    /// packages) and GitHub's magpie-plugin topic. Nothing without a registry address that has a search beside it.
+    /// </summary>
     public async Task<List<MarketSearchResult>> SearchAsync(string query, CancellationToken ct = default)
     {
         query = query.Trim();
-        if (_searches.TryGetValue(query, out var hit) && DateTimeOffset.UtcNow - hit.At < SearchFresh) return hit.Results;
-        var results = new List<MarketSearchResult>();
-        var npm = SearchNpmAsync(query, ct);
-        var github = SearchGitHubAsync(query, ct);
-        results.AddRange(await npm);
-        results.AddRange(await github);
-        _searches[query] = (DateTimeOffset.UtcNow, results);
-        return results;
+        var source = Source;
+        if (source is null || SearchUrl(source, query) is not { } url) return [];
+        if (_searches.TryGetValue(query, out var hit) && hit.Source == source && DateTimeOffset.UtcNow - hit.At < SearchFresh) return hit.Results;
+        try
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(12));
+            var results = ParseSearch(await http().GetStringAsync(url, timeout.Token));
+            _searches[query] = (DateTimeOffset.UtcNow, source, results);
+            return results;
+        }
+        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or JsonException)
+        {
+            return [];
+        }
     }
 
-    private async Task<List<JsonObject>> RegistryAsync(bool refresh, CancellationToken ct)
+    // …/registry.json has its search at …/search; any other address has none we know of.
+    internal static string? SearchUrl(string source, string query) =>
+        Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.AbsolutePath.EndsWith("/" + RegistryFile, StringComparison.Ordinal)
+            ? new Uri(uri, "search").GetLeftPart(UriPartial.Path) + "?q=" + Uri.EscapeDataString(query)
+            : null;
+
+    internal static List<MarketSearchResult> ParseSearch(string text) =>
+        (JsonNode.Parse(text) as JsonArray ?? []).OfType<JsonObject>()
+            .Select(o => new MarketSearchResult(Str(o, "spec") ?? "", Str(o, "name") ?? Str(o, "spec") ?? "", Str(o, "description"), Str(o, "version"),
+                Str(o, "source") is "astra" or "npm" or "github" ? Str(o, "source")! : "npm", KindOf(Str(o, "kind")),
+                o["stars"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0))
+            .Where(r => r.Spec.Length > 0)
+            .ToList();
+
+    private async Task<(DateTimeOffset At, string? Source, List<MarketListing> List)> RegistryAsync(bool refresh, CancellationToken ct, bool strict = false)
     {
-        if (!refresh && _registry is { } r && DateTimeOffset.UtcNow - r.At < Fresh) return r.List;
+        var source = Source;
+        if (!refresh && _registry is { } r && r.Source == source && DateTimeOffset.UtcNow - r.At < Fresh) return r;
         await _lock.WaitAsync(ct);
         try
         {
-            if (!refresh && _registry is { } again && DateTimeOffset.UtcNow - again.At < Fresh) return again.List;
-            var source = (getEnv ?? Environment.GetEnvironmentVariable)("ASTRA_PLUGIN_MARKET") is { Length: > 0 } s ? s : RegistryUrl;
-            if (source != "off")
+            if (!refresh && _registry is { } again && again.Source == source && DateTimeOffset.UtcNow - again.At < Fresh) return again;
+            var baseUri = source is null ? null : new Uri(source);
+            if (source is not null)
             {
                 try
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     timeout.CancelAfter(TimeSpan.FromSeconds(6));
                     var text = await http().GetStringAsync(source, timeout.Token);
-                    if (Parse(text) is { Count: > 0 } fetched)
+                    if (Parse(text, baseUri) is { Count: > 0 } fetched)
                     {
                         Directory.CreateDirectory(paths.PluginMarketDir);
                         await File.WriteAllTextAsync(CacheFile, text, ct);
-                        _registry = (DateTimeOffset.UtcNow, fetched);
-                        return fetched;
+                        _registry = (DateTimeOffset.UtcNow, source, fetched);
+                        return _registry.Value;
                     }
+                    if (strict) throw new InvalidDataException($"{source} has no plugins, or isn't a plugin registry");
                 }
-                catch (Exception e) when (e is HttpRequestException or OperationCanceledException or IOException)
+                catch (OperationCanceledException) when (strict && !ct.IsCancellationRequested)
+                {
+                    throw new TimeoutException($"{source} didn't answer in time");
+                }
+                catch (Exception e) when (!strict && e is HttpRequestException or OperationCanceledException or IOException)
                 {
                     // the copy fetched last, else the built-in one; asked again in a minute
                 }
             }
-            var fallback = (File.Exists(CacheFile) ? Parse(await File.ReadAllTextAsync(CacheFile, ct)) : null) ?? Parse(BuiltIn()) ?? [];
-            _registry = (DateTimeOffset.UtcNow - Fresh + TimeSpan.FromMinutes(1), fallback);
-            return fallback;
+            var fallback = (File.Exists(CacheFile) ? Parse(await File.ReadAllTextAsync(CacheFile, ct), baseUri) : null) ?? Parse(BuiltIn(), baseUri) ?? [];
+            _registry = (DateTimeOffset.UtcNow - Fresh + TimeSpan.FromMinutes(1), source, fallback);
+            return _registry.Value;
         }
         finally
         {
@@ -112,13 +188,15 @@ public sealed class PluginMarket(AstraPaths paths, Func<HttpClient> http, Func<s
         }
     }
 
-    // magpie-community's own entries alone, each a valid npm package.
-    private static List<JsonObject>? Parse(string text)
+    // Each entry a valid npm package. Whatever the host lists is taken (it chose what to list); hosted tarballs need a
+    // usable address (https, or http on this machine) and a sha256, or the version isn't offered.
+    internal static List<MarketListing>? Parse(string text, Uri? baseUri)
     {
         try
         {
             return (JsonNode.Parse(text)?["plugins"] as JsonArray)?.OfType<JsonObject>()
-                .Where(e => Str(e, "package") is { } pkg && PluginSpec.IsPackageName(pkg) && e["community"] is JsonValue c && c.GetValueKind() == JsonValueKind.True)
+                .Where(e => Str(e, "package") is { } pkg && PluginSpec.IsPackageName(pkg))
+                .Select(e => ToListing(e, baseUri))
                 .ToList();
         }
         catch (JsonException)
@@ -127,103 +205,49 @@ public sealed class PluginMarket(AstraPaths paths, Func<HttpClient> http, Func<s
         }
     }
 
+    private static MarketListing ToListing(JsonObject e, Uri? baseUri)
+    {
+        var pkg = Str(e, "package")!;
+        var summary = new Dictionary<string, string>();
+        if (e["summary"] is JsonObject s)
+            foreach (var (lang, text) in s)
+                if (text is JsonValue v && v.TryGetValue<string>(out var t)) summary[lang] = t;
+        var tarballs = (e["tarballs"] as JsonArray)?.OfType<JsonObject>().Select(t => ToTarball(t, baseUri)).OfType<MarketTarball>().ToList() ?? [];
+        tarballs.Sort((a, b) => PluginInstaller.IsNewer(a.Version, b.Version) ? -1 : PluginInstaller.IsNewer(b.Version, a.Version) ? 1 : 0);
+        return new MarketListing(pkg, Str(e, "name") ?? pkg, Str(e, "icon"), KindOf(Str(e, "kind")),
+            StringList(e["providers"]), Str(e, "replaces"), summary, Str(e, "latest"), Str(e, "description"), Str(e, "license"),
+            Str(e, "spec") is { } spec && PluginSpec.IsGit(spec) ? spec : null,
+            Str(e, "origin") == "astra" ? "astra" : "upstream", Str(e, "author"), HttpUrl(Str(e, "homepage")), HttpUrl(Str(e, "repository")),
+            StringList(e["tags"]), Str(e, "minAstraVersion"), tarballs);
+    }
+
+    private static MarketTarball? ToTarball(JsonObject t, Uri? baseUri)
+    {
+        if (Str(t, "version") is not { } version || Str(t, "url") is not { } url || Str(t, "sha256") is not { } sha256) return null;
+        // "/api/…" alone would parse as an absolute file: address on Unix, so only an http(s) one counts as absolute
+        Uri? resolved;
+        if (Uri.TryCreate(url, UriKind.Absolute, out var absolute) && absolute.Scheme is "http" or "https") resolved = absolute;
+        else if (baseUri is null || !Uri.TryCreate(baseUri, url, out resolved)) return null;
+        if (resolved.Scheme != Uri.UriSchemeHttps && !(resolved.IsLoopback && resolved.Scheme == Uri.UriSchemeHttp)) return null;
+        if (sha256.Length != 64 || !sha256.All(Uri.IsHexDigit)) return null;
+        var size = t["size"] is JsonValue v && v.TryGetValue<long>(out var n) ? n : 0;
+        return new MarketTarball(version, resolved.AbsoluteUri, sha256.ToLowerInvariant(), Str(t, "sha512"), size);
+    }
+
+    private static string KindOf(string? kind) => kind is "middleware" or "agent" or "pi" ? kind : "provider";
+
+    private static List<string> StringList(JsonNode? n) =>
+        (n as JsonArray)?.Select(p => p?.ToString() ?? "").Where(p => p.Length > 0).ToList() ?? [];
+
+    private static string? HttpUrl(string? url) =>
+        url is not null && Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme is "http" or "https" ? url : null;
+
+    private static bool IsHttp(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme is "http" or "https";
+
     private static string BuiltIn()
     {
         using var s = typeof(PluginMarket).Assembly.GetManifestResourceStream("Astra.Plugins.Market.market.json")!;
         return new StreamReader(s).ReadToEnd();
-    }
-
-    // npm's latest manifest of each package, six at a time, eight seconds for all; kept six hours.
-    private async Task<Dictionary<string, JsonObject?>> NpmInfoAsync(List<string> packages, bool refresh, CancellationToken ct)
-    {
-        using var all = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        all.CancelAfter(TimeSpan.FromSeconds(8));
-        using var gate = new SemaphoreSlim(6);
-        var tasks = packages.Select(async pkg =>
-        {
-            if (!refresh && _npm.TryGetValue(pkg, out var c) && DateTimeOffset.UtcNow - c.At < Fresh) return (pkg, c.Info);
-            await gate.WaitAsync(all.Token);
-            try
-            {
-                var text = await http().GetStringAsync($"{NpmRegistry}/{pkg.Replace("/", "%2F")}/latest", all.Token);
-                var info = JsonNode.Parse(text) as JsonObject;
-                _npm[pkg] = (DateTimeOffset.UtcNow, info);
-                return (pkg, info);
-            }
-            catch (Exception e) when (e is HttpRequestException or OperationCanceledException or JsonException)
-            {
-                return (pkg, _npm.TryGetValue(pkg, out var stale) ? stale.Info : null);
-            }
-            finally
-            {
-                gate.Release();
-            }
-        });
-        try
-        {
-            return (await Task.WhenAll(tasks)).ToDictionary(x => x.pkg, x => x.Item2);
-        }
-        catch (OperationCanceledException)
-        {
-            return packages.ToDictionary(p => p, p => _npm.TryGetValue(p, out var c) ? c.Info : null);
-        }
-    }
-
-    private async Task<List<MarketSearchResult>> SearchNpmAsync(string query, CancellationToken ct)
-    {
-        try
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(8));
-            var text = await http().GetStringAsync($"{NpmRegistry}/-/v1/search?size=25&text={Uri.EscapeDataString(query + " opencode")}", timeout.Token);
-            return (JsonNode.Parse(text)?["objects"] as JsonArray ?? []).OfType<JsonObject>().Select(o => o["package"] as JsonObject)
-                .OfType<JsonObject>()
-                .Select(p => new MarketSearchResult(Str(p, "name") ?? "", Str(p, "name") ?? "", Str(p, "description"), Str(p, "version"), "npm",
-                    KindOfKeywords(p["keywords"] as JsonArray), 0))
-                .Where(r => r.Spec.Length > 0)
-                .ToList();
-        }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or JsonException)
-        {
-            return [];
-        }
-    }
-
-    private async Task<List<MarketSearchResult>> SearchGitHubAsync(string query, CancellationToken ct)
-    {
-        try
-        {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(8));
-            var q = Uri.EscapeDataString($"{query} topic:magpie-plugin archived:false fork:false");
-            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/search/repositories?q={q}&sort=stars&per_page=30");
-            request.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
-            request.Headers.TryAddWithoutValidation("User-Agent", "Astra");
-            if ((getEnv ?? Environment.GetEnvironmentVariable)("GITHUB_TOKEN") is { Length: > 0 } token)
-                request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + token);
-            using var response = await http().SendAsync(request, timeout.Token);
-            if (!response.IsSuccessStatusCode) return [];
-            var text = await response.Content.ReadAsStringAsync(timeout.Token);
-            return (JsonNode.Parse(text)?["items"] as JsonArray ?? []).OfType<JsonObject>()
-                .Select(r => new MarketSearchResult("github:" + Str(r, "full_name"), Str(r, "name") ?? "", Str(r, "description"), null, "github",
-                    KindOfKeywords(r["topics"] as JsonArray), r["stargazers_count"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : 0))
-                .Where(r => r.Spec.Length > "github:".Length)
-                .ToList();
-        }
-        catch (Exception e) when (e is HttpRequestException or OperationCanceledException or JsonException)
-        {
-            return [];
-        }
-    }
-
-    // What the package's keywords (or a repository's topics) say it is.
-    private static string KindOfKeywords(JsonArray? keywords)
-    {
-        var words = keywords?.Select(k => k?.ToString() ?? "").ToHashSet() ?? [];
-        return words.Contains("magpie-middleware") ? "middleware"
-            : words.Contains("magpie-agent") ? "agent"
-            : words.Contains("pi-package") ? "pi"
-            : "provider";
     }
 
     private static string? Str(JsonNode? o, string key) =>

@@ -124,9 +124,11 @@ public static class AstraApp
         builder.Services.AddSingleton(sp => new HostAssets(paths));
         builder.Services.AddSingleton<PluginJobs>();
         builder.Services.AddSingleton(sp => new Astra.Plugins.Market.PluginMarket(paths,
-            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName)));
+            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName),
+            configuredUrl: () => sp.GetRequiredService<SettingsService>().Current.PluginMarketUrl));
         builder.Services.AddSingleton(sp => new PluginInstaller(
             sp.GetRequiredService<PluginCatalog>(), sp.GetRequiredService<BunRuntime>(), sp.GetRequiredService<NpmTarballFetcher>(),
+            sp.GetRequiredService<Astra.Plugins.Market.PluginMarket>(),
             () => sp.GetRequiredService<ClientEnvironment>().ToolSearchPath()));
         builder.Services.AddSingleton(sp =>
         {

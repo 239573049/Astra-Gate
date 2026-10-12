@@ -51,7 +51,7 @@ public sealed record PluginPreferInput(string? Spec, string? Provider);
 /// </summary>
 public sealed class PluginService(
     PluginCatalog catalog, PluginInstaller installer, PluginJobs jobs, BunRuntime bun, MiddlewareEngine middleware,
-    IAgentPluginCatalog agents, ClientService clients, Astra.Plugins.Host.PluginHost host)
+    IAgentPluginCatalog agents, ClientService clients, Astra.Plugins.Host.PluginHost host, Astra.Plugins.Market.PluginMarket market)
 {
     /// <summary>The named HttpClient for npm and Bun downloads.</summary>
     public const string HttpClientName = "plugins";
@@ -71,12 +71,66 @@ public sealed class PluginService(
         return new PluginsDto(rows, snapshot.Preferences.ToDictionary(), bun.Status, catalog.Off);
     }
 
+    /// <summary>
+    /// Starts installing <c>spec</c>. A plain package name (optionally <c>@version</c>) asked for by the market — or by no
+    /// one in particular, as the CLI does — is looked up in the plugin market first: one the market hosts is installed
+    /// from the market; one it lists with a git spec from that; anything else (or a market that can't be reached) from
+    /// npm. The tarball's address and hash always come from the market's registry, never from the caller.
+    /// </summary>
     public PluginJob Add(PluginAddInput body)
     {
         var spec = body.Spec?.Trim();
         if (string.IsNullOrEmpty(spec)) throw new AdminApiException(400, "spec is required");
         RequireOn();
-        return jobs.Start("add", spec, async (log, ct) => (await installer.AddAsync(spec, body.Source, log, ct)).Spec);
+        return jobs.Start("add", spec, async (log, ct) =>
+        {
+            if (body.Source is null or PluginSources.Market && IsPlainPackage(spec, out var name, out var version))
+            {
+                var listing = await FindListingAsync(name, ct);
+                if (listing is not null)
+                {
+                    if (!Astra.Plugins.Market.PluginMarket.MeetsMinVersion(listing.MinAstraVersion, Astra.Server.Hosting.ServerOptions.Version))
+                        throw new InvalidOperationException($"{name} needs Astra {listing.MinAstraVersion} or newer; this is {Astra.Server.Hosting.ServerOptions.Version}");
+                    if (listing.Tarballs.Count > 0)
+                    {
+                        var tarball = version is null ? listing.Tarballs[0] : listing.Tarballs.FirstOrDefault(t => t.Version == version)
+                            ?? throw new InvalidOperationException($"the plugin market hosts no version {version} of {name}");
+                        return (await installer.AddHostedAsync(name, tarball, version is not null, log, ct)).Spec;
+                    }
+                    if (listing.Spec is { } gitSpec && version is null)
+                        return (await installer.AddAsync(gitSpec, body.Source ?? PluginSources.Market, log, ct)).Spec;
+                }
+            }
+            return (await installer.AddAsync(spec, body.Source, log, ct)).Spec;
+        });
+    }
+
+    // "name", "name@1.2.3" or "name@latest" — not a path, a git repository or anything else bun resolves by itself.
+    private static bool IsPlainPackage(string spec, out string name, out string? version)
+    {
+        name = spec;
+        version = null;
+        if (PluginSpec.IsPath(spec) || PluginSpec.IsGit(spec)) return false;
+        var at = spec.LastIndexOf('@');
+        if (at > 0)
+        {
+            name = spec[..at];
+            version = spec[(at + 1)..] is { Length: > 0 } v && v != "latest" ? v : null;
+        }
+        return PluginSpec.IsPackageName(name);
+    }
+
+    // The market's listing of a package; a market that can't answer is no listing (npm is asked instead).
+    private async Task<Astra.Plugins.Market.MarketListing?> FindListingAsync(string name, CancellationToken ct)
+    {
+        try
+        {
+            return await market.FindAsync(name, ct);
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or JsonException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     public PluginJob Update(string? spec)

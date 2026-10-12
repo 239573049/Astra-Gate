@@ -18,7 +18,7 @@ vi.mock('../src/lib/http.js', async (importOriginal) => {
   };
 });
 
-import { runPluginAdd, runPluginOptions, runPluginSwitch, runPluginUse } from '../src/commands/plugin';
+import { runPluginAdd, runPluginMarket, runPluginOptions, runPluginSwitch, runPluginUse } from '../src/commands/plugin';
 import { AstraError } from '../src/errors';
 
 const SPEC = '@magpie-community/middleware-word-guard@latest';
@@ -68,5 +68,22 @@ describe('plugin commands', () => {
 
   it('names an unknown plugin', async () => {
     await expect(runPluginUse('missing', 'zcode')).rejects.toThrow('No plugin "missing"');
+  });
+
+  it('lists the market with where each plugin comes from, and searches through the market', async () => {
+    responses.set('GET /api/plugins/market', [
+      { package: '@astra/middleware-hosted', name: 'Hosted', kind: 'middleware', latest: '1.0.0', summary: { en: 'Hosted here' }, origin: 'astra', tarballs: [{ version: '1.0.0' }] },
+      { package: '@astra/plugin-npm', name: 'Npm', kind: 'provider', summary: {}, origin: 'astra', tarballs: [] },
+      { package: '@magpie-community/middleware-model-map', name: 'Model Map', kind: 'middleware', summary: {}, origin: 'upstream', tarballs: [] },
+    ]);
+    await runPluginMarket();
+    const out = log.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+    expect(out).toMatch(/@astra\/middleware-hosted\s+middleware\s+1\.0\.0\s+astra \(hosted\)/);
+    expect(out).toMatch(/@astra\/plugin-npm\s+provider\s+astra\s/);
+    expect(out).toMatch(/@magpie-community\/middleware-model-map\s+middleware\s+community\s/);
+
+    responses.set('GET /api/plugins/search?q=zed%20auth', [{ spec: '@astra/plugin-zed', kind: 'provider', source: 'astra' }]);
+    await runPluginMarket('zed auth');
+    expect(calls.at(-1)?.path).toBe('/api/plugins/search?q=zed%20auth');
   });
 });
