@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatContext, formatNanos, formatPercent, formatTps, formatUnitPrice, formatUsd, formatUsdAxis, priceSummary } from '../lib/format';
+import { formatContext, formatDuration, formatNanos, formatPercent, formatTps, formatUnitPrice, formatUsd, formatUsdAxis, priceSummary } from '../lib/format';
 
 describe('formatUsd', () => {
   it('uses 2 decimals from $1 and 3 significant digits below', () => {
@@ -49,5 +49,15 @@ describe('other formatters', () => {
     expect(formatUnitPrice(3)).toBe('$3');
     expect(priceSummary({ base: { input: 3, output: 15 } })).toBe('$3 / $15');
     expect(priceSummary(null)).toBe('—');
+  });
+});
+
+describe('formatDuration', () => {
+  it('picks minutes, then hours, then days', () => {
+    expect(formatDuration(30_000, 'en')).toBe('1 minute');
+    expect(formatDuration(12 * 60_000, 'en')).toBe('12 minutes');
+    expect(formatDuration(3 * 3_600_000, 'en')).toBe('3 hours');
+    expect(formatDuration(3 * 86_400_000, 'en')).toBe('3 days');
+    expect(formatDuration(12 * 60_000, 'zh')).toBe('12分钟');
   });
 });

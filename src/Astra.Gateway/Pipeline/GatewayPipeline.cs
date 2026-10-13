@@ -70,6 +70,8 @@ public sealed class GatewayPipeline(
             StartedAtUtc = DateTimeOffset.UtcNow,
             InboundProtocol = inbound.ToId(),
             UserAgent = Truncate(ctx.Request.Headers.UserAgent.ToString(), 300),
+            Remote = Http.RequestOrigin.IsRemote(ctx),
+            ClientIp = ClientIp(ctx),
         };
         ctx.Response.Headers["x-astra-request-id"] = record.Id;
         // Live request log: the request shows up the moment it arrives, then follows its progress.
@@ -1258,6 +1260,17 @@ public sealed class GatewayPipeline(
 
     private static string? StripModels(string? model) =>
         string.IsNullOrEmpty(model) ? null : model.StartsWith("models/", StringComparison.Ordinal) ? model[7..] : model;
+
+    /// <summary>
+    /// The caller's address for the request log, when it isn't this machine: tunnel visitors arrive with Cloudflare's
+    /// address already adopted by the security middleware; one it could not tell (no Cf-Connecting-IP) is left out.
+    /// </summary>
+    private static string? ClientIp(HttpContext ctx)
+    {
+        if (ctx.Connection.RemoteIpAddress is not { } raw) return null;
+        var ip = raw.IsIPv4MappedToIPv6 ? raw.MapToIPv4() : raw;
+        return System.Net.IPAddress.IsLoopback(ip) || ip.Equals(System.Net.IPAddress.None) ? null : ip.ToString();
+    }
 
     private static string Truncate(string? text, int max) =>
         string.IsNullOrEmpty(text) ? "" : text.Length <= max ? text : text[..max];

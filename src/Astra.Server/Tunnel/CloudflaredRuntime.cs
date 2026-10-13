@@ -1,22 +1,32 @@
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Astra.Core;
 
 namespace Astra.Server.Tunnel;
 
 /// <summary>
-/// The cloudflared remote access runs on: <c>ASTRA_CLOUDFLARED</c> when set, else the pinned release Astra downloads
-/// into <see cref="AstraPaths.ToolsDir"/> the first time the tunnel starts, checked against the release's SHA-256
-/// digests (the same pattern as the plugins' Bun runtime).
+/// The cloudflared remote access runs on: <c>ASTRA_CLOUDFLARED</c> when set, else the installed one the tunnel settings
+/// name (<see cref="TunnelSettings.CloudflaredPath"/>), else the pinned release Astra downloads into
+/// <see cref="AstraPaths.ToolsDir"/> the first time the tunnel starts. Downloads come from GitHub, the Astra site's
+/// mirror (docs/app/api/tools/cloudflared) or a custom base, per <see cref="TunnelSettings.DownloadSource"/>; a source
+/// that fails or stalls hands over to the next, and whatever arrives is checked against the release's SHA-256 digests.
 /// </summary>
-public sealed class CloudflaredRuntime
+public sealed partial class CloudflaredRuntime
 {
     public const string HttpClientName = "astra-tools";
 
     /// <summary>The cloudflared Astra downloads. Update <see cref="Sums"/> with it (the release assets' sha256 digests).</summary>
     public const string Version = "2026.10.0";
+
+    public const string GitHubBase = "https://github.com/cloudflare/cloudflared/releases/download";
+
+    /// <summary>The Astra site's mirror (same layout as GitHub's: <c>{base}/{version}/{asset}</c>).</summary>
+    public const string AstraMirrorBase = "https://astra-gate.si/api/tools/cloudflared";
 
     private static readonly Dictionary<string, string> Sums = new()
     {
@@ -32,45 +42,79 @@ public sealed class CloudflaredRuntime
     private readonly AstraPaths _paths;
     private readonly Func<HttpClient> _http;
     private readonly Func<string, string?> _getEnv;
+    private readonly Func<TunnelSettings> _settings;
+    private readonly Func<string?> _findInstalled;
+    private readonly string _githubBase;
+    private readonly string _mirrorBase;
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ConcurrentDictionary<(string Path, DateTime Written), string?> _versions = new();
     private volatile string? _error;
+    private volatile string? _source;
     private volatile bool _downloading;
     private long _received;
     private long _total;
 
     /// <param name="http">The client downloads go through (Astra's proxy-aware one).</param>
-    /// <param name="releaseBase">Where cloudflared's releases are; tests point it at a local server.</param>
+    /// <param name="settings">The tunnel settings (download source, installed cloudflared); defaults when null.</param>
+    /// <param name="findInstalled">Finds a cloudflared on the user's PATH (detection only; never used unasked).</param>
+    /// <param name="githubBase">Where cloudflared's releases are; tests point it (and the mirror) at a local server.</param>
     public CloudflaredRuntime(AstraPaths paths, Func<HttpClient> http, Func<string, string?>? getEnv = null,
-        string releaseBase = "https://github.com/cloudflare/cloudflared/releases/download")
+        Func<TunnelSettings>? settings = null, Func<string?>? findInstalled = null,
+        string githubBase = GitHubBase, string mirrorBase = AstraMirrorBase)
     {
         _paths = paths;
         _http = http;
         _getEnv = getEnv ?? Environment.GetEnvironmentVariable;
-        ReleaseBase = releaseBase.TrimEnd('/');
+        _settings = settings ?? (() => new TunnelSettings());
+        _findInstalled = findInstalled ?? (() => null);
+        _githubBase = githubBase.TrimEnd('/');
+        _mirrorBase = mirrorBase.TrimEnd('/');
     }
 
-    public string ReleaseBase { get; }
+    /// <summary>A source gets this long to start sending, and to keep sending, before the next one is tried.</summary>
+    public TimeSpan StallTimeout { get; init; } = TimeSpan.FromSeconds(20);
 
     /// <summary>The cloudflared the user named (<c>ASTRA_CLOUDFLARED</c>), used as it is and never downloaded over.</summary>
     public string? Override => _getEnv("ASTRA_CLOUDFLARED") is { Length: > 0 } c ? c : null;
+
+    /// <summary>The installed cloudflared the tunnel settings name, when it is still there.</summary>
+    public string? Configured => _settings().CloudflaredPath is { Length: > 0 } p && File.Exists(p) ? p : null;
 
     /// <summary>Where the downloaded cloudflared lives.</summary>
     public string DownloadedPath =>
         Path.Combine(_paths.ToolsDir, "cloudflared-" + Version, OperatingSystem.IsWindows() ? "cloudflared.exe" : "cloudflared");
 
     /// <summary>The cloudflared at hand without a download, or null.</summary>
-    public string? Current => Override ?? (File.Exists(DownloadedPath) ? DownloadedPath : null);
+    public string? Current => Override ?? Configured ?? (File.Exists(DownloadedPath) ? DownloadedPath : null);
 
-    /// <summary>What the remote access page shows: where cloudflared is, the download's progress, why it failed.</summary>
+    /// <summary>What the remote access page shows: which cloudflared, the download's progress and source, why it failed.</summary>
     public CloudflaredStatus Status
     {
         get
         {
+            var current = Current;
+            var own = current is not null && current != DownloadedPath;
             var total = Interlocked.Read(ref _total);
             double? progress = _downloading && total > 0 ? Math.Min(1, (double)Interlocked.Read(ref _received) / total) : null;
-            return new CloudflaredStatus(Current, Override is null ? Version : null, _downloading, progress, _error, Asset(out _));
+            return new CloudflaredStatus(current, own ? ProbeVersion(current!) : Version, _downloading, progress, _error, Asset(out _),
+                _downloading ? _source : null, own, Override is not null);
         }
     }
+
+    /// <summary>The download sources for the current settings, in the order they are tried: (label, base URL).</summary>
+    public IReadOnlyList<(string Label, string Base)> Sources()
+    {
+        var s = _settings();
+        return s.DownloadSource switch
+        {
+            TunnelSettings.SourceGitHub => [(Host(_githubBase), _githubBase)],
+            TunnelSettings.SourceAstra => [(Host(_mirrorBase), _mirrorBase)],
+            TunnelSettings.SourceCustom when s.DownloadBaseUrl is { Length: > 0 } custom => [(Host(custom), custom.TrimEnd('/'))],
+            _ => [(Host(_githubBase), _githubBase), (Host(_mirrorBase), _mirrorBase)],
+        };
+    }
+
+    private static string Host(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? u.Host : url;
 
     /// <summary>The cloudflared to run, downloading it first when there is none yet.</summary>
     public async Task<string> EnsureAsync(CancellationToken ct = default)
@@ -82,10 +126,24 @@ public sealed class CloudflaredRuntime
             if (Current is { } again) return again;
             _downloading = true;
             _error = null;
-            Interlocked.Exchange(ref _received, 0);
-            Interlocked.Exchange(ref _total, 0);
-            await DownloadAsync(ct);
-            return DownloadedPath;
+            var asset = Asset(out var why) ?? throw new PlatformNotSupportedException(why);
+            var failures = new List<string>();
+            foreach (var (label, source) in Sources())
+            {
+                _source = label;
+                Interlocked.Exchange(ref _received, 0);
+                Interlocked.Exchange(ref _total, 0);
+                try
+                {
+                    await DownloadAsync(source, asset, ct);
+                    return DownloadedPath;
+                }
+                catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    failures.Add($"{label}: {e.Message}");
+                }
+            }
+            throw new InvalidOperationException(string.Join("; ", failures));
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -95,13 +153,61 @@ public sealed class CloudflaredRuntime
         finally
         {
             _downloading = false;
+            _source = null;
             _lock.Release();
         }
     }
 
+    /// <summary>A cloudflared on the user's PATH and its version, or null; nothing is changed.</summary>
+    public (string Path, string? Version)? Detect() => _findInstalled() is { } found ? (found, ProbeVersion(found)) : null;
+
+    /// <summary>
+    /// The version an installed cloudflared reports (<c>cloudflared --version</c>), or null when it doesn't run as one —
+    /// remembered per file and modification time, so the status poll doesn't start a process every time.
+    /// </summary>
+    public string? ProbeVersion(string path)
+    {
+        DateTime written;
+        try
+        {
+            written = File.GetLastWriteTimeUtc(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+        return _versions.GetOrAdd((path, written), key => RunVersion(key.Path));
+    }
+
+    private static string? RunVersion(string path)
+    {
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo(path, "--version")
+            {
+                UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+            });
+            if (process is null) return null;
+            var output = process.StandardOutput.ReadToEndAsync();
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(entireProcessTree: true);
+                return null;
+            }
+            return VersionLine().Match(output.GetAwaiter().GetResult()) is { Success: true } m ? m.Groups[1].Value : null;
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        {
+            return null;
+        }
+    }
+
+    [GeneratedRegex(@"cloudflared version (\S+)", RegexOptions.CultureInvariant)]
+    private static partial Regex VersionLine();
+
     /// <summary>
     /// The release asset for this machine; null with the reason when there is none. Windows on Arm runs the x64 build
-    /// (cloudflared publishes no native one).
+    /// (cloudflared publishes no native one). The Astra site's mirror accepts exactly these names.
     /// </summary>
     public static string? Asset(out string? why)
     {
@@ -130,30 +236,38 @@ public sealed class CloudflaredRuntime
         }
     }
 
-    private async Task DownloadAsync(CancellationToken ct)
+    private async Task DownloadAsync(string source, string asset, CancellationToken ct)
     {
-        var asset = Asset(out var why) ?? throw new PlatformNotSupportedException(why);
         var want = Sums[asset];
-        var url = $"{ReleaseBase}/{Version}/{asset}";
-        using var res = await GetFollowingAsync(url, ct);
-        if (!res.IsSuccessStatusCode) throw new HttpRequestException($"{url}: {(int)res.StatusCode} {res.ReasonPhrase}");
-        if (res.Content.Headers.ContentLength is { } length)
-        {
-            if (length > MaxDownload) throw new InvalidDataException($"{url}: too large");
-            Interlocked.Exchange(ref _total, length);
-        }
-
+        var url = $"{source}/{Version}/{asset}";
+        // A source that goes quiet (a blocked or crawling connection) gives way to the next instead of hanging the tunnel.
+        using var stall = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        stall.CancelAfter(StallTimeout);
         using var data = new MemoryStream();
-        await using (var body = await res.Content.ReadAsStreamAsync(ct))
+        try
         {
-            var buffer = new byte[81920];
-            int n;
-            while ((n = await body.ReadAsync(buffer, ct)) > 0)
+            using var res = await GetFollowingAsync(url, stall.Token);
+            if (!res.IsSuccessStatusCode) throw new HttpRequestException($"{(int)res.StatusCode} {res.ReasonPhrase}");
+            if (res.Content.Headers.ContentLength is { } length)
             {
-                if (data.Length + n > MaxDownload) throw new InvalidDataException($"{url}: too large");
+                if (length > MaxDownload) throw new InvalidDataException("too large");
+                Interlocked.Exchange(ref _total, length);
+            }
+            await using var body = await res.Content.ReadAsStreamAsync(stall.Token);
+            var buffer = new byte[81920];
+            while (true)
+            {
+                stall.CancelAfter(StallTimeout);
+                var n = await body.ReadAsync(buffer, stall.Token);
+                if (n == 0) break;
+                if (data.Length + n > MaxDownload) throw new InvalidDataException("too large");
                 data.Write(buffer, 0, n);
                 Interlocked.Add(ref _received, n);
             }
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"no data for {StallTimeout.TotalSeconds:0} s");
         }
         if (!Convert.ToHexStringLower(SHA256.HashData(data.GetBuffer().AsSpan(0, (int)data.Length))).Equals(want, StringComparison.Ordinal))
             throw new InvalidDataException("the download's checksum doesn't match the release's");
@@ -190,9 +304,13 @@ public sealed class CloudflaredRuntime
 
 /// <summary>cloudflared as the remote access page shows it.</summary>
 /// <param name="Path">The cloudflared in use, null when none is at hand yet.</param>
-/// <param name="Version">The pinned version Astra downloads; null when ASTRA_CLOUDFLARED names one.</param>
+/// <param name="Version">Its version: the pinned one for the downloaded copy, what an installed one reports (null if it doesn't).</param>
 /// <param name="Downloading">Whether it is being downloaded now.</param>
 /// <param name="Progress">0–1 while downloading with a known size.</param>
-/// <param name="Error">Why the last download failed.</param>
+/// <param name="Error">Why the last download failed (every source tried, "host: reason; …").</param>
 /// <param name="Asset">This machine's release asset; null when cloudflared has none.</param>
-public sealed record CloudflaredStatus(string? Path, string? Version, bool Downloading, double? Progress, string? Error, string? Asset);
+/// <param name="Source">The host being downloaded from right now.</param>
+/// <param name="Installed">Whether <see cref="Path"/> is the user's own cloudflared rather than the downloaded copy.</param>
+/// <param name="FromEnvironment">Whether ASTRA_CLOUDFLARED chose it (the setting then has no effect).</param>
+public sealed record CloudflaredStatus(string? Path, string? Version, bool Downloading, double? Progress, string? Error, string? Asset,
+    string? Source, bool Installed, bool FromEnvironment);

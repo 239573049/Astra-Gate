@@ -194,6 +194,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(SystemEndpoints.SetPasswordRequest))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelStatusDto))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelConfigRequest))]
+[JsonSerializable(typeof(TunnelEndpoints.DetectedCloudflaredDto))]
 // server-owned documents
 [JsonSerializable(typeof(ServerOptions))]
 [JsonSerializable(typeof(RuntimeInfo))]

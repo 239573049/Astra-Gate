@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
+import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, Globe, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { keys, useProviders, useRequest, useRequestRate, useRequests, type RequestQuery } from '../api/hooks';
+import { keys, useProviders, useRequest, useRequestRate, useRequests, useTunnel, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
 import type { ClientKind, RateStats, RequestDetail, RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
@@ -13,7 +13,7 @@ import { Tooltip } from '../components/arc/tooltip/tooltip';
 import { PricingSourceBadge } from '../components/Billing';
 import { CLIENT_META, ClientGlyph, ModelGlyph, ProtocolGlyph, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
-import { EMPTY_REQUEST_FILTERS, RequestFilters, type RequestFilterId, type RequestFilterValues } from '../components/RequestFilters';
+import { EMPTY_REQUEST_FILTERS, originQuery, RequestFilters, type RequestFilterId, type RequestFilterValues } from '../components/RequestFilters';
 import { CacheUsageCell, TokenTotalsCell, TokenTypeLabel, TokenUsageSummary } from '../components/TokenUsage';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, KV, Spinner } from '../components/ui/controls';
 import { errorText, Sheet } from '../components/ui/overlays';
@@ -77,6 +77,7 @@ export function RequestsPage() {
     token: debouncedFilters.token.join(','),
     provider: debouncedFilters.provider.join(','),
     status: debouncedFilters.status.join(','),
+    origin: originQuery(debouncedFilters.origin),
   };
   // Header rate readout: the trailing window under the same filters as the list (paging excluded), every 5 s.
   const qc = useQueryClient();
@@ -90,6 +91,7 @@ export function RequestsPage() {
       token: new Set(debouncedFilters.token),
       provider: new Set(debouncedFilters.provider),
       status: new Set(debouncedFilters.status),
+      origin: new Set(debouncedFilters.origin.length === 1 ? debouncedFilters.origin : []),
     }),
     [debouncedFilters],
   );
@@ -111,6 +113,9 @@ export function RequestsPage() {
   }, [page, data, liveRows, debouncedModel, liveFilters]);
   // Stable between data changes, so typing, filter clicks and rate polls leave the memoized table alone.
   const items = useMemo(() => [...liveOnly, ...(data?.items ?? [])], [liveOnly, data]);
+  // Remote access in use (now, or in the rows at hand): offer the origin filter.
+  const tunnel = useTunnel();
+  const showOrigin = tunnel.data?.enabled === true || items.some((r) => r.remote);
 
   useCommandListener((cmd) => {
     if (cmd === 'find') searchRef.current?.focus();
@@ -160,6 +165,7 @@ export function RequestsPage() {
           filters={filters}
           onFilterChange={setFilter}
           onClear={clearFilters}
+          showOrigin={showOrigin}
         />
       </div>
 
@@ -250,13 +256,18 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
       width: 72,
       render: (_, row) => (
         <LiveCell r={row.r}>
-          {(r) => r.clientKind ? (
-            <Tooltip content={clientName(r)}>
-              <span className="inline-flex" role="img" aria-label={clientName(r)}>
-                <ClientGlyph kind={r.clientKind as ClientKind} size={20} />
-              </span>
-            </Tooltip>
-          ) : clientName(r)}
+          {(r) => (
+            <span className="inline-flex items-center gap-1">
+              {r.clientKind ? (
+                <Tooltip content={clientName(r)}>
+                  <span className="inline-flex" role="img" aria-label={clientName(r)}>
+                    <ClientGlyph kind={r.clientKind as ClientKind} size={20} />
+                  </span>
+                </Tooltip>
+              ) : clientName(r)}
+              {r.remote && <RemoteMark r={r} />}
+            </span>
+          )}
         </LiveCell>
       ),
     },
@@ -373,12 +384,26 @@ function requestClientName(r: Pick<RequestSummary, 'clientKind' | 'tokenId'>, t:
   return r.tokenId ? t('requests.direct') : '—';
 }
 
+/** Marks a request that came through remote access; the tooltip names the visitor's address. */
+function RemoteMark({ r }: { r: RequestSummary }) {
+  const { t } = useI18n();
+  const label = r.clientIp ? t('requests.origin.remoteFrom', { ip: r.clientIp }) : t('requests.origin.remote');
+  return (
+    <Tooltip content={label}>
+      <span className="inline-flex text-[var(--accent)]" role="img" aria-label={label}>
+        <Globe className="size-3.5" />
+      </span>
+    </Tooltip>
+  );
+}
+
 /** Client-side mirror of the server's list filters (RequestRepository), for live rows not stored yet. */
 function matchesFilters(r: RequestSummary, model: string, filters: Record<RequestFilterId, Set<string>>): boolean {
   if (filters.client.size && !filters.client.has(r.clientKind ?? '')) return false;
   if (filters.token.size && !filters.token.has(r.tokenId ?? '')) return false;
   if (filters.provider.size && !filters.provider.has(r.providerId ?? '')) return false;
   if (filters.status.size && !filters.status.has(r.status)) return false;
+  if (filters.origin.size && !filters.origin.has(r.remote ? 'remote' : 'local')) return false;
   if (model) {
     const needle = model.toLowerCase();
     const names = [r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel];
@@ -615,6 +640,11 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
               <KV label={t('requests.col.time')}>{formatDateTime(r.startedAtUtc, locale)}</KV>
               <KV label={t('requests.col.client')}>{requestClientName(r, t)}</KV>
               <KV label={t('requests.col.token')}>{r.tokenName ?? '—'}</KV>
+              <KV label={t('requests.col.origin')}>
+                {r.remote
+                  ? r.clientIp ? t('requests.origin.remoteFrom', { ip: r.clientIp }) : t('requests.origin.remote')
+                  : r.clientIp ?? t('requests.origin.local')}
+              </KV>
               <KV label={t('requests.col.provider')}>{r.providerName ?? '—'}</KV>
               {r.accountId && <KV label={t('requests.detail.account')}>{r.accountName ?? r.accountId}</KV>}
               <KV label={t('requests.detail.protocol')}>

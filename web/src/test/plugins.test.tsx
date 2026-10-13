@@ -11,8 +11,8 @@ import { PluginsPage } from '../pages/PluginsPage';
 const spies = vi.hoisted(() => ({ patch: vi.fn(), add: vi.fn(), reorder: vi.fn() }));
 
 const wordGuard: Plugin = {
-  spec: '@magpie-community/middleware-word-guard@latest',
-  name: '@magpie-community/middleware-word-guard',
+  spec: '@astragate-community/middleware-word-guard@latest',
+  name: '@astragate-community/middleware-word-guard',
   shortName: 'word-guard',
   version: '0.1.1',
   enabled: true,
@@ -24,7 +24,7 @@ const wordGuard: Plugin = {
 };
 const aider: Plugin = {
   spec: '/Users/me/agent-aider',
-  name: '@magpie-community/agent-aider',
+  name: '@astragate-community/agent-aider',
   shortName: 'agent-aider',
   enabled: false,
   kinds: ['agent'],
@@ -33,8 +33,8 @@ const aider: Plugin = {
 };
 const list: PluginList = { plugins: [wordGuard, aider], preferences: {}, runtime: { downloading: false, version: '1.4.2', target: 'bun-darwin-aarch64' } };
 const market: MarketListing[] = [
-  { package: '@magpie-community/middleware-word-guard', name: 'Word Guard', kind: 'middleware', providers: [], summary: { en: 'Sensitive-word filter' }, latest: '0.1.1', origin: 'upstream', tags: [], tarballs: [] },
-  { package: '@magpie-community/opencode-zcode-auth', name: 'ZCode', kind: 'provider', providers: ['zcode'], summary: { en: 'GLM Coding Plan' }, latest: '0.1.15', origin: 'upstream', tags: [], tarballs: [] },
+  { package: '@astragate-community/middleware-word-guard', name: 'Word Guard', kind: 'middleware', providers: [], summary: { en: 'Sensitive-word filter' }, latest: '0.1.1', origin: 'upstream', tags: [], tarballs: [] },
+  { package: '@astragate-community/opencode-zcode-auth', name: 'ZCode', kind: 'provider', providers: ['zcode'], summary: { en: 'GLM Coding Plan' }, latest: '0.1.15', origin: 'upstream', tags: [], tarballs: [] },
   {
     package: '@astra/middleware-hosted', name: 'Hosted', kind: 'middleware', providers: [], summary: { en: 'Hosted by the site' }, latest: '1.0.0', origin: 'astra', minAstraVersion: '0.8.0', tags: [],
     tarballs: [{ version: '1.0.0', url: 'https://market.test/p.tgz', sha256: 'a'.repeat(64), size: 10 }],

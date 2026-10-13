@@ -2,6 +2,58 @@
   "version": 2,
   "plugins": [
     {
+      "package": "@astragate-community/aider",
+      "name": "Aider",
+      "icon": "https://aider.chat/assets/icons/apple-touch-icon.png",
+      "kind": "agent",
+      "summary": {
+        "en": "Aider (aider.chat) on the Clients page: pick one of the gateway's models for it, and switch it off to put its config back.",
+        "zh": "把 Aider（aider.chat）加到客户端页：给它选网关的模型，关掉即恢复它原来的配置。"
+      },
+      "community": true,
+      "latest": "0.1.1",
+      "description": "Aider (aider.chat) as an agent for Astra: pick one of the gateway's models for it on the Clients page",
+      "license": "MIT",
+      "repository": "https://github.com/astragate-community/astra-gate-plugins",
+      "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/aider",
+      "tarballs": [
+        {
+          "version": "0.1.1",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/aider-v0.1.1/aider-0.1.1.tgz",
+          "sha256": "9fb71288bc51977f7487be9014b416a04559872fecaa00fcfbd8168fd6927aa6",
+          "sha512": "fPNRJ3N2rU/IVxWMZHrpm6Vl7p7J/FKzpjS7X2DaRlFHP3BXDyHAlKdbsMB6/+yxHv19ELt0ac9s4iXzKTuCLQ==",
+          "size": 1811
+        }
+      ]
+    },
+    {
+      "package": "@astragate-community/cline-auth",
+      "name": "Cline",
+      "icon": "https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/cline.svg",
+      "providers": [
+        "cline"
+      ],
+      "summary": {
+        "en": "Cline's models on your own Cline account — usage billing, ClinePass and Cline's free models — with Cline's device sign-in or an API key.",
+        "zh": "用自己的 Cline 账号使用 Cline 的模型——用量计费、ClinePass 与免费模型——支持 Cline 设备登录或 API key。"
+      },
+      "community": true,
+      "latest": "0.1.7",
+      "description": "Cline (cline.bot) on your own account — usage billing, ClinePass and the free models — in OpenCode, magpie and Astra",
+      "license": "MIT",
+      "repository": "https://github.com/astragate-community/astra-gate-plugins",
+      "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/cline",
+      "tarballs": [
+        {
+          "version": "0.1.7",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/cline-v0.1.7/cline-0.1.7.tgz",
+          "sha256": "9cd4918e0f960f2b44b2e33c57cfb024e95b3504f91333b35332f1f1b6e23944",
+          "sha512": "voaVOclYqAINjAs9GoQ5la0udAffflpu9d5pYnXDvLVAm2dRTf36BANDf84Yx9xsnCRUR6hDbz1S+RwoSg8CnA==",
+          "size": 13951
+        }
+      ]
+    },
+    {
       "package": "@astragate-community/commandcode-auth",
       "name": "Command Code",
       "icon": "https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/commandcode.svg",
@@ -14,18 +66,18 @@
         "zh": "Command Code 各档套餐：Pro、GOAT、Max、Ultra、Go 和 Teams。"
       },
       "community": true,
-      "latest": "0.1.13",
+      "latest": "0.1.15",
       "description": "Command Code plans (Pro, GOAT, Max, Ultra, Go, Teams) in Astra, OpenCode and magpie",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/commandcode",
       "tarballs": [
         {
-          "version": "0.1.13",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/commandcode-v0.1.13/commandcode-0.1.13.tgz",
-          "sha256": "9f154b46959a63aa1724a22ec71ca14596bb0875d611bd8bc6436e1b48fc8613",
-          "sha512": "yIN1DcpzaTXmsKu+6Cl/FfT/nJJAomlG0HgmJ1P9Zrn7lFYb22kpjnylnwP+g/QOBKYYXKjbTuU5yvDeJlAL1A==",
-          "size": 20605
+          "version": "0.1.15",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/commandcode-v0.1.15/commandcode-0.1.15.tgz",
+          "sha256": "adc23a743dd375534d98e98657fda4f2c23f9656b808882805621bc901797fec",
+          "sha512": "eFS/JTiOPASrIiDntkty1QRw/NJvy3RMr4ySdCHTlELvZuZueHW/oL/owSJe8+aEYLzMQxO/F4eU0PAa4AfQ0w==",
+          "size": 17507
         }
       ]
     },
@@ -42,18 +94,18 @@
         "zh": "Cursor Pro、Pro+、Ultra 与 Teams：套餐里的所有模型，支持工具调用。"
       },
       "community": true,
-      "latest": "0.2.12",
+      "latest": "0.2.14",
       "description": "Cursor subscriptions (Pro, Pro+, Ultra, Teams) in Astra, OpenCode and magpie, through the API cursor-agent talks to",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/cursor",
       "tarballs": [
         {
-          "version": "0.2.12",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/cursor-v0.2.12/cursor-0.2.12.tgz",
-          "sha256": "a4b6011b66310dcf7eebd3c5969564b79162059168236d482c914fc06f02db4e",
-          "sha512": "vzzsNj829oRD0WrELdD/rzPpjG34XPyVpSCIHJ6+SRmS8ajoRiBNt8MP8CT3LNDzB1UBuFOML805SRPwlF3FqQ==",
-          "size": 30705
+          "version": "0.2.14",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/cursor-v0.2.14/cursor-0.2.14.tgz",
+          "sha256": "b0d80adc14280109b75dd031611d1ce7bb0ef49eedd629693da79509bc3c3c7b",
+          "sha512": "t2cR0vaNUsFinK2cxhf+1k8A/+2y+cduTPNjhQdJbg0MhPXMVWp92Qnjscb9MjAFc+9DKRMGuiJGG1BBvoJuxA==",
+          "size": 27675
         }
       ]
     },
@@ -70,18 +122,18 @@
         "zh": "用 Devin 账号使用 Devin 的模型：浏览器登录，或沿用 devin CLI 的登录。"
       },
       "community": true,
-      "latest": "0.1.15",
+      "latest": "0.1.17",
       "description": "Devin subscriptions (the devin CLI's account) provider plugin for Astra and magpie",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/devin",
       "tarballs": [
         {
-          "version": "0.1.15",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/devin-v0.1.15/devin-0.1.15.tgz",
-          "sha256": "eb0e5bc59c65cc2424c03e34306936f0715df20e35e8c7e74f4565b4b70dc39a",
-          "sha512": "dU6GiONfBoQNdzflJOMaA4Sr3fWWrwJcuQ/OI2rwLgbUbOwojhTluflkcalOb/hUtxzhxAVqusmFyq79zth7ng==",
-          "size": 25581
+          "version": "0.1.17",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/devin-v0.1.17/devin-0.1.17.tgz",
+          "sha256": "32edbd4ad5181a28a10b3c7859480d6ed0502e738d73470872a3c02f36c76785",
+          "sha512": "pTXkVe/+8JRrretf42zv3z/cqV5HJ5cO9I/OeZRUm1jqo7cYS/psoraZSZXjDBNgbe4OTZQ+zBqM+4JzGL1kiA==",
+          "size": 22449
         }
       ]
     },
@@ -98,18 +150,18 @@
         "zh": "Factory Droid 订阅：Anthropic、OpenAI、xAI 及开源模型共 30 个。"
       },
       "community": true,
-      "latest": "0.1.26",
+      "latest": "0.1.28",
       "description": "Sign in to a Factory (Droid) subscription from Astra, OpenCode or magpie",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/factory",
       "tarballs": [
         {
-          "version": "0.1.26",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/factory-v0.1.26/factory-0.1.26.tgz",
-          "sha256": "bd3b43344ec04be37a149be46c765c405f8c5ba500741d4caefb9fa70001ec6d",
-          "sha512": "VLukpZUVSp/SSND4W4cYkkXSKO7JGJxqIMpRX6hiOAqaDgkqoAGRKvK5dy4FDqKGtxO0os5eQFvKuAS0EyNSMw==",
-          "size": 25896
+          "version": "0.1.28",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/factory-v0.1.28/factory-0.1.28.tgz",
+          "sha256": "d38198f0a43ebb95f96aed3fe3a4321305b228547226d57a4f65cf4e71cf3441",
+          "sha512": "wqX0qVkYkXwgcG2xyY0TcxR9ZPvMuFwwaAwThGca5AY6e6d+Sa5YTPzMjIZNLCfCIXEyl7TugZ7x36qtvwNhhQ==",
+          "size": 22849
         }
       ]
     },
@@ -126,18 +178,18 @@
         "zh": "通过 Grok Build CLI 的登录使用 SuperGrok 和 X Premium+。"
       },
       "community": true,
-      "latest": "0.1.15",
+      "latest": "0.1.17",
       "description": "OpenCode provider plugin: Grok (SuperGrok / X Premium+) through the Grok Build CLI's sign-in",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/grok",
       "tarballs": [
         {
-          "version": "0.1.15",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/grok-v0.1.15/grok-0.1.15.tgz",
-          "sha256": "8ac5a7e0d0306c1f06b8659111c80a3a766a37b26d865e1b525cafc262942028",
-          "sha512": "NjFM3CetPf6SMBbLcm269j5bBE9wO7OpRqF5qJ9tvjxomEV2BXL0k3adhOuwSXkXU/OtlAonlntDtQDBq4PZQg==",
-          "size": 15980
+          "version": "0.1.17",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/grok-v0.1.17/grok-0.1.17.tgz",
+          "sha256": "5fbec0110d031421474de6c4fe92d98bf588cafecea9f205a266146668345032",
+          "sha512": "H2xj5e9nhZEqD6F3y3YTwhTIV2oieukwLKW5d9AOIN/FPo/J+pBat6L1G20mGejexamq9rhMCVvJzlLSjQ19hw==",
+          "size": 12874
         }
       ]
     },
@@ -154,18 +206,18 @@
         "zh": "Kiro Free、Pro、Pro+ 与 Power：Kiro 登录、沿用 kiro-cli 的登录，或 API key。"
       },
       "community": true,
-      "latest": "0.1.10",
+      "latest": "0.1.12",
       "description": "Kiro subscriptions (Free, Pro, Pro+, Power) in OpenCode, magpie and Astra",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/kiro",
       "tarballs": [
         {
-          "version": "0.1.10",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/kiro-v0.1.10/kiro-0.1.10.tgz",
-          "sha256": "172440544c0d72ad89f31e1d151e8f017622d3263d6c7933b430b1c3e31a58c6",
-          "sha512": "ucqjhzrs+oG+yXDKMS/zmkFS5IpuV8VXD0I8mlMXvNQkfODzju8zD+3X9geSXic7qq6TI76zq7wSlZFuzqPNqg==",
-          "size": 24581
+          "version": "0.1.12",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/kiro-v0.1.12/kiro-0.1.12.tgz",
+          "sha256": "e130800de2b455025692d9d87027acc3ad75e74e4fe4b222cc3c516c2e8dde19",
+          "sha512": "CCN3GUGgSOAlCNd01XN5IVTVCFl758tUELsyJbYDDxm/1kli/EGktc8cVMITyLnkUpNgrp39d58HHqaL8MUeKQ==",
+          "size": 21491
         }
       ]
     },
@@ -178,18 +230,18 @@
         "zh": "New API 的模型重定向：按名称或正则把模型换成另一个发出，回复里仍是原来的名字。"
       },
       "community": true,
-      "latest": "0.1.2",
+      "latest": "0.1.4",
       "description": "New API's model_mapping (模型重定向) as magpie gateway middleware: send the model an agent asks for as another, and keep the asked name in replies",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/middleware-model-map",
       "tarballs": [
         {
-          "version": "0.1.2",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-model-map-v0.1.2/middleware-model-map-0.1.2.tgz",
-          "sha256": "e1b4d8b7dd9d28c188fb6b333a217323970acbae15f356dd1b2d9b8bdc39dd0b",
-          "sha512": "AKHzpuF5iAYcvLGuyPdjbFSk3nK2/pn2Np6vt3wUXhFAZfXMk03D8w9R1QjTdMnXH0L4RoAN0X55K847ZV7YeQ==",
-          "size": 6545
+          "version": "0.1.4",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-model-map-v0.1.4/middleware-model-map-0.1.4.tgz",
+          "sha256": "c279e4d799392c6a8b5043f1eedb5110ce9971edb7dff5d0b7be29da01089ba2",
+          "sha512": "FBSAllHH9gFk2k2DeriGpX3agS8E77tZmvhemiHI9cPIas0oASs8rOAEJjJbPV9D5aeyl+Wot6jMles3ObQhBA==",
+          "size": 3372
         }
       ]
     },
@@ -202,18 +254,18 @@
         "zh": "New API 的参数覆盖：按模型或条件设置、删除、移动或改写每个请求的字段。"
       },
       "community": true,
-      "latest": "0.1.1",
+      "latest": "0.1.3",
       "description": "New API's param_override (参数覆盖) as magpie gateway middleware: set, delete, move and rewrite any field of what agents send, with conditions",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/middleware-param-override",
       "tarballs": [
         {
-          "version": "0.1.1",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-param-override-v0.1.1/middleware-param-override-0.1.1.tgz",
-          "sha256": "5c1bc989c8525e50ba710ce2c226beb1be1111e09abab69582d39c9b6b91e465",
-          "sha512": "bKwLbwCUzT3ilGbROIiz8R4rKjpoiL2C5Pyr3l9Sl1p/mz+NhMKVsiPd23LVQPBQPBURGrW8e/EWYES5Qq3NIg==",
-          "size": 9470
+          "version": "0.1.3",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-param-override-v0.1.3/middleware-param-override-0.1.3.tgz",
+          "sha256": "003299f2badc0c72796badcbed6365eacd1d784f6695cbace8d04450e12cfdaf",
+          "sha512": "LuMl6Z2X46k6qWN5cFZ5C77R06j0c3eGsY61Xoeeekq7zUXyDi3NpsjPJhGh/u4yLuaKwHkdmYFY8apwm5BR/Q==",
+          "size": 6314
         }
       ]
     },
@@ -226,18 +278,18 @@
         "zh": "给每个请求（或指定 agent、模型）加上自己的系统提示词，放在各 API 自己的位置。"
       },
       "community": true,
-      "latest": "0.1.1",
+      "latest": "0.1.3",
       "description": "New API's system_prompt (系统提示词) as magpie gateway middleware: give agents' requests a system prompt of yours, in each API's own place for it",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/middleware-system-prompt",
       "tarballs": [
         {
-          "version": "0.1.1",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-system-prompt-v0.1.1/middleware-system-prompt-0.1.1.tgz",
-          "sha256": "89d0a48bbb927e868682301cce2a5b42aeb8c43fa67f44043215624e5b682a2f",
-          "sha512": "FLrsi91uvInDtZbvJyhM4plPVqF2gQFawoK9Rdj8o1idXaiSA++5WyQM6TDUFYHI+hzavzNIEf44hVgkax7KdQ==",
-          "size": 6565
+          "version": "0.1.3",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-system-prompt-v0.1.3/middleware-system-prompt-0.1.3.tgz",
+          "sha256": "10b85295f36fc280cafa901f65dcb7bd53367f950cb07d4561041f7c377105bc",
+          "sha512": "gLIbi2ClqZsVkg6Zw1PVdvUx2buvc4tg5HbmjB0rSUqI78vY9Hkb22b7S1jNRkH9XTJunIcjLqMCUz3l7zjjJA==",
+          "size": 3410
         }
       ]
     },
@@ -250,18 +302,18 @@
         "zh": "去掉回复正文开头的 <think>…</think>，或把 Chat 回复的思考内容放进正文。"
       },
       "community": true,
-      "latest": "0.1.1",
+      "latest": "0.1.3",
       "description": "Take a model's <think>…</think> out of its reply's text, or put a Chat reply's reasoning_content into it (New API's thinking_to_content), as magpie gateway middleware",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/middleware-think-tags",
       "tarballs": [
         {
-          "version": "0.1.1",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-think-tags-v0.1.1/middleware-think-tags-0.1.1.tgz",
-          "sha256": "627e9cfc9b6b9403a5f902fa161851378b45152c650fea600aa074885a593638",
-          "sha512": "G4/9KmWrhxMPPi7cen0aj4/QfdQkCeRDXTVUDtWEJd2I4ZLQ32hgdrNN2JqRXJpllHAhup7W2Az+OS+qjgEzGA==",
-          "size": 7218
+          "version": "0.1.3",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-think-tags-v0.1.3/middleware-think-tags-0.1.3.tgz",
+          "sha256": "e8019a2242142b9f03c44b8cb30bfaa3b4b5864ee8b7157928ec97fe3d3d2c56",
+          "sha512": "JuogXZSGsiXb6hNKFSjMdYFglyAgwC/P5frYWT8bK2dMM1J0kAHlftbGhmgP9Jwvx8OVfPw0/TfsMLxXoGgV0g==",
+          "size": 4061
         }
       ]
     },
@@ -274,18 +326,18 @@
         "zh": "New API 的敏感词过滤：拒绝或替换你发出的内容和回复里的词与正则。"
       },
       "community": true,
-      "latest": "0.1.2",
+      "latest": "0.1.4",
       "description": "New API's sensitive-word filter (敏感词过滤) as magpie gateway middleware: turn away or mask words and patterns in what agents send, and in replies",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/middleware-word-guard",
       "tarballs": [
         {
-          "version": "0.1.2",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-word-guard-v0.1.2/middleware-word-guard-0.1.2.tgz",
-          "sha256": "4a34a6bb0fb73625728fb06845e5e5a946c9674274046e0250a6478b7ba83727",
-          "sha512": "tHBF8azCq2CQ/gye41Z7FVaX3jVgGbRjoFAS3VoI4Hcjyf074DxObBYjL+cjIngLv7QokcUdACtYGmIdRENyIA==",
-          "size": 7443
+          "version": "0.1.4",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/middleware-word-guard-v0.1.4/middleware-word-guard-0.1.4.tgz",
+          "sha256": "92437066df87c37f9bd50d517ac43e3bb82fb89269a79c0ae61efa4218d82e23",
+          "sha512": "NcjeZV2N2fOL31o/JmL88bsc5Vuxq48pOj07VJzNyI8Xh5eHByxCd/DRHHGF0uLaIp247prC+rZuYVaQCf099g==",
+          "size": 4271
         }
       ]
     },
@@ -302,18 +354,46 @@
         "zh": "用小米账号使用小米 MiMo 模型。"
       },
       "community": true,
-      "latest": "0.1.10",
+      "latest": "0.1.12",
       "description": "OpenCode provider plugin for Xiaomi MiMo: the MiMo app's Xiaomi-account sign-in, MiMo Pro and MiMo Flash",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/mimo",
       "tarballs": [
         {
-          "version": "0.1.10",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/mimo-v0.1.10/mimo-0.1.10.tgz",
-          "sha256": "8ce8a97f40e100b1dc0dc4ccf5dc441fba4fd6a2e0ca8fdb3f1b9d2c688ea1ff",
-          "sha512": "o2wiXQaT82nkvpKK5H2T/9MNNSQx3mtUgarrACZaH/u98AEE6XUZ+3R59edFIQuOYr86YxUAxDdt4xg5Sh9b3w==",
-          "size": 14519
+          "version": "0.1.12",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/mimo-v0.1.12/mimo-0.1.12.tgz",
+          "sha256": "e44e4eebd96117ca6d525aba4fc82af5299efddf8aed225c517fc33731d7d070",
+          "sha512": "2QekWkj2JbasK2pyjj2y6dXzRkGilLuUIZcMNjFD87ZZyo1TC7/UE5Qx34vNTrZmYNMhSn6EKHXFQf1fAn7eag==",
+          "size": 11394
+        }
+      ]
+    },
+    {
+      "package": "@astragate-community/minimax-auth",
+      "name": "MiniMax Code",
+      "icon": "https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/minimax-color.svg",
+      "providers": [
+        "minimax-code",
+        "minimax-code-global"
+      ],
+      "summary": {
+        "en": "MiniMax Code account credits and M Plan, with MiniMax Code's own device sign-in.",
+        "zh": "用 MiniMax Code 账号的积分与 M Plan，使用 MiniMax Code 自己的设备登录。"
+      },
+      "community": true,
+      "latest": "0.1.1",
+      "description": "Provider plugins for MiniMax Code accounts: their credits and M Plan, China (minimax-code) and international (minimax-code-global), with MiniMax Code's own device sign-in",
+      "license": "MIT",
+      "repository": "https://github.com/astragate-community/astra-gate-plugins",
+      "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/minimax",
+      "tarballs": [
+        {
+          "version": "0.1.1",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/minimax-v0.1.1/minimax-0.1.1.tgz",
+          "sha256": "e22a5b0074a9aee2e253211d4a2f5428028af8a55fa497c7cfde188775387c34",
+          "sha512": "4QWJKgplz52/PaotTromo+ppx8f+UBHj1ZVEc4Nws4sfPE/XVbNJyBuU1+irbgBepQqe+pnrf5UoBxhL264cHQ==",
+          "size": 12059
         }
       ]
     },
@@ -330,18 +410,46 @@
         "zh": "用 Qoder 自己的设备登录使用 Qoder 订阅。"
       },
       "community": true,
-      "latest": "0.2.15",
+      "latest": "0.2.17",
       "description": "Qoder subscriptions in Astra, OpenCode and magpie: Qoder (qoder.com) and Qoder CN (qoder.cn)",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/qoder",
       "tarballs": [
         {
-          "version": "0.2.15",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/qoder-v0.2.15/qoder-0.2.15.tgz",
-          "sha256": "c59da21e0582f1f61930e02e986c2785b985185c049ade070e5a3c69b4fb08b5",
-          "sha512": "S9xNdjdvCyGKlLSftmQkUzSLsBM7s4lBcgJPR+c0TIohmZHnWKKjItJnheuo70Fae/fcGHM3laD+fMo6Oq3YaA==",
-          "size": 27340
+          "version": "0.2.17",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/qoder-v0.2.17/qoder-0.2.17.tgz",
+          "sha256": "b3f6958c07a4da9288159da3e3d643cd24e44c55536eab392f857bfabb47f35e",
+          "sha512": "nky37YfueRndNHNWsMAjZqdcV1XY5ej2rjNwTBiTKQfHAtFy8mcKd0AKEEwIo/bPZDyei50B+0+BODSEFhiyOw==",
+          "size": 23753
+        }
+      ]
+    },
+    {
+      "package": "@astragate-community/trae-auth",
+      "name": "Trae",
+      "icon": "https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/trae.svg",
+      "providers": [
+        "trae-cn",
+        "trae-global"
+      ],
+      "summary": {
+        "en": "Trae CN (trae.cn) and Trae international (trae.ai) models with your own account, free tier included — Trae's own browser sign-in. Experimental.",
+        "zh": "用 Trae CN（trae.cn）与 Trae 国际版（trae.ai）账号使用各自的模型，含免费版，使用 Trae 自己的浏览器登录。实验性。"
+      },
+      "community": true,
+      "latest": "0.2.11",
+      "description": "Trae CN (trae.cn) and Trae Global (trae.ai) accounts, free tier included, with Trae's own browser sign-in, in OpenCode, magpie and Astra",
+      "license": "MIT",
+      "repository": "https://github.com/astragate-community/astra-gate-plugins",
+      "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/trae",
+      "tarballs": [
+        {
+          "version": "0.2.11",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/trae-v0.2.11/trae-0.2.11.tgz",
+          "sha256": "f7603c09dcf4dad433875521fe234b6513fd9c62b38a5114b9e99d05cc695c19",
+          "sha512": "qDoi2wHIbrKrN0DuKUXQyvMQnd1GC4aG9MscFo5Qykx90bjR55LwZDCGh+ZjOR8YH7XEBobOCDiSwUZTZNSL0g==",
+          "size": 33180
         }
       ]
     },
@@ -359,18 +467,18 @@
         "zh": "WorkBuddy 国内版（CodeBuddy 套餐）与国际版，支持每日签到。"
       },
       "community": true,
-      "latest": "0.2.1",
+      "latest": "0.2.3",
       "description": "WorkBuddy (China, copilot.tencent.com) and WorkBuddy AI (international, www.workbuddy.ai) provider plugins for Astra and magpie, with the daily check-in (签到)",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/workbuddy",
       "tarballs": [
         {
-          "version": "0.2.1",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/workbuddy-v0.2.1/workbuddy-0.2.1.tgz",
-          "sha256": "376e8bd20a60a3b74612c3fd477a3e47eed2de6537124e0d4df347df3ae427a2",
-          "sha512": "YbuAzmwdpH/3JWkowlQAvImDZq9CfJo9g5BXf7CMmnzU6VKU4UcJKx555UKiV3Zfj8F53dZvv+d/WF8FEtKpEg==",
-          "size": 21061
+          "version": "0.2.3",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/workbuddy-v0.2.3/workbuddy-0.2.3.tgz",
+          "sha256": "7dee038fc4b6e12111ab524565f5188759f9b67abdb1a4ff559812d2aed28f26",
+          "sha512": "X3lZmfoV3COrKFcGtNsVCewUVZfjW714iCJrzQ0cBhkLfR5Ez6GM4WlciowgPl4CrbThubv3zA7Q9EpiPvki7g==",
+          "size": 17966
         }
       ]
     },
@@ -387,18 +495,18 @@
         "zh": "Z.ai 与智谱 GLM Coding Plan，支持团队席位。"
       },
       "community": true,
-      "latest": "0.1.18",
+      "latest": "0.1.20",
       "description": "OpenCode provider plugin: signs in to Z.ai's or BigModel's (智谱) GLM Coding Plan as ZCode does, including team seats and ZCode's Start Plan",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/zcode",
       "tarballs": [
         {
-          "version": "0.1.18",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/zcode-v0.1.18/zcode-0.1.18.tgz",
-          "sha256": "6d925942949177bc02382327b0fe1344b203e05ee0b2bfcca9ade3cd05d5cd47",
-          "sha512": "WKGfGO1t8NvWwbZLIOgAc9K9Td+RME4HP4lPoDUfw370wOqAS/pgbIYs3d08F+NOCh4WKarR99PtWHvHdEwX1A==",
-          "size": 27602
+          "version": "0.1.20",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/zcode-v0.1.20/zcode-0.1.20.tgz",
+          "sha256": "37b7f51ac0e2f9f9669957b19ac565e38786f47c66d4a6225c388a22c824ee03",
+          "sha512": "hj5/9N4VnuvWUqNzwGuqwWtoBvYe7O7ldF4ingp+hnhZirMRncENMsMHP+w1TW/uk+uVProQA+jQI8zwIty1Jg==",
+          "size": 24550
         }
       ]
     },
@@ -415,18 +523,18 @@
         "zh": "用 Zed 订阅使用 Zed 托管的 Claude、GPT、Gemini 和 Grok。"
       },
       "community": true,
-      "latest": "0.1.7",
+      "latest": "0.1.9",
       "description": "Sign in to a Zed subscription (Zed Pro, trial, student, business) from Astra, OpenCode or magpie",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/zed",
       "tarballs": [
         {
-          "version": "0.1.7",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/zed-v0.1.7/zed-0.1.7.tgz",
-          "sha256": "7e48091d5e712e1dff517d87028d97620459fa66842ecf2a7028007ff7f68a71",
-          "sha512": "IawfpcRrXAVrBRR1l7+stYr6weCkh4c2FhNxzUyHGxD7vNVDT+5FKnRbnmmuXgo3QaTJ8aIWeqDIPvJO7KaXlA==",
-          "size": 15745
+          "version": "0.1.9",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/zed-v0.1.9/zed-0.1.9.tgz",
+          "sha256": "c3981af32025b5fe51cd5379c30c2599e57be66636bb21fa43731e2847816e62",
+          "sha512": "6Z6rB9s6gCY//ZTUjfZpcXM62DxMtZSfOHYChSyDASw6o5l2zvOrJyQDOb9gTEopDQsU1KRm8MMVeRb063BOIA==",
+          "size": 12620
         }
       ]
     },
@@ -442,18 +550,18 @@
         "zh": "使用 public 凭证接入 OpenCode Zen 免费模型，自动发现模型并支持原生流式协议。"
       },
       "community": true,
-      "latest": "0.1.2",
+      "latest": "0.1.4",
       "description": "OpenCode Zen free models through the public credential, with native streaming protocols",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/zen-free",
       "tarballs": [
         {
-          "version": "0.1.2",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/zen-free-v0.1.2/zen-free-0.1.2.tgz",
-          "sha256": "5e3935ccff6c6a2b1ff6a016c2b0a4fd0053265145d51d9d9e5c31ed4add6e7e",
-          "sha512": "RVpdjjcCzeLEtTduPsVvJHyubGmoT50VBqWhPE4TdMejNOImHNJUs1Ne+dCm72rWlSiu5bPTeh+LU4eGXqeIZg==",
-          "size": 17184
+          "version": "0.1.4",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/zen-free-v0.1.4/zen-free-0.1.4.tgz",
+          "sha256": "cc3ce4ba859e56c194b4883808d4e956ec87de8c82c80ae8d3ed7d843beee08c",
+          "sha512": "/LcP+KJAmtXPtFbHoQps2q0IV+MdOftKhySucDWrh26iLmDZtF4EOYlfYHbPSP165yDNGWt57Jy2kb0iP7hlYQ==",
+          "size": 14055
         }
       ]
     }

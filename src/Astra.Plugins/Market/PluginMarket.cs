@@ -123,8 +123,8 @@ public sealed class PluginMarket(
             ?.Icon;
     }
 
-    // The package spec installs is the listing's, or the same plugin under its former name (magpie-community's
-    // zed-auth and the community repository's): their short names are the same.
+    // The package spec installs is the listing's, or the same plugin under its former name (an
+    // opencode-…-auth package and the community repository's …-auth one): their short names are the same.
     private static bool SameListing(string spec, string package)
     {
         var at = spec.LastIndexOf('@');

@@ -10,7 +10,7 @@ public sealed class PluginMarketTests
         new(plugins.Paths, http.Client, name => name == "ASTRA_PLUGIN_MARKET" ? env : null, configured);
 
     private static string Registry(string extra = "") =>
-        $$"""{"version":2,"plugins":[{"package":"@astra/plugin-a","name":"A","kind":"middleware","origin":"astra","latest":"1.2.0","description":"d","license":"MIT","author":"me","homepage":"https://a.example","repository":"https://github.com/a/a","tags":["x","y"],"minAstraVersion":"0.7.0","summary":{"en":"En","zh":"中"} {{extra}} },{"package":"Not A Package","name":"bad"},{"package":"@magpie-community/opencode-zed-auth","community":true,"providers":["zed"],"replaces":"zed"}]}""";
+        $$"""{"version":2,"plugins":[{"package":"@astra/plugin-a","name":"A","kind":"middleware","origin":"astra","latest":"1.2.0","description":"d","license":"MIT","author":"me","homepage":"https://a.example","repository":"https://github.com/a/a","tags":["x","y"],"minAstraVersion":"0.7.0","summary":{"en":"En","zh":"中"} {{extra}} },{"package":"Not A Package","name":"bad"},{"package":"@astragate-community/opencode-zed-auth","community":true,"providers":["zed"],"replaces":"zed"}]}""";
 
     [Fact]
     public void BuiltInIcon_names_the_listings_icon_for_each_provider_it_serves()
@@ -22,9 +22,9 @@ public sealed class PluginMarketTests
         // a provider the listing doesn't name is matched by the package its plugin was installed as
         Assert.Equal(qoder, PluginMarket.BuiltInIcon("qoder-cn", "@astragate-community/qoder-auth@latest"));
         // and by the name the same plugin had before the community repository took it over
-        Assert.Equal(qoder, PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-auth@latest"));
+        Assert.Equal(qoder, PluginMarket.BuiltInIcon("qoder-cn", "@astragate-community/opencode-qoder-auth@latest"));
         Assert.Null(PluginMarket.BuiltInIcon("qoder-cn", "@astragate-community/qoder-authx"));
-        Assert.Null(PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-authx"));
+        Assert.Null(PluginMarket.BuiltInIcon("qoder-cn", "@astragate-community/opencode-qoder-authx"));
         Assert.Null(PluginMarket.BuiltInIcon("no-such-provider"));
     }
 
@@ -36,7 +36,7 @@ public sealed class PluginMarketTests
         var list = await Market(plugins, http).ListAsync();
 
         Assert.Equal([DocsRegistry], http.Requests);
-        Assert.Equal(["@astra/plugin-a", "@magpie-community/opencode-zed-auth"], list.Select(l => l.Package));
+        Assert.Equal(["@astra/plugin-a", "@astragate-community/opencode-zed-auth"], list.Select(l => l.Package));
         var a = list[0];
         Assert.Equal("astra", a.Origin);
         Assert.Equal("1.2.0", a.Latest);
@@ -121,7 +121,7 @@ public sealed class PluginMarketTests
         Assert.Equal("1.2.0", newest.Tarball.Version);
         Assert.Equal("1.0.0", (await market.FindHostedAsync("@astra/plugin-a", "1.0.0"))!.Value.Tarball.Version);
         Assert.Null(await market.FindHostedAsync("@astra/plugin-a", "9.9.9"));
-        Assert.Null(await market.FindHostedAsync("@magpie-community/opencode-zed-auth"));
+        Assert.Null(await market.FindHostedAsync("@astragate-community/opencode-zed-auth"));
         Assert.Null(await market.FindHostedAsync("nope"));
     }
 

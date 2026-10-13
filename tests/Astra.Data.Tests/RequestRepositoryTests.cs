@@ -122,6 +122,28 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Remote_Origin_And_Client_Ip_Round_Trip_And_Filter()
+    {
+        var db = await TestDb.InitializeAsync();
+        var remote = Success("r-remote", T1, "codex", "p1", "P1", "gpt-5", 1, 1, 1, 100);
+        remote.Remote = true;
+        remote.ClientIp = "203.0.113.7";
+        await db.Requests.InsertBatchAsync([Success("r-local", T0, "codex", "p1", "P1", "gpt-5", 1, 1, 1, 100), remote]);
+
+        var stored = await db.Requests.GetAsync("r-remote");
+        Assert.True(stored!.Remote);
+        Assert.Equal("203.0.113.7", stored.ClientIp);
+        var local = await db.Requests.GetAsync("r-local");
+        Assert.False(local!.Remote);
+        Assert.Null(local.ClientIp);
+
+        Assert.Equal(["r-remote"], (await db.Requests.QueryAsync(new RequestQuery { Remote = true })).Items.Select(r => r.Id));
+        Assert.Equal(["r-local"], (await db.Requests.QueryAsync(new RequestQuery { Remote = false })).Items.Select(r => r.Id));
+        Assert.Equal(2, (await db.Requests.QueryAsync(new RequestQuery())).Total);
+        Assert.Equal(1, (await db.Requests.RateAsync(new RequestQuery { Remote = true })).Requests);
+    }
+
+    [Fact]
     public async Task Query_Paging_Newest_First_With_Total()
     {
         var db = await TestDb.InitializeAsync();

@@ -20,6 +20,10 @@ public sealed record RequestQuery
     public string? Model { get; init; }
 
     public string? Status { get; init; }
+
+    /// <summary>true = only requests that came through remote access, false = only local ones, null = all.</summary>
+    public bool? Remote { get; init; }
+
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 50;
 }
@@ -156,7 +160,7 @@ public sealed class RequestRepository
                generation_ms, output_tps, total_input_tokens, total_output_tokens, cache_read_tokens, cache_write_tokens,
                reasoning_tokens, cost_nanousd, usage_source, usage_raw_json, pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                billing_description, privacy_json, body_ref, user_agent,
-               reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id,
+               reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip,
                (SELECT a.display_name FROM provider_accounts a WHERE a.id = requests.account_id) AS account_name
         FROM requests
         """;
@@ -177,7 +181,7 @@ public sealed class RequestRepository
                              reasoning_tokens, cost_nanousd, usage_source, usage_raw_json,
                              pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                              billing_description, privacy_json, body_ref, user_agent,
-                             reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id)
+                             reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip)
         VALUES (@id, @started_at_utc, @client_kind, @token_id, @token_name, @provider_id, @provider_name, @inbound_protocol,
                 @upstream_protocol, @passthrough, @requested_model, @upstream_model, @system_model_id,
                 @response_model,
@@ -187,7 +191,7 @@ public sealed class RequestRepository
                 @reasoning_tokens, @cost_nanousd, @usage_source, @usage_raw_json,
                 @pricing_snapshot_json, @pricing_source, @price_key, @billing_trace_json,
                 @billing_description, @privacy_json, @body_ref, @user_agent,
-                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id)
+                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id, @remote, @client_ip)
         """;
 
     private const string InsertItemSql = """
@@ -247,6 +251,7 @@ public sealed class RequestRepository
            AND (@model IS NULL OR (requested_model LIKE @model ESCAPE '\' OR upstream_model LIKE @model ESCAPE '\'
                 OR system_model_id LIKE @model ESCAPE '\' OR response_model LIKE @model ESCAPE '\'))
            AND (@status IS NULL OR @status = '' OR instr(',' || @status || ',', ',' || status || ',') > 0)
+           AND (@remote IS NULL OR remote = @remote)
         """;
 
     private const string PrivacyWhereSql = """
@@ -333,6 +338,8 @@ public sealed class RequestRepository
                 reasoning_mode = record.ReasoningMode,
                 reasoning_budget_tokens = record.ReasoningBudgetTokens,
                 account_id = record.AccountId,
+                remote = record.Remote,
+                client_ip = record.ClientIp,
             }, transaction: tx);
             foreach (var item in record.UsageItems)
             {
@@ -486,6 +493,7 @@ public sealed class RequestRepository
             provider_id = query.ProviderId,
             model = LikePattern(query.Model),
             status = query.Status,
+            remote = query.Remote is { } remote ? (long?)(remote ? 1 : 0) : null,
         };
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 200);
@@ -497,7 +505,7 @@ public sealed class RequestRepository
         var items = (await conn.QueryAsync<RequestRecord>(
             $"{RequestSelect}{RequestWhereSql} ORDER BY started_at_utc DESC, id DESC LIMIT @limit OFFSET @offset", new
             {
-                p.from, p.to, p.client_kind, p.token_id, p.provider_id, p.model, p.status,
+                p.from, p.to, p.client_kind, p.token_id, p.provider_id, p.model, p.status, p.remote,
                 limit = pageSize,
                 offset = (page - 1) * pageSize,
             })).ToList();
@@ -519,6 +527,7 @@ public sealed class RequestRepository
             provider_id = query.ProviderId,
             model = LikePattern(query.Model),
             status = query.Status,
+            remote = query.Remote is { } remote ? (long?)(remote ? 1 : 0) : null,
         };
         await using var conn = await _factory.OpenAsync(ct);
         var row = await conn.QuerySingleAsync<RateRow>($"""

@@ -180,6 +180,59 @@ public sealed class RemoteAccessTests
         Assert.False(cleared!["hasToken"]!.GetValue<bool>());
     }
 
+    [Fact]
+    public async Task Remote_gateway_requests_are_logged_with_their_origin()
+    {
+        await using var host = await TestHost.StartAsync();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await SendRemote(host, HttpMethod.Post, "/v1/chat/completions",
+            new { model = "gpt-5", messages = new[] { new { role = "user", content = "hi" } } })).Status);
+        await host.Client.PostAsync("/v1/chat/completions", JsonContent.Create(new { model = "gpt-5", messages = Array.Empty<object>() }));
+        await host.App.Services.GetRequiredService<Astra.Gateway.Pipeline.UsageWriter>().FlushAsync();
+
+        var remote = (await host.GetJsonAsync("/api/requests?origin=remote"))["items"]!.AsArray();
+        var row = Assert.Single(remote)!;
+        Assert.True(row["remote"]!.GetValue<bool>());
+        Assert.Equal("203.0.113.7", row["clientIp"]!.GetValue<string>());
+
+        var local = (await host.GetJsonAsync("/api/requests?origin=local"))["items"]!.AsArray();
+        var localRow = Assert.Single(local)!;
+        Assert.False(localRow["remote"]!.GetValue<bool>());
+        Assert.Null(localRow["clientIp"]);
+        Assert.Equal(2, (await host.GetJsonAsync("/api/requests"))["total"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Download_settings_validate_and_keep_the_program_choice_local()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var (noUrl, _) = await host.SendAsync(HttpMethod.Put, "/api/tunnel", new { downloadSource = "custom" });
+        Assert.Equal(HttpStatusCode.BadRequest, noUrl);
+        Assert.Equal("auto", (await host.GetJsonAsync("/api/tunnel"))["download"]!["downloadSource"]!.GetValue<string>());
+
+        var (ok, custom) = await host.SendAsync(HttpMethod.Put, "/api/tunnel",
+            new { downloadSource = "custom", downloadBaseUrl = "https://mirror.example.com/cloudflared/" });
+        Assert.Equal(HttpStatusCode.OK, ok);
+        Assert.Equal("https://mirror.example.com/cloudflared", custom!["download"]!["downloadBaseUrl"]!.GetValue<string>());
+
+        var (missing, _) = await host.SendAsync(HttpMethod.Put, "/api/tunnel", new { cloudflaredPath = Path.Combine(host.Root, "nope") });
+        Assert.Equal(HttpStatusCode.BadRequest, missing);
+        var notCloudflared = Path.Combine(host.Root, "not-cloudflared.txt");
+        await File.WriteAllTextAsync(notCloudflared, "hello");
+        var (refused, _) = await host.SendAsync(HttpMethod.Put, "/api/tunnel", new { cloudflaredPath = notCloudflared });
+        Assert.Equal(HttpStatusCode.BadRequest, refused);
+
+        SetPassword(host, "correct-horse");
+        await host.SendAsync(HttpMethod.Put, "/api/tunnel", new { allowAdmin = true });
+        var login = await SendRemote(host, HttpMethod.Post, "/api/auth/login", new { password = "correct-horse" });
+        using var req = Remote(HttpMethod.Put, "/api/tunnel", new { cloudflaredPath = "" });
+        req.Headers.Add("Cookie", login.Response.Headers.GetValues("Set-Cookie").Single().Split(';')[0]);
+        Assert.Equal(HttpStatusCode.Forbidden, (await host.Client.SendAsync(req)).StatusCode);
+
+        var (detected, _) = await host.SendAsync(HttpMethod.Post, "/api/tunnel/cloudflared/detect");
+        Assert.Equal(HttpStatusCode.OK, detected);
+    }
+
     [Theory]
     [InlineData("2026-10-13T17:39:01Z INF |  https://electoral-friendship-courtesy-mtv.trycloudflare.com    |", "https://electoral-friendship-courtesy-mtv.trycloudflare.com")]
     [InlineData("2026-10-13T17:39:01Z INF Requesting new quick Tunnel on trycloudflare.com...", null)]

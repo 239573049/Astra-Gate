@@ -10,7 +10,7 @@ public class PluginSpecTests
     [InlineData("file:///abs/x.js", true)]
     [InlineData("~/dev/plugin", true)]
     [InlineData(@"C:\plugins\x", true)]
-    [InlineData("@magpie-community/middleware-word-guard", false)]
+    [InlineData("@astragate-community/middleware-word-guard", false)]
     [InlineData("github:someone/word-guard", false)]
     public void Paths_are_told_apart(string spec, bool isPath) => Assert.Equal(isPath, PluginSpec.IsPath(spec));
 
@@ -26,9 +26,9 @@ public class PluginSpecTests
     public void Git_specs_are_recognised(string spec, bool isGit) => Assert.Equal(isGit, PluginSpec.IsGit(spec));
 
     [Theory]
-    [InlineData("@magpie-community/middleware-word-guard@0.1.1", "@magpie-community/middleware-word-guard")]
-    [InlineData("@magpie-community/middleware-word-guard@latest", "@magpie-community/middleware-word-guard")]
-    [InlineData("@magpie-community/middleware-word-guard", "@magpie-community/middleware-word-guard")]
+    [InlineData("@astragate-community/middleware-word-guard@0.1.1", "@astragate-community/middleware-word-guard")]
+    [InlineData("@astragate-community/middleware-word-guard@latest", "@astragate-community/middleware-word-guard")]
+    [InlineData("@astragate-community/middleware-word-guard", "@astragate-community/middleware-word-guard")]
     [InlineData("opencode-gemini-auth@1.2.0", "opencode-gemini-auth")]
     public void Name_drops_the_version(string spec, string name) => Assert.Equal(name, PluginSpec.Name(spec, "/nowhere"));
 
@@ -44,8 +44,8 @@ public class PluginSpecTests
     }
 
     [Theory]
-    [InlineData("@magpie-community/middleware-model-map", "model-map")]
-    [InlineData("@magpie-community/opencode-zed-auth", "zed")]
+    [InlineData("@astragate-community/middleware-model-map", "model-map")]
+    [InlineData("@astragate-community/opencode-zed-auth", "zed")]
     [InlineData("opencode-gemini-auth", "gemini")]
     [InlineData("plain", "plain")]
     public void Short_names_drop_scope_and_kind_words(string package, string shortName) =>
@@ -63,7 +63,7 @@ public class PluginSpecTests
     [Fact]
     public void Npm_targets_are_under_node_modules()
     {
-        var target = PluginSpec.Target("@magpie-community/middleware-word-guard@latest", "/p");
-        Assert.Equal(Path.Combine("/p", "node_modules", "@magpie-community", "middleware-word-guard"), target);
+        var target = PluginSpec.Target("@astragate-community/middleware-word-guard@latest", "/p");
+        Assert.Equal(Path.Combine("/p", "node_modules", "@astragate-community", "middleware-word-guard"), target);
     }
 }

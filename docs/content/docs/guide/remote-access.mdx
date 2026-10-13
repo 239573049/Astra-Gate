@@ -11,9 +11,24 @@ Astra 默认只监听本机。打开 **设置 → 远程访问**，Astra 会运�
 
 ## 工作方式
 
-- Astra 第一次开启远程访问时，从 Cloudflare 的 GitHub Release 下载固定版本的 `cloudflared`，按发布页给出的 SHA-256 校验后放到 `~/.astra/tools/`。也可以用环境变量 `ASTRA_CLOUDFLARED` 指定已安装的 `cloudflared`。
+- Astra 第一次开启远程访问时下载固定版本的 `cloudflared`，按固定的 SHA-256 校验后放到 `~/.astra/tools/`。下载来源见下一节「cloudflared 从哪里来」。
 - `cloudflared` 作为 Astra 的子进程运行：断线后自动重连；Astra 退出时一起退出；开关保持开启时，Astra 下次启动会自动重新连接。
 - 页面底部的「运行日志」显示 `cloudflared` 最近的输出，连接失败时先看这里。
+
+## cloudflared 从哪里来
+
+在远程访问页面的「cloudflared」一组里选择：
+
+| 下载来源 | 说明 |
+| --- | --- |
+| 自动（默认） | 先从 GitHub 下载；GitHub 失败，或 20 秒内没有任何数据时，改用 Astra 官网镜像 |
+| GitHub | 只从 cloudflared 的 GitHub Releases 下载 |
+| Astra 官网镜像 | 从 `astra-gate.si` 下载，GitHub 访问慢的网络（例如中国大陆）通常更快 |
+| 自定义地址 | 从你指定的地址下载，例如 GitHub 加速代理。文件按「地址/版本号/文件名」获取，与 GitHub Releases 的目录结构相同 |
+
+无论从哪个来源下载，文件都会按 Astra 内置的 SHA-256 校验，校验不通过就不会使用，所以来源本身不需要可信。
+
+也可以不下载，直接使用这台电脑上已经安装的 `cloudflared`：点「使用已安装的」，Astra 会在 PATH 中查找，也可以手动填写路径；Astra 会运行 `cloudflared --version` 确认它能用。这个选项只能在这台电脑上设置，不能通过远程地址修改。环境变量 `ASTRA_CLOUDFLARED` 的优先级最高，设置后页面上的选项不生效。
 
 ## 连接方式
 
@@ -50,6 +65,10 @@ Cloudflare 分配一个随机的 `https://xxx.trycloudflare.com` 地址，打开
 - 打开「管理后台」之前需要先设置**管理员密码**，可以在远程访问页面直接设置，也可以用 `astra-server set-password`。密码只能在这台电脑上设置，不能通过远程地址修改。
 - 远程登录失败会按访问者 IP 限速（每 5 分钟 10 次）。登录会话的 Cookie 带有 `Secure` 和 `SameSite=Strict`。
 - 管理后台关闭时，通过远程地址打开控制台只会看到「远程管理已关闭」的提示。
+
+## 请求日志里的远程请求
+
+经 Cloudflare 转发的请求在请求日志的「客户端」一栏带一个地球图标，鼠标悬停显示访问者的 IP；详情里的「来源」也会写明。开启过远程访问后，筛选栏会多出「来源」筛选，可以只看远程或本机的请求。
 
 ## 在其他设备上使用
 

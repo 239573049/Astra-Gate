@@ -10,17 +10,23 @@ import { Button, SearchField } from './ui/controls';
 
 export const REQUEST_STATUSES = ['success', 'blocked', 'upstream_error', 'gateway_error', 'client_cancelled'] as const;
 
-export type RequestFilterId = 'client' | 'token' | 'provider' | 'status';
-/** Picked values per field; an empty list means "any". Values are query ids (client kind, token id, provider id, status). */
+export type RequestFilterId = 'client' | 'token' | 'provider' | 'status' | 'origin';
+/** Picked values per field; an empty list means "any". Values are query ids (client kind, token id, provider id, status, remote | local). */
 export type RequestFilterValues = Record<RequestFilterId, string[]>;
 
-export const EMPTY_REQUEST_FILTERS: RequestFilterValues = { client: [], token: [], provider: [], status: [] };
+export const EMPTY_REQUEST_FILTERS: RequestFilterValues = { client: [], token: [], provider: [], status: [], origin: [] };
+
+export const REQUEST_ORIGINS = ['remote', 'local'] as const;
+
+/** The server's single `origin` filter: one origin picked narrows the list, none or both mean any. */
+export const originQuery = (values: string[]) => (values.length === 1 ? values[0] : '');
 
 const FIELD_LABEL: Record<RequestFilterId, MessageKey> = {
   client: 'requests.col.client',
   token: 'requests.col.token',
   provider: 'requests.col.provider',
   status: 'requests.col.status',
+  origin: 'requests.col.origin',
 };
 
 const FIELD_PLACEHOLDER: Record<RequestFilterId, MessageKey> = {
@@ -28,9 +34,10 @@ const FIELD_PLACEHOLDER: Record<RequestFilterId, MessageKey> = {
   token: 'requests.allTokens',
   provider: 'requests.allProviders',
   status: 'requests.allStatus',
+  origin: 'requests.allOrigins',
 };
 
-const FIELDS: RequestFilterId[] = ['client', 'token', 'provider', 'status'];
+const FIELDS: RequestFilterId[] = ['client', 'token', 'provider', 'status', 'origin'];
 
 /** Request-log filter bar: the model keyword search plus one multi-select per list filter (clients carry their brand icon). */
 export function RequestFilters({
@@ -40,6 +47,7 @@ export function RequestFilters({
   filters,
   onFilterChange,
   onClear,
+  showOrigin = false,
 }: {
   model: string;
   onModelChange: (model: string) => void;
@@ -47,6 +55,8 @@ export function RequestFilters({
   filters: RequestFilterValues;
   onFilterChange: (id: RequestFilterId, values: string[]) => void;
   onClear: () => void;
+  /** The origin filter only matters once remote access has been used; it stays while a value is picked. */
+  showOrigin?: boolean;
 }) {
   const { t } = useI18n();
   const clients = useClients();
@@ -69,13 +79,18 @@ export function RequestFilters({
   );
   const tokenOptions = useMemo<MultiSelectOption[]>(() => (tokens.data ?? []).map((tk) => ({ value: tk.id, label: tk.name })), [tokens.data]);
   const statusOptions = useMemo<MultiSelectOption[]>(() => REQUEST_STATUSES.map((s) => ({ value: s, label: t(`status.${s}`) })), [t]);
-  const options: Record<RequestFilterId, MultiSelectOption[]> = { client: clientOptions, token: tokenOptions, provider: providerOptions, status: statusOptions };
+  const originOptions = useMemo<MultiSelectOption[]>(() => REQUEST_ORIGINS.map((o) => ({ value: o, label: t(`requests.origin.${o}`) })), [t]);
+  const options: Record<RequestFilterId, MultiSelectOption[]> = {
+    client: clientOptions, token: tokenOptions, provider: providerOptions, status: statusOptions, origin: originOptions,
+  };
 
   const onClient = useCallback((v: string[]) => onFilterChange('client', v), [onFilterChange]);
   const onToken = useCallback((v: string[]) => onFilterChange('token', v), [onFilterChange]);
   const onProvider = useCallback((v: string[]) => onFilterChange('provider', v), [onFilterChange]);
   const onStatus = useCallback((v: string[]) => onFilterChange('status', v), [onFilterChange]);
-  const handlers: Record<RequestFilterId, (v: string[]) => void> = { client: onClient, token: onToken, provider: onProvider, status: onStatus };
+  const onOrigin = useCallback((v: string[]) => onFilterChange('origin', v), [onFilterChange]);
+  const handlers: Record<RequestFilterId, (v: string[]) => void> = { client: onClient, token: onToken, provider: onProvider, status: onStatus, origin: onOrigin };
+  const fields = showOrigin || filters.origin.length > 0 ? FIELDS : FIELDS.filter((id) => id !== 'origin');
 
   const active = model.trim() !== '' || FIELDS.some((id) => filters[id].length > 0);
 
@@ -89,7 +104,7 @@ export function RequestFilters({
         placeholder={t('requests.searchModel')}
         clearLabel={t('common.clearSearch')}
       />
-      {FIELDS.map((id) => (
+      {fields.map((id) => (
         <MultiSelect
           key={id}
           className="w-[11.5rem] flex-[1_1_9rem]"

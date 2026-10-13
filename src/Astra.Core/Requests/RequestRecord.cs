@@ -109,6 +109,12 @@ public sealed class RequestRecord
     public string? BodyRef { get; set; }
     public string? UserAgent { get; set; }
 
+    /// <summary>Reached Astra through Cloudflare (remote access tunnel) rather than from this machine or its network.</summary>
+    public bool Remote { get; set; }
+
+    /// <summary>The caller's address when it isn't this machine (the visitor's, for tunnel requests); null for local callers.</summary>
+    public string? ClientIp { get; set; }
+
     public List<RequestUsageItem> UsageItems { get; set; } = [];
 }
 

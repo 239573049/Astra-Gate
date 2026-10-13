@@ -28,6 +28,7 @@ vi.mock('../api/hooks', () => ({
   useRequest: hookSpies.useRequest,
   useRequestRate: hookSpies.useRequestRate,
   useTokens: () => ({ data: [] }),
+  useTunnel: () => ({ data: undefined }),
 }));
 
 // The live request feed opens an event stream; the list tests only cover stored rows.
@@ -436,6 +437,36 @@ describe('RequestsPage filtering', () => {
     expect(lastQuery().provider).toBe('prov-relay');
     // The trigger shows the shared label, never the internal id.
     expect(within(group).queryByText('prov-relay')).toBeNull();
+  });
+});
+
+describe('Requests list origin', () => {
+  beforeEach(() => {
+    hookSpies.useClients.mockReset().mockReturnValue(hookResult([{ kind: 'codex', name: 'Codex' } as ClientInfo]));
+    hookSpies.useProviders.mockReset().mockReturnValue(hookResult([providerRow('prov-anthropic', 'Anthropic')]));
+    hookSpies.useRequest.mockReset().mockReturnValue(hookResult(undefined));
+    hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
+  });
+
+  it('hides the origin filter until remote access shows up', () => {
+    hookSpies.useRequests.mockReturnValue(hookResult(pageOf([summary({ id: 'r-local' })])));
+    showPage();
+    expect(screen.queryByRole('combobox', { name: 'Origin' })).toBeNull();
+    expect(screen.queryByRole('img', { name: /^Remote/ })).toBeNull();
+  });
+
+  it('marks remote rows with the visitor address and offers the origin filter', async () => {
+    hookSpies.useRequests.mockReturnValue(hookResult(pageOf([summary({ id: 'r-remote', remote: true, clientIp: '203.0.113.7' })])));
+    showPage();
+    expect(screen.getByRole('img', { name: 'Remote · 203.0.113.7' })).toBeInTheDocument();
+    const group = screen.getByRole('group', { name: 'Active filters' });
+    await pickOption(group, 'Origin', 'Remote');
+    await waitDebounce();
+    expect(lastQuery().origin).toBe('remote');
+    // Both picked means any origin.
+    await pickOption(group, 'Origin', 'Local');
+    await waitDebounce();
+    expect(lastQuery().origin).toBe('');
   });
 });
 

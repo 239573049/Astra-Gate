@@ -20,13 +20,13 @@ public class PackageManifestTests
     public void Middleware_only_package_runs_in_process()
     {
         var dir = Folder("""
-            {"name":"@magpie-community/middleware-word-guard","version":"0.1.1",
+            {"name":"@astragate-community/middleware-word-guard","version":"0.1.1",
              "magpie":{"middleware":"./word-guard.middleware.js","options":{"words":["x"],"action":"reject"}}}
             """, "word-guard.middleware.js");
 
         var m = PackageManifest.Read(dir);
 
-        Assert.Equal("@magpie-community/middleware-word-guard", m.Name);
+        Assert.Equal("@astragate-community/middleware-word-guard", m.Name);
         Assert.Equal("0.1.1", m.Version);
         Assert.Equal(Path.Combine(dir, "word-guard.middleware.js"), m.MiddlewareFile);
         Assert.True(m.InProcessOnly);

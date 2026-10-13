@@ -188,7 +188,9 @@ public static class AstraApp
         builder.Services.AddSingleton<RuntimeFile>();
         // Remote access (Cloudflare Tunnel): cloudflared, downloaded on first use, run and supervised as a child process.
         builder.Services.AddSingleton(sp => new Astra.Server.Tunnel.CloudflaredRuntime(paths,
-            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(Astra.Server.Tunnel.CloudflaredRuntime.HttpClientName)));
+            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(Astra.Server.Tunnel.CloudflaredRuntime.HttpClientName),
+            settings: () => sp.GetRequiredService<SettingsService>().Current.Tunnel,
+            findInstalled: () => sp.GetRequiredService<ClientEnvironment>().FindTool("cloudflared")));
         builder.Services.AddSingleton<Astra.Server.Tunnel.TunnelService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Astra.Server.Tunnel.TunnelService>());
         builder.Services.AddSingleton<AdminSessions>();

@@ -10,7 +10,7 @@ namespace Astra.Server.IntegrationTests;
 /// <summary>A magpie agent plugin end to end: listed as a client, wired up, used through the gateway, put back.</summary>
 public class AgentPluginApiTests
 {
-    // magpie-community's agent-aider, as published (internal/plugin/testdata in magpie)
+    // the community's agent-aider, as published (internal/plugin/testdata in magpie)
     private const string Aider = """
         export const agent = {
           id: "aider",
@@ -41,9 +41,9 @@ public class AgentPluginApiTests
         await using var gw = await GatewayFixture.StartAsync("plugin-aider", ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
         var dir = Path.Combine(gw.Host.Root, "plugin-src", "agent-aider");
         Directory.CreateDirectory(dir);
-        File.WriteAllText(Path.Combine(dir, "package.json"), """{"name":"@magpie-community/agent-aider","version":"0.1.0","magpie":{"agent":"./aider.agent.js"}}""");
+        File.WriteAllText(Path.Combine(dir, "package.json"), """{"name":"@astragate-community/agent-aider","version":"0.1.0","magpie":{"agent":"./aider.agent.js"}}""");
         File.WriteAllText(Path.Combine(dir, "aider.agent.js"), Aider);
-        await gw.Host.Db.Plugins.AddAsync(new PluginEntry { Spec = dir, Name = "@magpie-community/agent-aider" });
+        await gw.Host.Db.Plugins.AddAsync(new PluginEntry { Spec = dir, Name = "@astragate-community/agent-aider" });
         gw.Host.App.Services.GetRequiredService<PluginCatalog>().Invalidate();
         var config = Path.Combine(gw.Host.ClientHome, ".aider.conf.yml");
         Directory.CreateDirectory(gw.Host.ClientHome);

@@ -472,6 +472,10 @@ export interface RequestSummary {
   tokenId?: string | null; tokenName?: string | null;
   /** Subscription account that served the request (after any failover); name is null once the account is deleted. */
   accountId?: string | null; accountName?: string | null;
+  /** Came through remote access (Cloudflare) rather than from this machine or its network; absent in older test fixtures. */
+  remote?: boolean;
+  /** The caller's address when it isn't this machine (the visitor's, for tunnel requests). */
+  clientIp?: string | null;
 }
 export interface RequestUsageItem {
   tokenType: string; tokens: number; isPerCall: boolean; unitPrice: string; baseUnitPrice?: string | null;
@@ -774,13 +778,28 @@ export interface TunnelStatus {
   cloudflared: {
     path?: string | null; version?: string | null; downloading: boolean; progress?: number | null;
     error?: string | null; asset?: string | null;
+    /** Host being downloaded from right now. */
+    source?: string | null;
+    /** path is the user's own cloudflared (setting or ASTRA_CLOUDFLARED), not the downloaded copy. */
+    installed?: boolean;
+    /** ASTRA_CLOUDFLARED chose it; the settings have no effect. */
+    fromEnvironment?: boolean;
   };
+  download: { downloadSource: TunnelDownloadSource; downloadBaseUrl?: string | null; cloudflaredPath?: string | null };
   checks: { passwordSet: boolean; blocker?: string | null };
   /** cloudflared's recent output, oldest first. */
   log: string[];
 }
 /** Partial update; token is write-only ("" clears it). */
-export interface TunnelConfig { mode?: TunnelMode; hostname?: string | null; token?: string; allowAdmin?: boolean }
+/** auto = GitHub, then the Astra site's mirror; custom = downloadBaseUrl ({base}/{version}/{asset}). */
+export type TunnelDownloadSource = "auto" | "github" | "astra" | "custom";
+/** cloudflaredPath ("" = back to the downloaded copy) is accepted from this machine only. */
+export interface TunnelConfig {
+  mode?: TunnelMode; hostname?: string | null; token?: string; allowAdmin?: boolean;
+  downloadSource?: TunnelDownloadSource; downloadBaseUrl?: string | null; cloudflaredPath?: string;
+}
+// POST /api/tunnel/cloudflared/detect -> a cloudflared on PATH (nothing saved); both null when none
+export interface DetectedCloudflared { path?: string | null; version?: string | null }
 
 // ---------- update feed ----------
 // GET /api/update/status ; POST /api/update/check

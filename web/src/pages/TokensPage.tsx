@@ -10,6 +10,7 @@ import {
   useRevealToken,
   useSettings,
   useTokens,
+  useTunnel,
   useUpdateToken,
 } from '../api/hooks';
 import type { ClientKind, Token, TokenBudget, TokenBudgetUsage, TokenLimitMetric, TokenLimitPeriod, TokenMutationResult, TokenStats } from '../api/types';
@@ -28,6 +29,9 @@ export function TokensPage() {
   const { t } = useI18n();
   const tokens = useTokens();
   const settings = useSettings();
+  const tunnel = useTunnel();
+  // With remote access up, the addresses to hand out to other devices are the tunnel's.
+  const remote = tunnel.data?.state === 'connected' ? tunnel.data.publicUrl : null;
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Token | null>(null);
 
@@ -46,6 +50,7 @@ export function TokensPage() {
           <div className="flex flex-col gap-1 px-1 text-[12px] text-[var(--text-secondary)]">
             <p>{t('tokens.directHint', { url: `${settings.data.gatewayBaseUrl}/v1` })}</p>
             <p className="selectable">{t('tokens.selfServiceHint', { url: settings.data.gatewayBaseUrl })}</p>
+            {remote && <p className="selectable text-[var(--accent)]">{t('tokens.remoteHint', { url: `${remote}/v1`, key: `${remote}/key` })}</p>}
           </div>
         )}
         {tokens.isLoading && <Spinner lines={4} />}

@@ -8,7 +8,7 @@ type Listener = () => void;
 
 /** Fields the request list filters on; a change to any of them can move a row in or out of the filtered list. */
 const listKey = (r: RequestSummary) =>
-  [r.clientKind, r.tokenId, r.providerId, r.status, r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel].join('\u0000');
+  [r.clientKind, r.tokenId, r.providerId, r.status, r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel, r.remote].join('\u0000');
 
 /**
  * Rows of the live request log (GET /api/requests/live), outside React state so an update re-renders only what

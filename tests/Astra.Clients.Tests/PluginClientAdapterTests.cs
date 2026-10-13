@@ -35,7 +35,7 @@ public sealed class PluginClientAdapterTests : IDisposable
 
     private static AgentPluginDescriptor Aider() => new()
     {
-        Spec = "@magpie-community/agent-aider@latest", Id = "aider", Name = "Aider", Config = "~/.aider.conf.yml",
+        Spec = "@astragate-community/agent-aider@latest", Id = "aider", Name = "Aider", Config = "~/.aider.conf.yml",
         Format = "yaml", Model = "model", Prefix = "openai/", Bin = "aider",
     };
 
@@ -180,7 +180,7 @@ public sealed class PluginClientAdapterTests : IDisposable
         var adapter = new PluginClientAdapter(_home.Env, _store, Aider(), agents);
 
         var e = Assert.Throws<Astra.Clients.Editing.EditorException>(() => adapter.PlanEnable(TestGateway.Context("k", "gpt-5")));
-        Assert.Equal("@magpie-community/agent-aider@latest: connect: took too long", e.Message);
+        Assert.Equal("@astragate-community/agent-aider@latest: connect: took too long", e.Message);
     }
 
     private sealed class ThrowingAgents(AgentPluginDescriptor agent) : IAgentPluginCatalog

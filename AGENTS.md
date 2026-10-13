@@ -175,7 +175,9 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   the gateway always wants a token from them (`RequireGatewayKey` only opens it to this machine), `/api`
   wants a session, and in loopback mode they get no `/api` beyond health/version/auth status unless
   `AppSettings.Tunnel.AllowAdmin`. In loopback mode the middleware also adopts Cloudflare's client IP and
-  https scheme (per-IP rate limits, Secure cookie). `POST /api/auth/password` never answers remote callers.
+  https scheme (per-IP rate limits, Secure cookie). `POST /api/auth/password` and `PUT /api/tunnel`'s `cloudflaredPath`
+  (a program for Astra to run) never answer remote callers. The request log records the origin (`requests.remote`,
+  `requests.client_ip`, migration 0016; `?origin=remote|local` filter).
 - Gateway: `GatewayException` is rendered in the inbound protocol's error shape. Client-facing
   gateway error messages are currently written in Chinese — match the surrounding file.
 - Secrets (provider API keys, local client keys) go through `ISecretProtector` (DataProtection);
@@ -305,7 +307,9 @@ runtime needed on the target).
     web i18n `alerts.event.<id>[.hint]` (plus `alerts.param.*` / `alerts.choice.*` for new condition fields), and the event
     table in `docs/content/docs/console/notifications.mdx`. The webhook payload shape is a public contract documented there.
 12. **cloudflared version** (`CloudflaredRuntime.Version` + its SHA-256 table, from the release assets' digests —
-    `gh api repos/cloudflare/cloudflared/releases/tags/<v>`) move together; the remote access page and
+    `gh api repos/cloudflare/cloudflared/releases/tags/<v>`) move together. The asset names `CloudflaredRuntime.Asset`
+    returns are also the docs site mirror's allowlist (`CLOUDFLARED_ASSETS` in `docs/lib/tools-mirror.ts`, served at
+    `/api/tools/cloudflared/<version>/<asset>`, cached under `${DATA_DIR}/tools/`): change them together. The remote access page and
     `docs/content/docs/guide/remote-access.mdx` describe what remote requests may reach — keep them in step with
     `SecurityMiddleware`.
 

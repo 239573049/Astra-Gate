@@ -68,7 +68,7 @@ public sealed partial class TunnelService(
     public string? Validate(TunnelSettings s)
     {
         if (!Supported) return "Remote access is not managed inside a container; run cloudflared as a sidecar instead";
-        if (runtime.Override is null && CloudflaredRuntime.Asset(out var why) is null) return why;
+        if (runtime.Override is null && runtime.Configured is null && CloudflaredRuntime.Asset(out var why) is null) return why;
         if (s.Mode == TunnelSettings.ModeNamed)
         {
             if (string.IsNullOrEmpty(s.TokenProtected)) return "A named tunnel needs its tunnel token";

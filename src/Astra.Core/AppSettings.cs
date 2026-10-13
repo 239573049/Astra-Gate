@@ -112,6 +112,24 @@ public sealed class TunnelSettings
 
     /// <summary>Whether the admin UI / API answers remote requests (behind the admin password); off = gateway only.</summary>
     public bool AllowAdmin { get; set; }
+
+    public const string SourceAuto = "auto";
+    public const string SourceGitHub = "github";
+    public const string SourceAstra = "astra";
+    public const string SourceCustom = "custom";
+
+    /// <summary>
+    /// Where cloudflared is downloaded from: "auto" = GitHub, then the Astra site's mirror when GitHub fails or stalls;
+    /// "github" | "astra" = only that one; "custom" = <see cref="DownloadBaseUrl"/>. Every source is checked against the
+    /// same pinned checksums.
+    /// </summary>
+    public string DownloadSource { get; set; } = SourceAuto;
+
+    /// <summary>Custom download base: files are fetched from <c>{base}/{version}/{asset}</c> (GitHub's release layout).</summary>
+    public string? DownloadBaseUrl { get; set; }
+
+    /// <summary>An installed cloudflared to run instead of downloading one; ASTRA_CLOUDFLARED still wins.</summary>
+    public string? CloudflaredPath { get; set; }
 }
 
 /// <summary>reasoning effort → thinking budget tokens, used when translating between protocols.</summary>

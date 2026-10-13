@@ -8,13 +8,14 @@ import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider, translate } from '../i18n';
 import { TokensPage } from '../pages/TokensPage';
 
-const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[] }));
+const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[], tunnel: undefined as unknown }));
 
 vi.mock('../api/hooks', () => {
   const idle = { mutate: vi.fn(), isPending: false };
   return {
     useTokens: () => ({ data: spies.tokens, isLoading: false, isError: false }),
     useSettings: () => ({ data: { gatewayBaseUrl: 'http://astra.test:8787' } }),
+    useTunnel: () => ({ data: spies.tunnel }),
     useProviders: () => ({ data: [] }),
     useProviderAccounts: () => ({ data: [] }),
     useUpdateToken: () => ({ mutate: spies.update, isPending: false }),
@@ -79,8 +80,24 @@ const show = () => {
 beforeEach(() => {
   spies.update.mockReset();
   spies.tokens = [];
+  spies.tunnel = undefined;
 });
 afterEach(cleanup);
+
+describe('remote access', () => {
+  it('adds the tunnel addresses while it is connected, and only then', () => {
+    spies.tunnel = { state: 'starting', publicUrl: 'https://astra.example.com' };
+    show();
+    expect(screen.queryByText(/astra\.example\.com/)).toBeNull();
+    cleanup();
+
+    spies.tunnel = { state: 'connected', publicUrl: 'https://astra.example.com' };
+    show();
+    expect(
+      screen.getByText(t('tokens.remoteHint', { url: 'https://astra.example.com/v1', key: 'https://astra.example.com/key' })),
+    ).toBeInTheDocument();
+  });
+});
 
 describe('token limits', () => {
   it('shows each budget with its usage, the RPM window, allowed clients and the self-service address', () => {

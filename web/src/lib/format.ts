@@ -79,6 +79,14 @@ export function formatTime(iso: string, locale: string): string {
   }).format(d);
 }
 
+/** A span of time as one unit ("12 分钟", "3 hours"): minutes under two hours, hours under two days, else days. */
+export function formatDuration(ms: number, locale: string): string {
+  const minutes = Math.max(1, Math.floor(ms / 60_000));
+  const [value, unit] =
+    minutes < 120 ? [minutes, 'minute'] : minutes < 48 * 60 ? [Math.floor(minutes / 60), 'hour'] : [Math.floor(minutes / 1440), 'day'];
+  return new Intl.NumberFormat(locale === 'zh' ? 'zh-CN' : 'en-US', { style: 'unit', unit, unitDisplay: 'long' }).format(value);
+}
+
 export function formatDateTime(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
   return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {

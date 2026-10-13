@@ -25,7 +25,7 @@ public static class RequestEndpoints
         long TotalInputTokens, long TotalOutputTokens, long CacheReadTokens, long CacheWriteTokens, long ReasoningTokens,
         long CostNanoUsd, string UsageSource,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
-        string? TokenId, string? TokenName, string? AccountId, string? AccountName);
+        string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp);
 
     public sealed record UsageItemDto(
         string TokenType, long Tokens, bool IsPerCall, string UnitPrice, string? BaseUnitPrice, string TierApplied,
@@ -45,7 +45,7 @@ public static class RequestEndpoints
         string? PriceKey, List<BillingTraceStep> BillingTrace, string? BillingDescription, List<UsageItemDto> UsageItems,
         string? UserAgent, BodiesDto? Bodies, PrivacyReport? Privacy,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
-        string? TokenId, string? TokenName, string? AccountId, string? AccountName);
+        string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp);
 
     /// <summary>
     /// One live request-log event (SSE <c>/api/requests/live</c>): "started" / "updated" carry the row as it stands
@@ -101,6 +101,7 @@ public static class RequestEndpoints
                 ProviderId = Str(q["provider"]),
                 Model = Str(q["model"]),
                 Status = Str(q["status"]),
+                Remote = Origin(q["origin"]),
                 Page = int.TryParse(q["page"], out var page) ? Math.Max(1, page) : 1,
                 PageSize = int.TryParse(q["pageSize"], out var size) ? Math.Clamp(size, 1, 500) : 50,
             };
@@ -231,6 +232,7 @@ public static class RequestEndpoints
                 ProviderId = Str(q["provider"]),
                 Model = Str(q["model"]),
                 Status = Str(q["status"]),
+                Remote = Origin(q["origin"]),
             };
             var rate = await db.Requests.RateAsync(query, ct);
             var requests = rate.Requests;
@@ -381,7 +383,11 @@ public static class RequestEndpoints
         AnyOf(f.ClientKind, r.ClientKind)
         && AnyOf(f.TokenId, r.TokenId)
         && AnyOf(f.ProviderId, r.ProviderId)
-        && (string.IsNullOrWhiteSpace(f.Model) || ModelContains(r, f.Model.Trim()));
+        && (string.IsNullOrWhiteSpace(f.Model) || ModelContains(r, f.Model.Trim()))
+        && (f.Remote is null || r.Remote == f.Remote);
+
+    /// <summary>The <c>origin</c> filter: "remote" | "local"; anything else means both.</summary>
+    private static bool? Origin(string? value) => value switch { "remote" => true, "local" => false, _ => null };
 
     /// <summary>True when the list filter is unset, or <paramref name="value"/> is one of its comma-separated entries.</summary>
     private static bool AnyOf(string? list, string? value) =>
@@ -402,7 +408,7 @@ public static class RequestEndpoints
         r.TotalInputTokens, r.TotalOutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.ReasoningTokens,
         r.CostNanoUsd, r.UsageSource,
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-        r.TokenId, r.TokenName, r.AccountId, r.AccountName);
+        r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp);
 
     private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies, bool inFlight = false)
     {
@@ -428,7 +434,7 @@ public static class RequestEndpoints
                 i.CostNanoUsd, i.Note)).ToList(),
             r.UserAgent, captured, r.PrivacyJson is null ? null : Json.Deserialize<PrivacyReport>(r.PrivacyJson),
             r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-            r.TokenId, r.TokenName, r.AccountId, r.AccountName);
+            r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp);
     }
 
     private static JsonNode? ParseNode(string? json)

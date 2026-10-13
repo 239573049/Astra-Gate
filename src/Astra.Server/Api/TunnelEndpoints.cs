@@ -1,5 +1,6 @@
 using Astra.Core;
 using Astra.Core.Clients;
+using Astra.Gateway.Http;
 using Astra.Gateway.Pipeline;
 using Astra.Server.Hosting;
 using Astra.Server.Tunnel;
@@ -18,14 +19,23 @@ public static class TunnelEndpoints
     public sealed record TunnelStatusDto(
         bool Supported, bool Enabled, string State, string? PublicUrl, string? Error, DateTimeOffset? ConnectedAt,
         string Mode, string? Hostname, bool HasToken, bool AllowAdmin, string OriginUrl,
-        CloudflaredStatus Cloudflared, TunnelChecksDto Checks, List<string> Log);
+        CloudflaredStatus Cloudflared, TunnelDownloadDto Download, TunnelChecksDto Checks, List<string> Log);
 
     /// <param name="PasswordSet">An admin password exists (needed only when the admin UI is opened remotely).</param>
     /// <param name="Blocker">Why the tunnel cannot start with the current settings; null when it can.</param>
     public sealed record TunnelChecksDto(bool PasswordSet, string? Blocker);
 
+    /// <param name="DownloadSource">auto | github | astra | custom.</param>
+    /// <param name="DownloadBaseUrl">The custom source's base ({base}/{version}/{asset}); used with DownloadSource "custom".</param>
+    /// <param name="CloudflaredPath">An installed cloudflared to run; "" goes back to the downloaded one.</param>
+    public sealed record TunnelDownloadDto(string DownloadSource, string? DownloadBaseUrl, string? CloudflaredPath);
+
     /// <summary>Partial update; a null field is left as it is. <c>Token</c> is write-only and "" clears it.</summary>
-    public sealed record TunnelConfigRequest(string? Mode, string? Hostname, string? Token, bool? AllowAdmin);
+    public sealed record TunnelConfigRequest(string? Mode, string? Hostname, string? Token, bool? AllowAdmin,
+        string? DownloadSource = null, string? DownloadBaseUrl = null, string? CloudflaredPath = null);
+
+    /// <summary>A cloudflared found on PATH (POST /api/tunnel/cloudflared/detect); nothing is saved.</summary>
+    public sealed record DetectedCloudflaredDto(string? Path, string? Version);
 
     public static void MapTunnelEndpoints(this IEndpointRouteBuilder app)
     {
@@ -34,8 +44,8 @@ public static class TunnelEndpoints
         group.MapGet("", (TunnelService tunnel, SettingsService settings, CloudflaredRuntime runtime, ServerOptions server) =>
             Results.Ok(ToDto(tunnel, settings.Current.Tunnel, runtime, server)));
 
-        group.MapPut("", async (TunnelConfigRequest body, TunnelService tunnel, SettingsService settings, CloudflaredRuntime runtime,
-            ServerOptions server, ISecretProtector secrets, CancellationToken ct) =>
+        group.MapPut("", async (TunnelConfigRequest body, HttpContext http, TunnelService tunnel, SettingsService settings,
+            CloudflaredRuntime runtime, ServerOptions server, ISecretProtector secrets, CancellationToken ct) =>
         {
             if (body.Mode is not null && body.Mode is not (TunnelSettings.ModeQuick or TunnelSettings.ModeNamed))
                 throw new AdminApiException(400, "mode must be quick or named");
@@ -44,6 +54,29 @@ public static class TunnelEndpoints
                 hostname = NormalizeHostname(body.Hostname) ?? throw new AdminApiException(400, "hostname must be a domain name, such as astra.example.com");
             if (body.AllowAdmin == true && string.IsNullOrEmpty(server.AdminPasswordHash))
                 throw new AdminApiException(409, "Set an admin password before opening the admin UI to remote access");
+            if (body.DownloadSource is not null && body.DownloadSource is not (TunnelSettings.SourceAuto or TunnelSettings.SourceGitHub
+                    or TunnelSettings.SourceAstra or TunnelSettings.SourceCustom))
+                throw new AdminApiException(400, "downloadSource must be auto, github, astra or custom");
+            string? baseUrl = null;
+            if (body.DownloadBaseUrl is { } rawBase && rawBase.Trim().Length > 0)
+            {
+                // Any http(s) address will do: what it serves is checked against the pinned checksums.
+                if (!Uri.TryCreate(rawBase.Trim(), UriKind.Absolute, out var b) || b.Scheme is not ("http" or "https"))
+                    throw new AdminApiException(400, "downloadBaseUrl must be an http(s) address");
+                baseUrl = rawBase.Trim().TrimEnd('/');
+            }
+            string? installed = null;
+            if (body.CloudflaredPath is { } rawPath)
+            {
+                // Choosing a program for Astra to run is for this machine only, never through a tunnel.
+                if (RequestOrigin.IsRemote(http)) throw new AdminApiException(403, "The cloudflared program can only be chosen on this machine");
+                if (rawPath.Trim().Length > 0)
+                {
+                    installed = rawPath.Trim();
+                    if (!File.Exists(installed)) throw new AdminApiException(400, $"{installed} does not exist");
+                    if (runtime.ProbeVersion(installed) is null) throw new AdminApiException(400, $"{installed} does not run as cloudflared (cloudflared --version)");
+                }
+            }
 
             var before = settings.Current.Tunnel;
             var next = await settings.UpdateAsync(s =>
@@ -52,11 +85,20 @@ public static class TunnelEndpoints
                 if (body.Hostname is not null) s.Tunnel.Hostname = hostname;
                 if (body.Token is not null) s.Tunnel.TokenProtected = body.Token.Trim() is { Length: > 0 } token ? secrets.Protect(token) : null;
                 if (body.AllowAdmin is { } allow) s.Tunnel.AllowAdmin = allow;
+                if (body.DownloadSource is not null) s.Tunnel.DownloadSource = body.DownloadSource;
+                if (body.DownloadBaseUrl is not null) s.Tunnel.DownloadBaseUrl = baseUrl;
+                if (body.CloudflaredPath is not null) s.Tunnel.CloudflaredPath = installed;
             }, ct);
+            if (next.Tunnel.DownloadSource == TunnelSettings.SourceCustom && next.Tunnel.DownloadBaseUrl is null)
+            {
+                await settings.UpdateAsync(s => s.Tunnel.DownloadSource = before.DownloadSource, ct);
+                throw new AdminApiException(400, "A custom download source needs its address");
+            }
 
             // What cloudflared runs with changed: start it again (AllowAdmin is read per request and needs no restart).
             var t = next.Tunnel;
-            if (t.Mode != before.Mode || t.Hostname != before.Hostname || t.TokenProtected != before.TokenProtected)
+            if (t.Mode != before.Mode || t.Hostname != before.Hostname || t.TokenProtected != before.TokenProtected
+                || t.CloudflaredPath != before.CloudflaredPath)
             {
                 if (t.Enabled && tunnel.Validate(t) is null) tunnel.RestartIfRunning();
                 else if (t.Enabled) await tunnel.DisableAsync(ct);
@@ -77,6 +119,9 @@ public static class TunnelEndpoints
             }
             return Results.Ok(ToDto(tunnel, settings.Current.Tunnel, runtime, server));
         });
+
+        group.MapPost("/cloudflared/detect", (CloudflaredRuntime runtime) =>
+            Results.Ok(runtime.Detect() is { } found ? new DetectedCloudflaredDto(found.Path, found.Version) : new DetectedCloudflaredDto(null, null)));
 
         group.MapPost("/stop", async (TunnelService tunnel, SettingsService settings, CloudflaredRuntime runtime, ServerOptions server,
             CancellationToken ct) =>
@@ -102,6 +147,6 @@ public static class TunnelEndpoints
         return new TunnelStatusDto(
             tunnel.Supported, s.Enabled, state.State, state.Url, state.Error, state.ConnectedAt,
             s.Mode, s.Hostname, !string.IsNullOrEmpty(s.TokenProtected), s.AllowAdmin, tunnel.OriginUrl,
-            runtime.Status, new TunnelChecksDto(!string.IsNullOrEmpty(server.AdminPasswordHash), tunnel.Validate(s)), state.Log);
+            runtime.Status, new TunnelDownloadDto(s.DownloadSource, s.DownloadBaseUrl, s.CloudflaredPath), new TunnelChecksDto(!string.IsNullOrEmpty(server.AdminPasswordHash), tunnel.Validate(s)), state.Log);
     }
 }

@@ -351,9 +351,14 @@ function ServiceStatus({ rail }: { rail: boolean }) {
             exit={{ opacity: 0, scale: 0.6 }}
             className="flex h-10 items-center"
             style={{ paddingLeft: ITEM_PAD + 7 }}
-            title={status}
+            title={remoteOn ? `${status} · ${t('shell.remoteOn')}` : status}
           >
             <Dot tone={up ? 'green' : 'red'} />
+            {remoteOn && (
+              <NavLink to="/settings/remote" aria-label={t('shell.remoteOn')} className="ml-1 text-[var(--accent)]">
+                <Globe className="size-3" />
+              </NavLink>
+            )}
           </motion.div>
         ) : (
           <motion.div

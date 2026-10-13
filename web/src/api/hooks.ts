@@ -27,6 +27,7 @@ import type {
   ClaudeDirectSelect,
   ClaudeDirectState,
   ConfigPreview,
+  DetectedCloudflared,
   DisableResult,
   DailyActivity,
   EnableRequest,
@@ -198,13 +199,17 @@ export function useSetAdminPassword() {
 
 const TUNNEL_BUSY: TunnelState[] = ['downloading', 'starting', 'reconnecting'];
 
-/** Polls quickly while the tunnel is coming up, slowly otherwise. */
+/** Polls quickly while the tunnel is coming up, every 15 s while it runs, and only now and then while it is off. */
 export const useTunnel = (enabled = true) =>
   useQuery({
     queryKey: keys.tunnel,
     queryFn: ({ signal }) => api<TunnelStatus>('GET', '/api/tunnel', undefined, signal),
     enabled,
-    refetchInterval: (q) => (q.state.data && TUNNEL_BUSY.includes(q.state.data.state) ? 1500 : 15_000),
+    refetchInterval: (q) => {
+      const s = q.state.data;
+      if (s && TUNNEL_BUSY.includes(s.state)) return 1500;
+      return s?.enabled ? 15_000 : 60_000;
+    },
   });
 
 export function useUpdateTunnel() {
@@ -213,6 +218,11 @@ export function useUpdateTunnel() {
     mutationFn: (config: TunnelConfig) => api<TunnelStatus>('PUT', '/api/tunnel', config),
     onSuccess: (s) => qc.setQueryData(keys.tunnel, s),
   });
+}
+
+/** Looks for a cloudflared on PATH; saves nothing. */
+export function useDetectCloudflared() {
+  return useMutation({ mutationFn: () => api<DetectedCloudflared>('POST', '/api/tunnel/cloudflared/detect') });
 }
 
 export function useToggleTunnel() {
@@ -1036,6 +1046,8 @@ export interface RequestQuery {
   provider?: string;
   model?: string;
   status?: string;
+  /** "remote" | "local"; empty = both. */
+  origin?: string;
   page: number;
   pageSize: number;
 }
@@ -1058,7 +1070,7 @@ export const useRequest = (id: string | null) =>
   });
 
 /** The list's filters, minus paging — exactly what the live rate endpoint accepts. */
-export type RequestRateFilter = Pick<RequestQuery, 'client' | 'token' | 'provider' | 'model' | 'status'>;
+export type RequestRateFilter = Pick<RequestQuery, 'client' | 'token' | 'provider' | 'model' | 'status' | 'origin'>;
 
 /** Live RPM / TPM / cache-hit ratio for the request-log header: a trailing window (default 60 s) under the list's filters. */
 export const useRequestRate = (filters: RequestRateFilter) =>
