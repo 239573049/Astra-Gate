@@ -191,6 +191,9 @@ namespace Astra.Server;
 [JsonSerializable(typeof(List<SubscriptionEndpoints.BatchImportItemDto>))]
 // auth
 [JsonSerializable(typeof(SystemEndpoints.LoginRequest))]
+[JsonSerializable(typeof(SystemEndpoints.SetPasswordRequest))]
+[JsonSerializable(typeof(TunnelEndpoints.TunnelStatusDto))]
+[JsonSerializable(typeof(TunnelEndpoints.TunnelConfigRequest))]
 // server-owned documents
 [JsonSerializable(typeof(ServerOptions))]
 [JsonSerializable(typeof(RuntimeInfo))]

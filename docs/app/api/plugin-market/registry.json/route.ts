@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import { buildRegistry } from '@/lib/plugin-market/registry';
 
 /**
- * The plugin market's registry: magpie-community's list (with npm's newest versions) merged with the entries and
+ * The plugin market's registry: the community registry's list (astragate-community/astra-gate-plugins; entries without tarballs get npm's newest versions) merged with the entries and
  * packages published here. This is what Astra's plugin market reads by default (ASTRA_PLUGIN_MARKET overrides).
  *
  *   GET /api/plugin-market/registry.json

@@ -71,7 +71,7 @@ function PluginIcon({ name, icon, kind, size = 32 }: { name: string; icon?: stri
 
 /**
  * Plugins (magpie-compatible; .plan/plugins.md): what is installed — provider plugins run in the Bun plugin host,
- * gateway middleware and agents in Astra's own process — the market (magpie-community's registry and searches),
+ * gateway middleware and agents in Astra's own process — the market (the community registry and searches),
  * and the runtime (Bun and the plugin host).
  */
 export function PluginsPage() {
@@ -431,7 +431,7 @@ function AddPluginSheet({ open, onOpenChange, onJob }: { open: boolean; onOpenCh
       }
     >
       <Field label={t('plugins.spec')} hint={t('plugins.specHint')}>
-        <Input mono value={spec} onChange={(e) => setSpec(e.target.value)} placeholder="@magpie-community/middleware-word-guard" autoFocus />
+        <Input mono value={spec} onChange={(e) => setSpec(e.target.value)} placeholder="@astragate-community/middleware-word-guard" autoFocus />
       </Field>
       <Alert tone="warning" title={t('plugins.trustTitle')} className="mt-4">
         {t('plugins.trustDetail')}
@@ -747,11 +747,11 @@ function RuntimeTab({ onJob }: { onJob: (id: string) => void }) {
       </section>
       <a
         className="flex items-center gap-1 px-1 text-[12px] text-[var(--text-muted)] hover:text-[var(--accent)] lg:col-span-2"
-        href="https://github.com/magpie-community/plugins"
+        href="https://github.com/astragate-community/astra-gate-plugins"
         target="_blank"
         rel="noreferrer"
       >
-        <ExternalLink className="size-3" /> magpie-community/plugins
+        <ExternalLink className="size-3" /> astragate-community/astra-gate-plugins
       </a>
     </div>
   );

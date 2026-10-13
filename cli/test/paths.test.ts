@@ -24,6 +24,7 @@ describe('homePaths', () => {
     expect(p.serverStdoutLog).toBe('/h/logs/server-stdout.log');
     expect(p.desktopPrefix).toBe('/h/desktop');
     expect(p.pluginsDir).toBe('/h/plugins');
+    expect(p.toolsDir).toBe('/h/tools');
   });
 });
 

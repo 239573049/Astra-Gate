@@ -9,10 +9,10 @@ Astra 的插件市场由官网（`astra-gate.si`）提供。控制台和 `astra 
 
 注册表由两部分合成，同名时官网发布的条目覆盖社区条目：
 
-- **社区清单**：magpie-community 的 `registry.json`，官网定时拉取，并用 npm 补全每个包的最新版本、描述和许可证；
+- **社区清单**：[astragate-community/astra-gate-plugins](https://github.com/astragate-community/astra-gate-plugins) 的 `registry.json`，官网定时拉取。每个插件的各个版本是该仓库 Release 里的 tarball，清单给出下载地址和 SHA-256；没有 tarball 的条目才用 npm 补全最新版本、描述和许可证；
 - **官网发布的条目**：用下面的接口发布。可以只是一条指向 npm 包（或 `github:用户/仓库`）的条目，也可以连同 tarball 一起上传，由官网托管。
 
-托管的包由客户端从官网下载，安装前必须与注册表里的 SHA-256（和 SHA-512，若有）一致；解压时只接受普通文件，路径限制在包目录内，与 npm 包的安装规则相同。同样以 `--ignore-scripts` 安装，安装脚本不会运行。
+注册表给出下载地址的包（官网托管的在官网，社区仓库的在它的 GitHub Release），由客户端按 `tarballs[].url` 下载，安装前必须与注册表里的 SHA-256（和 SHA-512，若有）一致；解压时只接受普通文件，路径限制在包目录内，与 npm 包的安装规则相同。同样以 `--ignore-scripts` 安装，安装脚本不会运行。
 
 ## 接口
 
@@ -40,7 +40,7 @@ Astra 的插件市场由官网（`astra-gate.si`）提供。控制台和 `astra 
 | `author`、`homepage`、`repository`、`tags` | 作者、主页、仓库、标签 |
 | `minAstraVersion` | 能运行它的最低 Astra 版本；客户端版本不够时安装会失败并说明 |
 | `origin` | `astra`（官网发布）或 `upstream`（社区清单） |
-| `tarballs` | 官网托管的版本，最新在前：`version`、`url`、`sha256`、`sha512`、`size`、`publishedAt` |
+| `tarballs` | 可下载的版本，最新在前：`version`、`url`（官网托管的是相对地址，社区仓库的是 GitHub Release 的 https 地址）、`sha256`、`sha512`、`size`、`publishedAt`（社区仓库的条目没有） |
 
 ## 发布插件
 
@@ -88,7 +88,7 @@ curl -X DELETE "https://astra-gate.si/api/plugin-market/entries?package=@scope/n
 | 变量 | 说明 |
 | --- | --- |
 | `PLUGIN_UPLOAD_TOKEN` | 发布与下架用的 Bearer token；不设则发布接口关闭 |
-| `PLUGIN_MARKET_UPSTREAM` | 社区清单的地址，默认 magpie-community 的 `registry.json`；设为 `off` 则只用站内条目和镜像内置的快照 |
+| `PLUGIN_MARKET_UPSTREAM` | 社区清单的地址，默认 astragate-community/astra-gate-plugins 的 `registry.json`；设为 `off` 则只用站内条目和镜像内置的快照 |
 | `GITHUB_TOKEN` | 可选，提高搜索访问 GitHub 的限额 |
 
 让 Astra 使用自建的市场：在 **设置 → 插件市场** 里填 `https://你的域名/api/plugin-market/registry.json`，或设置环境变量 `ASTRA_PLUGIN_MARKET`。搜索地址取注册表地址旁边的 `search`，所以注册表地址需要以 `/registry.json` 结尾；否则搜索不可用，其余功能不受影响。

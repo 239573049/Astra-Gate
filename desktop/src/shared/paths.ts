@@ -9,6 +9,8 @@ export interface AstraPaths {
   logsDir: string;
   /** Plugins (sign-ins, npm packages, Bun): kept as files, owner-only. */
   pluginsDir: string;
+  /** Helper programs the server downloads for itself (cloudflared for remote access). */
+  toolsDir: string;
   /** Path of the server's log file for a given day: astra-YYYYMMDD.log. */
   logFile: (date: Date) => string;
 }
@@ -33,6 +35,7 @@ export function astraPaths(
     installFile: path.join(home, 'install.json'),
     logsDir: path.join(home, 'logs'),
     pluginsDir: path.join(home, 'plugins'),
+    toolsDir: path.join(home, 'tools'),
     logFile: (date: Date) => path.join(home, 'logs', logFileName(date)),
   };
 }

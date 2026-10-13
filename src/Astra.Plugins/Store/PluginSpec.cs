@@ -59,7 +59,7 @@ public static partial class PluginSpec
 
     /// <summary>
     /// A package's name without its scope and the words every package of its kind has: model-map for
-    /// @magpie-community/middleware-model-map, zed for @magpie-community/opencode-zed-auth.
+    /// @astragate-community/middleware-model-map, zed for @astragate-community/zed-auth.
     /// </summary>
     public static string ShortName(string package)
     {

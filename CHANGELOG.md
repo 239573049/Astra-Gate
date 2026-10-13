@@ -4,6 +4,27 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.9.0] - 2026-10-14
+
+### 新增
+
+- **远程访问（Cloudflare Tunnel）**：**设置 → 远程访问** 一键把网关开放到公网，不需要公网 IP 或端口转发。Astra 首次开启时下载固定版本的 `cloudflared`（按发布页的 SHA-256 校验，放在 `~/.astra/tools/`，也可用 `ASTRA_CLOUDFLARED` 指定已安装的），作为子进程运行，断线自动重连，开关保持开启时下次启动自动恢复。支持「临时地址」（`*.trycloudflare.com`，无需账号，但不支持流式输出，只适合试用）和「固定域名」（你自己的隧道令牌，令牌加密保存）。
+  - 安全模型：带 `Cf-Ray` / `Cf-Connecting-IP` 的请求、或访问隧道主机名的请求视为远程请求。远程调用网关**始终需要令牌**，不受「强制令牌」开关影响；管理后台默认不对远程开放，打开「管理后台」开关后还需要管理员密码登录；`POST /api/auth/password` 不响应远程调用方。
+  - 登录接口按访问者 IP 限速（每 5 分钟 10 次）；回环模式下采用 Cloudflare 传来的客户端 IP 和 https 协议，限流按真实访问者计、会话 Cookie 带 `Secure`。
+  - 管理员密码可以直接在远程访问页面设置（仅限本机），不必再跑 `astra-server set-password`。
+  - Docker 里不托管 `cloudflared`，请用 sidecar 容器；经 Cloudflare 转发的请求同样按远程请求处理。详见文档「远程访问」。
+- **令牌限额**：每个令牌可设用量上限，由 `TokenLimiter` 在网关处强制执行，并记录用量台账；日、周、月额度按设置里的「用量时区」（`UsageTimeZone`，默认本机时区）重置。令牌持有者可通过自助接口（`/v1/astra/key`、`/v1/dashboard/billing/*`）和网页 `/key` 查看自己的用量与限额，接口按来源 IP 限流（每分钟 30 次）。
+- **告警与 Webhook**：新的「通知」页面。按事件配置告警规则（如令牌额度接近上限），通过 Webhook 推送，支持多种消息格式；由 `AlertEngine` 定时巡检。Webhook 载荷是公开契约，字段和事件表见文档「通知」。（数据库迁移 0013–0015，启动时自动备份并执行。）
+- **Paseo 客户端**：新增 Paseo 的一键接管适配与安装目录条目，Codex 与 WorkBuddy 的适配同步更新。
+- **订阅账号额度后台刷新**（`SubscriptionQuotaIntervalMinutes`，默认 30 分钟，0 为关闭）。
+- **请求体压缩**：支持向上游发送 zstd / gzip / br / deflate 压缩的请求体（提供商 `request_compression` 设置；ChatGPT 订阅模板默认开启 zstd，与 codex-cli 一致）。设置里新增全局覆盖：可统一指定编码或设为「none」。
+
+### 改进
+
+- **插件市场的社区清单改为 [astragate-community/astra-gate-plugins](https://github.com/astragate-community/astra-gate-plugins)**：插件的各个版本是该仓库 Release 里的 tarball，注册表给出下载地址和 SHA-256，安装前照常校验；没有 tarball 的条目才回退到 npm。旧的 magpie-community 包名（如 `zed-auth`）与新名字按同一插件识别，内置图标不丢。
+- **网关**：SSE 解析与协议转换细节、Claude OAuth 请求头与 Claude Code 伪装做了调整；隐私守卫的检测实现重写。
+- 前端：模型页、令牌页、设置页等界面更新，补齐中英文文案。
+
 ## [0.8.0] - 2026-10-12
 
 ### 新增

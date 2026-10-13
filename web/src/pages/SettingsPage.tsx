@@ -1,11 +1,12 @@
-import { Bell, Copy, Download, FolderOpen, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Bell, Copy, Download, FolderOpen, Globe, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
+import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useTunnel, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
 import type { ProxyMode, RequestCompression, Settings } from '../api/types';
 import { NotificationSettings } from '../components/NotificationSettings';
+import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
 import { Page } from '../components/layout/Page';
 import { NumberField } from '../components/arc/number-field/number-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
@@ -18,7 +19,7 @@ import { ACCENT_PRESETS, useAppearance } from '../shell/appearance';
 import { getBridge, isDesktop } from '../shell/bridge';
 import { systemActions } from '../shell/systemActions';
 
-const TABS = ['general', 'notifications', 'tray'] as const;
+const TABS = ['general', 'notifications', 'remote', 'tray'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 /** Zones offered for token limits besides the server's own (any IANA id the server knows is accepted). */
@@ -27,7 +28,7 @@ const USAGE_TIME_ZONES = [
   'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles',
 ];
 
-/** Settings: General and Notifications, plus Tray panel in the desktop app (/settings/:tab). */
+/** Settings: General, Notifications and Remote access, plus Tray panel in the desktop app (/settings/:tab). */
 export function SettingsPage() {
   const { t } = useI18n();
   const { tab } = useParams();
@@ -52,6 +53,12 @@ export function SettingsPage() {
               {t('settings.tab.notifications')}
             </span>
           </TabsTrigger>
+          <TabsTrigger value="remote">
+            <span className="inline-flex items-center gap-1.5">
+              <Globe className="size-3.5" />
+              {t('settings.tab.remote')}
+            </span>
+          </TabsTrigger>
           {trayAvailable && (
             <TabsTrigger value="tray">
               <span className="inline-flex items-center gap-1.5">
@@ -66,6 +73,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="notifications" className="pt-5">
           <NotificationSettings />
+        </TabsContent>
+        <TabsContent value="remote" className="pt-5">
+          <RemoteAccessSettings />
         </TabsContent>
         {trayAvailable && (
           <TabsContent value="tray" className="pt-5">
@@ -86,8 +96,10 @@ function GeneralSettings() {
   const version = useVersion();
   const auth = useAuthStatus();
   const logout = useLogout();
+  const tunnel = useTunnel();
   const { toast, confirm } = useFeedback();
   const s = settings.data;
+  const remoteUrl = tunnel.data?.state === 'connected' && tunnel.data.publicUrl ? `${tunnel.data.publicUrl}/v1` : null;
 
   const patch = (p: Partial<Settings>) => update.mutate(p, { onError: (e) => toast(errorText(e), 'error') });
 
@@ -157,6 +169,11 @@ function GeneralSettings() {
             <Row label={t('settings.gatewayUrl')} detail={`${s.gatewayBaseUrl}/v1`}>
               <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('common.copy')} onClick={() => void copy(`${s.gatewayBaseUrl}/v1`)} />
             </Row>
+            {remoteUrl && (
+              <Row label={t('settings.remote.publicUrl')} detail={remoteUrl}>
+                <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('common.copy')} onClick={() => void copy(remoteUrl)} />
+              </Row>
+            )}
             <Row label={t('settings.listen')} detail={`${s.host}:${s.port}`} />
             <Row label={t('settings.dataDir')} detail={s.dataDir}>
               {systemActions.canOpenPaths ? (

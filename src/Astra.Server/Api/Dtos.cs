@@ -26,7 +26,10 @@ public sealed record RemovedDto(bool Removed);
 public sealed record ReappliedDto(IReadOnlyList<string> Updated);
 public sealed record StatusDto(string Status);
 public sealed record SignedInDto(bool SignedIn);
-public sealed record AuthStatusDto(bool Required, bool SignedIn);
+/// <param name="Required">Whether this request needs a signed-in session (off-loopback, or remote through a tunnel).</param>
+/// <param name="Remote">Whether this request came through Cloudflare (a tunnel) rather than from this machine or network.</param>
+/// <param name="AdminBlocked">Remote, and the tunnel settings keep the admin UI local: signing in would not help.</param>
+public sealed record AuthStatusDto(bool Required, bool SignedIn, bool Remote = false, bool AdminBlocked = false);
 
 public class ModelDto
 {

@@ -12,6 +12,8 @@ export interface HomePaths {
   keysDir: string;
   /** Plugins (sign-ins, npm packages, Bun): kept as files, owner-only. */
   pluginsDir: string;
+  /** Helper programs the server downloads for itself (cloudflared for remote access). */
+  toolsDir: string;
   desktopPrefix: string;
 }
 
@@ -32,6 +34,7 @@ export function homePaths(home: string): HomePaths {
     dbFile: path.join(home, 'astra.db'),
     keysDir: path.join(home, 'keys'),
     pluginsDir: path.join(home, 'plugins'),
+    toolsDir: path.join(home, 'tools'),
     desktopPrefix: path.join(home, 'desktop'),
   };
 }

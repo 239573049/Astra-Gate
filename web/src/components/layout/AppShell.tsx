@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { Globe } from 'lucide-react';
 import { AnimatePresence, motion, type Transition } from 'motion/react';
 import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 
-import { useHealth, useSettings } from '../../api/hooks';
+import { useHealth, useSettings, useTunnel } from '../../api/hooks';
 import { useT } from '../../i18n';
 import { cn } from '../../lib/cn';
 import { useMediaQuery } from '../../lib/hooks';
@@ -304,9 +305,12 @@ function ServiceStatus({ rail }: { rail: boolean }) {
   const t = useT();
   const health = useHealth();
   const settings = useSettings();
+  const up = health.isSuccess && !health.isError;
+  const tunnel = useTunnel(up);
   const { toast } = useFeedback();
   const [starting, setStarting] = useState(false);
-  const up = health.isSuccess && !health.isError;
+  // Always visible while the gateway is open to the internet, so it is never left on by accident.
+  const remoteOn = up && tunnel.data?.enabled === true;
   const address = settings.data?.gatewayBaseUrl?.replace(/^https?:\/\//, '');
   const status = up ? t('shell.running') : health.isLoading ? t('shell.connecting') : t('shell.disconnected');
 
@@ -367,6 +371,12 @@ function ServiceStatus({ rail }: { rail: boolean }) {
                   <span className="truncate">{status}</span>
                 </div>
                 {up && address && <div className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--text-muted)] selectable">{address}</div>}
+                {remoteOn && (
+                  <NavLink to="/settings/remote" className="mt-1 flex items-center gap-1 text-[var(--accent)] hover:underline">
+                    <Globe className="size-3 shrink-0" />
+                    <span className="truncate">{t('shell.remoteOn')}</span>
+                  </NavLink>
+                )}
               </div>
               <div className="-my-1 -mr-1 flex shrink-0 flex-col">
                 {EXTERNAL_LINKS.map(({ href, labelKey, Icon }) => (

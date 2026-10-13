@@ -17,8 +17,15 @@ export interface Page<T> { items: T[]; total: number; page: number; pageSize: nu
 
 // GET /api/health -> { status: "ok" } ; GET /api/version -> VersionInfo
 export interface VersionInfo { version: string; apiVersion: string }
-// GET /api/auth/status ; POST /api/auth/login {password} ; POST /api/auth/logout
-export interface AuthStatus { required: boolean; signedIn: boolean }
+// GET /api/auth/status ; POST /api/auth/login {password} ; POST /api/auth/logout ;
+// POST /api/auth/password {password} (this machine only, never through a tunnel)
+export interface AuthStatus {
+  required: boolean; signedIn: boolean;
+  /** The request came through Cloudflare (remote access tunnel). */
+  remote: boolean;
+  /** Remote, and the admin UI is kept local: signing in would not help. */
+  adminBlocked: boolean;
+}
 
 // ---------- pricing (storage format, snake_case) ----------
 export type PriceSet = Partial<Record<TokenType, number | null>> & { per_call?: Record<string, number> };
@@ -743,6 +750,38 @@ export type ProxyMode = "system" | "custom" | "direct";
 export type SettingsPatch = Partial<Settings> & { proxyPassword?: string | null };
 // GET /api/settings -> Settings ; PATCH /api/settings body SettingsPatch -> Settings
 
+// ---------- remote access (Cloudflare Tunnel) ----------
+// GET /api/tunnel -> TunnelStatus ; PUT /api/tunnel body TunnelConfig -> TunnelStatus ;
+// POST /api/tunnel/start | /api/tunnel/stop -> TunnelStatus
+export type TunnelMode = "quick" | "named";
+export type TunnelState = "off" | "downloading" | "starting" | "connected" | "reconnecting";
+export interface TunnelStatus {
+  /** False inside a container: cloudflared runs as a sidecar there. */
+  supported: boolean;
+  /** Switched on (and started again with the server). */
+  enabled: boolean;
+  state: TunnelState;
+  /** The address remote clients use; a quick tunnel's is known once cloudflared reports it. */
+  publicUrl?: string | null;
+  error?: string | null;
+  connectedAt?: string | null;
+  mode: TunnelMode;
+  hostname?: string | null;
+  hasToken: boolean;
+  allowAdmin: boolean;
+  /** Where a named tunnel's public hostname must point in the Cloudflare dashboard. */
+  originUrl: string;
+  cloudflared: {
+    path?: string | null; version?: string | null; downloading: boolean; progress?: number | null;
+    error?: string | null; asset?: string | null;
+  };
+  checks: { passwordSet: boolean; blocker?: string | null };
+  /** cloudflared's recent output, oldest first. */
+  log: string[];
+}
+/** Partial update; token is write-only ("" clears it). */
+export interface TunnelConfig { mode?: TunnelMode; hostname?: string | null; token?: string; allowAdmin?: boolean }
+
 // ---------- update feed ----------
 // GET /api/update/status ; POST /api/update/check
 export interface UpdateStatus {
@@ -797,7 +836,7 @@ export interface MarketListing {
   summary: Record<string, string>; latest?: string | null; description?: string | null; license?: string | null;
   /** What adding it installs when that isn't the package (github:owner/repo). */
   spec?: string | null;
-  /** astra = published on the site, upstream = magpie-community's list. */
+  /** astra = published on the site, upstream = the community registry's list. */
   origin: "astra" | "upstream";
   author?: string | null; homepage?: string | null; repository?: string | null; tags: string[];
   /** The oldest Astra that can run it. */

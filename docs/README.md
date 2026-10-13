@@ -37,12 +37,12 @@ pnpm --filter @aidotnet/docs build
 ## 插件市场
 
 实现在 `lib/plugin-market/`，数据存放在 `${DATA_DIR}/plugin-market/`（与客户端发布共用 `/app/data` 卷）。
-注册表 = magpie-community 上游清单（附 npm 最新版本）+ 站内发布的条目和插件包；站内同名条目覆盖上游。
+注册表 = astragate-community 社区仓库的 `registry.json`（插件包是仓库 Release 里的 tarball；没有 tarball 的条目附 npm 最新版本）+ 站内发布的条目和插件包；站内同名条目覆盖上游。
 
 | 环境变量 | 作用 |
 | --- | --- |
 | `PLUGIN_UPLOAD_TOKEN` | 发布 / 下架用的 Bearer token；未设置时写接口返回 503（与 `CLIENT_UPLOAD_TOKEN` 分开） |
-| `PLUGIN_MARKET_UPSTREAM` | 上游清单地址，默认 magpie-community 的 `registry.json`；设为 `off` 只用站内条目和仓库内置快照 |
+| `PLUGIN_MARKET_UPSTREAM` | 上游清单地址，默认 astragate-community/astra-gate-plugins 的 `registry.json`；设为 `off` 只用站内条目和仓库内置快照 |
 | `GITHUB_TOKEN` | 可选，提高搜索代理访问 GitHub 的限额 |
 
 `lib/plugin-market/upstream-fallback.json` 是上游清单的内置快照（上游不可达且没有缓存时使用），内容与

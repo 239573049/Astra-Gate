@@ -17,9 +17,13 @@ public sealed class PluginMarketTests
     {
         Assert.Equal("workbuddy-color", PluginMarket.BuiltInIcon("workbuddy"));
         Assert.Equal("workbuddy-color", PluginMarket.BuiltInIcon("workbuddy-ai"));
-        Assert.Equal("qoder", PluginMarket.BuiltInIcon("qoder"));
+        const string qoder = "https://unpkg.com/@lobehub/icons-static-svg@1.95.1/icons/qoder-color.svg";
+        Assert.Equal(qoder, PluginMarket.BuiltInIcon("qoder"));
         // a provider the listing doesn't name is matched by the package its plugin was installed as
-        Assert.Equal("qoder", PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-auth@latest"));
+        Assert.Equal(qoder, PluginMarket.BuiltInIcon("qoder-cn", "@astragate-community/qoder-auth@latest"));
+        // and by the name the same plugin had before the community repository took it over
+        Assert.Equal(qoder, PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-auth@latest"));
+        Assert.Null(PluginMarket.BuiltInIcon("qoder-cn", "@astragate-community/qoder-authx"));
         Assert.Null(PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-authx"));
         Assert.Null(PluginMarket.BuiltInIcon("no-such-provider"));
     }
@@ -68,7 +72,7 @@ public sealed class PluginMarketTests
         var list = await Market(plugins, http, configured: () => "").ListAsync();
 
         Assert.Empty(http.Requests);
-        Assert.Contains(list, l => l.Package == "@magpie-community/middleware-model-map"); // the built-in copy
+        Assert.Contains(list, l => l.Package == "@astragate-community/middleware-model-map"); // the built-in copy
         Assert.Empty(await Market(plugins, http, env: "off").SearchAsync("zed"));
         Assert.Empty(http.Requests);
     }

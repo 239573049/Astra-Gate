@@ -31,7 +31,7 @@ builds `docs/Dockerfile` (Next standalone output; the build context is the repo 
 `ghcr.io/<owner>/<repo>/docs` on every `main` push that touches `docs/**` (or the lockfile / workflow).
 The site also serves the plugin market (`docs/lib/plugin-market/`, `/api/plugin-market/**`, pages under
 `/plugins` and `/en/plugins` — both languages' copy and cards live in `components/plugins/`, kept free of the
-registry store so the client components don't pull in `node:fs`): upstream magpie-community list + published
+registry store so the client components don't pull in `node:fs`): upstream community registry (astragate-community/astra-gate-plugins' `registry.json`, whose tarballs are GitHub Release assets; regenerate it and the two built-in copies with that repo's `scripts/release.mjs pack`) + published
 entries/tarballs under `${DATA_DIR}/plugin-market/`; publishing needs `PLUGIN_UPLOAD_TOKEN` (see linked update 10).
 Tutorial screenshots in `docs/public/screenshots/` are captured from the live UI (`web` dev server on
 :5173 + a running astra-server) via `node docs/scripts/snap.mjs`; re-run it after UI changes instead of
@@ -147,6 +147,8 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   that format, never logged or returned by the API), `packages/` (`bun add` / npm tarball installs),
   `runtime/` (the downloaded Bun), `host/<hash>/` (the vendored host.js / pi.js). The installed-plugin
   list itself is SQLite (`plugins`, `plugin_provider_prefs`); the host gets it in its `init` call.
+  `~/.astra/tools/` (`AstraPaths.ToolsDir`) likewise holds the downloaded `cloudflared-<version>/` and the
+  running tunnel's `cloudflared.pid` (remote access; the tunnel settings themselves are `AppSettings.Tunnel`).
   Runtime-editable settings are one `AppSettings` JSON blob stored under key `"app"`
   (`SettingsService`); adding a setting is a property on `AppSettings` plus endpoint/UI wiring —
   no migration needed.
@@ -167,6 +169,13 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   off-loopback except for an explicit "open" path list. Mutating endpoints get the header
   requirement automatically; adding a public read endpoint means deliberately adding it to that
   list. The web client already sends the header (`web/src/api/client.ts`, `api()`).
+- Remote access (`src/Astra.Server/Tunnel/`): `TunnelService` runs cloudflared (a Cloudflare Tunnel)
+  as a child process. Requests carrying `Cf-Ray` / `Cf-Connecting-IP`, or the tunnel's own hostname
+  (the only non-loopback Host the allowlist admits), are marked remote (`Astra.Gateway/Http/RequestOrigin`):
+  the gateway always wants a token from them (`RequireGatewayKey` only opens it to this machine), `/api`
+  wants a session, and in loopback mode they get no `/api` beyond health/version/auth status unless
+  `AppSettings.Tunnel.AllowAdmin`. In loopback mode the middleware also adopts Cloudflare's client IP and
+  https scheme (per-IP rate limits, Secure cookie). `POST /api/auth/password` never answers remote callers.
 - Gateway: `GatewayException` is rendered in the inbound protocol's error shape. Client-facing
   gateway error messages are currently written in Chinese — match the surrounding file.
 - Secrets (provider API keys, local client keys) go through `ISecretProtector` (DataProtection);
@@ -295,6 +304,10 @@ runtime needed on the target).
     (`AlertEngine.SweepAsync`, `TokenLimiter.Observation`), its zh/en message in `src/Astra.Server/Alerts/AlertMessages.cs`,
     web i18n `alerts.event.<id>[.hint]` (plus `alerts.param.*` / `alerts.choice.*` for new condition fields), and the event
     table in `docs/content/docs/console/notifications.mdx`. The webhook payload shape is a public contract documented there.
+12. **cloudflared version** (`CloudflaredRuntime.Version` + its SHA-256 table, from the release assets' digests —
+    `gh api repos/cloudflare/cloudflared/releases/tags/<v>`) move together; the remote access page and
+    `docs/content/docs/guide/remote-access.mdx` describe what remote requests may reach — keep them in step with
+    `SecurityMiddleware`.
 
 ## Conventions
 

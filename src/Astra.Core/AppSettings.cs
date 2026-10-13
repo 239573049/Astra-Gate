@@ -82,7 +82,36 @@ public sealed class AppSettings
     /// </summary>
     public string RequestCompression { get; set; } = "default";
 
+    /// <summary>Remote access through a Cloudflare Tunnel (Astra.Server's TunnelService).</summary>
+    public TunnelSettings Tunnel { get; set; } = new();
+
     public AppSettings Clone() => Json.Deserialize<AppSettings>(Json.Serialize(this))!;
+}
+
+/// <summary>
+/// Remote access through a Cloudflare Tunnel run by Astra (cloudflared as a child process). Remote requests always need
+/// an Astra token on the gateway; the admin UI is reachable remotely only with <see cref="AllowAdmin"/> and a signed-in
+/// session.
+/// </summary>
+public sealed class TunnelSettings
+{
+    public const string ModeQuick = "quick";
+    public const string ModeNamed = "named";
+
+    /// <summary>Whether the tunnel should run; the server starts it again on startup while this is set.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>"quick" = a temporary *.trycloudflare.com address (no account, no SSE); "named" = the user's tunnel token.</summary>
+    public string Mode { get; set; } = ModeQuick;
+
+    /// <summary>The public hostname a named tunnel routes to this server (configured in the Cloudflare dashboard).</summary>
+    public string? Hostname { get; set; }
+
+    /// <summary>The named tunnel's token, protected with ISecretProtector; the API only reports whether one is set.</summary>
+    public string? TokenProtected { get; set; }
+
+    /// <summary>Whether the admin UI / API answers remote requests (behind the admin password); off = gateway only.</summary>
+    public bool AllowAdmin { get; set; }
 }
 
 /// <summary>reasoning effort → thinking budget tokens, used when translating between protocols.</summary>

@@ -64,7 +64,8 @@ public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, Setti
 {
     public async Task<GatewayRoute> ResolveAsync(HttpRequest request, CancellationToken ct)
     {
-        var open = !settings.Current.RequireGatewayKey;
+        // A remote request (tunnel / network) always presents a token: the switch only opens the gateway to this machine.
+        var open = !settings.Current.RequireGatewayKey && !Http.RequestOrigin.IsRemote(request.HttpContext);
         var key = GatewayTokens.Extract(request);
         TokenRecord? token = null;
         string? kind = null;

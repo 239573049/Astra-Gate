@@ -3,7 +3,7 @@ title: 插件
 description: 兼容 magpie 的插件：提供商插件、网关中间件与客户端插件的安装、配置和工作方式
 ---
 
-Astra 的插件与 [magpie](https://github.com/yetone/magpie) 兼容：为 magpie 编写的插件（包括 [magpie-community/plugins](https://github.com/magpie-community/plugins) 里的社区插件）无需修改即可在 Astra 中使用。插件分三类，一个包也可以同时属于几类：
+Astra 的插件与 [magpie](https://github.com/yetone/magpie) 兼容：为 magpie 编写的插件（包括 [magpie-community/plugins](https://github.com/magpie-community/plugins) 里的社区插件）无需修改即可在 Astra 中使用；Astra 社区仓库 [astragate-community/astra-gate-plugins](https://github.com/astragate-community/astra-gate-plugins) 里是重构后的版本。插件分三类，一个包也可以同时属于几类：
 
 | 类型 | 是什么 | 在哪里运行 |
 | --- | --- | --- |
@@ -17,12 +17,12 @@ pi 扩展（`pi-coding-agent` 的扩展包）由插件宿主通过 pi 自己的�
 
 在控制台左侧打开 **插件**：
 
-- **插件市场**：读取 [Astra 官网的插件市场](/plugins)（英文版 [/en/plugins](/en/plugins)）——magpie-community 的社区清单，加上官网发布的插件；官网托管的插件包直接从官网下载，并按清单里的 SHA-256 校验。清单每 6 小时更新一次，官网不可达时依次用上次拿到的副本和内置副本。搜索框同时搜市场自己的条目、npm 与 GitHub `magpie-plugin` 主题（后两者未经审核）。点 **安装** 即可。市场地址可以在 **设置 → 插件市场** 里改（或设环境变量 `ASTRA_PLUGIN_MARKET`），也可以切到“只用本地副本”。
+- **插件市场**：读取 [Astra 官网的插件市场](/plugins)（英文版 [/en/plugins](/en/plugins)）——社区仓库 astragate-community/astra-gate-plugins 的清单，加上官网发布的插件；插件包按清单里的地址下载，并按清单里的 SHA-256 校验。清单每 6 小时更新一次，官网不可达时依次用上次拿到的副本和内置副本。搜索框同时搜市场自己的条目、npm 与 GitHub `magpie-plugin` 主题（后两者未经审核）。点 **安装** 即可。市场地址可以在 **设置 → 插件市场** 里改（或设环境变量 `ASTRA_PLUGIN_MARKET`），也可以切到“只用本地副本”。
 - **添加插件**：填写 npm 包（可带版本，如 `opencode-gemini-auth@1.2.0`）、Git 仓库（`github:用户/仓库`）或本机文件、文件夹的绝对路径。本地路径适合开发自己的插件，改动保存后下一次请求就会用上。
 
 安装以后台任务进行，窗口里会实时显示日志。CLI 里对应 `astra plugin add <spec>`、`astra plugin market`、`astra plugin list` 等命令。官网上每个插件的页面都有“在 Astra 中安装”：复制命令，或填上本机控制台的端口，打开后控制台会先询问再安装——页面不会在你不知情时装任何东西。
 
-装的是官网托管的包时，之后的更新也向市场询问最新版本，而不是 npm。有的插件会标注“需要 Astra x.y.z+”，版本不够时安装会失败并提示所需版本。想发布自己的插件，见[插件市场与发布](/docs/advanced/plugin-market)。
+装的是市场给出下载地址的包（官网托管的，或社区仓库的）时，之后的更新也向市场询问最新版本，而不是 npm。有的插件会标注“需要 Astra x.y.z+”，版本不够时安装会失败并提示所需版本。想发布自己的插件，见[插件市场与发布](/docs/advanced/plugin-market)。
 
 <Callout type="warn">
 提供商插件在插件宿主中拥有你的全部权限，能看到经过它的请求；中间件能读取并改写所有请求与回复。只安装你信任的插件。npm 包一律以 `--ignore-scripts` 安装，安装脚本不会运行。

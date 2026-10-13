@@ -12,7 +12,7 @@ using Astra.Plugins.Store;
 namespace Astra.Server.Api;
 
 /// <summary>One installed plugin as the Plugins page shows it.</summary>
-/// <param name="ShortName">The name the community's READMEs use (word-guard for @magpie-community/middleware-word-guard).</param>
+/// <param name="ShortName">The name the community's READMEs use (word-guard for @astragate-community/middleware-word-guard).</param>
 /// <param name="Kinds">provider, middleware, agent, pi (<see cref="PluginKinds"/>).</param>
 /// <param name="Options">The options set, or null for none.</param>
 /// <param name="OptionsExample">package.json magpie.options: what the options editor starts from.</param>

@@ -54,6 +54,8 @@ Astra 本身只提供 HTTP。对外暴露时请在前面放一个终止 TLS 的�
 - `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`：信任 `X-Forwarded-Proto` / `X-Forwarded-For`，登录会话 Cookie 才会带 `Secure`。**只有在容器只能被你的代理访问时才开启**，否则任何人都能伪造这些头。
 - `ASTRA_PUBLIC_URL=https://你的域名`。
 
+用 Cloudflare（包括 Cloudflare Tunnel 的 `cloudflared` sidecar）转发时，带 `Cf-Ray` / `Cf-Connecting-IP` 的请求会被识别为远程请求：网关调用始终需要令牌，不受「强制令牌」开关影响。详见[远程访问](/docs/guide/remote-access)。
+
 令牌的自助查询接口（`/v1/astra/key`、`/v1/dashboard/billing/*`）按来源 IP 限流，每个 IP 每分钟 30 次。放在反向代理后面又没有开启 `ASPNETCORE_FORWARDEDHEADERS_ENABLED` 时，所有请求看起来都来自代理，会共用这一个额度。
 
 ## 升级

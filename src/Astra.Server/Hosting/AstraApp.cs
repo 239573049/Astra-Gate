@@ -186,6 +186,11 @@ public static class AstraApp
         builder.Services.AddSingleton<UpdateCheckService>();
         builder.Services.AddHostedService<UpdateCheckWorker>();
         builder.Services.AddSingleton<RuntimeFile>();
+        // Remote access (Cloudflare Tunnel): cloudflared, downloaded on first use, run and supervised as a child process.
+        builder.Services.AddSingleton(sp => new Astra.Server.Tunnel.CloudflaredRuntime(paths,
+            () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(Astra.Server.Tunnel.CloudflaredRuntime.HttpClientName)));
+        builder.Services.AddSingleton<Astra.Server.Tunnel.TunnelService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<Astra.Server.Tunnel.TunnelService>());
         builder.Services.AddSingleton<AdminSessions>();
         builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
         builder.Services.AddHttpClient();
@@ -212,6 +217,9 @@ public static class AstraApp
         builder.Services.AddHttpClient(ClientInstallService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
+        builder.Services.AddHttpClient(Astra.Server.Tunnel.CloudflaredRuntime.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(10))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
         // npm tarballs and Bun itself (~40 MB): a long outer bound.
         builder.Services.AddHttpClient(PluginService.HttpClientName, client => client.Timeout = TimeSpan.FromMinutes(5))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
@@ -227,6 +235,8 @@ public static class AstraApp
         });
         // Per-IP limit of the token self-service views, which are reachable by whoever a key was shared with.
         builder.Services.AddRateLimiter(KeyInfoEndpoints.AddKeyInfoRateLimit);
+        // Per-IP limit of password attempts (remote visitors are told apart by Cloudflare's address).
+        builder.Services.AddRateLimiter(SystemEndpoints.AddLoginRateLimit);
         builder.Services.AddCors(c => c.AddDefaultPolicy(p => p
             .WithOrigins(SecurityMiddleware.DesktopOrigin)
             .AllowAnyMethod()
@@ -271,6 +281,7 @@ public static class AstraApp
         app.MapGatewayEndpoints();
         app.MapKeyInfoEndpoints();
         app.MapAlertEndpoints();
+        app.MapTunnelEndpoints();
 
         // SPA fallback for everything that is not an API / gateway route.
         app.MapFallback(async ctx =>

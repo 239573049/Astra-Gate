@@ -10,13 +10,14 @@ export const PLUGIN_KINDS: readonly PluginKind[] = ['provider', 'middleware', 'a
 /** One version of a package hosted by this site. */
 export interface HostedTarball {
   version: string;
-  /** Path relative to the registry document's URL, e.g. /api/plugin-market/packages/%40a__b/1.0.0.tgz */
+  /** Path relative to the registry document's URL, e.g. /api/plugin-market/packages/%40a__b/1.0.0.tgz; or an absolute https URL (a GitHub Release asset) */
   url: string;
   sha256: string;
   /** base64 */
   sha512: string;
   size: number;
-  publishedAt: string;
+  /** absent on the tarballs a listing from the community registry carries (GitHub Release assets) */
+  publishedAt?: string;
 }
 
 /** The metadata an entry carries (published, or taken from upstream). */

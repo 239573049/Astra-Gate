@@ -42,7 +42,7 @@ const COPY = {
     repository: '仓库',
     tags: '标签',
     source: '来源',
-    hosted: '站内托管的版本',
+    hosted: '可下载的版本',
     version: '版本',
     published: '发布时间',
     size: '大小',
@@ -52,7 +52,7 @@ const COPY = {
     backToMarket: '返回插件市场',
     footer: '插件以 --ignore-scripts 安装，安装脚本不会运行，但插件本身能看到经过它的请求。只安装你信任的插件。',
     metadataTitle: '插件市场',
-    metadataDescription: '为 Astra 找插件：提供商插件、网关中间件和客户端插件。聚合 magpie-community 社区清单，也托管 Astra 发布的插件包。',
+    metadataDescription: '为 Astra 找插件：提供商插件、网关中间件和客户端插件。聚合 astragate-community 社区仓库的插件清单，也托管 Astra 发布的插件包。',
   },
   en: {
     kind: { provider: 'Provider', middleware: 'Middleware', agent: 'Client', pi: 'pi extension' } as Record<PluginKind, string>,
@@ -86,7 +86,7 @@ const COPY = {
     repository: 'Repository',
     tags: 'Tags',
     source: 'Source',
-    hosted: 'Versions hosted here',
+    hosted: 'Downloadable versions',
     version: 'Version',
     published: 'Published',
     size: 'Size',
@@ -96,7 +96,7 @@ const COPY = {
     backToMarket: 'Back to the plugin market',
     footer: 'Plugins are installed with --ignore-scripts, so install scripts never run — but a plugin does see the requests that pass through it. Install only what you trust.',
     metadataTitle: 'Plugin market',
-    metadataDescription: 'Find plugins for Astra: provider plugins, gateway middleware and client plugins. Aggregates magpie-community\'s registry and hosts the packages Astra publishes.',
+    metadataDescription: 'Find plugins for Astra: provider plugins, gateway middleware and client plugins. Aggregates the astragate-community plugin registry and hosts the packages Astra publishes.',
   },
 } as const;
 

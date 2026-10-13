@@ -103,7 +103,7 @@ export function PluginDetailView({
                         </a>
                       </td>
                       <td className="px-4 py-2">
-                        {new Date(v.publishedAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN')}
+                        {v.publishedAt ? new Date(v.publishedAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN') : '—'}
                       </td>
                       <td className="px-4 py-2">{(v.size / 1024).toFixed(1)} KB</td>
                       <td className="px-4 py-2 font-mono text-xs">{v.sha256.slice(0, 16)}…</td>

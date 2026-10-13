@@ -22,6 +22,9 @@ public sealed class AstraPaths
     public string DbBackupsDir => Path.Combine(BackupsDir, "db");
     public string BodiesDir => Path.Combine(Root, "bodies");
 
+    /// <summary>Helper programs Astra downloads for itself (cloudflared for remote access): tools/&lt;name&gt;-&lt;version&gt;/.</summary>
+    public string ToolsDir => Path.Combine(Root, "tools");
+
     /// <summary>
     /// Plugins: the one part of the data dir kept as files rather than in SQLite, because the plugin host
     /// (magpie's host.js) and Bun need files — the sign-ins in OpenCode's auth.json shape, the npm

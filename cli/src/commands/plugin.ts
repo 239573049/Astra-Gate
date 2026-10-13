@@ -36,7 +36,7 @@ interface MarketListing {
   kind: string;
   latest?: string | null;
   summary: Record<string, string>;
-  /** astra = published on the Astra site, upstream = magpie-community's list. */
+  /** astra = published on the Astra site, upstream = the community registry's list. */
   origin?: 'astra' | 'upstream';
   /** Versions the market hosts itself; empty = installed from npm (or a git spec). */
   tarballs?: { version: string }[];
@@ -165,7 +165,7 @@ export async function runPluginUse(name: string, provider: string): Promise<void
   success(`${p.shortName} serves ${provider} now.`);
 }
 
-/** Where a listing comes from: the Astra site (hosted = it serves the package too), or magpie-community's list. */
+/** Where a listing comes from: the Astra site (hosted = it serves the package too), or the community registry's list. */
 function marketOrigin(l: MarketListing): string {
   if (l.origin !== 'astra') return 'community';
   return l.tarballs && l.tarballs.length > 0 ? 'astra (hosted)' : 'astra';

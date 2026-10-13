@@ -14,7 +14,7 @@ namespace Astra.Plugins.Market;
 /// <param name="Summary">By language: en, zh.</param>
 /// <param name="Latest">The newest version the registry knows; null when it didn't say.</param>
 /// <param name="Spec">What adding it installs when that is not the package name (github:owner/repo); null = the package.</param>
-/// <param name="Origin">astra (published on the docs site) or upstream (magpie-community's list).</param>
+/// <param name="Origin">astra (published on the docs site) or upstream (the community registry, astragate-community/astra-gate-plugins).</param>
 /// <param name="MinAstraVersion">The oldest Astra that can run it; null = any.</param>
 /// <param name="Tarballs">The versions the market hosts itself, newest first; empty = installed from npm (or <paramref name="Spec"/>).</param>
 public sealed record MarketListing(
@@ -36,7 +36,7 @@ public sealed record MarketSearchResult(string Spec, string Name, string? Descri
 
 /// <summary>
 /// The plugin market. Everything comes from one registry — by default the Astra site's
-/// (<see cref="DefaultUrl"/>), which lists magpie-community's plugins, those published on the site and the
+/// (<see cref="DefaultUrl"/>), which lists the community's plugins (astragate-community/astra-gate-plugins), those published on the site and the
 /// packages it hosts — fetched at most every six hours (else the copy fetched last, else the one built into
 /// Astra), and searched through the site too. Which registry: <c>ASTRA_PLUGIN_MARKET</c> (<c>off</c> keeps to
 /// the cached and built-in copies), else the PluginMarketUrl setting (empty = the same), else the default.
@@ -119,8 +119,17 @@ public sealed class PluginMarket(
     {
         var withIcon = BuiltInListings.Value.Where(l => l.Icon is not null).ToList();
         return (withIcon.FirstOrDefault(l => l.Providers.Contains(providerId))
-                ?? (spec is null ? null : withIcon.FirstOrDefault(l => spec == l.Package || spec.StartsWith(l.Package + "@", StringComparison.Ordinal))))
+                ?? (spec is null ? null : withIcon.FirstOrDefault(l => SameListing(spec, l.Package))))
             ?.Icon;
+    }
+
+    // The package spec installs is the listing's, or the same plugin under its former name (magpie-community's
+    // zed-auth and the community repository's): their short names are the same.
+    private static bool SameListing(string spec, string package)
+    {
+        var at = spec.LastIndexOf('@');
+        var name = at > 0 ? spec[..at] : spec;
+        return name == package || PluginSpec.ShortName(name) == PluginSpec.ShortName(package) && name.EndsWith("-auth", StringComparison.Ordinal) == package.EndsWith("-auth", StringComparison.Ordinal);
     }
 
     /// <summary>

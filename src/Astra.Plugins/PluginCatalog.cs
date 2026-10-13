@@ -69,7 +69,7 @@ public sealed class PluginCatalog(IPluginListStore store, AstraPaths paths, bool
     /// <summary>
     /// The plugin <paramref name="name"/> means: the one added as that spec exactly, else the one of that
     /// package, else (with <paramref name="shortName"/>) the one whose short name it is — as the community's
-    /// READMEs write it, param-override for @magpie-community/middleware-param-override. A plugin of the
+    /// READMEs write it, param-override for @astragate-community/middleware-param-override. A plugin of the
     /// user's own (a folder) beside a third party's is each told apart by its own spec.
     /// </summary>
     public static InstalledPlugin? Find(PluginSnapshot snapshot, string name, bool shortName = false, string? packagesDir = null)

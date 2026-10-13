@@ -79,6 +79,9 @@ import type {
   TokenLimits,
   TokenMutationResult,
   TopModel,
+  TunnelConfig,
+  TunnelState,
+  TunnelStatus,
   UpdateStatus,
   VersionInfo,
   ModelOverrides,
@@ -91,6 +94,7 @@ export const keys = {
   version: ['version'] as const,
   auth: ['auth'] as const,
   settings: ['settings'] as const,
+  tunnel: ['tunnel'] as const,
   update: ['update'] as const,
   models: (search?: string, vendor?: string) => ['models', search ?? '', vendor ?? ''] as const,
   model: (id: string) => ['model', id] as const,
@@ -179,6 +183,43 @@ export function useUpdateSettings() {
   return useMutation({
     mutationFn: (patch: SettingsPatch) => api<Settings>('PATCH', '/api/settings', patch),
     onSuccess: (s) => qc.setQueryData(keys.settings, s),
+  });
+}
+
+export function useSetAdminPassword() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (password: string) => api('POST', '/api/auth/password', { password }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.tunnel }),
+  });
+}
+
+// ---------- remote access ----------
+
+const TUNNEL_BUSY: TunnelState[] = ['downloading', 'starting', 'reconnecting'];
+
+/** Polls quickly while the tunnel is coming up, slowly otherwise. */
+export const useTunnel = (enabled = true) =>
+  useQuery({
+    queryKey: keys.tunnel,
+    queryFn: ({ signal }) => api<TunnelStatus>('GET', '/api/tunnel', undefined, signal),
+    enabled,
+    refetchInterval: (q) => (q.state.data && TUNNEL_BUSY.includes(q.state.data.state) ? 1500 : 15_000),
+  });
+
+export function useUpdateTunnel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (config: TunnelConfig) => api<TunnelStatus>('PUT', '/api/tunnel', config),
+    onSuccess: (s) => qc.setQueryData(keys.tunnel, s),
+  });
+}
+
+export function useToggleTunnel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (on: boolean) => api<TunnelStatus>('POST', on ? '/api/tunnel/start' : '/api/tunnel/stop'),
+    onSuccess: (s) => qc.setQueryData(keys.tunnel, s),
   });
 }
 

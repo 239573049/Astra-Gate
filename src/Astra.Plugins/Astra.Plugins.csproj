@@ -12,7 +12,7 @@
     <!-- magpie's plugin host, unmodified (Host/VENDORED.md); written out by HostAssets. -->
     <EmbeddedResource Include="Host\host.js" LogicalName="Astra.Plugins.Host.host.js" />
     <EmbeddedResource Include="Host\pi.js" LogicalName="Astra.Plugins.Host.pi.js" />
-    <!-- magpie's built-in copy of magpie-community's registry.json, for when GitHub can't be reached -->
+    <!-- a built-in copy of the community registry (astragate-community/astra-gate-plugins' registry.json), for when GitHub can't be reached -->
     <EmbeddedResource Include="Market\market.json" LogicalName="Astra.Plugins.Market.market.json" />
   </ItemGroup>
   <ItemGroup>

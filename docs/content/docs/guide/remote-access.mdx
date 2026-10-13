@@ -1,0 +1,62 @@
+---
+title: 远程访问
+description: 通过 Cloudflare Tunnel 一键把网关开放到公网，在其他设备上使用
+---
+
+Astra 默认只监听本机。打开 **设置 → 远程访问**，Astra 会运行一个 [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/)，把网关开放到公网：不需要公网 IP，也不用在路由器上转发端口。
+
+<Callout title="开启前先确认">
+  任何知道地址的人都能访问你的网关入口。远程调用**始终需要 Astra 令牌**（不受本机「强制令牌」开关影响），请只把地址和令牌分享给信任的人。
+</Callout>
+
+## 工作方式
+
+- Astra 第一次开启远程访问时，从 Cloudflare 的 GitHub Release 下载固定版本的 `cloudflared`，按发布页给出的 SHA-256 校验后放到 `~/.astra/tools/`。也可以用环境变量 `ASTRA_CLOUDFLARED` 指定已安装的 `cloudflared`。
+- `cloudflared` 作为 Astra 的子进程运行：断线后自动重连；Astra 退出时一起退出；开关保持开启时，Astra 下次启动会自动重新连接。
+- 页面底部的「运行日志」显示 `cloudflared` 最近的输出，连接失败时先看这里。
+
+## 连接方式
+
+### 临时地址（无需账号）
+
+Cloudflare 分配一个随机的 `https://xxx.trycloudflare.com` 地址，打开开关即可使用。
+
+<Callout type="warn" title="不适合日常使用">
+  临时地址**不支持流式输出（SSE）**，Claude Code、Codex 等大多数编程客户端会因此无法正常工作。地址在每次启动时都会变化，也没有可用性保证。只适合临时试用。
+</Callout>
+
+### 固定域名（推荐）
+
+使用你在 Cloudflare 上创建的隧道和自己的域名（域名需要托管在 Cloudflare）：
+
+1. 打开 Cloudflare Zero Trust → **Networks → Tunnels**，新建一个 Cloudflared 类型的隧道。
+2. 安装页面给出的命令里，`--token` 后面那一长串就是**隧道令牌**，复制它。不需要在电脑上执行那条安装命令，Astra 会自己运行 `cloudflared`。
+3. 为隧道添加**公网主机名**（例如 `astra.example.com`），把服务（Service）设为远程访问页面上显示的**服务地址**，例如 `http://127.0.0.1:17321`。
+4. 回到 Astra，选择「固定域名」，填入隧道令牌和公网域名，保存后打开开关。
+
+隧道令牌加密保存，界面和接口只显示是否已设置。
+
+<Callout title="端口要一致">
+  Astra 的端口变化时（例如 17321 被占用后自动换了端口），Cloudflare 后台的服务地址需要同步修改。想让端口保持不变，可以在 `~/.astra/config.json` 里设置 `port`，并设置环境变量 `ASTRA_STRICT_PORT=1`：端口被占用时启动失败，而不是悄悄换端口。
+</Callout>
+
+## 远程开放范围
+
+| 内容 | 远程访问 |
+| --- | --- |
+| 网关 API（`/v1`、`/v1beta`）和令牌自助查询页 `/key` | 始终开放，必须携带 Astra 令牌 |
+| 管理后台和管理接口 | 默认关闭；打开「管理后台」开关后，需要管理员密码登录 |
+
+- 打开「管理后台」之前需要先设置**管理员密码**，可以在远程访问页面直接设置，也可以用 `astra-server set-password`。密码只能在这台电脑上设置，不能通过远程地址修改。
+- 远程登录失败会按访问者 IP 限速（每 5 分钟 10 次）。登录会话的 Cookie 带有 `Secure` 和 `SameSite=Strict`。
+- 管理后台关闭时，通过远程地址打开控制台只会看到「远程管理已关闭」的提示。
+
+## 在其他设备上使用
+
+在客户端里填写远程网关地址（页面上的「远程网关地址」，形如 `https://astra.example.com/v1`）和一个 Astra 令牌。令牌在控制台的「令牌」页面创建和复制；令牌的用量与限额可以让持有者在 `https://你的域名/key` 自助查看。
+
+本机的客户端仍然直连 `127.0.0.1`，开启远程访问不会改动它们的配置。
+
+## Docker
+
+容器内不托管 `cloudflared`，远程访问页面会显示提示。请把 `cloudflared` 作为 sidecar 容器运行，指向 Astra 容器的地址，并按[Docker 部署](/docs/guide/docker)设置管理员密码。经 Cloudflare 转发的请求同样会被识别为远程请求，网关调用始终需要令牌。
