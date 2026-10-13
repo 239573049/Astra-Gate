@@ -9,8 +9,10 @@ namespace Astra.Gateway.Pipeline;
 /// <summary>
 /// Background writer for request records: batches of up to 50 or every second, one transaction per batch.
 /// Drains the queue on shutdown so no finished request is lost. Written records leave the <see cref="LiveRequestFeed"/>.
+/// Queued records count toward their token's limits right away (<see cref="TokenUsageLedger"/>), before they are written.
 /// </summary>
-public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<UsageWriter> logger) : BackgroundService
+public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<UsageWriter> logger, TokenUsageLedger? ledger = null)
+    : BackgroundService
 {
     private const int BatchSize = 50;
     private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(1);
@@ -23,6 +25,7 @@ public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<
 
     public void Enqueue(RequestRecord record)
     {
+        ledger?.Add(record);
         Interlocked.Increment(ref _pending);
         if (!_queue.Writer.TryWrite(record))
         {
@@ -93,7 +96,7 @@ public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<
         var count = batch.Count;
         try
         {
-            await db.Requests.InsertBatchAsync(batch, ct);
+            await db.Requests.InsertBatchAsync(batch, ct, ledger?.Zone);
         }
         catch (Exception ex)
         {
@@ -103,6 +106,7 @@ public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<
         finally
         {
             live.Persisted(batch);
+            ledger?.Persisted(batch);
             batch.Clear();
             Interlocked.Add(ref _pending, -count);
         }

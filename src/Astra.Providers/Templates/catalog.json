@@ -615,9 +615,43 @@
     }
   },
   {
-    "id": "routin",
+    "id": "routin-ai",
     "version": 1,
-    "name": "Routin",
+    "name": "RoutinAI",
+    "category": "aggregator",
+    "icon": "routin",
+    "website": "https://routin.ai",
+    "apiKeyUrl": "https://routin.ai",
+    "docsUrl": "https://docs.routin.ai",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.routin.ai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.routin.ai/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "routin",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-responses",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "routin",
+    "version": 2,
+    "name": "Routin 订阅（Plan）",
     "category": "aggregator",
     "icon": "routin",
     "website": "https://routin.ai",
@@ -692,7 +726,7 @@
   },
   {
     "id": "openai-subscription",
-    "version": 4,
+    "version": 5,
     "name": "ChatGPT 订阅（Codex）",
     "category": "subscription",
     "icon": "openai",
@@ -729,7 +763,8 @@
       "OpenAI-Beta": "responses=experimental"
     },
     "settings": {
-      "force_stream": true
+      "force_stream": true,
+      "request_compression": "zstd"
     }
   },
   {

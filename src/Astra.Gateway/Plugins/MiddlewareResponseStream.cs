@@ -89,17 +89,22 @@ public sealed class MiddlewareResponseStream : Stream
                 return;
         }
         _buffer.Write(buffer.Span);
+        // Events are cut from the front; the incomplete rest moves down once per write, not once per event.
+        var consumed = 0;
         while (true)
         {
-            var held = _buffer.GetBuffer().AsSpan(0, (int)_buffer.Length);
-            var (index, length) = SseEventFramer.EventEnd(held);
+            var held = _buffer.GetBuffer().AsMemory(consumed, (int)_buffer.Length - consumed);
+            var (index, length) = SseEventFramer.EventEnd(held.Span);
             if (index < 0) break;
             var ev = held[..(index + length)].ToArray();
-            var rest = held[(index + length)..].ToArray();
-            _buffer.SetLength(0);
-            _buffer.Write(rest);
+            consumed += index + length;
             if (_run.Event(ev) is { } output) await _inner.WriteAsync(output, ct);
         }
+        if (consumed == 0) return;
+        var rest = (int)_buffer.Length - consumed;
+        var bytes = _buffer.GetBuffer();
+        Buffer.BlockCopy(bytes, consumed, bytes, 0, rest);
+        _buffer.SetLength(rest);
     }
 
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken ct) =>

@@ -1,8 +1,8 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Check, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
+import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
-import { keys, useRequest, useRequestRate, useRequests, type RequestQuery } from '../api/hooks';
+import { keys, useProviders, useRequest, useRequestRate, useRequests, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
 import type { ClientKind, RateStats, RequestDetail, RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
@@ -11,7 +11,7 @@ import { Pagination } from '../components/arc/pagination/pagination';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
 import { Tooltip } from '../components/arc/tooltip/tooltip';
 import { PricingSourceBadge } from '../components/Billing';
-import { CLIENT_META } from '../components/icons';
+import { CLIENT_META, ClientGlyph, ModelGlyph, ProtocolGlyph, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { EMPTY_REQUEST_FILTERS, RequestFilters, type RequestFilterId, type RequestFilterValues } from '../components/RequestFilters';
 import { CacheUsageCell, TokenTotalsCell, TokenTypeLabel, TokenUsageSummary } from '../components/TokenUsage';
@@ -193,6 +193,9 @@ export function RequestsPage() {
 const RequestTable = memo(function RequestTable({ items, onOpen }: { items: RequestSummary[]; onOpen: (id: string) => void }) {
   const { t, locale } = useI18n();
   const clientName = useCallback((r: RequestSummary) => requestClientName(r, t), [t]);
+  const providers = useProviders();
+  // A request row names its provider but not its icon: look the icon up in the provider list.
+  const providerById = useMemo(() => new Map((providers.data ?? []).map((p) => [p.id, p])), [providers.data]);
 
   const rows = useMemo<Row[]>(() => items.map((r) => ({
     id: r.id,
@@ -203,6 +206,7 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
     provider: r.providerName ?? '',
     status: r.status,
     ttft: r.ttftMs ?? null,
+    tps: r.outputTps ?? null,
     tokens: r.totalInputTokens + r.totalOutputTokens,
     cache: r.cacheReadTokens,
     cost: r.costNanoUsd ?? 0,
@@ -214,12 +218,19 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
     {
       key: 'model',
       label: t('requests.col.model'),
+      // Wide enough for a full model ID next to the reasoning badge; the badge wraps below the name
+      // rather than squeezing it (see the cell below).
+      width: 320,
       render: (_, row) => (
         <LiveCell r={row.r}>
           {(r) => (
             <button type="button" className="block w-full min-w-0 text-left" onClick={() => onOpen(r.id)} aria-label={t('requests.openDetail', { model: r.requestedModel || r.id })}>
-              <span className="flex min-w-0 items-center gap-1.5">
-                <span className="block min-w-0 truncate font-medium hover:text-[var(--accent)]" title={r.requestedModel ?? ''}>{r.requestedModel || '—'}</span>
+              {/* Wrapping, not shrinking: the model name keeps its full width and the badge moves to its own line. */}
+              <span className="flex min-w-0 flex-wrap items-center gap-x-1.5">
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <ModelGlyph model={r.upstreamModel || r.requestedModel} size={15} />
+                  <span className="block min-w-0 truncate font-medium hover:text-[var(--accent)]" title={r.requestedModel ?? ''}>{r.requestedModel || '—'}</span>
+                </span>
                 <ReasoningBadge r={r} />
               </span>
               <span className="block text-[11px]">
@@ -233,18 +244,54 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
         </LiveCell>
       ),
     },
-    { key: 'client', label: t('requests.col.client'), width: 110, render: (_, row) => <LiveCell r={row.r}>{(r) => clientName(r)}</LiveCell> },
+    {
+      key: 'client',
+      label: t('requests.col.client'),
+      width: 72,
+      render: (_, row) => (
+        <LiveCell r={row.r}>
+          {(r) => r.clientKind ? (
+            <Tooltip content={clientName(r)}>
+              <span className="inline-flex" role="img" aria-label={clientName(r)}>
+                <ClientGlyph kind={r.clientKind as ClientKind} size={20} />
+              </span>
+            </Tooltip>
+          ) : clientName(r)}
+        </LiveCell>
+      ),
+    },
     {
       key: 'token',
       label: t('requests.col.token'),
       width: 110,
-      render: (_, row) => <LiveCell r={row.r}>{(r) => <span className="block truncate">{r.tokenName || '—'}</span>}</LiveCell>,
+      render: (_, row) => (
+        <LiveCell r={row.r}>
+          {(r) => (
+            <span className="flex min-w-0 items-center gap-1.5">
+              {r.tokenName && <KeyRound className="size-3.5 shrink-0 text-[var(--text-muted)]" aria-hidden="true" />}
+              <span className="block min-w-0 truncate">{r.tokenName || '—'}</span>
+            </span>
+          )}
+        </LiveCell>
+      ),
     },
     {
       key: 'provider',
       label: t('requests.col.provider'),
       width: 130,
-      render: (_, row) => <LiveCell r={row.r}>{(r) => <span className="block truncate">{r.providerName || '—'}</span>}</LiveCell>,
+      render: (_, row) => (
+        <LiveCell r={row.r}>
+          {(r) => {
+            const p = r.providerId ? providerById.get(r.providerId) : undefined;
+            return (
+              <span className="flex min-w-0 items-center gap-1.5">
+                {r.providerName && <ProviderIcon name={r.providerName} icon={p?.icon} colorKey={p?.templateId} size={18} />}
+                <span className="block min-w-0 truncate">{r.providerName || '—'}</span>
+              </span>
+            );
+          }}
+        </LiveCell>
+      ),
     },
     {
       key: 'status',
@@ -272,9 +319,9 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
     },
     {
       key: 'ttft',
-      label: 'TTFT / TPS',
+      label: t('requests.col.ttft'),
       numeric: true,
-      width: 112,
+      width: 88,
       render: (_, row) => (
         <LiveCell r={row.r}>
           {(r) => (
@@ -286,9 +333,19 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
               ) : (
                 <div title="TTFT">{formatMs(r.ttftMs)}</div>
               )}
-              <div className="text-[11px] text-[var(--text-muted)]" title={t('requests.detail.tps')}>{formatTps(r.outputTps)}</div>
             </div>
           )}
+        </LiveCell>
+      ),
+    },
+    {
+      key: 'tps',
+      label: t('requests.col.tps'),
+      numeric: true,
+      width: 92,
+      render: (_, row) => (
+        <LiveCell r={row.r}>
+          {(r) => <span className="num whitespace-nowrap" title={t('requests.detail.tps')}>{formatTps(r.outputTps)}</span>}
         </LiveCell>
       ),
     },
@@ -305,7 +362,7 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
         </LiveCell>
       ),
     },
-  ], [t, locale, clientName, onOpen]);
+  ], [t, locale, clientName, providerById, onOpen]);
 
   return <SortableDataTable<Row> caption={t('nav.requests')} rows={rows} columns={columns} rowKey="id" emptyMessage={t('requests.empty')} />;
 });
@@ -398,23 +455,34 @@ function StatusBadge({ status, http, hint }: { status: string; http?: number | n
     );
   }
   const tone = status === 'success' ? 'green' : status === 'client_cancelled' ? 'orange' : 'red';
+  const StatusIcon = status === 'success' ? CircleCheck : status === 'client_cancelled' ? Ban : CircleX;
   const key = `status.${status}` as 'status.success';
   return (
     <Badge tone={tone} title={[http ? `HTTP ${http}` : '', hint].filter(Boolean).join(' · ') || undefined}>
-      {t(key)}
+      <span className="inline-flex items-center gap-1">
+        <StatusIcon className="size-3" aria-hidden="true" />
+        {t(key)}
+      </span>
     </Badge>
   );
 }
 
 function ProtocolTag({ r }: { r: Pick<RequestSummary, 'inboundProtocol' | 'upstreamProtocol' | 'passthrough'> }) {
   if (r.passthrough || !r.upstreamProtocol || r.upstreamProtocol === r.inboundProtocol) {
-    return <span className="text-[var(--text-muted)]">{r.inboundProtocol}</span>;
+    return (
+      <span className="inline-flex items-center gap-1 text-[var(--text-muted)]">
+        <ProtocolGlyph protocol={r.inboundProtocol} />
+        {r.inboundProtocol}
+      </span>
+    );
   }
   return (
     <span className="inline-flex items-center gap-0.5 text-[var(--warning)]">
-      {r.inboundProtocol}
+      <ProtocolGlyph protocol={r.inboundProtocol} />
+      <span className="ml-0.5">{r.inboundProtocol}</span>
       <ArrowRight className="size-3" />
-      {r.upstreamProtocol}
+      <ProtocolGlyph protocol={r.upstreamProtocol} />
+      <span className="ml-0.5">{r.upstreamProtocol}</span>
     </span>
   );
 }
@@ -438,7 +506,10 @@ function ReasoningBadge({ r }: { r: Pick<RequestSummary, 'reasoningEffort' | 're
   if (parts.length === 0) return null;
   return (
     <Badge tone="neutral" className="max-w-44 text-[10px] font-normal" title={`${t('requests.reasoning.hint')} ${parts.join(' · ')}`}>
-      <span className="block max-w-40 truncate">{t('requests.reasoning')}: {parts.join(' · ')}</span>
+      <span className="inline-flex min-w-0 items-center gap-1">
+        <Brain className="size-3 shrink-0" aria-hidden="true" />
+        <span className="block max-w-40 min-w-0 truncate">{t('requests.reasoning')}: {parts.join(' · ')}</span>
+      </span>
     </Badge>
   );
 }

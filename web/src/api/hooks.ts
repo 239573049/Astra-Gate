@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
-import { api, apiStream, enc, qs, type SseMessage } from './client';
+import { api, apiBase, apiStream, enc, qs, type SseMessage } from './client';
 import type {
   MarketListing,
   MarketSearchResult,
@@ -76,6 +76,7 @@ import type {
   SyncPreview,
   TimeseriesPoint,
   Token,
+  TokenLimits,
   TokenMutationResult,
   TopModel,
   UpdateStatus,
@@ -83,6 +84,7 @@ import type {
   ModelOverrides,
 } from './types';
 import type { PrivacyEvent } from './types';
+import type { AlertEvent, AlertRule, AlertState, KeyInfo, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 
 export const keys = {
   health: ['health'] as const,
@@ -105,6 +107,11 @@ export const keys = {
   claudeDirect: ['claude-direct'] as const,
   claudeDirectRequests: (id: string) => ['claude-direct-requests', id] as const,
   tokens: ['tokens'] as const,
+  webhooks: ['webhooks'] as const,
+  webhookDeliveries: (id: string) => ['webhook-deliveries', id] as const,
+  alertEvents: ['alert-events'] as const,
+  alertRules: ['alert-rules'] as const,
+  alertStates: ['alert-states'] as const,
   clientModels: (kind: string) => ['client-models', kind] as const,
   backups: (kind: string) => ['backups', kind] as const,
   clientInstallJob: (kind: string) => ['client-install-job', kind] as const,
@@ -960,7 +967,10 @@ export const useCreateToken = () =>
 
 /** providerId: null clears direct calls; accountId: null / "" uses the provider's default account. */
 export const useUpdateToken = () =>
-  useTokenMutation((v: { id: string; name?: string; enabled?: boolean; providerId?: string | null; accountId?: string | null }) => {
+  useTokenMutation((v: {
+    id: string; name?: string; enabled?: boolean; providerId?: string | null; accountId?: string | null;
+    limits?: TokenLimits | null; allowedClients?: ClientKind[] | null;
+  }) => {
     const { id, ...body } = v;
     return api<Token>('PATCH', `/api/tokens/${enc(id)}`, body);
   });
@@ -1225,3 +1235,75 @@ export const useMagpieImportPreview = (enabled = true) =>
 
 export const useImportMagpie = () =>
   usePluginMutation((signIns: boolean) => api<PluginJob>('POST', '/api/plugins/import-magpie', { signIns }));
+
+// ---------- alerts & webhooks ----------
+
+export const useWebhooks = () => useQuery({ queryKey: keys.webhooks, queryFn: () => api<Webhook[]>('GET', '/api/webhooks') });
+
+export type WebhookBody = {
+  name?: string; url?: string; format?: WebhookFormat; enabled?: boolean; timeoutSec?: number; useProxy?: boolean;
+  /** Feishu / DingTalk: the bot's signing secret ("" clears it). Not accepted for other formats. */
+  secret?: string | null;
+  /** Replaces the set; an empty value keeps that header's stored value; null clears all. */
+  headers?: Record<string, string> | null;
+  /** false drops the secret (create: no secret). */
+  signed?: boolean;
+};
+
+function useAlertMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.webhooks });
+      void qc.invalidateQueries({ queryKey: keys.alertRules });
+      void qc.invalidateQueries({ queryKey: keys.alertStates });
+      void qc.invalidateQueries({ queryKey: ['webhook-deliveries'] });
+    },
+  });
+}
+
+export const useCreateWebhook = () => useAlertMutation((body: WebhookBody) => api<WebhookSecret>('POST', '/api/webhooks', body));
+export const useUpdateWebhook = () =>
+  useAlertMutation(({ id, ...body }: WebhookBody & { id: string }) => api<Webhook>('PATCH', `/api/webhooks/${enc(id)}`, body));
+export const useDeleteWebhook = () => useAlertMutation((id: string) => api<void>('DELETE', `/api/webhooks/${enc(id)}`));
+export const useResetWebhookSecret = () =>
+  useAlertMutation((id: string) => api<WebhookSecret>('POST', `/api/webhooks/${enc(id)}/secret`));
+export const useTestWebhook = () => useAlertMutation((id: string) => api<WebhookDelivery>('POST', `/api/webhooks/${enc(id)}/test`));
+export const useWebhookDeliveries = (id: string | undefined) =>
+  useQuery({
+    queryKey: keys.webhookDeliveries(id ?? ''),
+    queryFn: () => api<WebhookDelivery[]>('GET', `/api/webhooks/${enc(id!)}/deliveries`),
+    enabled: Boolean(id),
+  });
+export const useRedeliver = () =>
+  useAlertMutation((id: string) => api<WebhookDelivery>('POST', `/api/webhook-deliveries/${enc(id)}/redeliver`));
+
+export const useAlertEvents = () =>
+  useQuery({ queryKey: keys.alertEvents, queryFn: () => api<AlertEvent[]>('GET', '/api/alerts/events'), staleTime: Infinity });
+export const useAlertRules = () => useQuery({ queryKey: keys.alertRules, queryFn: () => api<AlertRule[]>('GET', '/api/alerts/rules') });
+export const useAlertStates = (firingOnly = false) =>
+  useQuery({
+    queryKey: [...keys.alertStates, firingOnly],
+    queryFn: () => api<AlertState[]>('GET', `/api/alerts/states${firingOnly ? '?firing=true' : ''}`),
+    refetchInterval: 60_000,
+  });
+
+export type AlertRuleBody = Partial<Pick<AlertRule, 'name' | 'enabled' | 'event' | 'subjects' | 'condition' | 'notifyResolved' | 'repeatMinutes' | 'cooldownMinutes' | 'webhookIds'>>;
+export const useCreateAlertRule = () => useAlertMutation((body: AlertRuleBody) => api<AlertRule>('POST', '/api/alerts/rules', body));
+export const useUpdateAlertRule = () =>
+  useAlertMutation(({ id, ...body }: AlertRuleBody & { id: string }) => api<AlertRule>('PATCH', `/api/alerts/rules/${enc(id)}`, body));
+export const useDeleteAlertRule = () => useAlertMutation((id: string) => api<void>('DELETE', `/api/alerts/rules/${enc(id)}`));
+
+/** The token self-service view (no admin session: the key itself authenticates). Plain fetch, not the admin client. */
+export async function fetchKeyInfo(key: string): Promise<KeyInfo> {
+  const res = await fetch(`${apiBase()}/v1/astra/key`, { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new KeyInfoError(res.status);
+  return (await res.json()) as KeyInfo;
+}
+
+export class KeyInfoError extends Error {
+  constructor(public readonly status: number) {
+    super(`HTTP ${status}`);
+  }
+}

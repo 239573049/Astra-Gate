@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Text;
 using Astra.Core;
 
@@ -17,7 +18,8 @@ public sealed class BodyStore(AstraPaths paths)
     public const string UpstreamResponse = "upstream-response";
     public const string ClientResponse = "client-response";
 
-    private const int MaxBytes = 8 * 1024 * 1024;
+    /// <summary>The most of one part that is written (the rest is cut).</summary>
+    public const int MaxBytes = 8 * 1024 * 1024;
 
     public static string RefFor(string requestId, DateTimeOffset startedAtUtc) => $"{startedAtUtc:yyyy-MM-dd}/{requestId}";
 
@@ -25,12 +27,24 @@ public sealed class BodyStore(AstraPaths paths)
     {
         var file = PathFor(bodyRef, part);
         Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        var slice = body.Length > MaxBytes ? body[..MaxBytes] : body;
-        await File.WriteAllBytesAsync(file, slice.ToArray(), ct);
+        await File.WriteAllBytesAsync(file, body.Length > MaxBytes ? body[..MaxBytes] : body, ct);
     }
 
-    public Task WriteAsync(string bodyRef, string part, string body, CancellationToken ct = default) =>
-        WriteAsync(bodyRef, part, Encoding.UTF8.GetBytes(body), ct);
+    public async Task WriteAsync(string bodyRef, string part, string body, CancellationToken ct = default)
+    {
+        // Only the characters that can land within MaxBytes are encoded (each is at least one byte).
+        var text = body.AsSpan(0, Math.Min(body.Length, MaxBytes));
+        var buffer = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetMaxByteCount(text.Length));
+        try
+        {
+            var length = Encoding.UTF8.GetBytes(text, buffer);
+            await WriteAsync(bodyRef, part, buffer.AsMemory(0, length), ct);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
 
     public string? Read(string bodyRef, string part)
     {

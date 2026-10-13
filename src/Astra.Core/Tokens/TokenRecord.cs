@@ -32,9 +32,23 @@ public sealed class TokenRecord
     /// <summary>Pinned subscription account of <see cref="ProviderId"/> for direct calls; null = the provider's default.</summary>
     public string? AccountId { get; set; }
 
+    /// <summary>Usage caps (<see cref="TokenLimits"/>, Json.Storage); null = unlimited.</summary>
+    public string? LimitsJson { get; set; }
+
+    /// <summary>
+    /// Client kinds allowed as the key suffix (JSON string array); null = any client, [] = direct calls only. Direct
+    /// calls themselves still need <see cref="ProviderId"/>.
+    /// </summary>
+    public string? AllowedClientsJson { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? LastUsedAt { get; set; }
+
+    public TokenLimits? Limits() => TokenLimits.Parse(LimitsJson);
+
+    public List<string>? AllowedClients() =>
+        string.IsNullOrWhiteSpace(AllowedClientsJson) ? null : Json.Deserialize<List<string>>(AllowedClientsJson) ?? [];
 }
 
 /// <summary>Usage numbers of one token, either lifetime (persisted counters) or for a time range (from the request log).</summary>
@@ -64,4 +78,19 @@ public sealed class TokenUsage
 
     /// <summary>Weighted output speed in tokens per second; null without a measured generation time.</summary>
     public double? Tps => TpsGenerationMs > 0 ? TpsOutputTokens * 1000.0 / TpsGenerationMs : null;
+}
+
+/// <summary>One row of <c>token_usage_daily</c>: a token's usage on one local day of the usage time zone.</summary>
+public sealed class TokenDailyUsage
+{
+    public string TokenId { get; set; } = "";
+
+    /// <summary>"yyyy-MM-dd".</summary>
+    public string Day { get; set; } = "";
+
+    public long Requests { get; set; }
+    public long SuccessRequests { get; set; }
+    public long CostNanoUsd { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
 }

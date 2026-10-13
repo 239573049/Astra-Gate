@@ -51,8 +51,10 @@ public sealed class ClientAdapterRegistry
         new OpenCodeClientAdapter(env, store, OpenCodeFlavour.MiMoCode),
         new DeepSeekHarnessClientAdapter(env, store),
         new WorkBuddyClientAdapter(env, store),
+        new WorkBuddyClientAdapter(env, store, international: true),
         new MuseCodeClientAdapter(env, store),
         new NextCoWorkClientAdapter(env, store),
+        new PaseoClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

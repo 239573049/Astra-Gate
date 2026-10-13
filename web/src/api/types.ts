@@ -276,7 +276,7 @@ export type ClientKind =
   | "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build"
   | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot"
   | "crush" | "qwen-code" | "droid" | "kimi-code" | "zed"
-  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "muse-code" | "nextcowork";
+  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo";
 /** One provider bound to a client; the list order is the routing order (first = primary). */
 export interface ClientBinding { providerId: string; accountId?: string | null }
 export interface ClientInfo {
@@ -411,11 +411,30 @@ export interface Token {
   /** Enabled clients whose config uses this token. */
   clients: ClientKind[];
   today: TokenStats; total: TokenStats;
+  /** Usage caps; null = unlimited. */
+  limits?: TokenLimits | null;
+  /** Client kinds the key may be used with; null = any, [] = direct calls only. */
+  allowedClients?: ClientKind[] | null;
+  /** Where the token stands against each budget of `limits`. */
+  limitUsage: TokenBudgetUsage[];
+  /** Requests let through during the last minute (what the RPM cap counts). */
+  recentRequests: number;
+}
+export type TokenLimitMetric = 'cost' | 'requests' | 'tokens';
+export type TokenLimitPeriod = 'day' | 'week' | 'month' | 'total';
+/** One cap: at most `limit` (USD for cost, a count otherwise) per period of the usage time zone. */
+export interface TokenBudget { metric: TokenLimitMetric; period: TokenLimitPeriod; limit: number }
+export interface TokenLimits { budgets: TokenBudget[]; rpm?: number | null }
+export interface TokenBudgetUsage extends TokenBudget {
+  used: number; remaining: number; usedPercent: number; exhausted: boolean;
+  /** When the period resets; null for "total". */
+  resetsAt?: string | null;
 }
 export interface TokenMutationResult { token?: Token | null; rewritten: ClientKind[]; skipped: ClientKind[] }
 // GET /api/tokens -> Token[]
 // POST /api/tokens body {name, providerId?, accountId?} -> Token
-// PATCH /api/tokens/{id} body {name?, enabled?, providerId?, accountId?} -> Token   (never touches client configs)
+// PATCH /api/tokens/{id} body {name?, enabled?, providerId?, accountId?, limits?, allowedClients?} -> Token   (never touches client configs)
+// Self-service, authenticated by the key itself (no admin session): GET /v1/astra/key, /v1/dashboard/billing/{subscription,usage}
 // POST /api/tokens/{id}/reset -> TokenMutationResult   (new key; rewrites the configs of its enabled clients)
 // POST /api/tokens/{id}/reveal -> {token}
 // DELETE /api/tokens/{id} -> TokenMutationResult       (default token: 409; clients move to the default token)
@@ -691,14 +710,23 @@ export interface AccountImportRequest {
 //   (400 {error} when empty, over 200 tokens, or the provider is not GitHub Copilot)
 
 // ---------- settings ----------
+export type RequestCompression = "default" | "zstd" | "gzip" | "br" | "deflate" | "none";
 export interface Settings {
   locale: "zh" | "en"; debugBodies: boolean; bodyRetentionDays: number; requestRetentionDays: number | null;
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
   updateChannel: "stable" | "beta"; updateAutoCheck: boolean;
+  /** Request body coding for providers that compress (e.g. ChatGPT subscription's zstd): default = each provider's own; none = off. */
+  requestCompression: RequestCompression;
   /** false = gateway calls work without a token (served via the default token). */
   requireGatewayKey: boolean;
   /** Background balance / quota refresh of API-key providers, minutes (0 = off; providers may override). */
   quotaAutoIntervalMinutes: number;
+  /** Background quota refresh of subscription accounts, minutes (0 = off, otherwise at least 10). */
+  subscriptionQuotaIntervalMinutes: number;
+  /** Time zone token budgets' days / weeks / months follow; null = the server's local zone. */
+  usageTimeZone: string | null;
+  /** Read-only: the zone actually in use. */
+  effectiveUsageTimeZone: string;
   /** Outbound proxy: system = env vars, then the OS setting; custom = proxyUrl; direct = never. Providers' own proxy wins. */
   proxyMode: ProxyMode; proxyUrl: string | null; proxyUsername: string | null; hasProxyPassword: boolean;
   /** NO_PROXY-style hosts, comma separated, that stay direct in custom mode. */
@@ -814,4 +842,51 @@ export interface PluginCheckinState {
 export interface MagpieImportPreview {
   found: boolean; path: string; signIns: number; error?: string | null;
   plugins: { spec: string; off: boolean; hasOptions: boolean; installed: boolean }[];
+}
+
+// ---------- alerts & webhooks ----------
+// GET/POST /api/webhooks, PATCH/DELETE /api/webhooks/{id}, POST /{id}/secret, POST /{id}/test, GET /{id}/deliveries
+// POST /api/webhook-deliveries/{id}/redeliver
+// GET /api/alerts/events, GET/POST /api/alerts/rules, PATCH/DELETE /api/alerts/rules/{id}, GET /api/alerts/states?firing=
+/** generic = Astra's signed JSON; the others render the alert as that platform's bot message. */
+export type WebhookFormat = 'generic' | 'feishu' | 'dingtalk' | 'wecom' | 'slack' | 'discord';
+/** A delivery target; the secret only as hasSecret, custom headers by name only. */
+export interface Webhook {
+  id: string; name: string; url: string; format: WebhookFormat; enabled: boolean; timeoutSec: number; useProxy: boolean; hasSecret: boolean;
+  headerNames: string[]; createdAt: string; updatedAt: string;
+}
+/** Create / secret reset: a generated (generic) secret is shown this once; null for bot formats. */
+export interface WebhookSecret { webhook: Webhook; secret?: string | null }
+export type WebhookDeliveryStatus = 'pending' | 'success' | 'failed';
+export interface WebhookDelivery {
+  id: string; webhookId: string; ruleId?: string | null; event: string; status: WebhookDeliveryStatus; attempts: number;
+  nextAttemptAt?: string | null; httpStatus?: number | null; error?: string | null; responseSnippet?: string | null;
+  payload?: Record<string, unknown> | null; createdAt: string; finishedAt?: string | null;
+}
+export type AlertSubjectType = 'provider' | 'account' | 'token';
+export interface AlertParam { name: string; kind: 'number' | 'choice' | 'text'; choices?: string[] | null; default?: number | null; required: boolean }
+export interface AlertEvent { id: string; subjectType: AlertSubjectType; params: AlertParam[] }
+export interface AlertRule {
+  id: string; name: string; enabled: boolean; event: string;
+  /** Subject ids; null = every subject of the event's type. */
+  subjects?: string[] | null;
+  condition: Record<string, string | number>;
+  notifyResolved: boolean; repeatMinutes?: number | null; cooldownMinutes: number; webhookIds: string[];
+  /** Subjects the rule is firing for right now. */
+  firing: number;
+  createdAt: string; updatedAt: string;
+}
+export interface AlertState {
+  ruleId: string; ruleName: string; event: string; subjectType: AlertSubjectType; subjectId: string; subjectName: string;
+  state: 'firing' | 'ok'; value?: Record<string, unknown> | null; changedAt: string; lastNotifiedAt?: string | null;
+}
+
+// ---------- token self-service (GET /v1/astra/key, authenticated by the token itself) ----------
+export interface KeyUsage { requests: number; successRequests: number; costUsd: number; inputTokens: number; outputTokens: number }
+export interface KeyInfo {
+  name: string; keyPrefix: string; enabled: boolean; allowedClients?: string[] | null; directCall: boolean; timeZone: string;
+  limits: (TokenBudgetUsage & { unit: string })[];
+  rpm?: { limit: number; used: number } | null;
+  usage: { today: KeyUsage; week: KeyUsage; month: KeyUsage; total: KeyUsage };
+  daily: (KeyUsage & { day: string })[];
 }

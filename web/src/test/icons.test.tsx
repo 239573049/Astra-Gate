@@ -5,7 +5,7 @@ import { fileURLToPath, URL as NodeURL } from 'node:url';
 import { cleanup, render } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { CLIENT_ORDER, ClientGlyph, ClientIcon, ProviderIcon } from '../components/icons';
+import { CLIENT_ORDER, ClientGlyph, ClientIcon, ModelGlyph, ProviderIcon } from '../components/icons';
 
 // The real @lobehub/icons barrel transitively imports JSON with import attributes that Node ESM
 // (vitest) rejects. Stub each brand component: the mono mark itself, `.Color` and `.Avatar`.
@@ -29,6 +29,7 @@ vi.mock('@lobehub/icons', () => {
     HermesAgent: stub('hermes-agent'),
     Kimi: stub('kimi'),
     LmStudio: stub('lm-studio'),
+    Qoder: stub('qoder'),
     Meta: stub('meta'),
     Minimax: stub('minimax'),
     Moonshot: stub('moonshot'),
@@ -42,6 +43,17 @@ vi.mock('@lobehub/icons', () => {
     Volcengine: stub('volcengine'),
     XAI: stub('xai'),
     XiaomiMiMo: stub('xiaomi-mimo'),
+    Baichuan: stub('baichuan'),
+    ChatGLM: stub('chatglm'),
+    Cohere: stub('cohere'),
+    Doubao: stub('doubao'),
+    Gemma: stub('gemma'),
+    Hunyuan: stub('hunyuan'),
+    LongCat: stub('longcat'),
+    Mistral: stub('mistral'),
+    Stepfun: stub('stepfun'),
+    Wenxin: stub('wenxin'),
+    Yi: stub('yi'),
     Zhipu: stub('zhipu'),
   };
 });
@@ -80,8 +92,10 @@ describe('client brand icons', () => {
     'mimo-code': { brand: 'xiaomi-mimo', mark: 'mono', badge: true },
     'deepseek-harness': { brand: 'deepseek', mark: 'color', badge: true },
     workbuddy: { brand: null, mark: 'logo', badge: false },
+    'workbuddy-ai': { brand: null, mark: 'logo', badge: true },
     'muse-code': { brand: 'meta', mark: 'color', badge: true },
     nextcowork: { brand: null, mark: 'logo', badge: false },
+    paseo: { brand: null, mark: 'logo', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {
@@ -163,6 +177,18 @@ describe('provider brand icons', () => {
     }
   });
 
+  it('renders plugin providers by magpie icon name or their own picture', () => {
+    // plugin providers carry the market listing's icon name (magpie's), or an https/data:image URL of their own
+    const workbuddy = render(<ProviderIcon name="WorkBuddy AI" icon="workbuddy-color" />);
+    expect(workbuddy.container.querySelector('img')!.getAttribute('src')).toMatch(/workbuddy\.svg$/);
+    workbuddy.unmount();
+    const qoder = render(<ProviderIcon name="Qoder CN" icon="qoder" />);
+    expect(qoder.container.querySelector('svg[data-testid^="lobe-"]')).not.toBeNull();
+    qoder.unmount();
+    const own = render(<ProviderIcon name="Own" icon="https://example.com/own.png" />);
+    expect(own.container.querySelector('img')!.getAttribute('src')).toBe('https://example.com/own.png');
+  });
+
   it('falls back to the colored-initials tile for unknown icon ids', () => {
     const { container } = render(<ProviderIcon name="Acme AI" icon="unknown-brand" colorKey="acme" />);
     expect(container.querySelector('svg')).toBeNull();
@@ -182,6 +208,49 @@ describe('provider brand icons', () => {
       expect(bytes.length, source.file).toBeGreaterThan(100);
       expect(createHash('sha256').update(bytes).digest('hex'), source.file).toBe(source.sha256);
       expect(bytes.subarray(0, 8).toString('hex'), source.file).toBe('89504e470d0a1a0a'); // PNG
+    }
+  });
+});
+
+describe('model glyphs', () => {
+  it('guesses the model family from the id and falls back to a neutral box', () => {
+    const cases: [string, string | null][] = [
+      ['claude-sonnet-4-5', 'claude'],
+      ['us.anthropic.claude-opus-4-1', 'claude'],
+      ['gpt-5-codex', 'openai'],
+      ['o3-mini', 'openai'],
+      ['gemini-2.5-pro', 'gemini'],
+      ['gemma-3-27b', 'gemma'],
+      ['deepseek-chat', 'deepseek'],
+      ['qwen3-coder-plus', 'qwen'],
+      ['kimi-k2', 'kimi'],
+      ['glm-4.6', 'chatglm'],
+      ['grok-4', 'grok'],
+      ['qfmodel', null],
+    ];
+    for (const [model, brand] of cases) {
+      const { container, unmount } = render(<ModelGlyph model={model} />);
+      const mark = container.querySelector('[data-testid^="lobe-"]');
+      expect(mark?.getAttribute('data-testid') ?? null, model).toBe(brand && `lobe-${brand}`);
+      expect(container.querySelector('[data-model-mark]')?.getAttribute('data-model-mark')).toBe(brand ? 'brand' : 'none');
+      unmount();
+    }
+  });
+});
+
+describe('regional provider variants', () => {
+  it('badges the suffixed build of a shared mark and leaves the plain one alone', () => {
+    const cases: [string, string, string | null][] = [
+      ['WorkBuddy', 'workbuddy-color', null],
+      ['WorkBuddy AI', 'workbuddy-color', 'intl'],
+      ['Qoder', 'qoder', null],
+      ['Qoder CN', 'qoder', 'cn'],
+      ['Moonshot AI', 'kimi', null],
+    ];
+    for (const [name, icon, region] of cases) {
+      const { container, unmount } = render(<ProviderIcon name={name} icon={icon} />);
+      expect(container.querySelector('[data-region-badge]')?.getAttribute('data-region-badge') ?? null, name).toBe(region);
+      unmount();
     }
   });
 });

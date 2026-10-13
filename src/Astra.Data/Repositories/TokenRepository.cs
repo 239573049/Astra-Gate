@@ -4,14 +4,14 @@ using Astra.Core.Tokens;
 namespace Astra.Data.Repositories;
 
 /// <summary>
-/// Gateway tokens (table <c>tokens</c>) and their lifetime usage counters (table <c>token_usage_totals</c>,
-/// added to by <see cref="RequestRepository.InsertBatchAsync"/>).
+/// Gateway tokens (table <c>tokens</c>) and their usage counters (tables <c>token_usage_totals</c> and
+/// <c>token_usage_daily</c>, added to by <see cref="RequestRepository.InsertBatchAsync"/>).
 /// </summary>
 public sealed class TokenRepository
 {
     private const string Select = """
         SELECT id, name, is_default, enabled, key_enc, key_hash, key_prefix, provider_id, account_id,
-               created_at, updated_at, last_used_at
+               limits_json, allowed_clients_json, created_at, updated_at, last_used_at
         FROM tokens
         """;
 
@@ -50,9 +50,9 @@ public sealed class TokenRepository
         await using var conn = await _factory.OpenAsync(ct);
         await conn.ExecuteAsync("""
             INSERT INTO tokens(id, name, is_default, enabled, key_enc, key_hash, key_prefix, provider_id, account_id,
-                               created_at, updated_at, last_used_at)
+                               limits_json, allowed_clients_json, created_at, updated_at, last_used_at)
             VALUES (@id, @name, @is_default, @enabled, @key_enc, @key_hash, @key_prefix, @provider_id, @account_id,
-                    @created_at, @updated_at, @last_used_at)
+                    @limits_json, @allowed_clients_json, @created_at, @updated_at, @last_used_at)
             """, new
         {
             id = token.Id,
@@ -64,19 +64,22 @@ public sealed class TokenRepository
             key_prefix = token.KeyPrefix,
             provider_id = token.ProviderId,
             account_id = token.AccountId,
+            limits_json = token.LimitsJson,
+            allowed_clients_json = token.AllowedClientsJson,
             created_at = DateTimeOffsetHandler.ToStorage(token.CreatedAt),
             updated_at = DateTimeOffsetHandler.ToStorage(token.UpdatedAt),
             last_used_at = token.LastUsedAt is { } used ? DateTimeOffsetHandler.ToStorage(used) : null,
         });
     }
 
-    /// <summary>Saves every editable column (name, enabled, key, direct-call provider); never touches last_used_at.</summary>
+    /// <summary>Saves every editable column (name, enabled, key, direct-call provider, limits); never touches last_used_at.</summary>
     public async Task<bool> UpdateAsync(TokenRecord token, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
         return await conn.ExecuteAsync("""
             UPDATE tokens SET name = @name, enabled = @enabled, key_enc = @key_enc, key_hash = @key_hash,
                               key_prefix = @key_prefix, provider_id = @provider_id, account_id = @account_id,
+                              limits_json = @limits_json, allowed_clients_json = @allowed_clients_json,
                               updated_at = @updated_at
             WHERE id = @id
             """, new
@@ -89,6 +92,8 @@ public sealed class TokenRepository
             key_prefix = token.KeyPrefix,
             provider_id = token.ProviderId,
             account_id = token.AccountId,
+            limits_json = token.LimitsJson,
+            allowed_clients_json = token.AllowedClientsJson,
             updated_at = DateTimeOffsetHandler.ToStorage(token.UpdatedAt),
         }) > 0;
     }
@@ -105,6 +110,25 @@ public sealed class TokenRepository
     {
         await using var conn = await _factory.OpenAsync(ct);
         return (await conn.QueryAsync<TokenUsage>(TotalsSelect)).ToList();
+    }
+
+    /// <summary>Lifetime counters of one token; null when it has none yet.</summary>
+    public async Task<TokenUsage?> GetTotalsAsync(string tokenId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return await conn.QuerySingleOrDefaultAsync<TokenUsage>($"{TotalsSelect} WHERE token_id = @tokenId", new { tokenId });
+    }
+
+    /// <summary>Daily counters (table <c>token_usage_daily</c>) of one token from <paramref name="fromDay"/> ("yyyy-MM-dd") on, oldest first.</summary>
+    public async Task<IReadOnlyList<TokenDailyUsage>> DailyAsync(string tokenId, string fromDay, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<TokenDailyUsage>("""
+            SELECT token_id, day, requests, success_requests, cost_nanousd, input_tokens, output_tokens
+            FROM token_usage_daily
+            WHERE token_id = @tokenId AND day >= @fromDay
+            ORDER BY day
+            """, new { tokenId, fromDay })).ToList();
     }
 
     /// <summary>Per-token usage from the request log within [from, to] (e.g. today).</summary>

@@ -49,9 +49,6 @@ const KIND_TONE: Record<PluginKind, 'neutral' | 'accent' | 'green' | 'orange'> =
   pi: 'orange',
 };
 
-// magpie's icon names that Astra ships under another name
-const ICON_ALIASES: Record<string, string> = { xai: 'grok', zcode: 'glm', 'kiro-color': 'kiro', 'workbuddy-color': 'workbuddy' };
-
 /** A plugin's picture: the one it gives (an https: / data:image URL), a brand Astra knows, else its kind's glyph. */
 function PluginIcon({ name, icon, kind, size = 32 }: { name: string; icon?: string | null; kind: PluginKind; size?: number }) {
   const radius = Math.round(size * 0.28);
@@ -69,7 +66,7 @@ function PluginIcon({ name, icon, kind, size = 32 }: { name: string; icon?: stri
       </span>
     );
   }
-  return <ProviderIcon name={name} icon={icon ? (ICON_ALIASES[icon] ?? icon) : null} size={size} />;
+  return <ProviderIcon name={name} icon={icon} size={size} />;
 }
 
 /**

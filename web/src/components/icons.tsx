@@ -1,9 +1,10 @@
 import { type IconAvatarProps } from '@lobehub/icons';
-import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
+import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qoder, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
 import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo } from '@lobehub/icons';
-import { Code, Monitor, Puzzle, SquareTerminal, type LucideIcon } from 'lucide-react';
+import { Baichuan, ChatGLM, Cohere, Doubao, Gemma, Hunyuan, LongCat, Mistral, Stepfun, Wenxin, Yi } from '@lobehub/icons';
+import { Box, Code, Globe, Monitor, Puzzle, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType, CSSProperties } from 'react';
-import type { ClientKind } from '../api/types';
+import type { ApiProtocol, ClientKind } from '../api/types';
 // Vendors without a @lobehub/icons brand component ship their own downloaded mark.
 // See assets/providers/sources.json for provenance.
 import routinLogo from '../assets/providers/routin.png';
@@ -12,6 +13,7 @@ import nextcoworkLogo from '../assets/providers/nextcowork.png';
 import crushLogo from '../assets/clients/crush.png';
 import droidLogo from '../assets/clients/droid.svg';
 import nextcoworkClientLogo from '../assets/clients/nextcowork.png';
+import paseoLogo from '../assets/clients/paseo.png';
 import ompLogo from '../assets/clients/omp.png';
 import vscodeInsidersLogo from '../assets/clients/vscode-insiders.png';
 import vscodiumLogo from '../assets/clients/vscodium.svg';
@@ -41,8 +43,10 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'mimo-code': { name: 'MiMo Code' },
   'deepseek-harness': { name: 'DeepSeek Harness' },
   workbuddy: { name: 'WorkBuddy' },
+  'workbuddy-ai': { name: 'WorkBuddy AI' },
   'muse-code': { name: 'Muse Code' },
   nextcowork: { name: 'NextCoWork' },
+  paseo: { name: 'Paseo' },
 };
 
 /**
@@ -57,7 +61,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
   'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
-  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'muse-code', 'nextcowork',
+  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -110,8 +114,11 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   'mimo-code': { Mark: XiaomiMiMo, Avatar: XiaomiMiMo.Avatar, badge: SquareTerminal },
   'deepseek-harness': { Mark: DeepSeek.Color, Avatar: DeepSeek.Avatar, badge: Monitor },
   workbuddy: logo(workbuddyLogo),
+  // the international build (workbuddy.ai) shares the China build's mark: told apart by a globe badge
+  'workbuddy-ai': { ...logo(workbuddyLogo), badge: Globe },
   'muse-code': { Mark: Meta.Color, Avatar: Meta.Avatar, badge: SquareTerminal },
   nextcowork: logo(nextcoworkClientLogo),
+  paseo: logo(paseoLogo),
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.
@@ -218,6 +225,7 @@ const LOBE_PROVIDER_AVATARS: Record<string, BrandAvatar> = {
   siliconflow: SiliconCloud.Avatar,
   ollama: Ollama.Avatar,
   'lm-studio': LmStudio.Avatar,
+  qoder: Qoder.Avatar,
 };
 
 // Providers the icon library does not ship: a locally bundled vendor image, keyed by the same
@@ -225,25 +233,74 @@ const LOBE_PROVIDER_AVATARS: Record<string, BrandAvatar> = {
 const LOCAL_PROVIDER_LOGOS: Record<string, string> = {
   nextcowork: nextcoworkLogo,
   routin: routinLogo,
+  workbuddy: workbuddyLogo,
 };
 
+// magpie's icon names (plugin market listings, plugin providers' fallback icon) that Astra ships under another name
+const PROVIDER_ICON_ALIASES: Record<string, string> = { xai: 'grok', zcode: 'glm', 'kiro-color': 'kiro', 'workbuddy-color': 'workbuddy' };
+
+function LogoTile({ src, size }: { src: string; size: number }) {
+  return (
+    <span
+      aria-hidden
+      className="relative inline-flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.08)]"
+      style={{ width: size, height: size, borderRadius: Math.round(size * 0.28) }}
+    >
+      <img src={src} alt="" draggable={false} decoding="async" className="size-full object-contain" />
+    </span>
+  );
+}
+
+// Regional builds of one vendor share its mark (WorkBuddy / WorkBuddy AI, Qoder / Qoder CN): the variant whose name
+// carries the region suffix gets a corner badge, "CN" for a China build and a globe for an international one.
+const CN_VARIANT = /(?:[\s-]|^)(?:cn|china)$|(?:国内|中国)版?$/i;
+const INTL_VARIANT = /(?:[\s-]|^)(?:intl|international|global)$|国际版?$/i;
+// brands whose international build is named "<brand> AI" (a generic " AI" suffix would also match "Moonshot AI")
+const AI_SUFFIX_INTL: Record<string, RegExp> = { workbuddy: /workbuddy[\s-]?ai$/i };
+
+function providerRegion(name: string, key: string | undefined): 'cn' | 'intl' | null {
+  const n = name.trim();
+  if (CN_VARIANT.test(n)) return 'cn';
+  if (INTL_VARIANT.test(n) || (key && AI_SUFFIX_INTL[key]?.test(n))) return 'intl';
+  return null;
+}
+
+function RegionBadge({ region, size }: { region: 'cn' | 'intl'; size: number }) {
+  const box = Math.max(9, Math.round(size * 0.45));
+  return (
+    <span
+      data-region-badge={region}
+      className="absolute -right-0.5 -bottom-0.5 inline-flex items-center justify-center rounded-[3px] bg-[var(--surface-raised)] font-semibold leading-none text-[var(--foreground)] shadow-[0_0_0_1px_var(--border)]"
+      style={{ minWidth: box, height: box, fontSize: Math.max(6, Math.round(box * 0.6)), paddingInline: region === 'cn' ? 1 : 0 }}
+    >
+      {region === 'cn' ? 'CN' : <Globe style={{ width: box * 0.78, height: box * 0.78 }} strokeWidth={2.5} />}
+    </span>
+  );
+}
+
 export function ProviderIcon({ name, icon, colorKey, size = 28 }: { name: string; icon?: string | null; colorKey?: string | null; size?: number }) {
-  const Avatar = icon ? LOBE_PROVIDER_AVATARS[icon] : undefined;
+  const key = icon ? (PROVIDER_ICON_ALIASES[icon] ?? icon) : undefined;
+  const region = providerRegion(name, key);
+  const mark = <ProviderMark name={name} icon={icon} colorKey={colorKey} size={size} />;
+  if (!region) return mark;
+  return (
+    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
+      {mark}
+      <RegionBadge region={region} size={size} />
+    </span>
+  );
+}
+
+function ProviderMark({ name, icon, colorKey, size }: { name: string; icon?: string | null; colorKey?: string | null; size: number }) {
+  // a plugin provider's own picture (PluginProviderSync keeps only https: and raster data:image URLs)
+  if (icon && /^(https:|data:image\/)/i.test(icon)) return <LogoTile src={icon} size={size} />;
+  const key = icon ? (PROVIDER_ICON_ALIASES[icon] ?? icon) : undefined;
+  const Avatar = key ? LOBE_PROVIDER_AVATARS[key] : undefined;
   if (Avatar) {
     return <Avatar size={size} shape="square" style={{ borderRadius: Math.round(size * 0.28) }} />;
   }
-  const logo = icon ? LOCAL_PROVIDER_LOGOS[icon] : undefined;
-  if (logo) {
-    return (
-      <span
-        aria-hidden
-        className="relative inline-flex shrink-0 items-center justify-center overflow-hidden bg-white shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.08)]"
-        style={{ width: size, height: size, borderRadius: Math.round(size * 0.28) }}
-      >
-        <img src={logo} alt="" draggable={false} decoding="async" className="size-full object-contain" />
-      </span>
-    );
-  }
+  const logo = key ? LOCAL_PROVIDER_LOGOS[key] : undefined;
+  if (logo) return <LogoTile src={logo} size={size} />;
   // No brand logo: neutral initials mark (colorKey kept for API compatibility).
   void colorKey;
   return (
@@ -253,6 +310,63 @@ export function ProviderIcon({ name, icon, colorKey, size = 28 }: { name: string
       style={{ width: size, height: size, borderRadius: Math.round(size * 0.28), fontSize: Math.round(size * 0.38) }}
     >
       {initials(name)}
+    </span>
+  );
+}
+
+// Model-id patterns → the model family's brand mark, first match wins. Model ids carry no vendor field, so this is a
+// best-effort guess from the name (case-insensitive, matched anywhere so "anthropic/claude-…" and "us.anthropic.…"
+// work too); an id matching nothing shows a neutral box.
+const MODEL_MARKS: [RegExp, BrandMark][] = [
+  [/claude|anthropic/, Claude.Color],
+  [/gemma/, Gemma.Color],
+  [/gemini/, Gemini.Color],
+  [/\bgpt|\bo[1-9]\b|o[1-9]-|codex|openai|dall-e|whisper|chatgpt/, OpenAI],
+  [/deepseek/, DeepSeek.Color],
+  [/qwen|qwq|qvq/, Qwen.Color],
+  [/kimi|moonshot/, Kimi.Color],
+  [/glm|zhipu|chatglm/, ChatGLM.Color],
+  [/minimax|abab/, Minimax.Color],
+  [/grok|xai/, Grok],
+  [/llama|meta/, Meta.Color],
+  [/mistral|mixtral|codestral|devstral|magistral|pixtral/, Mistral.Color],
+  [/doubao|\bseed-/, Doubao.Color],
+  [/hunyuan/, Hunyuan.Color],
+  [/ernie|wenxin/, Wenxin.Color],
+  [/\byi-/, Yi.Color],
+  [/baichuan/, Baichuan.Color],
+  [/command|cohere/, Cohere.Color],
+  [/step-/, Stepfun],
+  [/mimo/, XiaomiMiMo],
+  [/longcat/, LongCat.Color],
+];
+
+/** The brand mark of a model's family, guessed from its id (see MODEL_MARKS). Decorative, like ClientGlyph. */
+export function ModelGlyph({ model, size = 16 }: { model?: string | null; size?: number }) {
+  const id = (model ?? '').toLowerCase();
+  const Mark = id ? MODEL_MARKS.find(([re]) => re.test(id))?.[1] : undefined;
+  return (
+    <span aria-hidden data-model-mark={Mark ? 'brand' : 'none'} className="inline-flex shrink-0 items-center justify-center text-[var(--foreground)]" style={{ width: size, height: size }}>
+      {Mark ? <Mark size={size} aria-hidden /> : <Box className="text-[var(--text-secondary)] opacity-60" style={{ width: size * 0.85, height: size * 0.85 }} />}
+    </span>
+  );
+}
+
+// Wire protocol → the vendor whose API it is, for the small marks in the request log's protocol line.
+const PROTOCOL_MARKS: Record<ApiProtocol, BrandMark> = {
+  'openai-chat': OpenAI,
+  'openai-responses': OpenAI,
+  anthropic: Anthropic,
+  gemini: Gemini.Color,
+};
+
+/** The vendor mark of a wire protocol. Decorative; the protocol name is shown beside it. */
+export function ProtocolGlyph({ protocol, size = 11 }: { protocol: ApiProtocol; size?: number }) {
+  const Mark = PROTOCOL_MARKS[protocol] as BrandMark | undefined;
+  if (!Mark) return null;
+  return (
+    <span aria-hidden data-protocol-mark={protocol} className="inline-flex shrink-0 items-center justify-center text-current" style={{ width: size, height: size }}>
+      <Mark size={size} aria-hidden />
     </span>
   );
 }

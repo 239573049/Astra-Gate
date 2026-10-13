@@ -172,10 +172,11 @@ public sealed class ProviderPluginGatewayTests : IAsyncDisposable
 
             var state = await host.GetJsonAsync("/api/plugin-providers/plugin-fakeco/checkin");
             Assert.True(state["supported"]!.GetValue<bool>());
-            Assert.False(state["on"]!.GetValue<bool>());
+            Assert.True(state["on"]!.GetValue<bool>()); // on by default
             var checkins = host.App.Services.GetRequiredService<Api.PluginCheckinService>();
+            await host.SendAsync(HttpMethod.Put, "/api/plugin-providers/plugin-fakeco/checkin", new { on = false });
             await checkins.RunDueAsync(CancellationToken.None);
-            Assert.False(File.Exists(presses)); // off until switched on
+            Assert.False(File.Exists(presses)); // nothing while switched off
 
             await host.SendAsync(HttpMethod.Put, "/api/plugin-providers/plugin-fakeco/checkin", new { on = true });
             await checkins.RunDueAsync(CancellationToken.None);

@@ -16,13 +16,19 @@ namespace Astra.Clients.Adapters;
 /// is hot-reloaded. Entries are addressed with a selector on <c>name</c> (<see cref="JsoncEditor.Selector"/>), which survives a
 /// gateway port change and never matches the user's own models; <c>id</c> is the model id sent upstream. The
 /// <c>availableModels</c> filter is left alone — when the user set one, Astra's models stay hidden until they are added to it.
+/// With <paramref name="international"/> it is WorkBuddy AI (the international build, workbuddy.ai, its own client):
+/// the same app keeping its data in a sibling <c>~/.workbuddy-ai</c>, so the same entries go into
+/// <c>~/.workbuddy-ai/models.json</c>.
 /// </summary>
-public sealed class WorkBuddyClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
+public sealed class WorkBuddyClientAdapter(ClientEnvironment env, IClientConfigStateStore store, bool international = false)
     : ClientAdapterBase(env, store)
 {
     public const string NamePrefix = "Astra: ";
 
-    private string ConfigFile => Env.Combine(".workbuddy", "models.json");
+    /// <summary>The build's home: <c>.workbuddy</c> (China build) or <c>.workbuddy-ai</c> (international build).</summary>
+    private string HomeDir => international ? ".workbuddy-ai" : ".workbuddy";
+
+    private string ConfigFile => Env.Combine(HomeDir, "models.json");
 
     /// <summary>
     /// Astra wrote WorkBuddy's models into CodeBuddy's <c>~/.codebuddy/models.json</c> before 0.3.1 (the products share
@@ -34,7 +40,7 @@ public sealed class WorkBuddyClientAdapter(ClientEnvironment env, IClientConfigS
 
     private static string ModelPath(string id) => "models." + JsoncEditor.Selector(("name", NamePrefix + id));
 
-    public override string Kind => ClientKinds.WorkBuddy;
+    public override string Kind => international ? ClientKinds.WorkBuddyAi : ClientKinds.WorkBuddy;
 
     public override ClientMode Mode => ClientMode.Coexist;
 
@@ -42,6 +48,13 @@ public sealed class WorkBuddyClientAdapter(ClientEnvironment env, IClientConfigS
 
     public override ClientDetection Detect()
     {
+        if (international)
+        {
+            var home = Env.Combine(HomeDir);
+            return Env.DirectoryExists(home)
+                ? ClientDetection.Found(null, $"config directory {home}")
+                : ClientDetection.NotFound($"no {home}");
+        }
         foreach (var dir in new[] { Env.Combine(".workbuddy"), Env.Combine(".codebuddy") })
         {
             if (Env.DirectoryExists(dir)) return ClientDetection.Found(null, $"config directory {dir}");

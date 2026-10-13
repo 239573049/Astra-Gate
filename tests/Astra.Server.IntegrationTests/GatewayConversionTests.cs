@@ -401,6 +401,27 @@ public class GatewayConversionTests
         Assert.NotNull(record.TtftMs);
     }
 
+    [Theory]
+    [InlineData(ClientKinds.Codex, "/v1/responses", """{"model":"gpt-5","input":"hi","stream":true,"user":"u-1","safety_identifier":"s","max_output_tokens":64,"temperature":0.2,"top_p":0.9}""")]
+    [InlineData(ClientKinds.ClaudeCode, "/v1/messages", """{"model":"gpt-5","max_tokens":64,"stream":true,"temperature":0.2,"metadata":{"user_id":"u-1"},"messages":[{"role":"user","content":"hi"}]}""")]
+    public async Task Codex_Subscription_Drops_Parameters_The_ChatGPT_Backend_Rejects(string kind, string path, string body)
+    {
+        const string stream =
+            "event: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":0,\"response\":{\"id\":\"resp_1\",\"object\":\"response\",\"status\":\"completed\",\"model\":\"gpt-5\",\"output\":[],\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2}}}\n\n";
+        await using var gw = await GatewayFixture.StartAsync(kind, ApiProtocol.OpenAIResponses, _ => FakeUpstream.Sse(stream));
+        gw.Provider.Settings["force_stream"] = true;
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        var response = await gw.PostAsync(path, body, null, ("anthropic-version", "2023-06-01"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var sent = JsonNode.Parse(Assert.Single(gw.Upstream.Requests).Body)!.AsObject();
+        foreach (var name in new[] { "user", "safety_identifier", "max_output_tokens", "temperature", "top_p" })
+            Assert.False(sent.ContainsKey(name), name);
+        Assert.True(sent["stream"]!.GetValue<bool>());
+        Assert.False(sent["store"]!.GetValue<bool>());
+        Assert.IsType<JsonArray>(sent["input"]);
+    }
+
     // ---------- Gemini :streamGenerateContent without ?alt=sse (JSON array wire format) ----------
 
     private const string ChatCompletion =

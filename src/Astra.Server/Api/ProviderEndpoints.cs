@@ -114,6 +114,7 @@ public static class ProviderEndpoints
             ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
+            var (plugin, storedEndpoints) = (p.AuthScheme == AuthSchemes.Plugin, p.Endpoints);
             if (body.ContainsKey("name")) p.Name = String(body, "name") ?? "";
             if (body.ContainsKey("endpoints")) p.Endpoints = Read<List<ProviderEndpoint>>(body["endpoints"]);
             if (body.ContainsKey("preferredUpstreamProtocols")) p.PreferredUpstreamProtocols = Read<List<ApiProtocol>>(body["preferredUpstreamProtocols"]);
@@ -135,7 +136,10 @@ public static class ProviderEndpoints
             }
             if (body.ContainsKey("enabled")) p.Enabled = Read<bool>(body["enabled"]);
             if (body.ContainsKey("notes")) p.Notes = String(body, "notes");
-            Validate(p);
+            // PluginProviderSync owns a plugin provider's plugin:// endpoints and auth scheme; edits keep them as they are.
+            if (plugin && (p.AuthScheme != AuthSchemes.Plugin || !Same(p.Endpoints, storedEndpoints)))
+                throw new AdminApiException(400, "A plugin provider's endpoints and authentication are managed by its plugin");
+            Validate(p, plugin);
             if (body.ContainsKey("apiKey"))
             {
                 if (body["apiKey"] is null) throw new AdminApiException(400, "apiKey must be a string (empty clears it)");
@@ -566,16 +570,17 @@ public static class ProviderEndpoints
         }
     }
 
-    internal static void Validate(Provider p)
+    /// <param name="pluginOwned">The row is a plugin's (its endpoints and auth scheme come from plugin sync, unchanged).</param>
+    internal static void Validate(Provider p, bool pluginOwned = false)
     {
         if (string.IsNullOrWhiteSpace(p.Name)) throw new AdminApiException(400, "Provider name is required");
         if (p.Endpoints.Count == 0 || p.Endpoints.Any(e => e is null) || p.Endpoints.Select(e => e.Protocol).Distinct().Count() != p.Endpoints.Count)
             throw new AdminApiException(400, "Configure one endpoint per protocol");
-        foreach (var e in p.Endpoints)
+        foreach (var e in p.Endpoints.Where(_ => !pluginOwned))
             if (!ApiProtocols.All.Contains(e.Protocol) || !Uri.TryCreate(e.BaseUrl, UriKind.Absolute, out var u) ||
                 u.Scheme is not ("http" or "https") || u.UserInfo.Length != 0 || u.Fragment.Length != 0 || e.BaseUrl.Any(char.IsControl))
                 throw new AdminApiException(400, "Endpoints must be http(s) URLs without embedded credentials or fragments");
-        if (!AuthSchemes.All.Contains(p.AuthScheme)) throw new AdminApiException(400, "Unknown authentication scheme");
+        if (!pluginOwned && !AuthSchemes.All.Contains(p.AuthScheme)) throw new AdminApiException(400, "Unknown authentication scheme");
         if (p.PriceMultiplier < 0) throw new AdminApiException(400, "Price multiplier must be non-negative");
         if (p.HttpProxy is not null && (!Uri.TryCreate(p.HttpProxy, UriKind.Absolute, out var proxy) || proxy.Scheme is not ("http" or "https" or "socks5")))
             throw new AdminApiException(400, "Invalid HTTP/SOCKS proxy URL");

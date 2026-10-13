@@ -47,6 +47,18 @@ public sealed class AppSettings
     public int QuotaAutoIntervalMinutes { get; set; } = 30;
 
     /// <summary>
+    /// Background quota refresh for subscription accounts, in minutes (ProviderQuotaWorker via SubscriptionQuotaSync).
+    /// 0 turns it off; otherwise at least <c>SubscriptionQuotaSync.MinIntervalMinutes</c> (the upstream usage endpoints rate-limit).
+    /// </summary>
+    public int SubscriptionQuotaIntervalMinutes { get; set; } = 30;
+
+    /// <summary>
+    /// Time zone (IANA / Windows id) whose local days, weeks and months token budgets reset on and token daily usage is
+    /// counted in; null = the process's local zone (UTC in most containers).
+    /// </summary>
+    public string? UsageTimeZone { get; set; }
+
+    /// <summary>
     /// Outbound proxy (<see cref="SystemProxy"/>): "system" = HTTPS_PROXY-style variables, then the OS setting;
     /// "custom" = <see cref="ProxyUrl"/>; "direct" = never proxy. A provider's own httpProxy still wins.
     /// </summary>
@@ -62,6 +74,13 @@ public sealed class AppSettings
 
     /// <summary>NO_PROXY-style hosts (comma separated) that stay direct in custom mode; loopback always does.</summary>
     public string? ProxyBypass { get; set; }
+
+    /// <summary>
+    /// Request body coding for providers that compress (their <c>settings.request_compression</c>, e.g. the ChatGPT
+    /// subscription's zstd): "default" = each provider's own; "zstd" | "gzip" | "br" | "deflate" = that one instead;
+    /// "none" = every body goes upstream as is. Providers that do not compress are never affected.
+    /// </summary>
+    public string RequestCompression { get; set; } = "default";
 
     public AppSettings Clone() => Json.Deserialize<AppSettings>(Json.Serialize(this))!;
 }

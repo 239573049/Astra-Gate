@@ -1,5 +1,8 @@
+using System.Buffers;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Astra.Core;
@@ -70,35 +73,65 @@ public static partial class StickyKeys
     /// <summary>Last resort for clients without a session id: system prompt + first user message. Null when both are empty.</summary>
     private static string? Fingerprint(JsonObject body)
     {
-        var system = TextOf(body["system"]);
-        var first = "";
+        // sha256(utf8(system + "\n\0\n" + first)), fed piece by piece: a long system prompt is hashed where it
+        // lies (the request's own bytes when unescaped) instead of being concatenated and re-encoded first.
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var length = AppendText(hash, body["system"]);
+        hash.AppendData("\n\0\n"u8);
         if (body["messages"] is JsonArray messages)
             foreach (var message in messages)
                 if (message is JsonObject m && Str(m, "role") == "user")
                 {
-                    first = TextOf(m["content"]);
+                    length += AppendText(hash, m["content"]);
                     break;
                 }
-        if (system.Length == 0 && first.Length == 0) return null;
-        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(system + "\n\u0000\n" + first));
-        return "fp:" + Convert.ToHexString(hash, 0, 16).ToLowerInvariant();
+        if (length == 0) return null;
+        Span<byte> digest = stackalloc byte[32];
+        hash.GetHashAndReset(digest);
+        return "fp:" + Convert.ToHexString(digest[..16]).ToLowerInvariant();
     }
 
-    /// <summary>Plain text of a string or an array of content blocks (text blocks only).</summary>
-    private static string TextOf(JsonNode? node)
+    /// <summary>Hashes the plain text of a string or an array of content blocks (text blocks only); its length.</summary>
+    private static long AppendText(IncrementalHash hash, JsonNode? node)
     {
         switch (node)
         {
-            case JsonValue v when v.TryGetValue<string>(out var text):
-                return text;
+            case JsonValue v:
+                return AppendString(hash, v);
             case JsonArray blocks:
-                var sb = new StringBuilder();
+                long length = 0;
                 foreach (var block in blocks)
-                    if (block is JsonObject o && Str(o, "text") is { } t)
-                        sb.Append(t);
-                return sb.ToString();
+                    if (block is JsonObject o && o["text"] is JsonValue t)
+                        length += AppendString(hash, t);
+                return length;
             default:
-                return "";
+                return 0;
+        }
+    }
+
+    private static long AppendString(IncrementalHash hash, JsonValue value)
+    {
+        if (value.TryGetValue<JsonElement>(out var element))
+        {
+            if (element.ValueKind != JsonValueKind.String) return 0;
+            var raw = JsonMarshal.GetRawUtf8Value(element)[1..^1];
+            if (raw.IndexOf((byte)'\\') < 0)
+            {
+                hash.AppendData(raw);
+                return raw.Length;
+            }
+        }
+        if (!value.TryGetValue<string>(out var text)) return 0;
+        var buffer = ArrayPool<byte>.Shared.Rent(Encoding.UTF8.GetByteCount(text));
+        try
+        {
+            var count = Encoding.UTF8.GetBytes(text, buffer);
+            hash.AppendData(buffer, 0, count);
+            return count;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
     }
 

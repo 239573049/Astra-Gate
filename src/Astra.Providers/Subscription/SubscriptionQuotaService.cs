@@ -81,7 +81,7 @@ public sealed class SubscriptionQuotaService(
                 await ProbeWithRecoveryAsync(account, config, (token, c) => ProbeZcodeAsync(token, config, c), ct),
             "github-copilot-subscription" => await ProbeCopilotAsync(account, config, ct),
             "kimi-subscription" => await ProbeWithRecoveryAsync(account, config, (token, c) => ProbeKimiAsync(token, config, c), ct),
-            // 其它家族没有额度探针：返回 null 让 UI 显示"暂不支持"，而不是猜一个字段名。
+            // 其它家族没有额度探针：返回 null 让 UI 显示"暂不支持"，而不是猜一个字段名。新增探针时同步 ProbedFamilies。
             _ => null,
         };
         if (quota is null) return (account, null);
@@ -91,6 +91,18 @@ public sealed class SubscriptionQuotaService(
         await accounts.UpdateAsync(account, ct);
         return (account, quota);
     }
+
+    /// <summary>Provider families <see cref="FetchAsync"/> has a quota probe for (the switch there).</summary>
+    public static readonly IReadOnlySet<string> ProbedFamilies = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "claude-subscription", "openai-subscription", "grok-subscription", "zcode-subscription", "bigmodel-subscription",
+        "github-copilot-subscription", "kimi-subscription",
+    };
+
+    /// <summary>Whether <see cref="FetchAsync"/> can query this account's quota (a probed family, not a setup token).</summary>
+    public static bool CanProbe(Provider provider, ProviderAccount account) =>
+        ProbedFamilies.Contains(provider.TemplateId ?? provider.PriceKey ?? provider.Id)
+        && !(account.Extra[SetupTokenFlag] is JsonValue flag && flag.TryGetValue<bool>(out var setup) && setup);
 
     /// <summary>
     /// 这个账号能不能用"重置卡"：目前只有 ChatGPT 订阅有（codex 的

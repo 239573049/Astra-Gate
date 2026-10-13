@@ -24,7 +24,7 @@ public static class GatewayMiddleware
     };
 
     /// <summary>The request's info: its model and stream flag read from the body (Gemini's from its URL).</summary>
-    public static MiddlewareInfo Info(ApiProtocol protocol, string body, string path, string? agent, string? pathModel, bool? pathStream)
+    public static MiddlewareInfo Info(ApiProtocol protocol, ReadOnlySpan<byte> body, string path, string? agent, string? pathModel, bool? pathStream)
     {
         var (model, stream) = protocol == ApiProtocol.Gemini ? (pathModel, pathStream ?? false) : Peek(body);
         return new MiddlewareInfo(ProtocolName(protocol), model, stream, path, agent);
@@ -44,20 +44,21 @@ public static class GatewayMiddleware
         }, reject.Message);
 
     // The top-level "model" and "stream" of a JSON body, without building a document.
-    private static (string? Model, bool Stream) Peek(string body)
+    private static (string? Model, bool Stream) Peek(ReadOnlySpan<byte> body)
     {
         string? model = null;
         var stream = false;
         try
         {
-            var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(body), new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip });
+            var reader = new Utf8JsonReader(body, new JsonReaderOptions { CommentHandling = JsonCommentHandling.Skip });
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject) return (null, false);
             while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
             {
-                var name = reader.GetString();
+                var isModel = reader.ValueTextEquals("model"u8);
+                var isStream = !isModel && reader.ValueTextEquals("stream"u8);
                 reader.Read();
-                if (name == "model" && reader.TokenType == JsonTokenType.String) model = reader.GetString();
-                else if (name == "stream" && reader.TokenType is JsonTokenType.True or JsonTokenType.False) stream = reader.GetBoolean();
+                if (isModel && reader.TokenType == JsonTokenType.String) model = reader.GetString();
+                else if (isStream && reader.TokenType is JsonTokenType.True or JsonTokenType.False) stream = reader.GetBoolean();
                 reader.Skip();
             }
         }

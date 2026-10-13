@@ -18,7 +18,7 @@ public class MigrationTests
 
         await using var conn = await factory.OpenAsync();
         var versions = (await conn.QueryAsync<long>("SELECT version FROM schema_version")).AsList();
-        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L], versions.Order());
+        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L], versions.Order());
 
         var appliedAt = await conn.ExecuteScalarAsync<string>("SELECT applied_at FROM schema_version ORDER BY version LIMIT 1");
         Assert.NotNull(appliedAt);
@@ -30,7 +30,8 @@ public class MigrationTests
                  {
                      "schema_version", "settings", "models", "model_prices", "providers", "provider_models",
                      "clients", "client_bindings", "client_config_state", "requests", "request_usage_items",
-                     "request_attempts", "provider_accounts", "tokens", "token_usage_totals",
+                     "request_attempts", "provider_accounts", "tokens", "token_usage_totals", "token_usage_daily",
+                     "webhooks", "alert_rules", "alert_rule_webhooks", "alert_states", "webhook_deliveries",
                      "plugins", "plugin_provider_prefs",
                  })
         {
@@ -120,7 +121,7 @@ public class MigrationTests
         Assert.True(new FileInfo(backup).Length > 0);
 
         await using var check = await factory.OpenAsync();
-        Assert.Equal(9, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
+        Assert.Equal(12, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
         Assert.Equal("true",
             await check.ExecuteScalarAsync<string>("SELECT value_json FROM settings WHERE key = 'marker'"));
         // 0005 was re-applied after the rollback: the reasoning columns are back.
@@ -161,7 +162,7 @@ public class MigrationTests
         var backup = Assert.Single(Directory.GetFiles(paths.DbBackupsDir));
         Assert.Contains("-v4", Path.GetFileName(backup));
         await using var check = await factory.OpenAsync();
-        Assert.Equal(12, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
+        Assert.Equal(15, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
         var record = await check.QuerySingleAsync<Astra.Core.Requests.RequestRecord>("""
             SELECT requested_model, reasoning_effort, reasoning_mode, reasoning_budget_tokens
             FROM requests WHERE id = 'r-v4'
@@ -172,8 +173,28 @@ public class MigrationTests
         Assert.Null(record.ReasoningBudgetTokens);
     }
 
-    /// <summary>Rolls a fully migrated database back to its v7 shape (what 0008 – 0012 add is removed).</summary>
-    private const string UndoAfterProviderQuotaMigrations = """
+    /// <summary>Rolls a fully migrated database back to its v13 shape (what 0014_alerts and 0015_webhook_format add is removed).</summary>
+    private const string UndoAlertsMigration = """
+        DELETE FROM schema_version WHERE version = 15;
+        DROP TABLE webhook_deliveries;
+        DROP TABLE alert_states;
+        DROP TABLE alert_rule_webhooks;
+        DROP TABLE alert_rules;
+        DROP TABLE webhooks;
+        DELETE FROM schema_version WHERE version = 14;
+        """;
+
+    /// <summary>Rolls a v13 database back to its v12 shape (what 0013_token_limits adds is removed).</summary>
+    private const string UndoTokenLimitsMigration = """
+        DROP TABLE token_usage_daily;
+        ALTER TABLE tokens DROP COLUMN limits_json;
+        ALTER TABLE tokens DROP COLUMN allowed_clients_json;
+        DELETE FROM schema_version WHERE version = 13;
+        """;
+
+    /// <summary>Rolls a fully migrated database back to its v7 shape (what 0008 – 0014 add is removed).</summary>
+    private const string UndoAfterProviderQuotaMigrations = UndoAlertsMigration + UndoTokenLimitsMigration + """
+
         DROP TABLE plugin_provider_prefs;
         DROP TABLE plugins;
         DELETE FROM schema_version WHERE version = 12;
@@ -212,6 +233,38 @@ public class MigrationTests
         DELETE FROM settings WHERE key = 'token_migration';
         DELETE FROM schema_version WHERE version = 6;
         """;
+
+    [Fact]
+    public async Task Token_Limits_Migration_Backfills_Daily_Usage_From_The_Request_Log()
+    {
+        var paths = TestDb.NewPaths(out _);
+        var factory = new SqliteConnectionFactory(paths);
+        var runner = new MigrationRunner(factory, paths);
+        await runner.MigrateAsync();
+        await using (var conn = await factory.OpenAsync())
+        {
+            await conn.ExecuteAsync(UndoAlertsMigration + UndoTokenLimitsMigration);
+            await conn.ExecuteAsync("""
+                INSERT INTO requests(id, started_at_utc, inbound_protocol, status, total_input_tokens, total_output_tokens,
+                                     cost_nanousd, token_id)
+                VALUES ('r1', '2026-10-07T12:00:00.000Z', 'openai-chat', 'success', 100, 50, 1000, 'default'),
+                       ('r2', '2026-10-07T12:01:00.000Z', 'openai-chat', 'upstream_error', 10, 0, 0, 'default'),
+                       ('r3', '2026-10-07T12:02:00.000Z', 'openai-chat', 'success', 1, 1, 1, 'deleted-token');
+                """);
+        }
+
+        await runner.MigrateAsync();
+
+        await using var check = await factory.OpenAsync();
+        var day = Assert.Single(await check.QueryAsync<Astra.Core.Tokens.TokenDailyUsage>("SELECT * FROM token_usage_daily"));
+        Assert.Equal("default", day.TokenId);
+        Assert.Equal(Astra.Core.Tokens.UsagePeriods.DayKey(new DateTimeOffset(2026, 10, 7, 12, 0, 0, TimeSpan.Zero), TimeZoneInfo.Local), day.Day);
+        Assert.Equal(2, day.Requests);
+        Assert.Equal(1, day.SuccessRequests);
+        Assert.Equal(1000, day.CostNanoUsd);
+        Assert.Equal(110, day.InputTokens);
+        Assert.Null(await check.ExecuteScalarAsync<string>("SELECT limits_json FROM tokens WHERE id = 'default'"));
+    }
 
     [Fact]
     public async Task Tokens_Migration_Moves_Clients_To_The_Default_Token_And_Backfills_Totals()

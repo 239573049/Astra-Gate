@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
@@ -5,6 +6,7 @@ using Astra.Core.Billing;
 using Astra.Core.Clients;
 using Astra.Core.Privacy;
 using Astra.Core.Requests;
+using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Data.Repositories;
 using Astra.Gateway.Pipeline;
@@ -80,9 +82,10 @@ public static class RequestEndpoints
     public sealed record SettingsDto(
         string Locale, bool DebugBodies, int BodyRetentionDays, int? RequestRetentionDays, EffortBudgets EffortBudgets,
         int StreamIdleTimeoutSec, string UpdateChannel, bool UpdateAutoCheck,
-        int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes,
+        int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes, int SubscriptionQuotaIntervalMinutes,
         string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass,
-        bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl);
+        bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl, string? UsageTimeZone,
+        string EffectiveUsageTimeZone, string RequestCompression);
 
     public static void MapRequestEndpoints(this IEndpointRouteBuilder app)
     {
@@ -105,7 +108,8 @@ public static class RequestEndpoints
             return Results.Ok(new RequestPageDto(result.Items.Select(ToSummary).ToList(), result.Total, result.Page, result.PageSize, result.TotalCostNanoUsd));
         });
 
-        // Live request log (server-sent events): the in-flight snapshot first, then every change as it happens.
+        // Live request log (server-sent events): the in-flight snapshot first, then changes as they happen (coalesced
+        // per request, a batch every LiveRequestFeed.FlushInterval). The feed only records while such a stream is open.
         // A comment line every 15 s keeps idle connections (and proxies in front of them) open.
         app.MapGet("/api/requests/live", async (HttpContext ctx, LiveRequestFeed live, IHostApplicationLifetime lifetime) =>
         {
@@ -123,11 +127,9 @@ public static class RequestEndpoints
             try
             {
                 await WriteAsync(": connected\n\n");
-                await foreach (var e in live.SubscribeAsync(ct))
-                {
-                    var dto = new RequestLiveEventDto(e.Type, ToSummary(e.Record, e.InFlight));
-                    await WriteAsync(SseWriter.Format(new SseEvent(null, Json.SerializeApi(dto))));
-                }
+                // One write and flush per batch; a batch is serialized once and shared by every viewer.
+                await foreach (var batch in live.SubscribeAsync(ct))
+                    await WriteAsync(batch.Format(FormatLiveBatch));
             }
             catch (Exception ex) when (ex is OperationCanceledException or IOException)
             {
@@ -155,6 +157,14 @@ public static class RequestEndpoints
                 }
             }
         });
+
+        static string FormatLiveBatch(LiveRequestBatch batch)
+        {
+            var sb = new StringBuilder();
+            foreach (var e in batch.Events)
+                sb.Append(SseWriter.Format(new SseEvent(null, Json.SerializeApi(new RequestLiveEventDto(e.Type, ToSummary(e.Record, e.InFlight))))));
+            return sb.ToString();
+        }
 
         // A request still in flight (or not yet written) is served from the live feed, so its detail opens right away.
         app.MapGet("/api/requests/{id}", async (string id, AstraDatabase db, BodyStore bodies, LiveRequestFeed live, CancellationToken ct) =>
@@ -226,7 +236,8 @@ public static class RequestEndpoints
             var requests = rate.Requests;
             if (string.IsNullOrEmpty(query.Status))
             {
-                // In-flight rows count toward RPM the moment they arrive (they are visible in the live table above).
+                // In-flight rows count toward RPM the moment they arrive (they are visible in the live table above;
+                // the feed only tracks them while that table is open).
                 // They have no final status yet, so a status filter skips them entirely.
                 requests += live.InFlightSnapshot().Count(r =>
                     r.StartedAtUtc >= query.From && MatchesWindowFilters(r, query));
@@ -289,6 +300,23 @@ public static class RequestEndpoints
                             // 0 turns the background balance / quota refresh off; providers may override it.
                             s.QuotaAutoIntervalMinutes = Math.Clamp(value?.GetValue<int>() ?? 30, 0, 1440);
                             break;
+                        case "subscriptionQuotaIntervalMinutes":
+                            // 0 turns the background refresh of subscription accounts off; otherwise at least the minimum.
+                            var minutes = value?.GetValue<int>() ?? 30;
+                            s.SubscriptionQuotaIntervalMinutes = minutes <= 0 ? 0 : Math.Clamp(minutes, SubscriptionQuotaSync.MinIntervalMinutes, 1440);
+                            break;
+                        case "usageTimeZone":
+                            // Token budgets' days / weeks / months; null / "" = the process's local zone.
+                            var zone = value?.GetValue<string>()?.Trim();
+                            if (string.IsNullOrEmpty(zone)) s.UsageTimeZone = null;
+                            else if (TimeZoneHelper.TryFind(zone, out _)) s.UsageTimeZone = zone;
+                            else error = $"Unknown time zone {zone}";
+                            break;
+                        case "requestCompression":
+                            var compression = value?.GetValue<string>();
+                            if (compression is not null && UpstreamCompression.Overrides.Contains(compression)) s.RequestCompression = compression;
+                            else error = "requestCompression must be default, zstd, gzip, br, deflate or none";
+                            break;
                         case "proxyMode":
                             var mode = value?.GetValue<string>();
                             if (mode is SystemProxy.ModeSystem or SystemProxy.ModeCustom or SystemProxy.ModeDirect) s.ProxyMode = mode;
@@ -339,9 +367,10 @@ public static class RequestEndpoints
     private static SettingsDto ToSettings(AppSettings s, ServerOptions server, AstraPaths paths) => new(
         s.Locale, s.DebugBodies, s.BodyRetentionDays, s.RequestRetentionDays, s.EffortBudgets, s.StreamIdleTimeoutSec,
         s.UpdateChannel, s.UpdateAutoCheck,
-        server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes,
+        server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes, s.SubscriptionQuotaIntervalMinutes,
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
-        s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl);
+        s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
+        UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:

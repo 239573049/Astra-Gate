@@ -12,11 +12,12 @@ import {
   useTokens,
   useUpdateToken,
 } from '../api/hooks';
-import type { Token, TokenMutationResult, TokenStats } from '../api/types';
+import type { ClientKind, Token, TokenBudget, TokenBudgetUsage, TokenLimitMetric, TokenLimitPeriod, TokenMutationResult, TokenStats } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
+import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { CLIENT_META, ClientGlyph } from '../components/icons';
 import { Page } from '../components/layout/Page';
-import { Badge, Button, EmptyState, Field, Input, Spinner } from '../components/ui/controls';
+import { Badge, Button, EmptyState, Field, Input, NumberInput, Segmented, Spinner } from '../components/ui/controls';
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { formatDateTime, formatPercent, formatTime, formatTokens, formatTps, formatUsd } from '../lib/format';
@@ -42,9 +43,10 @@ export function TokensPage() {
     >
       <div className="mx-auto flex max-w-[1100px] flex-col gap-4">
         {settings.data && (
-          <p className="px-1 text-[12px] text-[var(--text-secondary)]">
-            {t('tokens.directHint', { url: `${settings.data.gatewayBaseUrl}/v1` })}
-          </p>
+          <div className="flex flex-col gap-1 px-1 text-[12px] text-[var(--text-secondary)]">
+            <p>{t('tokens.directHint', { url: `${settings.data.gatewayBaseUrl}/v1` })}</p>
+            <p className="selectable">{t('tokens.selfServiceHint', { url: settings.data.gatewayBaseUrl })}</p>
+          </div>
         )}
         {tokens.isLoading && <Spinner lines={4} />}
         {tokens.isError && <Alert tone="danger" title={t('common.error')}>{errorText(tokens.error)}</Alert>}
@@ -145,6 +147,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               <h2 className={`truncate text-[14px] font-medium ${token.enabled ? '' : 'text-[var(--text-muted)]'}`}>{token.name}</h2>
               {token.isDefault && <Badge tone="accent">{t('tokens.default')}</Badge>}
               {!token.enabled && <Badge tone="orange">{t('tokens.disabledBadge')}</Badge>}
+              {token.limitUsage.some((u) => u.exhausted) && <Badge tone="orange">{t('tokens.limitExhausted')}</Badge>}
             </div>
             <div className="mt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <code className="font-mono text-[12px] text-[var(--text-secondary)] selectable">{token.keyMasked}</code>
@@ -205,14 +208,78 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               <dd className="mt-0.5 truncate text-[var(--text-secondary)]">{direct?.name ?? (token.providerId ? token.providerId : t('tokens.directNone'))}</dd>
             </div>
             <div className="min-w-0">
+              <dt className="text-[var(--text-muted)]">{t('tokens.allowedClients')}</dt>
+              <dd className="mt-0.5 truncate text-[var(--text-secondary)]">
+                {token.allowedClients == null
+                  ? t('tokens.allowedClientsAny')
+                  : token.allowedClients.length === 0
+                    ? t('tokens.directOnly')
+                    : token.allowedClients.map((k) => CLIENT_META[k]?.name ?? k).join(', ')}
+              </dd>
+            </div>
+            <div className="min-w-0">
               <dt className="text-[var(--text-muted)]">{t('tokens.lastUsedTitle')}</dt>
               <dd className="mt-0.5 truncate text-[var(--text-secondary)]">{lastUsedFull}</dd>
             </div>
           </dl>
+          <LimitsSummary token={token} />
           <StatsTable today={token.today} total={token.total} />
         </div>
       )}
     </article>
+  );
+}
+
+/** The token's caps: one bar per budget, plus the RPM window; "unlimited" without any. */
+function LimitsSummary({ token }: { token: Token }) {
+  const { t } = useI18n();
+  const rpm = token.limits?.rpm;
+  return (
+    <div className="mt-3">
+      <div className="text-[12px] text-[var(--text-muted)]">{t('tokens.limits')}</div>
+      {token.limitUsage.length === 0 && rpm == null ? (
+        <div className="mt-0.5 text-[12px] text-[var(--text-secondary)]">{t('tokens.unlimited')}</div>
+      ) : (
+        <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+          {token.limitUsage.map((u) => (
+            <LimitBar key={`${u.metric}:${u.period}`} usage={u} />
+          ))}
+          {rpm != null && (
+            <div className="text-[11.5px] text-[var(--text-secondary)]">
+              {t('tokens.rpm')} · <span className="num">{t('tokens.rpmUsage', { used: token.recentRequests, limit: rpm })}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LimitBar({ usage: u }: { usage: TokenBudgetUsage }) {
+  const { t, locale } = useI18n();
+  const label = `${t(`tokens.period.${u.period}`)} · ${t(`tokens.metric.${u.metric}`)}`;
+  const amount = (v: number) => (u.metric === 'cost' ? formatUsd(v) : formatTokens(v, true));
+  const percent = Math.max(0, Math.min(100, Math.round(u.usedPercent)));
+  // Closer to the cap reads hotter: >= 90% red, >= 70% orange, else the accent.
+  const tone = percent >= 90 ? 'var(--danger)' : percent >= 70 ? 'var(--warning)' : 'var(--accent)';
+  return (
+    <div>
+      <div className="mb-1 flex items-baseline justify-between gap-2 text-[11.5px]">
+        <span className="text-[var(--text-secondary)]">{label}</span>
+        <span className="num">{t('tokens.limitUsed', { used: amount(u.used), limit: amount(u.limit) })}</span>
+      </div>
+      <div
+        role="progressbar"
+        aria-valuenow={percent}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label}
+        className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--surface)]"
+      >
+        <div className="h-full rounded-full" style={{ width: `${percent}%`, background: tone }} />
+      </div>
+      {u.resetsAt && <div className="mt-1 text-[10.5px] text-[var(--text-muted)]">{t('tokens.limitResets', { time: formatDateTime(u.resetsAt, locale) })}</div>}
+    </div>
   );
 }
 
@@ -343,21 +410,39 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
   const [name, setName] = useState('');
   const [providerId, setProviderId] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [budgets, setBudgets] = useState<DraftBudget[]>([]);
+  const [rpm, setRpm] = useState<number | null>(null);
+  const [clientsMode, setClientsMode] = useState<'any' | 'only'>('any');
+  const [allowed, setAllowed] = useState<ClientKind[]>([]);
   const provider = providers.find((p) => p.id === providerId);
   const isSubscription = provider?.authScheme === 'oauth-subscription' || provider?.authScheme === 'plugin';
   const accounts = useProviderAccounts(provider?.id, isSubscription);
+  const duplicate = new Set(budgets.map((b) => `${b.metric}:${b.period}`)).size < budgets.length;
 
   useEffect(() => {
     if (!token) return;
     setName(token.name);
     setProviderId(token.providerId ?? '');
     setAccountId(token.accountId ?? '');
+    setBudgets(token.limits?.budgets.map((b) => ({ ...b })) ?? []);
+    setRpm(token.limits?.rpm ?? null);
+    setClientsMode(token.allowedClients == null ? 'any' : 'only');
+    setAllowed(token.allowedClients ?? []);
   }, [token]);
 
   const save = () => {
     if (!token) return;
+    const kept: TokenBudget[] = budgets.flatMap((b) => (b.limit != null && b.limit > 0 ? [{ ...b, limit: b.limit }] : []));
+    const limits = kept.length > 0 || (rpm != null && rpm > 0) ? { budgets: kept, rpm: rpm != null && rpm > 0 ? Math.floor(rpm) : null } : null;
     update.mutate(
-      { id: token.id, name: name.trim(), providerId: providerId || null, accountId: isSubscription ? accountId || null : null },
+      {
+        id: token.id,
+        name: name.trim(),
+        providerId: providerId || null,
+        accountId: isSubscription ? accountId || null : null,
+        limits,
+        allowedClients: clientsMode === 'any' ? null : allowed,
+      },
       {
         onSuccess: () => {
           onClose();
@@ -376,7 +461,7 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
       footer={
         <>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
-          <Button variant="primary" disabled={!name.trim()} loading={update.isPending} onClick={save}>
+          <Button variant="primary" disabled={!name.trim() || duplicate} loading={update.isPending} onClick={save}>
             {t('common.save')}
           </Button>
         </>
@@ -405,7 +490,93 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
             />
           </Field>
         )}
+        <Field label={t('tokens.limits')} hint={t('tokens.limitsHint')} error={duplicate ? t('tokens.limitDuplicate') : undefined}>
+          <BudgetsEditor budgets={budgets} onChange={setBudgets} />
+        </Field>
+        <Field label={t('tokens.rpm')} hint={t('tokens.rpmHint')}>
+          <NumberInput value={rpm} min={1} step={1} label={t('tokens.rpm')} placeholder={t('tokens.unlimited')} onChange={setRpm} />
+        </Field>
+        <Field label={t('tokens.allowedClients')} hint={t('tokens.allowedClientsHint')}>
+          <div className="grid gap-2">
+            <Segmented
+              ariaLabel={t('tokens.allowedClients')}
+              value={clientsMode}
+              onChange={setClientsMode}
+              items={[
+                { value: 'any', label: t('tokens.allowedClientsAny') },
+                { value: 'only', label: t('tokens.allowedClientsOnly') },
+              ]}
+            />
+            {clientsMode === 'only' && (
+              <ChipGroup
+                label={t('tokens.allowedClients')}
+                // Kinds outside the catalog (plugin agents) stay selectable once chosen.
+                options={[...new Set([...(Object.keys(CLIENT_META) as ClientKind[]), ...allowed])].map((k) => ({ value: k, label: CLIENT_META[k]?.name ?? k }))}
+                value={allowed}
+                onValueChange={(v) => setAllowed(v as ClientKind[])}
+              />
+            )}
+          </div>
+        </Field>
       </div>
     </Sheet>
+  );
+}
+
+/** A budget being edited: the limit stays null while its field is empty (dropped on save). */
+type DraftBudget = Omit<TokenBudget, 'limit'> & { limit: number | null };
+
+const METRICS: TokenLimitMetric[] = ['cost', 'requests', 'tokens'];
+const PERIODS: TokenLimitPeriod[] = ['day', 'week', 'month', 'total'];
+
+function BudgetsEditor({ budgets, onChange }: { budgets: DraftBudget[]; onChange: (b: DraftBudget[]) => void }) {
+  const { t } = useI18n();
+  const set = (i: number, patch: Partial<DraftBudget>) => onChange(budgets.map((b, j) => (j === i ? { ...b, ...patch } : b)));
+  // A new row starts on the first metric × period not used yet.
+  const free = METRICS.flatMap((metric) => PERIODS.map((period) => ({ metric, period })))
+    .find((c) => !budgets.some((b) => b.metric === c.metric && b.period === c.period));
+  return (
+    <div className="grid gap-2">
+      {budgets.length === 0 && <div className="text-[12px] text-[var(--text-muted)]">{t('tokens.unlimited')}</div>}
+      {budgets.map((b, i) => (
+        <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+          <Select
+            ariaLabel={t('tokens.limitMetric')}
+            value={b.metric}
+            onChange={(metric) => set(i, { metric })}
+            options={METRICS.map((m) => ({ value: m, label: t(`tokens.metric.${m}`) }))}
+          />
+          <Select
+            ariaLabel={t('tokens.limitPeriod')}
+            value={b.period}
+            onChange={(period) => set(i, { period })}
+            options={PERIODS.map((p) => ({ value: p, label: t(`tokens.period.${p}`) }))}
+          />
+          <NumberInput
+            label={t('tokens.limitValue')}
+            value={b.limit}
+            min={0}
+            step={b.metric === 'cost' ? 'any' : 1}
+            placeholder={t('tokens.limitValue')}
+            onChange={(limit) => set(i, { limit })}
+          />
+          <Button
+            size="sm"
+            variant="plain"
+            icon={<Trash2 className="size-3.5" />}
+            aria-label={t('tokens.removeLimit')}
+            title={t('tokens.removeLimit')}
+            onClick={() => onChange(budgets.filter((_, j) => j !== i))}
+          />
+        </div>
+      ))}
+      {free && (
+        <div>
+          <Button size="sm" icon={<Plus className="size-3.5" />} onClick={() => onChange([...budgets, { ...free, limit: null }])}>
+            {t('tokens.addLimit')}
+          </Button>
+        </div>
+      )}
+    </div>
   );
 }

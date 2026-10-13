@@ -12,6 +12,7 @@ using Astra.Plugins.Runtime;
 using Astra.Providers.Quota;
 using Astra.Providers.Subscription;
 using Astra.Providers.Templates;
+using Astra.Server.Alerts;
 using Astra.Server.Api;
 using Astra.Server.Security;
 using Microsoft.AspNetCore.DataProtection;
@@ -92,6 +93,8 @@ public static class AstraApp
         builder.Services.AddSingleton<EffectiveModelResolver>();
         builder.Services.AddSingleton<BodyStore>();
         builder.Services.AddSingleton<LiveRequestFeed>();
+        builder.Services.AddSingleton<TokenUsageLedger>();
+        builder.Services.AddSingleton<TokenLimiter>();
         builder.Services.AddSingleton<UsageWriter>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UsageWriter>());
         builder.Services.AddHostedService<RetentionService>();
@@ -114,6 +117,24 @@ public static class AstraApp
         builder.Services.AddSingleton<QuotaTemplateCatalog>();
         builder.Services.AddSingleton<ProviderQuotaService>();
         builder.Services.AddSingleton<ProviderQuotaManager>();
+        builder.Services.AddSingleton<SubscriptionQuotaSync>();
+        // Alerts (plan: alerts-webhooks-token-limits §3): the engine is the IAlertSignals sink and a hosted sweep; the
+        // dispatcher sends webhook deliveries.
+        builder.Services.AddSingleton<WebhookDispatcher>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<WebhookDispatcher>());
+        builder.Services.AddSingleton<AlertEngine>();
+        builder.Services.AddSingleton<Astra.Core.Alerts.IAlertSignals>(sp => sp.GetRequiredService<AlertEngine>());
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<AlertEngine>());
+        builder.Services.AddSingleton<AlertService>();
+        builder.Services.AddHttpClient(WebhookDispatcher.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(10)))
+            .RemoveAllLoggers();
+        builder.Services.AddHttpClient(WebhookDispatcher.DirectHttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false, UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(10),
+            })
+            .RemoveAllLoggers();
         builder.Services.AddHostedService<ProviderQuotaWorker>();
         // Plugins (magpie-compatible; .plan/plugins.md): the installed list, Bun, the vendored host files and installs.
         builder.Services.AddSingleton(sp => new PluginCatalog(database.Plugins, paths, o.Server.PluginsOff));
@@ -204,6 +225,8 @@ public static class AstraApp
             // Source-generated metadata for endpoint payloads; unregistered types fall back to reflection.
             j.SerializerOptions.TypeInfoResolver = JsonContexts.Resolver;
         });
+        // Per-IP limit of the token self-service views, which are reachable by whoever a key was shared with.
+        builder.Services.AddRateLimiter(KeyInfoEndpoints.AddKeyInfoRateLimit);
         builder.Services.AddCors(c => c.AddDefaultPolicy(p => p
             .WithOrigins(SecurityMiddleware.DesktopOrigin)
             .AllowAnyMethod()
@@ -220,6 +243,7 @@ public static class AstraApp
 
         app.UseCors();
         app.UseMiddleware<SecurityMiddleware>();
+        app.UseRateLimiter();
         if (app.Environment.WebRootPath is not null)
         {
             app.UseDefaultFiles();
@@ -245,6 +269,8 @@ public static class AstraApp
         app.MapUpdateEndpoints();
         app.MapPluginEndpoints();
         app.MapGatewayEndpoints();
+        app.MapKeyInfoEndpoints();
+        app.MapAlertEndpoints();
 
         // SPA fallback for everything that is not an API / gateway route.
         app.MapFallback(async ctx =>

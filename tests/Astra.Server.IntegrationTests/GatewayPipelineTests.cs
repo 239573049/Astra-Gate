@@ -1042,4 +1042,80 @@ public class GatewayPipelineTests
         Assert.Equal(["Bearer sk-kimi-acc-own", "Bearer sk-kimi-acc-inherit"],
             gw.Upstream.Requests.Select(r => r.Headers["authorization"]));
     }
+
+    [Fact]
+    public async Task Passthrough_Stream_Is_Forwarded_Byte_For_Byte_And_Still_Observed()
+    {
+        // A keep-alive comment, a CRLF event and a "data:" without its space: none of it is re-formatted any more.
+        const string sse =
+            "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"m1\",\"model\":\"claude-x\",\"usage\":{\"input_tokens\":7,\"output_tokens\":1}}}\n\n" +
+            ": ping\n\n" +
+            "event: content_block_start\r\ndata:{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\r\n\r\n" +
+            "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"你好 🙂\"}}\n\n" +
+            "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":3}}\n\n" +
+            "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n";
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Anthropic, _ => FakeUpstream.Sse(sse));
+
+        var response = await gw.PostAsync("/v1/messages", """{"model":"claude-x","stream":true,"max_tokens":8,"messages":[{"role":"user","content":"hi"}]}""");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(sse, await response.Content.ReadAsStringAsync());
+        var record = await gw.RecordOfAsync(response);
+        Assert.Equal(RequestStatus.Success, record.Status);
+        Assert.Equal("reported", record.UsageSource);
+        Assert.Equal(7, record.TotalInputTokens);
+        Assert.NotNull(record.TtftMs);
+    }
+
+    [Fact]
+    public async Task Passthrough_Sends_An_Untouched_Body_As_The_Client_Bytes()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Anthropic, _ => FakeUpstream.Json(AnthropicMessage));
+        await EnablePrivacyAsync(gw, PrivacyActions.Redact);
+        // Spacing, key order and escapes the gateway's own serializer would write differently.
+        const string body = "{ \"messages\" : [ {\"role\":\"user\",\"content\":\"caf\\u00e9 \\n ok\"} ],\n \"max_tokens\": 8, \"model\":\"claude-x\" }";
+
+        var response = await gw.PostAsync("/v1/messages", body);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(body, Assert.Single(gw.Upstream.Requests).Body);
+    }
+
+    [Fact]
+    public async Task A_Byte_Order_Mark_Is_Dropped_Like_Before()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Anthropic, _ => FakeUpstream.Json(AnthropicMessage));
+        const string body = """{"model":"claude-x","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}""";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/messages")
+        {
+            Content = new ByteArrayContent([.. Encoding.UTF8.Preamble, .. Encoding.UTF8.GetBytes(body)]),
+        };
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {gw.Key}");
+
+        var response = await gw.Host.Client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(body, Assert.Single(gw.Upstream.Requests).Body);
+    }
+
+    [Fact]
+    public async Task Privacy_Redacts_Escaped_Strings_In_The_Parsed_Body()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Anthropic, _ => FakeUpstream.Json(AnthropicMessage));
+        await EnablePrivacyAsync(gw, PrivacyActions.Redact);
+
+        var response = await gw.PostAsync("/v1/messages",
+            """{"model":"claude-x","max_tokens":8,"system":"line one\nmail a\u0040b.com","messages":[{"role":"user","content":[{"type":"text","text":"key AKIAIOSFODNN7EXAMPLE"}]}]}""");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var seen = Assert.Single(gw.Upstream.Requests);
+        Assert.DoesNotContain("a@b.com", seen.Body);
+        Assert.DoesNotContain("AKIAIOSFODNN7EXAMPLE", seen.Body);
+        Assert.Equal("line one\nmail [REDACTED:email#1]", seen.Json["system"]!.GetValue<string>());
+        Assert.Equal("key [REDACTED:aws_key#1]", seen.Json["messages"]![0]!["content"]![0]!["text"]!.GetValue<string>());
+    }
+
+    private const string AnthropicMessage =
+        """{"id":"m1","type":"message","role":"assistant","model":"claude-x","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":5,"output_tokens":1}}""";
 }

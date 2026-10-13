@@ -64,7 +64,8 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
     public IEnumerable<UnifiedStreamEvent> DecodeJson(JsonObject body)
     {
         if (ResponsesCodec.Str(body, "model") is { } model && !string.IsNullOrWhiteSpace(model)) ResponseModel = model;
-        FinalResponse = (JsonObject)body.DeepClone();
+        // Kept as it is (only ever read and written out): no copy of what may be a long answer.
+        FinalResponse = body;
         var events = new List<UnifiedStreamEvent>();
         if (!_started)
         {
@@ -315,7 +316,7 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
         if (_terminal)
             return;
         // 记下完整响应对象：只发 SSE 的上游（codex backend）要靠它在非流式请求里拼出响应体。
-        FinalResponse = (JsonObject)response.DeepClone();
+        FinalResponse = response;
         if (!_started)
         {
             _started = true;

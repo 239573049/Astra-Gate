@@ -12,6 +12,12 @@ public sealed class GatewayException(int status, string type, string message) : 
 {
     public int Status { get; } = status;
     public string Type { get; } = type;
+
+    /// <summary>Sent as the Retry-After header (seconds) when the response has not started yet.</summary>
+    public int? RetryAfterSeconds { get; init; }
+
+    /// <summary>What the request log records as <c>error_type</c> instead of <see cref="Type"/>.</summary>
+    public string? RecordErrorType { get; init; }
 }
 
 /// <summary>
@@ -94,6 +100,8 @@ public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, Setti
         }
         if (!token.Enabled)
             throw new GatewayException(403, "permission_error", $"令牌 {token.Name} 已停用。");
+        if (kind is not null && token.AllowedClients() is { } allowed && !allowed.Contains(kind))
+            throw new GatewayException(403, "permission_error", $"令牌 {token.Name} 不允许客户端 {kind} 使用。");
 
         if (kind is null)
         {

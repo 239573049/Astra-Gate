@@ -165,6 +165,32 @@ public class ClientConfigApplierTests : IDisposable
     }
 
     [Fact]
+    public void ModelPickedInCodex_IsNotDrift_AndReapplyKeepsIt()
+    {
+        _applier.Apply(_codex.PlanEnable(Ctx()));
+        // Codex writes the model the user picks in its UI back to config.toml.
+        _home.WriteFile(_config, _home.ReadFile(_config).Replace("model = \"gpt-5.1\"", "model = \"glm-5\""));
+        var status = _codex.Inspect();
+        Assert.True(status.Enabled);
+        Assert.Empty(status.DriftedKeys);
+
+        // A re-apply with Astra's selection unchanged (provider switch, model-list sync) keeps the user's pick ...
+        _applier.Apply(_codex.PlanEnable(Ctx("astra-codex-rotated")));
+        var after = new TomlEditor(_home.ReadFile(_config));
+        Assert.Equal("\"glm-5\"", after.GetValue("model"));
+        Assert.Equal("\"astra-codex-rotated\"", after.GetValue("model_providers.astra.experimental_bearer_token"));
+        Assert.Empty(_codex.Inspect().DriftedKeys);
+
+        // ... while a model newly selected in Astra is written.
+        _applier.Apply(_codex.PlanEnable(Ctx(model: "gpt-5.2")));
+        Assert.Equal("\"gpt-5.2\"", new TomlEditor(_home.ReadFile(_config)).GetValue("model"));
+
+        // Restore is unchanged: the original model comes back.
+        Assert.False(_applier.Disable(_codex.PlanDisable()).HasDrift);
+        Assert.Equal("\"gpt-5.1-codex\"", new TomlEditor(_home.ReadFile(_config)).GetValue("model"));
+    }
+
+    [Fact]
     public void ReEnableTwice_KeepsTrueOriginal()
     {
         var original = _home.ReadFileBytes(_config);

@@ -119,6 +119,15 @@
       "note": "Official WorkBuddy favicon served by workbuddy.cn.",
       "sha256": "10ccbc099e7bc3d5ff12c315c4edd7b21386aa7166c1ec19997b3d55010d5c7d"
     },
+    "workbuddy-ai": {
+      "file": "workbuddy.svg",
+      "source": "https://download.codebuddy.cn/web/workbuddy/788eb1c5ba3681efa98cf7b58ae688e293c1bb34/assets/logo.svg",
+      "website": "https://www.workbuddy.ai/",
+      "mark": "WorkBuddy",
+      "kind": "product",
+      "note": "WorkBuddy's international build (WorkBuddy AI) uses the same WorkBuddy mark; the file is shared with the workbuddy entry.",
+      "sha256": "10ccbc099e7bc3d5ff12c315c4edd7b21386aa7166c1ec19997b3d55010d5c7d"
+    },
     "nextcowork": {
       "file": "nextcowork.png",
       "source": "https://nextco.work/icon.png",
@@ -127,6 +136,15 @@
       "kind": "product",
       "note": "Official NextCoWork app icon, downscaled to 256px locally; the same file as assets/providers/nextcowork.png.",
       "sha256": "400553c3de8c7aad9c87767aca815513bd1d2f9a81f29ce9f7658c1b364560a8"
+    },
+    "paseo": {
+      "file": "paseo.png",
+      "source": "https://github.com/getpaseo/paseo/blob/main/packages/app/assets/images/icon.png",
+      "website": "https://paseo.sh/",
+      "mark": "Paseo",
+      "kind": "product",
+      "note": "Official Paseo app icon (1024px), downscaled to 256px locally.",
+      "sha256": "23dad36791b80a850251e35d800a9fca1859a5ee5e6ff33ec0c0ddd1bfd3ef3d"
     }
   }
 }

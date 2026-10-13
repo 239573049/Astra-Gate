@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Privacy;
+using Astra.Server.Alerts;
 using Astra.Server.Api;
 using Astra.Server.Hosting;
 
@@ -118,6 +119,21 @@ namespace Astra.Server;
 // tokens
 [JsonSerializable(typeof(TokenDto))]
 [JsonSerializable(typeof(TokenStatsDto))]
+[JsonSerializable(typeof(TokenLimitsDto))]
+[JsonSerializable(typeof(WebhookDto))]
+[JsonSerializable(typeof(WebhookSecretDto))]
+[JsonSerializable(typeof(WebhookDeliveryDto))]
+[JsonSerializable(typeof(AlertEventDto))]
+[JsonSerializable(typeof(AlertParamDto))]
+[JsonSerializable(typeof(AlertRuleDto))]
+[JsonSerializable(typeof(AlertStateDto))]
+[JsonSerializable(typeof(List<WebhookDto>))]
+[JsonSerializable(typeof(List<WebhookDeliveryDto>))]
+[JsonSerializable(typeof(List<AlertEventDto>))]
+[JsonSerializable(typeof(List<AlertRuleDto>))]
+[JsonSerializable(typeof(List<AlertStateDto>))]
+[JsonSerializable(typeof(TokenBudgetDto))]
+[JsonSerializable(typeof(TokenBudgetUsageDto))]
 [JsonSerializable(typeof(TokenSecretDto))]
 [JsonSerializable(typeof(TokenMutationResultDto))]
 // requests and stats

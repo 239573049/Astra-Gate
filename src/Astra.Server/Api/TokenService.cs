@@ -12,11 +12,25 @@ public sealed record TokenStatsDto(
     decimal CostUsd, long Requests, long InputTokens, long OutputTokens, long TotalTokens, long CacheReadTokens,
     long CacheWriteTokens, double? CacheHitRate, double? Tps);
 
+/// <summary>One budget of a token as the admin API takes and shows it: a cost limit in USD, counts as they are.</summary>
+public sealed record TokenBudgetDto(string Metric, string Period, decimal Limit);
+
+/// <summary>A token's usage caps (<see cref="TokenLimits"/>) in the admin API.</summary>
+public sealed record TokenLimitsDto(List<TokenBudgetDto> Budgets, int? Rpm);
+
+/// <summary>Where a token stands against one budget (cost amounts in USD).</summary>
+public sealed record TokenBudgetUsageDto(
+    string Metric, string Period, decimal Limit, decimal Used, decimal Remaining, double UsedPercent, bool Exhausted,
+    DateTimeOffset? ResetsAt);
+
 /// <summary>A token as shown in the admin API: masked key only, never the plaintext.</summary>
+/// <param name="AllowedClients">Client kinds the key may be used with; null = any, empty = direct calls only.</param>
+/// <param name="RecentRequests">Requests let through during the last minute (what the RPM cap counts).</param>
 public sealed record TokenDto(
     string Id, string Name, bool IsDefault, bool Enabled, string KeyMasked, string? ProviderId, string? AccountId,
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? LastUsedAt, IReadOnlyList<string> Clients,
-    TokenStatsDto Today, TokenStatsDto Total);
+    TokenStatsDto Today, TokenStatsDto Total, TokenLimitsDto? Limits, List<string>? AllowedClients,
+    List<TokenBudgetUsageDto> LimitUsage, int RecentRequests);
 
 public sealed record TokenSecretDto(string Token);
 
@@ -27,7 +41,8 @@ public sealed record TokenMutationResultDto(TokenDto? Token, IReadOnlyList<strin
 /// Gateway token administration (plan: tokens). Clients write "&lt;token&gt;.&lt;kind&gt;"; resetting a key or deleting a
 /// token rewrites the affected client configs through <see cref="ClientService"/> so the restore invariants hold.
 /// </summary>
-public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, ClientService clients, SettingsService settings)
+public sealed class TokenService(
+    AstraDatabase db, ISecretProtector secrets, ClientService clients, SettingsService settings, TokenUsageLedger ledger)
 {
     private const int MaxNameLength = 64;
 
@@ -60,9 +75,16 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
         var today = (await db.Tokens.UsageAsync(from, to, ct)).ToDictionary(u => u.TokenId);
         var totals = (await db.Tokens.ListTotalsAsync(ct)).ToDictionary(u => u.TokenId);
         var clientRows = await db.Clients.ListAsync(ct);
-        return tokens.Select(t => ToDto(t,
-            clientRows.Where(c => (c.TokenId ?? TokenIds.Default) == t.Id && c.Enabled).Select(c => c.Kind).ToList(),
-            today.GetValueOrDefault(t.Id), totals.GetValueOrDefault(t.Id))).ToList();
+        var list = new List<TokenDto>(tokens.Count);
+        foreach (var t in tokens)
+        {
+            var limits = t.Limits();
+            var usage = limits is null ? [] : await ledger.StatusAsync(t.Id, limits, ct);
+            list.Add(ToDto(t,
+                clientRows.Where(c => (c.TokenId ?? TokenIds.Default) == t.Id && c.Enabled).Select(c => c.Kind).ToList(),
+                today.GetValueOrDefault(t.Id), totals.GetValueOrDefault(t.Id), limits, usage, ledger.RecentRequests(t.Id)));
+        }
+        return list;
     }
 
     public async Task<TokenDto> GetAsync(string id, CancellationToken ct = default) =>
@@ -77,6 +99,8 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
             Name = RequireName(ReadString(body, "name")),
             Enabled = true,
             CreatedAt = now,
+            LimitsJson = body.ContainsKey("limits") ? ReadLimits(body["limits"]) : null,
+            AllowedClientsJson = body.ContainsKey("allowedClients") ? ReadAllowedClients(body["allowedClients"]) : null,
         };
         await ApplyProviderAsync(token, body, ct);
         AssignKey(token, now);
@@ -85,8 +109,9 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
     }
 
     /// <summary>
-    /// Patch: <c>name</c>, <c>enabled</c>, <c>providerId</c> (null clears direct calls) and <c>accountId</c>
-    /// (null / "" = the provider's default account). Never touches client configs.
+    /// Patch: <c>name</c>, <c>enabled</c>, <c>providerId</c> (null clears direct calls), <c>accountId</c>
+    /// (null / "" = the provider's default account), <c>limits</c> (<see cref="TokenLimitsDto"/>; null = unlimited) and
+    /// <c>allowedClients</c> (client kinds; null = any, [] = direct calls only). Never touches client configs.
     /// </summary>
     public async Task<TokenDto> UpdateAsync(string id, JsonObject body, CancellationToken ct)
     {
@@ -97,6 +122,8 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
                 ? enabled
                 : throw new AdminApiException(400, "enabled must be a boolean");
         if (body.ContainsKey("providerId") || body.ContainsKey("accountId")) await ApplyProviderAsync(token, body, ct);
+        if (body.ContainsKey("limits")) token.LimitsJson = ReadLimits(body["limits"]);
+        if (body.ContainsKey("allowedClients")) token.AllowedClientsJson = ReadAllowedClients(body["allowedClients"]);
         token.UpdatedAt = DateTimeOffset.UtcNow;
         await db.Tokens.UpdateAsync(token, ct);
         return await GetAsync(id, ct);
@@ -122,6 +149,7 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
         if (token.IsDefault) throw new AdminApiException(409, "The default token cannot be deleted");
         var moved = await db.Clients.ReassignTokenAsync(id, TokenIds.Default, ct);
         await db.Tokens.DeleteAsync(id, CancellationToken.None);
+        ledger.Forget(id);
         var result = moved.Count == 0
             ? new TokenRewriteResult([], [])
             : await clients.RewriteForTokenAsync(TokenIds.Default, CancellationToken.None);
@@ -174,6 +202,50 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
         return trimmed;
     }
 
+    /// <summary>The <c>limits</c> body field as the stored JSON; null for null or no caps at all.</summary>
+    private static string? ReadLimits(JsonNode? node)
+    {
+        if (node is null) return null;
+        TokenLimitsDto? dto;
+        try
+        {
+            dto = Json.DeserializeApi<TokenLimitsDto>(node);
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException or FormatException)
+        {
+            throw new AdminApiException(400, "limits must be { budgets: [{ metric, period, limit }], rpm }");
+        }
+        if (dto is null) return null;
+        var limits = new TokenLimits
+        {
+            Budgets = (dto.Budgets ?? []).Select(b => new TokenBudget
+            {
+                Metric = b.Metric,
+                Period = b.Period,
+                Limit = b.Metric == TokenLimitMetrics.Cost ? Money.ToNanos(b.Limit) : (long)decimal.Truncate(b.Limit),
+            }).ToList(),
+            Rpm = dto.Rpm,
+        };
+        var errors = limits.Validate();
+        if (errors.Count > 0) throw new AdminApiException(400, string.Join("; ", errors));
+        return limits.IsEmpty ? null : Json.Serialize(limits);
+    }
+
+    /// <summary>The <c>allowedClients</c> body field as the stored JSON; null = any client.</summary>
+    private static string? ReadAllowedClients(JsonNode? node)
+    {
+        if (node is null) return null;
+        if (node is not JsonArray array) throw new AdminApiException(400, "allowedClients must be an array of client kinds or null");
+        var kinds = new List<string>();
+        foreach (var item in array)
+        {
+            var kind = item is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
+            if (kind is null || !ClientKinds.IsKnown(kind)) throw new AdminApiException(400, $"unknown client kind {item}");
+            if (!kinds.Contains(kind)) kinds.Add(kind);
+        }
+        return Json.Serialize(kinds);
+    }
+
     private static string? ReadString(JsonObject body, string name) => body[name] switch
     {
         null => null,
@@ -181,9 +253,17 @@ public sealed class TokenService(AstraDatabase db, ISecretProtector secrets, Cli
         _ => throw new AdminApiException(400, $"{name} must be a string"),
     };
 
-    private static TokenDto ToDto(TokenRecord t, IReadOnlyList<string> clientKinds, TokenUsage? today, TokenUsage? total) => new(
+    private static TokenDto ToDto(TokenRecord t, IReadOnlyList<string> clientKinds, TokenUsage? today, TokenUsage? total,
+        TokenLimits? limits, IReadOnlyList<TokenBudgetStatus> usage, int recentRequests) => new(
         t.Id, t.Name, t.IsDefault, t.Enabled, GatewayTokens.Mask(t.KeyPrefix), t.ProviderId, t.AccountId,
-        t.CreatedAt, t.UpdatedAt, t.LastUsedAt, clientKinds, Stats(today), Stats(total));
+        t.CreatedAt, t.UpdatedAt, t.LastUsedAt, clientKinds, Stats(today), Stats(total),
+        limits is null ? null : new TokenLimitsDto(limits.Budgets.Select(b => new TokenBudgetDto(b.Metric, b.Period, Amount(b.Metric, b.Limit))).ToList(), limits.Rpm),
+        t.AllowedClients(),
+        usage.Select(s => new TokenBudgetUsageDto(s.Budget.Metric, s.Budget.Period, Amount(s.Budget.Metric, s.Budget.Limit),
+            Amount(s.Budget.Metric, s.Used), Amount(s.Budget.Metric, s.Remaining), s.UsedPercent, s.Exhausted, s.ResetsAt)).ToList(),
+        recentRequests);
+
+    private static decimal Amount(string metric, long value) => metric == TokenLimitMetrics.Cost ? Money.FromNanos(value) : value;
 
     private static TokenStatsDto Stats(TokenUsage? u)
     {

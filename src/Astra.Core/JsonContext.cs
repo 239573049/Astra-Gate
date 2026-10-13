@@ -42,6 +42,7 @@ namespace Astra.Core;
 [JsonSerializable(typeof(ClientConfigStateEntry))]
 [JsonSerializable(typeof(BillingTraceStep))]
 [JsonSerializable(typeof(ApiProtocol))]
+[JsonSerializable(typeof(Astra.Core.Tokens.TokenLimits))]
 // Framework / node types used as roots or as dictionary values.
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(bool))]

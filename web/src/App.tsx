@@ -22,6 +22,8 @@ const ProvidersPage = lazy(() => import('./pages/ProvidersPage').then((m) => ({ 
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const TokensPage = lazy(() => import('./pages/TokensPage').then((m) => ({ default: m.TokensPage })));
+// The token self-service page lives outside the admin login (the token itself authenticates; plan: alerts-webhooks-token-limits §2.2).
+const KeyPage = lazy(() => import('./pages/KeyPage').then((m) => ({ default: m.KeyPage })));
 const TrayPanelPage = lazy(() => import('./pages/TrayPanelPage').then((m) => ({ default: m.TrayPanelPage })));
 
 // app:// has no server-side fallback for deep links, so the desktop uses hash routing.
@@ -30,34 +32,50 @@ const Router = isDesktop ? HashRouter : BrowserRouter;
 export function App() {
   return (
     <Router>
-      <AuthGate>
-        {/* Pages inside the shell suspend at its <Outlet />; this boundary only covers the tray route. */}
-        <Suspense fallback={null}>
-          <Routes>
-            {/* The desktop tray popover window: no app shell around it. */}
-            <Route path="tray" element={<TrayPanelPage />} />
-            <Route element={<AppShell />}>
-              <Route index element={<OverviewPage />} />
-              <Route path="requests" element={<RequestsPage />} />
-              <Route path="tokens" element={<TokensPage />} />
-              <Route path="clients" element={<ClientsPage />} />
-              <Route path="clients/:kind" element={<ClientsPage />} />
-              <Route path="providers" element={<ProvidersPage />} />
-              <Route path="providers/:id" element={<ProviderDetailPage />} />
-              <Route path="models" element={<ModelsPage />} />
-              <Route path="models/:id" element={<ModelDetailPage />} />
-              <Route path="plugins" element={<PluginsPage />} />
-              <Route path="plugins/:tab" element={<PluginsPage />} />
-              <Route path="privacy" element={<PrivacyPage />} />
-              <Route path="privacy/:tab" element={<PrivacyPage />} />
-              <Route path="settings" element={<SettingsPage />} />
-              <Route path="settings/:tab" element={<SettingsPage />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Route>
-          </Routes>
-        </Suspense>
-      </AuthGate>
+      <Routes>
+        <Route
+          path="key"
+          element={
+            <Suspense fallback={null}>
+              <KeyPage />
+            </Suspense>
+          }
+        />
+        <Route path="*" element={<AdminApp />} />
+      </Routes>
     </Router>
+  );
+}
+
+function AdminApp() {
+  return (
+    <AuthGate>
+      {/* Pages inside the shell suspend at its <Outlet />; this boundary only covers the tray route. */}
+      <Suspense fallback={null}>
+        <Routes>
+          {/* The desktop tray popover window: no app shell around it. */}
+          <Route path="tray" element={<TrayPanelPage />} />
+          <Route element={<AppShell />}>
+            <Route index element={<OverviewPage />} />
+            <Route path="requests" element={<RequestsPage />} />
+            <Route path="tokens" element={<TokensPage />} />
+            <Route path="clients" element={<ClientsPage />} />
+            <Route path="clients/:kind" element={<ClientsPage />} />
+            <Route path="providers" element={<ProvidersPage />} />
+            <Route path="providers/:id" element={<ProviderDetailPage />} />
+            <Route path="models" element={<ModelsPage />} />
+            <Route path="models/:id" element={<ModelDetailPage />} />
+            <Route path="plugins" element={<PluginsPage />} />
+            <Route path="plugins/:tab" element={<PluginsPage />} />
+            <Route path="privacy" element={<PrivacyPage />} />
+            <Route path="privacy/:tab" element={<PrivacyPage />} />
+            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings/:tab" element={<SettingsPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </Suspense>
+    </AuthGate>
   );
 }
 

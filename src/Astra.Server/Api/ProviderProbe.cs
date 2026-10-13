@@ -282,9 +282,10 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             record.TtfbMs = httpMs;
             record.TtftMs = run.FirstTokenMs;
             record.TotalMs = sw.ElapsedMilliseconds;
-            if (run.FirstTokenMs is { } ttft && record.TotalMs > ttft)
+            // From the response start, as in GatewayPipeline.Finish (hidden reasoning is billed but not streamed).
+            if (run.FirstTokenMs is not null && httpMs is { } ttfb && record.TotalMs > ttfb)
             {
-                record.GenerationMs = record.TotalMs - ttft;
+                record.GenerationMs = record.TotalMs - ttfb;
                 var generated = usage is null ? 0 : usage.Get(TokenTypes.Output) + usage.Get(TokenTypes.Reasoning);
                 if (generated > 0 && record.GenerationMs > 0)
                     record.OutputTps = Math.Round(generated / (record.GenerationMs.Value / 1000.0), 2);

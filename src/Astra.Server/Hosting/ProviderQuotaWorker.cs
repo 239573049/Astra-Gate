@@ -8,11 +8,13 @@ namespace Astra.Server.Hosting;
 /// minute, enabled providers whose query is turned on and whose last attempt is older than their interval
 /// (provider override → global <c>QuotaAutoIntervalMinutes</c>; 0 = off; ×4 after repeated failures) are
 /// queried one after another, at most <see cref="MaxPerRound"/> per round. Failures are stored on the
-/// snapshot and never change the provider itself.
+/// snapshot and never change the provider itself. The round's remaining slots go to subscription accounts
+/// (<see cref="SubscriptionQuotaSync"/>).
 /// </summary>
 public sealed class ProviderQuotaWorker(
     AstraDatabase db,
     ProviderQuotaManager quota,
+    SubscriptionQuotaSync subscriptions,
     ILogger<ProviderQuotaWorker> logger,
     TimeProvider? timeProvider = null) : BackgroundService
 {
@@ -37,7 +39,8 @@ public sealed class ProviderQuotaWorker(
         {
             try
             {
-                await RefreshDueAsync(stoppingToken);
+                var queried = await RefreshDueAsync(stoppingToken);
+                await subscriptions.RefreshDueAsync(MaxPerRound - queried, stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {

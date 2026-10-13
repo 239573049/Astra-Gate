@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Privacy;
 using Astra.Data;
@@ -9,7 +11,8 @@ namespace Astra.Gateway.Pipeline;
 /// <param name="Applied">False when the guard is disabled — body passes through untouched.</param>
 /// <param name="DryRun">True when configured to detect-and-record only.</param>
 /// <param name="Blocked">A "block" action matched; the request must be rejected.</param>
-/// <param name="Body">Body to forward upstream (redacted when applied and not blocked).</param>
+/// <param name="Body">Body to forward upstream (redacted when applied and not blocked); empty from
+/// <see cref="PrivacyGuardService.InspectJson"/>, which redacts the parsed body in place instead.</param>
 /// <param name="Hits">Aggregated rule hits.</param>
 /// <param name="RestoreMap">Placeholder → original; empty unless redactions are to be restored.</param>
 public sealed record PrivacyGuardResult(
@@ -21,6 +24,9 @@ public sealed record PrivacyGuardResult(
     IReadOnlyDictionary<string, string> RestoreMap)
 {
     public static readonly PrivacyGuardResult PassThrough = new(false, false, false, "", [], new Dictionary<string, string>());
+
+    /// <summary><see cref="PrivacyGuardService.InspectJson"/>: redactions were written into the parsed body.</summary>
+    public bool Rewritten { get; init; }
 }
 
 /// <summary>
@@ -70,12 +76,12 @@ public sealed class PrivacyGuardService(AstraDatabase db)
     }
 
     private volatile Snapshot _snapshot = new(new PrivacySettings());
-    private PrivacyDetector? _detector;
+
+    // One detector for the service's lifetime: it keeps, per policy, which long strings are known to be clean.
+    private readonly PrivacyDetector _detector = new();
 
     /// <summary>The active settings as a copy; mutating it never reaches the published snapshot.</summary>
     public PrivacySettings Settings => _snapshot.Settings.Clone();
-
-    private PrivacyDetector Detector => _detector ??= new PrivacyDetector();
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
@@ -127,7 +133,7 @@ public sealed class PrivacyGuardService(AstraDatabase db)
         if (!settings.Enabled) return PrivacyGuardResult.PassThrough with { Body = requestBody };
 
         var policy = snapshot.PolicyFor(clientKind, null, null);
-        var applied = Detector.ApplyJson(requestBody, policy) ?? Detector.Apply(requestBody, policy);
+        var applied = _detector.ApplyJson(requestBody, policy) ?? _detector.Apply(requestBody, policy);
 
         // Nothing matched: forward the original bytes untouched.
         if (applied.Hits.Count == 0)
@@ -146,6 +152,29 @@ public sealed class PrivacyGuardService(AstraDatabase db)
             ? applied.Redactions.ToDictionary(r => r.Placeholder, r => r.Original)
             : new Dictionary<string, string>();
         return new PrivacyGuardResult(true, false, false, applied.Text, applied.Hits, restore);
+    }
+
+    /// <summary>
+    /// <see cref="Inspect"/> for a body already parsed as a JSON object: <paramref name="source"/> is scanned and,
+    /// unless the outcome is a dry run or a block, redactions are written into <paramref name="body"/> — the node
+    /// tree over that same element — so the body is neither serialized nor parsed again (Body stays empty).
+    /// </summary>
+    public PrivacyGuardResult InspectJson(JsonElement source, JsonObject body, string? clientKind)
+    {
+        var snapshot = _snapshot;
+        var settings = snapshot.Settings;
+        if (!settings.Enabled) return PrivacyGuardResult.PassThrough;
+
+        var policy = snapshot.PolicyFor(clientKind, null, null);
+        var applied = _detector.ApplyJson(source, body, policy, rewrite: !policy.DryRun);
+        if (applied.Hits.Count == 0 || policy.DryRun || applied.Blocked)
+            return new PrivacyGuardResult(true, policy.DryRun, applied.Blocked && !policy.DryRun, "", applied.Hits,
+                new Dictionary<string, string>());
+
+        var restore = policy.Restore && settings.RestoreResponses
+            ? applied.Redactions.ToDictionary(r => r.Placeholder, r => r.Original)
+            : new Dictionary<string, string>();
+        return new PrivacyGuardResult(true, false, false, "", applied.Hits, restore) { Rewritten = applied.Redactions.Count > 0 };
     }
 
     /// <summary>Plain-text restore for non-streaming responses (streaming uses <see cref="ChunkRestorer"/>).</summary>

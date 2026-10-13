@@ -1,4 +1,5 @@
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -19,7 +20,10 @@ public static partial class WorkPlace
     public const string GitHeader = "x-magpie-work-git";
 
     /// <summary>Puts the agent's folder (as the request body says it) on a request to a plugin's provider.</summary>
-    public static void Tell(HttpRequestMessage request, string body)
+    public static void Tell(HttpRequestMessage request, string body) => Tell(request, Parse(body));
+
+    /// <summary><see cref="Tell(HttpRequestMessage, string)"/> for a body already parsed.</summary>
+    public static void Tell(HttpRequestMessage request, JsonNode? body)
     {
         request.Headers.Remove(DirHeader);
         request.Headers.Remove(GitHeader);
@@ -36,17 +40,11 @@ public static partial class WorkPlace
     /// Claude Code " - Primary working directory: /x" (a move adds " (was /y)"), Codex's and Pi's &lt;cwd&gt;,
     /// OpenCode's "Working directory: /x" inside &lt;env&gt;. Of those said, the last goes. The model's own turns don't count.
     /// </summary>
-    public static (string? Dir, string? Git) Of(string body)
+    public static (string? Dir, string? Git) Of(string body) => Of(Parse(body));
+
+    /// <summary><see cref="Of(string)"/> for a body already parsed.</summary>
+    public static (string? Dir, string? Git) Of(JsonNode? root)
     {
-        JsonNode? root;
-        try
-        {
-            root = JsonNode.Parse(body);
-        }
-        catch (JsonException)
-        {
-            return (null, null);
-        }
         string? dir = null, git = null;
         Walk(root, false, text =>
         {
@@ -57,6 +55,18 @@ public static partial class WorkPlace
             }
         });
         return (dir, git);
+    }
+
+    private static JsonNode? Parse(string body)
+    {
+        try
+        {
+            return JsonNode.Parse(body);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     // Every string of the request in document order, but those of an assistant's (the model's) turn.
@@ -71,6 +81,14 @@ public static partial class WorkPlace
                 break;
             case JsonArray a:
                 foreach (var child in a) Walk(child, assistant, look);
+                break;
+            // A value still reading from the request's bytes is checked there first: only a string that can say
+            // the folder becomes a string. The markers can only hide behind a \u escape, never \n or \".
+            case JsonValue v when !assistant && v.TryGetValue<JsonElement>(out var element):
+                if (element.ValueKind != JsonValueKind.String) break;
+                var raw = JsonMarshal.GetRawUtf8Value(element);
+                if (raw.IndexOf("\\u"u8) < 0 && raw.IndexOf("irectory: "u8) < 0 && raw.IndexOf("<cwd>"u8) < 0) break;
+                look(element.GetString()!);
                 break;
             case JsonValue v when !assistant && v.TryGetValue<string>(out var text):
                 look(text);

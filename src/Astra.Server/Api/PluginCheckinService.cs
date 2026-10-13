@@ -18,7 +18,7 @@ public sealed record PluginCheckinSwitch(bool On);
 
 /// <summary>
 /// A plugin's daily check-in (magpie's plugin_checkin.go): a plugin whose auth hook has <c>checkin</c> presses its
-/// vendor's daily check-in (签到) for each account. Off until the user switches it on per provider. Each usable
+/// vendor's daily check-in (签到) for each account. On by default; the user can switch it off per provider. Each usable
 /// account is asked once a Beijing day; a <c>failed</c> answer is asked again after 30 minutes, every other answer
 /// settles the day. The result is kept in the account's <c>extra.checkin</c>.
 /// </summary>
@@ -96,6 +96,12 @@ public sealed class PluginCheckinService(AstraDatabase db, PluginProviders provi
                     if (answer?["credit"] is JsonValue credit && credit.TryGetValue<double>(out var c)) result["credit"] = c;
                     if (answer?["streak"] is JsonValue streak && streak.TryGetValue<int>(out var s)) result["streak"] = s;
                 }
+                catch (PluginHostException e) when (e.Message.Contains("doesn't check in", StringComparison.Ordinal))
+                {
+                    // the plugin lost its check-in hook (an update): the provider's flag was stale, not the account failing
+                    await DropSupportAsync(provider, ct);
+                    return;
+                }
                 catch (PluginHostException e)
                 {
                     // a throw is a failure, asked again later; it never resets the account or a day's result
@@ -113,6 +119,21 @@ public sealed class PluginCheckinService(AstraDatabase db, PluginProviders provi
         }
     }
 
+    private async Task DropSupportAsync(Provider provider, CancellationToken ct)
+    {
+        var plugin = provider.Settings["plugin"] as JsonObject ?? new JsonObject();
+        plugin["checkin"] = false;
+        provider.Settings["plugin"] = plugin;
+        await db.Providers.UpdateAsync(provider, ct);
+        foreach (var account in await db.Accounts.ListAsync(provider.Id, ct))
+        {
+            if (account.Extra["checkin"] is null) continue;
+            account.Extra.Remove("checkin");
+            await db.Accounts.UpdateAsync(account, CancellationToken.None);
+        }
+        logger.LogInformation("{Provider}'s plugin no longer checks in; check-in switched off for it", provider.Name);
+    }
+
     private async Task<Provider> RequireAsync(string providerId, CancellationToken ct)
     {
         var provider = await db.Providers.GetAsync(providerId, ct) ?? throw new AdminApiException(404, "Provider not found");
@@ -122,7 +143,8 @@ public sealed class PluginCheckinService(AstraDatabase db, PluginProviders provi
 
     private static bool Supported(Provider p) => p.Settings["plugin"]?["checkin"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
 
-    private static bool IsOn(Provider p) => p.Settings["plugin"]?["checkin_on"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+    // on unless the user switched it off (checkin_on is only written by SwitchAsync)
+    private static bool IsOn(Provider p) => p.Settings["plugin"]?["checkin_on"] is not JsonValue v || !v.TryGetValue<bool>(out var b) || b;
 
     private static PluginCheckinDto Dto(ProviderAccount a)
     {

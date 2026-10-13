@@ -11,6 +11,10 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Content-Encoding: zstd request bodies (codex-cli compresses with it); managed port, no native library. -->
+    <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
     <ProjectReference Include="..\Astra.Data\Astra.Data.csproj" />
     <ProjectReference Include="..\Astra.Providers\Astra.Providers.csproj" />

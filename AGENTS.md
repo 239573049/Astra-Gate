@@ -290,6 +290,11 @@ runtime needed on the target).
     is a copy of `Market/market.json` (the docs image build context has no `src/`): update both together. A hosted
     package's tarball address and hash come from the registry only (`PluginService.Add` never takes them from the
     caller), and `PluginSources.MarketPackage` entries update through the market, not npm.
+11. **Alert event** (`.plan/alerts-webhooks-token-limits.md`): a descriptor in `AlertEvents.All` and its evaluation in
+    `AlertConditions` (`src/Astra.Core/Alerts/AlertContracts.cs`), the observation its subject type reports
+    (`AlertEngine.SweepAsync`, `TokenLimiter.Observation`), its zh/en message in `src/Astra.Server/Alerts/AlertMessages.cs`,
+    web i18n `alerts.event.<id>[.hint]` (plus `alerts.param.*` / `alerts.choice.*` for new condition fields), and the event
+    table in `docs/content/docs/console/notifications.mdx`. The webhook payload shape is a public contract documented there.
 
 ## Conventions
 

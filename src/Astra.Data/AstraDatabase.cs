@@ -22,6 +22,7 @@ public sealed class AstraDatabase
         ClientConfigState = new ClientConfigStateStore(factory);
         Requests = new RequestRepository(factory);
         Plugins = new PluginRepository(factory);
+        Alerts = new AlertRepository(factory);
         Migrations = new MigrationRunner(factory, paths);
         Seed = new SeedImporter(factory);
     }
@@ -37,6 +38,7 @@ public sealed class AstraDatabase
     public ClientConfigStateStore ClientConfigState { get; }
     public RequestRepository Requests { get; }
     public PluginRepository Plugins { get; }
+    public AlertRepository Alerts { get; }
     public MigrationRunner Migrations { get; }
     public SeedImporter Seed { get; }
 

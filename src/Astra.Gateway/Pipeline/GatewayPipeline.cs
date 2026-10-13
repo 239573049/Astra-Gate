@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -39,15 +40,20 @@ public sealed class GatewayPipeline(
     LiveRequestFeed live,
     MiddlewareEngine middleware,
     PluginFetchHandler pluginTransport,
+    TokenLimiter limiter,
     ILogger<GatewayPipeline> logger)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
     private readonly HttpClient _pluginClient = new(pluginTransport, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
 
-    private const long MaxRequestBytes = 64L * 1024 * 1024;
+    internal const long MaxRequestBytes = 64L * 1024 * 1024;
     private const int MaxErrorBodyBytes = 1024 * 1024;
     private const string DefaultAnthropicVersion = "2023-06-01";
     private static readonly string UserAgent = $"Astra/{typeof(GatewayPipeline).Assembly.GetName().Version?.ToString(3) ?? "0"}";
+
+    // Top-level Responses fields the ChatGPT (Codex) backend rejects with 400 "Unsupported parameter".
+    private static readonly string[] CodexUnsupportedParams =
+        ["user", "safety_identifier", "max_output_tokens", "temperature", "top_p", "prompt_cache_retention"];
 
     /// <summary>Handles one generation request (chat / responses / messages / generateContent).</summary>
     /// <param name="pathModel">Gemini: model from the URL.</param>
@@ -84,6 +90,9 @@ public sealed class GatewayPipeline(
         AccountScheduler.Lease? accountLease = null;
         MiddlewareRun? middlewareRun = null;
         MiddlewareResponseStream? middlewareStream = null;
+        // Pooled: returned when the request is over (a send still running keeps its own reference).
+        RequestBody? requestBody = null;
+        PooledBuffer? upstreamPayload = null;
 
         try
         {
@@ -96,29 +105,37 @@ public sealed class GatewayPipeline(
             record.ProviderName = provider.Name;
             live.Update(record);
 
-            var rawBody = await ReadBodyAsync(ctx.Request, ct);
-            capture?.Set(BodyStore.ClientRequest, rawBody);
+            // Token caps (plan: alerts-webhooks-token-limits §1.4): once per request, before anything goes upstream.
+            await limiter.CheckAsync(route.Token, ct);
+            // Read once into a pooled UTF-8 buffer; from here on the body is these bytes and one tree over them.
+            requestBody = await RequestBody.ReadAsync(ctx.Request, MaxRequestBytes, ct);
+            capture?.Set(BodyStore.ClientRequest, requestBody.Utf8);
 
             // Gateway middleware plugins (magpie-compatible; .plan/plugins.md) see the agent's body in its own
             // API first, before the privacy guard — which still applies to whatever they send on — and the
             // reply on its way back to the agent. A reject is answered in the agent's API's error shape.
             middlewareRun = await middleware.BeginAsync(
-                GatewayMiddleware.Info(inbound, rawBody, ctx.Request.Path,
+                GatewayMiddleware.Info(inbound, requestBody.Utf8, ctx.Request.Path,
                     route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream), ct);
             if (middlewareRun is not null)
             {
-                var (changed, reject) = middlewareRun.Request(Encoding.UTF8.GetBytes(rawBody));
+                var (changed, reject) = middlewareRun.Request(requestBody.Utf8.ToArray());
                 if (reject is not null)
                 {
                     record.Status = RequestStatus.Blocked;
                     throw GatewayMiddleware.Rejected(reject);
                 }
-                rawBody = Encoding.UTF8.GetString(changed);
+                requestBody.Replace(changed);
                 middlewareStream = MiddlewareResponseStream.Install(ctx, middlewareRun);
             }
 
-            // Privacy guard (plan §6.7): runs on the client body before anything leaves the machine.
-            var guard = privacy.Inspect(rawBody, route.ClientKind);
+            // Privacy guard (plan §6.7): runs on the client body before anything leaves the machine. A JSON object
+            // is parsed once and redacted in place — the tree the rest of the pipeline reads. Anything else takes
+            // the text path, which reports it (or blocks it) exactly as before.
+            var parsed = requestBody.Parse();
+            var guard = parsed is (var root, var tree)
+                ? privacy.InspectJson(root, tree, route.ClientKind)
+                : privacy.Inspect(requestBody.Text(), route.ClientKind);
             if (guard.Applied && guard.Hits.Count > 0)
                 record.PrivacyJson = PrivacyGuardService.ReportJson(guard.DryRun, guard.Blocked, guard.Hits, guard.RestoreMap.Count);
             if (guard.Blocked)
@@ -127,7 +144,9 @@ public sealed class GatewayPipeline(
                 throw new GatewayException(400, "invalid_request_error", "请求中包含被 Astra 隐私护栏拦截的敏感信息，已拒绝发送到上游。详情见 Astra 请求日志。");
             }
 
-            var body = ParseObject(guard.Body);
+            var body = parsed?.Object ?? ParseObject(guard.Body);
+            // Whether the client's own bytes can go upstream as they are: the tree is theirs and nothing changed it.
+            var bodyIsClientBytes = parsed is not null && !guard.Rewritten;
             // Log-only metadata (plan §6.5): what the client itself set, read before any codec derives
             // upstream budgets from it. Never touches the wire and never throws.
             RequestReasoning.Capture(record, inbound, body);
@@ -214,8 +233,9 @@ public sealed class GatewayPipeline(
             record.SystemModelId = effective.SystemModelId;
             live.Update(record);
 
-            // What we send upstream.
-            string upstreamText;
+            // What we send upstream: one tree, serialized once at the end — or the client's bytes when untouched.
+            JsonObject upstreamTree;
+            bool upstreamDirty;
             var injectedChatUsage = false;
             if (passthrough)
             {
@@ -223,22 +243,6 @@ public sealed class GatewayPipeline(
                 if (upstreamModel != model && inbound != ApiProtocol.Gemini)
                 {
                     body["model"] = upstreamModel; // Gemini carries the model in the URL instead.
-                    rewritten = true;
-                }
-                if (forceResponsesStream)
-                {
-                    // codex backend: input 必须是数组、store 必须是 false、stream 必须是 true。
-                    if (body["input"] is JsonValue inputValue && inputValue.TryGetValue<string>(out var inputText))
-                    {
-                        body["input"] = new JsonArray(new JsonObject
-                        {
-                            ["type"] = "message", ["role"] = "user",
-                            ["content"] = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = inputText }),
-                        });
-                        rewritten = true;
-                    }
-                    body["store"] = false;
-                    body["stream"] = true;
                     rewritten = true;
                 }
                 if (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
@@ -250,26 +254,47 @@ public sealed class GatewayPipeline(
                     injectedChatUsage = true;
                     rewritten = true;
                 }
-                upstreamText = rewritten ? body.ToJsonString(GatewayJson.Options) : guard.Body;
+                upstreamTree = body;
+                upstreamDirty = rewritten || !bodyIsClientBytes;
             }
             else
             {
-                var encoded = upstreamCodec!.EncodeRequest(ir!, new RequestEncodeContext
+                upstreamTree = upstreamCodec!.EncodeRequest(ir!, new RequestEncodeContext
                 {
                     UpstreamModel = upstreamModel,
                     DefaultMaxOutputTokens = effective.MaxOutputTokens is { } max && max <= int.MaxValue ? (int)max : null,
                     EffortBudgets = s.EffortBudgets,
                     AutoCacheControl = provider.SettingFlag("auto_cache_control", true),
                 });
-                upstreamText = encoded.ToJsonString(GatewayJson.Options);
+                upstreamDirty = true;
                 if (ir!.Warnings.Count > 0) logger.LogInformation("Request {Id}: lossy mapping: {Warnings}", record.Id, string.Join("; ", ir.Warnings));
             }
+            if (forceResponsesStream)
+            {
+                // codex backend: input 必须是数组、store 必须是 false、stream 必须是 true；codex-cli 不发的
+                // 采样/身份参数（user、max_output_tokens、temperature…）一律回 400 "Unsupported parameter"。
+                // 直通与翻译两条路都在这里收口。
+                if (upstreamTree["input"] is JsonValue inputValue && inputValue.TryGetValue<string>(out var inputText))
+                {
+                    upstreamTree["input"] = new JsonArray(new JsonObject
+                    {
+                        ["type"] = "message", ["role"] = "user",
+                        ["content"] = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = inputText }),
+                    });
+                }
+                upstreamTree["store"] = false;
+                upstreamTree["stream"] = true;
+                foreach (var name in CodexUnsupportedParams) upstreamTree.Remove(name);
+                upstreamDirty = true;
+            }
+            // The conversation identity, read before the rewrites below can touch system / metadata.
+            var stickyKey = StickyKeys.Of(inbound, body, ctx.Request.Headers);
             // 模拟 Claude Code（subscription.mimic_claude_code，见 ClaudeCodeMimicry）：把最终发往
             // 上游的请求体改写成 CLI 的形状（3 块 system + metadata.user_id）。直通与翻译两条路
-            // 都在这里收口，改的是同一份 upstreamText。
+            // 都在这里收口，改的是同一棵 upstreamTree。
             var clientCacheTtl = ClientOptions.GetCacheTtl(route.Client?.ExtraJson);
             if (claudeMimic)
-                upstreamText = ClaudeCodeMimicry.ApplyBody(upstreamText, route.AccountId ?? provider.Id,
+                upstreamDirty |= ClaudeCodeMimicry.ApplyBody(upstreamTree, route.AccountId ?? provider.Id,
                     ctx.Request.Headers["x-claude-code-session-id"].ToString());
             // Relay（真正的 Claude Code）：经 ANTHROPIC_AUTH_TOKEN 指到 Astra 的 CC 处于 auth-token 模式，
             // 它的请求体与自己用订阅（OAuth）登录时发的不同——实测抓包（claude-cli/2.1.281 两种模式的原始请求）
@@ -278,16 +303,28 @@ public sealed class GatewayPipeline(
             // 只补头不补体，就是"声明订阅身份却带着 API-key 形态的体"，上游回 403 Request not allowed。
             // 客户端专属的 cacheTtl 选项（ClientOptions）优先于 Relay 的默认 1h；只给没有 ttl 的块补，不增删断点。
             else if (claudeMode == ClaudeHeaderMode.Relay)
-                upstreamText = ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamText, clientCacheTtl ?? "1h");
+                upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl ?? "1h");
             else if (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
-                upstreamText = ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamText, clientCacheTtl);
-            capture?.Set(BodyStore.UpstreamRequest, upstreamText);
+                upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl);
+
+            PooledBuffer payload;
+            if (upstreamDirty)
+            {
+                // Straight to UTF-8 in a pooled buffer sized like the client's body (the usual outcome).
+                upstreamPayload = payload = new PooledBuffer(requestBody.Buffer.Length + 1024);
+                GatewayJson.WriteTo(upstreamTree, payload);
+            }
+            else
+            {
+                payload = requestBody.Buffer;
+            }
+            capture?.Set(BodyStore.UpstreamRequest, payload.Span);
 
             var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
             // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
             if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
-            var (sent, accountId, lease) = await SendAsync(route, endpoint, url, upstreamText, stream, passthrough, claudeMode, upstreamModel,
-                StickyKeys.Of(inbound, body, ctx.Request.Headers), ctx.Request, capture, ct);
+            var (sent, accountId, lease) = await SendAsync(route, endpoint, url, payload, upstreamTree, stream, passthrough, claudeMode, upstreamModel,
+                stickyKey, ctx.Request, capture, ct);
             accountLease = lease;
             using var response = sent;
             record.AccountId = accountId;
@@ -342,8 +379,10 @@ public sealed class GatewayPipeline(
         {
             if (record.Status != RequestStatus.Blocked) record.Status = RequestStatus.GatewayError;
             record.HttpStatus ??= e.Status;
-            record.ErrorType = e.Type;
+            record.ErrorType = e.RecordErrorType ?? e.Type;
             record.ErrorMessage = e.Message;
+            if (e.RetryAfterSeconds is { } retryAfter && !ctx.Response.HasStarted)
+                ctx.Response.Headers.RetryAfter = retryAfter.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await WriteErrorAsync(ctx, inbound, encoder, e.Status, e.Type, e.Message);
         }
         catch (ProtocolException e)
@@ -410,6 +449,9 @@ public sealed class GatewayPipeline(
                 record.BodyRef = BodyStore.RefFor(record.Id, record.StartedAtUtc);
                 await capture.WriteAsync(bodies, record.BodyRef);
             }
+            // Nothing reads the body tree past this point; a send still in flight holds its own buffer reference.
+            upstreamPayload?.Release();
+            requestBody?.Dispose();
             live.Finish(record);
             usageWriter.Enqueue(record);
         }
@@ -422,7 +464,7 @@ public sealed class GatewayPipeline(
         provider.Settings["plugin"]?["provider"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var id) ? id : provider.Id;
 
     private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
-        GatewayRoute route, ProviderEndpoint endpoint, string url, string body, bool stream, bool passthrough,
+        GatewayRoute route, ProviderEndpoint endpoint, string url, PooledBuffer body, JsonObject bodyTree, bool stream, bool passthrough,
         ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, CancellationToken ct)
     {
         var provider = route.Provider;
@@ -441,6 +483,10 @@ public sealed class GatewayPipeline(
         // 模拟 Claude Code（subscription.mimic_claude_code）：只作用于 compat 路径（调用方不是 Claude Code 本身）。
         var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
         var claudeSessionId = clientRequest.Headers["x-claude-code-session-id"].ToString();
+        // 上游请求体压缩（settings.request_compression；codex-cli 发 chatgpt.com 用 zstd）：整个请求只压一次，
+        // 各次重试共用；设置里的「上游请求压缩」可以换格式或关掉；插件提供商的请求不走 HTTP，不压。
+        var compression = plugin ? null : UpstreamCompression.Of(provider, settings.Current.RequestCompression);
+        var compressed = compression is null ? null : UpstreamCompression.Compress(body.Span, compression);
         var accountId = route.AccountId;
         var tried = new List<string>();
         AccountScheduler.Lease? lease = null;
@@ -474,7 +520,17 @@ public sealed class GatewayPipeline(
                 // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
                 // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
                 capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
-                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
+                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                if (response.StatusCode == HttpStatusCode.UnsupportedMediaType && compressed is not null)
+                {
+                    // 上游不收压缩的请求体：本请求剩下的发送都改发原文。
+                    response.Dispose();
+                    compressed = null;
+                    request = Build(credentials);
+                    capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
+                    response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                }
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
                 {
                     // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
                     response.Dispose();
@@ -567,7 +623,7 @@ public sealed class GatewayPipeline(
             var target = a.QueryName is not null && a.QueryValue is not null ? UpstreamUrls.WithQuery(url, a.QueryName, a.QueryValue) : url;
             var request = new HttpRequestMessage(HttpMethod.Post, target)
             {
-                Content = new StringContent(body, Encoding.UTF8, "application/json"),
+                Content = compressed is null ? new PooledContent(body) : UpstreamCompression.Content(compressed, compression!),
             };
             if (plugin)
             {
@@ -575,7 +631,7 @@ public sealed class GatewayPipeline(
                 if (a.PluginKey is { } key) request.Options.Set(PluginFetchHandler.AccountOption, key);
                 if (a.Proxy is { Length: > 0 } proxy) request.Options.Set(PluginFetchHandler.ProxyOption, proxy);
                 if (stickyKey is { Length: > 0 }) request.Headers.TryAddWithoutValidation(PluginFetchHandler.ConversationHeader, stickyKey);
-                WorkPlace.Tell(request, body);
+                WorkPlace.Tell(request, bodyTree);
             }
             if (claudeMode == ClaudeHeaderMode.Relay)
             {
@@ -682,39 +738,62 @@ public sealed class GatewayPipeline(
         var upstreamCapture = capture is null ? null : new StringBuilder();
         var clientCapture = capture is null ? null : new StringBuilder();
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        var buffer = new byte[16 * 1024];
+        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct);
+        var buffer = ArrayPool<byte>.Shared.Rent(16 * 1024);
         var outText = new StringBuilder();
+        var utf8 = Encoding.UTF8.GetEncoder();
+        var output = ctx.Response.BodyWriter;
         var array = asJsonArray ? new JsonArrayBody() : null;
         var sawSseEvent = false;
+        // Pass-through with nothing to change on the way (no placeholder to restore, no injected usage chunk to
+        // drop, no capture, SSE to SSE): the upstream bytes are the answer. They are forwarded as they arrive and
+        // only parsed to observe usage, first token and errors — no event is decoded to text and encoded back.
+        var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && !asJsonArray && capture is null;
         // Upstream bytes until the first SSE event parses: a body that never becomes SSE (a JSON object /
         // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here.
-        var rawPending = new StringBuilder();
+        PooledBuffer? rawPending = null;
 
         try
         {
             while (true)
             {
-                var read = await ReadWithIdleTimeoutAsync(stream, buffer, idleTimeoutSec, ct);
+                var read = await reader.ReadAsync(buffer);
                 if (read == 0) break;
-                var events = parser.Feed(buffer.AsSpan(0, read));
-                if (events.Count > 0)
+                var chunk = buffer.AsMemory(0, read);
+                var events = parser.Feed(chunk.Span);
+                if (!sawSseEvent && events.Count == 0)
                 {
+                    (rawPending ??= new PooledBuffer(read)).Write(chunk.Span);
+                    if (upstreamCapture is not null) AppendCapped(upstreamCapture, chunk.Span);
+                    continue;
+                }
+                if (upstreamCapture is not null) AppendCapped(upstreamCapture, chunk.Span);
+                if (forwardBytes)
+                {
+                    foreach (var sse in events) Observe(sse);
+                    if (!sawSseEvent && rawPending is not null)
+                    {
+                        // the start of the stream, held while it could still have been a plain JSON body
+                        await output.WriteAsync(rawPending.Memory, ct);
+                        rawPending.Release();
+                        rawPending = null;
+                    }
                     sawSseEvent = true;
-                    rawPending.Clear();
+                    await output.WriteAsync(chunk, ct);
+                    continue;
                 }
-                // The chunk as text is only wanted for body capture and for a body that has not turned into
-                // SSE yet: decoding every chunk of a streamed answer would allocate a string per read.
-                if (capture is not null || (!sawSseEvent && events.Count == 0))
-                {
-                    var text = Encoding.UTF8.GetString(buffer, 0, read);
-                    upstreamCapture?.Append(text);
-                    if (!sawSseEvent && events.Count == 0) rawPending.Append(text);
-                }
+                sawSseEvent = true;
+                rawPending?.Release();
+                rawPending = null;
                 foreach (var sse in events) Handle(sse);
                 await FlushAsync();
             }
-            foreach (var sse in parser.Flush()) Handle(sse);
-            if (!sawSseEvent && rawPending.Length > 0) await HandleNonSseBodyAsync(rawPending.ToString());
+            foreach (var sse in parser.Flush())
+            {
+                if (forwardBytes) Observe(sse);
+                else Handle(sse);
+            }
+            if (!sawSseEvent && rawPending is not null) await HandleNonSseBodyAsync(Encoding.UTF8.GetString(rawPending.Span));
             if (decoder is not null) Emit(decoder.Complete());
             await FlushAsync();
             await CloseArrayAsync();
@@ -729,11 +808,18 @@ public sealed class GatewayPipeline(
         }
         finally
         {
+            rawPending?.Release();
+            ArrayPool<byte>.Shared.Return(buffer);
             if (capture is not null)
             {
                 capture.Set(BodyStore.UpstreamResponse, upstreamCapture!.ToString());
                 capture.Set(BodyStore.ClientResponse, clientCapture!.ToString());
             }
+        }
+
+        void Observe(SseEvent sse)
+        {
+            foreach (var e in decoder?.DecodeSse(sse) ?? []) observer.Observe(e, sw.ElapsedMilliseconds);
         }
 
         void Handle(SseEvent sse)
@@ -744,9 +830,7 @@ public sealed class GatewayPipeline(
                 // Pass-through: observe, then forward the event unchanged (minus our injected usage chunk).
                 foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds);
                 if (dropChatUsageChunk && IsChatUsageOnlyChunk(sse.Data)) return;
-                Write(asJsonArray
-                    ? PrivacyGuardService.Restore(sse.Data, restore)
-                    : PrivacyGuardService.Restore(SseWriter.Format(sse), restore));
+                WriteFrame(sse);
                 return;
             }
             Emit(events);
@@ -800,11 +884,16 @@ public sealed class GatewayPipeline(
             {
                 observer.Observe(e, sw.ElapsedMilliseconds, wholeBody);
                 if (encoder is null) continue;
-                foreach (var frame in encoder.OnEvent(e))
-                    Write(asJsonArray
-                        ? PrivacyGuardService.Restore(frame.Data, restore)
-                        : PrivacyGuardService.Restore(SseWriter.Format(frame), restore));
+                foreach (var frame in encoder.OnEvent(e)) WriteFrame(frame);
             }
+        }
+
+        void WriteFrame(SseEvent frame)
+        {
+            if (asJsonArray) Write(PrivacyGuardService.Restore(frame.Data, restore));
+            // Nothing to restore: the frame is formatted straight into the pending text.
+            else if (restore.Count == 0) SseWriter.AppendTo(outText, frame);
+            else Write(PrivacyGuardService.Restore(SseWriter.Format(frame), restore));
         }
 
         void Write(string text)
@@ -825,11 +914,12 @@ public sealed class GatewayPipeline(
                 return;
             }
             if (outText.Length == 0) return;
-            var text = outText.ToString();
+            if (clientCapture is not null && clientCapture.Length < BodyStore.MaxBytes) clientCapture.Append(outText);
+            // Encoded chunk by chunk into the response pipe: the pending text never becomes one string.
+            foreach (var part in outText.GetChunks()) utf8.Convert(part.Span, output, flush: false, out _, out _);
+            utf8.Convert([], output, flush: true, out _, out _);
             outText.Clear();
-            clientCapture?.Append(text);
-            await ctx.Response.WriteAsync(text, ct);
-            await ctx.Response.Body.FlushAsync(ct);
+            await output.FlushAsync(ct);
         }
 
         async Task CloseArrayAsync()
@@ -847,54 +937,78 @@ public sealed class GatewayPipeline(
         int idleTimeoutSec, CancellationToken ct)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        // A declared length sizes the buffer once instead of doubling it (and copying) as the body arrives.
+        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct);
+        // A declared length sizes the buffer once (+1: the read that sees the end needs room); a compressed or
+        // chunked body (no length) grows by doubling inside the pool.
         var declared = response.Content.Headers.ContentLength;
-        using var memory = new MemoryStream(declared is > 0 and < int.MaxValue ? (int)declared.Value : 0);
-        var buffer = new byte[64 * 1024];
-        int read;
-        while ((read = await ReadWithIdleTimeoutAsync(stream, buffer, idleTimeoutSec, ct)) > 0) memory.Write(buffer, 0, read);
-        var body = memory.GetBuffer().AsMemory(0, (int)memory.Length);
-
-        JsonObject? json = null;
+        var known = declared is > 0 and < int.MaxValue;
+        var body = new PooledBuffer(known ? (int)declared!.Value + 1 : 64 * 1024);
         try
         {
-            // Parsed from its UTF-8 bytes: the body only becomes a string when something has to rewrite it.
-            // Invalid UTF-8 (a binary error page, say) is not JSON, which is what the string path found too.
-            if (Utf8.IsValid(body.Span)) json = JsonNode.Parse(body.Span) as JsonObject;
-        }
-        catch (JsonException)
-        {
-            // Not JSON: forwarded as-is on the pass-through path; the conversion path reports it below.
-        }
+            int read;
+            while ((read = await reader.ReadAsync(body.GetMemory(known ? 1 : 16 * 1024))) > 0) body.Advance(read);
 
-        var events = json is null || decoder is null ? [] : decoder.DecodeJson(json).ToList();
-        // One complete body: usage and errors are real, but there is no first-token moment to measure.
-        foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds, wholeBody: true);
-
-        if (encoder is null)
-        {
-            ctx.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-            ctx.Response.StatusCode = 200;
-            if (capture is null && restore.Count == 0)
+            JsonObject? json = null;
+            try
             {
-                // Nothing to rewrite (no capture, nothing redacted): hand the upstream bytes over untouched.
-                await ctx.Response.Body.WriteAsync(body, ct);
+                // Parsed from its UTF-8 bytes: the body only becomes a string when something has to rewrite it.
+                // Invalid UTF-8 (a binary error page, say) is not JSON, which is what the string path found too.
+                if (Utf8.IsValid(body.Span)) json = JsonNode.Parse(body.Span) as JsonObject;
+            }
+            catch (JsonException)
+            {
+                // Not JSON: forwarded as-is on the pass-through path; the conversion path reports it below.
+            }
+
+            var events = json is null || decoder is null ? [] : decoder.DecodeJson(json).ToList();
+            // One complete body: usage and errors are real, but there is no first-token moment to measure.
+            foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds, wholeBody: true);
+
+            if (encoder is null)
+            {
+                ctx.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                ctx.Response.StatusCode = 200;
+                if (capture is null && restore.Count == 0)
+                {
+                    // Nothing to rewrite (no capture, nothing redacted): hand the upstream bytes over untouched.
+                    await ctx.Response.Body.WriteAsync(body.Memory, ct);
+                    return;
+                }
+                var passthrough = PrivacyGuardService.Restore(Encoding.UTF8.GetString(body.Span), restore);
+                capture?.Set(BodyStore.UpstreamResponse, passthrough);
+                capture?.Set(BodyStore.ClientResponse, passthrough);
+                await ctx.Response.WriteAsync(passthrough, ct);
                 return;
             }
-            var passthrough = PrivacyGuardService.Restore(Encoding.UTF8.GetString(body.Span), restore);
-            capture?.Set(BodyStore.UpstreamResponse, passthrough);
-            capture?.Set(BodyStore.ClientResponse, passthrough);
-            await ctx.Response.WriteAsync(passthrough, ct);
+
+            if (json is null) throw new GatewayException(502, "api_error", "上游返回的不是 JSON：" + Truncate(Encoding.UTF8.GetString(body.Span[..Math.Min(body.Length, 1200)]), 300));
+            capture?.Set(BodyStore.UpstreamResponse, body.Span);
+            foreach (var e in events) encoder.OnEvent(e);
+            ctx.Response.ContentType = "application/json";
+            ctx.Response.StatusCode = 200;
+            await WriteJsonAsync(ctx, encoder.BuildJson(), restore, capture, ct);
+        }
+        finally
+        {
+            body.Release();
+        }
+    }
+
+    /// <summary>
+    /// Writes a whole JSON answer: straight from the tree into the response pipe as UTF-8, unless a placeholder
+    /// has to be restored or the body captured — those need the text.
+    /// </summary>
+    private static async Task WriteJsonAsync(HttpContext ctx, JsonNode payload, IReadOnlyDictionary<string, string> restore,
+        BodyCapture? capture, CancellationToken ct)
+    {
+        if (restore.Count == 0 && capture is null)
+        {
+            GatewayJson.WriteTo(payload, ctx.Response.BodyWriter);
+            await ctx.Response.BodyWriter.FlushAsync(ct);
             return;
         }
-
-        if (json is null) throw new GatewayException(502, "api_error", "上游返回的不是 JSON：" + Truncate(Encoding.UTF8.GetString(body.Span), 300));
-        capture?.Set(BodyStore.UpstreamResponse, Encoding.UTF8.GetString(body.Span));
-        foreach (var e in events) encoder.OnEvent(e);
-        var output = PrivacyGuardService.Restore(encoder.BuildJson().ToJsonString(GatewayJson.Options), restore);
+        var output = PrivacyGuardService.Restore(payload.ToJsonString(GatewayJson.Options), restore);
         capture?.Set(BodyStore.ClientResponse, output);
-        ctx.Response.ContentType = "application/json";
-        ctx.Response.StatusCode = 200;
         await ctx.Response.WriteAsync(output, ct);
     }
 
@@ -909,31 +1023,41 @@ public sealed class GatewayPipeline(
         BodyCapture? capture, int idleTimeoutSec, CancellationToken ct)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct);
         var parser = new SseParser();
         var upstreamCapture = capture is null ? null : new StringBuilder();
-        var buffer = new byte[16 * 1024];
-        var rawPending = new StringBuilder();
+        var buffer = ArrayPool<byte>.Shared.Rent(16 * 1024);
+        PooledBuffer? rawPending = null;
         var sawSseEvent = false;
-        while (true)
+        try
         {
-            var read = await ReadWithIdleTimeoutAsync(stream, buffer, idleTimeoutSec, ct);
-            if (read == 0) break;
-            upstreamCapture?.Append(Encoding.UTF8.GetString(buffer, 0, read));
-            var events = parser.Feed(buffer.AsSpan(0, read));
-            if (events.Count > 0)
+            while (true)
             {
-                sawSseEvent = true;
-                rawPending.Clear();
+                var read = await reader.ReadAsync(buffer);
+                if (read == 0) break;
+                if (upstreamCapture is not null) AppendCapped(upstreamCapture, buffer.AsSpan(0, read));
+                var events = parser.Feed(buffer.AsSpan(0, read));
+                if (events.Count > 0)
+                {
+                    sawSseEvent = true;
+                    rawPending?.Release();
+                    rawPending = null;
+                }
+                else if (!sawSseEvent)
+                {
+                    (rawPending ??= new PooledBuffer(read)).Write(buffer.AsSpan(0, read));
+                }
+                foreach (var sse in events) Emit(decoder?.DecodeSse(sse) ?? []);
             }
-            else if (!sawSseEvent)
-            {
-                rawPending.Append(Encoding.UTF8.GetString(buffer, 0, read));
-            }
-            foreach (var sse in events) Emit(decoder?.DecodeSse(sse) ?? []);
+            foreach (var sse in parser.Flush()) Emit(decoder?.DecodeSse(sse) ?? []);
+            if (!sawSseEvent && rawPending is not null && JsonNode.Parse(rawPending.Span) is JsonObject whole)
+                Emit(decoder?.DecodeJson(whole) ?? [], wholeBody: true);
         }
-        foreach (var sse in parser.Flush()) Emit(decoder?.DecodeSse(sse) ?? []);
-        if (!sawSseEvent && rawPending.Length > 0 && JsonNode.Parse(rawPending.ToString()) is JsonObject whole)
-            Emit(decoder?.DecodeJson(whole) ?? [], wholeBody: true);
+        finally
+        {
+            rawPending?.Release();
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
         Emit(decoder?.Complete() ?? []);
         capture?.Set(BodyStore.UpstreamResponse, upstreamCapture?.ToString() ?? "");
 
@@ -944,17 +1068,20 @@ public sealed class GatewayPipeline(
                       ?? throw new GatewayException(502, "api_error", "上游强制流式但响应里没有完整结果。");
         else
             payload = encoder.BuildJson();
-        var json = payload.ToJsonString(GatewayJson.Options);
-        json = PrivacyGuardService.Restore(json, restore);
-        capture?.Set(BodyStore.ClientResponse, json);
         ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = "application/json";
-        await ctx.Response.WriteAsync(json, ct);
+        await WriteJsonAsync(ctx, payload, restore, capture, ct);
 
         void Emit(IEnumerable<UnifiedStreamEvent> events, bool wholeBody = false)
         {
             foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds, wholeBody);
         }
+    }
+
+    // Debug capture keeps at most what BodyStore writes; a long stream must not grow it without bound.
+    private static void AppendCapped(StringBuilder capture, ReadOnlySpan<byte> utf8)
+    {
+        if (capture.Length < BodyStore.MaxBytes) capture.Append(Encoding.UTF8.GetString(utf8));
     }
 
     private async Task ForwardErrorAsync(
@@ -1010,9 +1137,13 @@ public sealed class GatewayPipeline(
                 logger.LogError(e, "Billing failed for request {Id}", record.Id);
             }
         }
-        if (record.TtftMs is { } ttft && record.TotalMs > ttft)
+        // Generation runs from the response start (TTFB), not the first visible token: hidden reasoning (e.g.
+        // Anthropic thinking with display "omitted") is billed as output but streams nothing until it is done,
+        // so timing from the first token would divide those tokens by the last few ms. A streamed first token
+        // is still required — a whole body's headers arrive only after the generation, leaving nothing to time.
+        if (record.TtftMs is not null && record.TtfbMs is { } ttfb && record.TotalMs > ttfb)
         {
-            record.GenerationMs = record.TotalMs - ttft;
+            record.GenerationMs = record.TotalMs - ttfb;
             var generated = observer.Usage is null ? 0 : observer.Usage.Get(TokenTypes.Output) + observer.Usage.Get(TokenTypes.Reasoning);
             if (generated > 0 && record.GenerationMs > 0) record.OutputTps = Math.Round(generated / (record.GenerationMs.Value / 1000.0), 2);
         }
@@ -1046,15 +1177,6 @@ public sealed class GatewayPipeline(
     private static JsonObject GenericError(string type, string message) =>
         new() { ["error"] = new JsonObject { ["type"] = type, ["message"] = message } };
 
-    private static async Task<string> ReadBodyAsync(HttpRequest request, CancellationToken ct)
-    {
-        if (request.ContentLength > MaxRequestBytes) throw new GatewayException(413, "request_too_large", "请求体超过 64 MiB。");
-        using var reader = new StreamReader(request.Body, Encoding.UTF8);
-        var text = await reader.ReadToEndAsync(ct);
-        if (text.Length > MaxRequestBytes) throw new GatewayException(413, "request_too_large", "请求体超过 64 MiB。");
-        return text;
-    }
-
     private static JsonObject ParseObject(string text)
     {
         try
@@ -1067,18 +1189,35 @@ public sealed class GatewayPipeline(
         }
     }
 
-    private static async Task<int> ReadWithIdleTimeoutAsync(Stream stream, byte[] buffer, int idleTimeoutSec, CancellationToken ct)
+    /// <summary>
+    /// Reads the upstream body with an idle timeout per read. One token source serves the whole body: it is
+    /// re-armed before each read (a timer that fired while the answer was being written to the client is not a
+    /// timeout of the next read — that read gets a fresh source), instead of a linked source and timer per chunk.
+    /// </summary>
+    private sealed class IdleTimeoutReader(Stream stream, int idleTimeoutSec, CancellationToken ct) : IDisposable
     {
-        using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        idle.CancelAfter(TimeSpan.FromSeconds(Math.Max(5, idleTimeoutSec)));
-        try
+        private readonly TimeSpan _timeout = TimeSpan.FromSeconds(Math.Max(5, idleTimeoutSec));
+        private CancellationTokenSource _idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        public async ValueTask<int> ReadAsync(Memory<byte> buffer)
         {
-            return await stream.ReadAsync(buffer, idle.Token);
+            if (!_idle.TryReset())
+            {
+                _idle.Dispose();
+                _idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            }
+            _idle.CancelAfter(_timeout);
+            try
+            {
+                return await stream.ReadAsync(buffer, _idle.Token);
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new UpstreamIdleTimeoutException($"上游超过 {idleTimeoutSec} 秒没有返回数据（流空闲超时，可在设置中调整）。");
+            }
         }
-        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
-        {
-            throw new UpstreamIdleTimeoutException($"上游超过 {idleTimeoutSec} 秒没有返回数据（流空闲超时，可在设置中调整）。");
-        }
+
+        public void Dispose() => _idle.Dispose();
     }
 
     private static async Task<string> ReadLimitedAsync(HttpResponseMessage response, int limit, CancellationToken ct)
@@ -1173,9 +1312,12 @@ public sealed class GatewayPipeline(
     /// <summary>Debug body capture (plan §6.5): four bodies per request, written after it finishes.</summary>
     private sealed class BodyCapture
     {
-        private readonly Dictionary<string, string> _parts = new();
+        private readonly Dictionary<string, object> _parts = new();
 
         public void Set(string part, string body) => _parts[part] = body;
+
+        /// <summary>Bytes are copied (at most what is written): the source is a pooled buffer.</summary>
+        public void Set(string part, ReadOnlySpan<byte> body) => _parts[part] = body[..Math.Min(body.Length, BodyStore.MaxBytes)].ToArray();
 
         public async Task WriteAsync(BodyStore store, string bodyRef)
         {
@@ -1183,7 +1325,7 @@ public sealed class GatewayPipeline(
             {
                 try
                 {
-                    await store.WriteAsync(bodyRef, part, body);
+                    await (body is byte[] bytes ? store.WriteAsync(bodyRef, part, bytes) : store.WriteAsync(bodyRef, part, (string)body));
                 }
                 catch (IOException)
                 {

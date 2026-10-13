@@ -13,6 +13,18 @@ public sealed class PluginMarketTests
         $$"""{"version":2,"plugins":[{"package":"@astra/plugin-a","name":"A","kind":"middleware","origin":"astra","latest":"1.2.0","description":"d","license":"MIT","author":"me","homepage":"https://a.example","repository":"https://github.com/a/a","tags":["x","y"],"minAstraVersion":"0.7.0","summary":{"en":"En","zh":"中"} {{extra}} },{"package":"Not A Package","name":"bad"},{"package":"@magpie-community/opencode-zed-auth","community":true,"providers":["zed"],"replaces":"zed"}]}""";
 
     [Fact]
+    public void BuiltInIcon_names_the_listings_icon_for_each_provider_it_serves()
+    {
+        Assert.Equal("workbuddy-color", PluginMarket.BuiltInIcon("workbuddy"));
+        Assert.Equal("workbuddy-color", PluginMarket.BuiltInIcon("workbuddy-ai"));
+        Assert.Equal("qoder", PluginMarket.BuiltInIcon("qoder"));
+        // a provider the listing doesn't name is matched by the package its plugin was installed as
+        Assert.Equal("qoder", PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-auth@latest"));
+        Assert.Null(PluginMarket.BuiltInIcon("qoder-cn", "@magpie-community/opencode-qoder-authx"));
+        Assert.Null(PluginMarket.BuiltInIcon("no-such-provider"));
+    }
+
+    [Fact]
     public async Task Reads_the_docs_registry_by_default_and_never_asks_npm_or_github()
     {
         var plugins = new TestPlugins();

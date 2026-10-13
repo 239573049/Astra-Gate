@@ -1,0 +1,132 @@
+---
+title: 通知与 Webhook
+description: 余额、订阅额度和令牌限额的告警规则，以及接收告警的 Webhook
+---
+
+Astra 可以在**余额不足、订阅额度紧张、账号失效、令牌额度用完**等情况发生时，把告警以 JSON POST 到你指定的地址（Webhook）。入口在 **设置 → 通知**。
+
+这一页分成三块：
+
+- **触发中的告警** — 当前处于触发状态的规则与对象；
+- **Webhook** — 告警发往哪里；
+- **告警规则** — 什么情况下告警、发往哪些 Webhook。
+
+## 工作方式
+
+每条规则 = **事件** + **条件** + **范围** → **Webhook**。Astra 按「规则 × 对象」记录状态：
+
+- 条件**开始成立**时通知一次（`status: "firing"`）；之后条件持续成立不会重复通知，除非设置了**重复提醒**；
+- 条件**不再成立**时回到正常状态；勾选了**恢复时也通知**会再发一条 `status: "resolved"`；
+- 恢复后在**防抖**时间（默认 60 分钟）内再次触发不通知，避免数值在阈值附近来回抖动时刷屏；
+- 数据暂时无法判断时（例如还没查询过余额）保持原状态，不会误报恢复。
+
+状态保存在数据库里，服务重启后不会把已经通知过的告警再发一遍。规则的事件、条件或范围被修改后，状态清零重新判断。
+
+### 数据从哪里来
+
+Astra 每分钟用**已保存的数据**巡检一次（不会因此访问上游）：
+
+| 对象 | 数据 |
+| --- | --- |
+| 提供商 | 「用量查询」得到的余额快照，后台按[查询间隔](/docs/console/settings#提供商用量查询)刷新 |
+| 订阅账号 | 账号状态、额度快照，以及后台额度同步的失败次数 |
+| 令牌 | 设置了限额的令牌当前各项限额的用量 |
+
+另外，令牌的请求被限额拦下时会**立即**触发「令牌额度用完」。订阅账号的额度由后台同步定时刷新，间隔在 **设置 → 提供商用量查询 → 订阅账号查询间隔** 里调整（默认 30 分钟，最短 10 分钟，0 表示关闭）。
+
+## 事件
+
+| 事件 | 对象 | 条件 |
+| --- | --- | --- |
+| 提供商余额不足 `provider.balance.low` | 提供商 | 「余额低于」阈值（按套餐自身的单位），或「已用百分比达到」阈值；可指定套餐名，默认取第一个有数据的套餐 |
+| 提供商余额查询失败 `provider.quota.failed` | 提供商 | 连续失败次数达到阈值（默认 3） |
+| 订阅账号额度紧张 `account.quota.high` | 订阅账号 | 5 小时 / 每周 / 点数窗口（或任一窗口）的已用百分比达到阈值（默认 90） |
+| 订阅账号失效 `account.auth.invalid` | 订阅账号 | 登录过期或被撤销，需要重新登录 |
+| 订阅账号额度查询失败 `account.quota.failed` | 订阅账号 | 后台额度同步连续失败次数达到阈值（默认 3） |
+| 令牌额度用量高 `token.usage.high` | 令牌 | 某项[限额](/docs/console/tokens#限额)的已用百分比达到阈值（默认 80）；可指定限额，如 `cost:month` |
+| 令牌额度用完 `token.limit.reached` | 令牌 | 某项限额已用完，或请求被每分钟请求数拦截（限额填 `rpm` 只看后者） |
+
+**范围**默认是该类型的全部对象，也可以只选其中几个。
+
+## Webhook
+
+| 字段 | 说明 |
+| --- | --- |
+| 格式 | 通用 JSON，或飞书 / 钉钉 / 企业微信 / Slack / Discord 的机器人消息，见下文 |
+| 地址 | `http://` 或 `https://`。不跟随重定向 |
+| 超时 | 1–60 秒，默认 10 |
+| 自定义请求头 | 例如 `Authorization`。值加密保存，保存后界面只显示名称；编辑时留空表示保持原值。`Content-Type`、`User-Agent`、`X-Astra-*` 等由 Astra 设置，不能自定义 |
+| 使用网络代理 | 开启时跟随设置里的网络代理，关闭则始终直连 |
+| 签名 | 通用 JSON：默认开启，创建时生成签名密钥并**只显示这一次**，之后可以在菜单里重新生成。飞书 / 钉钉：填入机器人自己的签名密钥（加密保存，不再显示）。企业微信、Slack、Discord 不签名 |
+
+### 机器人格式
+
+选择平台后，Astra 会把告警渲染成一条文本消息，第一行是「【Astra】告警 / 告警恢复 / 测试通知」，然后是告警的 `message`、规则名、时间和 Astra 地址：
+
+| 格式 | 地址从哪里拿 | 发送内容 | 签名 | 成功判断 |
+| --- | --- | --- | --- | --- |
+| 飞书 | 群设置 → 群机器人 → 添加自定义机器人 | `{"msg_type":"text","content":{"text":…}}` | 开启签名校验时，按飞书规则在请求体里加 `timestamp`、`sign` | 响应 `code` 为 0 |
+| 钉钉 | 群设置 → 机器人 → 自定义 | `{"msgtype":"text","text":{"content":…}}` | 安全设置选「加签」时，在地址后追加 `timestamp`、`sign` | 响应 `errcode` 为 0 |
+| 企业微信 | 群聊 → 添加群机器人 | `{"msgtype":"text","text":{"content":…}}` | — | 响应 `errcode` 为 0 |
+| Slack | Incoming Webhook | `{"text":…}` | — | 2xx |
+| Discord | 频道设置 → 整合 → Webhook | `{"content":…}`（最多 2000 字） | — | 2xx |
+
+- 钉钉机器人如果用「自定义关键词」做安全设置，关键词需要包含 `Astra`（每条消息的第一行都带它）。
+- 这些平台出错时多数仍然返回 HTTP 200，Astra 会读取响应里的错误码，非 0 视为失败并按规则重试；投递记录里能看到平台返回的错误信息。
+- 投递记录里显示的载荷始终是下面的通用 JSON，实际发出的消息在发送时才生成（飞书、钉钉的签名要求时间戳是新的）。
+- 切换格式时旧的签名密钥会被清除，需要重新填写。
+
+「发送测试」会立即发一条 `event: "test"` 的通知并显示结果，不会重试。「投递记录」列出最近的投递，包括载荷、响应状态和响应开头的内容，失败的可以重新投递。投递记录保留 7 天，每个 Webhook 最多 1000 条。
+
+### 投递与重试
+
+只有 2xx 响应算成功。失败后分别在 1 分钟、5 分钟、30 分钟后重试，共 4 次，仍失败则标记为失败。投递先写入数据库再发送，服务重启后未完成的投递会继续。
+
+### 请求格式
+
+```http
+POST /your/endpoint
+Content-Type: application/json
+User-Agent: astra/<版本>
+X-Astra-Event: provider.balance.low
+X-Astra-Delivery: 01JA…
+X-Astra-Timestamp: 1760400000
+X-Astra-Signature: sha256=<hex>
+```
+
+```json
+{
+  "id": "01JA…",
+  "event": "provider.balance.low",
+  "status": "firing",
+  "repeat": false,
+  "occurredAt": "2026-10-14T01:12:00Z",
+  "rule": { "id": "01J…", "name": "DeepSeek 余额" },
+  "subject": { "type": "provider", "id": "deepseek", "name": "DeepSeek" },
+  "condition": { "metric": "remaining", "value": 5 },
+  "observed": { "plan": "CNY", "unit": "CNY", "remaining": 3.2, "total": null, "usedPercent": null },
+  "message": "提供商 DeepSeek 余额 3.2 CNY，低于阈值 5 CNY。",
+  "astra": { "version": "0.9.0", "url": "https://astra.example.com" }
+}
+```
+
+- `status`：`firing` / `resolved` / `test`；`repeat` 为 `true` 表示这是重复提醒。
+- `observed` 的字段随事件不同：订阅账号是 `window` / `usedPercent` / `resetsAt` 或 `status`，失败类事件是 `failures` / `error`，令牌是限额的 `key` / `metric` / `period` / `used` / `limit` / `usedPercent`（费用以美元计）。
+- `message` 是可以直接转发给人看的一句话，语言跟随设置里的语言。
+- `X-Astra-Delivery` 与载荷里的 `id` 相同，可以用来去重（重新投递会生成新的 id）。
+
+### 校验签名
+
+签名是对 `<X-Astra-Timestamp>.<请求体原文>` 做 HMAC-SHA256，密钥为签名密钥，结果用小写十六进制表示：
+
+```js
+import crypto from 'node:crypto';
+
+function verify(secret, timestamp, rawBody, signature) {
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+  const ok = signature.length === expected.length && crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  // 拒绝过旧的请求，防止重放
+  return ok && Math.abs(Date.now() / 1000 - Number(timestamp)) < 300;
+}
+```
+

@@ -801,6 +801,31 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
         Assert.Equal(["a"], Hints.Jsonc(Home.ReadFile(_config))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
     }
+
+    [Fact]
+    public void InternationalBuild_IsItsOwnClient_WritingOnlyWorkBuddyAiModelsJson()
+    {
+        // WorkBuddy AI (the international build) keeps its data in ~/.workbuddy-ai; it is a client of its own.
+        var intlAdapter = new WorkBuddyClientAdapter(Home.Env, Store, international: true);
+        var intl = Home.File(".workbuddy-ai", "models.json");
+        Assert.Equal(ClientKinds.WorkBuddyAi, intlAdapter.Kind);
+        Assert.False(intlAdapter.Detect().Detected);
+        Home.WriteFile(intl, Original);
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(intl);
+        Assert.True(intlAdapter.Detect().Detected);
+        Assert.Equal([intl], intlAdapter.ConfigPaths());
+
+        Applier.Apply(intlAdapter.PlanEnable(TestGateway.Context("astra-wb-7", null, Hints.Extra("a", "b"))));
+        Applier.Apply(intlAdapter.PlanEnable(TestGateway.Context("astra-wb-7", null, Hints.Extra("a"))));
+        Assert.Equal(["mine", "a"], Hints.Jsonc(Home.ReadFile(intl))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
+        Assert.Equal(["mine"], Hints.Jsonc(Home.ReadFile(_config))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
+        Assert.True(intlAdapter.Inspect().Enabled);
+        Assert.False(_adapter.Inspect().Enabled); // the China build's client is untouched
+
+        Assert.False(Applier.Disable(intlAdapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(intl));
+    }
 }
 
 public class NextCoWorkClientAdapterTests : AdapterTestBase
@@ -918,5 +943,129 @@ public class NextCoWorkClientAdapterTests : AdapterTestBase
         Assert.Equal([_config], _adapter.ConfigPaths());
         Assert.Equal(ClientMode.Coexist, _adapter.Mode);
         Assert.Equal(Astra.Core.ApiProtocol.OpenAIChat, ClientKinds.ProtocolOf(_adapter.Kind));
+    }
+}
+
+public class PaseoClientAdapterTests : AdapterTestBase
+{
+    private const string Original = """
+        {
+          "$schema": "https://paseo.sh/schemas/paseo.config.v1.json",
+          "version": 1,
+          "daemon": { "listen": "127.0.0.1:6767" },
+          "agents": {
+            "providers": {
+              "copilot": { "enabled": false },
+              "zai": { "extends": "claude", "label": "ZAI", "env": { "ANTHROPIC_AUTH_TOKEN": "k" } }
+            }
+          }
+        }
+        """;
+
+    private readonly PaseoClientAdapter _adapter;
+    private readonly string _config;
+
+    public PaseoClientAdapterTests()
+    {
+        _adapter = new PaseoClientAdapter(Home.Env, Store);
+        _config = Home.File(".paseo", "config.json");
+    }
+
+    [Fact]
+    public void Enable_AddsOneClaudeProfile_LeavesUserProviders_DisableRestoresBytes()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-1", "glm-5", Hints.Extra("claude-opus-4-6", "glm-5"))));
+
+        var root = Hints.Jsonc(Home.ReadFile(_config));
+        Assert.Equal("127.0.0.1:6767", root["daemon"]!["listen"]!.GetValue<string>());
+        var providers = root["agents"]!["providers"]!.AsObject();
+        Assert.Equal(["copilot", "zai", "astra"], providers.Select(p => p.Key));
+        Assert.Equal("k", providers["zai"]!["env"]!["ANTHROPIC_AUTH_TOKEN"]!.GetValue<string>());
+
+        var ours = providers["astra"]!.AsObject();
+        // Paseo's schema is strict: only documented provider fields.
+        Assert.Equal(["extends", "label", "description", "env", "disallowedTools", "models"], ours.Select(p => p.Key));
+        Assert.Equal("claude", ours["extends"]!.GetValue<string>());
+        Assert.Equal("Astra", ours["label"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", ours["env"]!["ANTHROPIC_BASE_URL"]!.GetValue<string>());
+        Assert.Equal("astra-paseo-1", ours["env"]!["ANTHROPIC_AUTH_TOKEN"]!.GetValue<string>());
+        Assert.Equal(["WebSearch"], ours["disallowedTools"]!.AsArray().Select(t => t!.GetValue<string>()));
+
+        var models = ours["models"]!.AsArray();
+        Assert.Equal(["claude-opus-4-6", "glm-5"], models.Select(m => m!["id"]!.GetValue<string>()));
+        Assert.Equal("GLM-5", models[1]!["label"]!.GetValue<string>());
+        Assert.Null(models[0]!["isDefault"]);
+        Assert.True(models[1]!["isDefault"]!.GetValue<bool>());
+        Assert.True(_adapter.Inspect().Enabled);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+        Assert.False(_adapter.Inspect().Enabled);
+    }
+
+    [Fact]
+    public void ModelLabelFallsBackToId_FirstModelIsDefault_NoModelsLeavesPaseoList()
+    {
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-2", "only-selected", null)));
+        var models = Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!["astra"]!["models"]!.AsArray();
+        Assert.Single(models);
+        Assert.Equal("only-selected", models[0]!["label"]!.GetValue<string>());
+        Assert.True(models[0]!["isDefault"]!.GetValue<bool>());
+
+        Applier.Disable(_adapter.PlanDisable());
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-3", null, Hints.Extra("a", "b"))));
+        models = Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!["astra"]!["models"]!.AsArray();
+        Assert.True(models[0]!["isDefault"]!.GetValue<bool>());
+
+        Applier.Disable(_adapter.PlanDisable());
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-4", null, null)));
+        Assert.Null(Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!["astra"]!["models"]);
+    }
+
+    [Fact]
+    public void FileOriginallyAbsent_CreatedThenDeleted()
+    {
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-5", null, Hints.Extra("a"))));
+        Assert.True(Home.FileExists(_config));
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.False(Home.FileExists(_config));
+    }
+
+    [Fact]
+    public void EntryEditedInPaseo_IsDriftAndIsNotOverwrittenByDisable()
+    {
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-6", null, Hints.Extra("a"))));
+        var edited = Home.ReadFile(_config).Replace("\"label\":\"Astra\"", "\"label\":\"My Astra\"");
+        Assert.NotEqual(Home.ReadFile(_config), edited);
+        Home.WriteFile(_config, edited);
+
+        Assert.Contains("agents.providers.astra", _adapter.Inspect().DriftedKeys);
+        Assert.True(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Contains("My Astra", Home.ReadFile(_config));
+    }
+
+    [Fact]
+    public void PaseoHome_MovesTheConfig()
+    {
+        Home.Variables["PASEO_HOME"] = Home.File("custom-paseo");
+        var moved = Home.File("custom-paseo", "config.json");
+        Assert.Equal([moved], _adapter.ConfigPaths());
+        Assert.False(_adapter.Detect().Detected);
+        Home.WriteFile(moved, "{}");
+        Assert.True(_adapter.Detect().Detected);
+    }
+
+    [Fact]
+    public void Detect_FollowsTheConfigDirectory_SpeaksAnthropic()
+    {
+        Assert.False(_adapter.Detect().Detected);
+        Home.WriteFile(_config, Original);
+        Assert.True(_adapter.Detect().Detected);
+        Assert.Equal([_config], _adapter.ConfigPaths());
+        Assert.Equal(ClientMode.Coexist, _adapter.Mode);
+        Assert.Equal(Astra.Core.ApiProtocol.Anthropic, ClientKinds.ProtocolOf(_adapter.Kind));
+        Assert.Contains(ClientKinds.Paseo, ClientKinds.WithModelList);
     }
 }

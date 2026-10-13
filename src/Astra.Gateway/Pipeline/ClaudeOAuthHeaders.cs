@@ -119,24 +119,39 @@ public static class ClaudeOAuthHeaders
         {
             return body; // best effort: never drop a request because the rewrite failed
         }
+    }
 
-        static void Promote(System.Text.Json.Nodes.JsonNode? node, string ttl, ref bool changed)
+    /// <summary>
+    /// <see cref="PromoteCacheControlTtl(string, string)"/> on a parsed body, in place; true when a block changed.
+    /// A block whose <c>type</c> is not a string is left alone (the text form leaves the whole body alone then).
+    /// </summary>
+    public static bool PromoteCacheControlTtl(System.Text.Json.Nodes.JsonObject root, string ttl = "1h")
+    {
+        var changed = false;
+        Promote(root, ttl, ref changed, lenient: true);
+        return changed;
+    }
+
+    private static void Promote(System.Text.Json.Nodes.JsonNode? node, string ttl, ref bool changed, bool lenient = false)
+    {
+        switch (node)
         {
-            switch (node)
-            {
-                case System.Text.Json.Nodes.JsonObject obj:
-                    if (obj["cache_control"] is System.Text.Json.Nodes.JsonObject cc
-                        && cc["type"]?.GetValue<string>() == "ephemeral" && cc["ttl"] is null)
-                    {
-                        cc["ttl"] = ttl;
-                        changed = true;
-                    }
-                    foreach (var (_, child) in obj.ToList()) Promote(child, ttl, ref changed);
-                    break;
-                case System.Text.Json.Nodes.JsonArray arr:
-                    foreach (var child in arr) Promote(child, ttl, ref changed);
-                    break;
-            }
+            case System.Text.Json.Nodes.JsonObject obj:
+                if (obj["cache_control"] is System.Text.Json.Nodes.JsonObject cc
+                    && (lenient
+                        ? cc["type"] is System.Text.Json.Nodes.JsonValue type && type.TryGetValue<string>(out var t) && t == "ephemeral"
+                        : cc["type"]?.GetValue<string>() == "ephemeral")
+                    && cc["ttl"] is null)
+                {
+                    cc["ttl"] = ttl;
+                    changed = true;
+                }
+                // Only cache_control children are added, never a property of obj itself: no snapshot needed.
+                foreach (var (_, child) in obj) Promote(child, ttl, ref changed, lenient);
+                break;
+            case System.Text.Json.Nodes.JsonArray arr:
+                foreach (var child in arr) Promote(child, ttl, ref changed, lenient);
+                break;
         }
     }
 

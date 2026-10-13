@@ -21,6 +21,7 @@ class LiveRequestStore {
   private connected = false;
   private readonly listListeners = new Set<Listener>();
   private readonly rowListeners = new Map<string, Set<Listener>>();
+  private rebuildQueued = false;
 
   readonly getList = () => this.list;
   readonly getConnected = () => this.connected;
@@ -69,7 +70,20 @@ class LiveRequestStore {
     this.rebuildList();
   }
 
+  /**
+   * The server delivers changes in batches and every event of a chunk is handled synchronously, so the sort and the
+   * list listeners run once per batch (in a microtask) rather than once per event.
+   */
   private rebuildList() {
+    if (this.rebuildQueued) return;
+    this.rebuildQueued = true;
+    queueMicrotask(() => {
+      this.rebuildQueued = false;
+      this.rebuildListNow();
+    });
+  }
+
+  private rebuildListNow() {
     // Newest first; ULID ids sort by arrival, so ties on the timestamp stay stable.
     this.list = [...this.rows.values()].sort((a, b) => (a.startedAtUtc === b.startedAtUtc ? (a.id < b.id ? 1 : -1) : a.startedAtUtc < b.startedAtUtc ? 1 : -1));
     for (const listener of this.listListeners) listener();
@@ -85,9 +99,47 @@ const store = new LiveRequestStore();
 let consumers = 0;
 let stop: (() => void) | undefined;
 
-/** Opens the live stream while at least one consumer wants it; reconnects with backoff while it is down. */
+/** How long a hidden tab keeps the stream open (a quick tab switch should not drop and resync the feed). */
+const HIDDEN_GRACE_MS = 10_000;
+
+const isHidden = () => document.visibilityState === 'hidden';
+
+/**
+ * Opens the live stream while at least one consumer wants it; reconnects with backoff while it is down. The server
+ * records the live log only while a stream is open, so the stream is closed while the page is hidden (after
+ * {@link HIDDEN_GRACE_MS}) and reopened — with a fresh snapshot and list refetch — once it is visible again.
+ */
 function connect(onPersisted: (id: string) => void, onReconnect: () => void): () => void {
   const controller = new AbortController();
+  let connection: AbortController | undefined;
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  let wake: (() => void) | undefined;
+  const onVisibility = () => {
+    if (isHidden()) {
+      hideTimer ??= setTimeout(() => {
+        hideTimer = undefined;
+        connection?.abort();
+      }, HIDDEN_GRACE_MS);
+    } else {
+      clearTimeout(hideTimer);
+      hideTimer = undefined;
+      wake?.();
+    }
+  };
+  /** Resolves after `ms`, or as soon as the page becomes visible or the feed is stopped. */
+  const sleep = (ms: number) =>
+    new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        wake = undefined;
+        controller.signal.removeEventListener('abort', done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      wake = done;
+      controller.signal.addEventListener('abort', done);
+    });
+  document.addEventListener('visibilitychange', onVisibility);
   const onEvent = (message: SseMessage) => {
     const e = message.data as RequestLiveEvent | null;
     if (!e || typeof e !== 'object' || !e.request?.id) return;
@@ -101,24 +153,40 @@ function connect(onPersisted: (id: string) => void, onReconnect: () => void): ()
   void (async () => {
     let delay = 1000;
     while (!controller.signal.aborted) {
+      // Hidden: stay disconnected until the page is visible again (the poll fallback pauses in the background too).
+      if (isHidden()) {
+        while (isHidden() && !controller.signal.aborted) await sleep(60_000);
+        if (controller.signal.aborted) return;
+        // Back in view: catch the list up with what was written while the feed was off.
+        onReconnect();
+      }
+      connection = new AbortController();
+      const abortConnection = () => connection?.abort();
+      controller.signal.addEventListener('abort', abortConnection);
       try {
-        await apiEventStream('/api/requests/live', onEvent, controller.signal, () => store.setConnected(true));
+        await apiEventStream('/api/requests/live', onEvent, connection.signal, () => store.setConnected(true));
         delay = 1000;
       } catch {
-        // Server restarting or unreachable: retry below.
+        // Server restarting or unreachable (or the page was hidden): retry below.
+      } finally {
+        controller.signal.removeEventListener('abort', abortConnection);
       }
       if (controller.signal.aborted) return;
+      const paused = connection.signal.aborted;
       // Rows of the dropped connection may never see their "persisted" event: forget them (the snapshot on reconnect
       // re-sends whatever is still in flight) and let the list catch up with what was written meanwhile.
       store.reset(false);
       onReconnect();
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (paused) continue;
+      await sleep(delay);
       delay = Math.min(delay * 2, 15000);
     }
   })();
 
   return () => {
     controller.abort();
+    clearTimeout(hideTimer);
+    document.removeEventListener('visibilitychange', onVisibility);
     store.reset(false);
   };
 }

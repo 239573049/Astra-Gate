@@ -77,7 +77,7 @@ public sealed class CodexClientAdapter(ClientEnvironment env, IClientConfigState
         var file = ConfigFile;
         // Stored "after" values are JSON texts of RAW TOML source (a TOML string includes its quotes).
         var changes = new List<ConfigChange> { TopKey(file, "model_provider", JsonString(TomlRaw(ProviderId))) };
-        if (!string.IsNullOrEmpty(ctx.Model)) changes.Add(TopKey(file, "model", JsonString(TomlRaw(ctx.Model))));
+        if (!string.IsNullOrEmpty(ctx.Model) && !KeepsCodexModel(file, ctx.Model)) changes.Add(TopKey(file, "model", JsonString(TomlRaw(ctx.Model))));
         if (ClientOptions.GetInt(ctx.Extras, ClientOptions.ContextWindow) is { } window)
             changes.Add(TopKey(file, "model_context_window", JsonString(window.ToString(System.Globalization.CultureInfo.InvariantCulture))));
         if (ClientOptions.GetInt(ctx.Extras, ClientOptions.AutoCompactTokenLimit) is { } compact)
@@ -140,6 +140,22 @@ public sealed class CodexClientAdapter(ClientEnvironment env, IClientConfigState
     }
 
     protected override bool IsTableKeyPath(string keyPath) => keyPath == $"model_providers.{ProviderId}";
+
+    /// <summary>Codex writes <c>model</c> back to config.toml whenever the user picks a model in it: that is not drift.</summary>
+    protected override bool IsClientManagedKey(string file, string keyPath) => file == ConfigFile && keyPath == "model";
+
+    /// <summary>
+    /// True when the user picked another model in Codex since Astra last wrote <c>model</c>, and Astra's own selection
+    /// is still the one it wrote then: a re-apply (provider or model-list sync) keeps the user's pick. A model newly
+    /// selected in Astra is written as usual.
+    /// </summary>
+    private bool KeepsCodexModel(string file, string model)
+    {
+        if (Store.Get(Kind, file, "model") is not { AppliedValueJson: { } applied }) return false;
+        return ConfigValueCodec.EqualsValue(ConfigFileFormat.Toml, TomlRaw(model), applied)
+               && CurrentValue(file, ConfigFileFormat.Toml, "model") is { } current
+               && !ConfigValueCodec.EqualsValue(ConfigFileFormat.Toml, current, applied);
+    }
 
     /// <summary>The provider table: created wholesale on first enable, otherwise only URL/key fields refreshed.</summary>
     private IEnumerable<ConfigChange> ProviderTableChanges(string file, EnableContext ctx)

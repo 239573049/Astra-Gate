@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Astra.Core.Privacy;
 
 namespace Astra.Core.Tests;
@@ -168,6 +170,76 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     private readonly PrivacyDetector _detector = new();
+
+    [Theory]
+    [InlineData("""{"model":"m","system":"ops alice@example.com","messages":[{"role":"user","content":[{"type":"text","text":"key AKIAIOSFODNN7EXAMPLE\nand bob@test.org"}]}]}""")]
+    [InlineData("""{"messages":[{"content":"mail alice\u0040example.com, again alice@example.com"}],"n":1.50,"tags":["10.0.0.5",null,true]}""")]
+    [InlineData("""{"input":[{"type":"function_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,AKIAIOSFODNN7EXAMPLE"},{"type":"input_text","text":"x@y.io"}]}]}""")]
+    public void Parsed_Body_Redaction_Matches_The_Text_Path(string json)
+    {
+        var policy = Policy();
+        var expected = _detector.ApplyJson(json, policy)!;
+
+        using var document = JsonDocument.Parse(json);
+        var tree = JsonObject.Create(document.RootElement)!;
+        var actual = new PrivacyDetector().ApplyJson(document.RootElement, tree, policy, rewrite: true);
+
+        Assert.Equal(expected.Redactions.Select(r => (r.Placeholder, r.Original)), actual.Redactions.Select(r => (r.Placeholder, r.Original)));
+        Assert.Equal(expected.Hits.Select(h => (h.RuleId, h.Action, h.Count)), actual.Hits.Select(h => (h.RuleId, h.Action, h.Count)));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected.Text), tree));
+    }
+
+    [Fact]
+    public void Parsed_Body_Is_Untouched_Without_Rewrite_Or_When_Blocked()
+    {
+        const string json = """{"messages":[{"content":"alice@example.com AKIAIOSFODNN7EXAMPLE"}]}""";
+        using var document = JsonDocument.Parse(json);
+
+        var dryTree = JsonObject.Create(document.RootElement)!;
+        Assert.NotEmpty(_detector.ApplyJson(document.RootElement, dryTree, Policy(), rewrite: false).Redactions);
+        Assert.Equal(json, dryTree.ToJsonString());
+
+        var blockedTree = JsonObject.Create(document.RootElement)!;
+        var blocked = _detector.ApplyJson(document.RootElement, blockedTree,
+            Policy(categoryActions: new() { [PrivacyCategories.AwsKey] = PrivacyActions.Block }), rewrite: true);
+        Assert.True(blocked.Blocked);
+        Assert.Equal(json, blockedTree.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("call 13\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669 now", PrivacyCategories.Phone)] // \d takes other scripts' digits
+    [InlineData("intl +44 7911123456", PrivacyCategories.Phone)]
+    [InlineData("card 4111111111111111.", PrivacyCategories.CreditCard)]
+    [InlineData("id 11010519491231002X", PrivacyCategories.NationalId)]
+    [InlineData("PASSWORD = hunter2hunter2", PrivacyCategories.Credential)]
+    [InlineData("db postgres://u:p4ss@db.internal/x", PrivacyCategories.Credential)]
+    public void Literal_Prefilters_Never_Hide_A_Match(string text, string category)
+    {
+        var policy = Policy(defaultAction: PrivacyActions.Off, categoryActions: new() { [category] = PrivacyActions.Redact });
+        Assert.NotEmpty(_detector.Apply(text, policy).Redactions);
+        Assert.NotEmpty(_detector.ApplyJson(JsonSerializer.Serialize(new { text }), policy)!.Redactions);
+    }
+
+    [Fact]
+    public void Clean_Cache_Is_Per_Policy_And_Never_Hides_A_Secret()
+    {
+        var detector = new PrivacyDetector();
+        var filler = new string('x', 2_000);
+        var withEmail = $$"""{"messages":[{"content":"{{filler}} alice@example.com"}]}""";
+        var clean = $$"""{"messages":[{"content":"{{filler}} nothing here"}]}""";
+
+        // Clean for a policy that ignores email — and remembered as clean for that policy only.
+        var emailOff = Policy(categoryActions: new() { [PrivacyCategories.Email] = PrivacyActions.Off });
+        Assert.Empty(detector.ApplyJson(withEmail, emailOff)!.Hits);
+        Assert.Empty(detector.ApplyJson(withEmail, emailOff)!.Hits);
+
+        var redact = Policy();
+        for (var i = 0; i < 3; i++)
+        {
+            Assert.Equal("alice@example.com", Assert.Single(detector.ApplyJson(withEmail, redact)!.Redactions).Original);
+            Assert.Empty(detector.ApplyJson(clean, redact)!.Hits);
+        }
+    }
 
     private static EffectivePrivacyPolicy Policy(
         string defaultAction = PrivacyActions.Redact,

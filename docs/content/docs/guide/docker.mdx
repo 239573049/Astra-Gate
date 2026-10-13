@@ -54,6 +54,8 @@ Astra 本身只提供 HTTP。对外暴露时请在前面放一个终止 TLS 的�
 - `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`：信任 `X-Forwarded-Proto` / `X-Forwarded-For`，登录会话 Cookie 才会带 `Secure`。**只有在容器只能被你的代理访问时才开启**，否则任何人都能伪造这些头。
 - `ASTRA_PUBLIC_URL=https://你的域名`。
 
+令牌的自助查询接口（`/v1/astra/key`、`/v1/dashboard/billing/*`）按来源 IP 限流，每个 IP 每分钟 30 次。放在反向代理后面又没有开启 `ASPNETCORE_FORWARDEDHEADERS_ENABLED` 时，所有请求看起来都来自代理，会共用这一个额度。
+
 ## 升级
 
 ```bash
@@ -66,6 +68,7 @@ docker compose pull && docker compose up -d
 
 - **客户端一键接管**（改写 Claude Code、Codex 等的配置）改的是**容器内**的文件，对宿主机上的客户端没有意义。请在客户端里手动填写网关地址和令牌：`ASTRA_PUBLIC_URL` + `/v1`。
 - **订阅账号登录**使用本机回环回调。Codex 的回调端口固定为 1455 和 1457，可用 `-p 1455:1455 -p 1457:1457` 发布，且浏览器必须与 Docker 主机在同一台机器上；Claude 使用临时端口，在容器内无法完成回调。
+- 容器默认使用 UTC 时区，令牌的每日 / 每周 / 每月额度会在 UTC 零点重置。需要按本地时间重置时，在**设置 → 令牌额度时区**里选择时区（例如 `Asia/Shanghai`），或者给容器设置 `TZ` 环境变量。
 - 宿主机上的上游服务（如 Ollama）不能写 `localhost`，请用 `host.docker.internal`（Linux 上需要 `--add-host=host.docker.internal:host-gateway`）。
 - **插件**：中间件与客户端插件直接从 npm 下载安装；提供商插件需要 Bun，首次使用时下载到 `/data/plugins/runtime/`（需要能访问 GitHub）。离线环境可以把 Bun 放进镜像，用 `ASTRA_BUN` 指向它。插件宿主不会收到任何 `ASTRA_*` 环境变量（包括管理员密码）。
 

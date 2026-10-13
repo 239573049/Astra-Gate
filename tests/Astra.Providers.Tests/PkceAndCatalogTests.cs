@@ -275,6 +275,7 @@ public class ProviderTemplateCatalogTests
         { "ollama", "http://127.0.0.1:11434/v1" },
         { "lm-studio", "http://127.0.0.1:1234/v1" },
         { "routin", "https://api.routin.ai/plan/v1" },
+        { "routin-ai", "https://api.routin.ai/v1" },
         { "nextcowork", "https://nextco.work/v1" },
         { "openai-subscription", "https://chatgpt.com/backend-api/codex" },
         { "custom-responses", "http://127.0.0.1:8000/v1" },

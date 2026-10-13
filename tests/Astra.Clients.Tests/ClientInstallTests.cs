@@ -257,8 +257,10 @@ public class ClientInstallPlannerTests
     [InlineData(ClientKinds.Omp, "omp")]
     [InlineData(ClientKinds.DeepSeekHarness, "dsh")]
     [InlineData(ClientKinds.WorkBuddy, null)]
+    [InlineData(ClientKinds.WorkBuddyAi, null)]
     [InlineData(ClientKinds.MuseCode, "muse")]
     [InlineData(ClientKinds.NextCoWork, null)]
+    [InlineData(ClientKinds.Paseo, "paseo")]
     public void New_Manual_Clients_Only_Show_Version_And_Homepage(string kind, string? executable)
     {
         var spec = ClientInstallCatalog.Get(kind)!;

@@ -97,8 +97,8 @@ export function ClientsPage() {
 /** Clients whose config lists the bound provider's models (ClientKinds.WithModelList on the server). */
 const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot',
-  'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'nextcowork',
-  'muse-code', 'codex',
+  'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'nextcowork',
+  'paseo', 'muse-code', 'codex',
 ]);
 
 /** The built-in clients in their order, then the clients agent plugins add ("plugin-<id>"), by name. */

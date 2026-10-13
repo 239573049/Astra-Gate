@@ -23,7 +23,7 @@ public class ProviderApiTests
     {
         await using var host = await TestHost.StartAsync();
         var templates = (await host.GetJsonAsync("/api/provider-templates")).AsArray();
-        Assert.Equal(27, templates.Count); // + nextcowork, github-copilot-subscription, bigmodel-subscription
+        Assert.Equal(28, templates.Count); // + nextcowork, github-copilot-subscription, bigmodel-subscription, routin-ai
         var claudeSub = templates.Single(t => t!["id"]!.GetValue<string>() == "claude-subscription")!;
         Assert.Equal("oauth-subscription", claudeSub["authScheme"]!.GetValue<string>());
         Assert.False(claudeSub["requiresApiKey"]!.GetValue<bool>());
@@ -62,6 +62,38 @@ public class ProviderApiTests
         Assert.False(body!["hasApiKey"]!.GetValue<bool>());
         Assert.Null((await host.Db.Providers.GetAsync(id))!.ApiKeyEnc);
     }
+    [Fact]
+    public async Task Plugin_Provider_Can_Be_Toggled_And_Edited_But_Keeps_Its_Plugin_Endpoints()
+    {
+        await using var host = await TestHost.StartAsync();
+        var endpoint = new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = Astra.Plugins.Host.PluginFetchHandler.BaseFor("fakeco", ApiProtocol.OpenAIChat) };
+        await host.Db.Providers.InsertAsync(new Provider
+        {
+            Id = "plugin-fakeco", Name = "FakeCo", Category = "plugin", AuthScheme = AuthSchemes.Plugin, Enabled = true,
+            Endpoints = [endpoint], PreferredUpstreamProtocols = [ApiProtocol.OpenAIChat],
+        });
+
+        var (status, body) = await host.SendAsync(HttpMethod.Patch, "/api/providers/plugin-fakeco", new { enabled = false });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.False(body!["enabled"]!.GetValue<bool>());
+        // The detail form sends the whole row back, plugin:// endpoints and auth scheme included.
+        (status, _) = await host.SendAsync(HttpMethod.Patch, "/api/providers/plugin-fakeco", new
+        {
+            name = "FakeCo 2", authScheme = AuthSchemes.Plugin, endpoints = new[] { new { protocol = "openai-chat", baseUrl = endpoint.BaseUrl } },
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("FakeCo 2", (await host.Db.Providers.GetAsync("plugin-fakeco"))!.Name);
+
+        (status, _) = await host.SendAsync(HttpMethod.Patch, "/api/providers/plugin-fakeco", new
+        {
+            endpoints = new[] { new { protocol = "openai-chat", baseUrl = "https://example.com/v1" } },
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        (status, _) = await host.SendAsync(HttpMethod.Patch, "/api/providers/plugin-fakeco", new { authScheme = AuthSchemes.Bearer });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Equal(AuthSchemes.Plugin, (await host.Db.Providers.GetAsync("plugin-fakeco"))!.AuthScheme);
+    }
+
 
     [Fact]
     public async Task Provider_Model_Only_Needs_Id_And_Inherits_System_Fields_And_Provider_Price()

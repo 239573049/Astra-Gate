@@ -142,16 +142,21 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             var isClaudeCode = protocol == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, null, countTokens: true);
             // With a single provider the policy is known before the body is read; several wait for the model below.
             if (route.Targets.Count < 2) SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
-            using var reader = new StreamReader(ctx.Request.Body, Encoding.UTF8);
-            var body = await reader.ReadToEndAsync(ct);
+            // Same body handling as the generation pipeline: read once (pooled), parsed once, guarded in place.
+            using var requestBody = await RequestBody.ReadAsync(ctx.Request, GatewayPipeline.MaxRequestBytes, ct);
+            var parsed = requestBody.Parse();
 
             // 隐私护栏（plan §6.7）：count_tokens 的请求体同样发往上游，必须先过护栏。
-            var guard = privacy.Inspect(body, route.ClientKind);
+            var guard = parsed is (var root, var tree)
+                ? privacy.InspectJson(root, tree, route.ClientKind)
+                : privacy.Inspect(requestBody.Text(), route.ClientKind);
             if (guard.Blocked)
                 throw new GatewayException(400, "invalid_request_error", "请求中包含被 Astra 隐私护栏拦截的敏感信息，已拒绝发送到上游。");
-            body = guard.Body;
 
-            var json = pathModel is null ? JsonNode.Parse(body) as JsonObject : null;
+            // The text path (not a JSON object) keeps the guarded text; the tree path its redacted tree.
+            var text = parsed is null ? guard.Body : null;
+            var json = parsed?.Object ?? (pathModel is null ? JsonNode.Parse(text!) as JsonObject : null);
+            var dirty = guard.Rewritten;
             var requestedModel = pathModel ?? json?["model"]?.GetValue<string>() ?? "";
             // Same provider choice as the generation request for this model (ClientRouting); nothing has left the machine yet.
             route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
@@ -161,52 +166,71 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             if (json is not null && json["model"]?.GetValue<string>() is { } requested && requested != model)
             {
                 json["model"] = model; // Claude Desktop role id / provider model mapping → provider model
-                body = json.ToJsonString(GatewayJson.Options);
+                dirty = true;
             }
-            // A plugin's provider is estimated locally: its plugin serves conversations, not token counting.
-            var url = endpoint is null || route.Provider.AuthScheme == AuthSchemes.Plugin ? null : UpstreamUrls.CountTokens(endpoint, model);
-            if (url is not null)
+            // The client's bytes when nothing changed the tree, else the tree (or guarded text) written once.
+            PooledBuffer? serialized = null;
+            if (dirty)
             {
-                var claudeOAuth = SubscriptionSupport.IsClaudeSubscription(route.Provider) && protocol == ApiProtocol.Anthropic;
-                var relay = claudeOAuth && isClaudeCode;
-                if (relay) url = GatewayPipeline.WithClientQuery(url, ctx.Request.QueryString);
-                var credentials = await auth.ResolveAsync(route.Provider.Id, route.AccountId, ct) ?? UpstreamAuth.None;
-                if (credentials.QueryName is not null && credentials.QueryValue is not null)
-                    url = UpstreamUrls.WithQuery(url, credentials.QueryName, credentials.QueryValue);
-                using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
-                if (relay)
+                serialized = new PooledBuffer(requestBody.Buffer.Length + 256);
+                GatewayJson.WriteTo(json!, serialized);
+            }
+            else if (parsed is null)
+            {
+                serialized = PooledBuffer.FromString(text!);
+            }
+            var payload = serialized ?? requestBody.Buffer;
+            try
+            {
+                // A plugin's provider is estimated locally: its plugin serves conversations, not token counting.
+                var url = endpoint is null || route.Provider.AuthScheme == AuthSchemes.Plugin ? null : UpstreamUrls.CountTokens(endpoint, model);
+                if (url is not null)
                 {
-                    // Same relay as /v1/messages: Claude Code's own headers, only the credential and OAuth beta change.
-                    ClaudeOAuthHeaders.ApplyRelay(request, ctx.Request.Headers, model, route.Provider.ExtraHeaders, "2023-06-01");
-                    // count_tokens needs the token-counting beta on top (sub2api computeFinalCountTokensAnthropicBeta).
-                    ClaudeOAuthHeaders.EnsureCountTokensBeta(request);
-                }
-                else
-                {
-                    if (protocol == ApiProtocol.Anthropic)
+                    var claudeOAuth = SubscriptionSupport.IsClaudeSubscription(route.Provider) && protocol == ApiProtocol.Anthropic;
+                    var relay = claudeOAuth && isClaudeCode;
+                    if (relay) url = GatewayPipeline.WithClientQuery(url, ctx.Request.QueryString);
+                    var credentials = await auth.ResolveAsync(route.Provider.Id, route.AccountId, ct) ?? UpstreamAuth.None;
+                    if (credentials.QueryName is not null && credentials.QueryValue is not null)
+                        url = UpstreamUrls.WithQuery(url, credentials.QueryName, credentials.QueryValue);
+                    using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = new PooledContent(payload) };
+                    if (relay)
                     {
-                        var version = ctx.Request.Headers["anthropic-version"].ToString();
-                        request.Headers.TryAddWithoutValidation("anthropic-version", version.Length > 0 ? version : "2023-06-01");
-                        if (ctx.Request.Headers["anthropic-beta"].ToString() is { Length: > 0 } beta) request.Headers.TryAddWithoutValidation("anthropic-beta", beta);
-                    }
-                    foreach (var (name, value) in route.Provider.ExtraHeaders) request.Headers.TryAddWithoutValidation(name, value);
-                    if (claudeOAuth)
-                    {
-                        ClaudeOAuthHeaders.ApplyCompat(request, ctx.Request.Headers);
+                        // Same relay as /v1/messages: Claude Code's own headers, only the credential and OAuth beta change.
+                        ClaudeOAuthHeaders.ApplyRelay(request, ctx.Request.Headers, model, route.Provider.ExtraHeaders, "2023-06-01");
+                        // count_tokens needs the token-counting beta on top (sub2api computeFinalCountTokensAnthropicBeta).
                         ClaudeOAuthHeaders.EnsureCountTokensBeta(request);
                     }
+                    else
+                    {
+                        if (protocol == ApiProtocol.Anthropic)
+                        {
+                            var version = ctx.Request.Headers["anthropic-version"].ToString();
+                            request.Headers.TryAddWithoutValidation("anthropic-version", version.Length > 0 ? version : "2023-06-01");
+                            if (ctx.Request.Headers["anthropic-beta"].ToString() is { Length: > 0 } beta) request.Headers.TryAddWithoutValidation("anthropic-beta", beta);
+                        }
+                        foreach (var (name, value) in route.Provider.ExtraHeaders) request.Headers.TryAddWithoutValidation(name, value);
+                        if (claudeOAuth)
+                        {
+                            ClaudeOAuthHeaders.ApplyCompat(request, ctx.Request.Headers);
+                            ClaudeOAuthHeaders.EnsureCountTokensBeta(request);
+                        }
+                    }
+                    if (credentials.HeaderName is not null) request.Headers.TryAddWithoutValidation(credentials.HeaderName, credentials.HeaderValue);
+                    using var response = await http.For(route.Provider).SendAsync(request, ct);
+                    ctx.Response.StatusCode = (int)response.StatusCode;
+                    ctx.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+                    await response.Content.CopyToAsync(ctx.Response.Body, ct);
+                    return;
                 }
-                if (credentials.HeaderName is not null) request.Headers.TryAddWithoutValidation(credentials.HeaderName, credentials.HeaderValue);
-                using var response = await http.For(route.Provider).SendAsync(request, ct);
-                ctx.Response.StatusCode = (int)response.StatusCode;
-                ctx.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
-                await ctx.Response.WriteAsync(await response.Content.ReadAsStringAsync(ct), ct);
-                return;
+                var estimate = Math.Max(1, Encoding.UTF8.GetCharCount(payload.Span) / 4);
+                JsonObject result = protocol == ApiProtocol.Gemini ? new JsonObject { ["totalTokens"] = estimate } : new JsonObject { ["input_tokens"] = estimate };
+                ctx.Response.ContentType = "application/json";
+                await ctx.Response.WriteAsync(result.ToJsonString(GatewayJson.Options), ct);
             }
-            var estimate = Math.Max(1, body.Length / 4);
-            JsonObject result = protocol == ApiProtocol.Gemini ? new JsonObject { ["totalTokens"] = estimate } : new JsonObject { ["input_tokens"] = estimate };
-            ctx.Response.ContentType = "application/json";
-            await ctx.Response.WriteAsync(result.ToJsonString(GatewayJson.Options), ct);
+            finally
+            {
+                serialized?.Release();
+            }
         }
         catch (GatewayException e)
         {

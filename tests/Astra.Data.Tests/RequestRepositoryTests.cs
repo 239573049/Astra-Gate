@@ -656,6 +656,32 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Daily_Counters_Use_The_Usage_Zone_And_Skip_Refused_Requests()
+    {
+        var db = await TestDb.InitializeAsync();
+        var now = DateTimeOffset.UtcNow;
+        await db.Tokens.InsertAsync(new Astra.Core.Tokens.TokenRecord { Id = "t1", Name = "Shared", CreatedAt = now, UpdatedAt = now });
+
+        // T2 is 2026-10-02 23:10 UTC — already 2026-10-03 in Shanghai.
+        var a = Success("01TEST0000000000000000002A", T0, "codex", "p1", "Alpha", "gpt-5", 1_000, 100, 10, 200);
+        var b = Success("01TEST0000000000000000002B", T2, "codex", "p1", "Alpha", "gpt-5", 2_000, 200, 20, 200);
+        var refused = Success("01TEST0000000000000000002C", T2, "codex", "p1", "Alpha", "gpt-5", 0, 0, 0, 0);
+        refused.Status = RequestStatus.GatewayError;
+        refused.ErrorType = Astra.Core.Tokens.TokenLimits.RefusedErrorType;
+        foreach (var r in new[] { a, b, refused }) r.TokenId = "t1";
+        await db.Requests.InsertBatchAsync([a, b, refused], usageZone: Astra.Core.Tokens.UsagePeriods.Zone("Asia/Shanghai"));
+
+        var daily = await db.Tokens.DailyAsync("t1", "2026-01-01");
+        Assert.Equal(["2026-10-01", "2026-10-03"], daily.Select(d => d.Day));
+        Assert.Equal(1, daily[1].Requests);
+        Assert.Equal(2_000, daily[1].CostNanoUsd);
+        Assert.Equal(220, daily[1].InputTokens + daily[1].OutputTokens);
+        Assert.Equal(2, (await db.Tokens.GetTotalsAsync("t1"))!.Requests);
+        Assert.Equal(3, (await db.Requests.QueryAsync(new RequestQuery { TokenId = "t1" })).Total); // still logged
+        Assert.Empty(await db.Tokens.DailyAsync("t1", "2026-10-04"));
+    }
+
+    [Fact]
     public async Task Requests_And_Stats_Filter_And_Group_By_Token_With_Current_Name()
     {
         var db = await TestDb.InitializeAsync();

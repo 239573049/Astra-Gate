@@ -100,31 +100,38 @@ function CheckinSection({ provider }: { provider: Provider }) {
   const action = usePluginCheckinAction(provider.id);
   if (!state.data?.supported) return null;
   const run = (on?: boolean) => action.mutate(on, { onError: (e) => toast(errorText(e), 'error') });
+  const tone = { claimed: 'green', done: 'green', ineligible: 'neutral', inactive: 'neutral', captcha: 'orange', failed: 'red' } as const;
   return (
-    <section className="card flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex-1 text-[13px] font-medium">{t('pluginAccounts.checkin')}</span>
+    <section className="card divide-y divide-[var(--border-subtle)] overflow-hidden p-0">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[13px] font-medium">{t('pluginAccounts.checkin')}</h3>
+          <p className="mt-0.5 text-[12px] text-[var(--text-secondary)]">{t('pluginAccounts.checkinDetail')}</p>
+        </div>
         <Switch checked={state.data.on} label={t('pluginAccounts.checkinOn')} onChange={(on) => run(on)} />
-        <Button size="sm" disabled={action.isPending} onClick={() => run()}>
+        <Button size="sm" loading={action.isPending} onClick={() => run()}>
           {t('pluginAccounts.checkinNow')}
         </Button>
       </div>
-      <p className="text-[12px] text-[var(--text-secondary)]">{t('pluginAccounts.checkinDetail')}</p>
-      {state.data.accounts.map((a) => (
-        <KV key={a.accountId} label={a.account}>
-          {a.outcome
-            ? [
-                t(`pluginAccounts.outcome.${a.outcome}` as MessageKey),
-                a.credit ? t('pluginAccounts.credit', { credit: a.credit }) : null,
-                a.streak ? t('pluginAccounts.streak', { days: a.streak }) : null,
-                a.message,
-                a.at ? formatDateTime(a.at, locale) : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-            : t('pluginAccounts.checkinNever')}
-        </KV>
-      ))}
+      {state.data.accounts.map((a) => {
+        const detail = [
+          a.credit ? t('pluginAccounts.credit', { credit: a.credit }) : null,
+          a.streak ? t('pluginAccounts.streak', { days: a.streak }) : null,
+          a.message,
+          a.at ? formatDateTime(a.at, locale) : null,
+        ].filter(Boolean);
+        return (
+          <div key={a.accountId} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+            <span className="min-w-0 flex-1 truncate text-[13px]">{a.account}</span>
+            {detail.length > 0 && <span className="min-w-0 truncate text-[12px] text-[var(--text-secondary)]">{detail.join(' · ')}</span>}
+            {a.outcome ? (
+              <Badge tone={tone[a.outcome as keyof typeof tone] ?? 'neutral'}>{t(`pluginAccounts.outcome.${a.outcome}` as MessageKey)}</Badge>
+            ) : (
+              <Badge>{t('pluginAccounts.checkinNever')}</Badge>
+            )}
+          </div>
+        );
+      })}
     </section>
   );
 }

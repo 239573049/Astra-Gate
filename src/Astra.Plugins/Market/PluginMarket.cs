@@ -106,6 +106,23 @@ public sealed class PluginMarket(
     /// <summary>Whether an Astra at <paramref name="current"/> is new enough for a plugin that needs <paramref name="min"/> (null = any).</summary>
     public static bool MeetsMinVersion(string? min, string current) => min is null || !PluginInstaller.IsNewer(min, current);
 
+    private static readonly Lazy<List<MarketListing>> BuiltInListings = new(() => Parse(BuiltIn(), null) ?? []);
+
+    /// <summary>
+    /// The icon name the built-in list gives the plugin serving provider <paramref name="providerId"/> (magpie's icon
+    /// names, e.g. <c>workbuddy-color</c>): the listing that names the provider, else the one for the package
+    /// <paramref name="spec"/> installs (a plugin may serve providers its listing doesn't name, e.g. qoder-cn); null
+    /// when neither gives an icon. Plugins rarely give their providers a picture of their own, so this is the fallback
+    /// the provider rows show.
+    /// </summary>
+    public static string? BuiltInIcon(string providerId, string? spec = null)
+    {
+        var withIcon = BuiltInListings.Value.Where(l => l.Icon is not null).ToList();
+        return (withIcon.FirstOrDefault(l => l.Providers.Contains(providerId))
+                ?? (spec is null ? null : withIcon.FirstOrDefault(l => spec == l.Package || spec.StartsWith(l.Package + "@", StringComparison.Ordinal))))
+            ?.Icon;
+    }
+
     /// <summary>
     /// Plugins found by <paramref name="query"/>: the registry's host searches its own entries, npm (OpenCode, magpie and pi
     /// packages) and GitHub's magpie-plugin topic. Nothing without a registry address that has a search beside it.

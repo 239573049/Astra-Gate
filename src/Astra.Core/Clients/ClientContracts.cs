@@ -25,14 +25,16 @@ public static class ClientKinds
     public const string MiMoCode = "mimo-code";
     public const string DeepSeekHarness = "deepseek-harness";
     public const string WorkBuddy = "workbuddy";
+    public const string WorkBuddyAi = "workbuddy-ai";
     public const string MuseCode = "muse-code";
     public const string NextCoWork = "nextcowork";
+    public const string Paseo = "paseo";
 
     public static readonly IReadOnlyList<string> All =
     [
         Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
-        DeepSeekHarness, WorkBuddy, MuseCode, NextCoWork,
+        DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo,
     ];
 
     /// <summary>
@@ -43,8 +45,8 @@ public static class ClientKinds
     public static readonly IReadOnlyList<string> WithModelList =
     [
         OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
-        Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, NextCoWork,
-        MuseCode, Codex,
+        Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, WorkBuddyAi, NextCoWork,
+        Paseo, MuseCode, Codex,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>
@@ -77,7 +79,7 @@ public static class ClientKinds
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
         Codex or GrokBuild or MuseCode => ApiProtocol.OpenAIResponses,
-        ClaudeCode or ClaudeDesktop => ApiProtocol.Anthropic,
+        ClaudeCode or ClaudeDesktop or Paseo => ApiProtocol.Anthropic,
         GeminiCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,
     };

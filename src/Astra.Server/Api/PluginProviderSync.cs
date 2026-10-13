@@ -4,6 +4,7 @@ using Astra.Core.Models;
 using Astra.Data;
 using Astra.Plugins;
 using Astra.Plugins.Host;
+using Astra.Plugins.Market;
 
 namespace Astra.Server.Api;
 
@@ -88,7 +89,7 @@ public sealed class PluginProviderSync(AstraDatabase db, PluginProviders provide
         var isNew = row is null;
         row ??= new Provider { Id = RowId(pp.Id), Enabled = true, CreatedAt = DateTimeOffset.UtcNow };
         row.Name = pp.Name;
-        row.Icon = SafeIcon(pp.Icon) ?? row.Icon;
+        row.Icon = SafeIcon(pp.Icon) ?? PluginMarket.BuiltInIcon(pp.Id, pp.Spec) ?? row.Icon;
         row.Category = "plugin";
         row.AuthScheme = AuthSchemes.Plugin;
         row.AdapterId = "plugin:" + pp.Id;

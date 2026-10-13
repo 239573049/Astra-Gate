@@ -70,6 +70,13 @@ public abstract class ClientAdapterBase : IClientAdapter
     /// <summary>TOML key paths that were recorded as table entries (subclasses with table entries override this).</summary>
     protected virtual bool IsTableKeyPath(string keyPath) => false;
 
+    /// <summary>
+    /// Keys the client itself rewrites in normal use (e.g. the model the user picks in its UI). A changed value there is
+    /// not drift: it neither marks the client drifted nor stops Astra from keeping its other entries current. Restore
+    /// still treats it like any edited value (left alone unless forced).
+    /// </summary>
+    protected virtual bool IsClientManagedKey(string file, string keyPath) => false;
+
     /// <summary>The file format of a config file, derived from its name.</summary>
     protected static ConfigFileFormat FormatOfPath(string path) =>
         Path.GetFileName(path) is ".zshrc" or ".bashrc" or ".zprofile" or ".bash_profile" ? ConfigFileFormat.ShellBlock
@@ -93,7 +100,7 @@ public abstract class ClientAdapterBase : IClientAdapter
             var current = CurrentValue(entry.FilePath, format, entry.KeyPath, kind);
             var matches = ConfigValueCodec.EqualsValue(format, current, entry.AppliedValueJson);
             if (matches) appliedKeys.Add(entry.KeyPath);
-            else drifted.Add(entry.KeyPath);
+            else if (!IsClientManagedKey(entry.FilePath, entry.KeyPath)) drifted.Add(entry.KeyPath);
         }
         return new ClientStatus
         {

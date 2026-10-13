@@ -1,10 +1,11 @@
-import { Boxes, CloudDownload, Plus } from 'lucide-react';
+import { Boxes, ChevronRight, CloudDownload, Plus } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useCreateModel, useModels, useSyncApply, useSyncPreview } from '../api/hooks';
 import type { Model, SyncChange } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
+import { Checkbox } from '../components/arc/checkbox/checkbox';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, EmptyState, Field, Input, NumberInput, SearchField, Spinner } from '../components/ui/controls';
@@ -188,7 +189,168 @@ function CreateModelSheet({ open, onOpenChange, onCreated }: { open: boolean; on
   );
 }
 
-type SyncRow = { id: string; model: string; kind: string; c: SyncChange };
+type DiffLine = { path: string; before?: unknown; after?: unknown };
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Leaf paths of a JSON value ("" for a scalar); arrays and empty objects count as leaves. */
+function flatten(value: unknown, prefix = '', out = new Map<string, unknown>()): Map<string, unknown> {
+  if (isPlainObject(value) && Object.keys(value).length > 0) {
+    for (const [k, v] of Object.entries(value)) flatten(v, prefix ? `${prefix}.${k}` : k, out);
+  } else if (value !== undefined && value !== null) {
+    out.set(prefix, value);
+  }
+  return out;
+}
+
+/** Only the leaves that differ, so a price row shows "base.input 0.5 → 0.6" instead of two near-identical JSON blobs. */
+function diffLines(before: unknown, after: unknown): DiffLine[] {
+  const a = flatten(before);
+  const b = flatten(after);
+  const paths = [...b.keys(), ...[...a.keys()].filter((k) => !b.has(k))];
+  return paths
+    .filter((p) => JSON.stringify(a.get(p)) !== JSON.stringify(b.get(p)))
+    .map((p) => ({ path: p.replace(/^pricing\./, ''), before: a.get(p), after: b.get(p) }));
+}
+
+const leafText = (v: unknown) => (typeof v === 'string' ? v : JSON.stringify(v));
+
+const SYNC_DIFF_LINES = 4;
+
+function SyncDiff({ before, after }: { before: unknown; after: unknown }) {
+  const { t } = useI18n();
+  const lines = diffLines(before, after);
+  const hidden = lines.length - SYNC_DIFF_LINES;
+  return (
+    <span
+      className="flex w-full min-w-0 flex-col gap-0.5 font-mono text-[11px] leading-snug"
+      title={`${pretty(before) || '∅'}\n→\n${pretty(after) || '∅'}`}
+    >
+      {lines.slice(0, SYNC_DIFF_LINES).map((l) => (
+        <span key={l.path} className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
+          {l.path && <span className="shrink-0 text-[var(--text-secondary)]">{l.path}</span>}
+          {l.before !== undefined && <span className="min-w-0 truncate text-[var(--danger)] line-through opacity-80">{leafText(l.before)}</span>}
+          {l.before !== undefined && l.after !== undefined && <span className="shrink-0 text-[var(--text-secondary)]">→</span>}
+          {l.after !== undefined && <span className="min-w-0 truncate text-[var(--success)]">{leafText(l.after)}</span>}
+        </span>
+      ))}
+      {hidden > 0 && <span className="text-[var(--text-secondary)]">{t('models.sync.more', { n: hidden })}</span>}
+    </span>
+  );
+}
+
+/** One model's pending changes; a group checkbox toggles them all, single-change groups stay one row. */
+function SyncGroups({
+  changes,
+  label,
+  checked,
+  onChange,
+}: {
+  changes: SyncChange[];
+  label: (c: SyncChange) => string;
+  checked: Set<string>;
+  onChange: (next: Set<string>) => void;
+}) {
+  const { t } = useI18n();
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const groups = useMemo(() => {
+    const map = new Map<string, SyncChange[]>();
+    for (const c of changes) map.set(c.modelId, [...(map.get(c.modelId) ?? []), c]);
+    return [...map];
+  }, [changes]);
+
+  const stateOf = (ids: string[]) => {
+    const n = ids.filter((id) => checked.has(id)).length;
+    return n === 0 ? false : n === ids.length ? true : ('indeterminate' as const);
+  };
+  const setMany = (ids: string[], on: boolean) => {
+    const next = new Set(checked);
+    for (const id of ids) if (on) next.add(id);
+    else next.delete(id);
+    onChange(next);
+  };
+  const toggleCollapsed = (model: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(model)) next.delete(model);
+      else next.add(model);
+      return next;
+    });
+
+  const body = (c: SyncChange) => (
+    <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
+      <span className="flex flex-wrap gap-1">
+        <Badge tone={c.kind === 'new_model' ? 'green' : 'neutral'}>{label(c)}</Badge>
+        {c.skippedBecauseUserModified && <Badge tone="orange">{t('models.sync.userModified')}</Badge>}
+      </span>
+      {c.kind !== 'new_model' && <SyncDiff before={c.before} after={c.after} />}
+    </span>
+  );
+
+  const allIds = changes.map((c) => c.id);
+  return (
+    <div className="card max-h-[520px] overflow-auto">
+      <ul className="divide-y divide-[var(--border)]">
+        <li className="sticky top-0 z-10 flex items-center gap-3 bg-[var(--surface)] px-4 py-2">
+          <Checkbox checked={stateOf(allIds)} onCheckedChange={(s) => setMany(allIds, s !== false)} aria-label={t('models.sync.selectAll')} />
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {t('models.sync.selectedOf', { n: checked.size, total: allIds.length, models: groups.length })}
+          </span>
+        </li>
+        {groups.map(([model, items]) => {
+          const ids = items.map((c) => c.id);
+          const single = items.length === 1 ? items[0] : undefined;
+          const open = !collapsed.has(model);
+          return (
+            <li key={model} className="px-4 py-2.5">
+              <div className="flex items-start gap-3">
+                <Checkbox checked={stateOf(ids)} onCheckedChange={(s) => setMany(ids, s !== false)} aria-label={model} className="mt-0.5" />
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  {single ? (
+                    <span className="truncate font-mono text-[12px] font-medium" title={model}>
+                      {model}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="flex min-w-0 items-center gap-1 text-left"
+                      aria-expanded={open}
+                      onClick={() => toggleCollapsed(model)}
+                    >
+                      <ChevronRight className={cn('size-3.5 shrink-0 text-[var(--text-muted)] transition-transform', open && 'rotate-90')} />
+                      <span className="truncate font-mono text-[12px] font-medium" title={model}>
+                        {model}
+                      </span>
+                      <span className="ml-auto shrink-0 pl-2 text-[11px] text-[var(--text-muted)]">
+                        {t('models.sync.groupCount', { n: items.length })}
+                      </span>
+                    </button>
+                  )}
+                  {single && body(single)}
+                </div>
+              </div>
+              {!single && open && (
+                <ul className="mt-2 ml-7 flex flex-col gap-2 border-l border-[var(--border)] pl-3">
+                  {items.map((c) => (
+                    <li key={c.id} className="flex items-start gap-3">
+                      <Checkbox
+                        checked={checked.has(c.id)}
+                        onCheckedChange={(s) => setMany([c.id], s !== false)}
+                        aria-label={`${model} ${label(c)}`}
+                        className="mt-0.5"
+                      />
+                      {body(c)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 function SyncSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const { t } = useI18n();
@@ -213,7 +375,7 @@ function SyncSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
         onOpenChange(o);
         if (o && !preview.data) load();
       }}
-      width={640}
+      width={720}
       title={t('models.sync')}
       description={t('models.syncDetail')}
       footer={
@@ -252,42 +414,7 @@ function SyncSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (o: bo
       {preview.isPending && <Spinner lines={4} />}
       {preview.isError && <Alert tone="danger" title={t('common.error')}>{errorText(preview.error)}</Alert>}
       {preview.data && changes.length === 0 && <Alert tone="success" title={t('models.sync.none')} />}
-      {changes.length > 0 && (
-        <SortableDataTable<SyncRow>
-          caption={t('models.sync')}
-          selectable
-          rowKey="id"
-          itemName={{ one: t('models.sync.changeOne'), other: t('models.sync.changeOther') }}
-          selectedKeys={[...checked]}
-          onSelectionChange={(keys) => setChecked(new Set(keys))}
-          rows={changes.map((c) => ({ id: c.id, model: c.modelId, kind: label(c), c }))}
-          columns={[
-            { key: 'model', label: t('models.col.model'), render: (v) => <span className="font-mono text-[12px]">{String(v)}</span> },
-            {
-              key: 'kind',
-              label: t('models.sync.change'),
-              render: (_, row) => (
-                <span className="flex flex-col items-start gap-1">
-                  <span className="flex flex-wrap gap-1">
-                    <Badge tone={row.c.kind === 'new_model' ? 'green' : 'neutral'}>{row.kind}</Badge>
-                    {row.c.skippedBecauseUserModified && <Badge tone="orange">{t('models.sync.userModified')}</Badge>}
-                  </span>
-                  {row.c.kind !== 'new_model' && (
-                    <span className="grid w-full grid-cols-2 gap-2 font-mono text-[10.5px]">
-                      <span className="truncate text-[var(--danger)]" title={pretty(row.c.before)}>
-                        {JSON.stringify(row.c.before) ?? '∅'}
-                      </span>
-                      <span className="truncate text-[var(--success)]" title={pretty(row.c.after)}>
-                        {JSON.stringify(row.c.after) ?? '∅'}
-                      </span>
-                    </span>
-                  )}
-                </span>
-              ),
-            },
-          ]}
-        />
-      )}
+      {changes.length > 0 && <SyncGroups changes={changes} label={label} checked={checked} onChange={setChecked} />}
     </Sheet>
   );
 }

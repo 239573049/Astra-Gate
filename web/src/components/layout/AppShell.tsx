@@ -276,6 +276,30 @@ function Sidebar({ rail }: { rail: boolean }) {
   );
 }
 
+const DISCORD_URL = 'https://discord.gg/Qf6Jv4Rthe';
+const GITHUB_URL = 'https://github.com/239573049/Astra-Gate';
+
+function DiscordIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M20.32 4.37A19.8 19.8 0 0 0 15.43 2.85a.07.07 0 0 0-.08.04c-.21.38-.44.87-.6 1.26a18.3 18.3 0 0 0-5.5 0 12.6 12.6 0 0 0-.62-1.26.08.08 0 0 0-.08-.04A19.74 19.74 0 0 0 3.67 4.37a.07.07 0 0 0-.03.03C.53 9.05-.32 13.58.1 18.06a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 5.99 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.23-2a.08.08 0 0 0-.04-.1 13.1 13.1 0 0 1-1.87-.9.08.08 0 0 1 0-.13c.13-.09.25-.19.37-.29a.07.07 0 0 1 .08-.01c3.93 1.8 8.18 1.8 12.06 0a.07.07 0 0 1 .08.01c.12.1.24.2.37.29a.08.08 0 0 1 0 .13c-.6.35-1.22.65-1.87.9a.08.08 0 0 0-.04.1c.36.7.77 1.37 1.23 2a.08.08 0 0 0 .08.03 19.84 19.84 0 0 0 6-3.03.08.08 0 0 0 .03-.05c.5-5.18-.84-9.67-3.55-13.66a.06.06 0 0 0-.03-.03ZM8.02 15.33c-1.18 0-2.16-1.09-2.16-2.42s.96-2.42 2.16-2.42c1.21 0 2.18 1.1 2.16 2.42 0 1.33-.96 2.42-2.16 2.42Zm7.97 0c-1.18 0-2.16-1.09-2.16-2.42s.95-2.42 2.16-2.42c1.21 0 2.18 1.1 2.16 2.42 0 1.33-.95 2.42-2.16 2.42Z" />
+    </svg>
+  );
+}
+
+function GithubIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.35.96.1-.74.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.62 1.59.23 2.76.11 3.05.74.81 1.18 1.83 1.18 3.09 0 4.42-2.69 5.39-5.25 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z" />
+    </svg>
+  );
+}
+
+const EXTERNAL_LINKS = [
+  { href: GITHUB_URL, labelKey: 'shell.github', Icon: GithubIcon },
+  { href: DISCORD_URL, labelKey: 'shell.discord', Icon: DiscordIcon },
+] as const;
+
 function ServiceStatus({ rail }: { rail: boolean }) {
   const t = useT();
   const health = useHealth();
@@ -295,7 +319,25 @@ function ServiceStatus({ rail }: { rail: boolean }) {
   };
 
   return (
-    <div className="relative m-2 min-h-10 shrink-0">
+    <div className="relative m-2 shrink-0">
+      {rail && (
+        <div className="flex flex-col gap-0.5 pb-1" style={{ paddingLeft: ITEM_PAD }}>
+          {EXTERNAL_LINKS.map(({ href, labelKey, Icon }) => (
+            <a
+              key={href}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              title={t(labelKey)}
+              aria-label={t(labelKey)}
+              className="grid size-[22px] shrink-0 place-items-center rounded-md text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+            >
+              <Icon className="size-[18px]" />
+            </a>
+          ))}
+        </div>
+      )}
+      <div className="relative min-h-10">
       <AnimatePresence initial={false} mode="popLayout">
         {rail ? (
           <motion.div
@@ -318,11 +360,30 @@ function ServiceStatus({ rail }: { rail: boolean }) {
             className="rounded-xl bg-[color-mix(in_oklab,var(--glass-tint)_45%,transparent)] px-3 py-2 text-[11px] whitespace-nowrap text-[var(--text-secondary)]"
             style={{ width: SIDEBAR_EXPANDED - 16 }}
           >
-            <div className="flex items-center gap-1.5">
-              <Dot tone={up ? 'green' : health.isLoading ? 'neutral' : 'red'} />
-              <span className="truncate">{status}</span>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <Dot tone={up ? 'green' : health.isLoading ? 'neutral' : 'red'} />
+                  <span className="truncate">{status}</span>
+                </div>
+                {up && address && <div className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--text-muted)] selectable">{address}</div>}
+              </div>
+              <div className="-my-1 -mr-1 flex shrink-0 flex-col">
+                {EXTERNAL_LINKS.map(({ href, labelKey, Icon }) => (
+                  <a
+                    key={href}
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={t(labelKey)}
+                    aria-label={t(labelKey)}
+                    className="grid size-7 place-items-center rounded-md text-[var(--text-muted)] transition-colors hover:text-[var(--text-primary)]"
+                  >
+                    <Icon className="size-[18px]" />
+                  </a>
+                ))}
+              </div>
             </div>
-            {up && address && <div className="mt-0.5 truncate font-mono text-[10.5px] text-[var(--text-muted)] selectable">{address}</div>}
             {!up && !health.isLoading && isDesktop && (
               <Button size="sm" variant="primary" className="mt-1.5 w-full" loading={starting} onClick={() => void start()}>
                 {t('shell.startService')}
@@ -331,6 +392,7 @@ function ServiceStatus({ rail }: { rail: boolean }) {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
     </div>
   );
 }

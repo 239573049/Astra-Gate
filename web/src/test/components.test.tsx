@@ -79,6 +79,7 @@ vi.mock('@lobehub/icons', () => {
     HermesAgent: stub('hermes-agent'),
     Kimi: stub('kimi'),
     LmStudio: stub('lm-studio'),
+    Qoder: stub('qoder'),
     Meta: stub('meta'),
     Minimax: stub('minimax'),
     Moonshot: stub('moonshot'),
@@ -92,6 +93,17 @@ vi.mock('@lobehub/icons', () => {
     Volcengine: stub('volcengine'),
     XAI: stub('xai'),
     XiaomiMiMo: stub('xiaomi-mimo'),
+    Baichuan: stub('baichuan'),
+    ChatGLM: stub('chatglm'),
+    Cohere: stub('cohere'),
+    Doubao: stub('doubao'),
+    Gemma: stub('gemma'),
+    Hunyuan: stub('hunyuan'),
+    LongCat: stub('longcat'),
+    Mistral: stub('mistral'),
+    Stepfun: stub('stepfun'),
+    Wenxin: stub('wenxin'),
+    Yi: stub('yi'),
     Zhipu: stub('zhipu'),
   };
 });
@@ -555,7 +567,7 @@ describe('Requests list reasoning badge', () => {
   });
 });
 
-describe('Requests list TTFT / TPS column', () => {
+describe('Requests list TTFT and TPS columns', () => {
   beforeEach(() => {
     hookSpies.useClients.mockReset().mockReturnValue(hookResult([]));
     hookSpies.useProviders.mockReset().mockReturnValue(hookResult([]));
@@ -563,18 +575,21 @@ describe('Requests list TTFT / TPS column', () => {
     hookSpies.useRequestRate.mockReset().mockReturnValue(hookResult(undefined));
   });
 
-  it('places output speed beneath TTFT in the same cell, with units', () => {
+  it('gives TTFT and the output speed a column each, with units', () => {
     hookSpies.useRequests.mockReset().mockReturnValue(hookResult(pageOf([
       summary({ id: 'r-speed', ttftMs: 120, outputTps: 42.56 }),
     ])));
     showPage();
 
-    expect(screen.getByRole('columnheader', { name: /TTFT \/ TPS/ })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /TTFT/ })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /TPS/ })).toBeInTheDocument();
     const ttft = screen.getByTitle('TTFT');
-    const cell = ttft.closest('[role="cell"]')!;
+    const speed = screen.getByTitle('Output speed');
     expect(ttft).toHaveTextContent('120 ms');
-    expect(within(cell as HTMLElement).getByTitle('Output speed')).toHaveTextContent('42.6 tok/s');
-    expect(cell).toHaveAttribute('data-label', 'TTFT / TPS');
+    expect(speed).toHaveTextContent('42.6 tok/s');
+    expect(ttft.closest('[role="cell"]')).toHaveAttribute('data-label', 'TTFT');
+    expect(speed.closest('[role="cell"]')).toHaveAttribute('data-label', 'TPS');
+    expect(speed.closest('[role="cell"]')).not.toBe(ttft.closest('[role="cell"]'));
   });
 
   it.each([null, undefined])('shows a missing TPS as a dash, not a guessed speed (%s)', (outputTps) => {
@@ -586,7 +601,7 @@ describe('Requests list TTFT / TPS column', () => {
     const speed = screen.getByTitle('Output speed');
     expect(speed).toHaveTextContent('—');
     expect(speed).not.toHaveTextContent('tok/s');
-    expect(speed.closest('[role="cell"]')).toContainElement(screen.getByTitle('TTFT'));
+    expect(speed.closest('[role="cell"]')).not.toHaveTextContent('120 ms');
   });
 
   it('displays zero TPS as a number, even when TTFT is missing', () => {

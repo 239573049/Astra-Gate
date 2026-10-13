@@ -1,3 +1,8 @@
+using System.Buffers;
+using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json.Nodes;
@@ -87,16 +92,13 @@ public sealed partial class PrivacyDetector
 
     // Keep the original email lookarounds without quadratic retries on '%' runs. The linear
     // candidate consumes the right boundary; resume at the email end so that boundary is reusable.
+    // What an intranet host needs somewhere in the text: one vectorized pass instead of a regex scan.
+    private static readonly SearchValues<string> IntranetHints = SearchValues.Create(
+        ["10.", "192.168.", "172.", ".internal", ".local", ".lan", ".corp"], StringComparison.OrdinalIgnoreCase);
+
     private static IEnumerable<(int Index, int Length)> Matches(PrivacyRule rule, string text)
     {
-        if (ReferenceEquals(rule.Regex, IntranetHostRegex()) &&
-            !text.Contains("10.", StringComparison.Ordinal) &&
-            !text.Contains("192.168.", StringComparison.Ordinal) &&
-            !text.Contains("172.", StringComparison.Ordinal) &&
-            !text.Contains(".internal", StringComparison.OrdinalIgnoreCase) &&
-            !text.Contains(".local", StringComparison.OrdinalIgnoreCase) &&
-            !text.Contains(".lan", StringComparison.OrdinalIgnoreCase) &&
-            !text.Contains(".corp", StringComparison.OrdinalIgnoreCase)) yield break;
+        if (ReferenceEquals(rule.Regex, IntranetHostRegex()) && text.AsSpan().IndexOfAny(IntranetHints) < 0) yield break;
 
         if (ReferenceEquals(rule.Regex, EmailRegex()))
         {
@@ -155,28 +157,36 @@ public sealed partial class PrivacyDetector
     }
 
     /// <summary>Detects and applies the configured actions. Placeholder originals are returned, never stored.</summary>
-    public PrivacyApplyResult Apply(string text, EffectivePrivacyPolicy policy) => Apply(text, policy, null);
-
-    // numbering: the result whose counters number the placeholders. ApplyJson passes its merged result so
-    // placeholders stay unique across the body's strings (each would otherwise restart at #1).
-    private PrivacyApplyResult Apply(string text, EffectivePrivacyPolicy policy, PrivacyApplyResult? numbering)
+    public PrivacyApplyResult Apply(string text, EffectivePrivacyPolicy policy)
     {
         var result = new PrivacyApplyResult { Text = text };
-        numbering ??= result;
+        // Most text matches nothing: one allocation-free pass per rule decides that.
+        if (!AnyRuleMatches(text, StateFor(policy))) return result;
+        result.Text = ApplyInto(text, policy, result);
+        result.Blocked = result.Hits.Exists(h => h.Action == PrivacyActions.Block);
+        return result;
+    }
+
+    // Runs every rule over text in order (each rule sees the previous rules' placeholders), adding hits and
+    // redactions to into, whose counters number the placeholders: one JSON body shares them across its strings
+    // so placeholders stay unique (each string would otherwise restart at #1). Returns text itself when nothing
+    // was redacted.
+    private static string ApplyInto(string text, EffectivePrivacyPolicy policy, PrivacyApplyResult into)
+    {
         foreach (var rule in policy.Rules)
         {
             var action = policy.ActionFor(rule.Id, rule.Category);
             if (action == PrivacyActions.Off) continue;
 
-            var input = result.Text;
+            var input = text;
             StringBuilder? rewritten = null;
-            List<string>? samples = policy.RecordSamples ? [] : null;
+            List<string>? samples = null;
             var count = 0;
             var cursor = 0;
             foreach (var (index, length) in Matches(rule, input))
             {
                 count++;
-                if (samples is { Count: < MaxSamples } && length > 0)
+                if (policy.RecordSamples && length > 0 && (samples ??= []).Count < MaxSamples)
                 {
                     var masked = MaskSample(input.AsSpan(index, length));
                     if (!samples.Contains(masked)) samples.Add(masked);
@@ -185,9 +195,9 @@ public sealed partial class PrivacyDetector
 
                 rewritten ??= new StringBuilder(input.Length);
                 rewritten.Append(input, cursor, index - cursor);
-                var placeholder = PlaceholderFor(rule.Category, numbering.CounterFor(rule.Category));
+                var placeholder = PlaceholderFor(rule.Category, into.CounterFor(rule.Category));
                 rewritten.Append(placeholder);
-                result.Redactions.Add(new PrivacyRedaction
+                into.Redactions.Add(new PrivacyRedaction
                 {
                     Placeholder = placeholder,
                     Original = input.Substring(index, length),
@@ -196,14 +206,108 @@ public sealed partial class PrivacyDetector
                 });
                 cursor = index + length;
             }
-            if (count > 0) AddHit(result.Hits, rule, policy, count, samples);
+            if (count > 0) AddHit(into.Hits, rule, policy, count, samples);
             if (rewritten is not null)
-                result.Text = rewritten.Append(input, cursor, input.Length - cursor).ToString();
+                text = rewritten.Append(input, cursor, input.Length - cursor).ToString();
         }
-
-        result.Blocked = result.Hits.Exists(h => h.Action == PrivacyActions.Block);
-        return result;
+        return text;
     }
+
+    /// <summary>
+    /// Whether any active rule matches anywhere in <paramref name="text"/> — a necessary condition for any hit,
+    /// so text that fails it needs no further work. Allocation-free: span-based IsMatch only.
+    /// </summary>
+    private static bool AnyRuleMatches(ReadOnlySpan<char> text, PolicyState state)
+    {
+        foreach (var (regex, hint) in state.Active)
+        {
+            var matched = hint switch
+            {
+                RuleHint.Intranet => text.IndexOfAny(IntranetHints) >= 0 && regex.IsMatch(text),
+                // Any address Matches accepts is an EmailCandidate match; the linear candidate is the cheap check.
+                RuleHint.Email => text.Contains('@') && EmailCandidate.IsMatch(text),
+                RuleHint.Scheme => text.IndexOf("://", StringComparison.Ordinal) >= 0 && regex.IsMatch(text),
+                RuleHint.Assignment => text.IndexOfAny(':', '=') >= 0 && HasCredentialKeyword(text) && regex.IsMatch(text),
+                RuleHint.Telegram => text.IndexOf(":AA", StringComparison.Ordinal) >= 0 && regex.IsMatch(text),
+                RuleHint.Stripe => (text.IndexOf("_live_", StringComparison.Ordinal) >= 0 || text.IndexOf("whsec_", StringComparison.Ordinal) >= 0) && regex.IsMatch(text),
+                RuleHint.Dash => text.Contains('-') && regex.IsMatch(text),
+                RuleHint.Phone => text.Contains('+') ? regex.IsMatch(text) : DigitRunMatches(text, regex, 11),
+                RuleHint.Card => DigitRunMatches(text, regex, 13),
+                RuleHint.NationalId => DigitRunMatches(text, regex, 17),
+                _ => regex.IsMatch(text),
+            };
+            if (matched) return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// A literal some built-in rules cannot match without: a vectorized search for it decides most text before
+    /// the regex runs (the pattern is not touched, so what matches is unchanged).
+    /// </summary>
+    private enum RuleHint { None, Intranet, Email, Scheme, Assignment, Telegram, Stripe, Dash, Phone, Card, NationalId }
+
+    // Every keyword of builtin.credential-assignment contains one of these. The regex is IgnoreCase, whose case
+    // table also folds 'ſ' into 's' and the Kelvin sign into 'k' (and dotted / dotless i): text with any of those
+    // goes to the regex.
+    private static readonly SearchValues<string> CredentialKeywords = SearchValues.Create(
+        ["pass", "pwd", "secret", "token", "api", "access"], StringComparison.OrdinalIgnoreCase);
+
+    private static readonly SearchValues<char> CaseFoldOutliers = SearchValues.Create("\u017F\u212A\u0130\u0131");
+
+    private static bool HasCredentialKeyword(ReadOnlySpan<char> text) =>
+        text.IndexOfAny(CredentialKeywords) >= 0 || text.IndexOfAny(CaseFoldOutliers) >= 0;
+
+    private static readonly SearchValues<char> AsciiDigits = SearchValues.Create("0123456789");
+
+    /// <summary>
+    /// For rules whose every match is a whole run of digits bounded by non-digits — card numbers, ID numbers,
+    /// mainland phone numbers (+ the one trailing check character): runs shorter than <paramref name="minRun"/>
+    /// cannot match, and a longer one is tried in place, with one character of context each side so the
+    /// <c>(?&lt;!\d)</c> / <c>(?!\d)</c> guards see what they would see in the whole text. The full-text scan of
+    /// these backtracking patterns allocates and walks every digit; this touches only the candidate runs. \d also
+    /// takes other scripts' digits: text with any of those is matched whole, as before.
+    /// </summary>
+    private static bool DigitRunMatches(ReadOnlySpan<char> text, Regex regex, int minRun)
+    {
+        var offset = 0;
+        while (true)
+        {
+            var start = text[offset..].IndexOfAny(AsciiDigits);
+            if (start < 0) return HasNonAsciiDigit(text) && regex.IsMatch(text);
+            start += offset;
+            var run = text[start..].IndexOfAnyExcept(AsciiDigits);
+            var end = run < 0 ? text.Length : start + run;
+            if (end - start >= minRun)
+            {
+                var from = Math.Max(0, start - 1);
+                if (regex.IsMatch(text[from..Math.Min(text.Length, end + 2)])) return true;
+            }
+            if (end == text.Length) return HasNonAsciiDigit(text) && regex.IsMatch(text);
+            offset = end;
+        }
+    }
+
+    private static bool HasNonAsciiDigit(ReadOnlySpan<char> text)
+    {
+        if (Ascii.IsValid(text)) return false;
+        foreach (var c in text)
+            if (c > '\u007F' && char.IsDigit(c)) return true;
+        return false;
+    }
+
+    private static RuleHint HintFor(Regex regex) =>
+        ReferenceEquals(regex, IntranetHostRegex()) ? RuleHint.Intranet
+        : ReferenceEquals(regex, EmailRegex()) ? RuleHint.Email
+        : ReferenceEquals(regex, ConnStringRegex()) ? RuleHint.Scheme
+        : ReferenceEquals(regex, CredentialAssignmentRegex()) ? RuleHint.Assignment
+        : ReferenceEquals(regex, TelegramBotTokenRegex()) ? RuleHint.Telegram
+        : ReferenceEquals(regex, StripeKeyRegex()) ? RuleHint.Stripe
+        : ReferenceEquals(regex, UsSsnRegex()) ? RuleHint.Dash
+        : ReferenceEquals(regex, PhoneRegex()) ? RuleHint.Phone
+        : ReferenceEquals(regex, CreditCardRegex()) ? RuleHint.Card
+        : ReferenceEquals(regex, CnIdRegex()) ? RuleHint.NationalId
+        : RuleHint.None;
 
     /// <summary>
     /// JSON-aware processing: inspects string values except protocol-identified opaque media and
@@ -213,79 +317,274 @@ public sealed partial class PrivacyDetector
     /// </summary>
     public PrivacyApplyResult? ApplyJson(string json, EffectivePrivacyPolicy policy)
     {
-        JsonNode? root;
+        JsonDocument document;
         try
         {
-            root = JsonNode.Parse(json,
-                documentOptions: new JsonDocumentOptions
-                {
-                    CommentHandling = JsonCommentHandling.Skip,
-                    AllowTrailingCommas = true,
-                });
+            document = JsonDocument.Parse(json, new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true,
+            });
         }
         catch (JsonException)
         {
             return null;
         }
-        if (root is null) return null;
+        using (document)
+        {
+            var source = document.RootElement;
+            if (source.ValueKind == JsonValueKind.Null) return null;
 
-        var merged = new PrivacyApplyResult { Text = json };
-        root = Walk(root, policy, merged, JsonScope.Root);
-        if (merged.Redactions.Count > 0) merged.Text = root!.ToJsonString(Json.Wire);
+            var merged = new PrivacyApplyResult { Text = json };
+            var rewrites = Scan(source, policy, merged);
+            merged.Blocked = merged.Hits.Exists(h => h.Action == PrivacyActions.Block);
+            if (rewrites is null) return merged;
+            // Serialized while the document — which the unchanged nodes still read from — is alive.
+            JsonNode? root = source.ValueKind switch
+            {
+                JsonValueKind.Object => JsonObject.Create(source),
+                JsonValueKind.Array => JsonArray.Create(source),
+                _ => JsonValue.Create(source),
+            };
+            foreach (var (path, text) in rewrites) root = Rewrite(root, path, text);
+            merged.Text = root!.ToJsonString(Json.Wire);
+            return merged;
+        }
+    }
+
+    /// <summary>
+    /// <see cref="ApplyJson(string, EffectivePrivacyPolicy)"/> over a parsed body, without serializing it:
+    /// scans <paramref name="source"/> and, when <paramref name="rewrite"/> is set and nothing is to be blocked,
+    /// writes the redacted strings into <paramref name="target"/> — the node tree over that same element, which
+    /// keeps the original values everywhere else. <see cref="PrivacyApplyResult.Text"/> is not set; the result
+    /// says whether the tree changed (<see cref="PrivacyApplyResult.Redactions"/>).
+    /// </summary>
+    public PrivacyApplyResult ApplyJson(JsonElement source, JsonObject target, EffectivePrivacyPolicy policy, bool rewrite)
+    {
+        var merged = new PrivacyApplyResult();
+        var rewrites = Scan(source, policy, merged);
         merged.Blocked = merged.Hits.Exists(h => h.Action == PrivacyActions.Block);
+        if (rewrites is not null && rewrite && !merged.Blocked)
+            foreach (var (path, text) in rewrites) Rewrite(target, path, text);
         return merged;
+    }
+
+    // Walks the element tree — no JsonNode is built, no string materialized unless a rule may match it — and
+    // returns the strings to replace (null when none).
+    private List<(PathStep[] Path, string Text)>? Scan(JsonElement source, EffectivePrivacyPolicy policy, PrivacyApplyResult merged)
+    {
+        var walk = new JsonWalk(policy, StateFor(policy), merged);
+        try
+        {
+            walk.Walk(source, JsonScope.Root);
+            return walk.Rewrites;
+        }
+        finally
+        {
+            walk.Dispose();
+        }
+    }
+
+    private static JsonNode? Rewrite(JsonNode? root, PathStep[] path, string text)
+    {
+        if (path.Length == 0) return JsonValue.Create(text);
+        var node = root!;
+        for (var i = 0; i < path.Length - 1; i++)
+            node = path[i].Index < 0 ? node.AsObject()[path[i].Property.Name]! : node.AsArray()[path[i].Index]!;
+        var last = path[^1];
+        if (last.Index < 0) node.AsObject()[last.Property.Name] = JsonValue.Create(text);
+        else node.AsArray()[last.Index] = JsonValue.Create(text);
+        return root;
+    }
+
+    /// <summary>One step from a container to a child: an object property, or (Index ≥ 0) an array item.</summary>
+    private readonly record struct PathStep(JsonProperty Property, int Index);
+
+    /// <summary>The per-policy state: active rules, and digests of strings known to match none of them.</summary>
+    private sealed class PolicyState
+    {
+        // Bounds the memory of the clean set (~100 bytes an entry); full → start over.
+        private const int MaxCleanEntries = 16_384;
+
+        private readonly ConcurrentDictionary<Digest, byte> _clean = new();
+        private int _cleanCount;
+
+        public PolicyState(EffectivePrivacyPolicy policy) =>
+            Active = policy.Rules.Where(r => policy.ActionFor(r.Id, r.Category) != PrivacyActions.Off)
+                .Select(r => (r.Regex, HintFor(r.Regex))).ToArray();
+
+        public (Regex Regex, RuleHint Hint)[] Active { get; }
+
+        public bool IsClean(in Digest digest) => _clean.ContainsKey(digest);
+
+        public void MarkClean(in Digest digest)
+        {
+            if (!_clean.TryAdd(digest, 0) || Interlocked.Increment(ref _cleanCount) <= MaxCleanEntries) return;
+            _clean.Clear();
+            Interlocked.Exchange(ref _cleanCount, 0);
+        }
+    }
+
+    /// <summary>SHA-256 of a string's raw UTF-8: collision-resistant, so a cached "clean" can never cover a secret.</summary>
+    private readonly record struct Digest(ulong A, ulong B, ulong C, ulong D)
+    {
+        public static Digest Of(ReadOnlySpan<byte> utf8)
+        {
+            Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(utf8, hash);
+            var words = MemoryMarshal.Cast<byte, ulong>(hash);
+            return new Digest(words[0], words[1], words[2], words[3]);
+        }
+    }
+
+    /// <summary>
+    /// Strings at least this long (raw UTF-8 bytes) are remembered as clean per policy. Agents resend their whole
+    /// history every turn, so most of a body is the system prompt and turns already scanned last time: hashing
+    /// (GB/s) replaces running every rule again (tens of MB/s). Only clean strings are kept, as digests — never
+    /// text, never a match.
+    /// </summary>
+    private const int CleanCacheMinBytes = 256;
+
+    private readonly ConditionalWeakTable<EffectivePrivacyPolicy, PolicyState> _states = new();
+
+    private PolicyState StateFor(EffectivePrivacyPolicy policy) => _states.GetValue(policy, static p => new PolicyState(p));
+
+    private sealed class JsonWalk(EffectivePrivacyPolicy policy, PolicyState state, PrivacyApplyResult merged) : IDisposable
+    {
+        private readonly List<PathStep> _path = [];
+        private char[]? _chars;
+
+        public List<(PathStep[] Path, string Text)>? Rewrites { get; private set; }
+
+        public void Walk(JsonElement element, JsonScope scope)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.String:
+                    Visit(element);
+                    break;
+                case JsonValueKind.Object:
+                {
+                    // Skips are decided from the original discriminators (the element tree is never rewritten).
+                    var type = KnownType(element);
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        var key = KnownKey(property);
+                        if (IsOpaque(scope, type, element, key, property.Value)) continue;
+                        _path.Add(new PathStep(property, -1));
+                        Walk(property.Value, ChildScope(scope, type, key, property.Value));
+                        _path.RemoveAt(_path.Count - 1);
+                    }
+                    break;
+                }
+                case JsonValueKind.Array:
+                {
+                    var index = 0;
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        _path.Add(new PathStep(default, index++));
+                        Walk(item, scope);
+                        _path.RemoveAt(_path.Count - 1);
+                    }
+                    break;
+                }
+            }
+        }
+
+        private void Visit(JsonElement element)
+        {
+            var raw = JsonMarshal.GetRawUtf8Value(element); // quoted, still escaped
+            var content = raw[1..^1];
+            Digest? digest = null;
+            if (content.Length >= CleanCacheMinBytes)
+            {
+                var d = Digest.Of(content);
+                if (state.IsClean(d)) return;
+                digest = d;
+            }
+
+            // Unescaped into a reused buffer: a string becomes a string only when some rule matches it.
+            if (_chars is null || _chars.Length < content.Length)
+            {
+                if (_chars is not null) ArrayPool<char>.Shared.Return(_chars);
+                _chars = ArrayPool<char>.Shared.Rent(Math.Max(content.Length, 256));
+            }
+            int length;
+            if (content.IndexOf((byte)'\\') < 0)
+            {
+                length = Encoding.UTF8.GetChars(content, _chars);
+            }
+            else
+            {
+                var reader = new Utf8JsonReader(raw);
+                reader.Read();
+                length = reader.CopyString(_chars);
+            }
+            var chars = _chars.AsSpan(0, length);
+            if (!AnyRuleMatches(chars, state))
+            {
+                if (digest is { } clean) state.MarkClean(clean);
+                return;
+            }
+
+            var text = new string(chars);
+            var result = ApplyInto(text, policy, merged);
+            if (!ReferenceEquals(result, text)) (Rewrites ??= []).Add((_path.ToArray(), result));
+        }
+
+        public void Dispose()
+        {
+            if (_chars is not null) ArrayPool<char>.Shared.Return(_chars);
+            _chars = null;
+        }
     }
 
     private enum JsonScope { Root, Content, ToolContent, Source, InlineData, ImageUrl, Audio, File, Ordinary }
 
-    private JsonNode? Walk(JsonNode? node, EffectivePrivacyPolicy policy, PrivacyApplyResult merged, JsonScope scope)
+    // The "type" discriminators the scope rules compare against (any other type behaves like none).
+    private static readonly string[] KnownTypes =
+    [
+        "tool_result", "function_call_output", "image", "document", "image_url", "input_image", "input_audio", "file",
+        "input_file", "thinking", "redacted_thinking", "reasoning", "base64",
+    ];
+
+    // The property names the scope rules look at (any other name is ordinary).
+    private static readonly string[] KnownKeys =
+    [
+        "messages", "input", "system", "contents", "systemInstruction", "system_instruction", "content", "parts", "output",
+        "source", "image_url", "input_audio", "file", "inlineData", "inline_data", "data", "url", "file_data", "signature",
+        "encrypted_content", "thoughtSignature", "thought_signature",
+    ];
+
+    private static readonly byte[][] KnownKeysUtf8 = KnownKeys.Select(Encoding.UTF8.GetBytes).ToArray();
+
+    private static string? KnownType(JsonElement obj)
     {
-        switch (node)
-        {
-            case JsonValue value when value.TryGetValue<string>(out var s):
-            {
-                var r = Apply(s, policy, merged);
-                Merge(merged, r);
-                return r.Text == s ? node : JsonValue.Create(r.Text);
-            }
-            case JsonObject obj:
-            {
-                // Compute skips from original discriminators before custom rules can rewrite them.
-                var type = StringValue(obj["type"]);
-                var properties = obj.Select(p => (p.Key, p.Value,
-                    Skip: IsOpaque(scope, type, obj, p.Key, p.Value))).ToArray();
-                foreach (var (key, child, skip) in properties)
-                {
-                    if (skip) continue;
-                    var childScope = ChildScope(scope, type, key, child);
-                    var rewritten = Walk(child, policy, merged, childScope);
-                    if (!ReferenceEquals(child, rewritten)) obj[key] = rewritten;
-                }
-                break;
-            }
-            case JsonArray array:
-            {
-                for (var i = 0; i < array.Count; i++)
-                {
-                    var child = array[i];
-                    var rewritten = Walk(child, policy, merged, scope);
-                    if (!ReferenceEquals(child, rewritten)) array[i] = rewritten;
-                }
-                break;
-            }
-        }
-        return node;
+        if (!obj.TryGetProperty("type"u8, out var type) || type.ValueKind != JsonValueKind.String) return null;
+        foreach (var known in KnownTypes)
+            if (type.ValueEquals(known)) return known;
+        return null;
     }
 
-    private static string? StringValue(JsonNode? node) =>
-        node is JsonValue value && value.TryGetValue<string>(out var s) ? s : null;
+    private static string? KnownKey(JsonProperty property)
+    {
+        var raw = JsonMarshal.GetRawUtf8PropertyName(property);
+        if (raw.IndexOf((byte)'\\') >= 0)
+        {
+            var name = property.Name;
+            return Array.Find(KnownKeys, k => k == name);
+        }
+        for (var i = 0; i < KnownKeysUtf8.Length; i++)
+            if (raw.SequenceEqual(KnownKeysUtf8[i])) return KnownKeys[i];
+        return null;
+    }
 
-    private static JsonScope ChildScope(JsonScope scope, string? type, string key, JsonNode? child) => (scope, key) switch
+    private static JsonScope ChildScope(JsonScope scope, string? type, string? key, JsonElement child) => (scope, key) switch
     {
         (JsonScope.Root, "messages" or "input" or "system" or "contents" or "systemInstruction" or "system_instruction") => JsonScope.Content,
-        (JsonScope.Content, "content") when type == "tool_result" && child is JsonArray => JsonScope.ToolContent,
-        (JsonScope.Content, "content" or "parts") when child is JsonArray => JsonScope.Content,
-        (JsonScope.Content, "output") when type == "function_call_output" && child is JsonArray => JsonScope.ToolContent,
+        (JsonScope.Content, "content") when type == "tool_result" && child.ValueKind == JsonValueKind.Array => JsonScope.ToolContent,
+        (JsonScope.Content, "content" or "parts") when child.ValueKind == JsonValueKind.Array => JsonScope.Content,
+        (JsonScope.Content, "output") when type == "function_call_output" && child.ValueKind == JsonValueKind.Array => JsonScope.ToolContent,
         (JsonScope.ToolContent, "source") when type is "image" or "document" => JsonScope.Source,
         (JsonScope.ToolContent, "image_url") when type is "image_url" or "input_image" => JsonScope.ImageUrl,
         (JsonScope.ToolContent, "input_audio") when type == "input_audio" => JsonScope.Audio,
@@ -298,20 +597,21 @@ public sealed partial class PrivacyDetector
         _ => JsonScope.Ordinary,
     };
 
-    private static bool IsOpaque(JsonScope scope, string? type, JsonObject obj, string key, JsonNode? value)
+    private static bool IsOpaque(JsonScope scope, string? type, JsonElement obj, string? key, JsonElement value)
     {
         // Arbitrary tool JSON stays inspected even when it contains fields called data/signature.
         // Skip only opaque protocol slots, never captions, filenames, URLs or whole media objects.
-        if (value is not JsonValue scalar || !scalar.TryGetValue<string>(out var text)) return false;
+        if (key is null || value.ValueKind != JsonValueKind.String) return false;
         return (scope, key) switch
         {
-            (JsonScope.Source, "data") => type == "base64" && IsBinaryMedia(StringValue(obj["media_type"])),
-            (JsonScope.InlineData, "data") => IsBinaryMedia(StringValue(obj["mimeType"] ?? obj["mime_type"])),
+            (JsonScope.Source, "data") => type == "base64" && IsBinaryMedia(StringProperty(obj, "media_type")),
+            (JsonScope.InlineData, "data") => IsBinaryMedia(StringValue(
+                obj.TryGetProperty("mimeType"u8, out var mime) ? mime : obj.TryGetProperty("mime_type"u8, out var mime2) ? mime2 : default)),
             (JsonScope.Audio, "data") => true,
-            (JsonScope.ImageUrl, "url") => IsBinaryDataUrl(text),
-            (JsonScope.File, "file_data") => IsBinaryDataUrl(text),
-            (JsonScope.Content or JsonScope.ToolContent, "image_url") when type == "input_image" => IsBinaryDataUrl(text),
-            (JsonScope.Content or JsonScope.ToolContent, "file_data") when type == "input_file" => IsBinaryDataUrl(text),
+            (JsonScope.ImageUrl, "url") => IsBinaryDataUrl(value),
+            (JsonScope.File, "file_data") => IsBinaryDataUrl(value),
+            (JsonScope.Content or JsonScope.ToolContent, "image_url") when type == "input_image" => IsBinaryDataUrl(value),
+            (JsonScope.Content or JsonScope.ToolContent, "file_data") when type == "input_file" => IsBinaryDataUrl(value),
             (JsonScope.Content, "signature") => type == "thinking",
             (JsonScope.Content, "data") => type == "redacted_thinking",
             (JsonScope.Content, "encrypted_content") => type == "reasoning",
@@ -320,19 +620,39 @@ public sealed partial class PrivacyDetector
         };
     }
 
-    private static bool IsBinaryMedia(string? media) => media is not null &&
-        (media.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-         media.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
-         media.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
-         media.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
-         media.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase));
+    private static string? StringProperty(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out var value) ? StringValue(value) : null;
 
-    private static bool IsBinaryDataUrl(string text)
+    private static string? StringValue(JsonElement value) => value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static bool IsBinaryMedia(ReadOnlySpan<char> media) =>
+        media.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+        media.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
+        media.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
+        media.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+        media.Equals("application/octet-stream", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBinaryMedia(string? media) => media is not null && IsBinaryMedia(media.AsSpan());
+
+    // A data URL's header is in its first 136 characters (the ';' must come before 128): decoding at most
+    // 512 bytes covers that, so a multi-megabyte base64 payload is never turned into a string to be skipped.
+    private static bool IsBinaryDataUrl(JsonElement value)
+    {
+        var content = JsonMarshal.GetRawUtf8Value(value)[1..^1];
+        var head = content[..Math.Min(content.Length, 512)];
+        if (head.IndexOf((byte)'\\') >= 0) return IsBinaryDataUrl(value.GetString()!);
+        Span<char> chars = stackalloc char[512];
+        var length = Encoding.UTF8.GetChars(head, chars);
+        return IsBinaryDataUrl(chars[..length]);
+    }
+
+    private static bool IsBinaryDataUrl(ReadOnlySpan<char> text)
     {
         if (!text.StartsWith("data:", StringComparison.OrdinalIgnoreCase)) return false;
-        var separator = text.IndexOf(';', 5);
+        var separator = text[5..].IndexOf(';');
+        if (separator >= 0) separator += 5;
         return separator is > 5 and < 128 && IsBinaryMedia(text[5..separator]) &&
-            text.AsSpan(separator).StartsWith(";base64,", StringComparison.OrdinalIgnoreCase);
+            text[separator..].StartsWith(";base64,", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <remarks><paramref name="samples"/> defaults to null so older call sites (no samples) stay valid.</remarks>
@@ -351,28 +671,6 @@ public sealed partial class PrivacyDetector
             MergeSamples(attached, samples);
             hits.Add(new PrivacyHit { RuleId = rule.Id, Category = rule.Category, Action = action, Count = count, Samples = attached });
         }
-    }
-
-    private static void Merge(PrivacyApplyResult into, PrivacyApplyResult from)
-    {
-        foreach (var hit in from.Hits)
-        {
-            var existing = into.Hits.Find(h => h.RuleId == hit.RuleId && h.Action == hit.Action);
-            if (existing is not null)
-            {
-                existing.Count += hit.Count;
-                MergeSamples(existing.Samples, hit.Samples);
-            }
-            else into.Hits.Add(new PrivacyHit
-            {
-                RuleId = hit.RuleId,
-                Category = hit.Category,
-                Action = hit.Action,
-                Count = hit.Count,
-                Samples = hit.Samples,
-            });
-        }
-        into.Redactions.AddRange(from.Redactions);
     }
 
     /// <summary>Keeps at most <see cref="MaxSamples"/> distinct masked previews per rule.</summary>

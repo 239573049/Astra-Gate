@@ -1,10 +1,11 @@
-import { Copy, Download, FolderOpen, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Bell, Copy, Download, FolderOpen, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
-import type { ProxyMode, Settings } from '../api/types';
+import type { ProxyMode, RequestCompression, Settings } from '../api/types';
+import { NotificationSettings } from '../components/NotificationSettings';
 import { Page } from '../components/layout/Page';
 import { NumberField } from '../components/arc/number-field/number-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
@@ -17,24 +18,24 @@ import { ACCENT_PRESETS, useAppearance } from '../shell/appearance';
 import { getBridge, isDesktop } from '../shell/bridge';
 import { systemActions } from '../shell/systemActions';
 
-const TABS = ['general', 'tray'] as const;
+const TABS = ['general', 'notifications', 'tray'] as const;
 type SettingsTab = (typeof TABS)[number];
 
-/** Settings: General, plus Tray panel in the desktop app (/settings/:tab). */
+/** Zones offered for token limits besides the server's own (any IANA id the server knows is accepted). */
+const USAGE_TIME_ZONES = [
+  'UTC', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Taipei', 'Asia/Tokyo', 'Asia/Singapore',
+  'Europe/London', 'Europe/Berlin', 'America/New_York', 'America/Los_Angeles',
+];
+
+/** Settings: General and Notifications, plus Tray panel in the desktop app (/settings/:tab). */
 export function SettingsPage() {
   const { t } = useI18n();
   const { tab } = useParams();
   const navigate = useNavigate();
   const trayAvailable = hasTrayPanel();
-  const active: SettingsTab = trayAvailable && TABS.includes(tab as SettingsTab) ? (tab as SettingsTab) : 'general';
+  const active: SettingsTab =
+    TABS.includes(tab as SettingsTab) && (tab !== 'tray' || trayAvailable) ? (tab as SettingsTab) : 'general';
 
-  if (!trayAvailable) {
-    return (
-      <Page title={t('nav.settings')}>
-        <GeneralSettings />
-      </Page>
-    );
-  }
   return (
     <Page title={t('nav.settings')}>
       <Tabs value={active} onValueChange={(v) => navigate(v === 'general' ? '/settings' : `/settings/${v}`, { replace: true })}>
@@ -45,19 +46,32 @@ export function SettingsPage() {
               {t('settings.tab.general')}
             </span>
           </TabsTrigger>
-          <TabsTrigger value="tray">
+          <TabsTrigger value="notifications">
             <span className="inline-flex items-center gap-1.5">
-              <PanelTop className="size-3.5" />
-              {t('settings.tab.tray')}
+              <Bell className="size-3.5" />
+              {t('settings.tab.notifications')}
             </span>
           </TabsTrigger>
+          {trayAvailable && (
+            <TabsTrigger value="tray">
+              <span className="inline-flex items-center gap-1.5">
+                <PanelTop className="size-3.5" />
+                {t('settings.tab.tray')}
+              </span>
+            </TabsTrigger>
+          )}
         </TabsList>
         <TabsContent value="general" className="pt-5">
           <GeneralSettings />
         </TabsContent>
-        <TabsContent value="tray" className="pt-5">
-          <TraySettings />
+        <TabsContent value="notifications" className="pt-5">
+          <NotificationSettings />
         </TabsContent>
+        {trayAvailable && (
+          <TabsContent value="tray" className="pt-5">
+            <TraySettings />
+          </TabsContent>
+        )}
       </Tabs>
     </Page>
   );
@@ -168,6 +182,22 @@ function GeneralSettings() {
             <Row label={t('settings.streamIdle')} detail={t('settings.streamIdleHint')}>
               <DeferredNumber label={t('settings.streamIdle')} value={s.streamIdleTimeoutSec} onCommit={(v) => patch({ streamIdleTimeoutSec: v ?? 300 })} suffix=" s" />
             </Row>
+            <Row label={t('settings.requestCompression')} detail={t('settings.requestCompressionHint')}>
+              <Select
+                className="w-40"
+                ariaLabel={t('settings.requestCompression')}
+                value={s.requestCompression}
+                onChange={(requestCompression: RequestCompression) => patch({ requestCompression })}
+                options={[
+                  { value: 'default', label: t('settings.requestCompression.default') },
+                  { value: 'zstd', label: 'zstd' },
+                  { value: 'gzip', label: 'gzip' },
+                  { value: 'br', label: 'Brotli (br)' },
+                  { value: 'deflate', label: 'deflate' },
+                  { value: 'none', label: t('settings.requestCompression.none') },
+                ]}
+              />
+            </Row>
           </Group>
 
           <ProxySettings settings={s} />
@@ -182,6 +212,29 @@ function GeneralSettings() {
                 // Providers show their effective interval: refresh them after the global one changes.
                 onCommit={(v) => update.mutate({ quotaAutoIntervalMinutes: v ?? 30 }, { onSuccess: () => void qc.invalidateQueries({ queryKey: keys.providers }), onError: (e) => toast(errorText(e), 'error') })}
                 suffix={` ${t('settings.minutes')}`}
+              />
+            </Row>
+            <Row label={t('settings.quota.subscriptionInterval')} detail={t('settings.quota.subscriptionIntervalHint')}>
+              <DeferredNumber
+                label={t('settings.quota.subscriptionInterval')}
+                value={s.subscriptionQuotaIntervalMinutes}
+                onCommit={(v) => patch({ subscriptionQuotaIntervalMinutes: v ?? 30 })}
+                suffix={` ${t('settings.minutes')}`}
+              />
+            </Row>
+          </Group>
+
+          <Group footer={t('settings.usageTimeZone.hint')}>
+            <Row label={t('settings.usageTimeZone')}>
+              <Select
+                className="w-56"
+                ariaLabel={t('settings.usageTimeZone')}
+                value={s.usageTimeZone ?? ''}
+                onChange={(v) => patch({ usageTimeZone: v || null })}
+                options={[
+                  { value: '', label: t('settings.usageTimeZone.system', { zone: s.effectiveUsageTimeZone }) },
+                  ...[...new Set([...USAGE_TIME_ZONES, ...(s.usageTimeZone ? [s.usageTimeZone] : [])])].map((z) => ({ value: z, label: z })),
+                ]}
               />
             </Row>
           </Group>

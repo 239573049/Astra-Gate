@@ -51,12 +51,68 @@ public class GatewayTimingTests
         Assert.True(record.TtftMs > 0);
         Assert.NotNull(record.GenerationMs);
         Assert.True(record.GenerationMs > 0);
-        Assert.Equal(record.TotalMs - record.TtftMs, record.GenerationMs);
+        Assert.Equal(record.TotalMs - record.TtfbMs, record.GenerationMs);
         Assert.Equal(912, record.TotalOutputTokens);
         Assert.Equal(Math.Round(912 / (record.GenerationMs.Value / 1000.0), 2), record.OutputTps);
         var detail = await gw.Host.GetJsonAsync($"/api/requests/{record.Id}");
         Assert.Equal(record.TtftMs, detail["ttftMs"]!.GetValue<long>());
         Assert.Equal(record.OutputTps, detail["outputTps"]!.GetValue<double>());
+    }
+
+    [Fact]
+    public async Task Generation_Is_Timed_From_The_Response_Start_Not_The_First_Visible_Token()
+    {
+        // display "omitted": the thinking block carries no text, only a signature, yet output_tokens include it.
+        var frames = SseParser.ParseAll("""
+            event: message_start
+            data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5.5","content":[],"usage":{"input_tokens":10,"output_tokens":1}}}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig"}}
+
+            event: content_block_stop
+            data: {"type":"content_block_stop","index":0}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
+
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"OK"}}
+
+            event: content_block_stop
+            data: {"type":"content_block_stop","index":1}
+
+            event: message_delta
+            data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":400}}
+
+            event: message_stop
+            data: {"type":"message_stop"}
+
+
+            """.ReplaceLineEndings("\n"));
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeCode, ApiProtocol.Anthropic, _ =>
+        {
+            var content = new StreamContent(new DelayedSseStream(frames));
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        });
+
+        var response = await gw.PostAsync("/v1/messages",
+            """{"model":"claude-opus-5.5","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"hi"}]}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await response.Content.ReadAsStringAsync();
+        var record = await gw.RecordOfAsync(response);
+
+        Assert.Equal(400, record.TotalOutputTokens);
+        // The silent thinking before the text counts: all nine frames (20 ms each) follow the response
+        // headers, only three follow the text.
+        Assert.NotNull(record.GenerationMs);
+        Assert.Equal(record.TotalMs - record.TtfbMs, record.GenerationMs);
+        Assert.True(record.GenerationMs >= 160, $"generation {record.GenerationMs} ms");
+        Assert.Equal(Math.Round(400 / (record.GenerationMs.Value / 1000.0), 2), record.OutputTps);
     }
 
     [Fact]

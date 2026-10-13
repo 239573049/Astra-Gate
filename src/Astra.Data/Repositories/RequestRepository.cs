@@ -2,6 +2,7 @@ using System.Globalization;
 using Dapper;
 using Astra.Core;
 using Astra.Core.Requests;
+using Astra.Core.Tokens;
 
 namespace Astra.Data.Repositories;
 
@@ -216,6 +217,19 @@ public sealed class RequestRepository
             tps_generation_ms = tps_generation_ms + excluded.tps_generation_ms
         """;
 
+    // Daily token counters (plan: alerts-webhooks-token-limits §1.2); same skip rule as the lifetime counters.
+    private const string AddTokenDailySql = """
+        INSERT INTO token_usage_daily(token_id, day, requests, success_requests, cost_nanousd, input_tokens, output_tokens)
+        SELECT @token_id, @day, 1, @success, @cost_nanousd, @input_tokens, @output_tokens
+        WHERE EXISTS (SELECT 1 FROM tokens WHERE id = @token_id)
+        ON CONFLICT(token_id, day) DO UPDATE SET
+            requests = requests + 1,
+            success_requests = success_requests + excluded.success_requests,
+            cost_nanousd = cost_nanousd + excluded.cost_nanousd,
+            input_tokens = input_tokens + excluded.input_tokens,
+            output_tokens = output_tokens + excluded.output_tokens
+        """;
+
     private const string TouchTokenSql = """
         UPDATE tokens SET last_used_at = MAX(COALESCE(last_used_at, ''), @used_at) WHERE id = @token_id
         """;
@@ -258,11 +272,14 @@ public sealed class RequestRepository
 
     /// <summary>
     /// Inserts records and their usage items in ONE transaction (called by the background usage writer), adding
-    /// each record to its token's lifetime counters in that same transaction. Fills missing record ids with fresh ULIDs.
+    /// each record to its token's lifetime and daily counters in that same transaction (requests refused by a token
+    /// limit are not counted, see <see cref="TokenLimits.Counts"/>). Fills missing record ids with fresh ULIDs.
     /// </summary>
-    public async Task InsertBatchAsync(IReadOnlyList<RequestRecord> records, CancellationToken ct = default)
+    /// <param name="usageZone">Time zone of the daily counters' days; null = the process's local zone.</param>
+    public async Task InsertBatchAsync(IReadOnlyList<RequestRecord> records, CancellationToken ct = default, TimeZoneInfo? usageZone = null)
     {
         if (records.Count == 0) return;
+        var zone = usageZone ?? TimeZoneInfo.Local;
         await using var conn = await _factory.OpenAsync(ct);
         await using var tx = await conn.BeginTransactionAsync(ct);
         foreach (var record in records)
@@ -335,7 +352,7 @@ public sealed class RequestRepository
                     note = item.Note,
                 }, transaction: tx);
             }
-            if (record.TokenId is not null)
+            if (record.TokenId is not null && TokenLimits.Counts(record))
             {
                 // TPS only counts requests carrying both a measured generation window and output tokens: a timed
                 // request without usage would add time without tokens and drag the weighted speed down.
@@ -353,6 +370,18 @@ public sealed class RequestRepository
                     tps_output_tokens = timed ? record.TotalOutputTokens : 0,
                     tps_generation_ms = timed ? record.GenerationMs!.Value : 0,
                 }, transaction: tx);
+                await conn.ExecuteAsync(AddTokenDailySql, new
+                {
+                    token_id = record.TokenId,
+                    day = UsagePeriods.DayKey(record.StartedAtUtc, zone),
+                    success = record.Status == RequestStatus.Success ? 1 : 0,
+                    cost_nanousd = record.CostNanoUsd,
+                    input_tokens = record.TotalInputTokens,
+                    output_tokens = record.TotalOutputTokens,
+                }, transaction: tx);
+            }
+            if (record.TokenId is not null)
+            {
                 await conn.ExecuteAsync(TouchTokenSql, new
                 {
                     token_id = record.TokenId,
