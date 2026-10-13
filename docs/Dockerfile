@@ -43,7 +43,6 @@ ENV NODE_ENV=production \
 # releases survive image upgrades:  docker run -v /srv/astra:/app/data …
 # The plugin market (published packages and entries) lives in the same volume. Optional env:
 #   PLUGIN_UPLOAD_TOKEN      Bearer token for publishing plugins (unset = publishing disabled)
-#   PLUGIN_MARKET_UPSTREAM   upstream registry URL ("off" = none)
 #   GITHUB_TOKEN             raises the plugin search's GitHub rate limit
 RUN mkdir -p /app/data
 # Next detects the workspace root (/repo), so the standalone tree mirrors it:

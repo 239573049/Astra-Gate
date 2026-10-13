@@ -88,7 +88,6 @@ curl -X DELETE "https://astra-gate.si/api/plugin-market/entries?package=@scope/n
 | 变量 | 说明 |
 | --- | --- |
 | `PLUGIN_UPLOAD_TOKEN` | 发布与下架用的 Bearer token；不设则发布接口关闭 |
-| `PLUGIN_MARKET_UPSTREAM` | 社区清单的地址，默认 astragate-community/astra-gate-plugins 的 `registry.json`；设为 `off` 则只用站内条目和镜像内置的快照 |
 | `GITHUB_TOKEN` | 可选，提高搜索访问 GitHub 的限额 |
 
 让 Astra 使用自建的市场：在 **设置 → 插件市场** 里填 `https://你的域名/api/plugin-market/registry.json`，或设置环境变量 `ASTRA_PLUGIN_MARKET`。搜索地址取注册表地址旁边的 `search`，所以注册表地址需要以 `/registry.json` 结尾；否则搜索不可用，其余功能不受影响。

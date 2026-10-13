@@ -42,7 +42,6 @@ pnpm --filter @aidotnet/docs build
 | 环境变量 | 作用 |
 | --- | --- |
 | `PLUGIN_UPLOAD_TOKEN` | 发布 / 下架用的 Bearer token；未设置时写接口返回 503（与 `CLIENT_UPLOAD_TOKEN` 分开） |
-| `PLUGIN_MARKET_UPSTREAM` | 上游清单地址，默认 astragate-community/astra-gate-plugins 的 `registry.json`；设为 `off` 只用站内条目和仓库内置快照 |
 | `GITHUB_TOKEN` | 可选，提高搜索代理访问 GitHub 的限额 |
 
 `lib/plugin-market/upstream-fallback.json` 是上游清单的内置快照（上游不可达且没有缓存时使用），内容与

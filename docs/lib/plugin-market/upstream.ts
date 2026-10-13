@@ -14,13 +14,16 @@ import { PLUGIN_KINDS, type HostedTarball, type PluginKind, type RegistryListing
  * (upstream-fallback.json) stand in when upstream can't be reached.
  */
 
-const DEFAULT_UPSTREAM = 'https://raw.githubusercontent.com/astragate-community/astra-gate-plugins/main/registry.json';
+/** The one source of the community list: fixed, not configurable (no environment variable can point the site elsewhere). */
+const UPSTREAM = 'https://raw.githubusercontent.com/astragate-community/astra-gate-plugins/main/registry.json';
 const FRESH_MS = 6 * 60 * 60 * 1000;
 const RETRY_MS = 60 * 1000;
 const NPM_REGISTRY = 'https://registry.npmjs.org';
 
 interface UpstreamCache {
   fetchedAt: number;
+  /** the address the plugins came from: a copy of another list's is never served as this one's */
+  source: string;
   plugins: RegistryListing[];
 }
 
@@ -29,12 +32,6 @@ let inflight: Promise<RegistryListing[]> | null = null;
 
 function cacheFile(): string {
   return path.join(marketRoot(), 'upstream.json');
-}
-
-function upstreamUrl(): string | null {
-  const v = process.env.PLUGIN_MARKET_UPSTREAM?.trim();
-  if (v === 'off') return null;
-  return v || DEFAULT_UPSTREAM;
 }
 
 /** A tarball the registry lists: an https address, the hash it must have; anything else is left out. */
@@ -117,7 +114,8 @@ async function enrich(all: RegistryListing[]): Promise<void> {
 async function readCache(): Promise<UpstreamCache | null> {
   try {
     const parsed = JSON.parse(await fsp.readFile(cacheFile(), 'utf8')) as UpstreamCache;
-    if (typeof parsed.fetchedAt === 'number' && Array.isArray(parsed.plugins)) return parsed;
+    // a copy without a source (written before it was recorded) or from another address is the old list's
+    if (typeof parsed.fetchedAt === 'number' && Array.isArray(parsed.plugins) && parsed.source === UPSTREAM) return parsed;
   } catch {
     /* none yet */
   }
@@ -125,39 +123,36 @@ async function readCache(): Promise<UpstreamCache | null> {
 }
 
 async function refresh(): Promise<RegistryListing[]> {
-  const stale = memory ?? (await readCache());
+  const stale = memory?.source === UPSTREAM ? memory : await readCache();
   if (stale && Date.now() - stale.fetchedAt < FRESH_MS) {
     memory = stale;
     return stale.plugins;
   }
-  const url = upstreamUrl();
-  if (url) {
-    try {
-      const plugins = parseUpstream(await fetchJson(url, 6000));
-      if (plugins.length > 0) {
-        // enrichment mutates entries; carry over what a failed npm call can't refill
-        const before = new Map((stale?.plugins ?? []).map((p) => [p.package, p]));
-        for (const p of plugins) {
-          const old = before.get(p.package);
-          if (old) Object.assign(p, { latest: old.latest, description: old.description, license: old.license });
-        }
-        await enrich(plugins);
-        memory = { fetchedAt: Date.now(), plugins };
-        try {
-          await fsp.mkdir(marketRoot(), { recursive: true });
-          await fsp.writeFile(cacheFile(), JSON.stringify(memory));
-        } catch {
-          /* a read-only volume only costs the persisted copy */
-        }
-        return plugins;
+  try {
+    const plugins = parseUpstream(await fetchJson(UPSTREAM, 6000));
+    if (plugins.length > 0) {
+      // enrichment mutates entries; carry over what a failed npm call can't refill
+      const before = new Map((stale?.plugins ?? []).map((p) => [p.package, p]));
+      for (const p of plugins) {
+        const old = before.get(p.package);
+        if (old) Object.assign(p, { latest: old.latest, description: old.description, license: old.license });
       }
-    } catch {
-      /* fall through to the copy fetched last, then the shipped snapshot */
+      await enrich(plugins);
+      memory = { fetchedAt: Date.now(), source: UPSTREAM, plugins };
+      try {
+        await fsp.mkdir(marketRoot(), { recursive: true });
+        await fsp.writeFile(cacheFile(), JSON.stringify(memory));
+      } catch {
+        /* a read-only volume only costs the persisted copy */
+      }
+      return plugins;
     }
+  } catch {
+    /* fall through to the copy fetched last, then the shipped snapshot */
   }
   const plugins = stale?.plugins ?? parseUpstream(fallback);
   // asked again in a minute
-  memory = { fetchedAt: Date.now() - FRESH_MS + RETRY_MS, plugins };
+  memory = { fetchedAt: Date.now() - FRESH_MS + RETRY_MS, source: UPSTREAM, plugins };
   return plugins;
 }
 
