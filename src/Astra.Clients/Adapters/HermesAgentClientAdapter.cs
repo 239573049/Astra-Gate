@@ -1,3 +1,4 @@
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -12,6 +13,12 @@ namespace Astra.Clients.Adapters;
 /// switched to <c>chat_completions</c> while enabled. Per the Hermes docs config.yaml is the source of truth
 /// for model and endpoint (OPENAI_BASE_URL in .env only applies to the openai-api provider). Every
 /// original value is restored on disable; restart Hermes (or start a new session) after switching.
+/// <para>
+/// When the selected model's native protocol is Anthropic, <c>api_mode</c> is set to <c>anthropic_messages</c> (Hermes strips
+/// the trailing <c>/v1</c> before its Anthropic SDK appends <c>/v1/messages</c>, so the same base serves both). Responses is not
+/// offered: for <c>provider: custom</c> Hermes ignores <c>codex_responses</c> unless the URL is OpenAI's own
+/// (<c>_resolve_plain_custom_api_mode</c>), so such a model stays on Chat Completions and the gateway translates.
+/// </para>
 /// </summary>
 public sealed class HermesAgentClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -22,6 +29,7 @@ public sealed class HermesAgentClientAdapter(ClientEnvironment env, IClientConfi
     private const string ApiKeyPath = "model.api_key";
     private const string ApiModePath = "model.api_mode";
     private const string ChatApiMode = "chat_completions";
+    private const string AnthropicApiMode = "anthropic_messages";
 
     /// <summary>Every key this adapter may write (restored on disable when tracked).</summary>
     private static readonly string[] ManagedPaths = [SectionPath, ProviderPath, BaseUrlPath, ApiKeyPath, "model.default", "model.model", ApiModePath];
@@ -61,6 +69,10 @@ public sealed class HermesAgentClientAdapter(ClientEnvironment env, IClientConfi
         // Older configs write the model as a bare string ("model: provider/name"): replace that scalar with a
         // mapping as a whole (the original string comes back on disable). Once converted, later re-applies keep
         // owning the whole section so its recorded value stays exact.
+        var mode = !string.IsNullOrEmpty(ctx.Model)
+                   && ModelProtocols(ctx, ApiProtocol.OpenAIChat).GetValueOrDefault(ctx.Model) == ApiProtocol.Anthropic
+            ? AnthropicApiMode
+            : ChatApiMode;
         var section = CurrentValue(ConfigFile, ConfigFileFormat.Yaml, SectionPath);
         var bareModel = Store.Get(Kind, ConfigFile, SectionPath) is { OriginalValueJson: var original }
             ? StringOf(original)
@@ -74,6 +86,7 @@ public sealed class HermesAgentClientAdapter(ClientEnvironment env, IClientConfi
                 ["base_url"] = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1",
                 ["api_key"] = ctx.LocalKey,
             };
+            if (mode != ChatApiMode) mapping["api_mode"] = mode;
             return BuildPlan([new ConfigChange(ConfigFile, ConfigFileFormat.Yaml, SectionPath, section, mapping.ToJsonString())]);
         }
 
@@ -84,9 +97,13 @@ public sealed class HermesAgentClientAdapter(ClientEnvironment env, IClientConfi
             Key(ApiKeyPath, ctx.LocalKey),
         };
         if (!string.IsNullOrEmpty(ctx.Model)) changes.Add(Key(ModelPath, ctx.Model));
-        // Anthropic / Responses wire modes would not match the OpenAI chat endpoint we hand out.
+        // The wire mode follows the selected model; any other mode the user had would not match the endpoint we hand out.
         var apiMode = CurrentValue(ConfigFile, ConfigFileFormat.Yaml, ApiModePath);
-        if (apiMode is not null && StringOf(apiMode) != ChatApiMode) changes.Add(Key(ApiModePath, ChatApiMode));
+        if (mode != ChatApiMode) changes.Add(Key(ApiModePath, mode));
+        else if (apiMode is not null && StringOf(apiMode) != ChatApiMode)
+            changes.Add(Store.Get(Kind, ConfigFile, ApiModePath) is { OriginalAbsent: true }
+                ? new ConfigChange(ConfigFile, ConfigFileFormat.Yaml, ApiModePath, apiMode, null) // the mode Astra added goes again
+                : Key(ApiModePath, ChatApiMode));
         return BuildPlan(changes);
     }
 

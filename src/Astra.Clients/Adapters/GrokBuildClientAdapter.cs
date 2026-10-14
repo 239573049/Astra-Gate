@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -13,6 +14,11 @@ namespace Astra.Clients.Adapters;
 /// <c>api_key</c>, <c>api_backend</c> ("responses") and <c>context_window</c>. Astra adds a
 /// "astra" profile and flips <c>models.default</c>; disabling restores the file byte-identically
 /// (a profile we created is removed again). Restart the CLI after switching.
+/// <para>
+/// <c>api_backend</c> is chosen per profile from <c>chat_completions</c>, <c>responses</c> and <c>messages</c> (Anthropic), each
+/// appended to the same <c>…/v1</c> base, so the profile uses the selected model's native protocol (Responses when it has
+/// none Grok speaks) and its context window when Astra knows it.
+/// </para>
 /// </summary>
 public sealed class GrokBuildClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -59,6 +65,16 @@ public sealed class GrokBuildClientAdapter(ClientEnvironment env, IClientConfigS
                 CurrentValue(file, ConfigFileFormat.Toml, DefaultKeyPath), JsonString(TomlRaw(ProfileId))),
         };
         var model = string.IsNullOrEmpty(ctx.Model) ? DefaultModel : ctx.Model;
+        var protocol = string.IsNullOrEmpty(ctx.Model) ? ApiProtocol.OpenAIResponses
+            : ModelProtocols(ctx, ApiProtocol.OpenAIResponses).GetValueOrDefault(model, ApiProtocol.OpenAIResponses);
+        var backend = TomlRaw(protocol switch
+        {
+            ApiProtocol.OpenAIChat => "chat_completions",
+            ApiProtocol.Anthropic => "messages",
+            _ => "responses",
+        });
+        var contextWindow = (PositiveLong(ModelHints(ctx).GetValueOrDefault(model)?["contextWindow"]) ?? DefaultContextWindow)
+            .ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (CurrentValue(file, ConfigFileFormat.Toml, ProfileTablePath, ConfigChangeKind.Table) is null)
         {
             var items = new JsonObject
@@ -67,8 +83,8 @@ public sealed class GrokBuildClientAdapter(ClientEnvironment env, IClientConfigS
                 ["base_url"] = TomlRaw(ctx.GatewayBaseUrl.TrimEnd('/') + "/v1"),
                 ["name"] = TomlRaw("Astra"),
                 ["api_key"] = TomlRaw(ctx.LocalKey),
-                ["api_backend"] = TomlRaw("responses"),
-                ["context_window"] = DefaultContextWindow.ToString(),
+                ["api_backend"] = backend,
+                ["context_window"] = contextWindow,
             };
             changes.Add(new ConfigChange(file, ConfigFileFormat.Toml, ProfileTablePath, null, items.ToJsonString(),
                 ConfigChangeKind.Table));
@@ -80,6 +96,8 @@ public sealed class GrokBuildClientAdapter(ClientEnvironment env, IClientConfigS
                          ("base_url", TomlRaw(ctx.GatewayBaseUrl.TrimEnd('/') + "/v1")),
                          ("api_key", TomlRaw(ctx.LocalKey)),
                          ("model", TomlRaw(model)),
+                         ("api_backend", backend),
+                         ("context_window", contextWindow),
                      })
             {
                 var fieldPath = $"{ProfileTablePath}.{key}";
@@ -99,7 +117,7 @@ public sealed class GrokBuildClientAdapter(ClientEnvironment env, IClientConfigS
         if (before is not null)
             changes.Add(new ConfigChange(file, ConfigFileFormat.Toml, DefaultKeyPath, before, null));
         // Fields refreshed inside a pre-existing profile table were tracked individually; restore them.
-        foreach (var field in new[] { "base_url", "api_key", "model" })
+        foreach (var field in RefreshedFields)
         {
             var fieldPath = $"{ProfileTablePath}.{field}";
             if (Store.Get(Kind, file, fieldPath) is null) continue;
@@ -140,6 +158,9 @@ public sealed class GrokBuildClientAdapter(ClientEnvironment env, IClientConfigS
     }
 
     protected override bool IsTableKeyPath(string keyPath) => keyPath == ProfileTablePath;
+
+    /// <summary>The fields refreshed one by one inside a profile table that already exists.</summary>
+    private static readonly string[] RefreshedFields = ["base_url", "api_key", "model", "api_backend", "context_window"];
 
     private static string TomlRaw(string value) => Editing.TomlValueText.ForString(value);
 }

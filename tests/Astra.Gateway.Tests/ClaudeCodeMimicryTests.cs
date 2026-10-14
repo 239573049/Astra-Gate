@@ -10,6 +10,15 @@ namespace Astra.Gateway.Tests;
 /// </summary>
 public class ClaudeCodeMimicryTests
 {
+    [Theory]
+    [InlineData("claude-cli/2.1.299 (external, cli)", "2.1.299")]
+    [InlineData("claude-cli/1.0.0", "1.0.0")]
+    [InlineData("claude-cli/0.25.1 (external, cli)", null)] // Qwen Code borrows the UA with its own version
+    [InlineData("qwen-code/0.25.1", null)]
+    [InlineData(null, null)]
+    public void VersionFromUserAgent_OnlyTakesClaudeCodesOwnVersions(string? userAgent, string? expected) =>
+        Assert.Equal(expected, ClaudeCodeMimicry.VersionFromUserAgent(userAgent));
+
     [Fact]
     public void Body_Carries_The_Three_Block_System_And_The_Metadata_Identity()
     {

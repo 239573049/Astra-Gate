@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Astra.Clients.Editing;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -11,7 +12,9 @@ namespace Astra.Clients.Adapters;
 /// <c>customModels</c> array of <c>~/.factory/settings.json</c> — <c>{"model":…,"displayName":"Astra: &lt;id&gt;",
 /// "baseUrl":"&lt;gateway&gt;/v1","apiKey":…,"provider":"generic-chat-completion-api"}</c> (camelCase schema from
 /// docs.factory.ai/model-independence/byok; <c>generic-chat-completion-api</c> is the OpenAI Chat Completions type, the
-/// plain <c>openai</c> type is the Responses API). Entries are addressed with a selector on <c>displayName</c>
+/// plain <c>openai</c> type is the Responses API and <c>anthropic</c> the Messages API, whose base has no <c>/v1</c>). Each entry
+/// carries its own <c>provider</c>, so a model goes over its native protocol when it is one of those three, and
+/// <c>maxContextLimit</c> / <c>maxOutputTokens</c> when Astra knows them. Entries are addressed with a selector on <c>displayName</c>
 /// (<see cref="JsoncEditor.Selector"/>), which survives a gateway port change and never matches the user's own models.
 /// Astra does not select a default model: the id Droid derives for a custom model is not documented, so the user picks
 /// it in <c>/model</c> (the top-level <c>model</c> key is left alone). Droid documents no directory override.
@@ -46,8 +49,9 @@ public sealed class DroidClientAdapter(ClientEnvironment env, IClientConfigState
     public override ConfigChangePlan PlanEnable(EnableContext ctx)
     {
         var file = ConfigFile;
-        var baseUrl = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1";
+        var root = ctx.GatewayBaseUrl.TrimEnd('/');
         var hints = ModelHints(ctx);
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var changes = new List<ConfigChange>();
         var wanted = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, _) in ModelEntries(ctx))
@@ -59,10 +63,16 @@ public sealed class DroidClientAdapter(ClientEnvironment env, IClientConfigState
             {
                 ["model"] = id,
                 ["displayName"] = DisplayPrefix + id,
-                ["baseUrl"] = baseUrl,
+                ["baseUrl"] = protocols[id] == ApiProtocol.Anthropic ? root : root + "/v1",
                 ["apiKey"] = ctx.LocalKey,
-                ["provider"] = "generic-chat-completion-api",
+                ["provider"] = protocols[id] switch
+                {
+                    ApiProtocol.OpenAIResponses => "openai",
+                    ApiProtocol.Anthropic => "anthropic",
+                    _ => "generic-chat-completion-api",
+                },
             };
+            if (PositiveLong(info?["contextWindow"]) is { } context) entry["maxContextLimit"] = context;
             if (PositiveLong(info?["maxOutputTokens"]) is { } maxOutput) entry["maxOutputTokens"] = maxOutput;
             if (BoolHint(info?["vision"]) == false) entry["noImageSupport"] = true;
             var path = ModelPath(id);

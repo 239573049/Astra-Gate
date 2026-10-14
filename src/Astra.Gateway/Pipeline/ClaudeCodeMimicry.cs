@@ -209,12 +209,16 @@ public static class ClaudeCodeMimicry
         return Convert.ToHexStringLower(SHA256.HashData(input))[..3];
     }
 
-    /// <summary>The three-part version in a <c>claude-cli/&lt;version&gt; …</c> User-Agent; null otherwise.</summary>
+    /// <summary>
+    /// The three-part version in a <c>claude-cli/&lt;version&gt; …</c> User-Agent; null otherwise. A 0.x version is not Claude
+    /// Code's (its releases start at 1.0): tools that borrow the User-Agent for Anthropic endpoints — Qwen Code sends
+    /// <c>claude-cli/&lt;its own version&gt;</c> — must not have their version passed upstream as the CLI's.
+    /// </summary>
     public static string? VersionFromUserAgent(string? userAgent)
     {
         if (string.IsNullOrEmpty(userAgent)) return null;
-        var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"claude-cli/(\d+\.\d+\.\d+)");
-        return match.Success ? match.Groups[1].Value : null;
+        var match = System.Text.RegularExpressions.Regex.Match(userAgent, @"claude-cli/(\d+)\.\d+\.\d+");
+        return match.Success && match.Groups[1].Value.TrimStart('0').Length > 0 ? match.Value["claude-cli/".Length..] : null;
     }
 
     /// <summary>A stable per-account device id (64-char lowercase hex) — never changes for an account.</summary>

@@ -367,8 +367,9 @@ public class ClientApiTests
         (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{provider.Id}/models", new { modelIds = new[] { "gpt-5-mini" } });
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(["gpt-5", "gpt-5-mini"], CopilotModels(providers));
+        // The provider serves Responses only, so both clients list its models under their Responses provider.
         var yaml = Astra.Clients.Editing.YamlEditor.ParseToJson(await File.ReadAllTextAsync(minimax))!;
-        Assert.Equal(["gpt-5", "gpt-5-mini"], yaml["custom_provider"]!["astra"]!["models"]!.AsObject().Select(m => m.Key).Order(StringComparer.Ordinal));
+        Assert.Equal(["gpt-5", "gpt-5-mini"], yaml["custom_provider"]!["astra-responses"]!["models"]!.AsObject().Select(m => m.Key).Order(StringComparer.Ordinal));
 
         foreach (var kind in new[] { "copilot-cli", "minimax-code" })
         {
@@ -432,9 +433,86 @@ public class ClientApiTests
         Assert.Equal(ClientKinds.All, list!.AsArray().Select(c => c!["kind"]!.GetValue<string>()));
     }
 
+    [Fact]
+    public async Task Per_Model_Protocols_Follow_The_Providers_Endpoints_Unless_The_User_Chose_One()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host); // a Responses-only provider, like a ChatGPT (Codex) subscription
+        var chat = new Provider { Id = Ulid.NewUlid(), Name = "Chat + Messages", AuthScheme = AuthSchemes.None,
+            Endpoints =
+            [
+                new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://chat.invalid/v1" },
+                new ProviderEndpoint { Protocol = ApiProtocol.Anthropic, BaseUrl = "https://chat.invalid" },
+            ],
+            PreferredUpstreamProtocols = [ApiProtocol.OpenAIChat, ApiProtocol.Anthropic] };
+        await host.Db.Providers.InsertAsync(chat);
+        await host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = chat.Id, ModelId = "deepseek-v4" });
+        // A model the provider serves over Messages only (the way Copilot's Claude models are recorded).
+        await host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = chat.Id, ModelId = "claude-sonnet-5", UpstreamProtocols = [ApiProtocol.Anthropic] });
+        var (bound, _) = await host.SendAsync(HttpMethod.Put, "/api/clients/nextcowork/bindings",
+            new { bindings = new[] { new { providerId = provider.Id }, new { providerId = chat.Id } } });
+        Assert.Equal(HttpStatusCode.OK, bound);
+
+        var (status, info) = await host.SendAsync(HttpMethod.Post, "/api/clients/nextcowork/enable", new { providerId = provider.Id });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["openai-responses"], info!["extras"]!["models"]!["gpt-5"]!["protocols"]!.AsArray().Select(p => p!.GetValue<string>()));
+        var file = Path.Combine(host.ClientHome, ".next-cowork", "providers.json");
+        var models = JsonNode.Parse(await File.ReadAllTextAsync(file))!["providers"]!["astra"]!["models"]!;
+        Assert.Equal("openai-responses", models["gpt-5"]!["protocolOverride"]!.GetValue<string>());
+        Assert.Null(models["deepseek-v4"]!["protocolOverride"]);
+        Assert.Equal("anthropic", models["claude-sonnet-5"]!["protocolOverride"]!.GetValue<string>());
+
+        // The user sends gpt-5 over chat (the gateway translates); the choice is kept with the client.
+        var extras = info["extras"]!.DeepClone().AsObject();
+        extras[ClientProtocols.ExtrasKey] = new JsonObject { ["gpt-5"] = "openai-chat" };
+        (status, info) = await host.SendAsync(HttpMethod.Post, "/api/clients/nextcowork/enable", new JsonObject { ["extras"] = extras.DeepClone() });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("openai-chat", info!["extras"]![ClientProtocols.ExtrasKey]!["gpt-5"]!.GetValue<string>());
+        models = JsonNode.Parse(await File.ReadAllTextAsync(file))!["providers"]!["astra"]!["models"]!;
+        Assert.Null(models["gpt-5"]!["protocolOverride"]);
+        Assert.Equal("anthropic", models["claude-sonnet-5"]!["protocolOverride"]!.GetValue<string>());
+
+        // A protocol the client cannot be given is refused before anything is written.
+        extras[ClientProtocols.ExtrasKey] = new JsonObject { ["gpt-5"] = "gemini" };
+        var before = await File.ReadAllTextAsync(file);
+        (status, var error) = await host.SendAsync(HttpMethod.Post, "/api/clients/nextcowork/enable", new JsonObject { ["extras"] = extras.DeepClone() });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("gemini", error!["error"]!.GetValue<string>());
+        Assert.Equal(before, await File.ReadAllTextAsync(file));
+    }
+
+    [Fact]
+    public async Task A_Protocol_Chosen_In_NextCoWork_Is_Recorded_And_Kept_When_The_Model_List_Changes()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host); // Responses-only: gpt-5 gets protocolOverride openai-responses
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/nextcowork/enable", new { providerId = provider.Id });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var file = Path.Combine(host.ClientHome, ".next-cowork", "providers.json");
+
+        // The user switches gpt-5 to chat in NextCoWork, which also writes its resolved alias back.
+        var json = JsonNode.Parse(await File.ReadAllTextAsync(file))!;
+        var gpt = json["providers"]!["astra"]!["models"]!["gpt-5"]!.AsObject();
+        gpt["protocolOverride"] = "openai-chat";
+        gpt["thinkingConfig"] = new JsonObject { ["mode"] = "effort", ["defaultEnabled"] = true };
+        await File.WriteAllTextAsync(file, json.ToJsonString());
+        var info = (await host.GetJsonAsync("/api/clients")).AsArray().Single(c => c!["kind"]!.GetValue<string>() == "nextcowork")!;
+        Assert.Equal("enabled", info["status"]!.GetValue<string>()); // not drift
+
+        // A model added to the provider rewrites the entry: the user's protocol and NextCoWork's fields stay.
+        var (added, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{provider.Id}/models", new { modelIds = new[] { "gpt-5-mini" } });
+        Assert.Equal(HttpStatusCode.OK, added);
+        var models = JsonNode.Parse(await File.ReadAllTextAsync(file))!["providers"]!["astra"]!["models"]!;
+        Assert.Null(models["gpt-5"]!["protocolOverride"]); // chat is the provider's protocol: no override needed
+        Assert.Equal("effort", models["gpt-5"]!["thinkingConfig"]!["mode"]!.GetValue<string>());
+        Assert.Equal("openai-responses", models["gpt-5-mini"]!["protocolOverride"]!.GetValue<string>());
+        var record = await host.Db.Clients.GetAsync("nextcowork");
+        Assert.Equal("openai-chat", JsonNode.Parse(record!.ExtraJson!)![ClientProtocols.ExtrasKey]!["gpt-5"]!.GetValue<string>());
+    }
+
     private static List<string> CopilotModels(string providers) =>
         JsonNode.Parse(File.ReadAllText(providers))!["models"]!.AsArray()
-            .Where(m => m!["provider"]!.GetValue<string>() == "astra")
+            .Where(m => m!["provider"]!.GetValue<string>() is "astra" or "astra-responses" or "astra-anthropic")
             .Select(m => m!["id"]!.GetValue<string>()).Order(StringComparer.Ordinal).ToList();
 
     [Fact]

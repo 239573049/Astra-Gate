@@ -24,7 +24,9 @@ public sealed class EnableContext
     /// claude-desktop "roleMap" ({"sonnet":…,"opus":…,"haiku":…}); opencode, pi, minimax-code, copilot-cli and
     /// vscode-copilot and every other client in <c>ClientKinds.WithModelList</c> (crush, qwen-code, droid, kimi-code, zed,
     /// vscode-insiders, vscodium, omp, mimo-code, deepseek-harness, workbuddy, workbuddy-ai, nextcowork, paseo, codex) "models" ({"…": {"id":…,"name":…, optional "contextWindow", "maxOutputTokens",
-    /// "vision", "reasoning"}}, the bound provider's enabled models).
+    /// "vision", "reasoning", "pdf", "protocols"}}, the bound provider's enabled models; "protocols" lists the protocol ids
+    /// the gateway passes the model through in untranslated, preferred first) and "protocolOverrides" ({"&lt;model&gt;":
+    /// "&lt;protocol id&gt;"}, the user's per-model choices — see <c>ClientProtocols</c> and <c>ClientAdapterBase.ModelProtocols</c>).
     /// </summary>
     public JsonObject? Extras { get; init; }
 
@@ -103,6 +105,13 @@ public sealed class ConfigChange
     public ConfigChangeKind Kind { get; }
     public string? Before { get; }
     public string? After { get; }
+
+    /// <summary>
+    /// How a restore decides that the current value (first argument, source text) is still what Astra wrote (second, the
+    /// recorded JSON): null compares them exactly. An adapter whose client rewrites parts of an Astra-owned value in normal
+    /// use passes a comparison that looks only at the parts Astra owns (see <c>ClientAdapterBase.ValueStillOurs</c>).
+    /// </summary>
+    public Func<string?, string?, bool>? StillOurs { get; init; }
 
     public override string ToString() => $"{Path.GetFileName(File)}:{KeyPath}: {Before ?? "<absent>"} -> {After ?? "<absent>"}";
 }

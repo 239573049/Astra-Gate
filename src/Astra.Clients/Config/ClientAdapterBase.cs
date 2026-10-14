@@ -1,4 +1,5 @@
 using Astra.Clients.Editing;
+using Astra.Core;
 using Astra.Core.Clients;
 
 namespace Astra.Clients.Config;
@@ -78,6 +79,15 @@ public abstract class ClientAdapterBase : IClientAdapter
     protected virtual bool IsClientManagedKey(string file, string keyPath) => false;
 
     /// <summary>
+    /// Whether the current value of a key (source text) is still what Astra wrote (<paramref name="appliedJson"/>). Exact by
+    /// default; an adapter whose client rewrites parts of an Astra-owned value in normal use (NextCoWork normalises the
+    /// models it lists) compares only the parts Astra owns, and hands the same comparison to restores through
+    /// <see cref="ConfigChange.StillOurs"/>.
+    /// </summary>
+    protected virtual bool ValueStillOurs(string file, string keyPath, ConfigFileFormat format, string? current, string? appliedJson) =>
+        ConfigValueCodec.EqualsValue(format, current, appliedJson);
+
+    /// <summary>
     /// JSON config files the client reads with a strict JSON parser, where a comment or trailing comma (both fine for
     /// the editors here) stops the client from reading the file. <see cref="BuildStatus"/> reports those as repairs.
     /// </summary>
@@ -115,7 +125,7 @@ public abstract class ClientAdapterBase : IClientAdapter
             var format = FormatOfPath(entry.FilePath);
             var kind = IsTableKeyPath(entry.KeyPath) ? ConfigChangeKind.Table : ConfigChangeKind.Key;
             var current = CurrentValue(entry.FilePath, format, entry.KeyPath, kind);
-            var matches = ConfigValueCodec.EqualsValue(format, current, entry.AppliedValueJson);
+            var matches = ValueStillOurs(entry.FilePath, entry.KeyPath, format, current, entry.AppliedValueJson);
             if (matches) appliedKeys.Add(entry.KeyPath);
             else if (!IsClientManagedKey(entry.FilePath, entry.KeyPath)) drifted.Add(entry.KeyPath);
         }
@@ -169,20 +179,52 @@ public abstract class ClientAdapterBase : IClientAdapter
         return hints;
     }
 
+    /// <summary>
+    /// The protocol each listed model (<see cref="ModelEntries"/>) is configured with: the user's choice for it (extras
+    /// "protocolOverrides") when the client can speak it, else the first of its native protocols (the "protocols" hint,
+    /// preferred first) the client can speak, else <paramref name="fallback"/> — the client's default, which the gateway
+    /// translates. <paramref name="supported"/> defaults to <see cref="ClientProtocols.For"/> of this client;
+    /// <paramref name="accepts"/> narrows it per model id where the client decides by the id (Crush sends only some ids
+    /// over Responses).
+    /// </summary>
+    protected IReadOnlyDictionary<string, ApiProtocol> ModelProtocols(EnableContext ctx, ApiProtocol fallback,
+        IReadOnlyList<ApiProtocol>? supported = null, Func<string, ApiProtocol, bool>? accepts = null)
+    {
+        var protocolsOfClient = supported ?? ClientProtocols.For(Kind);
+        var hints = ModelHints(ctx);
+        var overrides = ClientProtocols.Overrides(ctx.Extras);
+        var result = new Dictionary<string, ApiProtocol>(StringComparer.Ordinal);
+        foreach (var (id, _) in ModelEntries(ctx))
+        {
+            bool Usable(ApiProtocol p) => protocolsOfClient.Contains(p) && (accepts?.Invoke(id, p) ?? true);
+            if (overrides.TryGetValue(id, out var chosen) && Usable(chosen))
+            {
+                result[id] = chosen;
+                continue;
+            }
+            var native = hints.TryGetValue(id, out var info) && info["protocols"] is System.Text.Json.Nodes.JsonArray protocols
+                ? protocols.Select(p => p is System.Text.Json.Nodes.JsonValue v && v.TryGetValue(out string? s) && ApiProtocols.TryParse(s, out var parsed) ? parsed : (ApiProtocol?)null)
+                    .FirstOrDefault(p => p is { } value && Usable(value))
+                : null;
+            result[id] = native ?? fallback;
+        }
+        return result;
+    }
+
     /// <summary>A positive integer hint (e.g. <c>contextWindow</c>), or null when missing or not a positive number.</summary>
-    protected static long? PositiveLong(System.Text.Json.Nodes.JsonNode? node) =>
+    protected internal static long? PositiveLong(System.Text.Json.Nodes.JsonNode? node) =>
         node is System.Text.Json.Nodes.JsonValue v && v.GetValueKind() == System.Text.Json.JsonValueKind.Number
         && long.TryParse(v.ToJsonString(), System.Globalization.CultureInfo.InvariantCulture, out var l) && l > 0 ? l : null;
 
     /// <summary>A boolean hint (e.g. <c>vision</c>), or null when missing or not a boolean.</summary>
-    protected static bool? BoolHint(System.Text.Json.Nodes.JsonNode? node) =>
+    protected internal static bool? BoolHint(System.Text.Json.Nodes.JsonNode? node) =>
         node is System.Text.Json.Nodes.JsonValue v && v.TryGetValue(out bool b) ? b : null;
 
     /// <summary>True when Astra recorded a value for the key and the file still holds exactly that value (not edited since).</summary>
     protected bool StillOurs(string file, ConfigFileFormat format, string keyPath, ConfigChangeKind kind = ConfigChangeKind.Key)
     {
         var entry = Store.Get(Kind, file, keyPath);
-        return entry is not null && ConfigValueCodec.EqualsValue(format, CurrentValue(file, format, keyPath, kind), entry.AppliedValueJson);
+        return entry is not null && ValueStillOurs(file, keyPath, format, CurrentValue(file, format, keyPath, kind), entry.AppliedValueJson);
     }
 
     /// <summary>The string a JSON value text holds, or null when it is absent or not a JSON string.</summary>

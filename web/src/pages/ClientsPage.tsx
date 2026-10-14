@@ -28,10 +28,11 @@ import {
   useStartClientInstall,
   useTokens,
 } from '../api/hooks';
-import type { ClientBinding, ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
+import type { ApiProtocol, ClientBinding, ClientInfo, ClientInstallJob, ClientKind, ConfigPreview, Provider } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
 import { ClaudeDirectPanel } from '../components/ClaudeDirectPanel';
 import { ClientOptionsGroup } from '../components/ClientOptionsGroup';
+import { ClientProtocolsGroup } from '../components/ClientProtocolsGroup';
 import { clientName, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
@@ -40,6 +41,7 @@ import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/format';
 import { clientOptionsKey, clientOptionsOf, type ClientOptionValues } from '../lib/clientOptions';
+import { protocolModelsOf, protocolOverridesKey, protocolOverridesOf } from '../lib/clientProtocols';
 import { CLAUDE_CODE_MODELS, modelSlotsKey, modelSlotsOf, type ModelSlots } from '../lib/modelSlots';
 import { ROLES, roleKey, rolesOf, type RoleMap } from '../lib/roleMap';
 import { dirnameOf, systemActions } from '../shell/systemActions';
@@ -99,7 +101,7 @@ export function ClientsPage() {
 const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'nextcowork',
-  'paseo', 'muse-code', 'codex',
+  'paseo', 'muse-code', 'codex', 'grok-build', 'hermes-agent',
 ]);
 
 /** The built-in clients in their order, then the clients agent plugins add ("plugin-<id>"), by name. */
@@ -289,12 +291,22 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   const savedOptions = clientOptionsOf(client.extras, optionDescriptors);
   const [options, setOptions] = useState<ClientOptionValues>(savedOptions);
   const optionsChanged = clientOptionsKey(options) !== clientOptionsKey(savedOptions);
+  // Per-model protocols (extras.protocolOverrides) for clients that can use more than one protocol.
+  const supportedProtocols = client.protocols ?? [];
+  const protocolModels = supportedProtocols.length > 1 ? protocolModelsOf(client.extras) : [];
+  const savedOverrides = protocolOverridesOf(client.extras);
+  const [overrides, setOverrides] = useState<Record<string, ApiProtocol>>(savedOverrides);
+  const overridesChanged = protocolOverridesKey(overrides) !== protocolOverridesKey(savedOverrides);
   const extras = isDesktopClient
     ? { ...client.extras, roleMap: roles }
     : isClaudeCode
       ? { ...client.extras, models: slots, options }
-      : optionDescriptors.length > 0
-        ? { ...client.extras, options }
+      : optionDescriptors.length > 0 || supportedProtocols.length > 1
+        ? {
+            ...client.extras,
+            ...(optionDescriptors.length > 0 ? { options } : {}),
+            ...(supportedProtocols.length > 1 ? { protocolOverrides: overrides } : {}),
+          }
         : undefined;
 
   useEffect(() => setModel(client.selectedModel ?? null), [client.kind, client.selectedModel]);
@@ -306,6 +318,8 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   useEffect(() => setSlots(modelSlotsOf(client.extras)), [client.kind, modelSlotsKey(savedSlots)]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setOptions(clientOptionsOf(client.extras, client.options)), [client.kind, clientOptionsKey(savedOptions)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setOverrides(protocolOverridesOf(client.extras)), [client.kind, protocolOverridesKey(savedOverrides)]);
 
   const saveAccount = () => {
     if (!client.providerId) return;
@@ -536,6 +550,19 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         <>
           <ClientOptionsGroup descriptors={optionDescriptors} values={options} onChange={setOptions} enabled={client.enabled} />
           {client.enabled && optionsChanged && (
+            <div className="-mt-3 mb-5 flex justify-end">
+              <Button size="sm" variant="primary" onClick={() => setEnableOpen(true)}>
+                {t('common.apply')}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
+
+      {!soon && protocolModels.length > 0 && (
+        <>
+          <ClientProtocolsGroup models={protocolModels} supported={supportedProtocols} values={overrides} onChange={setOverrides} enabled={client.enabled} />
+          {client.enabled && overridesChanged && (
             <div className="-mt-3 mb-5 flex justify-end">
               <Button size="sm" variant="primary" onClick={() => setEnableOpen(true)}>
                 {t('common.apply')}

@@ -31,6 +31,13 @@ namespace Astra.Clients.Adapters;
 /// <see cref="YamlEditor"/>). A row Astra creates is removed again on disable, but only while it holds nothing but Astra's
 /// keys. A home-level <c>$DSH_HOME/cordis.patch.yml</c> row for <c>llm-pi-ai</c> would be applied after the profile's and is
 /// warned about.
+/// <para>
+/// A route speaks one wire protocol (<c>api</c>: <c>openai-completions</c> | <c>openai-responses</c> | <c>anthropic-messages</c>;
+/// no Gemini), so models whose native protocol is Responses or Anthropic are listed under routes of their own,
+/// <c>providers.astra-responses</c> and <c>providers.astra-anthropic</c>, which exist only while they have models. Harness hands
+/// the configured <c>baseURL</c> to the SDK unchanged, and pi-ai's Anthropic client appends <c>/v1/messages</c> itself, so that
+/// route takes the gateway root. Limits Astra does not know are left to the route defaults (262144 / 32768).
+/// </para>
 /// </summary>
 public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -39,10 +46,6 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
 
     public const string KeyVariable = "ASTRA_GATEWAY_API_KEY";
 
-    public const long DefaultContextWindow = 128_000;
-
-    public const long DefaultMaxTokens = 16_384;
-
     private const string LlmRowId = "llm-pi-ai";
     private const string LlmRowName = "@deepseek-ai/dsh-llm-pi-ai";
     private const string DefaultRowId = "agent-default-model";
@@ -50,7 +53,17 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
 
     private static readonly string LlmRow = JsoncEditor.Selector(("id", LlmRowId));
     private static readonly string DefaultRow = JsoncEditor.Selector(("id", DefaultRowId));
-    private static readonly string ProviderPath = $"{LlmRow}.config.providers.{ProviderId}";
+    private static readonly string ProviderPath = ProviderPathOf(ProviderId);
+
+    /// <summary>The routes Astra writes, one per protocol: key and display name.</summary>
+    private static readonly (ApiProtocol Protocol, string Key, string Name)[] Routes =
+    [
+        (ApiProtocol.OpenAIChat, ProviderId, "Astra"),
+        (ApiProtocol.OpenAIResponses, ProviderId + "-responses", "Astra (Responses)"),
+        (ApiProtocol.Anthropic, ProviderId + "-anthropic", "Astra (Anthropic)"),
+    ];
+
+    private static string ProviderPathOf(string key) => $"{LlmRow}.config.providers.{key}";
     private static readonly string DefaultProviderPath = $"{DefaultRow}.config.provider";
     private static readonly string DefaultModelPath = $"{DefaultRow}.config.model";
     private static readonly string DefaultEffortPath = $"{DefaultRow}.config.reasoningEffort";
@@ -101,15 +114,9 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
             throw new EditorException($"DeepSeek Harness has no desktop or web profile in {Path.Combine(HomeDir, "profiles")} yet; start it once, then enable it here.");
         var models = ModelsJson(ctx);
         if (models.Count == 0) throw new EditorException("The bound provider has no enabled models to offer to DeepSeek Harness.");
-        var provider = new JsonObject
-        {
-            ["displayName"] = "Astra",
-            ["apiKeyEnv"] = KeyVariable,
-            ["api"] = "openai-completions",
-            ["baseURL"] = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1",
-            ["models"] = models,
-        };
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var selected = !string.IsNullOrEmpty(ctx.Model) && models.Any(m => m!["id"]!.GetValue<string>() == ctx.Model) ? ctx.Model : null;
+        var selectedRoute = selected is null ? ProviderId : Routes.First(r => r.Protocol == protocols[selected]).Key;
 
         var changes = new List<ConfigChange>
         {
@@ -118,10 +125,30 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
         foreach (var file in files)
         {
             changes.AddRange(EnsureRow(file, LlmRow, LlmRowId, LlmRowName));
-            changes.Add(Key(file, ProviderPath, provider.ToJsonString()));
+            foreach (var (protocol, key, name) in Routes)
+            {
+                var own = new JsonArray([.. models.Where(m => protocols[m!["id"]!.GetValue<string>()] == protocol).Select(m => m!.DeepClone())]);
+                var path = ProviderPathOf(key);
+                if (protocol != ApiProtocol.OpenAIChat && own.Count == 0)
+                {
+                    // Not needed (any more): a route Astra added goes again.
+                    if (Store.Get(Kind, file, path) is not null && CurrentValue(file, ConfigFileFormat.Yaml, path) is { } before)
+                        changes.Add(new ConfigChange(file, ConfigFileFormat.Yaml, path, before, null));
+                    continue;
+                }
+                var route = new JsonObject
+                {
+                    ["displayName"] = name,
+                    ["apiKeyEnv"] = KeyVariable,
+                    ["api"] = PiAiModels.ApiOf(protocol),
+                    ["baseURL"] = PiAiModels.BaseUrlFor(ctx.GatewayBaseUrl, protocol),
+                    ["models"] = own,
+                };
+                changes.Add(Key(file, path, route.ToJsonString()));
+            }
             if (selected is null) continue;
             changes.AddRange(EnsureRow(file, DefaultRow, DefaultRowId, DefaultRowName));
-            changes.Add(Key(file, DefaultProviderPath, JsonString(ProviderId)));
+            changes.Add(Key(file, DefaultProviderPath, JsonString(selectedRoute)));
             changes.Add(Key(file, DefaultModelPath, JsonString(selected)));
             // A custom model declares no effort levels; an effort it does not declare is refused.
             if (CurrentValue(file, ConfigFileFormat.Yaml, DefaultEffortPath) is { } effort)
@@ -137,8 +164,11 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
         {
             if (!Env.FileExists(file)) continue;
             // A default model the user picked afterwards (another provider) is theirs and stays.
-            var ownsDefault = StringOf(CurrentValue(file, ConfigFileFormat.Yaml, DefaultProviderPath)) == ProviderId;
-            var owned = ownsDefault ? new[] { DefaultModelPath, DefaultProviderPath, ProviderPath } : [ProviderPath];
+            var defaultRoute = StringOf(CurrentValue(file, ConfigFileFormat.Yaml, DefaultProviderPath));
+            var ownsDefault = Routes.Any(r => r.Key == defaultRoute);
+            var extraRoutes = Routes.Skip(1).Select(r => ProviderPathOf(r.Key)).Where(path => Store.Get(Kind, file, path) is not null);
+            string[] routes = [ProviderPath, .. extraRoutes];
+            var owned = ownsDefault ? [DefaultModelPath, DefaultProviderPath, .. routes] : routes;
             foreach (var path in owned)
             {
                 if (CurrentValue(file, ConfigFileFormat.Yaml, path) is { } current)
@@ -147,7 +177,7 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
             // The reasoning effort dropped on enable comes back from its recorded original.
             if (ownsDefault && Store.Get(Kind, file, DefaultEffortPath) is not null)
                 changes.Add(new ConfigChange(file, ConfigFileFormat.Yaml, DefaultEffortPath, null, null));
-            AddRowRemoval(changes, file, LlmRow, ["config", "providers", ProviderId]);
+            AddRowRemoval(changes, file, LlmRow, [.. Routes.Select(r => new[] { "config", "providers", r.Key })]);
             if (ownsDefault) AddRowRemoval(changes, file, DefaultRow, ["config", "provider"], ["config", "model"]);
         }
         if (CurrentValue(EnvFile, ConfigFileFormat.Env, KeyVariable) is { } key)
@@ -218,10 +248,12 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
         foreach (var (id, name) in ModelEntries(ctx))
         {
             hints.TryGetValue(id, out var info);
-            var context = PositiveLong(info?["contextWindow"]) ?? DefaultContextWindow;
-            var maxTokens = PositiveLong(info?["maxOutputTokens"]) ?? DefaultMaxTokens;
-            if (maxTokens >= context) maxTokens = Math.Max(1, context / 4);
-            var model = new JsonObject { ["id"] = id, ["name"] = name ?? id, ["contextWindow"] = context, ["maxTokens"] = maxTokens };
+            var model = new JsonObject { ["id"] = id, ["name"] = name ?? id };
+            var context = PositiveLong(info?["contextWindow"]);
+            var maxTokens = PositiveLong(info?["maxOutputTokens"]);
+            if (context is not null && maxTokens >= context) maxTokens = Math.Max(1, context.Value / 4);
+            if (context is not null) model["contextWindow"] = context;
+            if (maxTokens is not null) model["maxTokens"] = maxTokens;
             if (BoolHint(info?["vision"]) == true) model["input"] = new JsonArray("text", "image");
             models.AddNode(model);
         }

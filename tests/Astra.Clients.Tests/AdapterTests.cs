@@ -345,6 +345,56 @@ public class OpenCodeClientAdapterTests : IDisposable
     }
 
     [Fact]
+    public void Models_UseTheirNativeProtocolsSdk_AndCarryLimitsModalitiesReasoning()
+    {
+        var extras = new JsonObject
+        {
+            ["models"] = new JsonObject
+            {
+                ["gpt-5.5"] = new JsonObject { ["id"] = "gpt-5.5", ["contextWindow"] = 400_000, ["maxOutputTokens"] = 128_000, ["vision"] = true, ["reasoning"] = true },
+                ["claude-sonnet-5"] = new JsonObject { ["id"] = "claude-sonnet-5", ["contextWindow"] = 200_000, ["vision"] = true, ["pdf"] = true, ["reasoning"] = true },
+                ["deepseek-v4"] = new JsonObject { ["id"] = "deepseek-v4", ["vision"] = false, ["reasoning"] = false },
+                ["gemini-3-pro"] = new JsonObject { ["id"] = "gemini-3-pro" },
+            },
+        };
+        TestGateway.Native(extras, "gpt-5.5", "openai-responses", "openai-chat");
+        TestGateway.Native(extras, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extras, "deepseek-v4", "openai-chat", "anthropic");
+        TestGateway.Native(extras, "gemini-3-pro", "gemini");
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-open-2", null, extras)));
+
+        var node = JsonNode.Parse(_home.ReadFile(_config), nodeOptions: new JsonNodeOptions(),
+            documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
+        var ours = node["provider"]!["astra"]!;
+        Assert.Equal("@ai-sdk/openai-compatible", ours["npm"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", ours["options"]!["baseURL"]!.GetValue<string>());
+        var models = ours["models"]!;
+
+        var gpt = models["gpt-5.5"]!;
+        Assert.Equal("@ai-sdk/openai", gpt["provider"]!["npm"]!.GetValue<string>());
+        Assert.Equal(400_000, gpt["limit"]!["context"]!.GetValue<long>());
+        Assert.Equal(128_000, gpt["limit"]!["output"]!.GetValue<long>());
+        Assert.Equal(["text", "image"], gpt["modalities"]!["input"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal(["text"], gpt["modalities"]!["output"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.True(gpt["reasoning"]!.GetValue<bool>());
+
+        var claude = models["claude-sonnet-5"]!;
+        Assert.Equal("@ai-sdk/anthropic", claude["provider"]!["npm"]!.GetValue<string>());
+        Assert.Equal(0, claude["limit"]!["output"]!.GetValue<long>());
+        Assert.Equal(["text", "image", "pdf"], claude["modalities"]!["input"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Null(claude["reasoning"]); // budgets would come out negative without an output limit
+
+        var deepseek = models["deepseek-v4"]!;
+        Assert.Null(deepseek["provider"]);
+        Assert.Null(deepseek["limit"]);
+        Assert.Equal(["text"], deepseek["modalities"]!["input"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.False(deepseek["reasoning"]!.GetValue<bool>());
+
+        Assert.Null(models["gemini-3-pro"]!["provider"]); // no Gemini SDK on the shared /v1 base: the gateway translates chat
+        Assert.False(_applier.Disable(_adapter.PlanDisable()).HasDrift);
+    }
+
+    [Fact]
     public void ModelsRefresh_RewritesOnlyOurModelList()
     {
         _applier.Apply(_adapter.PlanEnable(Ctx()));
@@ -613,6 +663,38 @@ public class GrokBuildClientAdapterTests : IDisposable
         var report = _applier.Disable(_adapter.PlanDisable());
         Assert.False(report.HasDrift);
         Assert.Equal(originalBytes, _home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void Profile_UsesTheSelectedModelsNativeBackend_AndFollowsAChangedSelection()
+    {
+        var extras = new JsonObject
+        {
+            ["models"] = new JsonObject
+            {
+                ["claude-sonnet-5"] = new JsonObject { ["id"] = "claude-sonnet-5", ["contextWindow"] = 1_000_000 },
+                ["deepseek-v4"] = new JsonObject { ["id"] = "deepseek-v4" },
+                ["gemini-3-pro"] = new JsonObject { ["id"] = "gemini-3-pro" },
+            },
+        };
+        TestGateway.Native(extras, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extras, "deepseek-v4", "openai-chat");
+        TestGateway.Native(extras, "gemini-3-pro", "gemini");
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-grok-5", "claude-sonnet-5", extras)));
+        var text = _home.ReadFile(_config);
+        Assert.Contains("api_backend = \"messages\"", text);
+        Assert.Contains("context_window = 1000000", text);
+
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-grok-5", "deepseek-v4", extras)));
+        text = _home.ReadFile(_config);
+        Assert.Contains("api_backend = \"chat_completions\"", text);
+        Assert.Contains("context_window = 256000", text);
+
+        // Grok has no Gemini backend: Responses, translated by the gateway.
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-grok-5", "gemini-3-pro", extras)));
+        Assert.Contains("api_backend = \"responses\"", _home.ReadFile(_config));
+        Assert.False(_applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.False(_home.FileExists(_config));
     }
 
     [Fact]

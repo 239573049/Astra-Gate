@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 import type { ContextMenuItem, MenuCommand, ThemeSource } from './shared/chrome';
+import type { LoginItemState } from './shared/loginItem';
 import type { TrayPrefs } from './shared/prefs';
 import type { TrayPanelCommand, TrayPanelState } from './shared/trayPanel';
 import type { UiApplyOutcome, UpdateSummary } from './update';
@@ -50,6 +51,13 @@ const bridge = {
   startService: () => ipcRenderer.invoke('astra:start-service') as Promise<{ ok: boolean; error: string | null }>,
   /** Stops and starts the local server, e.g. so a changed listen address (config.json) takes effect. */
   restartService: () => ipcRenderer.invoke('astra:restart-service') as Promise<{ ok: boolean; error: string | null }>,
+  /** Launch the app at login, in the tray (macOS / Windows login item, Linux autostart entry); the tray menu's switch too. */
+  loginItem: {
+    get: () => ipcRenderer.invoke('astra:login-item-get') as Promise<LoginItemState>,
+    /** Resolves with the state afterwards: unchanged when the system refused. */
+    set: (enabled: boolean) => ipcRenderer.invoke('astra:login-item-set', enabled) as Promise<LoginItemState>,
+    onChanged: (cb: (state: LoginItemState) => void) => subscribe('astra:login-item-changed', cb),
+  },
   /** In-app update entry (Settings › About): check, and apply server/desktop updates. */
   updates: {
     check: () => ipcRenderer.invoke('astra:update-check') as Promise<UpdateSummary>,

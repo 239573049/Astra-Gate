@@ -208,4 +208,13 @@ public class SeedTests
         Assert.Contains(seed.Models, m => m.Pricing?.ContextTiers is { Count: > 0 });
         Assert.Contains(seed.Models, m => m.Pricing?.ServiceTiers?.ContainsKey("priority") == true);
     }
+
+    [Theory]
+    [InlineData("deepseek-v4.1-flash")]
+    [InlineData("deepseek-v4.1-flash-expires-on-0910")]
+    public void Seed_aliases_link_deepseek_v4_1_flash_ids(string upstreamId)
+    {
+        var candidates = SeedCatalog.Current.Models.Select(m => new ModelIdMatcher.Candidate(m.Id, m.Aliases));
+        Assert.Equal("deepseek-flash", ModelIdMatcher.Match(upstreamId, candidates));
+    }
 }

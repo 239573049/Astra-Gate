@@ -16,6 +16,7 @@ import type {
   AccountImportInfo,
   AccountImportRequest,
   AuthStatus,
+  AutostartStatus,
   BackupInfo,
   BillingResult,
   BillingSimulateRequest,
@@ -99,6 +100,7 @@ export const keys = {
   settings: ['settings'] as const,
   tunnel: ['tunnel'] as const,
   listen: ['listen'] as const,
+  autostart: ['autostart'] as const,
   update: ['update'] as const,
   models: (search?: string, vendor?: string) => ['models', search ?? '', vendor ?? ''] as const,
   model: (id: string) => ['model', id] as const,
@@ -211,6 +213,19 @@ export function useUpdateListen() {
   return useMutation({
     mutationFn: (host: string) => api<ListenStatus>('PUT', '/api/server/listen', { host }),
     onSuccess: (s) => qc.setQueryData(keys.listen, s),
+  });
+}
+
+/** Whether the service starts at login (the entry `astra autostart` manages). */
+export const useAutostart = () =>
+  useQuery({ queryKey: keys.autostart, queryFn: () => api<AutostartStatus>('GET', '/api/server/autostart') });
+
+/** Adds or removes the login entry; it applies at the next login and starts nothing now. */
+export function useSetAutostart() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => api<AutostartStatus>('PUT', '/api/server/autostart', { enabled }),
+    onSuccess: (s) => qc.setQueryData(keys.autostart, s),
   });
 }
 

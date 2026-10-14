@@ -15,13 +15,17 @@ namespace Astra.Server.Api;
 public sealed record ClientDetectionDto(bool Installed, bool ConfigExists, string? Version, IReadOnlyList<string> ConfigPaths);
 /// <summary>One provider bound to a client; the list order is the routing order (see <see cref="ClientRouting"/>).</summary>
 public sealed record ClientBindingDto(string ProviderId, string? AccountId);
-/// <summary>ProviderId / AccountId describe the primary binding (first of <see cref="Bindings"/>).</summary>
+/// <summary>
+/// ProviderId / AccountId describe the primary binding (first of <see cref="Bindings"/>). Protocols: the protocols a model of
+/// this client can be configured with (<see cref="ClientProtocols.For"/>), default first; null when every model uses
+/// <see cref="Protocol"/>. The user's per-model choices are <c>extras.protocolOverrides</c>.
+/// </summary>
 public sealed record ClientInfoDto(
     string Kind, string Name, ApiProtocol Protocol, string Availability, string? AvailabilityReason, string Mode,
     ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
     JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
     bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null,
-    List<ClientOptionDescriptor>? Options = null, IReadOnlyList<ConfigRepairDto>? Repairs = null);
+    List<ClientOptionDescriptor>? Options = null, IReadOnlyList<ConfigRepairDto>? Repairs = null, List<ApiProtocol>? Protocols = null);
 /// <summary>A config file the client cannot read as it is (problem "trailing-comma" | "comment", first at line); POST …/repair fixes it.</summary>
 public sealed record ConfigRepairDto(string File, string Problem, int Line);
 public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
@@ -318,6 +322,11 @@ public sealed class ClientService(
                 if (options is not JsonObject optionsObject) throw new AdminApiException(400, "extras.options must be an object");
                 if (ClientOptions.Validate(kind, optionsObject) is { } invalid) throw new AdminApiException(400, invalid);
             }
+            if (input["extras"]?[ClientProtocols.ExtrasKey] is { } overrides)
+            {
+                if (overrides is not JsonObject overridesObject) throw new AdminApiException(400, "extras.protocolOverrides must be an object");
+                if (ClientProtocols.Validate(kind, overridesObject) is { } invalid) throw new AdminApiException(400, invalid);
+            }
             next.ExtraJson = input["extras"]?.ToJsonString();
         }
         // Plan §7.5: the gateway maps Claude Desktop's role ids, so at least one role must point at a model.
@@ -348,7 +357,7 @@ public sealed class ClientService(
             // Every bound provider's models and mapped ids, each id once (ClientRouting): the gateway routes each to its
             // provider. A mapped id carries its target model's capabilities under its own name.
             var list = new JsonObject();
-            foreach (var (id, _, pm, effective) in await routing.ListModelsAsync(targets, ct))
+            foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ct))
             {
                 var entry = new JsonObject { ["id"] = id, ["name"] = id == pm.ModelId ? effective.DisplayName : id };
                 // Capability hints for clients that declare per-model limits (VS Code Copilot); omitted when unknown.
@@ -356,9 +365,22 @@ public sealed class ClientService(
                 if (effective.MaxOutputTokens is { } maxOut) entry["maxOutputTokens"] = maxOut;
                 if (effective.Capabilities.Vision is { } vision) entry["vision"] = vision;
                 if (effective.Capabilities.Reasoning is { } reasoning) entry["reasoning"] = reasoning;
+                if (effective.Capabilities.Pdf is { } pdf) entry["pdf"] = pdf;
+                // The protocols this model passes through in untranslated, preferred first; clients that can choose a
+                // protocol per model use the first one they speak (ClientProtocols).
+                var protocols = GatewayRouter.PassthroughProtocols(target.Provider, pm.UpstreamProtocols);
+                if (protocols.Count > 0) entry["protocols"] = new JsonArray([.. protocols.Select(p => (JsonNode)p.ToId())]);
                 list[id] = entry;
             }
             extras["models"] = list;
+        }
+        // A protocol the user changed in the client's own UI since Astra last wrote it is their choice: it joins the
+        // client's overrides (persisted with the extras), so the rewrite keeps it instead of putting the native one back.
+        if (_registry.Get(kind) is IClientProtocolChoices choices && choices.ChangedProtocolChoices() is { Count: > 0 } changed)
+        {
+            if (extras[ClientProtocols.ExtrasKey] is not JsonObject overrides)
+                extras[ClientProtocols.ExtrasKey] = overrides = new JsonObject();
+            foreach (var (model, protocol) in changed) overrides[model] = protocol.ToId();
         }
         // Claude Code's 1M option: models known to have a smaller window must not get the [1m] suffix.
         HashSet<string>? without1M = null;
@@ -442,7 +464,8 @@ public sealed class ClientService(
             record?.TokenId ?? TokenIds.Default, install,
             bindings.Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList(),
             ClientOptions.For(adapter.Kind).ToList(),
-            (inspected?.Repairs ?? []).Select(r => new ConfigRepairDto(r.File, r.Problem, r.Line)).ToList());
+            (inspected?.Repairs ?? []).Select(r => new ConfigRepairDto(r.File, r.Problem, r.Line)).ToList(),
+            ClientProtocols.IsPerModel(adapter.Kind) ? [.. ClientProtocols.For(adapter.Kind)] : null);
     }
 
     /// <summary>

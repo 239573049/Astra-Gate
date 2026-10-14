@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -19,6 +20,13 @@ namespace Astra.Clients.Adapters;
 /// Anthropic server-side tool a gateway upstream does not serve. The whole provider is one state key, so a refreshed model
 /// list replaces the old one wholesale. Paseo picks direct edits up on <c>paseo reload</c> or a daemon restart.
 /// </para>
+/// <para>
+/// A provider entry runs one agent, so it speaks one protocol: models whose native protocol is Responses get a second entry,
+/// <c>agents.providers.astra-codex</c>, that extends Paseo's <c>codex</c> provider — it launches the user's Codex CLI with
+/// <c>OPENAI_BASE_URL</c> (the gateway root; Paseo adds <c>/v1</c> and <c>wire_api = "responses"</c>) and <c>OPENAI_API_KEY</c>
+/// (getpaseo/paseo <c>codex-app-server-agent.ts</c>). That entry exists only while it has models; the Claude entry lists the
+/// rest (all of them when every model is Responses-native, since Claude Code reaches those too, translated).
+/// </para>
 /// </summary>
 public sealed class PaseoClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -31,6 +39,8 @@ public sealed class PaseoClientAdapter(ClientEnvironment env, IClientConfigState
     private string ConfigFile => Path.Combine(HomeDir, "config.json");
 
     private static string ProviderPath => $"agents.providers.{ProviderId}";
+
+    private static string CodexProviderPath => $"agents.providers.{ProviderId}-codex";
 
     public override string Kind => ClientKinds.Paseo;
 
@@ -62,16 +72,46 @@ public sealed class PaseoClientAdapter(ClientEnvironment env, IClientConfigState
             },
             ["disallowedTools"] = new JsonArray("WebSearch"),
         };
-        var models = ModelsJson(ctx);
+        var protocols = ModelProtocols(ctx, ApiProtocol.Anthropic);
+        var entries = ModelEntries(ctx);
+        var codex = entries.Where(e => protocols[e.Id] == ApiProtocol.OpenAIResponses).ToList();
+        var claude = entries.Where(e => protocols[e.Id] != ApiProtocol.OpenAIResponses).ToList();
+        var models = ModelsJson(claude.Count > 0 ? claude : entries, ctx.Model);
         if (models.Count > 0) provider["models"] = models;
-        var before = CurrentValue(ConfigFile, ConfigFileFormat.Json, ProviderPath);
-        return BuildPlan([new ConfigChange(ConfigFile, ConfigFileFormat.Json, ProviderPath, before, provider.ToJsonString())]);
+        var changes = new List<ConfigChange>
+        {
+            new(ConfigFile, ConfigFileFormat.Json, ProviderPath, CurrentValue(ConfigFile, ConfigFileFormat.Json, ProviderPath), provider.ToJsonString()),
+        };
+        var codexBefore = CurrentValue(ConfigFile, ConfigFileFormat.Json, CodexProviderPath);
+        if (codex.Count > 0)
+        {
+            var codexProvider = new JsonObject
+            {
+                ["extends"] = "codex",
+                ["label"] = "Astra (Codex)",
+                ["description"] = "Codex through the Astra gateway, for models served over the Responses API",
+                ["env"] = new JsonObject
+                {
+                    ["OPENAI_BASE_URL"] = ctx.GatewayBaseUrl.TrimEnd('/'),
+                    ["OPENAI_API_KEY"] = ctx.LocalKey,
+                },
+                ["models"] = ModelsJson(codex, ctx.Model),
+            };
+            changes.Add(new ConfigChange(ConfigFile, ConfigFileFormat.Json, CodexProviderPath, codexBefore, codexProvider.ToJsonString()));
+        }
+        else if (codexBefore is not null && Store.Get(Kind, ConfigFile, CodexProviderPath) is not null)
+            changes.Add(new ConfigChange(ConfigFile, ConfigFileFormat.Json, CodexProviderPath, codexBefore, null));
+        return BuildPlan(changes);
     }
 
     public override ConfigChangePlan PlanDisable()
     {
-        var before = CurrentValue(ConfigFile, ConfigFileFormat.Json, ProviderPath);
-        return BuildPlan(before is null ? [] : [new ConfigChange(ConfigFile, ConfigFileFormat.Json, ProviderPath, before, null)]);
+        var changes = new List<ConfigChange>();
+        if (CurrentValue(ConfigFile, ConfigFileFormat.Json, ProviderPath) is { } before)
+            changes.Add(new ConfigChange(ConfigFile, ConfigFileFormat.Json, ProviderPath, before, null));
+        if (Store.Get(Kind, ConfigFile, CodexProviderPath) is not null && CurrentValue(ConfigFile, ConfigFileFormat.Json, CodexProviderPath) is { } codex)
+            changes.Add(new ConfigChange(ConfigFile, ConfigFileFormat.Json, CodexProviderPath, codex, null));
+        return BuildPlan(changes);
     }
 
     public override ConfigChangePlan PlanPurge() => PlanDisable();
@@ -84,13 +124,12 @@ public sealed class PaseoClientAdapter(ClientEnvironment env, IClientConfigState
     }
 
     /// <summary>
-    /// The bound provider's models as Paseo profile models: <c>[{"id", "label", optional "isDefault"}]</c>. The selected
-    /// model (else the first) is the default.
+    /// Models as Paseo profile models: <c>[{"id", "label", optional "isDefault"}]</c>. The selected model (else the first)
+    /// is the default.
     /// </summary>
-    private static JsonArray ModelsJson(EnableContext ctx)
+    private static JsonArray ModelsJson(IReadOnlyList<(string Id, string? Name)> entries, string? selected)
     {
-        var entries = ModelEntries(ctx);
-        var defaultId = entries.Any(e => e.Id == ctx.Model) ? ctx.Model : entries.FirstOrDefault().Id;
+        var defaultId = entries.Any(e => e.Id == selected) ? selected : entries.FirstOrDefault().Id;
         var models = new JsonArray();
         foreach (var (id, name) in entries)
         {

@@ -119,8 +119,11 @@ initial delay instead of a shared scheduler:
 15. `cli/src/lib/server-lifecycle.ts:166-176` — resolves the binary (`resolveServerBinary`: env >
     install.json > repo dev build > platform package), records `install.json`
     (`serverPath`/`serverVersion`), and spawns `<bin> serve --port <p> --host <h> --started-by cli`
-    (detached + log fds, `--foreground` keeps stdio). `cli/src/lib/autostart.ts:98` uses
-    `serve --started-by autostart` with **no** `--port`, so config.json wins there
+    (detached + log fds, `--foreground` keeps stdio). `cli/src/lib/autostart.ts:109` (and the server's
+    own `Autostart/AutostartService.cs`, the settings switch) uses `serve --started-by autostart` with
+    **no** `--port`, so config.json wins there. On Windows the Run key starts the console binary in a
+    window of its own: `Program.Main` lets go of it (`Autostart/WindowsConsole.cs`, `FreeConsole`) and
+    sends stdout/stderr to `logs/server-stdout.log`
 16. `cli/src/lib/server-lifecycle.ts:waitForStartedServer` — polls runtime.json (pid alive) and
     `checkHealth`, 400 ms until a 20 s deadline; the address is taken from runtime.json **not** from
     the port we passed, because the server may have drifted away from it (`:107-126`)

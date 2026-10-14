@@ -35,6 +35,7 @@ public static class Program
                     Console.WriteLine(Json.SerializeApi(new Api.VersionDto(ServerOptions.Version, ServerOptions.ApiVersion)));
                     return 0;
                 case "serve":
+                    if (OperatingSystem.IsWindows() && Autostart.WindowsConsole.StartedByAutostart(rest)) Autostart.WindowsConsole.Detach(paths);
                     return await ServeAsync(paths, rest);
                 case "migrate":
                     return await Commands.MigrateAsync(paths);

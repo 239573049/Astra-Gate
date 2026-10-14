@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -10,6 +11,14 @@ namespace Astra.Clients.Adapters;
 /// <c>opencode.json</c>/<c>opencode.jsonc</c> and optionally sets top-level <c>model</c> to
 /// "astra/&lt;id&gt;". Astra's own providers keep working untouched. Refreshing the model list
 /// rewrites only <c>provider.astra.models</c> (<see cref="PlanModelsRefresh"/>).
+/// <para>
+/// A model whose native protocol is Responses or Anthropic names its own AI SDK package (<c>models.&lt;id&gt;.provider.npm</c>
+/// = <c>@ai-sdk/openai</c> / <c>@ai-sdk/anthropic</c>, the way OpenCode Zen mixes protocols); both append their path to the
+/// same <c>options.baseURL</c> (<c>…/v1</c>), which every OpenCode version reads. Gemini is not offered: its SDK needs a
+/// <c>/v1beta</c> base, and a per-model <c>provider.api</c> loses to <c>options.baseURL</c>. Per-model limits, input
+/// modalities and the reasoning flag are written when Astra knows them — without them OpenCode never compacts (context 0),
+/// caps output at 32k, drops images and offers no reasoning variants.
+/// </para>
 /// </summary>
 public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store, OpenCodeFlavour flavour)
     : ClientAdapterBase(env, store)
@@ -139,15 +148,36 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
     {
         var list = ctx.ExtraObject("models");
         if (list is null || list.Count == 0) return null;
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var models = new JsonObject();
         foreach (var model in list)
         {
             if (model.Value is not JsonObject m) continue;
             var id = m["id"]?.GetValue<string>();
             if (string.IsNullOrEmpty(id)) continue;
-            models[id] = new JsonObject();
+            var entry = new JsonObject();
             var name = m["name"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(name)) models[id]!["name"] = name;
+            if (!string.IsNullOrEmpty(name)) entry["name"] = name;
+            var protocol = protocols.GetValueOrDefault(id, ApiProtocol.OpenAIChat);
+            if (protocol is ApiProtocol.OpenAIResponses or ApiProtocol.Anthropic)
+                entry["provider"] = new JsonObject { ["npm"] = protocol == ApiProtocol.Anthropic ? "@ai-sdk/anthropic" : "@ai-sdk/openai" };
+            var output = PositiveLong(m["maxOutputTokens"]);
+            // limit needs both numbers; an unknown output stays OpenCode's default (0 = its 32k cap).
+            if (PositiveLong(m["contextWindow"]) is { } context) entry["limit"] = new JsonObject { ["context"] = context, ["output"] = output ?? 0 };
+            var vision = BoolHint(m["vision"]);
+            var pdf = BoolHint(m["pdf"]);
+            if (vision is not null || pdf is not null)
+            {
+                // Listing modalities replaces the default (text) entirely, and MiMo Code requires both lists.
+                var input = new JsonArray("text");
+                if (vision == true) input.Add((JsonNode)"image");
+                if (pdf == true) input.Add((JsonNode)"pdf");
+                entry["modalities"] = new JsonObject { ["input"] = input, ["output"] = new JsonArray("text") };
+            }
+            // Anthropic thinking budgets are derived from limit.output; without it they come out negative.
+            if (BoolHint(m["reasoning"]) is { } reasoning && (!reasoning || protocol != ApiProtocol.Anthropic || output is not null))
+                entry["reasoning"] = reasoning;
+            models[id] = entry;
         }
         return models.ToJsonString();
     }

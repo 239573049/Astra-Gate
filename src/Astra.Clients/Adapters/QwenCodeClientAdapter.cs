@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Astra.Clients.Editing;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -18,6 +19,12 @@ namespace Astra.Clients.Adapters;
 /// touched. A custom provider id would need <c>providerProtocol</c> (read once at startup), so the built-in
 /// <c>openai</c> type is used instead. No directory override exists for <c>~/.qwen</c>. The model list is hot-reloaded;
 /// selecting the model may need a restart.
+/// <para>
+/// Each model goes to the array of its native protocol: <c>openai</c> (Chat Completions, or Responses with
+/// <c>"wireApi":"responses"</c>), <c>anthropic</c> (base without <c>/v1</c>: the SDK appends <c>/v1/messages</c>) or
+/// <c>gemini</c> (the gateway root: the SDK adds <c>/v1beta/models/…</c>). The selection names the matching auth type
+/// (<c>openai</c>, <c>openai-responses</c>, <c>anthropic</c>, <c>gemini</c>) — what Qwen's own <c>/model</c> writes.
+/// </para>
 /// </summary>
 public sealed class QwenCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -28,9 +35,13 @@ public sealed class QwenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
 
     private static string KeyPath => "env." + KeyVariable;
 
-    private static string ModelPathPrefix => "modelProviders.openai.[envKey=" + KeyVariable + "&id=";
+    /// <summary>The <c>modelProviders</c> arrays Astra writes models into.</summary>
+    private static readonly string[] Buckets = ["openai", "anthropic", "gemini"];
 
-    private static string ModelPath(string id) => "modelProviders.openai." + JsoncEditor.Selector(("envKey", KeyVariable), ("id", id));
+    private static string ModelPathPrefix(string bucket) => $"modelProviders.{bucket}.[envKey={KeyVariable}&id=";
+
+    private static string ModelPath(string bucket, string id) =>
+        $"modelProviders.{bucket}." + JsoncEditor.Selector(("envKey", KeyVariable), ("id", id));
 
     private const string AuthTypePath = "security.auth.selectedType";
 
@@ -59,26 +70,42 @@ public sealed class QwenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
         {
             new(file, ConfigFileFormat.Json, KeyPath, CurrentValue(file, ConfigFileFormat.Json, KeyPath), JsonString(ctx.LocalKey)),
         };
-        var baseUrl = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1";
+        var root = ctx.GatewayBaseUrl.TrimEnd('/');
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var wanted = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (id, name) in ModelEntries(ctx))
         {
             if (!CanSelect(id)) continue; // ids with selector metacharacters cannot be addressed safely
-            wanted.Add(id);
-            var path = ModelPath(id);
-            var entry = new JsonObject { ["id"] = id, ["name"] = name ?? id, ["envKey"] = KeyVariable, ["baseUrl"] = baseUrl };
+            var protocol = protocols[id];
+            var path = ModelPath(BucketOf(protocol), id);
+            wanted.Add(path);
+            var entry = new JsonObject
+            {
+                ["id"] = id,
+                ["name"] = name ?? id,
+                ["envKey"] = KeyVariable,
+                ["baseUrl"] = protocol is ApiProtocol.Anthropic or ApiProtocol.Gemini ? root : root + "/v1",
+            };
+            if (protocol == ApiProtocol.OpenAIResponses) entry["wireApi"] = "responses";
             changes.Add(new ConfigChange(file, ConfigFileFormat.Json, path, CurrentValue(file, ConfigFileFormat.Json, path), entry.ToJsonString()));
         }
-        // Models Astra registered earlier that the bound provider no longer offers are taken out again.
+        // Models Astra registered earlier that the bound provider no longer offers (or that moved to another protocol's
+        // array) are taken out again.
         foreach (var path in TrackedModelPaths(file))
         {
-            if (wanted.Contains(path[ModelPathPrefix.Length..^1])) continue;
+            if (wanted.Contains(path)) continue;
             var current = CurrentValue(file, ConfigFileFormat.Json, path);
             if (current is not null) changes.Add(new ConfigChange(file, ConfigFileFormat.Json, path, current, null));
         }
-        if (!string.IsNullOrEmpty(ctx.Model) && wanted.Contains(ctx.Model))
+        if (!string.IsNullOrEmpty(ctx.Model) && protocols.TryGetValue(ctx.Model, out var selected) && wanted.Contains(ModelPath(BucketOf(selected), ctx.Model)))
         {
-            changes.Add(Key(AuthTypePath, JsonString("openai")));
+            changes.Add(Key(AuthTypePath, JsonString(selected switch
+            {
+                ApiProtocol.OpenAIResponses => "openai-responses",
+                ApiProtocol.Anthropic => "anthropic",
+                ApiProtocol.Gemini => "gemini",
+                _ => "openai",
+            })));
             changes.Add(Key(ModelNamePath, JsonString(ctx.Model)));
         }
         return BuildPlan(changes);
@@ -117,9 +144,17 @@ public sealed class QwenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
         new(ConfigFile, ConfigFileFormat.Json, path, CurrentValue(ConfigFile, ConfigFileFormat.Json, path), valueJson);
 
     private IEnumerable<string> TrackedModelPaths(string file) => Store.List(Kind)
-        .Where(e => e.FilePath == file && e.KeyPath.StartsWith(ModelPathPrefix, StringComparison.Ordinal) && e.KeyPath.EndsWith(']'))
+        .Where(e => e.FilePath == file && e.KeyPath.EndsWith(']')
+                    && Buckets.Any(b => e.KeyPath.StartsWith(ModelPathPrefix(b), StringComparison.Ordinal)))
         .Select(e => e.KeyPath)
         .ToList();
+
+    private static string BucketOf(ApiProtocol protocol) => protocol switch
+    {
+        ApiProtocol.Anthropic => "anthropic",
+        ApiProtocol.Gemini => "gemini",
+        _ => "openai",
+    };
 
     private static bool CanSelect(string id)
     {

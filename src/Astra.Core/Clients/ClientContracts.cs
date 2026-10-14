@@ -40,13 +40,14 @@ public static class ClientKinds
     /// <summary>
     /// Clients whose configuration lists the bound provider's models (kept current when that list changes). Muse Code
     /// writes no list, but takes its default model from it when none is selected (its model catalog needs one). Codex
-    /// writes it only with its "modelCatalog" option (a <c>model_catalog_json</c> file).
+    /// writes it only with its "modelCatalog" option (a <c>model_catalog_json</c> file). Grok Build and Hermes Agent write no
+    /// list either, but configure their one model from the selected model's hints (its native protocol, Grok's context window).
     /// </summary>
     public static readonly IReadOnlyList<string> WithModelList =
     [
         OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, WorkBuddyAi, NextCoWork,
-        Paseo, MuseCode, Codex,
+        Paseo, MuseCode, Codex, GrokBuild, HermesAgent,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>

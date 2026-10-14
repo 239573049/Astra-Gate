@@ -324,6 +324,11 @@ runtime needed on the target).
    (scope `config`, also add its key path to `ClientOptions.ConfigKeyPaths` so unsetting/disable restore it) or the
    gateway (scope `gateway`, read via `route.Client.ExtraJson`) — and zh/en `clients.option.<key>[.hint]` keys; the web
    panel renders from the descriptors the server reports on `ClientInfoDto.Options`.
+   Per-model protocols: `ClientService.ContextAsync` adds each model's `protocols` hint (`GatewayRouter.PassthroughProtocols`,
+   the protocols the gateway passes it through untranslated); an adapter picks with `ClientAdapterBase.ModelProtocols`
+   (the user's `extras.protocolOverrides`, else the first native one it speaks, else its default). `ClientProtocols.For`
+   (`Astra.Core/Clients`) lists what each adapter can write and drives the override validation and the web panel — teaching
+   an adapter a protocol means updating it there too.
 7. **A new JSON type crossing a boundary**: register it in the owning assembly's
    `JsonSerializerContext` (see Native AOT); the guard test
    (`tests/Astra.Server.IntegrationTests/JsonRegistrationTests.cs`) fails otherwise.
@@ -385,6 +390,13 @@ runtime needed on the target).
     package layout (`bin/astra-server`, companions, `wwwroot/`) and the managed layout `update-core` owns
     (`~/.astra/server/astra-server-<version>`, `install.json` — they preserve its `desktop*` fields). Change
     them together with those, and with `docs/content/docs/guide/install.mdx`, both READMEs and the download page.
+17. **Server autostart entries**: `astra autostart` (`cli/src/lib/autostart.ts`) and the settings page's switch
+    (`src/Astra.Server/Autostart/AutostartService.cs`, `GET`/`PUT /api/server/autostart`) write the same entries —
+    LaunchAgent `io.astra.server`, systemd user unit `astra.service`, Run key value `Astra Server` (the CLI's old
+    `schtasks` task is only found and removed) — running `<server> serve --started-by autostart`. Names, paths,
+    argv and file formats change in both (`AutostartTests.Entry_formats_match_the_cli` and `cli/test/autostart.test.ts`
+    pin the text), plus `docs/content/docs/console/settings.mdx` and `cli/service.mdx`. The desktop app's own login
+    item is separate (`desktop/src/shared/loginItem.ts`; Linux uses an XDG autostart entry).
 
 ## Conventions
 

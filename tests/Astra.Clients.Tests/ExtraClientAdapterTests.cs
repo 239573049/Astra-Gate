@@ -83,6 +83,55 @@ public class CrushClientAdapterTests : AdapterTestBase
     }
 
     [Fact]
+    public void ModelsGoToAProviderOfTheirNativeProtocol_WhichGoesAgainWhenEmpty()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.5", "grok-4.7", "claude-sonnet-5", "gemini-3-pro", "glm-5");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "grok-4.7", "openai-responses"); // Crush's openai type would send it over Chat anyway
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "gemini-3-pro", "gemini");
+        TestGateway.Native(extra, "glm-5", "openai-chat");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-crush-4", "claude-sonnet-5", extra)));
+
+        var providers = Hints.Jsonc(Home.ReadFile(_config))["providers"]!;
+        string[] Ids(string provider) => providers[provider]!["models"]!.AsArray().Select(m => m!["id"]!.GetValue<string>()).ToArray();
+        Assert.Equal(["grok-4.7", "glm-5"], Ids("astra"));
+        Assert.Equal(["gpt-5.5"], Ids("astra-responses"));
+        Assert.Equal("openai", providers["astra-responses"]!["type"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", providers["astra-responses"]!["base_url"]!.GetValue<string>());
+        Assert.Equal(["claude-sonnet-5"], Ids("astra-anthropic"));
+        Assert.Equal("anthropic", providers["astra-anthropic"]!["type"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", providers["astra-anthropic"]!["base_url"]!.GetValue<string>());
+        Assert.Equal(["gemini-3-pro"], Ids("astra-gemini"));
+        Assert.Equal("google", providers["astra-gemini"]!["type"]!.GetValue<string>());
+        Assert.Equal("astra-anthropic", Hints.Jsonc(Home.ReadFile(_config))["models"]!["large"]!["provider"]!.GetValue<string>());
+        Assert.True(_adapter.Inspect().Enabled);
+
+        // Everything moves to chat: the extra providers go, and astra no longer discovers models on its own.
+        var chatOnly = Hints.Extra("gpt-5.5", "glm-5");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-crush-4", "glm-5", chatOnly)));
+        providers = Hints.Jsonc(Home.ReadFile(_config))["providers"]!;
+        Assert.Null(providers["astra-responses"]);
+        Assert.Null(providers["astra-anthropic"]);
+        Assert.Null(providers["astra-gemini"]);
+        Assert.Equal(["gpt-5.5", "glm-5"], Ids("astra"));
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+
+        // Only Responses models: astra stays, without models and without discovery.
+        var responsesOnly = TestGateway.Native(Hints.Extra("gpt-5.5"), "gpt-5.5", "openai-responses");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-crush-4", "gpt-5.5", responsesOnly)));
+        providers = Hints.Jsonc(Home.ReadFile(_config))["providers"]!;
+        Assert.Null(providers["astra"]!["models"]);
+        Assert.False(providers["astra"]!["discover_models"]!.GetValue<bool>());
+        Assert.Equal("astra-responses", Hints.Jsonc(Home.ReadFile(_config))["models"]!["large"]!["provider"]!.GetValue<string>());
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
     public void Disable_KeepsAModelTheUserSelectedAfterwards()
     {
         Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-crush-2", "gpt-5.1", Hints.Extra("gpt-5.1"))));
@@ -160,6 +209,44 @@ public class QwenCodeClientAdapterTests : AdapterTestBase
     }
 
     [Fact]
+    public void Models_GoToTheirNativeProtocolsArray_AndMoveWhenItChanges()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "gemini-3-pro", "glm-5");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "gemini-3-pro", "gemini");
+        TestGateway.Native(extra, "glm-5", "openai-chat", "anthropic");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-qwen-4", "claude-sonnet-5", extra)));
+
+        var json = Hints.Jsonc(Home.ReadFile(_config));
+        var openai = json["modelProviders"]!["openai"]!.AsArray().ToDictionary(e => e!["id"]!.GetValue<string>(), e => e!);
+        Assert.Equal(["mine", "gpt-5.5", "glm-5"], openai.Keys);
+        Assert.Equal("responses", openai["gpt-5.5"]["wireApi"]!.GetValue<string>());
+        Assert.Null(openai["glm-5"]["wireApi"]);
+        var anthropic = Assert.Single(json["modelProviders"]!["anthropic"]!.AsArray())!;
+        Assert.Equal("claude-sonnet-5", anthropic["id"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", anthropic["baseUrl"]!.GetValue<string>());
+        Assert.Equal(QwenCodeClientAdapter.KeyVariable, anthropic["envKey"]!.GetValue<string>());
+        var gemini = Assert.Single(json["modelProviders"]!["gemini"]!.AsArray())!;
+        Assert.Equal("http://127.0.0.1:17321", gemini["baseUrl"]!.GetValue<string>());
+        Assert.Equal("anthropic", json["security"]!["auth"]!["selectedType"]!.GetValue<string>());
+        Assert.Equal("claude-sonnet-5", json["model"]!["name"]!.GetValue<string>());
+
+        // The user moves the Claude model to chat in Astra: it leaves the anthropic array for the openai one.
+        TestGateway.Override(extra, "claude-sonnet-5", "openai-chat");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-qwen-4", "claude-sonnet-5", extra)));
+        json = Hints.Jsonc(Home.ReadFile(_config));
+        Assert.Empty(json["modelProviders"]!["anthropic"]?.AsArray() ?? []);
+        Assert.Contains(json["modelProviders"]!["openai"]!.AsArray(), e => e!["id"]!.GetValue<string>() == "claude-sonnet-5");
+        Assert.Equal("openai", json["security"]!["auth"]!["selectedType"]!.GetValue<string>());
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
     public void Reapply_DropsModelsTheProviderNoLongerOffers()
     {
         Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-qwen-2", "gpt-5.1", Hints.Extra("gpt-5.1", "glm-5"))));
@@ -222,6 +309,29 @@ public class DroidClientAdapterTests : AdapterTestBase
 
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void EachEntryNamesItsNativeProviderType_AndTheLimitsAstraKnows()
+    {
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "deepseek-v4");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "deepseek-v4", "openai-chat");
+        ((JsonObject)extra["models"]!["claude-sonnet-5"]!)["contextWindow"] = 200_000;
+        ((JsonObject)extra["models"]!["claude-sonnet-5"]!)["maxOutputTokens"] = 64_000;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-droid-5", null, extra)));
+
+        var models = Hints.Jsonc(Home.ReadFile(_config))["customModels"]!.AsArray().ToDictionary(e => e!["model"]!.GetValue<string>(), e => e!);
+        Assert.Equal("openai", models["gpt-5.5"]["provider"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", models["gpt-5.5"]["baseUrl"]!.GetValue<string>());
+        Assert.Equal("anthropic", models["claude-sonnet-5"]["provider"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", models["claude-sonnet-5"]["baseUrl"]!.GetValue<string>());
+        Assert.Equal(200_000, models["claude-sonnet-5"]["maxContextLimit"]!.GetValue<long>());
+        Assert.Equal(64_000, models["claude-sonnet-5"]["maxOutputTokens"]!.GetValue<long>());
+        Assert.Equal("generic-chat-completion-api", models["deepseek-v4"]["provider"]!.GetValue<string>());
+        Assert.Null(models["deepseek-v4"]["maxContextLimit"]);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
     }
 
     [Fact]
@@ -292,6 +402,51 @@ public class KimiCodeClientAdapterTests : AdapterTestBase
 
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void Models_NameTheirNativeProtocol_AndAStaleOneIsTakenOutAgain()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "glm-5");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "glm-5", "openai-chat", "anthropic");
+        ((JsonObject)extra["models"]!["gpt-5.5"]!)["maxOutputTokens"] = 128_000;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-kimi-7", null, extra)));
+
+        var tables = TomlTables(Home.ReadFile(_config));
+        Assert.Equal("\"openai_responses\"", tables["models.astra-gpt-5-5"]["protocol"]);
+        Assert.Equal("128000", tables["models.astra-gpt-5-5"]["max_output_size"]);
+        Assert.Equal("\"GPT-5.5\"", tables["models.astra-gpt-5-5"]["display_name"]);
+        Assert.Equal("\"anthropic\"", tables["models.astra-claude-sonnet-5"]["protocol"]);
+        Assert.False(tables["models.astra-glm-5"].ContainsKey("protocol"));
+
+        // The provider later serves the model over chat only: the protocol Astra wrote goes away again.
+        TestGateway.Native(extra, "gpt-5.5", "openai-chat");
+        ((JsonObject)extra["models"]!["gpt-5.5"]!).Remove("maxOutputTokens");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-kimi-7", null, extra)));
+        tables = TomlTables(Home.ReadFile(_config));
+        Assert.False(tables["models.astra-gpt-5-5"].ContainsKey("protocol"));
+        Assert.False(tables["models.astra-gpt-5-5"].ContainsKey("max_output_size"));
+        Assert.Equal("\"anthropic\"", tables["models.astra-claude-sonnet-5"]["protocol"]);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    /// <summary>The simple <c>key = value</c> lines of each <c>[table]</c>, values as raw TOML text.</summary>
+    private static Dictionary<string, Dictionary<string, string>> TomlTables(string text)
+    {
+        var tables = new Dictionary<string, Dictionary<string, string>>();
+        var current = new Dictionary<string, string>();
+        foreach (var line in text.Split('\n'))
+        {
+            if (line.StartsWith('[')) tables[line.Trim('[', ']', ' ')] = current = new Dictionary<string, string>();
+            else if (line.IndexOf(" = ", StringComparison.Ordinal) is var eq and > 0) current[line[..eq]] = line[(eq + 3)..];
+        }
+        return tables;
     }
 
     [Fact]
@@ -388,6 +543,22 @@ public class ZedClientAdapterTests : AdapterTestBase
     }
 
     [Fact]
+    public void ResponsesNativeModels_LeaveChatCompletions()
+    {
+        var extra = Hints.Extra("gpt-5.5", "deepseek-v4", "claude-sonnet-5");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses", "openai-chat");
+        TestGateway.Native(extra, "deepseek-v4", "openai-chat");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic"); // no Anthropic provider written: chat, translated
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("k", null, extra)));
+
+        var models = Hints.Jsonc(Home.ReadFile(_config))["language_models"]!["openai_compatible"]!["astra"]!["available_models"]!.AsArray()
+            .ToDictionary(m => m!["name"]!.GetValue<string>(), m => m!["capabilities"]!);
+        Assert.False(models["gpt-5.5"]["chat_completions"]!.GetValue<bool>());
+        Assert.Null(models["deepseek-v4"]["chat_completions"]);
+        Assert.Null(models["claude-sonnet-5"]["chat_completions"]);
+    }
+
+    [Fact]
     public void Inspect_AlwaysExplainsTheManualTokenStep_WithoutLeakingAToken()
     {
         var warning = Assert.Single(_adapter.Inspect().Warnings);
@@ -458,6 +629,40 @@ public class OmpClientAdapterTests : AdapterTestBase
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.Equal(modelsOriginal, Home.ReadFileBytes(_models));
         Assert.Equal(configOriginal, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void Models_CarryTheirNativeApi_AndTheProviderUsesPlainApiKeyAuth()
+    {
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "gemini-3-pro", "deepseek-v4");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "gemini-3-pro", "gemini");
+        TestGateway.Native(extra, "deepseek-v4", "openai-chat", "anthropic");
+        ((JsonObject)extra["models"]!["gpt-5.5"]!)["contextWindow"] = 400_000;
+        ((JsonObject)extra["models"]!["gpt-5.5"]!)["maxOutputTokens"] = 128_000;
+        ((JsonObject)extra["models"]!["gpt-5.5"]!)["reasoning"] = true;
+        ((JsonObject)extra["models"]!["gpt-5.5"]!)["vision"] = true;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-omp-4", null, extra)));
+
+        var ours = YamlEditor.ParseToJson(Home.ReadFile(_models))!["providers"]!["astra"]!;
+        Assert.Equal("apiKey", ours["auth"]!.GetValue<string>());
+        var models = ours["models"]!.AsArray().ToDictionary(m => m!["id"]!.GetValue<string>(), m => m!);
+        Assert.Equal("openai-responses", models["gpt-5.5"]["api"]!.GetValue<string>());
+        Assert.Null(models["gpt-5.5"]["baseUrl"]);
+        Assert.Equal(400_000, models["gpt-5.5"]["contextWindow"]!.GetValue<long>());
+        Assert.Equal(128_000, models["gpt-5.5"]["maxTokens"]!.GetValue<long>());
+        Assert.True(models["gpt-5.5"]["reasoning"]!.GetValue<bool>());
+        Assert.Equal(["text", "image"], models["gpt-5.5"]["input"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal("anthropic-messages", models["claude-sonnet-5"]["api"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", models["claude-sonnet-5"]["baseUrl"]!.GetValue<string>());
+        Assert.Equal("google-generative-ai", models["gemini-3-pro"]["api"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1beta", models["gemini-3-pro"]["baseUrl"]!.GetValue<string>());
+        Assert.Null(models["deepseek-v4"]["api"]);
+        // Unknown limits stay unset: omp takes them from its catalog for a known id.
+        Assert.Null(models["deepseek-v4"]["contextWindow"]);
+        Assert.Null(models["deepseek-v4"]["maxTokens"]);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
     }
 
     [Fact]
@@ -614,6 +819,60 @@ public class DeepSeekHarnessClientAdapterTests : AdapterTestBase
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.Equal(desktopOriginal, Home.ReadFileBytes(_desktop));
         Assert.Equal(envOriginal, Home.ReadFileBytes(_env));
+    }
+
+    [Fact]
+    public void ModelsAreListedUnderARouteOfTheirNativeApi_AndTheDefaultNamesThatRoute()
+    {
+        Home.WriteFile(_desktop, Desktop);
+        var original = Home.ReadFileBytes(_desktop);
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "deepseek-v4");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "deepseek-v4", "openai-chat", "anthropic");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-dsh-6", "claude-sonnet-5", extra)));
+
+        var text = Home.ReadFile(_desktop);
+        var providers = Row(text, "llm-pi-ai")["config"]!["providers"]!;
+        string[] Ids(string route) => providers[route]!["models"]!.AsArray().Select(m => m!["id"]!.GetValue<string>()).ToArray();
+        Assert.Equal(["deepseek-v4"], Ids("astra"));
+        Assert.Null(providers["astra"]!["models"]![0]!["contextWindow"]); // unknown: Harness's own default
+        Assert.Equal(["gpt-5.5"], Ids("astra-responses"));
+        Assert.Equal("openai-responses", providers["astra-responses"]!["api"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", providers["astra-responses"]!["baseURL"]!.GetValue<string>());
+        Assert.Equal(["claude-sonnet-5"], Ids("astra-anthropic"));
+        Assert.Equal("anthropic-messages", providers["astra-anthropic"]!["api"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", providers["astra-anthropic"]!["baseURL"]!.GetValue<string>());
+        Assert.Equal(DeepSeekHarnessClientAdapter.KeyVariable, providers["astra-anthropic"]!["apiKeyEnv"]!.GetValue<string>());
+        Assert.Equal("astra-anthropic", Row(text, "agent-default-model")["config"]!["provider"]!.GetValue<string>());
+
+        // The Anthropic model is no longer offered: its route goes, the default follows the new choice.
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-dsh-6", "gpt-5.5", TestGateway.Native(Hints.Extra("gpt-5.5", "deepseek-v4"), "gpt-5.5", "openai-responses"))));
+        text = Home.ReadFile(_desktop);
+        Assert.Null(Row(text, "llm-pi-ai")["config"]!["providers"]!["astra-anthropic"]);
+        Assert.Equal("astra-responses", Row(text, "agent-default-model")["config"]!["provider"]!.GetValue<string>());
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_desktop));
+    }
+
+    [Fact]
+    public void Disable_AfterHarnessFoldedTheModelItems_RestoresBytes()
+    {
+        Home.WriteFile(_desktop, Desktop);
+        var original = Home.ReadFileBytes(_desktop);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-dsh-7", null, Hints.Extra("m1", "m2"))));
+        // Harness's own save spreads each flow item over several lines; the content stays the same.
+        var text = Home.ReadFile(_desktop);
+        var folded = System.Text.RegularExpressions.Regex.Replace(text, "- \\{\"id\":\"(\\w+)\",\"name\":\"(\\w+)\"\\}",
+            "- {\n              \"id\": \"$1\",\n              \"name\": \"$2\"\n            }");
+        Assert.Contains("\"id\": \"m2\",\n", folded);
+        Home.WriteFile(_desktop, folded);
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_desktop));
     }
 
     [Fact]
@@ -797,7 +1056,8 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
         Assert.True(_adapter.Inspect().Enabled); // entries recorded there still count, until they are migrated
 
         Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-wb-5", null, Hints.Extra("a"))));
-        Assert.Empty(Hints.Jsonc(Home.ReadFile(legacy))["models"]!.AsArray());
+        Assert.Null(Hints.Jsonc(Home.ReadFile(legacy))["models"]); // the array Astra created goes with its last entry
+        Assert.DoesNotContain(Store.List(_adapter.Kind), e => e.FilePath == legacy);
         Assert.Equal(["a"], Hints.Jsonc(Home.ReadFile(_config))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
     }
@@ -884,6 +1144,99 @@ public class NextCoWorkClientAdapterTests : AdapterTestBase
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.Equal(original, Home.ReadFileBytes(_config));
         Assert.False(_adapter.Inspect().Enabled);
+    }
+
+    [Fact]
+    public void EachModelUsesItsNativeProtocol_UnlessTheUserChoseAnother()
+    {
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "deepseek-v4", "gemini-3-pro", "kimi-k3");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "deepseek-v4", "openai-chat", "anthropic");
+        TestGateway.Native(extra, "gemini-3-pro", "gemini"); // NextCoWork has no Gemini protocol: the gateway translates
+        TestGateway.Native(extra, "kimi-k3", "openai-responses", "openai-chat");
+        TestGateway.Override(extra, "kimi-k3", "openai-chat");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-8", null, extra)));
+
+        var ours = Hints.Jsonc(Home.ReadFile(_config))["providers"]!["astra"]!;
+        Assert.Equal("openai-chat", ours["protocol"]!.GetValue<string>());
+        var models = ours["models"]!.AsObject();
+        Assert.Equal("openai-responses", models["gpt-5.5"]!["protocolOverride"]!.GetValue<string>());
+        Assert.Equal("anthropic", models["claude-sonnet-5"]!["protocolOverride"]!.GetValue<string>());
+        Assert.Null(models["deepseek-v4"]!["protocolOverride"]);
+        Assert.Null(models["gemini-3-pro"]!["protocolOverride"]);
+        Assert.Null(models["kimi-k3"]!["protocolOverride"]);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+    }
+
+    [Fact]
+    public void WhatNextCoWorkAddsIsNotDrift_SurvivesARewrite_AndItsProtocolChoiceIsReported()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.5", "deepseek-v4");
+        TestGateway.Native(extra, "gpt-5.5", "openai-chat", "openai-responses");
+        ((JsonObject)extra["models"]!["gpt-5.5"]!)["vision"] = true;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-10", null, extra)));
+        Assert.Empty(_adapter.ChangedProtocolChoices());
+
+        // The user edits gpt-5.5 in NextCoWork: it writes the resolved alias back (thinking settings, the full capability
+        // set, catalogOverrides) with the protocol they picked, and adds the provider defaults.
+        var json = Hints.Jsonc(Home.ReadFile(_config));
+        var ours = json["providers"]!["astra"]!.AsObject();
+        ours["priority"] = 50;
+        ours["enabled"] = true;
+        var gpt = ours["models"]!["gpt-5.5"]!.AsObject();
+        gpt["protocolOverride"] = "openai-responses";
+        gpt["thinkingConfig"] = new JsonObject { ["mode"] = "effort", ["defaultEnabled"] = true, ["defaultEffort"] = "high" };
+        gpt["catalogOverrides"] = new JsonArray("thinkingConfig");
+        gpt["capabilities"]!["tools"] = true;
+        gpt["capabilities"]!["caching"] = false;
+        Home.WriteFile(_config, json.ToJsonString());
+
+        var status = _adapter.Inspect();
+        Assert.True(status.Enabled);
+        Assert.Empty(status.DriftedKeys);
+        Assert.Equal(Astra.Core.ApiProtocol.OpenAIResponses, Assert.Single(_adapter.ChangedProtocolChoices()).Value);
+
+        // The server records the choice and rewrites (e.g. a refreshed model list): NextCoWork's fields stay.
+        TestGateway.Override(extra, "gpt-5.5", "openai-responses");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-10", null, extra)));
+        ours = Hints.Jsonc(Home.ReadFile(_config))["providers"]!["astra"]!.AsObject();
+        Assert.Equal(50, ours["priority"]!.GetValue<int>());
+        gpt = ours["models"]!["gpt-5.5"]!.AsObject();
+        Assert.Equal("openai-responses", gpt["protocolOverride"]!.GetValue<string>());
+        Assert.Equal("high", gpt["thinkingConfig"]!["defaultEffort"]!.GetValue<string>());
+        Assert.True(gpt["capabilities"]!["vision"]!.GetValue<bool>());
+        Assert.False(gpt["capabilities"]!["caching"]!.GetValue<bool>());
+        Assert.Empty(_adapter.ChangedProtocolChoices());
+
+        // Removing the override in NextCoWork means the provider's protocol (chat).
+        json = Hints.Jsonc(Home.ReadFile(_config));
+        json["providers"]!["astra"]!["models"]!["gpt-5.5"]!.AsObject().Remove("protocolOverride");
+        Home.WriteFile(_config, json.ToJsonString());
+        Assert.Equal(Astra.Core.ApiProtocol.OpenAIChat, Assert.Single(_adapter.ChangedProtocolChoices()).Value);
+
+        // An Astra-owned value changed in NextCoWork is still drift; NextCoWork-only changes do not block the restore.
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void MaxOutputNeverExceedsTheWindow_AndPdfMapsToFileInput()
+    {
+        var extra = Hints.Extra("a", "b");
+        ((JsonObject)extra["models"]!["a"]!)["contextWindow"] = 100_000;
+        ((JsonObject)extra["models"]!["a"]!)["maxOutputTokens"] = 128_000;
+        ((JsonObject)extra["models"]!["a"]!)["pdf"] = true;
+        ((JsonObject)extra["models"]!["b"]!)["maxOutputTokens"] = 384_000; // no window: NextCoWork assumes 200k
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-nc-9", null, extra)));
+
+        var models = Hints.Jsonc(Home.ReadFile(_config))["providers"]!["astra"]!["models"]!;
+        Assert.Equal(100_000, models["a"]!["maxOutputTokens"]!.GetValue<long>());
+        Assert.True(models["a"]!["capabilities"]!["fileInput"]!.GetValue<bool>());
+        Assert.Null(models["a"]!["capabilities"]!["vision"]);
+        Assert.Equal(200_000, models["b"]!["maxOutputTokens"]!.GetValue<long>());
     }
 
     [Fact]
@@ -1022,6 +1375,42 @@ public class PaseoClientAdapterTests : AdapterTestBase
         Applier.Disable(_adapter.PlanDisable());
         Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-4", null, null)));
         Assert.Null(Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!["astra"]!["models"]);
+    }
+
+    [Fact]
+    public void ResponsesNativeModels_GetACodexEntry_ThatGoesAgainWhenEmpty()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("claude-sonnet-5", "gpt-5.5", "deepseek-v4");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "deepseek-v4", "openai-chat"); // Claude Code reaches it, translated
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-7", "gpt-5.5", extra)));
+
+        var providers = Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!;
+        Assert.Equal(["claude-sonnet-5", "deepseek-v4"], providers["astra"]!["models"]!.AsArray().Select(m => m!["id"]!.GetValue<string>()));
+        var codex = providers["astra-codex"]!;
+        Assert.Equal("codex", codex["extends"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", codex["env"]!["OPENAI_BASE_URL"]!.GetValue<string>());
+        Assert.Equal("astra-paseo-7", codex["env"]!["OPENAI_API_KEY"]!.GetValue<string>());
+        var codexModel = Assert.Single(codex["models"]!.AsArray())!;
+        Assert.Equal("gpt-5.5", codexModel["id"]!.GetValue<string>());
+        Assert.True(codexModel["isDefault"]!.GetValue<bool>());
+
+        // Only Responses models: the Claude entry still lists them (translated), never empty.
+        var responsesOnly = TestGateway.Native(Hints.Extra("gpt-5.5"), "gpt-5.5", "openai-responses");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-7", null, responsesOnly)));
+        providers = Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!;
+        Assert.Equal(["gpt-5.5"], providers["astra"]!["models"]!.AsArray().Select(m => m!["id"]!.GetValue<string>()));
+        Assert.NotNull(providers["astra-codex"]);
+
+        // No Responses models any more: the Codex entry goes.
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-paseo-7", null, Hints.Extra("deepseek-v4"))));
+        Assert.Null(Hints.Jsonc(Home.ReadFile(_config))["agents"]!["providers"]!["astra-codex"]);
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
     }
 
     [Fact]

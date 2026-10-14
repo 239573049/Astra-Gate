@@ -1,6 +1,6 @@
 ---
 title: 设置
-description: 外观、网关信息、记录策略与版本
+description: 外观、开机自启动、网关信息、记录策略与版本
 ---
 
 设置页集中了界面偏好与服务端运行参数：
@@ -12,6 +12,20 @@ description: 外观、网关信息、记录策略与版本
 - **主题** — 跟随系统 / 浅色 / 深色；
 - **强调色** — 跟随系统，或固定为某个系统强调色；
 - **语言** — 中文 / English。语言同时决定**新请求计费说明**的显示语言。
+
+## 开机自启动
+
+登录系统后自动启动 Astra，macOS、Windows、Linux 都支持：
+
+- **后台服务** — 登录后在后台启动网关，不打开任何窗口。与 `astra autostart` 是同一个开关，写入的也是同一条启动项：macOS 为 LaunchAgent（`~/Library/LaunchAgents/io.astra.server.plist`），Linux 为 systemd 用户服务（`~/.config/systemd/user/astra.service`），Windows 为注册表 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 下的「Astra Server」。开关只增删启动项，下次登录才生效，不会立即启动或停止正在运行的服务；
+- **桌面端**（仅桌面端显示）— 登录后在托盘 / 菜单栏中打开桌面端，不弹出窗口，服务随之启动；与托盘菜单里的「登录时启动」是同一个开关。macOS / Windows 用系统的登录项，Linux 写入 `~/.config/autostart/io.astra.desktop.desktop`。
+
+两项都开也没关系：登录后桌面端会接管已在运行的同版本服务。几点说明：
+
+- 只能在运行 Astra 的这台电脑上修改；
+- 通过 `install.sh` / `astra update` 安装的服务端更新后，启动项会在新版本第一次启动时自动指向新版本；
+- macOS 可能会在「系统设置 › 通用 › 登录项」里要求允许 Astra 在后台运行；
+- Linux 需要 systemd（没有 systemd 时显示为不支持）；容器里不提供这个开关，由容器的重启策略（如 compose 的 `restart: unless-stopped`）负责。
 
 ## 网关
 

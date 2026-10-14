@@ -87,6 +87,33 @@ public class YamlRowEditorTests
     }
 
     [Fact]
+    public void A_Row_Whose_Items_Harness_Folded_Over_Several_Lines_Is_Replaced_Whole()
+    {
+        // Harness rewrites the patch file with long flow items spread over several lines.
+        const string folded = """
+            - id: "llm-pi-ai"
+              name: "@deepseek-ai/dsh-llm-pi-ai"
+              config:
+                providers:
+                  astra:
+                    api: "openai-completions"
+                    models:
+                      - {
+                          "id": "deepseek-flash",
+                          "input": [ "text", "image" ]
+                        }
+            """;
+        var text = Patch + folded + "\n";
+
+        var withoutProvider = new YamlEditor(text).Remove(Row("llm-pi-ai") + ".config.providers.astra");
+        Assert.Equal(Patch + "- id: \"llm-pi-ai\"\n  name: \"@deepseek-ai/dsh-llm-pi-ai\"\n  config:\n    providers: {}\n", withoutProvider.Text);
+        Assert.Equal(Patch, new YamlEditor(text).Remove(Row("llm-pi-ai")).Text);
+
+        var appended = new YamlEditor(text).SetRaw(Row("x"), "{\"id\":\"x\",\"name\":\"y\"}").Text;
+        Assert.Equal(text + "- id: \"x\"\n  name: \"y\"\n", appended.Replace("- id: x\n", "- id: \"x\"\n"));
+    }
+
+    [Fact]
     public void Selectors_Need_A_Sequence_Root_And_Block_Rows()
     {
         Assert.Throws<EditorException>(() => new YamlEditor("a: 1\n").Has(Row("x")));

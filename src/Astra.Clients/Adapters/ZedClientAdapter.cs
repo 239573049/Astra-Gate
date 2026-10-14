@@ -16,6 +16,11 @@ namespace Astra.Clients.Adapters;
 /// system keychain, or in the <c>ASTRA_API_KEY</c> environment variable), so the token cannot be written: <see cref="Inspect"/>
 /// always warns that it must be pasted into Zed's provider settings once. That the <c>agent.default_model</c> provider is the
 /// configured provider id follows from Zed's provider-id semantics; the docs show no verbatim example for it.
+/// <para>
+/// An <c>openai_compatible</c> model goes over Chat Completions unless its <c>capabilities.chat_completions</c> is false, which
+/// sends it to <c>{api_url}/responses</c> instead (Zed docs, "OpenAI API Compatible"); a model whose native protocol is
+/// Responses gets that flag. Zed's Responses requests are stateless (<c>store: false</c>, encrypted reasoning included).
+/// </para>
 /// </summary>
 public sealed class ZedClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -66,6 +71,7 @@ public sealed class ZedClientAdapter(ClientEnvironment env, IClientConfigStateSt
     public override ConfigChangePlan PlanEnable(EnableContext ctx)
     {
         var hints = ModelHints(ctx);
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var models = new JsonArray();
         foreach (var (id, name) in ModelEntries(ctx))
         {
@@ -77,13 +83,15 @@ public sealed class ZedClientAdapter(ClientEnvironment env, IClientConfigStateSt
                 ["max_tokens"] = PositiveLong(info?["contextWindow"]) ?? DefaultContextWindow,
             };
             if (PositiveLong(info?["maxOutputTokens"]) is { } maxOutput) model["max_output_tokens"] = maxOutput;
-            model["capabilities"] = new JsonObject
+            var capabilities = new JsonObject
             {
                 ["tools"] = true,
                 ["images"] = BoolHint(info?["vision"]) ?? false,
                 ["parallel_tool_calls"] = false,
                 ["prompt_cache_key"] = false,
             };
+            if (protocols[id] == ApiProtocol.OpenAIResponses) capabilities["chat_completions"] = false;
+            model["capabilities"] = capabilities;
             models.AddNode(model);
         }
         var provider = new JsonObject { ["api_url"] = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1" };

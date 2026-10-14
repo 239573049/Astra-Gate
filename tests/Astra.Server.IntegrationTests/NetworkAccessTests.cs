@@ -143,7 +143,7 @@ public sealed class NetworkAccessTests
     }
 
     [Fact]
-    public async Task Only_this_machine_changes_the_listen_address_or_the_password()
+    public async Task Only_this_machine_changes_the_listen_address_the_password_or_autostart()
     {
         await using var host = await StartAsync();
         var login = await SendFrom(host, "192.168.1.20", LanHost, HttpMethod.Post, "/api/auth/login", new { password = "correct-horse" });
@@ -153,5 +153,8 @@ public sealed class NetworkAccessTests
         Assert.Equal(HttpStatusCode.OK, (await SendFrom(host, "192.168.1.20", LanHost, HttpMethod.Get, "/api/settings", cookie: cookie)).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await SendFrom(host, "192.168.1.20", LanHost, HttpMethod.Put, "/api/server/listen", new { host = "127.0.0.1" }, cookie: cookie)).Status);
         Assert.Equal(HttpStatusCode.Forbidden, (await SendFrom(host, "192.168.1.20", LanHost, HttpMethod.Post, "/api/auth/password", new { password = "another-password" }, cookie: cookie)).Status);
+        var autostart = await SendFrom(host, "192.168.1.20", LanHost, HttpMethod.Get, "/api/server/autostart", cookie: cookie);
+        Assert.False(autostart.Body!["canChange"]!.GetValue<bool>());
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendFrom(host, "192.168.1.20", LanHost, HttpMethod.Put, "/api/server/autostart", new { enabled = true }, cookie: cookie)).Status);
     }
 }

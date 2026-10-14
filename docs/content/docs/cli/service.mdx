@@ -41,9 +41,13 @@ astra logs -f       # 持续输出（类似 tail -f）
 ## 开机自启
 
 ```bash
-astra autostart enable    # macOS: LaunchAgent · Linux: systemd --user · Windows: schtasks
+astra autostart enable    # macOS: LaunchAgent · Linux: systemd --user · Windows: 注册表 Run 项
 astra autostart status
 astra autostart disable
 ```
 
-启用后登录系统即自动拉起服务。桌面端有等价开关（见[桌面端](/docs/desktop)），两者操作同一套机制。
+启用后登录系统即自动拉起服务。控制台「设置 › 通用 › 开机自启动 › 后台服务」是同一个开关（见[设置](/docs/console/settings#开机自启动)），两边改的是同一条启动项。
+
+<Callout title="Windows：从计划任务换成了 Run 项">
+  早期版本在 Windows 上创建名为「Astra Server」的登录计划任务，而创建这类任务需要管理员权限。现在改为写入当前用户的 Run 项；`enable` / `disable` 会顺带删除旧的计划任务。旧任务当初是在管理员终端里创建的，普通终端删不掉时，按提示在管理员终端执行 `schtasks /Delete /F /TN "Astra Server"`。
+</Callout>

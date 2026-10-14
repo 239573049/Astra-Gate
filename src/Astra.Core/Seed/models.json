@@ -1,6 +1,6 @@
 {
- "seed_version": 4,
- "generated_at": "2026-10-11",
+ "seed_version": 5,
+ "generated_at": "2026-10-14",
  "sources": [
   "https://models.dev/api.json",
   "https://api-docs.deepseek.com/quick_start/pricing",
@@ -1658,9 +1658,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.08,
-       "cache_read": 0.04,
-       "output": 0.75
+       "input": 0.15,
+       "cache_read": 0.05,
+       "output": 1
       }
      }
     },
@@ -1718,9 +1718,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.55,
-       "cache_read": 0.225,
-       "output": 3.5
+       "input": 0.5,
+       "cache_read": 0.3,
+       "output": 3.6
       }
      }
     },
@@ -4764,7 +4764,10 @@
    "display_name": "DeepSeek V4.1 Flash",
    "vendor": "deepseek",
    "family": "deepseek-flash",
-   "aliases": [],
+   "aliases": [
+    "deepseek-v4.1-flash",
+    "deepseek-v4.1-flash-expires-on-0910"
+   ],
    "context_window": 1000000,
    "max_output_tokens": 393216,
    "capabilities": {
@@ -4878,8 +4881,8 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.018,
-       "cache_read": 0.018,
+       "input": 0.016,
+       "cache_read": 0.016,
        "output": 0.64
       }
      }
@@ -6011,8 +6014,8 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.3,
-       "output": 1.2
+       "input": 0.255,
+       "output": 1.02
       }
      }
     },
@@ -6262,9 +6265,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.21,
-       "cache_read": 0.042,
-       "output": 0.84
+       "input": 0.3,
+       "cache_read": 0.06,
+       "output": 1.2
       }
      }
     },
@@ -6651,9 +6654,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.8,
-       "cache_read": 0.55,
-       "output": 10
+       "input": 0.7,
+       "cache_read": 0.32,
+       "output": 15
       }
      }
     },
@@ -10931,9 +10934,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.966,
-       "cache_read": 0.1794,
-       "output": 3.036
+       "input": 1.33,
+       "cache_read": 0.247,
+       "output": 4.18
       }
      }
     },
@@ -11031,8 +11034,8 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.06,
-       "cache_read": 0.059,
+       "input": 0.05,
+       "cache_read": 0.049,
        "output": 7
       }
      }
@@ -11158,8 +11161,8 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.07,
-       "cache_read": 0.05,
+       "input": 0.079,
+       "cache_read": 0.059,
        "output": 4.8
       }
      }
@@ -11249,9 +11252,9 @@
       "currency": "USD",
       "unit": "per_1m_tokens",
       "base": {
-       "input": 0.15,
-       "cache_read": 0.03,
-       "output": 0.5
+       "input": 0.036,
+       "cache_read": 0.0108,
+       "output": 0.9
       }
      }
     },

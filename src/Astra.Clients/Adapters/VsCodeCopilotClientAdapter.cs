@@ -12,8 +12,11 @@ namespace Astra.Clients.Adapters;
 /// <c>chatLanguageModels.json</c> in the VS Code user directory (macOS <c>~/Library/Application Support/Code/User</c>,
 /// Windows <c>%APPDATA%\Code\User</c>, Linux <c>$XDG_CONFIG_HOME/Code/User</c>). The group
 /// <c>{"name":"Astra","vendor":"customendpoint","apiType":"chat-completions","models":[…]}</c> lists the bound
-/// provider's models, each pointing at the gateway's <c>/v1/chat/completions</c> (VS Code docs: "Add a custom endpoint
-/// model"). The local key travels as a per-model <c>requestHeaders.Authorization</c>: the group-level <c>apiKey</c> is a
+/// provider's models (VS Code docs: "Add a custom endpoint model"). A model may override the group's <c>apiType</c>
+/// (<c>chat-completions</c> | <c>responses</c> | <c>messages</c>), so each one names its native protocol and the matching
+/// gateway URL — an explicit path in <c>url</c> wins over <c>apiType</c>, so the two always change together. Responses models
+/// set <c>zeroDataRetentionEnabled</c>: Copilot then sends <c>store:false</c> and never a <c>previous_response_id</c>, which the
+/// gateway cannot honour for an upstream that keeps no server-side state. The local key travels as a per-model <c>requestHeaders.Authorization</c>: the group-level <c>apiKey</c> is a
 /// secret VS Code only resolves from its secret storage (a literal value in the file is read as a storage reference),
 /// while a user-supplied Authorization header replaces the inferred one (verified against the Copilot Chat extension
 /// bundled with VS Code). The file is a JSON array; the group is addressed with a selector
@@ -127,9 +130,10 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
     }
 
     /// <summary>One Custom Endpoint model per bound model, with limits from the model catalog where known.</summary>
-    private static JsonArray Models(EnableContext ctx)
+    private JsonArray Models(EnableContext ctx)
     {
-        var url = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1/chat/completions";
+        var root = ctx.GatewayBaseUrl.TrimEnd('/');
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var details = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
         foreach (var (_, value) in ctx.ExtraObject("models") ?? new JsonObject())
         {
@@ -144,18 +148,27 @@ public sealed class VsCodeCopilotClientAdapter(ClientEnvironment env, IClientCon
             var maxOutput = Long(info?["maxOutputTokens"]) ?? DefaultMaxOutputTokens;
             var context = Long(info?["contextWindow"]) ?? DefaultContextWindow;
             if (maxOutput >= context) maxOutput = Math.Max(1, context / 4);
-            models.AddNode(new JsonObject
+            var (apiType, path) = protocols[id] switch
+            {
+                ApiProtocol.OpenAIResponses => ("responses", "/v1/responses"),
+                ApiProtocol.Anthropic => ("messages", "/v1/messages"),
+                _ => ("chat-completions", "/v1/chat/completions"),
+            };
+            var model = new JsonObject
             {
                 ["id"] = id,
                 ["name"] = name ?? id,
-                ["url"] = url,
+                ["url"] = root + path,
+                ["apiType"] = apiType,
                 ["toolCalling"] = true,
                 ["vision"] = Bool(info?["vision"]) ?? false,
                 ["thinking"] = Bool(info?["reasoning"]) ?? false,
                 ["maxInputTokens"] = context - maxOutput,
                 ["maxOutputTokens"] = maxOutput,
                 ["requestHeaders"] = new JsonObject { ["Authorization"] = "Bearer " + ctx.LocalKey },
-            });
+            };
+            if (protocols[id] == ApiProtocol.OpenAIResponses) model["zeroDataRetentionEnabled"] = true;
+            models.AddNode(model);
         }
         return models;
     }

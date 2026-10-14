@@ -7,6 +7,7 @@ using Astra.Core;
 using Astra.Gateway.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using Astra.Data;
+using Astra.Server.Autostart;
 using Astra.Server.Hosting;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -62,6 +63,14 @@ public sealed class TestHost : IAsyncDisposable
                 b.WebHost.UseTestServer();
                 // Even read-only inspection uses the fake home; tests never touch the user's client configs.
                 b.Services.AddSingleton(new ClientEnvironment(Path.Combine(root, "client-home"), "osx"));
+                // Likewise login entries: a LaunchAgent in the fake home, never the user's.
+                b.Services.AddSingleton(new AutostartHost
+                {
+                    Platform = "darwin",
+                    UserHome = Path.Combine(root, "client-home"),
+                    Launch = [Path.Combine(root, "bin", "astra-server")],
+                    Run = (_, _, _) => Task.FromResult(new AutostartCommandResult(-1, "", "no commands in tests")),
+                });
                 configure?.Invoke(b);
             },
         });

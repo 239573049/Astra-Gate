@@ -43,6 +43,24 @@ export interface ListenStatus {
   networkUrls: string[];
 }
 
+// GET /api/server/autostart -> AutostartStatus ; PUT /api/server/autostart {enabled} -> AutostartStatus (this machine
+// only). The same login entry as `astra autostart`: LaunchAgent (macOS), systemd user unit (Linux), Run key (Windows).
+export type AutostartMechanism = 'launchd' | 'systemd' | 'registry' | 'none';
+export type AutostartUnsupported = 'container' | 'no-systemd' | 'platform';
+export interface AutostartStatus {
+  supported: boolean;
+  enabled: boolean;
+  mechanism: AutostartMechanism;
+  /** Why it is not supported; absent when it is. */
+  unsupported?: AutostartUnsupported | null;
+  /** Where the entry lives (plist, unit file, Run key value, or the CLI's old scheduled task). */
+  location?: string | null;
+  /** The program the entry starts, when it can be read back. */
+  program?: string | null;
+  /** The caller is on the computer running Astra: only it may change the entry. */
+  canChange: boolean;
+}
+
 // ---------- pricing (storage format, snake_case) ----------
 export type PriceSet = Partial<Record<TokenType, number | null>> & { per_call?: Record<string, number> };
 export interface ServiceTierRule { multiplier?: number | null; prices?: PriceSet | null }
@@ -324,6 +342,12 @@ export interface ClientInfo {
   options?: ClientOptionDescriptor[] | null;
   /** Config files the client cannot read as they are; POST /api/clients/{kind}/repair fixes them. */
   repairs?: ConfigRepair[] | null;
+  /**
+   * The protocols a model of this client can be configured with, the default first; absent when every model uses
+   * `protocol`. Each model uses its native protocol (extras.models[id].protocols, preferred first) when the client speaks
+   * it, unless the user chose another in extras.protocolOverrides.
+   */
+  protocols?: ApiProtocol[] | null;
 }
 /**
  * A file the client reads as strict JSON that holds a comment or a trailing comma (the first one at `line`). The repair

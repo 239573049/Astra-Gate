@@ -62,6 +62,7 @@ public sealed class ClientConfigApplier
             EnsureFirstWriteBackup(plan.ClientKind, path, existed);
 
             var ops = ConfigEditorOps.Create(format, text);
+            OriginalJsonDocument? originalDocument = null;
             foreach (var change in group)
             {
                 var before = ops.Read(change);
@@ -69,6 +70,16 @@ public sealed class ClientConfigApplier
                 var after = ops.Read(change);
                 applied.Add(new AppliedKey(path, change.KeyPath, before is null,
                     ConfigValueCodec.Encode(format, before), ConfigValueCodec.Encode(format, after)));
+                // Taking out a key Astra added (a model the provider no longer offers, or one that moved to another
+                // protocol's list) puts it back to its original absence, like a restore: no state is left behind, and the
+                // containers Astra created for it go too once empty.
+                if (after is null && _store.Get(plan.ClientKind, path, change.KeyPath) is { OriginalAbsent: true })
+                {
+                    if (ConfigValueCodec.IsJsonValued(format))
+                        PruneEmptyParents(ops, change, originalDocument ??= OriginalJson(plan.ClientKind, path, format, ReadFirstWriteEntry(plan.ClientKind, path)));
+                    _store.Delete(plan.ClientKind, path, change.KeyPath);
+                    continue;
+                }
                 UpsertState(plan.ClientKind, change, before, after);
             }
 
@@ -176,7 +187,7 @@ public sealed class ClientConfigApplier
                 var current = ops.Read(change);
                 var drifted = change.Kind == ConfigChangeKind.Table
                     ? !string.Equals(current, "true", StringComparison.Ordinal)
-                    : !ConfigValueCodec.EqualsValue(format, current, state.AppliedValueJson);
+                    : !(change.StillOurs?.Invoke(current, state.AppliedValueJson) ?? ConfigValueCodec.EqualsValue(format, current, state.AppliedValueJson));
 
                 if (drifted && !force)
                 {

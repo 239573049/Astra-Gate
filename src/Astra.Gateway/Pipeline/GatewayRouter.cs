@@ -186,6 +186,26 @@ public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, Setti
     }
 
     /// <summary>
+    /// The inbound protocols a request for this model passes through in, untranslated — those <see cref="SelectEndpoint(Provider, ApiProtocol, IReadOnlyList{ApiProtocol}?)"/>
+    /// answers with an endpoint of the same protocol — in the order a client should prefer them: the model's own
+    /// constraint, then the provider's preference, then its other endpoints. Client configs use the first one the client
+    /// can speak (the "protocols" model hint), so the request is never translated when it does not have to be.
+    /// </summary>
+    public static IReadOnlyList<ApiProtocol> PassthroughProtocols(Provider provider, IReadOnlyList<ApiProtocol>? supportedProtocols)
+    {
+        var constrained = supportedProtocols is { Count: > 0 };
+        var ordered = new List<ApiProtocol>();
+        foreach (var protocol in (constrained ? supportedProtocols! : [])
+                     .Concat(provider.PreferredUpstreamProtocols).Concat(provider.Endpoints.Select(e => e.Protocol)))
+        {
+            if (!ordered.Contains(protocol) && provider.EndpointFor(protocol) is not null
+                && (!constrained || supportedProtocols!.Contains(protocol)))
+                ordered.Add(protocol);
+        }
+        return ordered;
+    }
+
+    /// <summary>
     /// The provider's preferred protocols without an address, in priority order. None of them can ever be selected,
     /// so a request in one of them is translated into a lower-preference protocol instead of passing through.
     /// </summary>

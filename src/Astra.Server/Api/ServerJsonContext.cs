@@ -203,6 +203,8 @@ namespace Astra.Server;
 [JsonSerializable(typeof(SystemEndpoints.SetPasswordRequest))]
 [JsonSerializable(typeof(SystemEndpoints.ListenDto))]
 [JsonSerializable(typeof(SystemEndpoints.ListenRequest))]
+[JsonSerializable(typeof(AutostartEndpoints.AutostartDto))]
+[JsonSerializable(typeof(AutostartEndpoints.AutostartRequest))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelStatusDto))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelConfigRequest))]
 [JsonSerializable(typeof(TunnelEndpoints.DetectedCloudflaredDto))]

@@ -106,13 +106,13 @@ launcher of the same binary with a deliberately different resolution order (`cli
   `desktop/src/main.ts:594`): `--astra-api-base`, `--astra-api-mismatch`, `--astra-version`,
   `--astra-accent`. They exist because the renderer needs `apiBase` synchronously at load, inside the
   Chromium sandbox.
-- **IPC channels** (all declared in `registerIpc`, `desktop/src/main.ts:659`, mirrored in
+- **IPC channels** (all declared in `registerIpc`, `desktop/src/main.ts:713`, mirrored in
   `desktop/src/preload.ts:35` and typed in `desktop/src/bridge.d.ts:10`):
   renderer→main `invoke`: `astra:open-path`, `astra:reveal-logs`, `astra:start-service`, `astra:restart-service`, `astra:update-check`,
-  `astra:update-apply`, `astra:get-accent`, `astra:set-theme`, `astra:context-menu`, `astra:tray-prefs-get`,
+  `astra:update-apply`, `astra:login-item-get`, `astra:login-item-set`, `astra:get-accent`, `astra:set-theme`, `astra:context-menu`, `astra:tray-prefs-get`,
   `astra:tray-prefs-set`, `astra:tray-state-get`, `astra:tray-command`; renderer→main `send`:
   `astra:tray-title`, `astra:tray-panel-resize`; main→renderer `send` (via `broadcast`,
-  `desktop/src/main.ts:756`): `astra:menu-command`, `astra:accent-changed`, `astra:tray-state-changed`,
+  `desktop/src/main.ts:756`): `astra:menu-command`, `astra:accent-changed`, `astra:tray-state-changed`, `astra:login-item-changed`,
   `astra:tray-prefs-changed`, `astra:tray-panel-visibility` (`desktop/src/trayPanel.ts:99`/`:107`).
 - **Hash routes the main process drives**: `#/tray` (`desktop/src/shared/chrome.ts:31`),
   `#/settings/tray` (`:29`), `navHash()` targets (`:14`); `MenuCommand` (`:19`) is the payload of
@@ -199,10 +199,13 @@ launcher of the same binary with a deliberately different resolution order (`cli
 - **Renderer input is untrusted** — `astra:context-menu` and `astra:tray-title` / `astra:tray-command`
   validate before touching native APIs (`desktop/src/shared/chrome.ts:100`,
   `desktop/src/shared/trayPanel.ts:52`/`:47`).
-- **Login items need a packaged, stable exe** — `loginItemSupported()` requires `app.isPackaged` and
-  darwin/win32 (`desktop/src/main.ts:475`), and the Windows *query* must pass the same `--hidden` args as the
-  registration or it never matches (`desktop/src/main.ts:479`). macOS 13+ may leave the item at
-  `requires-approval`, which the dialog at `desktop/src/main.ts:502` handles.
+- **Login items need a packaged, stable exe** — `loginItemSupported()` requires `app.isPackaged`
+  (`desktop/src/main.ts:484`), and the Windows *query* must pass the same `--hidden` args as the
+  registration or it never matches (`desktop/src/main.ts:489`). Linux has no Electron login-item API: an XDG
+  autostart entry (`desktop/src/shared/loginItem.ts`) starts the AppImage file (`$APPIMAGE`, not its temporary
+  mount) and is rewritten at launch when the app moved (`refreshLinuxLoginItem`, `desktop/src/main.ts:517`).
+  The tray menu and Settings share `changeOpenAtLogin` (`:529`), which broadcasts `astra:login-item-changed`.
+  macOS 13+ may leave the item at `requires-approval`, which the dialog at `desktop/src/main.ts:556` handles.
 - **Platform tray differences are load-bearing**: Linux AppIndicator may never deliver click events, so the
   menu carries "Show Tray Panel" (`desktop/src/shared/trayMenu.ts:143`) and macOS must not call
   `setContextMenu` (it would turn every click into the menu — `desktop/src/tray.ts:48`). A native menu opened

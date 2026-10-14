@@ -8,6 +8,7 @@ import type { ProxyMode, RequestCompression, Settings } from '../api/types';
 import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
+import { StartupSettings } from '../components/StartupSettings';
 import { Page } from '../components/layout/Page';
 import { NumberField } from '../components/arc/number-field/number-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
@@ -161,6 +162,8 @@ function GeneralSettings() {
           />
         </Row>
       </Group>
+
+      <StartupSettings />
 
       {!s ? (
         settings.isError ? <div className="text-[12px] text-[var(--danger)]">{errorText(settings.error)}</div> : <Spinner className="mx-auto my-8" />

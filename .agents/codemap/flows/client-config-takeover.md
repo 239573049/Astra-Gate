@@ -169,6 +169,17 @@ sequenceDiagram
   consumer (adapter for scope `config`; gateway for scope `gateway`, read through `route.Client.ExtraJson`), its
   key path in `ClientOptions.ConfigKeyPaths` so unsetting/disabling restores it, plus zh/en
   `clients.option.<key>[.hint]` — the panel renders itself from the descriptors on `ClientInfoDto.Options`.
+- **A client that can use more than one protocol:** list them in `ClientProtocols.For` (`Astra.Core/Clients/ClientProtocols.cs`,
+  default first) and have the adapter write each model with `ClientAdapterBase.ModelProtocols(ctx, default)` — per model when
+  the client allows it (NextCoWork `protocolOverride`, Pi/omp `api`, OpenCode `provider.npm`, VS Code `apiType` …), else one
+  provider per protocol (`astra-responses`, `astra-anthropic`, created only while they have models; Crush, Copilot CLI,
+  MiniMax Code, DeepSeek Harness, Paseo). The `protocols` hint comes from `GatewayRouter.PassthroughProtocols` in
+  `ClientService.ContextAsync`; the user's choices are `extras.protocolOverrides`, and a client whose own UI can change
+  them implements `IClientProtocolChoices` so the server records those changes. Removing a key Astra added (a provider no
+  longer needed) in `Apply` restores its absence and prunes the empty containers, like a restore.
+- **A client that rewrites Astra's entry in normal use** (NextCoWork normalises the aliases it lists): override
+  `ClientAdapterBase.ValueStillOurs` to compare only the parts Astra owns, pass the same comparison on the plan's
+  `ConfigChange.StillOurs`, and carry the client's own fields over when rewriting.
 - **New config format:** a `ConfigEditorOps.Create` arm (`src/Astra.Clients/Config/ConfigEditorOps.cs:26`), a
   `ConfigFileFormat` value, and a `ClientAdapterBase.FormatOfPath` branch (`:81`) — precedent: `ShellBlock`
   (+`ShellBlockEditor`) in `628e692`. `ConfigValueCodec` decides the JSON-vs-raw encoding per format, and

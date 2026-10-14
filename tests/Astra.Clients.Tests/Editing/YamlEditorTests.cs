@@ -114,6 +114,15 @@ public class YamlEditorTests
     }
 
     [Fact]
+    public void MultiLineFlowValues_AreReplacedAndRemovedWhole()
+    {
+        const string text = "a:\n  list:\n    - {\n        \"id\": \"x\",\n        \"n\": 1\n      }\n  flow: {\n      k: 1,\n      j: [ 1,\n        2 ]\n    }\nb: 2\n";
+        Assert.Equal("a:\n  list:\n    - {\n        \"id\": \"x\",\n        \"n\": 1\n      }\n  flow: 3\nb: 2\n", new YamlEditor(text).SetRaw("a.flow", "3").Text);
+        Assert.Equal("a:\n  flow: {\n      k: 1,\n      j: [ 1,\n        2 ]\n    }\nb: 2\n", new YamlEditor(text).Remove("a.list").Text);
+        Assert.Equal(text.Replace("b: 2\n", "") + "  c: 4\nb: 2\n", new YamlEditor(text).SetRaw("a.c", "4").Text);
+    }
+
+    [Fact]
     public void Quote_EscapesSpecialCharacters()
     {
         var result = new YamlEditor("").SetRaw("k", "\"a\\\"b\\\\c\\nd: #e\"");

@@ -14,6 +14,13 @@ namespace Astra.Clients.Adapters;
 /// Schema verified against omp.sh/docs/providers and the project README (2026-10); <c>apiKey</c> is looked up as an
 /// environment variable name first and used literally otherwise. The <c>.yaml</c> spelling of both files is honored when it
 /// already exists. omp's own providers stay untouched.
+/// <para>
+/// omp resolves <c>api</c> and <c>baseUrl</c> per model, so a model whose native protocol is Responses, Anthropic or Gemini
+/// carries its own <c>api</c> (and base, see <see cref="PiAiModels"/>). The provider sets <c>auth: apiKey</c>: without it omp
+/// shapes every <c>anthropic-messages</c> request like Claude Code (its fingerprint headers and system blocks), which the
+/// gateway would take for Claude Code itself. Limits Astra does not know are left out, so omp takes them from its own
+/// catalog for a known model id.
+/// </para>
 /// </summary>
 public sealed class OmpClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -21,10 +28,6 @@ public sealed class OmpClientAdapter(ClientEnvironment env, IClientConfigStateSt
     public const string ProviderId = "astra";
 
     public const string ModelRefPrefix = ProviderId + "/";
-
-    public const long DefaultContextWindow = 128_000;
-
-    public const long DefaultMaxTokens = 16_384;
 
     private string AgentDir =>
         Env.GetEnvironmentVariable("PI_CODING_AGENT_DIR") is { Length: > 0 } dir ? dir : Env.Combine(".omp", "agent");
@@ -56,20 +59,30 @@ public sealed class OmpClientAdapter(ClientEnvironment env, IClientConfigStateSt
     public override ConfigChangePlan PlanEnable(EnableContext ctx)
     {
         var hints = ModelHints(ctx);
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
+        var baseUrl = PiAiModels.BaseUrlFor(ctx.GatewayBaseUrl, ApiProtocol.OpenAIChat);
         var models = new JsonArray();
         foreach (var (id, name) in ModelEntries(ctx))
         {
-            hints.TryGetValue(id, out var info);
-            var maxTokens = PositiveLong(info?["maxOutputTokens"]) ?? DefaultMaxTokens;
-            var context = PositiveLong(info?["contextWindow"]) ?? DefaultContextWindow;
-            if (maxTokens >= context) maxTokens = Math.Max(1, context / 4);
-            models.AddNode(new JsonObject { ["id"] = id, ["name"] = name ?? id, ["contextWindow"] = context, ["maxTokens"] = maxTokens });
+            var model = new JsonObject { ["id"] = id, ["name"] = name ?? id };
+            if (protocols[id] != ApiProtocol.OpenAIChat)
+            {
+                model["api"] = PiAiModels.ApiOf(protocols[id]);
+                var own = PiAiModels.BaseUrlFor(ctx.GatewayBaseUrl, protocols[id]);
+                if (own != baseUrl) model["baseUrl"] = own;
+            }
+            PiAiModels.AddHints(model, hints.GetValueOrDefault(id));
+            // omp rejects an output limit that leaves no room for input.
+            if (PositiveLong(model["contextWindow"]) is { } context && PositiveLong(model["maxTokens"]) is { } maxTokens && maxTokens >= context)
+                model["maxTokens"] = Math.Max(1, context / 4);
+            models.AddNode(model);
         }
         var provider = new JsonObject
         {
-            ["baseUrl"] = ctx.GatewayBaseUrl.TrimEnd('/') + "/v1",
+            ["baseUrl"] = baseUrl,
             ["api"] = "openai-completions",
             ["apiKey"] = ctx.LocalKey,
+            ["auth"] = "apiKey",
         };
         if (models.Count > 0) provider["models"] = models;
 

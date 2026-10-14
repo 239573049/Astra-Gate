@@ -12,6 +12,11 @@ namespace Astra.Clients.Adapters;
 /// <c>defaultProvider</c>/<c>defaultModel</c> in <c>&lt;agent-dir&gt;/settings.json</c>. The agent directory
 /// is <c>~/.pi/agent</c> unless PI_CODING_AGENT_DIR overrides it (pi.dev docs: configuration.md,
 /// models.md, settings.md). Pi's own providers and logins stay untouched; <c>/model</c> reloads models.json.
+/// <para>
+/// Pi resolves <c>api</c> and <c>baseUrl</c> per model (<c>model.api ?? provider.api</c>), so a model whose native protocol is
+/// Responses, Anthropic or Gemini carries its own <c>api</c> (and the base that protocol's SDK needs, see
+/// <see cref="PiAiModels"/>), and every model carries the reasoning / input / limit hints Astra knows.
+/// </para>
 /// </summary>
 public sealed class PiClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -51,11 +56,20 @@ public sealed class PiClientAdapter(ClientEnvironment env, IClientConfigStateSto
             ["api"] = "openai-completions",
             ["apiKey"] = ctx.LocalKey,
         };
+        var hints = ModelHints(ctx);
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
         var models = new JsonArray();
         foreach (var (id, name) in ModelEntries(ctx))
         {
             var model = new JsonObject { ["id"] = id };
             if (name is not null) model["name"] = name;
+            if (protocols[id] != ApiProtocol.OpenAIChat)
+            {
+                model["api"] = PiAiModels.ApiOf(protocols[id]);
+                var baseUrl = PiAiModels.BaseUrlFor(ctx.GatewayBaseUrl, protocols[id]);
+                if (baseUrl != (string?)provider["baseUrl"]) model["baseUrl"] = baseUrl;
+            }
+            PiAiModels.AddHints(model, hints.GetValueOrDefault(id));
             models.AddNode(model);
         }
         if (models.Count > 0) provider["models"] = models;

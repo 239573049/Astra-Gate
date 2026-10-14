@@ -3,11 +3,14 @@ import {
   autostartArgv,
   launchdPlistPath,
   renderLaunchdPlist,
+  regAddArgs,
+  regDeleteArgs,
+  regQueryArgs,
   renderSystemdUnit,
-  schtasksCreateArgs,
   schtasksDeleteArgs,
   schtasksQueryArgs,
   systemdUnitPath,
+  windowsCommandLine,
 } from '../src/lib/autostart';
 
 const argv = ['/opt/astra/bin/astra-server', 'serve', '--started-by', 'autostart'];
@@ -54,23 +57,32 @@ describe('systemd', () => {
   });
 });
 
-describe('schtasks', () => {
+describe('Windows Run key', () => {
   const winArgv = ['C:\\Program Files\\Astra\\astra-server.exe', 'serve', '--started-by', 'autostart'];
+  const key = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
 
-  it('builds an ONLOGON task with a quoted /TR command line', () => {
-    const args = schtasksCreateArgs(winArgv);
-    expect(args[0]).toBe('/Create');
-    expect(args).toContain('/SC');
-    expect(args).toContain('ONLOGON');
-    const tn = args.indexOf('/TN');
-    expect(args[tn + 1]).toBe('Astra Server');
-    const tr = args.indexOf('/TR');
-    expect(args[tr + 1]).toBe(
-      '"\\"C:\\Program Files\\Astra\\astra-server.exe\\" serve --started-by autostart"',
+  it('writes the quoted command line under the per-user Run key', () => {
+    expect(windowsCommandLine(winArgv)).toBe(
+      '"C:\\Program Files\\Astra\\astra-server.exe" serve --started-by autostart',
+    );
+    expect(regAddArgs(winArgv)).toEqual([
+      'add', key, '/v', 'Astra Server', '/t', 'REG_SZ',
+      '/d', '"C:\\Program Files\\Astra\\astra-server.exe" serve --started-by autostart', '/f',
+    ]);
+  });
+
+  it('always quotes the program, and other arguments only with spaces', () => {
+    expect(windowsCommandLine(['C:\\astra\\dotnet.exe', 'C:\\my app\\astra-server.dll', 'serve'])).toBe(
+      '"C:\\astra\\dotnet.exe" "C:\\my app\\astra-server.dll" serve',
     );
   });
 
-  it('builds delete and query args for the same task name', () => {
+  it('deletes and queries the same value', () => {
+    expect(regDeleteArgs()).toEqual(['delete', key, '/v', 'Astra Server', '/f']);
+    expect(regQueryArgs()).toEqual(['query', key, '/v', 'Astra Server']);
+  });
+
+  it('still finds the logon task earlier versions created', () => {
     expect(schtasksDeleteArgs()).toEqual(['/Delete', '/F', '/TN', 'Astra Server']);
     expect(schtasksQueryArgs()).toEqual(['/Query', '/TN', 'Astra Server']);
   });

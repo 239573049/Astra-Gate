@@ -49,6 +49,13 @@ export interface UpdateSummary {
 /** What an in-app apply did (mirrors desktop/src/update.ts). */
 export type UiApplyOutcome = 'server' | 'desktop' | 'none';
 
+/** Launch the app at login (mirrors desktop/src/shared/loginItem.ts). */
+export interface LoginItemState {
+  /** False in dev runs: a login item needs a packaged app. */
+  supported: boolean;
+  enabled: boolean;
+}
+
 /** Mirrors desktop/src/preload.ts. */
 export interface DesktopBridge {
   apiBase: string;
@@ -65,6 +72,13 @@ export interface DesktopBridge {
   revealLogs(): Promise<boolean>;
   startService(): Promise<{ ok: boolean; error?: string | null }>;
   restartService(): Promise<{ ok: boolean; error?: string | null }>;
+  /** The app's own login item (the tray menu's "Launch at Login"). */
+  loginItem: {
+    get(): Promise<LoginItemState>;
+    /** Resolves with the state afterwards: unchanged when the system refused. */
+    set(enabled: boolean): Promise<LoginItemState>;
+    onChanged(cb: (state: LoginItemState) => void): () => void;
+  };
   updates: {
     check(): Promise<UpdateSummary>;
     apply(): Promise<UiApplyOutcome>;

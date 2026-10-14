@@ -194,6 +194,10 @@ public static class AstraApp
             findInstalled: () => sp.GetRequiredService<ClientEnvironment>().FindTool("cloudflared")));
         builder.Services.AddSingleton<Astra.Server.Tunnel.TunnelService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Astra.Server.Tunnel.TunnelService>());
+        // Starting at login (the entries `astra autostart` writes); tests swap the host for a fake home.
+        builder.Services.AddSingleton(_ => Astra.Server.Autostart.AutostartHost.Real());
+        builder.Services.AddSingleton<Astra.Server.Autostart.AutostartService>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<Astra.Server.Autostart.AutostartService>());
         builder.Services.AddSingleton<AdminSessions>();
         builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
         builder.Services.AddHttpClient();
@@ -286,6 +290,7 @@ public static class AstraApp
         app.MapKeyInfoEndpoints();
         app.MapAlertEndpoints();
         app.MapTunnelEndpoints();
+        app.MapAutostartEndpoints();
 
         // SPA fallback for everything that is not an API / gateway route.
         app.MapFallback(async ctx =>

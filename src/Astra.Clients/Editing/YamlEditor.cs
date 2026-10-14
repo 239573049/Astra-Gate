@@ -136,7 +136,7 @@ public sealed partial class YamlEditor
         else if (parent.Style != MappingStyle.Flow && TextTool.AtLineContentStart(Text, keyStart))
         {
             var start = TextTool.LineStart(Text, keyStart);
-            var end = TextTool.LineEnd(Text, Math.Max(ContentEnd(entry.Key, entry.Value) - 1, keyStart));
+            var end = TextTool.LineEnd(Text, Math.Max(ContentEnd(Text, entry.Key, entry.Value) - 1, keyStart));
             updated = TextTool.Splice(Text, start, end, "");
         }
         else if (entry.ParentEntry is { } holder)
@@ -191,7 +191,7 @@ public sealed partial class YamlEditor
     {
         var keyStart = Idx(key.Start);
         var keyEnd = Idx(key.End);
-        var regionEnd = TextTool.LineEnd(text, Math.Max(ContentEnd(key, value) - 1, keyStart));
+        var regionEnd = TextTool.LineEnd(text, Math.Max(ContentEnd(text, key, value) - 1, keyStart));
         var hadNewline = regionEnd > 0 && text[regionEnd - 1] == '\n';
         var indent = new string(' ', keyStart - TextTool.LineStart(text, keyStart));
         var replacement = text[keyStart..keyEnd] + ":" + RenderValue(newValue, indent, nl) + (hadNewline ? nl : "");
@@ -206,23 +206,47 @@ public sealed partial class YamlEditor
         var firstKey = mapping.Children.First().Key;
         var firstStart = Idx(firstKey.Start);
         var indent = new string(' ', firstStart - TextTool.LineStart(text, firstStart));
-        var lastContent = mapping.Children.Max(p => ContentEnd(p.Key, p.Value));
+        var lastContent = mapping.Children.Max(p => ContentEnd(text, p.Key, p.Value));
         var at = TextTool.LineEnd(text, lastContent - 1);
         var prefix = at > 0 && text[at - 1] == '\n' ? "" : nl;
         return TextTool.Splice(text, at, at, prefix + RenderEntry(key, value, indent, nl) + nl);
     }
 
     /// <summary>Offset just past the last source character of an entry (comments after it excluded).</summary>
-    private static int ContentEnd(YamlNode key, YamlNode value) => Math.Max(Idx(key.End) + 1, ContentEnd(value));
+    private static int ContentEnd(string text, YamlNode key, YamlNode value) => Math.Max(Idx(key.End) + 1, ContentEnd(text, value));
 
-    private static int ContentEnd(YamlNode node) => node switch
+    private static int ContentEnd(string text, YamlNode node) => node switch
     {
         YamlMappingNode { Style: not MappingStyle.Flow, Children.Count: > 0 } m =>
-            m.Children.Max(p => ContentEnd(p.Key, p.Value)),
-        YamlSequenceNode { Style: not SequenceStyle.Flow, Children.Count: > 0 } s => s.Children.Max(ContentEnd),
+            m.Children.Max(p => ContentEnd(text, p.Key, p.Value)),
+        YamlSequenceNode { Style: not SequenceStyle.Flow, Children.Count: > 0 } s => s.Children.Max(c => ContentEnd(text, c)),
         YamlScalarNode { Style: ScalarStyle.Plain, Value: "" or null } => 0, // "key:" — no value text
+        YamlMappingNode or YamlSequenceNode => FlowEnd(text, node),
         _ => Idx(node.End),
     };
+
+    /// <summary>
+    /// Offset just past the closing bracket of a flow collection. YamlDotNet ends a collection node at its opening token,
+    /// which is only right while the whole collection sits on that line — DeepSeek Harness rewrites long flow items over
+    /// several lines — so the end is taken from the matching end event instead.
+    /// </summary>
+    private static int FlowEnd(string text, YamlNode node)
+    {
+        var parser = new Parser(new StringReader(text));
+        var depth = 0;
+        while (parser.MoveNext())
+        {
+            var e = parser.Current!;
+            if (depth == 0)
+            {
+                if (e is MappingStart { Style: MappingStyle.Flow } or SequenceStart { Style: SequenceStyle.Flow } && e.Start.Index == node.Start.Index)
+                    depth = 1;
+            }
+            else if (e is MappingStart or SequenceStart) depth++;
+            else if (e is MappingEnd or SequenceEnd && --depth == 0) return Idx(e.End);
+        }
+        return Idx(node.End);
+    }
 
     // ---------------------------------------------------------------- rendering (JSON → block YAML)
 
@@ -435,7 +459,7 @@ public sealed partial class YamlEditor
         string updated;
         if (root is YamlSequenceNode { Children.Count: > 0 } sequence)
         {
-            var at = TextTool.LineEnd(Text, ContentEnd(sequence.Children[^1]) - 1);
+            var at = TextTool.LineEnd(Text, ContentEnd(Text, sequence.Children[^1]) - 1);
             updated = TextTool.Splice(Text, at, at, (at > 0 && Text[at - 1] == '\n' ? "" : nl) + rendered);
         }
         else
@@ -474,7 +498,7 @@ public sealed partial class YamlEditor
         var before = Text[lineStart..keyStart];
         if (!before.EndsWith("- ", StringComparison.Ordinal) || before[..^2].Trim().Length > 0)
             throw new EditorException("A row in a YAML sequence must start on its own '- ' line.");
-        return (lineStart, TextTool.LineEnd(Text, Math.Max(ContentEnd(row) - 1, keyStart)), before[..^2]);
+        return (lineStart, TextTool.LineEnd(Text, Math.Max(ContentEnd(Text, row) - 1, keyStart)), before[..^2]);
     }
 
     private static string RowIndent(string text, YamlMappingNode row)

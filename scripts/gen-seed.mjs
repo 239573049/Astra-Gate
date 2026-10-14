@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const SEED_VERSION = 4;
+const SEED_VERSION = 5;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "src/Astra.Core/Seed/models.json");
 const source = process.argv[2] ?? "https://models.dev/api.json";
@@ -243,6 +243,9 @@ const EXTRA_ALIASES = {
   "kimi-k2.7-code-highspeed": ["kimi-for-coding-highspeed"],
   // GLM Coding Plan 1M-context variants advertise a "[1m]" suffix on the plain model id.
   "glm-5.3": ["glm-5.3[1m]"],
+  // DeepSeek's own API calls V4.1 Flash "deepseek-flash"; aggregators and plugins list it under its
+  // versioned id or the Sept 2026 beta id (billed like V4 Flash; offline 2026-09-10 per DeepSeek).
+  "deepseek-flash": ["deepseek-v4.1-flash", "deepseek-v4.1-flash-expires-on-0910"],
 };
 
 for (const [id, aliases] of Object.entries(EXTRA_ALIASES)) {

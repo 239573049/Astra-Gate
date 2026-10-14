@@ -46,7 +46,7 @@ CLI-side view of the `~/.astra` layout.
 | `instanceInstallJson helpers` | `cli/src/lib/install-json.ts:13`,`:25`,`:37`,`:49` | Read/write and merge `install.json` without losing the other side's fields. |
 | `ensureDesktopServer` | `cli/src/lib/desktop-server.ts:63` | Makes `install.json` point at a durable server for the desktop app; copies out of an npx/dlx cache into `~/.astra/server/astra-server-<version>` with `wwwroot` + native companions. |
 | `npmInstallGlobal` | `cli/src/lib/desktop.ts:20` | CLI self-update: `npm install -g <PACKAGE_NAME>@latest` via update-core's `locateNpm`/`npmChildEnv`. |
-| `autostartArgv` + `renderLaunchdPlist`/`renderSystemdUnit`/`schtasksCreateArgs` | `cli/src/lib/autostart.ts:99`,`:25`,`:59`,`:86` | Writes the per-platform autostart entry as `<binary> serve --started-by autostart`. |
+| `autostartArgv` + `renderLaunchdPlist`/`renderSystemdUnit`/`regAddArgs` | `cli/src/lib/autostart.ts:109`,`:30`,`:64`,`:88` | Writes the per-platform autostart entry as `<binary> serve --started-by autostart` — the same entry the server's `AutostartService` (settings page) writes. |
 | `findNewestLog` / `followFile` | `cli/src/lib/logs.ts:7`,`:41` | Newest `logs/astra-YYYYMMDD.log` else `logs/server-stdout.log`; 1 s polling tail. |
 | `AstraError` | `cli/src/errors.ts:2` | Expected failure with an optional `hint` line. |
 | `VERSION` / `PACKAGE_NAME` | `cli/src/version.ts:3`,`:10` | Both inlined from `cli/package.json` by tsup — `PACKAGE_NAME` is the name self-update targets. |
@@ -65,7 +65,7 @@ CLI-side view of the `~/.astra` layout.
 - `~/.astra/config.json` — patched for `port`/`host` only, and only when a flag was passed or the key was missing (`cli/src/lib/server-lifecycle.ts:141`, `cli/src/lib/config-file.ts:19`). It is **authoritative for nothing at runtime**; the server may drift the port.
 - `~/.astra/server/astra-server-<version>[.exe]`, `~/.astra/updates/`, `~/.astra/backups/`, `~/.astra/update-state.json` — owned by `update-core` (`packages/update-core/src/paths.ts:19`), reached through the CLI only via import.
 - `~/.astra/desktop/` — the installed desktop payload (`cli/src/lib/paths.ts:38`), removed by `runUninstallClient` (`cli/src/commands/desktop.ts:63`).
-- Autostart entries outside `~/.astra`: `~/Library/LaunchAgents/io.astra.server.plist`, `~/.config/systemd/user/astra.service`, the schtasks task `Astra Server` (`cli/src/lib/autostart.ts:21`,`:51`,`:10`).
+- Autostart entries outside `~/.astra`: `~/Library/LaunchAgents/io.astra.server.plist`, `~/.config/systemd/user/astra.service`, the `Astra Server` value under `HKCU\…\CurrentVersion\Run` (`cli/src/lib/autostart.ts:26`,`:56`,`:12`); the schtasks task `Astra Server` of earlier versions is only queried and deleted. `src/Astra.Server/Autostart/AutostartService.cs` writes the same three (AGENTS.md linked update 17).
 - Read-only for the CLI: `runtime.json` (`cli/src/lib/runtime.ts:6` — written by the server), `logs/*` (`cli/src/lib/logs.ts`).
 
 ## Contracts it exposes
@@ -81,7 +81,7 @@ CLI-side view of the `~/.astra` layout.
 - To add an API-backed command: copy the `api()` helper shape of the group you are extending (`cli/src/commands/admin.ts:53` for a 10 s timeout, `cli/src/commands/plugin.ts:55` for the 60 s one) — it does `ensureServerRunning()`, passes `runtime.runtimeToken`, and announces an auto-start. Calling `fetch` directly skips `X-Astra-Admin` and gets a 403 on any mutation.
 - To change binary resolution order: `cli/src/lib/binary.ts:60` **and** its stated mirror `desktop/src/shared/resolveServerBinary.ts` (see the order comment at `cli/src/lib/binary.ts:52`); changing only the CLI makes the desktop app and the CLI disagree about which server runs.
 - To move a `~/.astra` path: `cli/src/lib/paths.ts:26`, `src/Astra.Core/AstraPaths.cs` and `desktop/src/shared/paths.ts` together; a path that exists in only one of the three makes the other side read a file nobody writes.
-- To add an autostart mechanism: extend the three renderers plus the `dispatch` switch (`cli/src/commands/autostart.ts:22`) — a missing branch throws `Autostart is not supported on …`.
+- To add an autostart mechanism: extend the three renderers plus the `dispatch` switch (`cli/src/commands/autostart.ts:22`) — a missing branch throws `Autostart is not supported on …` — and the server's `AutostartService`, which must write the same entry.
 
 ## Invariants and traps
 - Never take the port from `config.json`; the server may have moved to the next free port, so the real address is `runtime.json` (`cli/src/lib/server-lifecycle.ts:107`, `cli/src/lib/runtime.ts:6`). `startServer` passes `--port` but returns `rt.port` (`cli/src/lib/server-lifecycle.ts:231`).

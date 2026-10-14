@@ -124,7 +124,7 @@ Zed 不会从设置文件读取 API Key，启用后需在 Zed 的提供商设置
 | `astra stop` / `restart` / `status` | 管理运行中的服务 |
 | `astra logs [-f]` | 查看最近的服务日志 |
 | `astra open` | 打开管理控制台 |
-| `astra autostart enable\|disable\|status` | 登录时自启（LaunchAgent / systemd 用户服务 / schtasks） |
+| `astra autostart enable\|disable\|status` | 登录时自启（LaunchAgent / systemd 用户服务 / 注册表 Run 项）；控制台设置里也有同一开关 |
 | `astra provider list\|add\|remove` | 管理上游提供商 |
 | `astra client list\|status\|enable\|disable` | 管理客户端接管 |
 | `astra config set-password` | 设置管理密码（绑定非回环地址前必须设置） |

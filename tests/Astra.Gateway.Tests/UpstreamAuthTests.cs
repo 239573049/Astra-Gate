@@ -129,6 +129,43 @@ public class UpstreamAuthResolverTests
             GatewayRouter.SelectEndpoint(provider, ApiProtocol.OpenAIResponses, [ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses]).Protocol);
     }
 
+    /// <summary>
+    /// The protocols a client should send a model in (the "protocols" hint of client configs): exactly those
+    /// <see cref="GatewayRouter.SelectEndpoint(Provider, ApiProtocol, IReadOnlyList{ApiProtocol}?)"/> passes through, the
+    /// model's own order first, then the provider's preference, then its other endpoints.
+    /// </summary>
+    [Fact]
+    public void Passthrough_Protocols_Are_What_SelectEndpoint_Passes_Through_In_Preference_Order()
+    {
+        var provider = new Provider
+        {
+            Name = "Mixed",
+            Endpoints =
+            [
+                new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://x" },
+                new ProviderEndpoint { Protocol = ApiProtocol.Anthropic, BaseUrl = "https://x" },
+                new ProviderEndpoint { Protocol = ApiProtocol.OpenAIResponses, BaseUrl = "https://x" },
+            ],
+            // Gemini is preferred but has no address: it can never pass through.
+            PreferredUpstreamProtocols = [ApiProtocol.Gemini, ApiProtocol.OpenAIResponses, ApiProtocol.OpenAIChat],
+        };
+        foreach (IReadOnlyList<ApiProtocol>? constraint in new IReadOnlyList<ApiProtocol>?[]
+                 { null, [], [ApiProtocol.Anthropic], [ApiProtocol.OpenAIChat, ApiProtocol.Anthropic], [ApiProtocol.Gemini] })
+        {
+            var passthrough = GatewayRouter.PassthroughProtocols(provider, constraint);
+            foreach (var inbound in ApiProtocols.All)
+            {
+                var passes = constraint is [ApiProtocol.Gemini]
+                    ? false // the only allowed protocol has no endpoint: SelectEndpoint refuses every inbound protocol
+                    : GatewayRouter.SelectEndpoint(provider, inbound, constraint).Protocol == inbound;
+                Assert.Equal(passes, passthrough.Contains(inbound));
+            }
+        }
+        Assert.Equal([ApiProtocol.OpenAIResponses, ApiProtocol.OpenAIChat, ApiProtocol.Anthropic], GatewayRouter.PassthroughProtocols(provider, null));
+        Assert.Equal([ApiProtocol.Anthropic, ApiProtocol.OpenAIChat],
+            GatewayRouter.PassthroughProtocols(provider, [ApiProtocol.Anthropic, ApiProtocol.OpenAIChat]));
+    }
+
     [Fact]
     public void A_Model_Without_Any_Configured_Supported_Endpoint_Is_Not_Sent_To_An_Unsupported_Protocol()
     {

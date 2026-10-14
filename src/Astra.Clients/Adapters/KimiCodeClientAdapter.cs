@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
 
 using Astra.Clients.Config;
@@ -18,6 +19,13 @@ namespace Astra.Clients.Adapters;
 /// <c>model</c>). Tables Astra created are owned whole (<see cref="ConfigChangeKind.Table"/>); fields inside a table that
 /// already existed are refreshed one by one and restored on disable. The archived Python CLI's <c>~/.kimi</c> directory is never
 /// touched.
+/// <para>
+/// A model table may name its own <c>protocol</c> (<c>openai_responses</c> or <c>anthropic</c>; the model's value wins over the
+/// provider's <c>type</c>), so a model whose native protocol is Responses or Anthropic gets one; Kimi strips the trailing
+/// <c>/v1</c> from the base for Anthropic itself, so the provider's <c>base_url</c> serves all three. Gemini would need a
+/// <c>google-genai</c> provider of its own (the model-level enum has no Gemini), so it stays on the gateway's translation.
+/// <c>max_output_size</c> is written when known (Responses otherwise asks for an unbounded output).
+/// </para>
 /// </summary>
 public sealed class KimiCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -69,19 +77,30 @@ public sealed class KimiCodeClientAdapter(ClientEnvironment env, IClientConfigSt
         ]));
 
         var hints = ModelHints(ctx);
-        var aliases = Aliases(ModelEntries(ctx).Select(e => e.Id));
+        var protocols = ModelProtocols(ctx, ApiProtocol.OpenAIChat);
+        var entries = ModelEntries(ctx);
+        var aliases = Aliases(entries.Select(e => e.Id));
         foreach (var (id, alias) in aliases)
         {
             hints.TryGetValue(id, out var info);
             var capabilities = new List<string> { "\"tool_use\"" };
             if (BoolHint(info?["reasoning"]) == true) capabilities.Add("\"thinking\"");
             if (BoolHint(info?["vision"]) == true) capabilities.Add("\"image_in\"");
+            var name = entries.First(e => e.Id == id).Name;
             changes.AddRange(TableChanges(file, ModelTable(alias),
             [
                 ("provider", Raw(ProviderId)),
                 ("model", Raw(id)),
                 ("max_context_size", (PositiveLong(info?["contextWindow"]) ?? DefaultContextSize).ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 ("capabilities", "[" + string.Join(", ", capabilities) + "]"),
+                ("protocol", protocols[id] switch
+                {
+                    ApiProtocol.OpenAIResponses => Raw("openai_responses"),
+                    ApiProtocol.Anthropic => Raw("anthropic"),
+                    _ => null,
+                }),
+                ("max_output_size", PositiveLong(info?["maxOutputTokens"])?.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ("display_name", name is null ? null : Raw(name)),
             ]));
         }
 
@@ -150,21 +169,32 @@ public sealed class KimiCodeClientAdapter(ClientEnvironment env, IClientConfigSt
         return BuildStatus(detection, enabled, warnings);
     }
 
-    /// <summary>Creates the table with all fields, or — when it already exists — refreshes only the differing fields.</summary>
-    private IEnumerable<ConfigChange> TableChanges(string file, string tablePath, (string Key, string Raw)[] fields)
+    /// <summary>
+    /// Creates the table with all fields, or — when it already exists — refreshes only the differing fields. A null field is
+    /// optional and currently not wanted: it is left out of a new table, and taken out of an existing one only when Astra put
+    /// it there (the table is Astra's, or the field was written by an earlier refresh).
+    /// </summary>
+    private IEnumerable<ConfigChange> TableChanges(string file, string tablePath, (string Key, string? Raw)[] fields)
     {
         if (CurrentValue(file, ConfigFileFormat.Toml, tablePath, ConfigChangeKind.Table) is null)
         {
             var items = new JsonObject();
-            foreach (var (key, raw) in fields) items[key] = raw;
+            foreach (var (key, raw) in fields)
+                if (raw is not null) items[key] = raw;
             yield return new ConfigChange(file, ConfigFileFormat.Toml, tablePath, null, items.ToJsonString(), ConfigChangeKind.Table);
             yield break;
         }
+        var tableIsOurs = Store.Get(Kind, file, tablePath)?.OriginalAbsent == true;
         foreach (var (key, raw) in fields)
         {
             var path = $"{tablePath}.{key}";
             var before = CurrentValue(file, ConfigFileFormat.Toml, path);
-            if (!string.Equals(before, raw, StringComparison.Ordinal))
+            if (raw is null)
+            {
+                if (before is not null && (tableIsOurs || Store.Get(Kind, file, path) is not null))
+                    yield return new ConfigChange(file, ConfigFileFormat.Toml, path, before, null);
+            }
+            else if (!string.Equals(before, raw, StringComparison.Ordinal))
                 yield return new ConfigChange(file, ConfigFileFormat.Toml, path, before, JsonString(raw));
         }
     }

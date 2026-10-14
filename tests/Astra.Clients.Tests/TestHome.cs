@@ -65,4 +65,24 @@ public static class TestGateway
         Model = model,
         Extras = extras,
     };
+
+    /// <summary>
+    /// Sets one model's "protocols" hint in a "models" extra (the protocols the gateway passes it through in, preferred
+    /// first — what ClientService derives from the provider) and returns the extra.
+    /// </summary>
+    public static System.Text.Json.Nodes.JsonObject Native(System.Text.Json.Nodes.JsonObject extras, string id, params string[] protocols)
+    {
+        var model = (System.Text.Json.Nodes.JsonObject)extras["models"]![id]!;
+        model["protocols"] = new System.Text.Json.Nodes.JsonArray([.. protocols.Select(p => (System.Text.Json.Nodes.JsonNode)p)]);
+        return extras;
+    }
+
+    /// <summary>Sets the user's per-model protocol choice ("protocolOverrides") in an extras object and returns it.</summary>
+    public static System.Text.Json.Nodes.JsonObject Override(System.Text.Json.Nodes.JsonObject extras, string id, string protocol)
+    {
+        if (extras["protocolOverrides"] is not System.Text.Json.Nodes.JsonObject overrides)
+            extras["protocolOverrides"] = overrides = new System.Text.Json.Nodes.JsonObject();
+        overrides[id] = protocol;
+        return extras;
+    }
 }

@@ -5,8 +5,13 @@ import { AstraError } from '../errors.js';
 import { homePaths } from './paths.js';
 import { runCapture } from './process-utils.js';
 
+// The server writes the same entries (src/Astra.Server/Autostart/AutostartService.cs, the settings page's switch):
+// names, paths, argv and formats change together.
 export const LAUNCHD_LABEL = 'io.astra.server';
 export const SYSTEMD_UNIT_NAME = 'astra.service';
+export const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+export const RUN_VALUE_NAME = 'Astra Server';
+/** The logon task earlier versions created; creating one needs an elevated prompt, so the Run key replaced it. */
 export const SCHTASKS_TASK_NAME = 'Astra Server';
 
 function xmlEscape(s: string): string {
@@ -73,18 +78,23 @@ WantedBy=default.target
 `;
 }
 
-function quoteForTr(argv: readonly string[]): string {
-  // Canonical schtasks /TR form: outer quotes, inner quotes backslash-escaped:
-  //   "\"C:\Program Files\app.exe\" serve --flag"
-  const inner = argv
-    .map((a) => (/[\s"]/.test(a) ? `"${a}"` : a))
-    .join(' ')
-    .replace(/"/g, '\\"');
-  return `"${inner}"`;
+/** The Run value: the program always quoted, then the arguments, quoted when they contain spaces. */
+export function windowsCommandLine(argv: readonly string[]): string {
+  return argv
+    .map((a, i) => (i === 0 || a === '' || /[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a))
+    .join(' ');
 }
 
-export function schtasksCreateArgs(argv: readonly string[]): string[] {
-  return ['/Create', '/F', '/SC', 'ONLOGON', '/TN', SCHTASKS_TASK_NAME, '/TR', quoteForTr(argv)];
+export function regAddArgs(argv: readonly string[]): string[] {
+  return ['add', RUN_KEY, '/v', RUN_VALUE_NAME, '/t', 'REG_SZ', '/d', windowsCommandLine(argv), '/f'];
+}
+
+export function regDeleteArgs(): string[] {
+  return ['delete', RUN_KEY, '/v', RUN_VALUE_NAME, '/f'];
+}
+
+export function regQueryArgs(): string[] {
+  return ['query', RUN_KEY, '/v', RUN_VALUE_NAME];
 }
 
 export function schtasksDeleteArgs(): string[] {
@@ -178,23 +188,45 @@ export async function autostartStatusLinux(
   return r !== null && r.code === 0 && r.stdout.trim() === 'enabled' ? 'enabled' : 'disabled';
 }
 
-// ---------- Windows (schtasks) ----------
+// ---------- Windows (HKCU Run key) ----------
+
+async function legacyTaskExists(): Promise<boolean> {
+  const r = await exec(['schtasks', ...schtasksQueryArgs()]).catch(() => null);
+  return r !== null && r.code === 0;
+}
+
+/** Removes the logon task of earlier versions when there is one; false when it is still there afterwards. */
+async function removeLegacyTask(): Promise<boolean> {
+  if (!(await legacyTaskExists())) return true;
+  await exec(['schtasks', ...schtasksDeleteArgs()]).catch(() => undefined);
+  return !(await legacyTaskExists());
+}
 
 export async function enableAutostartWindows(argv: readonly string[]): Promise<void> {
-  const r = await exec(['schtasks', ...schtasksCreateArgs(argv)]);
+  const r = await exec(['reg', ...regAddArgs(argv)]);
   if (r.code !== 0) {
-    throw new AstraError('schtasks /Create failed.', r.stderr.trim() || undefined);
+    throw new AstraError('reg add failed.', r.stderr.trim() || undefined);
   }
+  // The old logon task would start a second server next to the Run key's.
+  await removeLegacyTask();
 }
 
 export async function disableAutostartWindows(): Promise<void> {
-  const r = await exec(['schtasks', ...schtasksDeleteArgs()]);
-  if (r.code !== 0 && !/does not exist|no existe/i.test(r.stderr + r.stdout)) {
-    throw new AstraError('schtasks /Delete failed.', r.stderr.trim() || undefined);
+  await exec(['reg', ...regDeleteArgs()]).catch(() => undefined);
+  const still = await exec(['reg', ...regQueryArgs()]);
+  if (still.code === 0) {
+    throw new AstraError('reg delete failed.', `Remove the "${RUN_VALUE_NAME}" value under ${RUN_KEY}.`);
+  }
+  if (!(await removeLegacyTask())) {
+    throw new AstraError(
+      `The scheduled task "${SCHTASKS_TASK_NAME}" could not be removed.`,
+      `Run from an administrator prompt: schtasks /Delete /F /TN "${SCHTASKS_TASK_NAME}"`,
+    );
   }
 }
 
 export async function autostartStatusWindows(): Promise<'enabled' | 'disabled'> {
-  const r = await exec(['schtasks', ...schtasksQueryArgs()]);
-  return r.code === 0 ? 'enabled' : 'disabled';
+  const r = await exec(['reg', ...regQueryArgs()]);
+  if (r.code === 0) return 'enabled';
+  return (await legacyTaskExists()) ? 'enabled' : 'disabled';
 }

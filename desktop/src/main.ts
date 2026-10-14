@@ -38,6 +38,15 @@ import {
   type MenuCommand,
   type NavTarget,
 } from './shared/chrome';
+import {
+  HIDDEN_ARG,
+  linuxAutostartEnabled,
+  linuxAutostartPath,
+  linuxLoginExecutable,
+  renderLinuxAutostart,
+  retargetLinuxAutostart,
+  type LoginItemState,
+} from './shared/loginItem';
 import { astraPaths, type AstraPaths } from './shared/paths';
 import { apiBase } from './shared/port';
 import { parsePrefs, parseTrayPrefs, type DesktopPrefs } from './shared/prefs';
@@ -57,8 +66,6 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const DEV_RENDERER_URL = process.env.ASTRA_RENDERER_URL?.trim() || '';
-/** Passed by the Windows login item: start in the tray without opening the window. */
-const HIDDEN_ARG = '--hidden';
 const IS_MAC = process.platform === 'darwin';
 
 let paths: AstraPaths | null = null;
@@ -175,6 +182,7 @@ async function main(): Promise<void> {
   // Launched at login: stay in the tray / menu bar, no window and no Dock icon.
   const startHidden = launchedAtLogin();
   if (startHidden && IS_MAC) app.dock?.hide();
+  refreshLinuxLoginItem();
   // macOS gets a native menu (shortcuts → renderer commands); on Windows/Linux the
   // renderer handles Ctrl+ shortcuts itself and the window has no menu bar.
   if (IS_MAC) Menu.setApplicationMenu(buildAppMenu());
@@ -405,7 +413,7 @@ function trayCallbacks(): TrayCallbacks {
       })();
     },
     onToggleOpenAtLogin: (enabled: boolean) => {
-      void setOpenAtLogin(enabled).finally(() => refreshTray(true));
+      void changeOpenAtLogin(enabled);
     },
     onCheckUpdates: () => {
       bringAppToFront();
@@ -471,9 +479,12 @@ async function openTraySettings(): Promise<void> {
   bringAppToFront();
 }
 
-/** Login items need a stable, packaged executable; Linux has no Electron API for them. */
+/**
+ * Login items need a stable, packaged executable. macOS / Windows use Electron's login item; Linux, which has no
+ * Electron API for it, an XDG autostart entry.
+ */
 function loginItemSupported(): boolean {
-  return app.isPackaged && (process.platform === 'darwin' || process.platform === 'win32');
+  return app.isPackaged && (process.platform === 'darwin' || process.platform === 'win32' || process.platform === 'linux');
 }
 
 /** Windows registers the run key with HIDDEN_ARG; queries must pass the same args to match it. */
@@ -481,18 +492,67 @@ function loginItemArgs(): { args?: string[] } {
   return process.platform === 'win32' ? { args: [HIDDEN_ARG] } : {};
 }
 
+function linuxAutostartFile(): string {
+  return linuxAutostartPath(process.env, os.homedir());
+}
+
+function linuxAutostartArgv(): string[] {
+  return [linuxLoginExecutable(process.env, process.execPath), HIDDEN_ARG];
+}
+
 function readOpenAtLogin(): boolean | null {
   if (!loginItemSupported()) return null;
   try {
+    if (process.platform === 'linux') {
+      const file = linuxAutostartFile();
+      return fs.existsSync(file) && linuxAutostartEnabled(fs.readFileSync(file, 'utf8'));
+    }
     return app.getLoginItemSettings(loginItemArgs()).openAtLogin;
   } catch {
     return null;
   }
 }
 
+function loginItemState(): LoginItemState {
+  const enabled = readOpenAtLogin();
+  return { supported: enabled !== null, enabled: enabled === true };
+}
+
+/** Linux: an AppImage moved or replaced since the entry was written would no longer start; point it at this one. */
+function refreshLinuxLoginItem(): void {
+  if (process.platform !== 'linux' || !loginItemSupported()) return;
+  try {
+    const file = linuxAutostartFile();
+    if (!fs.existsSync(file)) return;
+    const next = retargetLinuxAutostart(fs.readFileSync(file, 'utf8'), linuxAutostartArgv());
+    if (next !== null) fs.writeFileSync(file, next);
+  } catch (err) {
+    console.error('[astra] could not refresh the autostart entry:', err);
+  }
+}
+
+/** Tray menu or Settings: switches the login item, then brings the tray and every window up to date. */
+async function changeOpenAtLogin(enabled: boolean): Promise<LoginItemState> {
+  await setOpenAtLogin(enabled);
+  const state = loginItemState();
+  broadcast('astra:login-item-changed', state);
+  void refreshTray(true);
+  return state;
+}
+
 async function setOpenAtLogin(enabled: boolean): Promise<void> {
   if (!loginItemSupported()) return;
   try {
+    if (process.platform === 'linux') {
+      const file = linuxAutostartFile();
+      if (enabled) {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, renderLinuxAutostart(linuxAutostartArgv()));
+      } else {
+        fs.rmSync(file, { force: true });
+      }
+      return;
+    }
     app.setLoginItemSettings({ openAtLogin: enabled, ...loginItemArgs() });
   } catch (err) {
     console.error('[astra] login item update failed:', err);
@@ -516,7 +576,7 @@ async function setOpenAtLogin(enabled: boolean): Promise<void> {
   }
 }
 
-/** True when this process was started by the login item (Windows arg, macOS launch reason). */
+/** True when this process was started by the login item (Windows / Linux arg, macOS launch reason). */
 function launchedAtLogin(): boolean {
   if (process.argv.includes(HIDDEN_ARG)) return true;
   if (!IS_MAC || !app.isPackaged) return false;
@@ -693,6 +753,11 @@ function registerIpc(): void {
     void refreshTray();
     return outcome;
   });
+  // Settings › General › Startup: the same login item as the tray menu's "Launch at Login".
+  ipcMain.handle('astra:login-item-get', (): LoginItemState => loginItemState());
+  ipcMain.handle('astra:login-item-set', (_event, enabled: unknown): Promise<LoginItemState> =>
+    typeof enabled === 'boolean' ? changeOpenAtLogin(enabled) : Promise.resolve(loginItemState()),
+  );
   ipcMain.handle('astra:get-accent', (): string | null => currentAccentColor());
   ipcMain.handle('astra:set-theme', (_event, source: unknown): boolean => {
     if (!isThemeSource(source)) return false;

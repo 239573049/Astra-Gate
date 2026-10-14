@@ -1,4 +1,5 @@
 import type { ContextMenuItem, MenuCommand, ThemeSource } from './shared/chrome';
+import type { LoginItemState } from './shared/loginItem';
 import type { TrayPrefs } from './shared/prefs';
 import type { TrayPanelCommand, TrayPanelState } from './shared/trayPanel';
 
@@ -22,6 +23,11 @@ declare global {
       revealLogs(): Promise<boolean>;
       startService(): Promise<{ ok: boolean; error: string | null }>;
       restartService(): Promise<{ ok: boolean; error: string | null }>;
+      loginItem: {
+        get(): Promise<LoginItemState>;
+        set(enabled: boolean): Promise<LoginItemState>;
+        onChanged(cb: (state: LoginItemState) => void): () => void;
+      };
       updates: {
         check(): Promise<UpdateSummary>;
         apply(): Promise<UiApplyOutcome>;

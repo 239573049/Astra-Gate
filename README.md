@@ -136,7 +136,7 @@ server running.
 | `astra stop` / `restart` / `status` | Manage the running server |
 | `astra logs [-f]` | Show recent server logs |
 | `astra open` | Open the web console |
-| `astra autostart enable\|disable\|status` | Start at login (LaunchAgent / systemd user / schtasks) |
+| `astra autostart enable\|disable\|status` | Start at login (LaunchAgent / systemd user / Run registry key); also in Settings › Start at login |
 | `astra provider list\|add\|remove` | Manage upstream providers |
 | `astra client list\|status\|enable\|disable` | Manage client take-over |
 | `astra config set-password` | Set the admin password (required before binding a non-loopback address) |

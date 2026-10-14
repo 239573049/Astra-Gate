@@ -87,7 +87,7 @@ and Bun host (`astra-plugins`), and the CLI/web/desktop/docs/packaging side (`cl
   `/api/providers/{id}/accounts*`, `/api/provider-accounts/*`, `/api/subscription/*`, `/api/oauth/callback` (`Api/SubscriptionEndpoints.cs:212`),
   `/api/update/status|/check` (`Api/UpdateEndpoints.cs:16`), `/api/plugins*`, `/api/plugin-providers/{id}/*` (`Api/PluginEndpoints.cs:14`),
   `/api/webhooks*`, `/api/alerts/*`, `/api/webhook-deliveries/{id}/redeliver` (`Alerts/AlertEndpoints.cs:419`),
-  `/api/tunnel*` (`Api/TunnelEndpoints.cs:40`), `/api/openapi.json` (`AstraApp.cs:270`), plus the gateway's `/v1`, `/v1beta`, `/v1/messages`, key-info routes.
+  `/api/tunnel*` (`Api/TunnelEndpoints.cs:40`), GET/PUT `/api/server/autostart` (`Api/AutostartEndpoints.cs`; PUT from this machine only — the login entry `astra autostart` manages, written by `Autostart/AutostartService.cs` without starting or stopping anything now), `/api/openapi.json` (`AstraApp.cs:270`), plus the gateway's `/v1`, `/v1beta`, `/v1/messages`, key-info routes.
 - Headers/status codes: `X-Astra-Admin: 1` on every mutating `/api` call, `X-Astra-Runtime-Token` for shutdown, `astra_session` cookie, 421 for a disallowed Host, 403/401 `{ error }` envelopes, session `Secure` when Cloudflare says https (`src/Astra.Server/Security/Security.cs:46`).
 - Webhook payload (camelCase, `WebhookDispatcher.Payload`, `src/Astra.Server/Alerts/WebhookDispatcher.cs:255`): `id, event, status, repeat, occurredAt, rule{id,name}, subject{type,id,name}, condition, observed, message, astra{version,url}` with `X-Astra-Event` / `-Delivery` / `-Timestamp` / `-Signature` headers.
 - runtime.json shape (`RuntimeInfo`, `src/Astra.Server/Hosting/RuntimeFile.cs:8`) — the file CLI and desktop read to find a running server.

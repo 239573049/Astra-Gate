@@ -94,7 +94,7 @@ program
 const autostart = program.command('autostart').description('Manage starting Astra at login');
 autostart
   .command('enable')
-  .description('Enable autostart (LaunchAgent / systemd --user / schtasks)')
+  .description('Enable autostart (LaunchAgent / systemd --user / Run registry key)')
   .action(() => runAutostart('enable'));
 autostart
   .command('disable')

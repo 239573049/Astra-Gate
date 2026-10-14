@@ -34,7 +34,7 @@ public sealed class JsonRegistrationTests
             "/api/privacy/events", "/api/privacy/events/stats", "/api/providers", "/api/clients", "/api/tokens",
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/provider-quota/templates",
-            "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel",
+            "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -91,6 +91,7 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Post, "/api/auth/login", new { password = "wrong" });
         await host.SendAsync(HttpMethod.Put, "/api/tunnel", new { mode = "named", hostname = "astra.example.com" });
         await host.SendAsync(HttpMethod.Post, "/api/tunnel/start");
+        await host.SendAsync(HttpMethod.Put, "/api/server/autostart", new { enabled = false });
         await host.SendAsync(HttpMethod.Delete, "/api/provider-accounts/missing");
         await host.SendAsync(HttpMethod.Get, "/api/models/missing");
         await host.SendAsync(HttpMethod.Get, "/api/nope");

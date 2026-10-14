@@ -564,7 +564,8 @@ public static class ProviderEndpoints
 
             // Plan §7.6: enabled clients with a model list (OpenCode, Pi, MiniMax Code, Copilot CLI) list the bound
             // provider's models in their config; keep those lists in step with whatever this write changed (models
-            // added/removed/renamed, provider enabled/disabled).
+            // added/removed/renamed, provider enabled/disabled, endpoints or preferred protocols — which decide the
+            // protocol each model is configured with, see ClientProtocols).
             if (context.HttpContext.GetRouteValue("id") is string id && result is not IStatusCodeHttpResult { StatusCode: >= 400 })
                 await context.HttpContext.RequestServices.GetRequiredService<ClientService>()
                     .SyncModelListsAsync(id, context.HttpContext.RequestAborted);
