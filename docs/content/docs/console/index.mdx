@@ -15,13 +15,14 @@ description: 打开控制台的几种方式，以及界面布局
 
 ## 登录
 
-监听在环回地址（`127.0.0.1`）时，本机访问**免密码**。只有把服务显式监听到局域网地址（`astra start --host 0.0.0.0`，需先用 `astra config set-password` 设置管理密码）后，才要求登录：
+本机访问**免密码**。把服务监听到局域网（[设置 → 网关 → 监听](/docs/console/settings#局域网访问)选「局域网」，或 `astra start --host 0.0.0.0`，都需要先设置管理员密码）后，**其他设备**打开控制台要求登录：
 
 <Screenshot src="/screenshots/login.png" alt="登录页：居中的玻璃卡片，提示输入管理密码" title="Astra — 登录" caption="对外监听时的登录页；环回访问无需登录" />
 
 <Callout type="warn" title="安全边界">
-  即使在本机，所有「修改」类接口也要求请求头 `X-Astra-Admin: 1`（Web 控制台已自动携带）；
-  对外监听时还有 Host 白名单（防 DNS 重绑定）与会话 cookie 保护。不要把端口暴露到不受信任的网络。
+  即使在本机，所有「修改」类接口也要求请求头 `X-Astra-Admin: 1`（Web 控制台已自动携带）。
+  对外监听时，只有从本机回环地址连入、Host 为 `127.0.0.1` / `localhost`、且没有代理转发头（`X-Forwarded-For` 等）的请求才算本机；
+  其余请求都要会话 cookie，调用网关必须带令牌。不要把端口暴露到不受信任的网络。
 </Callout>
 
 ## 界面布局

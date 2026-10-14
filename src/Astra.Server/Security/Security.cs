@@ -73,12 +73,14 @@ public sealed class AdminSessions(IDataProtectionProvider dp)
 /// - loopback mode: Host header must be 127.0.0.1 / localhost / [::1] (DNS-rebinding defense), or the public hostname of
 ///   the Cloudflare Tunnel Astra runs (<see cref="Tunnel.TunnelService"/>);
 /// - every mutating /api call needs "X-Astra-Admin: 1" (forces a CORS preflight from foreign origins);
-/// - non-loopback mode: /api requires an admin session cookie (except health/version/auth).
+/// - non-loopback mode (e.g. 0.0.0.0 for the LAN): a request is from this machine only when its peer is loopback, its
+///   Host is a loopback name (a rebound domain is not) and no proxy forwarded it; everything else is from the network
+///   (<see cref="RequestOrigin.MarkNetwork"/>), and /api wants an admin session cookie from it (except health/version/auth).
 /// Requests that came through Cloudflare (Cf-* headers, or the tunnel's hostname) are remote
 /// (<see cref="RequestOrigin"/>): the gateway wants a token from them, /api wants a session too, and in loopback mode
 /// they reach only the gateway unless the tunnel settings allow the admin UI. In loopback mode the connection is
 /// local, so Cloudflare's own headers are trusted for the client address and scheme (rate limits, Secure cookies).
-/// Gateway endpoints (/v1, /v1beta) authenticate with gateway tokens elsewhere.
+/// Gateway endpoints (/v1, /v1beta) authenticate with gateway tokens elsewhere; network requests always need one.
 /// </summary>
 public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions options, AdminSessions sessions,
     Tunnel.TunnelService tunnel, SettingsService settings)
@@ -105,6 +107,10 @@ public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions optio
             RequestOrigin.MarkRemote(ctx);
             if (options.IsLoopback) AdoptCloudflareHeaders(ctx);
         }
+        else if (!options.IsLoopback && !FromThisMachine(ctx, host))
+        {
+            RequestOrigin.MarkNetwork(ctx);
+        }
 
         var path = ctx.Request.Path;
         if (path.StartsWithSegments("/api") && !HttpMethods.IsOptions(ctx.Request.Method))
@@ -127,7 +133,7 @@ public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions optio
             var open = path.StartsWithSegments("/api/health") || path.StartsWithSegments("/api/version")
                        || path.StartsWithSegments("/api/auth") || path.StartsWithSegments("/api/admin/shutdown")
                        || path.StartsWithSegments("/api/update/status");
-            if (SessionRequired(ctx, options) && !open && !sessions.IsSignedIn(ctx))
+            if (SessionRequired(ctx) && !open && !sessions.IsSignedIn(ctx))
             {
                 await Problem(ctx, StatusCodes.Status401Unauthorized, "Login required");
                 return;
@@ -137,8 +143,27 @@ public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions optio
         await next(ctx);
     }
 
-    /// <summary>Whether /api wants a signed-in session from this request: always off-loopback, and for remote requests.</summary>
-    public static bool SessionRequired(HttpContext ctx, ServerOptions options) => !options.IsLoopback || RequestOrigin.IsRemote(ctx);
+    /// <summary>Whether /api wants a signed-in session from this request: whenever it is not from this machine.</summary>
+    public static bool SessionRequired(HttpContext ctx) => !RequestOrigin.IsLocal(ctx);
+
+    /// <summary>
+    /// Headers a proxy adds. X-Original-For is what ASP.NET's own forwarded-headers handling
+    /// (ASPNETCORE_FORWARDEDHEADERS_ENABLED) leaves after replacing the peer address with X-Forwarded-For's — which
+    /// anyone can send, so a peer of 127.0.0.1 that came that way proves nothing.
+    /// </summary>
+    private static readonly string[] ProxyHeaders = ["X-Forwarded-For", "X-Forwarded-Host", "Forwarded", "X-Real-IP", "X-Original-For"];
+
+    /// <summary>
+    /// Off-loopback, what still counts as this machine: a loopback peer asking for a loopback Host, with no proxy
+    /// headers. A page whose domain was rebound to 127.0.0.1 keeps its own Host, and a reverse proxy on this machine
+    /// relays other machines' requests, so neither is trusted like a local caller.
+    /// </summary>
+    private static bool FromThisMachine(HttpContext ctx, string host)
+    {
+        if (ctx.Connection.RemoteIpAddress is not { } peer) return false;
+        var headers = ctx.Request.Headers;
+        return IPAddress.IsLoopback(peer) && LoopbackHosts.Contains(host) && !ProxyHeaders.Any(headers.ContainsKey);
+    }
 
     /// <summary>What a remote browser may ask while remote admin is off: enough for the page to explain itself.</summary>
     private static bool IsRemoteProbe(PathString path) =>

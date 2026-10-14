@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -29,7 +30,18 @@ public sealed class ServerOptions
     /// <summary><c>ASTRA_PLUGINS=off</c>: no installed plugin runs and none can be installed (the list is kept).</summary>
     [JsonIgnore] public bool PluginsOff { get; set; }
 
+    /// <summary>ASTRA_HOST chose <see cref="Host"/>: config.json's host does not apply (containers).</summary>
+    [JsonIgnore] public bool HostFromEnvironment { get; private set; }
+
     public bool IsLoopback => Host is "127.0.0.1" or "localhost" or "::1" or "[::1]";
+
+    /// <summary>Listening on every interface (0.0.0.0, *, ::).</summary>
+    [JsonIgnore]
+    public bool IsWildcard => Host is "0.0.0.0" or "*" or "::" or "[::]";
+
+    /// <summary>A host Kestrel can bind (see <c>AstraApp.Create</c>): localhost, *, or an IP address literal.</summary>
+    public static bool IsValidHost(string host) =>
+        host is "localhost" or "*" || IPAddress.TryParse(host.Trim('[', ']'), out _);
 
     /// <summary>Base URL clients are pointed at (no trailing slash, no /v1): <see cref="PublicUrl"/> when set, else <see cref="LocalUrl"/>.</summary>
     [JsonIgnore]
@@ -84,7 +96,11 @@ public sealed class ServerOptions
     /// </summary>
     public void ApplyEnvironment(Func<string, string?> get)
     {
-        if (Nonblank(get("ASTRA_HOST")) is { } host) Host = host;
+        if (Nonblank(get("ASTRA_HOST")) is { } host)
+        {
+            Host = host;
+            HostFromEnvironment = true;
+        }
         if (Nonblank(get("ASTRA_PORT")) is { } port)
             Port = int.TryParse(port, out var p) && p is > 0 and < 65536 ? p : throw new ArgumentException("ASTRA_PORT must be 1-65535");
         if (Nonblank(get("ASTRA_PUBLIC_URL")) is { } url)
@@ -132,6 +148,7 @@ public sealed class ServerOptions
                     break;
                 case "--host":
                     Host = Next();
+                    HostFromEnvironment = false; // a flag outranks ASTRA_HOST
                     break;
                 case "--started-by":
                     StartedBy = Next();

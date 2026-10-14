@@ -18,7 +18,7 @@ public class MigrationTests
 
         await using var conn = await factory.OpenAsync();
         var versions = (await conn.QueryAsync<long>("SELECT version FROM schema_version")).AsList();
-        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L], versions.Order());
+        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L], versions.Order());
 
         var appliedAt = await conn.ExecuteScalarAsync<string>("SELECT applied_at FROM schema_version ORDER BY version LIMIT 1");
         Assert.NotNull(appliedAt);
@@ -32,7 +32,7 @@ public class MigrationTests
                      "clients", "client_bindings", "client_config_state", "requests", "request_usage_items",
                      "request_attempts", "provider_accounts", "tokens", "token_usage_totals", "token_usage_daily",
                      "webhooks", "alert_rules", "alert_rule_webhooks", "alert_states", "webhook_deliveries",
-                     "plugins", "plugin_provider_prefs",
+                     "plugins", "plugin_provider_prefs", "trace_spans",
                  })
         {
             Assert.Contains(expected, tables);
@@ -121,7 +121,7 @@ public class MigrationTests
         Assert.True(new FileInfo(backup).Length > 0);
 
         await using var check = await factory.OpenAsync();
-        Assert.Equal(13, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
+        Assert.Equal(14, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
         Assert.Equal("true",
             await check.ExecuteScalarAsync<string>("SELECT value_json FROM settings WHERE key = 'marker'"));
         // 0005 was re-applied after the rollback: the reasoning columns are back.
@@ -162,7 +162,7 @@ public class MigrationTests
         var backup = Assert.Single(Directory.GetFiles(paths.DbBackupsDir));
         Assert.Contains("-v4", Path.GetFileName(backup));
         await using var check = await factory.OpenAsync();
-        Assert.Equal(16, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
+        Assert.Equal(17, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
         var record = await check.QuerySingleAsync<Astra.Core.Requests.RequestRecord>("""
             SELECT requested_model, reasoning_effort, reasoning_mode, reasoning_budget_tokens
             FROM requests WHERE id = 'r-v4'
@@ -174,10 +174,25 @@ public class MigrationTests
     }
 
     /// <summary>
-    /// Rolls a fully migrated database back to its v13 shape (what 0014_alerts, 0015_webhook_format and
-    /// 0016_request_origin add is removed).
+    /// Rolls a fully migrated database back to its v13 shape (what 0014_alerts, 0015_webhook_format,
+    /// 0016_request_origin and 0017_tracing add is removed).
     /// </summary>
     private const string UndoAlertsMigration = """
+        DROP TABLE trace_spans;
+        DROP INDEX idx_requests_session_started;
+        DROP INDEX idx_requests_turn;
+        ALTER TABLE requests DROP COLUMN trace_id;
+        ALTER TABLE requests DROP COLUMN parent_span_id;
+        ALTER TABLE requests DROP COLUMN session_key;
+        ALTER TABLE requests DROP COLUMN chain_key;
+        ALTER TABLE requests DROP COLUMN turn_id;
+        ALTER TABLE requests DROP COLUMN parent_request_id;
+        ALTER TABLE requests DROP COLUMN step;
+        ALTER TABLE requests DROP COLUMN call_kind;
+        ALTER TABLE requests DROP COLUMN link_source;
+        ALTER TABLE requests DROP COLUMN finish_reason;
+        ALTER TABLE requests DROP COLUMN tool_calls;
+        DELETE FROM schema_version WHERE version = 17;
         ALTER TABLE requests DROP COLUMN remote;
         ALTER TABLE requests DROP COLUMN client_ip;
         DELETE FROM schema_version WHERE version = 16;

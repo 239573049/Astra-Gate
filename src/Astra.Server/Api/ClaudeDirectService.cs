@@ -9,6 +9,7 @@ using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Data;
 using Astra.Data.Repositories;
+using Astra.Gateway.Http;
 using Astra.Gateway.Pipeline;
 using Astra.Providers.Subscription;
 using Astra.Server.Hosting;
@@ -391,9 +392,9 @@ public static class ClaudeDirectEndpoints
 
     private static void RequireLocal(HttpContext ctx)
     {
-        var server = ctx.RequestServices.GetRequiredService<ServerOptions>();
         var address = ctx.Connection.RemoteIpAddress;
-        if (!server.IsLoopback || address is null || !IPAddress.IsLoopback(address))
-            throw new AdminApiException(403, "Direct Claude Code mode and its telemetry require a loopback server on this machine.");
+        // Off-loopback only a caller the security middleware judged local (loopback peer and Host, no proxy) qualifies.
+        if (!RequestOrigin.IsLocal(ctx) || address is null || !IPAddress.IsLoopback(address))
+            throw new AdminApiException(403, "Direct Claude Code mode and its telemetry are only available on this machine.");
     }
 }

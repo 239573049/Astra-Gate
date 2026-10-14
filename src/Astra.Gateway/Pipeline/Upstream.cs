@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using Astra.Core;
 using Astra.Core.Models;
@@ -93,6 +94,10 @@ public sealed class GatewayHttpClients : IDisposable
             // 提供商配了 httpProxy 就用它；没配则默认走系统代理（环境变量 > 操作系统设置，回环直连）。
             Proxy = proxy is null ? SystemProxy.Dynamic : new WebProxy(proxy),
             UseProxy = true,
+            // ASP.NET Core runs every inbound request under an Activity that adopts the agent's traceparent and
+            // baggage; the default propagator would copy both into the provider request (a header the real CLIs never
+            // send, and the agent's baggage handed to a third party). Trace context stays inside Astra.
+            ActivityHeadersPropagator = DistributedContextPropagator.CreateNoOutputPropagator(),
         };
         return new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
     }

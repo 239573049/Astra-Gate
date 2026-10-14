@@ -109,6 +109,7 @@ public static class AstraApp
         builder.Services.AddSingleton<ClientRouting>();
         builder.Services.AddSingleton<GatewayRouter>();
         builder.Services.AddSingleton<GatewayHttpClients>();
+        builder.Services.AddSingleton<Astra.Gateway.Tracing.TraceLinker>(_ => new Astra.Gateway.Tracing.TraceLinker());
         builder.Services.AddSingleton<GatewayPipeline>();
         builder.Services.AddSingleton<GatewayAuxiliary>();
         builder.Services.AddSingleton<PendingSubscriptionLogins>();
@@ -272,6 +273,7 @@ public static class AstraApp
         app.MapModelEndpoints();
         app.MapModelSyncEndpoints();
         app.MapRequestEndpoints();
+        app.MapTraceEndpoints();
         app.MapClientEndpoints();
         app.MapClaudeDirectEndpoints();
         app.MapTokenEndpoints();

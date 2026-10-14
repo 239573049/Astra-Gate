@@ -80,6 +80,30 @@ public sealed class ClientConfigApplier
         return new ApplyReport { ClientKind = plan.ClientKind, Applied = applied, Warnings = warnings };
     }
 
+    // ---------------------------------------------------------------- repair
+
+    /// <summary>
+    /// Rewrites JSON files the client reads strictly as strict JSON: their comments and trailing commas go, nothing else
+    /// changes (<see cref="StrictJson.Repair"/>). Takes the same first-write and rolling backups as any other write; no
+    /// value changes, so no key state is recorded. Files that are missing, already strict or not even JSONC are left
+    /// alone. Returns the files rewritten.
+    /// </summary>
+    public IReadOnlyList<string> Repair(string clientKind, IEnumerable<string> files)
+    {
+        var repaired = new List<string>();
+        string? rollingDir = null;
+        foreach (var path in files.Distinct(StringComparer.Ordinal))
+        {
+            if (_env.ReadTextWithBom(path) is not { } read || StrictJson.Repair(read.Text) is not { } strict) continue;
+            EnsureFirstWriteBackup(clientKind, path, existed: true);
+            rollingDir ??= CreateRollingBackupDir(clientKind);
+            AddRollingBackup(clientKind, rollingDir, path, existed: true);
+            _env.WriteTextAtomic(path, strict, read.HadBom);
+            repaired.Add(path);
+        }
+        return repaired;
+    }
+
     // ---------------------------------------------------------------- restore (disable / force / restore-all)
 
     /// <summary>
@@ -272,6 +296,9 @@ public sealed class ClientConfigApplier
         var originalText = Encoding.UTF8.GetString(StripBom(originalBytes));
         var currentText = Encoding.UTF8.GetString(StripBom(currentBytes));
         if (string.Equals(currentText, originalText, StringComparison.Ordinal)) return;
+        // Never undo a Repair: Astra's own edits keep a file's comments and trailing commas, so a strict file whose
+        // original was not strict has been repaired, and its original bytes are what the client could not read.
+        if (format == ConfigFileFormat.Json && StrictJson.IsStrict(currentText) && !StrictJson.IsStrict(originalText)) return;
         if (SemanticallyEqual(format, currentText, originalText)
             || OnlyTrailingNewlinesDiffer(currentText, originalText))
         {

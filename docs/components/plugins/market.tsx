@@ -1,3 +1,4 @@
+import { AppWindow, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 import type { PluginKind, RegistryListing } from '@/lib/plugin-market/types';
@@ -114,6 +115,51 @@ export function KindBadge({ kind, lang }: { kind: PluginKind; lang: MarketLang }
   );
 }
 
+function initials(name: string): string {
+  const words = name.replace(/[^\p{L}\p{N} ]/gu, ' ').split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (/\p{Script=Han}/u.test(words[0]!)) return words[0]!.slice(0, 1);
+  return (words.length > 1 ? words[0]![0]! + words[1]![0]! : words[0]!.slice(0, 2)).toUpperCase();
+}
+
+/**
+ * A plugin's picture, by the console's rules (web PluginsPage `PluginIcon`): its https icon on a white tile, else its
+ * kind's glyph for middleware / clients, else initials. Icon names (e.g. `factory`) are brands the console bundles;
+ * the site has no copy of those marks, so they fall back to initials too.
+ */
+export function PluginIcon({ plugin, size = 36 }: { plugin: RegistryListing; size?: number }) {
+  const radius = Math.round(size * 0.28);
+  const box = { width: size, height: size, borderRadius: radius };
+  if (plugin.icon && /^https:/i.test(plugin.icon)) {
+    return (
+      <span aria-hidden className="inline-flex shrink-0 items-center justify-center overflow-hidden bg-white ring-1 ring-black/5" style={box}>
+        <img src={plugin.icon} alt="" loading="lazy" decoding="async" draggable={false} className="size-full object-contain" />
+      </span>
+    );
+  }
+  if (plugin.kind === 'middleware' || plugin.kind === 'agent') {
+    const Glyph = plugin.kind === 'middleware' ? ShieldCheck : AppWindow;
+    return (
+      <span
+        aria-hidden
+        className="inline-flex shrink-0 items-center justify-center text-white"
+        style={{ ...box, background: plugin.kind === 'middleware' ? '#0a84ff' : '#30b0a0' }}
+      >
+        <Glyph className="size-[55%]" strokeWidth={1.75} />
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className="inline-flex shrink-0 items-center justify-center border border-fd-border bg-fd-muted font-medium text-fd-muted-foreground"
+      style={{ ...box, fontSize: Math.round(size * 0.38) }}
+    >
+      {initials(plugin.name)}
+    </span>
+  );
+}
+
 export function PluginCard({ plugin, lang, summary }: { plugin: RegistryListing; lang: MarketLang; summary: string }) {
   const t = copy(lang);
   return (
@@ -121,8 +167,9 @@ export function PluginCard({ plugin, lang, summary }: { plugin: RegistryListing;
       href={`${pluginBase(lang)}/${plugin.package}`}
       className="flex flex-col gap-2 rounded-xl border border-fd-border p-4 transition-colors hover:bg-fd-accent/50"
     >
-      <div className="flex items-start justify-between gap-3">
-        <span className="font-medium">{plugin.name}</span>
+      <div className="flex items-center gap-3">
+        <PluginIcon plugin={plugin} />
+        <span className="min-w-0 flex-1 truncate font-medium">{plugin.name}</span>
         <KindBadge kind={plugin.kind} lang={lang} />
       </div>
       <code className="truncate text-xs text-fd-muted-foreground">{plugin.package}</code>

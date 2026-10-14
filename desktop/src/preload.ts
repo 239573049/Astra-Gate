@@ -48,6 +48,8 @@ const bridge = {
   revealLogs: () => ipcRenderer.invoke('astra:reveal-logs') as Promise<boolean>,
   /** Starts (or adopts) the local server; used when the UI cannot reach it. */
   startService: () => ipcRenderer.invoke('astra:start-service') as Promise<{ ok: boolean; error: string | null }>,
+  /** Stops and starts the local server, e.g. so a changed listen address (config.json) takes effect. */
+  restartService: () => ipcRenderer.invoke('astra:restart-service') as Promise<{ ok: boolean; error: string | null }>,
   /** In-app update entry (Settings › About): check, and apply server/desktop updates. */
   updates: {
     check: () => ipcRenderer.invoke('astra:update-check') as Promise<UpdateSummary>,

@@ -1,4 +1,4 @@
-import { AppWindow, Boxes, KeyRound, LayoutDashboard, Puzzle, ScrollText, Server, Settings as SettingsIcon, ShieldCheck } from 'lucide-react';
+import { AppWindow, Boxes, KeyRound, LayoutDashboard, Puzzle, ScrollText, Server, Settings as SettingsIcon, ShieldCheck, Waypoints } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type { NavTarget } from '../../shell/bridge';
@@ -19,6 +19,7 @@ export const NAV_GROUPS: { title?: MessageKey; items: NavItem[] }[] = [
     items: [
       { id: 'overview', path: '/', label: 'nav.overview', color: '#0a84ff', icon: <LayoutDashboard className={ic} strokeWidth={1.75} /> },
       { id: 'requests', path: '/requests', label: 'nav.requests', color: '#8e8e93', icon: <ScrollText className={ic} strokeWidth={1.75} /> },
+      { id: 'traces', path: '/traces', label: 'nav.traces', color: '#64d2ff', icon: <Waypoints className={ic} strokeWidth={1.75} /> },
     ],
   },
   {

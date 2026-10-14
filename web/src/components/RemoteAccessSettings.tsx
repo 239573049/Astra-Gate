@@ -335,8 +335,8 @@ function ScopeGroup({ s }: { s: TunnelStatus }) {
   );
 }
 
-/** The admin password (what `astra-server set-password` sets); only remote admin needs it, so it lives here. */
-function PasswordRow({ passwordSet }: { passwordSet: boolean }) {
+/** The admin password (what `astra-server set-password` sets); remote admin and LAN access need it. */
+export function PasswordRow({ passwordSet }: { passwordSet: boolean }) {
   const { t } = useI18n();
   const { toast } = useFeedback();
   const auth = useAuthStatus();
@@ -357,8 +357,8 @@ function PasswordRow({ passwordSet }: { passwordSet: boolean }) {
   return (
     <>
       <Row label={t('settings.remote.password')} detail={passwordSet ? t('settings.remote.passwordSet') : t('settings.remote.passwordMissing')}>
-        {/* The server refuses it through a tunnel anyway; don't offer it there. */}
-        {!editing && !auth.data?.remote && (
+        {/* The server refuses it through a tunnel or from another device anyway; don't offer it there. */}
+        {!editing && !auth.data?.required && (
           <Button size="sm" onClick={() => setEditing(true)}>
             {passwordSet ? t('settings.remote.passwordChange') : t('settings.remote.passwordSetAction')}
           </Button>

@@ -489,12 +489,44 @@ public class ClaudeDesktopClientAdapterTests : IDisposable
     }
 
     [Fact]
-    public void Inspect_ReportsReverseEngineeredFormatWarning()
+    public void Inspect_ReportsOnlyTheRestartWarning()
     {
         _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-desk-4", null)));
         var status = _adapter.Inspect();
         Assert.True(status.Enabled);
-        Assert.Contains(status.Warnings, w => w.Contains("reverse-engineered") || w.Contains("cc-switch"));
+        // The profile format is Anthropic-documented now; the only thing the user must do is restart.
+        Assert.Equal(["Restart Claude Desktop to apply."], status.Warnings);
+        Assert.Empty(status.Repairs);
+    }
+
+    [Fact]
+    public void Config_It_Cannot_Parse_Is_Reported_And_Repaired_With_Backups()
+    {
+        const string broken = "{\n  \"preferences\": {\n    \"sidebarMode\": \"chat\"\n  },\n}\n";
+        _home.WriteFile(_threepConfig, broken);
+        var repair = Assert.Single(_adapter.Inspect().Repairs);
+        Assert.Equal(new ConfigRepair(_threepConfig, "trailing-comma", 4), repair);
+
+        Assert.Equal([_threepConfig], _applier.Repair("claude-desktop", [repair.File]));
+        Assert.Equal("{\n  \"preferences\": {\n    \"sidebarMode\": \"chat\"\n  }\n}\n", _home.ReadFile(_threepConfig));
+        Assert.Empty(_adapter.Inspect().Repairs);
+        var backups = _applier.ListBackups("claude-desktop");
+        Assert.Contains(backups, b => b.IsFirstWrite);
+        Assert.Contains(backups, b => !b.IsFirstWrite && b.Files.Single().OriginalPath == _threepConfig);
+        Assert.Empty(_store.List("claude-desktop")); // no value changed, so no key was taken over
+        Assert.Empty(_applier.Repair("claude-desktop", [_threepConfig])); // nothing left to fix
+    }
+
+    [Fact]
+    public void Disable_After_A_Repair_Does_Not_Bring_The_Broken_Original_Back()
+    {
+        _home.WriteFile(_threepConfig, "{\n  \"preferences\": {},\n}\n");
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-desk-5", null)));
+        _applier.Repair("claude-desktop", _adapter.Inspect().Repairs.Select(r => r.File));
+        _applier.Disable(_adapter.PlanDisable());
+        var text = _home.ReadFile(_threepConfig);
+        Assert.True(StrictJson.IsStrict(text), text);
+        Assert.DoesNotContain("deploymentMode", text);
     }
 
     public void Dispose() => _home.Dispose();

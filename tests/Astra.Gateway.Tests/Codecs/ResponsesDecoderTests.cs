@@ -106,6 +106,16 @@ public class ResponsesStreamDecodeTests
     }
 
     [Fact]
+    public void Error_Event_Nested_Like_The_ChatGPT_Backend_Keeps_Its_Message()
+    {
+        var decoder = new ResponsesCodec().CreateResponseDecoder(new ResponseDecodeContext { Stream = true });
+        var events = decoder.DecodeSse(new SseEvent("error",
+            """{"type":"error","sequence_number":2,"error":{"message":"Our servers are currently overloaded. Please try again later.","type":"service_unavailable_error","param":null,"code":"server_is_overloaded"}}""")).ToList();
+
+        Assert.Equal(new ErrorEvent(500, "server_is_overloaded", "Our servers are currently overloaded. Please try again later."), Assert.Single(events));
+    }
+
+    [Fact]
     public void Delta_Without_Item_Added_Still_Opens_A_Block()
     {
         var decoder = new ResponsesCodec().CreateResponseDecoder(new ResponseDecodeContext { Stream = true });

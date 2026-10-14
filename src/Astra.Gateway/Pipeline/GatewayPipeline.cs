@@ -12,6 +12,7 @@ using Astra.Core.Models;
 using Astra.Core.Requests;
 using Astra.Gateway.Plugins;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Tracing;
 using Astra.Plugins.Host;
 using Astra.Plugins.Middleware;
 using Astra.Providers.Subscription;
@@ -41,6 +42,7 @@ public sealed class GatewayPipeline(
     MiddlewareEngine middleware,
     PluginFetchHandler pluginTransport,
     TokenLimiter limiter,
+    TraceLinker linker,
     ILogger<GatewayPipeline> logger)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
@@ -54,6 +56,14 @@ public sealed class GatewayPipeline(
     // Top-level Responses fields the ChatGPT (Codex) backend rejects with 400 "Unsupported parameter".
     private static readonly string[] CodexUnsupportedParams =
         ["user", "safety_identifier", "max_output_tokens", "temperature", "top_p", "prompt_cache_retention"];
+
+    // Rate-limit state an attempt's response reports, kept on its span (.plan/observability.md §2.3).
+    private static readonly string[] RateLimitHeaders =
+    [
+        "retry-after", "x-ratelimit-remaining-requests", "x-ratelimit-remaining-tokens", "x-ratelimit-limit-requests",
+        "x-ratelimit-reset-requests", "anthropic-ratelimit-requests-remaining", "anthropic-ratelimit-tokens-remaining",
+        "anthropic-ratelimit-unified-status", "anthropic-ratelimit-unified-reset",
+    ];
 
     /// <summary>Handles one generation request (chat / responses / messages / generateContent).</summary>
     /// <param name="pathModel">Gemini: model from the URL.</param>
@@ -77,11 +87,29 @@ public sealed class GatewayPipeline(
         // Live request log: the request shows up the moment it arrives, then follows its progress.
         live.Start(record);
         var capture = s.DebugBodies ? new BodyCapture() : null;
+        // Tracing (.plan/observability.md §2): the request's spans, and where it sits in its agent's loop. The agent's
+        // traceparent only names the parent; nothing of it goes upstream (GatewayHttpClients).
+        var trace = new RequestTrace();
+        var (inboundTraceId, inboundSpanId) = TraceKeys.ParseTraceparent(ctx.Request.Headers["traceparent"].ToString());
+        record.ParentSpanId = inboundSpanId;
+        TraceLink? link = null;
+        TraceSpanBuilder? responseSpan = null;
+        var restorable = 0;
         var observer = new ResponseObserver
         {
             FirstToken = ttft =>
             {
                 record.TtftMs = ttft;
+                responseSpan?.Event("first_token");
+                live.Update(record);
+            },
+            // thinking → writing → calling a tool: what the agent sees the model doing, live (never stored)
+            StageChanged = stage =>
+            {
+                record.LiveStage = stage;
+                // bounded: a long agentic answer can switch stage on every tool call
+                if ((record.LivePhases?.Length ?? 0) < 2048)
+                    record.LivePhases = $"{(record.LivePhases is null ? "" : record.LivePhases + ",")}{stage.Replace(",", "").Replace("@", "")}@{sw.ElapsedMilliseconds}";
                 live.Update(record);
             },
         };
@@ -98,6 +126,7 @@ public sealed class GatewayPipeline(
 
         try
         {
+            var routeSpan = trace.Start(TraceSpanNames.Route);
             var route = await router.ResolveAsync(ctx.Request, ct);
             provider = route.Provider;
             record.ClientKind = route.ClientKind;
@@ -109,24 +138,33 @@ public sealed class GatewayPipeline(
 
             // Token caps (plan: alerts-webhooks-token-limits §1.4): once per request, before anything goes upstream.
             await limiter.CheckAsync(route.Token, ct);
+            routeSpan.Set("astra.client.kind", route.ClientKind).Set("astra.token.id", route.Token.Id).Set("astra.provider.id", provider.Id).Ok().End();
             // Read once into a pooled UTF-8 buffer; from here on the body is these bytes and one tree over them.
+            var bodySpan = trace.Start(TraceSpanNames.Body);
             requestBody = await RequestBody.ReadAsync(ctx.Request, MaxRequestBytes, ct);
+            bodySpan.Set("astra.body.bytes", requestBody.Utf8.Length).Ok().End();
             capture?.Set(BodyStore.ClientRequest, requestBody.Utf8);
 
             // Gateway middleware plugins (magpie-compatible; .plan/plugins.md) see the agent's body in its own
             // API first, before the privacy guard — which still applies to whatever they send on — and the
             // reply on its way back to the agent. A reject is answered in the agent's API's error shape.
+            var middlewareStart = Stopwatch.GetTimestamp();
             middlewareRun = await middleware.BeginAsync(
                 GatewayMiddleware.Info(inbound, requestBody.Utf8, ctx.Request.Path,
                     route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream), ct);
             if (middlewareRun is not null)
             {
+                var middlewareSpan = trace.StartAt(TraceSpanNames.Middleware, middlewareStart);
+                var bytesBefore = requestBody.Utf8.Length;
                 var (changed, reject) = middlewareRun.Request(requestBody.Utf8.ToArray());
                 if (reject is not null)
                 {
+                    middlewareSpan.Error("rejected").End();
                     record.Status = RequestStatus.Blocked;
                     throw GatewayMiddleware.Rejected(reject);
                 }
+                middlewareSpan.Set("astra.middleware.rewritten", !requestBody.Utf8.SequenceEqual(changed))
+                    .Set("astra.body.bytes_before", bytesBefore).Set("astra.body.bytes", changed.Length).Ok().End();
                 requestBody.Replace(changed);
                 middlewareStream = MiddlewareResponseStream.Install(ctx, middlewareRun);
             }
@@ -135,9 +173,30 @@ public sealed class GatewayPipeline(
             // is parsed once and redacted in place — the tree the rest of the pipeline reads. Anything else takes
             // the text path, which reports it (or blocks it) exactly as before.
             var parsed = requestBody.Parse();
+            // Where this call sits in the agent's loop (.plan/observability.md §3), read from the client's own body
+            // before the guard can rewrite it.
+            link = parsed?.Object is { } clientTree
+                ? LinkOf(record.Id, inbound, clientTree, ctx.Request.Headers, inboundTraceId)
+                : linker.Link(record.Id, null, null, new LastMessage([], true), inboundTraceId);
+            ApplyLink(record, link);
+            if (parsed?.Object is { } asked)
+            {
+                var shape = TraceKeys.ShapeOf(inbound, asked);
+                trace.Root.Set("astra.request.messages", shape.Messages).Set("astra.request.tools", shape.Tools)
+                    .Set("astra.request.system_chars", shape.SystemChars).Set("gen_ai.request.max_tokens", shape.MaxTokens);
+            }
+            var privacySpan = trace.Start(TraceSpanNames.Privacy);
             var guard = parsed is (var root, var tree)
                 ? privacy.InspectJson(root, tree, route.ClientKind)
                 : privacy.Inspect(requestBody.Text(), route.ClientKind);
+            restorable = guard.RestoreMap.Count;
+            privacySpan.Set("astra.privacy.applied", guard.Applied).Set("astra.privacy.hits", guard.Hits.Sum(h => (long)h.Count))
+                .Set("astra.privacy.categories", guard.Hits.Count == 0 ? null : string.Join(",", guard.Hits.Select(h => h.Category).Distinct()))
+                .Set("astra.privacy.rewritten", guard.Rewritten).Set("astra.privacy.dry_run", guard.DryRun)
+                .Set("astra.privacy.restorable", restorable);
+            if (guard.Blocked) privacySpan.Error("blocked");
+            else privacySpan.Ok();
+            privacySpan.End();
             if (guard.Applied && guard.Hits.Count > 0)
                 record.PrivacyJson = PrivacyGuardService.ReportJson(guard.DryRun, guard.Blocked, guard.Hits, guard.RestoreMap.Count);
             if (guard.Blocked)
@@ -156,6 +215,7 @@ public sealed class GatewayPipeline(
             var isClaudeCode = inbound == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, body);
             // A client bound to several providers: the first one serving this model — as an enabled model or through its
             // model mapping — else the primary (ClientRouting). Decided before the client policy and capability discovery below.
+            var resolveSpan = trace.Start(TraceSpanNames.Resolve);
             route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
             if (route.Provider.Id != provider.Id)
             {
@@ -169,12 +229,18 @@ public sealed class GatewayPipeline(
             // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
             // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
             var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, route.UpstreamModelFor(requestedModel), ct);
+            // Capability discovery may go to the network (a /models listing); timed on its own.
+            var capabilitiesStart = Stopwatch.GetTimestamp();
             var supportedProtocols = await modelProtocols.ResolveAsync(provider, resolvedModel, route.AccountId, ct);
+            resolveSpan.Set("astra.resolve.capabilities_us", RequestTrace.Micros(capabilitiesStart, Stopwatch.GetTimestamp()));
             var endpoint = GatewayRouter.SelectEndpoint(provider, inbound, supportedProtocols);
             var upstreamProtocol = endpoint.Protocol;
             var passthrough = upstreamProtocol == inbound;
             record.UpstreamProtocol = upstreamProtocol.ToId();
             record.Passthrough = passthrough;
+            resolveSpan.Set("astra.provider.id", provider.Id).Set("astra.provider.name", provider.Name)
+                .Set("gen_ai.request.model", requestedModel).Set("astra.protocol.upstream", upstreamProtocol.ToId())
+                .Set("astra.passthrough", passthrough).Ok().End();
 
             // Claude subscription (plan §5.4): for Claude Code itself on the pass-through path, a faithful relay of
             // its own headers; other callers get the minimal OAuth compatibility headers — or, when the user enabled
@@ -191,6 +257,7 @@ public sealed class GatewayPipeline(
                 logger.LogInformation("Request {Id}: {Provider} prefers {Preferred} but has no endpoint for it; translating to {Upstream}",
                     record.Id, provider.Name, missing.ToId(), upstreamProtocol.ToId());
 
+            var encodeSpan = trace.Start(TraceSpanNames.Encode);
             var clientCodec = codecs.Get(inbound);
             var upstreamCodec = codecs.Get(upstreamProtocol);
             if (!passthrough && (clientCodec is null || upstreamCodec is null))
@@ -321,14 +388,23 @@ public sealed class GatewayPipeline(
                 payload = requestBody.Buffer;
             }
             capture?.Set(BodyStore.UpstreamRequest, payload.Span);
+            encodeSpan.Set("astra.protocol.inbound", inbound.ToId()).Set("astra.protocol.upstream", upstreamProtocol.ToId())
+                .Set("astra.passthrough", passthrough).Set("astra.encode.rewritten", upstreamDirty)
+                .Set("astra.encode.lossy", ir?.Warnings.Count ?? 0)
+                .Set("astra.encode.warnings", ir is { Warnings.Count: > 0 } ? Truncate(string.Join("; ", ir.Warnings), 300) : null)
+                .Set("gen_ai.request.model", model).Set("astra.upstream.model", upstreamModel).Set("astra.stream", stream)
+                .Set("astra.claude.mode", claudeMode == ClaudeHeaderMode.None ? null
+                    : claudeMimic ? "mimic" : claudeMode == ClaudeHeaderMode.Relay ? "relay" : "compat")
+                .Set("astra.body.bytes", payload.Length).Ok().End();
 
             var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
             // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
             if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
             var (sent, accountId, lease) = await SendAsync(route, endpoint, url, payload, upstreamTree, stream, passthrough, claudeMode, upstreamModel,
-                stickyKey, ctx.Request, capture, ct);
+                stickyKey, ctx.Request, capture, trace, ct);
             accountLease = lease;
             using var response = sent;
+            responseSpan = trace.Start(TraceSpanNames.Response);
             record.AccountId = accountId;
             record.TtfbMs = sw.ElapsedMilliseconds;
             record.HttpStatus = (int)response.StatusCode;
@@ -370,12 +446,7 @@ public sealed class GatewayPipeline(
             else
                 await BufferAsync(ctx, response, decoder, encoder, observer, sw, restore, capture, s.StreamIdleTimeoutSec, ct);
 
-            if (observer.Error is { } err)
-            {
-                record.Status = RequestStatus.UpstreamError;
-                record.ErrorType = err.Type;
-                record.ErrorMessage = Truncate(err.Message, 2000);
-            }
+            RecordUpstreamError(record, observer);
         }
         catch (GatewayException e)
         {
@@ -398,7 +469,9 @@ public sealed class GatewayPipeline(
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // Plan §6.5: the client went away; the upstream request is cancelled with it. Usage seen so far is billed.
-            record.Status = RequestStatus.ClientCancelled;
+            // Leaving once the whole answer was written is a finished request, not a cancelled one.
+            if (observer.Delivered) RecordUpstreamError(record, observer);
+            else record.Status = RequestStatus.ClientCancelled;
         }
         catch (UpstreamIdleTimeoutException e)
         {
@@ -417,7 +490,8 @@ public sealed class GatewayPipeline(
         }
         catch (IOException) when (ct.IsCancellationRequested || ctx.Response.HasStarted)
         {
-            record.Status = RequestStatus.ClientCancelled;
+            if (observer.Delivered) RecordUpstreamError(record, observer);
+            else record.Status = RequestStatus.ClientCancelled;
         }
         catch (Exception e)
         {
@@ -446,6 +520,7 @@ public sealed class GatewayPipeline(
             accountLease?.Dispose();
             record.ResponseModel = decoder?.ResponseModel;
             Finish(record, observer, sw, effective, provider, s.Locale);
+            FinishTrace(record, trace, link, inboundTraceId, observer, responseSpan, middlewareStream is not null, restorable);
             if (capture is not null)
             {
                 record.BodyRef = BodyStore.RefFor(record.Id, record.StartedAtUtc);
@@ -467,7 +542,8 @@ public sealed class GatewayPipeline(
 
     private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, PooledBuffer body, JsonObject bodyTree, bool stream, bool passthrough,
-        ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, CancellationToken ct)
+        ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, RequestTrace trace,
+        CancellationToken ct)
     {
         var provider = route.Provider;
         var plugin = provider.AuthScheme == AuthSchemes.Plugin;
@@ -497,6 +573,8 @@ public sealed class GatewayPipeline(
         {
             while (true)
             {
+                // One upstream.attempt span per send (.plan/observability.md §2.3); a retry ends it and starts the next.
+                var attempt = trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client);
                 if (balanced)
                 {
                     // Pick (and hold an in-flight slot on) the account for this attempt; accounts that already failed
@@ -506,14 +584,20 @@ public sealed class GatewayPipeline(
                     if (lease is not null) accountId = lease.AccountId;
                 }
                 UpstreamAuth credentials;
+                var credentialsStart = Stopwatch.GetTimestamp();
                 try
                 {
                     credentials = await auth.ResolveAsync(provider.Id, accountId, ct) ?? UpstreamAuth.None;
                 }
                 catch (SubscriptionAuthException e)
                 {
+                    attempt.Set("astra.account.id", accountId).Error(e.Message);
                     throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
                 }
+                // A subscription token close to expiry is refreshed here, on the network.
+                attempt.Set("astra.account.id", credentials.AccountId ?? accountId)
+                    .Set("astra.credentials_us", RequestTrace.Micros(credentialsStart, Stopwatch.GetTimestamp()))
+                    .Set("astra.transport", plugin ? "plugin" : null);
 
                 // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
                 var client = plugin ? _pluginClient
@@ -526,6 +610,7 @@ public sealed class GatewayPipeline(
                 if (response.StatusCode == HttpStatusCode.UnsupportedMediaType && compressed is not null)
                 {
                     // 上游不收压缩的请求体：本请求剩下的发送都改发原文。
+                    attempt = Retry(attempt, response, "compression_rejected", credentials.AccountId ?? accountId);
                     response.Dispose();
                     compressed = null;
                     request = Build(credentials);
@@ -535,8 +620,9 @@ public sealed class GatewayPipeline(
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
                 {
                     // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
-                    response.Dispose();
                     var used = credentials.AccountId ?? accountId;
+                    attempt = Retry(attempt, response, "auth_refresh", used);
+                    response.Dispose();
                     try
                     {
                         if (plugin)
@@ -552,11 +638,14 @@ public sealed class GatewayPipeline(
                     {
                         if (failover && used is not null && await FailOverAsync(used, null, e.Message) is { } next)
                         {
+                            attempt.Set("astra.attempt.retry", "auth_failover").Error(e.Message).End();
                             accountId = next;
                             continue;
                         }
+                        attempt.Error(e.Message);
                         throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号需要重新登录：{e.Message}");
                     }
+                    attempt.Set("astra.credentials.refreshed", true);
                     request = Build(credentials);
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
@@ -566,6 +655,7 @@ public sealed class GatewayPipeline(
                     var until = RateLimitResetOf(response, DateTimeOffset.UtcNow);
                     if (await FailOverAsync(limited, until, $"429 限流，冷却至 {until.UtcDateTime:yyyy-MM-dd HH:mm} UTC") is { } next)
                     {
+                        EndAttempt(attempt, response, "rate_limited_failover");
                         response.Dispose();
                         accountId = next;
                         continue;
@@ -575,6 +665,7 @@ public sealed class GatewayPipeline(
                 if (!response.IsSuccessStatusCode && subscription)
                     logger.LogWarning("Upstream {Status} for {Provider} → {Url}; sent: {Headers}",
                         (int)response.StatusCode, provider.Name, url, DescribeRequest(request));
+                EndAttempt(attempt, response, null);
                 handedOver = true;
                 return (response, credentials.AccountId, lease);
             }
@@ -583,6 +674,29 @@ public sealed class GatewayPipeline(
         {
             // Failures must not leak an in-flight slot; on success the caller owns the lease.
             if (!handedOver) lease?.Dispose();
+        }
+
+        TraceSpanBuilder Retry(TraceSpanBuilder span, HttpResponseMessage response, string reason, string? account)
+        {
+            EndAttempt(span, response, reason);
+            return trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client).Set("astra.account.id", account).Set("astra.transport", plugin ? "plugin" : null);
+        }
+
+        // What the attempt's response said: status, upstream request id, rate-limit state, why it was retried.
+        static void EndAttempt(TraceSpanBuilder span, HttpResponseMessage response, string? retry)
+        {
+            var status = (int)response.StatusCode;
+            span.Set("http.response.status_code", status).Set("astra.attempt.retry", retry)
+                .Set("astra.upstream.request_id", FirstHeader(response, "x-request-id", "request-id", "x-goog-request-id", "cf-ray"));
+            foreach (var name in RateLimitHeaders)
+                if (response.Headers.TryGetValues(name, out var values) && values.FirstOrDefault() is { Length: > 0 } value)
+                    span.Set("astra.ratelimit." + name, Truncate(value, 100));
+            if (response.Headers.TryGetValues("openai-processing-ms", out var processing)
+                && long.TryParse(processing.FirstOrDefault(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var ms))
+                span.Set("astra.upstream.processing_ms", ms);
+            if (response.IsSuccessStatusCode) span.Ok();
+            else span.Error(status.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            span.End();
         }
 
         async Task<string?> FailOverAsync(string from, DateTimeOffset? cooldownUntil, string reason)
@@ -740,7 +854,7 @@ public sealed class GatewayPipeline(
         var upstreamCapture = capture is null ? null : new StringBuilder();
         var clientCapture = capture is null ? null : new StringBuilder();
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct);
+        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct, observer);
         var buffer = ArrayPool<byte>.Shared.Rent(16 * 1024);
         var outText = new StringBuilder();
         var utf8 = Encoding.UTF8.GetEncoder();
@@ -782,6 +896,7 @@ public sealed class GatewayPipeline(
                     }
                     sawSseEvent = true;
                     await output.WriteAsync(chunk, ct);
+                    observer.Written();
                     continue;
                 }
                 sawSseEvent = true;
@@ -789,6 +904,8 @@ public sealed class GatewayPipeline(
                 rawPending = null;
                 foreach (var sse in events) Handle(sse);
                 await FlushAsync();
+                // A JSON array is not a whole answer until its closing bracket, written only at the upstream's end.
+                if (array is null) observer.Written();
             }
             foreach (var sse in parser.Flush())
             {
@@ -939,7 +1056,7 @@ public sealed class GatewayPipeline(
         int idleTimeoutSec, CancellationToken ct)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct);
+        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct, observer);
         // A declared length sizes the buffer once (+1: the read that sees the end needs room); a compressed or
         // chunked body (no length) grows by doubling inside the pool.
         var declared = response.Content.Headers.ContentLength;
@@ -1025,7 +1142,7 @@ public sealed class GatewayPipeline(
         BodyCapture? capture, int idleTimeoutSec, CancellationToken ct)
     {
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
-        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct);
+        using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct, observer);
         var parser = new SseParser();
         var upstreamCapture = capture is null ? null : new StringBuilder();
         var buffer = ArrayPool<byte>.Shared.Rent(16 * 1024);
@@ -1118,6 +1235,15 @@ public sealed class GatewayPipeline(
 
     // ------------------------------------------------------------------ record
 
+    /// <summary>An answer that ended in an upstream error event (written to the client in its own shape) is that error.</summary>
+    private static void RecordUpstreamError(RequestRecord record, ResponseObserver observer)
+    {
+        if (observer.Error is not { } err) return;
+        record.Status = RequestStatus.UpstreamError;
+        record.ErrorType = err.Type;
+        record.ErrorMessage = Truncate(err.Message, 2000);
+    }
+
     private void Finish(RequestRecord record, ResponseObserver observer, Stopwatch sw, EffectiveModel? effective, Provider? provider, string locale)
     {
         record.TotalMs = sw.ElapsedMilliseconds;
@@ -1150,6 +1276,76 @@ public sealed class GatewayPipeline(
             if (generated > 0 && record.GenerationMs > 0) record.OutputTps = Math.Round(generated / (record.GenerationMs.Value / 1000.0), 2);
         }
     }
+
+    // ------------------------------------------------------------------ tracing
+
+    private TraceLink LinkOf(string requestId, ApiProtocol inbound, JsonObject body, IHeaderDictionary headers, string? inboundTraceId)
+    {
+        var chain = TraceKeys.ChainOf(inbound, body);
+        return linker.Link(requestId, TraceKeys.SessionOf(inbound, body, headers, chain), chain, TraceKeys.LastMessageOf(inbound, body), inboundTraceId);
+    }
+
+    private static void ApplyLink(RequestRecord record, TraceLink link)
+    {
+        record.TraceId = link.TraceId;
+        record.SessionKey = link.SessionKey;
+        record.ChainKey = link.ChainKey;
+        record.TurnId = link.TurnId;
+        record.ParentRequestId = link.ParentRequestId;
+        record.Step = link.Step;
+        record.CallKind = link.CallKind;
+        record.LinkSource = link.LinkSource;
+    }
+
+    /// <summary>Closes the request's spans into <see cref="RequestRecord.Spans"/> and remembers the tool calls it made.</summary>
+    private void FinishTrace(RequestRecord record, RequestTrace trace, TraceLink? link, string? inboundTraceId, ResponseObserver observer,
+        TraceSpanBuilder? responseSpan, bool middlewareResponse, int restorable)
+    {
+        record.FinishReason = observer.Finish is { } finish ? FinishReasonId(finish) : null;
+        record.ToolCalls = observer.ToolCallIds.Count;
+        if (responseSpan is not null)
+        {
+            responseSpan.Set("astra.protocol.client", record.InboundProtocol).Set("astra.response.reads", observer.Reads)
+                .Set("astra.response.max_gap_ms", observer.MaxGapMs).Set("astra.response.events", observer.Events)
+                .Set("astra.response.tool_calls", record.ToolCalls).Set("gen_ai.response.finish_reasons", record.FinishReason)
+                .Set("astra.response.tool_names", observer.ToolNames.Count == 0 ? null : Truncate(string.Join(",", observer.ToolNames), 300))
+                .Set("astra.restore.placeholders", restorable).Set("astra.middleware.response", middlewareResponse);
+            // The model's own phases inside the response (.plan/observability.md §5): thinking, writing, tool calls.
+            responseSpan.Set("astra.response.reasoning_chars", observer.ReasoningChars).Set("astra.response.text_chars", observer.TextChars);
+            if (observer.ReasoningStart is { } reasoningStart) responseSpan.EventAt("reasoning_start", reasoningStart);
+            if (observer.ReasoningEnd is { } reasoningEnd) responseSpan.EventAt("reasoning_end", reasoningEnd);
+            if (observer.TextStart is { } textStart) responseSpan.EventAt("text_start", textStart);
+            if (observer.TextEnd is { } textEnd) responseSpan.EventAt("text_end", textEnd);
+            foreach (var (at, name) in observer.ToolStarts) responseSpan.EventAt("tool_call", at, new KeyValuePair<string, object>("name", name));
+            if (observer.Error is { } error) responseSpan.Error(error.Message);
+            else if (record.Status == RequestStatus.Success) responseSpan.Ok();
+            responseSpan.End();
+        }
+        record.LiveStage = null;
+        record.LivePhases = null;
+        var root = trace.Root;
+        root.Set("gen_ai.operation.name", "chat").Set("gen_ai.request.model", record.RequestedModel)
+            .Set("gen_ai.response.model", record.ResponseModel).Set("gen_ai.usage.input_tokens", record.TotalInputTokens)
+            .Set("gen_ai.usage.output_tokens", record.TotalOutputTokens).Set("astra.client.kind", record.ClientKind)
+            .Set("astra.provider.id", record.ProviderId).Set("http.response.status_code", record.HttpStatus)
+            .Set("astra.status", record.Status);
+        if (record.Status == RequestStatus.Success) root.Ok();
+        else root.Error(record.ErrorMessage is { Length: > 0 } message ? message : record.Status);
+        // A request refused before its body was read still gets a trace: the agent's, else one of its own.
+        record.TraceId ??= inboundTraceId ?? ActivityTraceId.CreateRandom().ToHexString();
+        record.Spans = trace.Build(record.Id);
+        if (link is not null) linker.Complete(link, observer.ToolCallIds);
+    }
+
+    private static string FinishReasonId(FinishReason reason) => reason switch
+    {
+        FinishReason.Stop => "stop",
+        FinishReason.Length => "length",
+        FinishReason.ToolCalls => "tool_calls",
+        FinishReason.ContentFilter => "content_filter",
+        FinishReason.Error => "error",
+        _ => "other",
+    };
 
     // ------------------------------------------------------------------ helpers
 
@@ -1196,7 +1392,7 @@ public sealed class GatewayPipeline(
     /// re-armed before each read (a timer that fired while the answer was being written to the client is not a
     /// timeout of the next read — that read gets a fresh source), instead of a linked source and timer per chunk.
     /// </summary>
-    private sealed class IdleTimeoutReader(Stream stream, int idleTimeoutSec, CancellationToken ct) : IDisposable
+    private sealed class IdleTimeoutReader(Stream stream, int idleTimeoutSec, CancellationToken ct, ResponseObserver? observer = null) : IDisposable
     {
         private readonly TimeSpan _timeout = TimeSpan.FromSeconds(Math.Max(5, idleTimeoutSec));
         private CancellationTokenSource _idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -1211,7 +1407,9 @@ public sealed class GatewayPipeline(
             _idle.CancelAfter(_timeout);
             try
             {
-                return await stream.ReadAsync(buffer, _idle.Token);
+                var read = await stream.ReadAsync(buffer, _idle.Token);
+                if (read > 0) observer?.OnRead();
+                return read;
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -1284,6 +1482,64 @@ public sealed class GatewayPipeline(
         public FinishReason? Finish { get; private set; }
         public ErrorEvent? Error { get; private set; }
 
+        /// <summary>
+        /// The end of the answer (its <see cref="Finish"/> or <see cref="Error"/>) has been written to the client. A client
+        /// that leaves after this — on its <c>[DONE]</c> / <c>response.completed</c>, while the upstream still holds its
+        /// connection open (the ChatGPT backend does) — has its whole answer: that is not a cancellation.
+        /// </summary>
+        public bool Delivered { get; private set; }
+
+        /// <summary>Called after everything observed so far has been written to the client.</summary>
+        public void Written()
+        {
+            if (Finish is not null || Error is not null) Delivered = true;
+        }
+
+        /// <summary>Ids of the tool calls the response asked for (linking the agent's next call, .plan/observability.md §3.2).</summary>
+        public List<string> ToolCallIds { get; } = [];
+
+        /// <summary>Names of those tool calls (what the agent will run next), for the session view.</summary>
+        public List<string> ToolNames { get; } = [];
+
+        /// <summary>
+        /// When the model thought, wrote and started each tool call (<see cref="Stopwatch.GetTimestamp"/> values; streams
+        /// only — a whole body has no moments to tell apart), and how much it thought and wrote (.plan/observability.md §5).
+        /// </summary>
+        public long? ReasoningStart { get; private set; }
+        public long? ReasoningEnd { get; private set; }
+        public long? TextStart { get; private set; }
+        public long? TextEnd { get; private set; }
+        public List<(long At, string Name)> ToolStarts { get; } = [];
+        public long ReasoningChars { get; private set; }
+        public long TextChars { get; private set; }
+
+        /// <summary>Called when what the model produces changes: <c>thinking</c>, <c>writing</c>, <c>tool:&lt;name&gt;</c>.</summary>
+        public Action<string>? StageChanged { get; init; }
+
+        private string? _stage;
+
+        private void Stage(string stage)
+        {
+            if (stage == _stage) return;
+            _stage = stage;
+            StageChanged?.Invoke(stage);
+        }
+
+        /// <summary>IR events observed, upstream body reads, and the longest pause between two reads.</summary>
+        public int Events { get; private set; }
+        public int Reads { get; private set; }
+        public long MaxGapMs { get; private set; }
+
+        private long _lastRead;
+
+        public void OnRead()
+        {
+            var now = Stopwatch.GetTimestamp();
+            if (_lastRead != 0 && (long)Stopwatch.GetElapsedTime(_lastRead, now).TotalMilliseconds is var gap && gap > MaxGapMs) MaxGapMs = gap;
+            _lastRead = now;
+            Reads++;
+        }
+
         /// <summary>Called once, with the TTFT, when the first token arrives.</summary>
         public Action<long>? FirstToken { get; init; }
 
@@ -1294,6 +1550,36 @@ public sealed class GatewayPipeline(
         /// </summary>
         public void Observe(UnifiedStreamEvent e, long elapsedMs, bool wholeBody = false)
         {
+            Events++;
+            if (e is BlockStartEvent { Kind: BlockKind.ToolCall } toolCall)
+            {
+                if (toolCall.ToolCallId is { Length: > 0 } toolCallId) ToolCallIds.Add(toolCallId);
+                if (toolCall.ToolName is { Length: > 0 } toolName && ToolNames.Count < 32) ToolNames.Add(toolName);
+                if (!wholeBody && ToolStarts.Count < 32) ToolStarts.Add((Stopwatch.GetTimestamp(), toolCall.ToolName ?? ""));
+                if (!wholeBody) Stage("tool:" + (toolCall.ToolName ?? ""));
+            }
+            else if (e is ReasoningDeltaEvent reasoning && (reasoning.Text is { Length: > 0 } || reasoning.EncryptedContent is { Length: > 0 }))
+            {
+                ReasoningChars += reasoning.Text?.Length ?? 0;
+                if (!wholeBody)
+                {
+                    var now = Stopwatch.GetTimestamp();
+                    ReasoningStart ??= now;
+                    ReasoningEnd = now;
+                    Stage("thinking");
+                }
+            }
+            else if (e is TextDeltaEvent { Text.Length: > 0 } text)
+            {
+                TextChars += text.Text.Length;
+                if (!wholeBody)
+                {
+                    var now = Stopwatch.GetTimestamp();
+                    TextStart ??= now;
+                    TextEnd = now;
+                    Stage("writing");
+                }
+            }
             switch (e)
             {
                 case TextDeltaEvent { Text.Length: > 0 }:

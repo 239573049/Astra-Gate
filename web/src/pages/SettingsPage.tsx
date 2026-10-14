@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useTunnel, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
 import type { ProxyMode, RequestCompression, Settings } from '../api/types';
+import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
 import { Page } from '../components/layout/Page';
@@ -174,7 +175,7 @@ function GeneralSettings() {
                 <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('common.copy')} onClick={() => void copy(remoteUrl)} />
               </Row>
             )}
-            <Row label={t('settings.listen')} detail={`${s.host}:${s.port}`} />
+            <ListenRows />
             <Row label={t('settings.dataDir')} detail={s.dataDir}>
               {systemActions.canOpenPaths ? (
                 <Button size="sm" variant="plain" icon={<FolderOpen className="size-3.5" />} aria-label={t('settings.openFolder')} onClick={() => void systemActions.openPath(s.dataDir)} />

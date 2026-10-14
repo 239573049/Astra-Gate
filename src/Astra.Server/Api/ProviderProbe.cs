@@ -609,7 +609,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 using var request = await RequestAsync(p, HttpMethod.Get, url, endpoint.Protocol, false, deadline.Token, accountId);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 var body = TryObject(await ReadResponseAsync(response, deadline.Token));
-                if (!response.IsSuccessStatusCode) throw new AdminApiException(502, ErrorMessage(body, response.StatusCode, p, request), new { httpStatus = (int)response.StatusCode });
+                if (!response.IsSuccessStatusCode) throw new AdminApiException(502, ErrorMessage(body, response.StatusCode, p, request), new UpstreamStatusDetailsDto((int)response.StatusCode));
                 if (body is null) throw InvalidList();
                 var rows = body["data"] as JsonArray ?? body["models"] as JsonArray ?? throw InvalidList();
                 foreach (var row in rows)

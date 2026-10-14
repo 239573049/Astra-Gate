@@ -34,6 +34,8 @@ public static class ClientEndpoints
             Results.Ok(await clients.DisableAsync(kind, false, ct)));
         group.MapPost("/{kind}/force-restore", async (string kind, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.DisableAsync(kind, true, ct)));
+        group.MapPost("/{kind}/repair", async (string kind, ClientService clients, CancellationToken ct) =>
+            Results.Ok(await clients.RepairAsync(kind, ct)));
         // Materialized to List<ClientBackupDto>: an interface-typed root makes the serializer probe the
         // interface graph for metadata (see ServerJsonContext).
         group.MapGet("/{kind}/backups", (string kind, ClientService clients) => Results.Ok(clients.Backups(kind).ToList()));

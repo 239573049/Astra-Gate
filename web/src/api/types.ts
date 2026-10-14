@@ -18,13 +18,29 @@ export interface Page<T> { items: T[]; total: number; page: number; pageSize: nu
 // GET /api/health -> { status: "ok" } ; GET /api/version -> VersionInfo
 export interface VersionInfo { version: string; apiVersion: string }
 // GET /api/auth/status ; POST /api/auth/login {password} ; POST /api/auth/logout ;
-// POST /api/auth/password {password} (this machine only, never through a tunnel)
+// POST /api/auth/password {password} (this machine only, never through a tunnel or from the network)
 export interface AuthStatus {
+  /** This request needs a session: it did not come from this machine (another device on the network, or a tunnel). */
   required: boolean; signedIn: boolean;
   /** The request came through Cloudflare (remote access tunnel). */
   remote: boolean;
   /** Remote, and the admin UI is kept local: signing in would not help. */
   adminBlocked: boolean;
+}
+
+// GET /api/server/listen -> ListenStatus ; PUT /api/server/listen {host} -> ListenStatus (this machine only;
+// beyond loopback it needs an admin password; config.json changes, the running server only after a restart)
+export interface ListenStatus {
+  /** What the running server is bound to. */
+  host: string;
+  port: number;
+  /** What the next start binds (config.json); differs from host until the service restarts. */
+  configuredHost: string;
+  /** ASTRA_HOST decides the address; it cannot be changed here. */
+  hostFromEnvironment: boolean;
+  passwordSet: boolean;
+  /** Base URLs (no /v1) other devices can use while listening beyond loopback. */
+  networkUrls: string[];
 }
 
 // ---------- pricing (storage format, snake_case) ----------
@@ -116,7 +132,7 @@ export interface BillingResult {
 // ---------- provider templates & providers ----------
 export interface TemplateEndpoint { protocol: ApiProtocol; baseUrl: string; fullUrl?: boolean }
 export interface ProviderTemplate {
-  id: string; version: number; name: string; category: "official" | "subscription" | "cn" | "aggregator" | "custom" | "local";
+  id: string; version: number; name: string; category: "official" | "subscription" | "coding" | "cn" | "aggregator" | "inference" | "custom" | "local";
   icon?: string | null; website?: string | null; apiKeyUrl?: string | null; docsUrl?: string | null;
   endpoints: TemplateEndpoint[]; preferredUpstreamProtocols: ApiProtocol[];
   auth: { scheme: AuthScheme }; authScheme: AuthScheme; requiresApiKey: boolean; models: string[];
@@ -306,7 +322,14 @@ export interface ClientInfo {
   install?: ClientInstall | null;
   /** Client-specific options this client supports (stored in extras.options); empty or absent = none. */
   options?: ClientOptionDescriptor[] | null;
+  /** Config files the client cannot read as they are; POST /api/clients/{kind}/repair fixes them. */
+  repairs?: ConfigRepair[] | null;
 }
+/**
+ * A file the client reads as strict JSON that holds a comment or a trailing comma (the first one at `line`). The repair
+ * removes only those, after backing the file up.
+ */
+export interface ConfigRepair { file: string; problem: 'trailing-comma' | 'comment'; line: number }
 /**
  * One client-specific option. scope "config": written into the client's own config on apply; "gateway": applied by the
  * gateway to that client's requests. type "bool" | "int" | "enum" (choices); default "" = leave the client alone.
@@ -364,6 +387,7 @@ export interface BackupInfo { id: string; createdAt: string; files: string[]; fi
 // POST /api/clients/{kind}/enable body EnableRequest -> ClientInfo
 // POST /api/clients/{kind}/disable -> DisableResult
 // POST /api/clients/{kind}/force-restore -> DisableResult
+// POST /api/clients/{kind}/repair -> ClientInfo   (fixes every file in `repairs`; nothing to fix is not an error)
 // GET /api/clients/{kind}/backups -> BackupInfo[] ; POST /api/clients/{kind}/backups/{id}/restore -> ClientInfo
 // GET /api/clients/{kind}/models -> string[]   (enabled models of every bound provider, each id once, for model pickers)
 
@@ -476,6 +500,16 @@ export interface RequestSummary {
   remote?: boolean;
   /** The caller's address when it isn't this machine (the visitor's, for tunnel requests). */
   clientIp?: string | null;
+  /** The conversation (tracing; .plan/observability.md §3.1). */
+  sessionKey?: string | null;
+  /** Live feed only: what the model is producing — thinking | writing | tool:<name>. */
+  stage?: string | null;
+  /** Where the call sits in the agent's loop (tracing): its turn, main / sidechain / aux, the call before it. */
+  turnId?: string | null;
+  callKind?: TraceCallKind | null;
+  parentRequestId?: string | null;
+  /** Live feed only: when each stage began — "thinking@1530,writing@6020,tool:Bash@9100" (ms since arrival). */
+  phases?: string | null;
 }
 export interface RequestUsageItem {
   tokenType: string; tokens: number; isPerCall: boolean; unitPrice: string; baseUnitPrice?: string | null;
@@ -947,4 +981,172 @@ export interface KeyInfo {
   rpm?: { limit: number; used: number } | null;
   usage: { today: KeyUsage; week: KeyUsage; month: KeyUsage; total: KeyUsage };
   daily: (KeyUsage & { day: string })[];
+}
+
+// ---------------------------------------------------------------- traces (/api/traces, .plan/observability.md §4)
+
+export type TraceRange = 'live' | '1h' | '24h';
+export type TraceCallKind = 'main' | 'sidechain' | 'aux';
+export type TraceLinkSource = 'new_turn' | 'tool_call' | 'session' | 'inferred';
+export type TraceSpanStatus = 'ok' | 'error' | 'unset';
+
+export interface TraceSpan {
+  requestId: string;
+  spanId: string;
+  parentSpanId?: string | null;
+  /** gateway.request | gateway.route | gateway.body | gateway.middleware | gateway.privacy | gateway.resolve | gateway.encode | upstream.attempt | gateway.response */
+  name: string;
+  kind: 'server' | 'internal' | 'client';
+  /** Microseconds from the request's arrival. */
+  startUs: number;
+  durationUs: number;
+  status: TraceSpanStatus;
+  statusMessage?: string | null;
+  attributes?: Record<string, string | number | boolean> | null;
+  events?: { name: string; offset_us: number; attributes?: Record<string, string | number | boolean> }[] | null;
+}
+
+/** One gateway call with its agent links. */
+export interface TraceCall {
+  id: string;
+  startedAtUtc: string;
+  clientKind?: string | null;
+  providerId?: string | null;
+  providerName?: string | null;
+  accountId?: string | null;
+  accountName?: string | null;
+  inboundProtocol: ApiProtocol;
+  upstreamProtocol?: ApiProtocol | null;
+  passthrough: boolean;
+  stream: boolean;
+  requestedModel?: string | null;
+  upstreamModel?: string | null;
+  responseModel?: string | null;
+  status: RequestStatus;
+  httpStatus?: number | null;
+  errorType?: string | null;
+  errorMessage?: string | null;
+  ttfbMs?: number | null;
+  ttftMs?: number | null;
+  totalMs?: number | null;
+  generationMs?: number | null;
+  outputTps?: number | null;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  cacheReadTokens: number;
+  reasoningTokens: number;
+  costNanoUsd: number;
+  upstreamRequestId?: string | null;
+  traceId?: string | null;
+  parentSpanId?: string | null;
+  sessionKey?: string | null;
+  chainKey?: string | null;
+  turnId?: string | null;
+  parentRequestId?: string | null;
+  step?: number | null;
+  callKind?: TraceCallKind | null;
+  linkSource?: TraceLinkSource | null;
+  finishReason?: string | null;
+  toolCalls: number;
+  reasoningEffort?: string | null;
+  reasoningMode?: string | null;
+}
+
+export interface TraceRequest {
+  request: TraceCall;
+  inFlight: boolean;
+  spans: TraceSpan[];
+  parent?: TraceCall | null;
+  children: TraceCall[];
+}
+
+export interface TraceSession {
+  sessionKey: string;
+  clientKind?: string | null;
+  firstAtUtc: string;
+  lastAtUtc: string;
+  requests: number;
+  turns: number;
+  errors: number;
+  costNanoUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  providerIds: string[];
+  active: boolean;
+}
+
+export interface TraceTurn {
+  turnId: string;
+  startedAtUtc: string;
+  requests: number;
+  errors: number;
+  costNanoUsd: number;
+  durationMs: number;
+}
+
+export interface TraceSessionDetail {
+  session: TraceSession;
+  turns: TraceTurn[];
+  turnId?: string | null;
+  calls: TraceCall[];
+  spans: TraceSpan[];
+}
+
+export interface TraceStage {
+  name: string;
+  p50Us?: number | null;
+  p95Us?: number | null;
+  samples: number;
+}
+
+export interface TraceAccount {
+  id: string;
+  name: string;
+  /** ok | cooldown | expired | revoked | disabled */
+  status: string;
+  enabled: boolean;
+  cooldownUntilUtc?: string | null;
+  seenAtUtc?: string | null;
+  remainingRequests?: string | null;
+  remainingTokens?: string | null;
+  limitRequests?: string | null;
+}
+
+export interface TraceProviderNode {
+  providerId: string;
+  name: string;
+  icon?: string | null;
+  templateId?: string | null;
+  requests: number;
+  errors: number;
+  attempts: number;
+  rateLimited: number;
+  failovers: number;
+  perMinute: number;
+  ttfbP95Ms?: number | null;
+  accounts: TraceAccount[];
+}
+
+export interface TraceClientNode {
+  clientKind?: string | null;
+  requests: number;
+  errors: number;
+  perMinute: number;
+  activeSessions: number;
+}
+
+export interface TraceTopology {
+  range: TraceRange;
+  windowMinutes: number;
+  gateway: {
+    requests: number;
+    errors: number;
+    inFlight: number;
+    overheadP50Us?: number | null;
+    overheadP95Us?: number | null;
+    failovers: number;
+    stages: TraceStage[];
+  };
+  clients: TraceClientNode[];
+  providers: TraceProviderNode[];
 }

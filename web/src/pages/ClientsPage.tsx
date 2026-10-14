@@ -21,6 +21,7 @@ import {
   usePreviewEnable,
   useProviderAccounts,
   useProviders,
+  useRepairClientConfig,
   useRestoreBackup,
   useSetBinding,
   useSetBindings,
@@ -237,6 +238,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   const setBinding = useSetBinding();
   const disable = useDisableClient();
   const forceRestore = useForceRestore();
+  const repair = useRepairClientConfig();
   const tokens = useTokens();
   const models = useClientModels(client.kind, Boolean(client.providerId));
   const [model, setModel] = useState<string | null>(client.selectedModel ?? null);
@@ -390,6 +392,32 @@ function ClientPanel({ client }: { client: ClientInfo }) {
           <Row label={<span className="text-[12px] text-[var(--text-secondary)]">{t('clients.appliedAt', { time: formatDateTime(client.appliedAt, locale) })}</span>} />
         )}
       </Group>
+      {(client.repairs?.length ?? 0) > 0 && (
+        <div className="mb-5 flex flex-col items-start gap-2">
+          <Alert tone="danger" className="self-stretch" title={t('clients.repair.title', { name })}>
+            {client.repairs?.map((r) => (
+              <span key={r.file} className="block break-all">
+                <span className="font-mono">{r.file}</span>
+                {' — '}
+                {t(`clients.repair.problem.${r.problem}`, { line: r.line })}
+              </span>
+            ))}
+            <span className="block">{t('clients.repair.hint')}</span>
+          </Alert>
+          <Button
+            variant="primary"
+            loading={repair.isPending}
+            onClick={() =>
+              repair.mutate(client.kind, {
+                onSuccess: () => toast(t('clients.repair.done', { name }), 'success'),
+                onError: (e) => toast(errorText(e), 'error'),
+              })
+            }
+          >
+            {t('clients.repair.action')}
+          </Button>
+        </div>
+      )}
       {!isDirectMode && client.warnings.length > 0 && (
         <div className="mb-5 flex flex-col gap-2">
           {client.warnings.map((w, i) => (

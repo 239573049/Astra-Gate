@@ -2,7 +2,7 @@
 // in a normal browser it is absent and the shell is "web".
 
 export type ThemeSource = 'system' | 'light' | 'dark';
-export type NavTarget = 'overview' | 'requests' | 'clients' | 'tokens' | 'providers' | 'models' | 'plugins' | 'privacy' | 'settings';
+export type NavTarget = 'overview' | 'requests' | 'traces' | 'clients' | 'tokens' | 'providers' | 'models' | 'plugins' | 'privacy' | 'settings';
 export type MenuCommand =
   | `nav:${NavTarget}`
   | 'find'
@@ -64,6 +64,7 @@ export interface DesktopBridge {
   openPath(p: string): Promise<boolean>;
   revealLogs(): Promise<boolean>;
   startService(): Promise<{ ok: boolean; error?: string | null }>;
+  restartService(): Promise<{ ok: boolean; error?: string | null }>;
   updates: {
     check(): Promise<UpdateSummary>;
     apply(): Promise<UiApplyOutcome>;

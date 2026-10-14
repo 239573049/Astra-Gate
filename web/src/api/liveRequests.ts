@@ -6,9 +6,9 @@ import type { RequestLiveEvent, RequestSummary } from './types';
 
 type Listener = () => void;
 
-/** Fields the request list filters on; a change to any of them can move a row in or out of the filtered list. */
+/** Fields the request list (and a trace session) filters on; a change to any of them can move a row in or out of the filtered list. */
 const listKey = (r: RequestSummary) =>
-  [r.clientKind, r.tokenId, r.providerId, r.status, r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel, r.remote].join('\u0000');
+  [r.clientKind, r.tokenId, r.providerId, r.status, r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel, r.remote, r.sessionKey, r.turnId].join('\u0000');
 
 /**
  * Rows of the live request log (GET /api/requests/live), outside React state so an update re-renders only what
@@ -208,7 +208,12 @@ export function useLiveRequestFeed(enabled: boolean) {
       timer = setTimeout(() => {
         timer = undefined;
         void qc.invalidateQueries({ queryKey: ['requests'] });
-        for (const id of persisted) void qc.invalidateQueries({ queryKey: ['request', id] });
+        // an open trace session shows the stored call now rather than at its next poll
+        void qc.invalidateQueries({ queryKey: ['traces', 'session'] });
+        for (const id of persisted) {
+          void qc.invalidateQueries({ queryKey: ['request', id] });
+          void qc.invalidateQueries({ queryKey: ['traces', 'request', id] });
+        }
         persisted.clear();
       }, 250);
     };
@@ -235,6 +240,9 @@ export const useLiveRequestList = () => useSyncExternalStore(store.subscribeList
 
 /** Whether the live stream is up (callers poll instead while it is not). */
 export const useLiveRequestsConnected = () => useSyncExternalStore(store.subscribeList, store.getConnected);
+
+/** The live copy of one request right now, without subscribing (for views that re-render on a clock anyway). */
+export const peekLiveRequest = (id: string): RequestSummary | undefined => store.get(id);
 
 /** The live copy of one request, or undefined once it left the feed; re-renders only for that request. */
 export function useLiveRequest(id: string): RequestSummary | undefined {

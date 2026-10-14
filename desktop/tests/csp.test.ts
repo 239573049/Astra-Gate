@@ -12,6 +12,12 @@ describe('buildCsp', () => {
     expect(csp).toContain("frame-ancestors 'none'");
   });
 
+  it('allows https images for plugin icons, but not plain http', () => {
+    const csp = buildCsp('http://127.0.0.1:17321');
+    expect(csp).toContain("img-src 'self' data: blob: https:;");
+    expect(csp).not.toMatch(/img-src[^;]*http:/);
+  });
+
   it('varies with the port', () => {
     expect(buildCsp('http://127.0.0.1:18000')).toContain('http://127.0.0.1:18000');
   });

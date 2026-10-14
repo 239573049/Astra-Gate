@@ -18,6 +18,9 @@ const hookSpies = vi.hoisted(() => ({
   requestsEnabled: [] as (string | null | undefined)[],
   requestsLive: [] as boolean[],
   enabled: vi.fn(),
+  /** Overrides the page's client list for one test; reset before each. */
+  clients: undefined as ClientInfo[] | undefined,
+  repair: vi.fn(),
 }));
 
 const directState = (over: Record<string, unknown> = {}) => ({
@@ -57,13 +60,14 @@ vi.mock('../api/hooks', () => ({
     return hookSpies.requests;
   },
   useSelectClaudeDirect: () => ({ mutate: hookSpies.select, isPending: false }),
-  useClients: () => ({ data: clients, isLoading: false, isError: false, error: null }),
+  useClients: () => ({ data: hookSpies.clients ?? clients, isLoading: false, isError: false, error: null }),
   useProviders: () => ({ data: providers, isLoading: false, isError: false, error: null }),
   useClientModels: () => ({ data: ['claude-sonnet-4-5'], isLoading: false }),
   useSetBinding: () => ({ mutate: vi.fn(), isPending: false }),
   useSetBindings: () => ({ mutate: vi.fn(), isPending: false }),
   useDisableClient: () => ({ mutate: vi.fn(), isPending: false }),
   useForceRestore: () => ({ mutate: vi.fn(), isPending: false }),
+  useRepairClientConfig: () => ({ mutate: hookSpies.repair, isPending: false }),
   useTokens: () => ({ data: [], isLoading: false }),
   useProviderAccounts: () => ({ data: [], isLoading: false }),
   useBackups: () => ({ data: [], isLoading: false, isError: false }),
@@ -245,6 +249,8 @@ beforeEach(() => {
   hookSpies.requests = { data: [], isLoading: false, isError: false, error: null };
   hookSpies.select.mockClear();
   hookSpies.enabled.mockClear();
+  hookSpies.clients = undefined;
+  hookSpies.repair.mockClear();
   hookSpies.requestsEnabled.length = 0;
   hookSpies.requestsLive.length = 0;
 });
@@ -534,5 +540,25 @@ describe('ClientsPage in direct mode', () => {
     expect(screen.getByText(t('clients.tokenTitle'))).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: t('clients.claudeDirect.configure') })).not.toBeInTheDocument();
     expect(screen.getByText(t('clients.claudeDirect.modeTitle'))).toBeInTheDocument();
+  });
+});
+
+describe('Config repair', () => {
+  const file = '/Users/me/Library/Application Support/Claude-3p/claude_desktop_config.json';
+
+  it('names the file the client cannot read and repairs it on request', () => {
+    hookSpies.clients = [codex(), claudeCode({ repairs: [{ file, problem: 'trailing-comma', line: 53 }] })];
+    showPage();
+    expect(screen.getByText(/can't read this config file/)).toBeTruthy();
+    expect(screen.getByText(file)).toBeTruthy();
+    expect(screen.getByText(new RegExp(t('clients.repair.problem.trailing-comma', { line: 53 })))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: t('clients.repair.action') }));
+    expect(hookSpies.repair).toHaveBeenCalledWith('claude-code', expect.anything());
+  });
+
+  it('shows nothing when every config file is readable', () => {
+    showPage();
+    expect(screen.queryByText(/can't read this config file/)).toBeNull();
+    expect(screen.queryByRole('button', { name: t('clients.repair.action') })).toBeNull();
   });
 });

@@ -22,6 +22,7 @@ const ProvidersPage = lazy(() => import('./pages/ProvidersPage').then((m) => ({ 
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const TokensPage = lazy(() => import('./pages/TokensPage').then((m) => ({ default: m.TokensPage })));
+const TracesPage = lazy(() => import('./pages/TracesPage').then((m) => ({ default: m.TracesPage })));
 // The token self-service page lives outside the admin login (the token itself authenticates; plan: alerts-webhooks-token-limits §2.2).
 const KeyPage = lazy(() => import('./pages/KeyPage').then((m) => ({ default: m.KeyPage })));
 const TrayPanelPage = lazy(() => import('./pages/TrayPanelPage').then((m) => ({ default: m.TrayPanelPage })));
@@ -58,6 +59,11 @@ function AdminApp() {
           <Route element={<AppShell />}>
             <Route index element={<OverviewPage />} />
             <Route path="requests" element={<RequestsPage />} />
+            <Route path="traces" element={<TracesPage />} />
+            <Route path="traces/sessions" element={<TracesPage />} />
+            <Route path="traces/sessions/:key" element={<TracesPage />} />
+            <Route path="traces/requests" element={<TracesPage />} />
+            <Route path="traces/requests/:id" element={<TracesPage />} />
             <Route path="tokens" element={<TokensPage />} />
             <Route path="clients" element={<ClientsPage />} />
             <Route path="clients/:kind" element={<ClientsPage />} />

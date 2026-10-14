@@ -43,4 +43,13 @@ public sealed class ClientStatus
     public required IReadOnlyList<string> AppliedKeys { get; init; }
 
     public required IReadOnlyList<string> Warnings { get; init; }
+
+    /// <summary>Config files the client cannot read as they are and Astra can fix (<see cref="ClientConfigApplier.Repair"/>).</summary>
+    public IReadOnlyList<ConfigRepair> Repairs { get; init; } = [];
 }
+
+/// <summary>
+/// A config file the client reads as strict JSON but that holds JSONC syntax, which stops the client from reading it.
+/// <see cref="Problem"/> is the first one's <see cref="Editing.StrictJson"/> code and <see cref="Line"/> its 1-based line.
+/// </summary>
+public sealed record ConfigRepair(string File, string Problem, int Line);

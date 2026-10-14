@@ -36,6 +36,7 @@ import type {
   ImportResult,
   ImportSelection,
   ImportSource,
+  ListenStatus,
   LocalCodexLogin,
   LocalCopilotLogin,
   Model,
@@ -89,6 +90,7 @@ import type {
 } from './types';
 import type { PrivacyEvent } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
+import type { TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 
 export const keys = {
   health: ['health'] as const,
@@ -96,6 +98,7 @@ export const keys = {
   auth: ['auth'] as const,
   settings: ['settings'] as const,
   tunnel: ['tunnel'] as const,
+  listen: ['listen'] as const,
   update: ['update'] as const,
   models: (search?: string, vendor?: string) => ['models', search ?? '', vendor ?? ''] as const,
   model: (id: string) => ['model', id] as const,
@@ -142,6 +145,10 @@ export const keys = {
   requests: (q: RequestQuery) => ['requests', q] as const,
   request: (id: string) => ['request', id] as const,
   stats: (kind: string, ...args: unknown[]) => ['stats', kind, ...args] as const,
+  traceTopology: (range: TraceRange) => ['traces', 'topology', range] as const,
+  traceSessions: (range: string, client?: string) => ['traces', 'sessions', range, client ?? ''] as const,
+  traceSession: (key: string, turn?: string) => ['traces', 'session', key, turn ?? ''] as const,
+  traceRequest: (id: string) => ['traces', 'request', id] as const,
 };
 
 // ---------- system ----------
@@ -191,7 +198,19 @@ export function useSetAdminPassword() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (password: string) => api('POST', '/api/auth/password', { password }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.tunnel }),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.tunnel }), qc.invalidateQueries({ queryKey: keys.listen })]),
+  });
+}
+
+export const useListen = () =>
+  useQuery({ queryKey: keys.listen, queryFn: () => api<ListenStatus>('GET', '/api/server/listen') });
+
+/** Saves the listen address for the next start; the running server keeps its own until it restarts. */
+export function useUpdateListen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (host: string) => api<ListenStatus>('PUT', '/api/server/listen', { host }),
+    onSuccess: (s) => qc.setQueryData(keys.listen, s),
   });
 }
 
@@ -901,6 +920,13 @@ export const useDisableClient = () =>
 export const useForceRestore = () =>
   useClientMutation((kind: ClientKind) => api<DisableResult>('POST', `/api/clients/${kind}/force-restore`));
 
+/** Fixes the client's config files it cannot read as they are (ClientInfo.repairs); backs them up first. */
+export const useRepairClientConfig = () =>
+  useClientMutation(
+    (kind: ClientKind) => api<ClientInfo>('POST', `/api/clients/${kind}/repair`),
+    (kind) => [keys.backups(kind)],
+  );
+
 export const useRestoreBackup = () =>
   useClientMutation(
     (v: { kind: ClientKind; id: string }) =>
@@ -1360,3 +1386,41 @@ export class KeyInfoError extends Error {
     super(`HTTP ${status}`);
   }
 }
+
+// ---------------------------------------------------------------- traces (.plan/observability.md §4)
+
+/** Topology aggregates; the live window refreshes every 5 s. */
+export const useTraceTopology = (range: TraceRange) =>
+  useQuery({
+    queryKey: keys.traceTopology(range),
+    queryFn: () => api<TraceTopology>('GET', `/api/traces/topology${qs({ range })}`),
+    placeholderData: (prev) => prev,
+    refetchInterval: range === 'live' ? 5000 : 30_000,
+  });
+
+export const useTraceSessions = (range: string, client?: string) =>
+  useQuery({
+    queryKey: keys.traceSessions(range, client),
+    queryFn: () => api<TraceSession[]>('GET', `/api/traces/sessions${qs({ range, client })}`),
+    placeholderData: (prev) => prev,
+    refetchInterval: 10_000,
+  });
+
+/** One session with its turns; the calls and spans of <paramref>turn</paramref> (the latest when omitted). */
+export const useTraceSession = (key: string | undefined, turn?: string) =>
+  useQuery({
+    queryKey: keys.traceSession(key ?? '', turn),
+    queryFn: () => api<TraceSessionDetail>('GET', `/api/traces/sessions/${enc(key!)}${qs({ turn })}`),
+    enabled: Boolean(key),
+    placeholderData: (prev) => prev,
+    refetchInterval: (query) => (query.state.data?.session.active ? 3000 : false),
+  });
+
+/** One request's span tree; polled while the request is still in flight. */
+export const useTraceRequest = (id: string | undefined) =>
+  useQuery({
+    queryKey: keys.traceRequest(id ?? ''),
+    queryFn: () => api<TraceRequest>('GET', `/api/traces/requests/${enc(id!)}`),
+    enabled: Boolean(id),
+    refetchInterval: (query) => (query.state.data?.inFlight ? 1000 : false),
+  });

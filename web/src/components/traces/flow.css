@@ -1,0 +1,357 @@
+/* React Flow themed with Astra's tokens (.plan/observability.md §5). Loaded by TraceCanvas only. */
+
+.astra-flow {
+  --xy-background-color: transparent;
+  --xy-background-pattern-color: color-mix(in oklab, var(--label) 16%, transparent);
+  --xy-edge-label-background-color: var(--surface-solid);
+  --xy-edge-label-color: var(--label-2);
+  --xy-minimap-background-color: var(--surface-solid);
+  --xy-minimap-mask-background-color: color-mix(in oklab, var(--canvas) 55%, transparent);
+  --xy-minimap-mask-stroke-color: var(--accent);
+  --xy-minimap-mask-stroke-width: 2;
+  --xy-minimap-node-background-color: color-mix(in oklab, var(--label) 28%, transparent);
+  --xy-selection-background-color: color-mix(in oklab, var(--accent) 10%, transparent);
+  font-family: var(--font-sans);
+}
+
+.astra-flow .react-flow__pane {
+  cursor: grab;
+}
+
+.astra-flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
+
+.astra-flow .react-flow__handle {
+  width: 6px;
+  height: 6px;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.astra-flow .react-flow__edge-textbg {
+  rx: 9px;
+  ry: 9px;
+}
+
+.astra-flow .react-flow__edge-text {
+  font-size: 11.5px;
+}
+
+.astra-flow .react-flow__minimap {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 0.5px solid var(--separator);
+}
+
+.trace-node {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface-solid);
+  border: 1px solid var(--separator);
+  color: var(--label);
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  cursor: grab;
+  transition: box-shadow 0.12s;
+}
+
+.react-flow__node.dragging .trace-node {
+  cursor: grabbing;
+  box-shadow: 0 0 0 1px var(--accent), 0 16px 36px rgb(0 0 0 / 0.3);
+}
+
+.trace-node:hover {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--separator));
+}
+
+.trace-node.is-selected {
+  box-shadow: 0 0 0 2px var(--accent), 0 8px 22px rgb(0 0 0 / 0.22);
+}
+
+.trace-node.tone-warn {
+  border-color: color-mix(in oklab, var(--orange) 60%, var(--separator));
+}
+
+.trace-node.tone-error {
+  border-color: color-mix(in oklab, var(--red) 60%, var(--separator));
+}
+
+.trace-node.tone-ok {
+  border-color: color-mix(in oklab, var(--green) 45%, var(--separator));
+}
+
+.trace-node.tone-sub {
+  background: color-mix(in oklab, var(--accent-2) 12%, var(--surface-solid));
+}
+
+.trace-node.tone-idle {
+  opacity: 0.75;
+}
+
+.trace-node.is-pill {
+  border-radius: 999px;
+  border-style: dashed;
+  background: var(--surface-muted);
+  padding: 6px 14px;
+}
+
+.trace-hub {
+  width: 96px;
+  height: 96px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 0 0 0.5px var(--separator), 0 8px 24px rgb(0 0 0 / 0.18);
+  cursor: grab;
+}
+
+.trace-hub.is-selected {
+  box-shadow: 0 0 0 2px var(--accent), 0 8px 24px rgb(0 0 0 / 0.22);
+}
+
+.trace-hub img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.trace-edge-label {
+  position: absolute;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-solid);
+  border: 0.5px solid var(--separator);
+  color: var(--label-2);
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ---- session steps ---- */
+
+/* the tools on top, the gap under them: a long tool list is cut off, the time never is */
+.trace-step-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 120px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--surface-solid);
+  border: 0.5px dashed color-mix(in oklab, var(--label) 30%, transparent);
+  color: var(--label-2);
+  font: inherit;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: default;
+}
+
+.trace-step-label.has-tools {
+  padding: 2px 9px;
+  border-radius: 9px;
+  line-height: 14px;
+}
+
+.trace-step-tools {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--label);
+}
+
+.trace-step-label.is-clickable {
+  cursor: pointer;
+}
+
+.trace-step-label.is-clickable:hover {
+  color: var(--label);
+  border-color: var(--accent);
+}
+
+/* a folded run of steps: a little stack */
+.trace-node.is-group {
+  cursor: pointer;
+  box-shadow: 4px 4px 0 -1px var(--surface-solid), 4px 4px 0 0 var(--separator), 8px 8px 0 -2px var(--surface-solid), 8px 8px 0 -1px var(--separator);
+}
+
+.trace-flag {
+  position: absolute;
+  top: -9px;
+  left: 10px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 18px;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.trace-flag.tone-error {
+  background: var(--red);
+}
+
+.trace-flag.tone-warn {
+  background: color-mix(in oklab, var(--orange) 85%, black);
+}
+
+/* a call still in flight: the card breathes until its stored row replaces it */
+.trace-node.is-pending {
+  border-color: color-mix(in oklab, var(--accent) 60%, var(--separator));
+  animation: trace-pending 1.6s ease-in-out infinite;
+}
+
+@keyframes trace-pending {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--accent) 22%, transparent), 0 1px 2px rgb(0 0 0 / 0.08);
+  }
+}
+
+.trace-pending-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--label-3) 80%, transparent);
+  animation: trace-pulse 1.2s ease-in-out infinite;
+}
+
+.trace-pending-dot.thinking {
+  background: var(--accent-2);
+}
+
+.trace-pending-dot.writing {
+  background: var(--accent);
+}
+
+.trace-pending-dot.tool {
+  background: var(--green);
+}
+
+.trace-pending-dot.done {
+  background: var(--green);
+  animation: none;
+}
+
+.trace-pending-dot.failed {
+  background: var(--red);
+  animation: none;
+}
+
+/* ---- live requests on the topology lines (from the live request feed) ---- */
+
+.trace-live {
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.trace-live-dot {
+  stroke: var(--surface-solid);
+  stroke-width: 1.5;
+}
+
+/* going out: routed and sent, waiting for the upstream */
+.trace-live-dot.out {
+  fill: var(--accent);
+}
+
+/* coming back: the upstream answered and the response streams to the agent */
+.trace-live-dot.back {
+  fill: var(--green);
+}
+
+/* still no first byte after a while */
+.trace-live-dot.slow {
+  fill: var(--orange);
+}
+
+.trace-burst {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: trace-burst 0.9s ease-out forwards;
+}
+
+.trace-burst.done {
+  fill: var(--green);
+}
+
+.trace-burst.failed {
+  fill: var(--red);
+}
+
+@keyframes trace-burst {
+  from {
+    transform: scale(1);
+    opacity: 0.95;
+  }
+  to {
+    transform: scale(3.2);
+    opacity: 0;
+  }
+}
+
+.trace-live-badge {
+  position: absolute;
+  top: -9px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--surface-solid);
+  border: 1px solid color-mix(in oklab, var(--accent) 45%, var(--separator));
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.trace-live-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: trace-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes trace-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* the hub breathes while requests are in flight */
+.trace-hub.is-busy {
+  animation: trace-breathe 1.6s ease-in-out infinite;
+}
+
+@keyframes trace-breathe {
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in oklab, var(--accent) 30%, transparent), 0 8px 24px rgb(0 0 0 / 0.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trace-burst,
+  .trace-live-pulse,
+  .trace-pending-dot,
+  .trace-node.is-pending,
+  .trace-hub.is-busy {
+    animation: none;
+  }
+}

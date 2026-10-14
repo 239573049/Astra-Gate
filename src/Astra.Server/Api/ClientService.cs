@@ -21,7 +21,9 @@ public sealed record ClientInfoDto(
     ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
     JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
     bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null,
-    List<ClientOptionDescriptor>? Options = null);
+    List<ClientOptionDescriptor>? Options = null, IReadOnlyList<ConfigRepairDto>? Repairs = null);
+/// <summary>A config file the client cannot read as it is (problem "trailing-comma" | "comment", first at line); POST …/repair fixes it.</summary>
+public sealed record ConfigRepairDto(string File, string Problem, int Line);
 public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
 public sealed record ConfigChangeDto(string File, string Format, string KeyPath, string? Before, string? After);
 public sealed record ClientDisableDto(IReadOnlyList<string> Restored, IReadOnlyList<string> Drifted, ClientInfoDto Client);
@@ -205,6 +207,19 @@ public sealed class ClientService(
                 report.Keys.Where(k => k.Outcome == RestoreKeyOutcome.Restored).Select(KeyLabel).Concat(report.DeletedFiles).Distinct().ToList(),
                 report.Keys.Where(k => k.Outcome == RestoreKeyOutcome.Drifted).Select(KeyLabel).ToList(),
                 await InfoAsync(adapter, CancellationToken.None));
+        }, ct);
+
+    /// <summary>
+    /// Fixes the config files the client cannot read as they are (comments or trailing commas in a file it parses as
+    /// strict JSON), through the applier so the usual backups are taken. Nothing to fix is not an error.
+    /// </summary>
+    public async Task<ClientInfoDto> RepairAsync(string kind, CancellationToken ct) =>
+        await MutateAsync(async () =>
+        {
+            await RefreshRegistryAsync(ct);
+            var adapter = Require(kind);
+            _applier.Repair(kind, adapter.Inspect().Repairs.Select(r => r.File));
+            return await InfoAsync(adapter, CancellationToken.None);
         }, ct);
 
     public IReadOnlyList<ClientBackupDto> Backups(string kind)
@@ -426,7 +441,8 @@ public sealed class ClientService(
             Json.Deserialize<JsonObject>(record?.ExtraJson) ?? new JsonObject(), record?.AppliedAt, warnings, true, outdated,
             record?.TokenId ?? TokenIds.Default, install,
             bindings.Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList(),
-            ClientOptions.For(adapter.Kind).ToList());
+            ClientOptions.For(adapter.Kind).ToList(),
+            (inspected?.Repairs ?? []).Select(r => new ConfigRepairDto(r.File, r.Problem, r.Line)).ToList());
     }
 
     /// <summary>

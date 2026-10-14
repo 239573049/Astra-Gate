@@ -69,7 +69,7 @@ public static class TunnelEndpoints
             if (body.CloudflaredPath is { } rawPath)
             {
                 // Choosing a program for Astra to run is for this machine only, never through a tunnel.
-                if (RequestOrigin.IsRemote(http)) throw new AdminApiException(403, "The cloudflared program can only be chosen on this machine");
+                if (!RequestOrigin.IsLocal(http)) throw new AdminApiException(403, "The cloudflared program can only be chosen on this machine");
                 if (rawPath.Trim().Length > 0)
                 {
                     installed = rawPath.Trim();

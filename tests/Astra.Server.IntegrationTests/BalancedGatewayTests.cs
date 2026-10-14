@@ -138,6 +138,33 @@ public class BalancedGatewayTests
     }
 
     [Fact]
+    public async Task A_Failover_Is_Traced_As_Two_Attempts()
+    {
+        await using var gw = await StartClaudeAsync(Balanced, seen => seen.Headers["authorization"] == "Bearer at-A"
+            ? FakeUpstream.Json("""{"type":"error","error":{"type":"rate_limit_error","message":"limit"}}""", HttpStatusCode.TooManyRequests,
+                ("retry-after", "120"), ("request-id", "req_limited"))
+            : FakeUpstream.Json(Message, HttpStatusCode.OK, ("request-id", "req_ok")));
+
+        var record = await gw.RecordOfAsync(await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s1")));
+
+        // .plan/observability.md §2.3: every send is an upstream.attempt; the 429 says why it was retried.
+        var attempts = (await gw.Host.Db.Traces.ListSpansAsync(record.Id)).Where(s => s.Name == Astra.Core.Requests.TraceSpanNames.Attempt).ToList();
+        Assert.Equal(2, attempts.Count);
+        var limited = JsonNode.Parse(attempts[0].AttributesJson!)!;
+        Assert.Equal(429, limited["http.response.status_code"]!.GetValue<long>());
+        Assert.Equal("rate_limited_failover", limited["astra.attempt.retry"]!.GetValue<string>());
+        Assert.Equal("acc-a", limited["astra.account.id"]!.GetValue<string>());
+        Assert.Equal("120", limited["astra.ratelimit.retry-after"]!.GetValue<string>());
+        Assert.Equal("req_limited", limited["astra.upstream.request_id"]!.GetValue<string>());
+        Assert.Equal(Astra.Core.Requests.TraceSpanStatus.Error, attempts[0].Status);
+        var served = JsonNode.Parse(attempts[1].AttributesJson!)!;
+        Assert.Equal(200, served["http.response.status_code"]!.GetValue<long>());
+        Assert.Equal("acc-b", served["astra.account.id"]!.GetValue<string>());
+        Assert.Null(served["astra.attempt.retry"]);
+        Assert.True(attempts[1].StartUs >= attempts[0].StartUs + attempts[0].DurationUs);
+    }
+
+    [Fact]
     public async Task When_Every_Account_Is_Rate_Limited_The_429_Is_Handed_Back()
     {
         await using var gw = await StartClaudeAsync(Balanced, _ => FakeUpstream.Json(

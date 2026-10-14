@@ -50,6 +50,17 @@ public class ServerOptionsEnvironmentTests
         Assert.Equal(9090, o.Port);
     }
 
+    [Fact]
+    public void ASTRA_HOST_Locks_The_Listen_Address_Until_A_Flag_Overrides_It()
+    {
+        var o = Apply(new() { ["ASTRA_HOST"] = "0.0.0.0" });
+        Assert.True(o.HostFromEnvironment);
+        Assert.True(o.IsWildcard);
+        o.ApplyArgs(["--host", "127.0.0.1"]);
+        Assert.False(o.HostFromEnvironment);
+        Assert.False(Apply([]).HostFromEnvironment);
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("70000")]

@@ -226,6 +226,31 @@ public class ClientApiTests
     }
 
     [Fact]
+    public async Task Repair_Fixes_A_Claude_Desktop_Config_It_Cannot_Parse()
+    {
+        await using var host = await TestHost.StartAsync();
+        static JsonNode Desktop(JsonNode clients) =>
+            clients.AsArray().Single(c => c!["kind"]!.GetValue<string>() == ClientKinds.ClaudeDesktop)!;
+        var listed = Desktop(await host.GetJsonAsync("/api/clients"));
+        Assert.Empty(listed["repairs"]!.AsArray());
+        var config = listed["detection"]!["configPaths"]![1]!.GetValue<string>();
+        Assert.EndsWith(Path.Combine("Claude-3p", "claude_desktop_config.json"), config);
+        Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+        await File.WriteAllTextAsync(config, "{\n  \"preferences\": {},\n}\n");
+
+        var repair = Assert.Single(Desktop(await host.GetJsonAsync("/api/clients"))["repairs"]!.AsArray())!;
+        Assert.Equal(config, repair["file"]!.GetValue<string>());
+        Assert.Equal("trailing-comma", repair["problem"]!.GetValue<string>());
+        Assert.Equal(2, repair["line"]!.GetValue<int>());
+        var (status, repaired) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-desktop/repair");
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Empty(repaired!["repairs"]!.AsArray());
+        Assert.Equal("{\n  \"preferences\": {}\n}\n", await File.ReadAllTextAsync(config));
+        Assert.NotEmpty((await host.GetJsonAsync("/api/clients/claude-desktop/backups")).AsArray());
+        Assert.Empty(host.Db.ClientConfigState.List(ClientKinds.ClaudeDesktop));
+    }
+
+    [Fact]
     public async Task Unsetting_Default_Model_Restores_The_Original_Selection()
     {
         await using var host = await TestHost.StartAsync();

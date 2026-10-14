@@ -1,7 +1,7 @@
 import Link from 'next/link';
 
 import { InstallPanel } from '@/components/plugins/install-panel';
-import { KindBadge, copy, type MarketLang } from '@/components/plugins/market';
+import { KindBadge, PluginIcon, copy, type MarketLang } from '@/components/plugins/market';
 import type { RegistryListing } from '@/lib/plugin-market/types';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -35,6 +35,7 @@ export function PluginDetailView({
           {t.back}
         </Link>
         <div className="mt-4 flex flex-wrap items-center gap-3">
+          <PluginIcon plugin={plugin} size={44} />
           <h1 className="text-3xl font-bold">{plugin.name}</h1>
           <KindBadge kind={plugin.kind} lang={lang} />
           <span className="rounded-full bg-fd-muted px-2.5 py-0.5 text-xs text-fd-muted-foreground">

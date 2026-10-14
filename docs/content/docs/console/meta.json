@@ -15,6 +15,7 @@
     "plugins",
     "---[ShieldCheck]运行与安全---",
     "requests",
+    "traces",
     "privacy",
     "notifications",
     "settings"

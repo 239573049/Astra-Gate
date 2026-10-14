@@ -18,6 +18,7 @@ astra restart
 <Callout type="warn" title="对外监听前必须设置密码">
   `--host` 为非环回地址时，服务要求已通过 `astra config set-password` 设置管理密码，
   否则拒绝启动。任何有密码的人都能通过你的网关消耗上游额度——不要在不可信网络监听。
+  控制台的「设置 → 网关 → 监听」也能切换监听地址（写入 `config.json`），之后执行 `astra restart` 生效。
 </Callout>
 
 ## 状态

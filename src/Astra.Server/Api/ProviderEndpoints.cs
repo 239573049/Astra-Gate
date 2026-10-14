@@ -157,7 +157,7 @@ public static class ProviderEndpoints
             if (!await db.Providers.DeleteIfUnboundAsync(id, ct))
             {
                 var bound = (await db.Clients.ListBindingsByProviderAsync(id, ct)).Select(b => b.ClientKind).Distinct().ToList();
-                throw new AdminApiException(409, "Provider is bound to clients", new { boundClients = bound });
+                throw new AdminApiException(409, "Provider is bound to clients", new BoundClientsDetailsDto(bound));
             }
             return Results.NoContent();
         });
@@ -373,8 +373,10 @@ public static class ProviderEndpoints
                 catch (Exception ex) when (ex is IOException or OperationCanceledException) { }
             }
         });
+        // A List, not the IReadOnlyList the probe declares: an interface-typed root is written by its runtime type,
+        // which probes the whole interface graph and has no generated metadata under Native AOT.
         group.MapGet("/{id}/remote-models", async (string id, ProviderProbe probe, CancellationToken ct) =>
-            Results.Ok(await probe.ModelsAsync(id, ct)));
+            Results.Ok((await probe.ModelsAsync(id, ct)).ToList()));
 
         // Balance / quota query (cc-switch style "usage query"). A failed query never changes the provider;
         // it is stored next to the last good snapshot. Only an unusable configuration answers 400.

@@ -36,8 +36,10 @@ entries/tarballs under `${DATA_DIR}/plugin-market/`; publishing needs `PLUGIN_UP
 Tutorial screenshots in `docs/public/screenshots/` are captured from the live UI (`web` dev server on
 :5173 + a running astra-server) via `node docs/scripts/snap.mjs`; re-run it after UI changes instead of
 editing PNGs. `login.png` is the only mockup-rendered shot (`shots/login.html`, loopback never shows a
-login page). `docs` has no `lint`/`test` script, so `pnpm -r --if-present …` skips it silently; its
-`build` is a full Next.js build and fails if the shell exports a non-standard `NODE_ENV` (unset it first).
+login page). `docs` has no `lint`/`test` script and its typecheck is named `types:check`
+(`next typegen && tsc --noEmit`), which `pnpm -r --if-present lint|typecheck|test` therefore skips
+silently — run those two by hand when the site changes. Its `build` is a full Next.js build and
+fails if the shell exports a non-standard `NODE_ENV` (unset it first).
 
 Distribution couples the sides: the server binary and `web/dist` are packed into `npm/server-*`
 (`scripts/pack-platform.mjs`), and `web/dist` is copied into `desktop/renderer`
@@ -112,6 +114,9 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   not in `AuthSchemes.All`), `plugin://` endpoints, and accounts whose `extra.plugin_key` names the
   sign-in in plugin-auth.json; the gateway sends their requests through `PluginFetchHandler`.
 - Tests that need Bun use `[BunFact]` (skip without one); CI installs the pinned Bun.
+- A plugin's run-time inputs are files under `~/.astra/plugins/` (see State ownership), so anything
+  a plugin reads at request time resolves there or not at all — never relative to the process's
+  working directory.
 
 - Domain logic (billing, pricing, models, privacy) belongs in `Astra.Core`; persistence in
   `Astra.Data` repositories; HTTP and protocol handling in `Astra.Gateway`; endpoints in
@@ -120,6 +125,14 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   order, and every `Map*Endpoints()` call. New services, hosted workers, and endpoint groups are
   registered there. Integration tests reuse `AstraApp.Create` via `BuildOptions`
   (`InternalsVisibleTo Astra.Server.IntegrationTests`).
+- Most admin endpoint groups live in `src/Astra.Server/Api/*Endpoints.cs` (shared DTOs in
+  `Api/Dtos.cs`), with one exception: `src/Astra.Server/Alerts/AlertEndpoints.cs` sits beside the
+  alert service and its contracts. Register the group's `Map*Endpoints` in `AstraApp.Create`.
+- The CLI (`cli/src/commands`) and the web admin UI (`web/src/api/`) are both clients of that
+  public API, and `web/` is a private package with no library entry point: the desktop app consumes
+  it as a build artifact (`web/dist`), never as a source dependency. Treat the HTTP surface — not a
+  module boundary — as the contract between server, CLI and UI, and expect a server change that the
+  UI needs to be mirrored in `web/src/api` rather than imported.
 
 ### Protocol conversion is hub-and-spoke, never pairwise
 
@@ -162,27 +175,54 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 
 ### Error and security boundaries
 
-- Admin API: throw `AdminApiException(status, message)`; `AdminApiErrorFilter` turns it (and
-  IO/format errors) into JSON `{ error }`. `src/Astra.Server/Security/Security.cs`
-  `SecurityMiddleware` enforces: loopback Host allowlist (DNS-rebinding defense),
-  `X-Astra-Admin: 1` on every mutating `/api` call, and a session cookie when listening
-  off-loopback except for an explicit "open" path list. Mutating endpoints get the header
-  requirement automatically; adding a public read endpoint means deliberately adding it to that
-  list. The web client already sends the header (`web/src/api/client.ts`, `api()`).
+- Admin API: throw `AdminApiException(status, message)`; `AdminApiErrorFilter`
+  (`Api/AdminApiErrorFilter.cs`) turns it (and IO/format errors) into JSON `{ error }`.
+  Returning `Results.NotFound/BadRequest(new ErrorOnlyDto("…"))` (`Api/Dtos.cs`) is the older
+  style and still normal where a handler returns its value; both are in use, so match the group
+  you are editing instead of converting one to the other.
+- `src/Astra.Server/Security/Security.cs` `SecurityMiddleware` enforces: loopback Host allowlist
+  (DNS-rebinding defense), `X-Astra-Admin: 1` on every mutating `/api` call, and a session cookie
+  for every request not from this machine except for an explicit "open" path list. Mutating endpoints get the
+  header requirement automatically; adding a public read endpoint means deliberately adding it to
+  that list. The web client already sends the header (`web/src/api/client.ts`, `api()`).
+  Off-loopback (0.0.0.0 — the Settings page's LAN switch, `PUT /api/server/listen`, or a container), a request
+  is from this machine only with a loopback peer, a loopback Host and no proxy header (incl. `X-Original-For`,
+  which `ASPNETCORE_FORWARDEDHEADERS_ENABLED` leaves behind); everything else is marked network
+  (`RequestOrigin.MarkNetwork`) and, like a remote request, needs a session for `/api` and a token for the
+  gateway. Checks that mean "this machine only" use `RequestOrigin.IsLocal`, not `IsRemote`.
 - Remote access (`src/Astra.Server/Tunnel/`): `TunnelService` runs cloudflared (a Cloudflare Tunnel)
   as a child process. Requests carrying `Cf-Ray` / `Cf-Connecting-IP`, or the tunnel's own hostname
   (the only non-loopback Host the allowlist admits), are marked remote (`Astra.Gateway/Http/RequestOrigin`):
   the gateway always wants a token from them (`RequireGatewayKey` only opens it to this machine), `/api`
   wants a session, and in loopback mode they get no `/api` beyond health/version/auth status unless
-  `AppSettings.Tunnel.AllowAdmin`. In loopback mode the middleware also adopts Cloudflare's client IP and
-  https scheme (per-IP rate limits, Secure cookie). `POST /api/auth/password` and `PUT /api/tunnel`'s `cloudflaredPath`
-  (a program for Astra to run) never answer remote callers. The request log records the origin (`requests.remote`,
-  `requests.client_ip`, migration 0016; `?origin=remote|local` filter).
+  `AppSettings.Tunnel.AllowAdmin`. In loopback mode the middleware also adopts Cloudflare's client
+  IP and https scheme (per-IP rate limits, Secure cookie). `POST /api/auth/password`,
+  `PUT /api/server/listen` and `PUT /api/tunnel`'s `cloudflaredPath` (a program for Astra to run)
+  answer only callers from this machine.
+  The request log records the origin (`requests.remote`, `requests.client_ip`, migration 0016;
+  `?origin=remote|local` filter).
 - Gateway: `GatewayException` is rendered in the inbound protocol's error shape. Client-facing
   gateway error messages are currently written in Chinese — match the surrounding file.
 - Secrets (provider API keys, local client keys) go through `ISecretProtector` (DataProtection);
-  DTOs expose only masks (see `ProviderDto.HasApiKey` / `ApiKeyMasked`). Never log secrets or
-  echo them back.
+  DTOs expose only masks (`ProviderDto.HasApiKey` / `ApiKeyMasked`, `Api/ProviderEndpoints.cs`).
+  Never log secrets or echo them back.
+
+## Desktop app shell
+
+`desktop/` is more than a window around `web/dist`; these pieces have their own rules.
+
+- The renderer is served over the custom scheme `app://astra` (`desktop/src/appProtocol.ts`) with
+  the CSP from `desktop/src/shared/csp.ts`. The CSP is a deliberate allowlist: a renderer feature
+  that loads a new kind of resource (a remote image host, a frame, a websocket) needs a directive
+  there. Add the narrowest one rather than widening an existing directive or dropping a
+  restriction like `object-src 'none'`, and cover it in `desktop/tests/csp.test.ts`. Precedent:
+  `img-src … https:` was added — and pinned by a test that plain `http:` stays out — for https
+  plugin and market icons, the only scheme `PluginService.SafeIcon` admits.
+- Main-process code can only be reached from the renderer through the preload bridge: a new IPC
+  call is a linked update across `desktop/src/preload.ts` (injects `window.__ASTRA__`) and its
+  `desktop/src/bridge.d.ts` declaration, the main-process handler (`main.ts` / `tray.ts` /
+  `update.ts`), and the renderer's use of it. `window.__ASTRA__` is absent in a browser, so the
+  web build must keep working without it (the shell falls back to the plain web app).
 
 ## Native AOT
 
@@ -273,7 +313,10 @@ runtime needed on the target).
 6. **Client config take-over** (`Astra.Clients`): preserve the restore invariants — per-keyPath
    original values recorded in `client_config_state`, first-write backups kept permanently plus
    20 rolling backups (`ClientConfigApplier`), restore skips values the user changed (drift).
-   `astra-server restore-all` is an offline subcommand that depends on this data. Adapter tests
+   `astra-server restore-all` is an offline subcommand that depends on this data.
+   Files a client parses as strict JSON are an adapter's `StrictJsonFiles()`; `ClientConfigApplier.Repair` strips their
+   comments/trailing commas (`StrictJson`, backed up like any write, no key state), and a later restore must not
+   byte-restore the unparseable original (`ReconcileToOriginal` skips that case). Adapter tests
    must use a fake home (`ClientEnvironment`, `tests/Astra.Clients.Tests/TestHome.cs`) — never
    the developer's real client configs.
    Client-specific options (`ClientOptions` in `Astra.Core/Clients`, stored under `extras.options` in
@@ -313,29 +356,65 @@ runtime needed on the target).
     `/api/tools/cloudflared/<version>/<asset>`, cached under `${DATA_DIR}/tools/`): change them together. The remote access page and
     `docs/content/docs/guide/remote-access.mdx` describe what remote requests may reach — keep them in step with
     `SecurityMiddleware`.
+13. **Release publishing** pairs a version bump with `release.yml`: the manifest the CLI and
+    desktop read (`packages/update-core/src/check.ts`, `manifest.ts`, `DEFAULT_FEED_URL`) is served
+    by the docs site from bytes `release.yml` uploads to `${DATA_DIR}/client-releases/<channel>/`
+    through `docs/app/api/client-releases/` (storage and hashing: `docs/lib/releases.ts`, which
+    owns `CLIENT_UPLOAD_TOKEN`). The upload step warns and exits 0 when `DOCS_RELEASE_URL` /
+    `DOCS_RELEASE_TOKEN` are unset — a green run with a missing secret publishes nothing to the
+    site, so check that step's log rather than assuming a release reached the feed. `release.yml`
+    is also **two-phase**: a `main` push whose `cli/package.json` version is already on npm stops
+    after the `version` job, so the `build` and `publish` jobs never run in that case.
+14. **A `docs/` page or sidebar entry**: the folder's `meta.json` carries `title`/`description`/
+    `icon`/`defaultOpen` and lists its `pages` (with `---[Icon]Name---` separators between
+    sub-groups); a new page is added there and, when it belongs to a module, to the root
+    `docs/content/docs/meta.json` order as well.
+15. **Trace spans** (`.plan/observability.md`): span names are `TraceSpanNames` (`src/Astra.Core/Requests/TraceSpan.cs`),
+    recorded by `GatewayPipeline` through `src/Astra.Gateway/Tracing` (`RequestTrace`; the agent links — session, turn,
+    parent call — from `TraceKeys` + `TraceLinker`) and written to `trace_spans` with the request row
+    (`RequestRepository.InsertBatchAsync`, migration 0017). The names and the attribute keys the read side depends on
+    (`http.response.status_code`, `astra.account.id`, `astra.ratelimit.*`, `astra.response.*`, …) are also matched by
+    SQL in `TraceRepository`, by `/api/traces` (`TraceEndpoints`) and by the web views (`web/src/components/traces/model.ts`
+    `SPAN` and the inspectors): renaming one changes all of them, and `docs/content/docs/console/traces.mdx` lists what is
+    recorded. Upstream requests never carry trace context: `GatewayHttpClients` sets a no-output
+    `ActivityHeadersPropagator`, and `UpstreamTraceHeadersTests` checks it with the real handler (the integration
+    fixture swaps the handler out, so it cannot).
 
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
-  comments on public types. `noUncheckedIndexedAccess` is also on for all TypeScript
-  (`tsconfig.base.json`); packages extend it (`cli`) or replicate it (`web`, `desktop`).
+  comments on public types.
+- TypeScript is `strict` everywhere, but `noUncheckedIndexedAccess` is not: `tsconfig.base.json`
+  sets it, `cli/tsconfig.json` and `packages/*` extend the base, `desktop/tsconfig.json` repeats
+  the flag, and **`web/tsconfig.json` extends the base and turns it off** (`docs` uses Next's own
+  config and is outside the base entirely). Index an array or object without a guard freely in the
+  web UI; in the CLI, desktop and shared packages a non-null assertion like `arr[0]!` is the
+  expected form.
 - Formatting: root `.prettierrc` (100 cols, single quotes, semicolons, trailing commas). There
   is no repo-wide format command — match the surrounding code. ESLint: `web/` and `desktop/`
   have their own flat configs; `cli/` and `packages/*` inherit the root `eslint.config.js`.
-- Tests: vitest with per-package configs — `cli/test`, `desktop/tests`, `packages/update-core`
-  (node env), `web/src/test` (jsdom + testing-library). xunit on the .NET side, one test project
+- Tests: vitest with per-package configs — `cli/test`, `desktop/tests`, `packages/update-core/test`
+  (node env, `include: ['test/**/*.test.ts']`), `web/src/test` (jsdom + testing-library, chosen in
+  `web/vite.config.ts`). xunit on the .NET side, one test project
   per src project.
 - The web UI is bilingual (zh/en); any user-visible string belongs in the i18n catalogs, not
-  inline in components.
+  inline in components. The gateway is the exception: its client-facing error messages are Chinese
+  (see Error and security boundaries).
 
 ## Generated files — do not edit by hand
 
 - `web/dist`, `desktop/renderer`, `src/Astra.Server/wwwroot` — web build artifacts (all
-  gitignored).
+  gitignored). `wwwroot` is not an SDK output: the server serves the UI from
+  `<executable dir>/wwwroot` (`AstraApp.cs`), and `scripts/pack-platform.mjs --web-dist web/dist`
+  is what puts it beside a published binary. A `pnpm --filter @aidotnet/web build` followed by a
+  plain `dotnet run` therefore serves no UI.
 - `desktop/server-bundle/` — server staged for the desktop installers by `release.yml`
   (gitignored).
 - `npm/server-*/bin/`, `npm/desktop-*/app/` — outputs of `scripts/pack-platform.mjs` /
   `scripts/pack-desktop.mjs`.
+- `docker-bin/<amd64|arm64>/` — the unpacked Linux server package staged by the `docker` job in
+  `release.yml` for the root `Dockerfile` to `COPY` (gitignored). `docker/data/.gitkeep` is the
+  only tracked file under `docker/`; it seeds the image's `/data` volume.
 - `src/Astra.Core/Seed/models.json` — generated by `scripts/gen-seed.mjs` from models.dev.
   Regenerate rather than hand-edit; bump `SEED_VERSION` in the script when the seed changes.
   `SeedImporter` skips the import entirely when the stored seed version matches and never
@@ -382,10 +461,63 @@ runtime needed on the target).
 ## Ground rules for edits
 
 - Keep diffs minimal and scoped to the task. Do not refactor, reformat, or "clean up" code your
-  task did not touch; existing oddities are not license for unrelated changes.
+  task did not touch; existing oddities are not license for unrelated changes. Higher-priority
+  instructions and the task's own scope win over this file; inside that scope, keep the invariants
+  above and prefer the smallest change that satisfies both. If the two cannot both hold, say so
+  before changing code.
 - Read current file contents before editing; this repo has scripts, CI, and packages that
-  reference files across boundaries, so stale copies cause silent drift.
+  reference files across boundaries, so stale copies cause silent drift. That matters most in
+  files a second consumer reads or a script writes (`cli/package.json`, the `npm/*` manifests,
+  `packages/update-core`'s source-only entry points, the two market registry copies,
+  `pnpm-lock.yaml`): a small edit there is rarely small, and the copy you did not touch is the
+  one that ships. Reading the current contents and preserving edits you did not make is the only
+  thing that makes concurrent work safe — a small diff does not.
 - If a task cannot be done without violating an invariant above (for example, editing an applied
   migration), stop and explain the conflict before changing code.
 - If you change a documented command, boundary, or linked-update step in this file's scope,
-  update the corresponding guidance here in the same change.
+  update the corresponding guidance here in the same change. Do not commit, push or publish
+  without being asked.
+
+## Repository map
+
+The detailed map is in `.agents/codemap/` (generated at 6324e30; it can lag behind the code — when
+they disagree, trust the code and fix the page). Read the matching page before you change:
+- a gateway request, its protocol conversion or billing → `.agents/codemap/flows/gateway-request.md`
+- the trace spans, agent-turn linking or the 链路追踪 views → `.agents/codemap/flows/request-tracing.md`
+- an admin `/api` call, its auth or the console client → `.agents/codemap/flows/admin-api-request.md`
+- server startup, the port or `runtime.json` → `.agents/codemap/flows/server-startup.md`
+- taking over or restoring a local AI client's config → `.agents/codemap/flows/client-config-takeover.md`
+- installing or running a plugin → `.agents/codemap/flows/plugin-install-and-run.md`
+- a release, the update feed or the desktop/CLI updater → `.agents/codemap/flows/release-and-update.md`
+- unsure where new code belongs → `.agents/codemap/architecture.md` (ownership table)
+- a business term you do not recognise → `.agents/codemap/domain.md`
+
+When you change a module's entry points, contracts or extension steps, update its page in the same change.
+
+## Repository memory
+
+`.agents/memory/` records context the code does not show: corrected approaches, decisions and their
+reasons, traps, external resources. It is background; the rules are in this file.
+
+**Before starting a task:** read `.agents/memory/MEMORY.md` and open the entries relevant to the task.
+An entry describes the time it was written: verify any path, symbol or command it cites before relying
+on it. If it conflicts with the code or this file, follow the code and this file, and fix or delete the
+entry.
+
+**Write an entry when it happens, not at the end of the task:**
+- The user corrects your approach, or confirms a non-obvious one → `feedback`
+- A decision is made or explained that affects later changes, or an approach is rejected → `project`
+- You find a trap that is hard to see in the code and is not covered here → `project`
+- The user mentions an external resource (dashboard, ticket, doc, monitoring) → `reference`
+
+**Do not record:** what the code, git history, this file or `.agents/codemap/` already say; one-off task
+state; secrets or personal data; unverified guesses.
+
+**How:** update an existing entry before creating a new one; one fact per file, format in
+`.agents/memory/README.md`; absolute dates; cite evidence (`path:Symbol`, commit or link); keep the
+`MEMORY.md` line in sync; delete entries that turn out to be wrong. Anything about your own habits as an
+individual goes in `.next-cowork/memory/` (not committed).
+
+**Promotion:** when a `feedback` entry is confirmed again and holds for every contributor, suggest adding
+it to this file — do not rewrite the rules here yourself. Memory changes appear in the diff; do not commit
+them separately unless asked.

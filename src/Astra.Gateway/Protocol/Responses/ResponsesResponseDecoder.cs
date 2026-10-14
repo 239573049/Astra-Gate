@@ -241,10 +241,12 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
 
             case "error":
                 _terminal = true;
+                // OpenAI puts code / message at the top level; the ChatGPT (Codex) backend nests them in "error".
+                var detail = data["error"] as JsonObject ?? data;
                 events.Add(new ErrorEvent(
                     500,
-                    ResponsesCodec.Str(data, "code") ?? ResponsesCodec.Str(data, "type") ?? "server_error",
-                    ResponsesCodec.Str(data, "message") ?? "upstream returned an error event"));
+                    ResponsesCodec.Str(detail, "code") ?? ResponsesCodec.Str(detail, "type") ?? "server_error",
+                    ResponsesCodec.Str(detail, "message") ?? "upstream returned an error event"));
                 break;
         }
     }

@@ -77,6 +77,23 @@ public abstract class ClientAdapterBase : IClientAdapter
     /// </summary>
     protected virtual bool IsClientManagedKey(string file, string keyPath) => false;
 
+    /// <summary>
+    /// JSON config files the client reads with a strict JSON parser, where a comment or trailing comma (both fine for
+    /// the editors here) stops the client from reading the file. <see cref="BuildStatus"/> reports those as repairs.
+    /// </summary>
+    protected virtual IEnumerable<string> StrictJsonFiles() => [];
+
+    private List<ConfigRepair> FindRepairs()
+    {
+        var repairs = new List<ConfigRepair>();
+        foreach (var file in StrictJsonFiles())
+        {
+            if (Env.ReadTextOrNull(file) is { } text && StrictJson.FindProblem(text) is { } found)
+                repairs.Add(new ConfigRepair(file, found.Problem, found.Line));
+        }
+        return repairs;
+    }
+
     /// <summary>The file format of a config file, derived from its name.</summary>
     protected static ConfigFileFormat FormatOfPath(string path) =>
         Path.GetFileName(path) is ".zshrc" or ".bashrc" or ".zprofile" or ".bash_profile" ? ConfigFileFormat.ShellBlock
@@ -110,6 +127,7 @@ public abstract class ClientAdapterBase : IClientAdapter
             DriftedKeys = drifted,
             AppliedKeys = appliedKeys,
             Warnings = warnings,
+            Repairs = FindRepairs(),
         };
     }
 

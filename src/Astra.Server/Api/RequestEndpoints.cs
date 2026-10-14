@@ -25,7 +25,9 @@ public static class RequestEndpoints
         long TotalInputTokens, long TotalOutputTokens, long CacheReadTokens, long CacheWriteTokens, long ReasoningTokens,
         long CostNanoUsd, string UsageSource,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
-        string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp);
+        string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp,
+        string? SessionKey = null, string? Stage = null, string? TurnId = null, string? CallKind = null, string? ParentRequestId = null,
+        string? Phases = null);
 
     public sealed record UsageItemDto(
         string TokenType, long Tokens, bool IsPerCall, string UnitPrice, string? BaseUnitPrice, string TierApplied,
@@ -408,7 +410,8 @@ public static class RequestEndpoints
         r.TotalInputTokens, r.TotalOutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.ReasoningTokens,
         r.CostNanoUsd, r.UsageSource,
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-        r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp);
+        r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp,
+        r.SessionKey, inFlight ? r.LiveStage : null, r.TurnId, r.CallKind, r.ParentRequestId, inFlight ? r.LivePhases : null);
 
     private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies, bool inFlight = false)
     {

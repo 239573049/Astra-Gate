@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, Globe, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Link, useInRouterContext } from 'react-router';
 
 import { keys, useProviders, useRequest, useRequestRate, useRequests, useTunnel, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
@@ -573,6 +574,19 @@ function ResponseModelTag({ r, labeled = false }: { r: Pick<RequestSummary, 'req
 type UsageRow = { key: string; type: string; tokens: number; unitPrice: number; tier: string; cost: number; item: RequestDetail['usageItems'][number] };
 
 /** Request detail dialog: summary, timing, per-token-type bill, raw usage/pricing and captured bodies. */
+/** The request's span tree in 链路追踪 (.plan/observability.md §5); only where a router is mounted. */
+function TraceLink({ id, label }: { id: string; label: string }) {
+  if (!useInRouterContext()) return null;
+  return (
+    <Link
+      to={`/traces/requests/${encodeURIComponent(id)}`}
+      className="inline-flex h-8 items-center rounded-[10px] px-3 text-[13px] text-[var(--accent)] hover:bg-[var(--surface-muted)]"
+    >
+      {label}
+    </Link>
+  );
+}
+
 export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { t, locale } = useI18n();
   const q = useRequest(id);
@@ -629,7 +643,12 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
       width={780}
       title={r?.requestedModel ?? t('requests.detail.title')}
       description={r?.id}
-      footer={<Button onClick={onClose}>{t('common.close')}</Button>}
+      footer={
+        <div className="flex items-center gap-2">
+          {id ? <TraceLink id={id} label={t('traces.openTrace')} /> : null}
+          <Button onClick={onClose}>{t('common.close')}</Button>
+        </div>
+      }
     >
       {q.isLoading && <Spinner lines={5} />}
       {q.isError && <Alert tone="danger" title={t('common.error')}>{errorText(q.error)}</Alert>}

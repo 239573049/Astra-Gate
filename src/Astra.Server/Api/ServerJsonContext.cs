@@ -44,6 +44,8 @@ namespace Astra.Server;
 [JsonSerializable(typeof(PluginPreferInput))]
 // envelopes shared by several endpoints
 [JsonSerializable(typeof(ErrorBody))]
+[JsonSerializable(typeof(UpstreamStatusDetailsDto))]
+[JsonSerializable(typeof(BoundClientsDetailsDto))]
 [JsonSerializable(typeof(ErrorOnlyDto))]
 [JsonSerializable(typeof(ErrorStatusDto))]
 [JsonSerializable(typeof(ErrorVerificationDto))]
@@ -97,6 +99,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(ConfigChangeDto))]
 [JsonSerializable(typeof(ClientDisableDto))]
 [JsonSerializable(typeof(ClientBackupDto))]
+[JsonSerializable(typeof(ConfigRepairDto))]
 [JsonSerializable(typeof(TokenRewriteResult))]
 [JsonSerializable(typeof(ReappliedDto))]
 [JsonSerializable(typeof(ClientEndpoints.BindingInput))]
@@ -150,6 +153,11 @@ namespace Astra.Server;
 [JsonSerializable(typeof(RequestEndpoints.DailyActivityDto))]
 [JsonSerializable(typeof(RequestEndpoints.RateStatsDto))]
 [JsonSerializable(typeof(RequestEndpoints.SettingsDto))]
+// traces (.plan/observability.md §4)
+[JsonSerializable(typeof(TraceEndpoints.TraceRequestDto))]
+[JsonSerializable(typeof(TraceEndpoints.TraceSessionDetailDto))]
+[JsonSerializable(typeof(TraceEndpoints.TraceTopologyDto))]
+[JsonSerializable(typeof(List<TraceEndpoints.TraceSessionDto>))]
 // privacy
 [JsonSerializable(typeof(PrivacyEndpoints.DryRunRequest))]
 [JsonSerializable(typeof(PrivacyEndpoints.PrivacyEventDto))]
@@ -179,6 +187,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginPollDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LoginDoneDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.PollFailureDto))]
+[JsonSerializable(typeof(SubscriptionEndpoints.ResetCreditResultDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LocalCodexLoginDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LocalCopilotLoginDto))]
 [JsonSerializable(typeof(SubscriptionEndpoints.LocalCopilotImport))]
@@ -192,6 +201,8 @@ namespace Astra.Server;
 // auth
 [JsonSerializable(typeof(SystemEndpoints.LoginRequest))]
 [JsonSerializable(typeof(SystemEndpoints.SetPasswordRequest))]
+[JsonSerializable(typeof(SystemEndpoints.ListenDto))]
+[JsonSerializable(typeof(SystemEndpoints.ListenRequest))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelStatusDto))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelConfigRequest))]
 [JsonSerializable(typeof(TunnelEndpoints.DetectedCloudflaredDto))]
@@ -214,9 +225,10 @@ namespace Astra.Server;
 [JsonSerializable(typeof(List<RequestEndpoints.TimeseriesPointDto>))]
 [JsonSerializable(typeof(List<RequestEndpoints.TopModelDto>))]
 [JsonSerializable(typeof(List<PriceKeyInfo>))]
-// The provider model list is materialised as a List before it leaves the endpoint (an interface-typed
-// root makes the serializer probe the whole interface graph), so the List itself is a root type.
+// The provider model lists (configured and upstream) are materialised as Lists before they leave the endpoint
+// (an interface-typed root makes the serializer probe the whole interface graph), so the Lists are root types.
 [JsonSerializable(typeof(List<ProviderModelDto>))]
+[JsonSerializable(typeof(List<RemoteModelDto>))]
 // Endpoints that hand back an interface-typed collection: the declared type is the root the
 // serializer resolves, so the interface itself needs metadata.
 [JsonSerializable(typeof(IReadOnlyList<ClientInfoDto>))]

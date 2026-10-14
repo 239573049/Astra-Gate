@@ -321,7 +321,17 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
 }
 
 const PLUGIN_CHOICE = 'plugin:';
-const CATEGORY_ORDER = ['recommended', 'official', 'subscription', 'cn', 'aggregator', 'local', 'custom'] as const;
+const CATEGORY_ORDER = ['recommended', 'official', 'subscription', 'coding', 'cn', 'aggregator', 'inference', 'local', 'custom'] as const;
+// Template tiles name protocols by their short form; the full name (PROTOCOL_OPTIONS) is the tooltip.
+const PROTOCOL_SHORT: Record<ApiProtocol, string> = { 'openai-chat': 'Chat', 'openai-responses': 'Responses', anthropic: 'Anthropic', gemini: 'Gemini' };
+const protocolName = (p: ApiProtocol) => PROTOCOL_OPTIONS.find((o) => o.value === p)?.label ?? p;
+/** Compact tiles cut long names with an ellipsis; the tooltip keeps the whole text. */
+const tip = (text: string) => <span title={text}>{text}</span>;
+// "Claude 订阅（Pro/Max）" → ["Claude 订阅", "Pro/Max"]: a tile shows the plan on its second line instead of cutting it off.
+const splitPlan = (name: string): [string, string | null] => {
+  const m = /^(.+?)\s*[（(]([^（）()]+)[）)]$/.exec(name);
+  return m ? [m[1], m[2]] : [name, null];
+};
 
 function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (p: Provider) => void }) {
   const { t } = useI18n();
@@ -476,7 +486,7 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
         ]}
       />
       {!template ? (
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-4">
           <SearchField value={search} onChange={setSearch} placeholder={t('providers.searchTemplates')} />
           {templates.isLoading && <Spinner lines={4} />}
           {templates.isError && <Alert tone="danger" title={t('common.error')}>{errorText(templates.error)}</Alert>}
@@ -486,17 +496,22 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
               <RadioCards
                 name="provider-template"
                 aria-label={t(`providers.category.${g.category}`)}
-                minColumnWidth={170}
+                density="compact"
+                minColumnWidth={168}
                 value={g.items.some((x) => x.id === choice) ? choice : null}
                 onValueChange={setChoice}
-                options={g.items.map((x) => ({
-                  value: x.id,
-                  label: x.name,
-                  description: [...new Set(x.endpoints.map((e) => e.protocol))].join(' · '),
-                  icon: <ProviderIcon name={x.name} icon={x.icon} colorKey={x.id} size={24} />,
-                  disabled: addedSubscriptionTemplateIds.has(x.id),
-                  disabledReason: t('providers.subscriptionAdded'),
-                }))}
+                options={g.items.map((x) => {
+                  const protocols = [...new Set(x.endpoints.map((e) => e.protocol))];
+                  const [label, plan] = splitPlan(x.name);
+                  return {
+                    value: x.id,
+                    label: <span title={x.name}>{label}</span>,
+                    description: <span title={protocols.map(protocolName).join(' · ')}>{plan ?? protocols.map((p) => PROTOCOL_SHORT[p]).join(' · ')}</span>,
+                    icon: <ProviderIcon name={x.name} icon={x.icon} colorKey={x.id} size={28} />,
+                    disabled: addedSubscriptionTemplateIds.has(x.id),
+                    disabledReason: tip(t('providers.subscriptionAdded')),
+                  };
+                })}
               />
             </section>
           ))}
@@ -506,14 +521,15 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
               <RadioCards
                 name="provider-template-plugin"
                 aria-label={t('providers.category.plugin')}
-                minColumnWidth={170}
+                density="compact"
+                minColumnWidth={168}
                 value={choice?.startsWith(PLUGIN_CHOICE) ? choice : null}
                 onValueChange={setChoice}
                 options={pluginProviders.map((p) => ({
                   value: PLUGIN_CHOICE + p.id,
-                  label: p.name,
-                  description: t('providers.pluginProvided'),
-                  icon: <ProviderIcon name={p.name} icon={p.icon} colorKey={p.id} size={24} />,
+                  label: tip(p.name),
+                  description: tip(t('providers.pluginProvided')),
+                  icon: <ProviderIcon name={p.name} icon={p.icon} colorKey={p.id} size={28} />,
                 }))}
               />
             ) : (
@@ -537,9 +553,21 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
               name="provider-template-custom"
               aria-label={t('providers.custom')}
               layout="list"
+              density="compact"
               value={choice === 'custom' ? 'custom' : null}
               onValueChange={setChoice}
-              options={[{ value: 'custom', label: t('providers.custom'), description: t('providers.customDetail'), icon: <Plus className="size-4" /> }]}
+              options={[
+                {
+                  value: 'custom',
+                  label: t('providers.custom'),
+                  description: t('providers.customDetail'),
+                  icon: (
+                    <span className="inline-flex size-7 items-center justify-center rounded-[8px] border border-dashed border-[var(--border-strong)] text-[var(--text-secondary)]">
+                      <Plus className="size-4" />
+                    </span>
+                  ),
+                },
+              ]}
             />
           </section>
         </div>

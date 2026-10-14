@@ -39,6 +39,13 @@ export const systemActions = {
     if (!bridge) return null;
     return bridge.startService();
   },
+
+  /** Desktop only: restarts the local server (null on web, where `astra restart` does it). */
+  async restartService(): Promise<{ ok: boolean; error?: string | null } | null> {
+    const bridge = getBridge();
+    if (!bridge) return null;
+    return bridge.restartService();
+  },
 };
 
 /** Parent directory of a config path ("~/.codex/config.toml" → "~/.codex"). */

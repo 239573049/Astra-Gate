@@ -6,12 +6,17 @@ using Astra.Clients.Config;
 namespace Astra.Clients.Adapters;
 
 /// <summary>
-/// Claude Desktop (Switch): writes the third-party "3p" gateway profile layout (verified against
-/// cc-switch, https://github.com/farion1231/cc-switch — not an official Anthropic-documented format):
-/// a gateway profile under <c>Claude-3p/configLibrary/&lt;profileId&gt;.json</c>, our entry in
-/// <c>configLibrary/_meta.json</c> (appliedId), and <c>deploymentMode = "3p"</c> in both
-/// <c>claude_desktop_config.json</c> files. The role map (sonnet/opus/haiku) is applied by the
-/// gateway itself, not written here. Claude Desktop must be restarted after enabling.
+/// Claude Desktop (Switch): writes a "Claude Desktop on 3P" local configuration with Astra as the LLM
+/// gateway. The layout and keys are Anthropic-documented
+/// (https://claude.com/docs/third-party/claude-desktop/configuration and <c>/gateway</c>): a profile
+/// under <c>Claude-3p/configLibrary/&lt;profileId&gt;.json</c>, applied through
+/// <c>configLibrary/_meta.json</c>. Two pieces are not in those docs and follow the files Claude Desktop
+/// writes itself (as cc-switch does, https://github.com/farion1231/cc-switch): the <c>_meta.json</c>
+/// fields (<c>entries</c> of <c>{id, name}</c>, <c>appliedId</c>) and <c>deploymentMode = "3p"</c> in both
+/// <c>claude_desktop_config.json</c> files. Checked against Claude Desktop 2.9939.4 and the docs'
+/// configuration changelog through 2.37337.1 (2026-10). A device-managed (MDM) configuration makes
+/// Claude Desktop ignore this local one. The role map (sonnet/opus/haiku) is applied by the gateway
+/// itself, not written here. Claude Desktop must be restarted after enabling.
 /// </summary>
 public sealed class ClaudeDesktopClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
     : ClientAdapterBase(env, store)
@@ -68,6 +73,9 @@ public sealed class ClaudeDesktopClientAdapter(ClientEnvironment env, IClientCon
     }
 
     public override IReadOnlyList<string> ConfigPaths() => [NormalConfigFile, ThreepConfigFile, ProfileFile, MetaFile];
+
+    /// <summary>Claude Desktop writes all four files as plain JSON and reads them back with a strict parser.</summary>
+    protected override IEnumerable<string> StrictJsonFiles() => ConfigPaths();
 
     public override ConfigChangePlan PlanEnable(EnableContext ctx)
     {
@@ -143,11 +151,7 @@ public sealed class ClaudeDesktopClientAdapter(ClientEnvironment env, IClientCon
             ConfigFileFormat.Json,
             CurrentValue(MetaFile, ConfigFileFormat.Json, "appliedId"),
             entry.AppliedValueJson);
-        var warnings = new List<string>
-        {
-            "The Claude Desktop 3P profile format is reverse-engineered (cc-switch); re-verify after Claude Desktop updates.",
-            "Restart Claude Desktop to apply.",
-        };
+        var warnings = new List<string> { "Restart Claude Desktop to apply." };
         return BuildStatus(detection, enabled, warnings);
     }
 

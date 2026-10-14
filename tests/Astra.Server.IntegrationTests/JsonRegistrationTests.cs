@@ -1,5 +1,7 @@
 using System.Net;
 using Astra.Core;
+using Astra.Server.Api;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Astra.Server.IntegrationTests;
 
@@ -21,7 +23,9 @@ public sealed class JsonRegistrationTests
     [Fact]
     public async Task AdminApi_payloads_are_all_served_from_generated_metadata()
     {
-        await using var host = await ClaudeDirectTests.LocalHost();
+        // The provider probe's upstream is stubbed so the upstream model list has both a success and a failure shape.
+        await using var host = await ClaudeDirectTests.LocalHost(b => b.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new GuardUpstream()));
 
         // Exercise every response shape we can reach without a provider or an upstream.
         string[] gets =
@@ -68,6 +72,19 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = "missing" });
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/bindings", new { bindings = new[] { new { providerId = quotaId } } });
         await host.GetJsonAsync("/api/clients/codex/models");
+        // Fetching models from upstream: the list, and an upstream refusal with its error details.
+        foreach (var (upstream, expected) in new[] { ("models.guard.invalid", HttpStatusCode.OK), ("denied.guard.invalid", HttpStatusCode.BadGateway) })
+        {
+            var probed = await host.SendAsync(HttpMethod.Post, "/api/providers", new
+            {
+                name = "Probe " + upstream, endpoints = new[] { new { protocol = "openai-chat", baseUrl = $"https://{upstream}/v1" } },
+                apiKey = "sk-guard-0000", models = Array.Empty<string>(),
+            });
+            var remote = await host.SendAsync(HttpMethod.Get, $"/api/providers/{probed.Body!["id"]!.GetValue<string>()}/remote-models");
+            Assert.Equal(expected, remote.Status);
+        }
+        // Deleting a provider a client is bound to: the conflict and its details.
+        Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Delete, $"/api/providers/{quotaId}")).Status);
         await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Guard" });
         await host.SendAsync(HttpMethod.Patch, "/api/settings", new { locale = "en" });
         await host.SendAsync(HttpMethod.Post, "/api/privacy/dry-run", new { text = "hello" });
@@ -103,9 +120,48 @@ public sealed class JsonRegistrationTests
         await host.GetJsonAsync("/api/clients/claude-code/direct");
         await host.GetJsonAsync("/api/clients/claude-code/direct/accounts/guard-acc/requests");
 
+        // Traces (.plan/observability.md §4): a seeded call with a span tree and an account attempt, so every payload has data.
+        await host.Db.Requests.InsertBatchAsync([new Astra.Core.Requests.RequestRecord
+        {
+            Id = "guard-trace", StartedAtUtc = DateTimeOffset.UtcNow, ClientKind = "claude-code", ProviderId = claude.Id, ProviderName = claude.Name,
+            InboundProtocol = "anthropic", TtfbMs = 300, TraceId = "0af7651916cd43dd8448eb211c80319c", SessionKey = "cc:guard",
+            ChainKey = "fp:guard", TurnId = "guard-trace", Step = 1, CallKind = "main", LinkSource = "new_turn",
+            Spans =
+            [
+                new() { SpanId = "a0000000000000a1", Name = "gateway.request", Kind = "server", DurationUs = 1000, AttributesJson = """{"x":1}""" },
+                new()
+                {
+                    SpanId = "a0000000000000a2", ParentSpanId = "a0000000000000a1", Name = "upstream.attempt", Kind = "client", StartUs = 10,
+                    DurationUs = 900, AttributesJson = """{"astra.account.id":"guard-acc","astra.ratelimit.x-ratelimit-remaining-requests":"41"}""",
+                    EventsJson = """[{"name":"first_token","offset_us":5}]""",
+                },
+                new() { SpanId = "a0000000000000a3", ParentSpanId = "a0000000000000a1", Name = "gateway.route", DurationUs = 40 },
+            ],
+        }]);
+        await host.GetJsonAsync("/api/traces/requests/guard-trace");
+        await host.GetJsonAsync("/api/traces/sessions");
+        await host.GetJsonAsync("/api/traces/sessions/cc:guard");
+        await host.GetJsonAsync("/api/traces/topology?range=24h");
+        await host.SendAsync(HttpMethod.Get, "/api/traces/requests/missing");
+
         var unregistered = JsonContexts.FallbackTypes;
         Assert.True(unregistered.Count == 0,
             "These types had no generated metadata and fell back to reflection — add them to the owning "
             + "assembly's JsonSerializerContext: " + string.Join(", ", unregistered.Select(t => t.FullName)));
+    }
+
+    /// <summary>The provider probe's upstream: one host lists a model, one refuses the key, any other is unreachable.</summary>
+    private sealed class GuardUpstream : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            request.RequestUri?.Host switch
+            {
+                "models.guard.invalid" => Task.FromResult(Json(HttpStatusCode.OK, """{"data":[{"id":"guard-model"}]}""")),
+                "denied.guard.invalid" => Task.FromResult(Json(HttpStatusCode.Unauthorized, """{"error":{"message":"invalid api key"}}""")),
+                _ => Task.FromException<HttpResponseMessage>(new HttpRequestException("unreachable in the guard test")),
+            };
+
+        private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
+            new(status) { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
     }
 }

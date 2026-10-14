@@ -214,7 +214,11 @@ public sealed class ClaudeDirectTests
         Assert.True(row.OccurredAtUtc <= DateTimeOffset.UtcNow);
     }
 
-    internal static Task<TestHost> LocalHost() => TestHost.StartAsync(b => b.Services.AddSingleton<IStartupFilter>(new AddressFilter(IPAddress.Loopback)));
+    internal static Task<TestHost> LocalHost(Action<WebApplicationBuilder>? configure = null) => TestHost.StartAsync(b =>
+    {
+        b.Services.AddSingleton<IStartupFilter>(new AddressFilter(IPAddress.Loopback));
+        configure?.Invoke(b);
+    });
 
     internal static Task<Provider> AddClaudeProviderAsync(TestHost host) =>
         AddProviderAsync(host, "Claude 订阅", SubscriptionSupport.ClaudeSubscriptionKey);

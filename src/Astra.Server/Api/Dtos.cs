@@ -17,6 +17,11 @@ public static class PricingJson
 
 public sealed record ErrorBody(string Error, object? Details = null);
 
+// ErrorBody.Details is object-typed, so it is written by its runtime type: every details shape is a named
+// record registered in ServerJsonContext (an anonymous object has no generated metadata under Native AOT).
+public sealed record UpstreamStatusDetailsDto(int HttpStatus);
+public sealed record BoundClientsDetailsDto(IReadOnlyList<string> BoundClients);
+
 // Small envelopes shared by several endpoints. They replace anonymous objects so the payloads have
 // source-generated metadata (see ServerJsonContext) instead of a reflection fallback.
 public sealed record ErrorOnlyDto(string Error);
@@ -26,7 +31,7 @@ public sealed record RemovedDto(bool Removed);
 public sealed record ReappliedDto(IReadOnlyList<string> Updated);
 public sealed record StatusDto(string Status);
 public sealed record SignedInDto(bool SignedIn);
-/// <param name="Required">Whether this request needs a signed-in session (off-loopback, or remote through a tunnel).</param>
+/// <param name="Required">Whether this request needs a signed-in session (not from this machine: from the network, or through a tunnel).</param>
 /// <param name="Remote">Whether this request came through Cloudflare (a tunnel) rather than from this machine or network.</param>
 /// <param name="AdminBlocked">Remote, and the tunnel settings keep the admin UI local: signing in would not help.</param>
 public sealed record AuthStatusDto(bool Required, bool SignedIn, bool Remote = false, bool AdminBlocked = false);

@@ -664,10 +664,9 @@ function registerIpc(): void {
   ipcMain.handle('astra:reveal-logs', (): Promise<boolean> => {
     return shell.openPath(paths!.logsDir).then((err) => err === '');
   });
-  // Renderer "Start service" button (shown when the server is unreachable).
-  ipcMain.handle('astra:start-service', async (): Promise<{ ok: boolean; error: string | null }> => {
+  const rendererServiceAction = async (action: () => Promise<unknown>): Promise<{ ok: boolean; error: string | null }> => {
     try {
-      await service!.ensureRunning();
+      await action();
       await refreshTray();
       return { ok: true, error: null };
     } catch (err) {
@@ -675,7 +674,16 @@ function registerIpc(): void {
       const logPath = err instanceof StartupError ? err.logPath : null;
       return { ok: false, error: logPath ? `${message} (${logPath})` : message };
     }
-  });
+  };
+  // Renderer "Start service" button (shown when the server is unreachable).
+  ipcMain.handle('astra:start-service', () => rendererServiceAction(() => service!.ensureRunning()));
+  // Renderer "Restart service" (Settings, after the listen address changed: the server reads it at start).
+  ipcMain.handle('astra:restart-service', () =>
+    rendererServiceAction(async () => {
+      await service!.stopService();
+      await service!.ensureRunning();
+    }),
+  );
   // In-app update entry (Settings › About): check and apply via the shared update engine.
   ipcMain.handle('astra:update-check', async () => {
     return updater!.check();

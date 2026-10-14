@@ -161,6 +161,8 @@ public sealed class RequestRepository
                reasoning_tokens, cost_nanousd, usage_source, usage_raw_json, pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                billing_description, privacy_json, body_ref, user_agent,
                reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip,
+               trace_id, parent_span_id, session_key, chain_key, turn_id, parent_request_id, step, call_kind,
+               link_source, finish_reason, tool_calls,
                (SELECT a.display_name FROM provider_accounts a WHERE a.id = requests.account_id) AS account_name
         FROM requests
         """;
@@ -181,7 +183,9 @@ public sealed class RequestRepository
                              reasoning_tokens, cost_nanousd, usage_source, usage_raw_json,
                              pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
                              billing_description, privacy_json, body_ref, user_agent,
-                             reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip)
+                             reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip,
+                             trace_id, parent_span_id, session_key, chain_key, turn_id, parent_request_id, step,
+                             call_kind, link_source, finish_reason, tool_calls)
         VALUES (@id, @started_at_utc, @client_kind, @token_id, @token_name, @provider_id, @provider_name, @inbound_protocol,
                 @upstream_protocol, @passthrough, @requested_model, @upstream_model, @system_model_id,
                 @response_model,
@@ -191,7 +195,16 @@ public sealed class RequestRepository
                 @reasoning_tokens, @cost_nanousd, @usage_source, @usage_raw_json,
                 @pricing_snapshot_json, @pricing_source, @price_key, @billing_trace_json,
                 @billing_description, @privacy_json, @body_ref, @user_agent,
-                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id, @remote, @client_ip)
+                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id, @remote, @client_ip,
+                @trace_id, @parent_span_id, @session_key, @chain_key, @turn_id, @parent_request_id, @step,
+                @call_kind, @link_source, @finish_reason, @tool_calls)
+        """;
+
+    private const string InsertSpanSql = """
+        INSERT INTO trace_spans(request_id, span_id, parent_span_id, name, kind, start_us, duration_us, status,
+                                status_message, attributes_json, events_json)
+        VALUES (@request_id, @span_id, @parent_span_id, @name, @kind, @start_us, @duration_us, @status,
+                @status_message, @attributes_json, @events_json)
         """;
 
     private const string InsertItemSql = """
@@ -340,7 +353,37 @@ public sealed class RequestRepository
                 account_id = record.AccountId,
                 remote = record.Remote,
                 client_ip = record.ClientIp,
+                trace_id = record.TraceId,
+                parent_span_id = record.ParentSpanId,
+                session_key = record.SessionKey,
+                chain_key = record.ChainKey,
+                turn_id = record.TurnId,
+                parent_request_id = record.ParentRequestId,
+                step = record.Step,
+                call_kind = record.CallKind,
+                link_source = record.LinkSource,
+                finish_reason = record.FinishReason,
+                tool_calls = record.ToolCalls,
             }, transaction: tx);
+            // Tracing (.plan/observability.md §2.1): the request's span tree goes in with its row.
+            foreach (var span in record.Spans)
+            {
+                span.RequestId = record.Id;
+                await conn.ExecuteAsync(InsertSpanSql, new
+                {
+                    request_id = span.RequestId,
+                    span_id = span.SpanId,
+                    parent_span_id = span.ParentSpanId,
+                    name = span.Name,
+                    kind = span.Kind,
+                    start_us = span.StartUs,
+                    duration_us = span.DurationUs,
+                    status = span.Status,
+                    status_message = span.StatusMessage,
+                    attributes_json = span.AttributesJson,
+                    events_json = span.EventsJson,
+                }, transaction: tx);
+            }
             foreach (var item in record.UsageItems)
             {
                 item.RequestId = record.Id;
@@ -549,6 +592,22 @@ public sealed class RequestRepository
         record.UsageItems = (await conn.QueryAsync<RequestUsageItem>(
             $"{ItemSelect} WHERE request_id = @request_id ORDER BY id", new { request_id = id })).ToList();
         return record;
+    }
+
+    /// <summary>Every call of one turn (.plan/observability.md §3.2), in start order; usage items are not loaded.</summary>
+    public async Task<List<RequestRecord>> ListByTurnAsync(string turnId, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<RequestRecord>(
+            $"{RequestSelect} WHERE turn_id = @turn_id ORDER BY started_at_utc, id", new { turn_id = turnId })).ToList();
+    }
+
+    /// <summary>The calls that continue <paramref name="id"/> (its <c>parent_request_id</c> children), in start order.</summary>
+    public async Task<List<RequestRecord>> ListChildrenAsync(string id, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<RequestRecord>(
+            $"{RequestSelect} WHERE parent_request_id = @id ORDER BY started_at_utc, id", new { id })).ToList();
     }
 
     /// <summary>
