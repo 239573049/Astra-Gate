@@ -110,7 +110,16 @@ jobs:
           node-version: 24
           cache: pnpm
 
+      # install-dotnet.ps1 sometimes dies with "Internal CLR error (0x80131506)" on the
+      # windows-11-arm runner; a second attempt gets a fresh process and works.
       - uses: actions/setup-dotnet@v4
+        id: dotnet
+        continue-on-error: true
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.dotnet.outcome == 'failure'
         with:
           dotnet-version: 10.0.x
 
