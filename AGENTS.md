@@ -300,7 +300,8 @@ runtime needed on the target).
     asks npm or GitHub itself (search goes through the registry's `/search`). `docs/lib/plugin-market/upstream-fallback.json`
     is a copy of `Market/market.json` (the docs image build context has no `src/`): update both together. A hosted
     package's tarball address and hash come from the registry only (`PluginService.Add` never takes them from the
-    caller), and `PluginSources.MarketPackage` entries update through the market, not npm.
+    caller; the download follows redirects by hand — https only, at most 5 hops — because a GitHub Release asset always
+    redirects, and the sha256 from the registry decides whether what arrived is installed), and `PluginSources.MarketPackage` entries update through the market, not npm.
 11. **Alert event** (`.plan/alerts-webhooks-token-limits.md`): a descriptor in `AlertEvents.All` and its evaluation in
     `AlertConditions` (`src/Astra.Core/Alerts/AlertContracts.cs`), the observation its subject type reports
     (`AlertEngine.SweepAsync`, `TokenLimiter.Observation`), its zh/en message in `src/Astra.Server/Alerts/AlertMessages.cs`,

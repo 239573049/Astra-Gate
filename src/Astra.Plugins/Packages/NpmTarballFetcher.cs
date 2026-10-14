@@ -70,7 +70,7 @@ public sealed class NpmTarballFetcher(Func<HttpClient> http, string registry = "
     /// </summary>
     public async Task DownloadVerifiedAsync(string url, string sha256, string? sha512, string target, CancellationToken ct = default)
     {
-        using var res = await http().GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var res = await GetFollowingRedirectsAsync(url, ct);
         res.EnsureSuccessStatusCode();
         if (res.Content.Headers.ContentLength > MaxTarball) throw new InvalidDataException("the plugin's tarball is too large");
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
@@ -102,6 +102,29 @@ public sealed class NpmTarballFetcher(Func<HttpClient> http, string registry = "
         {
             if (File.Exists(target)) File.Delete(target);
             throw;
+        }
+    }
+
+    /// <summary>Most redirects a tarball address may go through (a GitHub Release asset takes one, to its storage).</summary>
+    internal const int MaxRedirects = 5;
+
+    /// <summary>
+    /// Gets <paramref name="url"/>, following redirects itself: Astra's clients never do (a redirect could lead anywhere),
+    /// but a market that lists GitHub Release assets points at an address that always redirects. Each hop must be https
+    /// (or http on this machine), and what is downloaded is checked against the market's hashes whichever host it came from.
+    /// </summary>
+    private async Task<HttpResponseMessage> GetFollowingRedirectsAsync(string url, CancellationToken ct)
+    {
+        var uri = new Uri(url);
+        for (var hop = 0; ; hop++)
+        {
+            var res = await http().GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, ct);
+            if ((int)res.StatusCode is not (301 or 302 or 303 or 307 or 308) || res.Headers.Location is not { } next) return res;
+            res.Dispose();
+            if (hop >= MaxRedirects) throw new HttpRequestException($"{url} redirects too many times");
+            uri = next.IsAbsoluteUri ? next : new Uri(uri, next);
+            if (uri.Scheme != Uri.UriSchemeHttps && !(uri.IsLoopback && uri.Scheme == Uri.UriSchemeHttp))
+                throw new HttpRequestException($"{url} redirects to {uri.Scheme}://{uri.Host}, which isn't https");
         }
     }
 
