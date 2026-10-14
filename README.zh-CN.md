@@ -34,7 +34,15 @@ OpenCode ─────┘                                       └─ OpenRou
 
 ## 安装
 
-需要 Node.js ≥ 18（npm 会安装对应平台的服务端二进制，无需 .NET）。
+不想装 Node.js？用安装脚本，它会询问安装服务端还是桌面端（加 `--server` / `--desktop` 可跳过提问）：
+
+```bash
+curl -fsSL https://astra-gate.si/install.sh | bash          # macOS / Linux
+iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex   # Windows（PowerShell）
+```
+
+脚本只安装 `astra-server`（不含 `astra` 命令行），所有下载都会校验发布源里的 sha256。
+需要 `astra` 命令行请用 npm：要求 Node.js ≥ 18，npm 会安装对应平台的服务端二进制，无需 .NET。
 
 ```bash
 npm install -g @aidotnet/astra-gate   # `astragate` 是同一个包的另一个名称

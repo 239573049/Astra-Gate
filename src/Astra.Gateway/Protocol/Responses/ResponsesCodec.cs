@@ -115,10 +115,11 @@ public sealed class ResponsesCodec : IProtocolCodec
                 }
                 request.ResponseFormat = rf;
             }
-            // Keep text minus format (verbosity …) for same-protocol round trips.
+            request.Verbosity = Str(textObj, "verbosity");
+            // Keep text minus format and verbosity for same-protocol round trips.
             var rest = new JsonObject();
             foreach (var (key, value) in textObj)
-                if (key != "format")
+                if (key != "format" && key != "verbosity")
                     rest[key] = value?.DeepClone();
             if (rest.Count > 0)
                 extensions["text"] = rest;
@@ -412,6 +413,12 @@ public sealed class ResponsesCodec : IProtocolCodec
             body["reasoning"] = reasoning;
         if (request.ResponseFormat is { Type: not "text" } format)
             body["text"] = FormatToJson(format);
+        if (request.Verbosity is { Length: > 0 } verbosity)
+        {
+            var text = body["text"] as JsonObject ?? new JsonObject();
+            text["verbosity"] = verbosity;
+            body["text"] = text;
+        }
         if (request.Temperature is { } temperature)
             body["temperature"] = temperature;
         if (request.TopP is { } topP)
@@ -677,8 +684,8 @@ public sealed class ResponsesCodec : IProtocolCodec
     internal static JsonObject? FormatToJson(ResponseFormat format)
     {
         var json = new JsonObject { ["type"] = format.Type };
-        if (format.Name is { } name)
-            json["name"] = name;
+        if (format.Type == "json_schema")
+            json["name"] = format.Name ?? "response"; // required by OpenAI; other protocols' formats carry none
         if (format.Schema is { } schema)
             json["schema"] = schema.DeepClone();
         if (format.Strict is { } strict)
@@ -695,7 +702,7 @@ public sealed class ResponsesCodec : IProtocolCodec
         if (effort is null && reasoning.BudgetTokens is { } budget)
             effort = budget <= budgets.Low ? "low" : budget <= budgets.Medium ? "medium" : "high";
         if (effort is { } e)
-            json["effort"] = e;
+            json["effort"] = ReasoningConfig.ToOpenAiEffort(e);
         if (reasoning.IncludeThoughts)
             json["summary"] = "auto";
         return json.Count > 0 ? json : null;

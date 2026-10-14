@@ -215,4 +215,19 @@ public class AnthropicRequestDecodeTests
             Codec.DecodeRequest(JsonNode.Parse(body)!.AsObject()!, new RequestDecodeContext()));
         Assert.Contains(expectedFragment, ex.Message);
     }
+
+    [Fact]
+    public void Adaptive_Thinking_With_Output_Config_Decodes_To_Effort_And_Format()
+    {
+        var r = Codec.DecodeRequest(JsonNode.Parse("""
+        {"model":"claude-opus","max_tokens":64,"messages":[{"role":"user","content":"hi"}],
+         "thinking":{"type":"adaptive"},
+         "output_config":{"effort":"high","format":{"type":"json_schema","schema":{"type":"object"}}}}
+        """)!.AsObject(), new RequestDecodeContext());
+
+        Assert.True(r.Reasoning!.Adaptive);
+        Assert.Equal("high", r.Reasoning.Effort);
+        Assert.Equal("json_schema", r.ResponseFormat!.Type);
+        Assert.Equal("object", (string?)r.ResponseFormat.Schema!["type"]);
+    }
 }

@@ -57,7 +57,14 @@ export default async function DownloadPage() {
               安装包内置服务端，无需 Node.js。macOS 版通过应用内自动更新；Windows / Linux 版有新版本时，从本页下载新的安装包覆盖安装即可。
             </p>
             <p className="mt-1">
-              服务端与命令行通过 npm 安装：
+              也可以用安装脚本，终端里一条命令选择安装服务端或桌面端：
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">curl -fsSL https://astra-gate.si/install.sh | bash</code>
+              （Windows：
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex</code>
+              ）。
+            </p>
+            <p className="mt-1">
+              命令行（<code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">astra</code>）通过 npm 安装：
               <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">npm install -g @aidotnet/astra-gate</code>
               安装后运行
               <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">astra install --desktop</code>

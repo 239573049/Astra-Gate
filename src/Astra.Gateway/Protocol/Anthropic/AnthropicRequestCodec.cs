@@ -147,7 +147,7 @@ internal static class AnthropicRequestCodec
 
         if (body["thinking"] is JsonObject th && Str(th, "type") is { } thType)
         {
-            var cfg = r.Reasoning = new ReasoningConfig();
+            var cfg = r.Reasoning = new ReasoningConfig { Display = Str(th, "display") };
             switch (thType)
             {
                 case "enabled":
@@ -157,9 +157,22 @@ internal static class AnthropicRequestCodec
                 case "disabled":
                     cfg.Enabled = false;
                     break;
-                // Future types (e.g. adaptive): reasoning stays enabled, no budget mapping.
+                case "adaptive":
+                    cfg.Adaptive = true;
+                    cfg.IncludeThoughts = true;
+                    break;
+                // Future types: reasoning stays enabled, no budget mapping.
             }
+            // output_config.effort steers thinking depth (adaptive, or on top of a budget).
+            if (cfg.Enabled && body["output_config"] is JsonObject oc && Str(oc, "effort") is { Length: > 0 } effort)
+                cfg.Effort = effort;
         }
+
+        // output_config.format (structured outputs) → response format. The raw object also stays in
+        // Extensions so an Anthropic upstream gets keys the IR does not model.
+        if (body["output_config"] is JsonObject { } outputConfig && outputConfig["format"] is JsonObject fmt
+            && Str(fmt, "type") == "json_schema")
+            r.ResponseFormat = new ResponseFormat { Type = "json_schema", Schema = fmt["schema"]?.DeepClone() };
 
         foreach (var (key, value) in body)
             if (!HandledTopLevel.Contains(key) && value is not null)
@@ -321,11 +334,13 @@ internal static class AnthropicRequestCodec
 
         // Thinking first: it constrains max_tokens and the sampling knobs (Anthropic constraints a–c).
         var budget = ThinkingBudget(r, ctx);
-        if (budget is not null && ForeignToolHistoryWithoutThinking(r))
+        var adaptive = budget is null && r.Reasoning is { Enabled: true, Adaptive: true };
+        if ((budget is not null || adaptive) && ForeignToolHistoryWithoutThinking(r))
         {
             // (a) Anthropic requires every assistant tool_use turn to replay its signed thinking block.
             // History translated from another protocol has no Anthropic signature → thinking must go off.
             budget = null;
+            adaptive = false;
             AddWarning(warnings, "thinking disabled: an assistant tool-use turn has no signed Anthropic thinking block (history from another protocol)");
         }
 
@@ -339,8 +354,19 @@ internal static class AnthropicRequestCodec
             AddWarning(warnings, $"raised max_tokens to {maxTokens} so it stays above budget_tokens");
         }
         root["max_tokens"] = maxTokens;
+        var outputConfig = new JsonObject();
         if (budget is { } enabled)
+        {
             root["thinking"] = new JsonObject { ["type"] = "enabled", ["budget_tokens"] = enabled };
+            if (r.Reasoning!.Display is { Length: > 0 } display) root["thinking"]!["display"] = display;
+        }
+        else if (adaptive)
+        {
+            root["thinking"] = new JsonObject { ["type"] = "adaptive" };
+            if (r.Reasoning!.Display is { Length: > 0 } adaptiveDisplay) root["thinking"]!["display"] = adaptiveDisplay;
+            if (r.Reasoning!.Effort is { Length: > 0 } adaptiveEffort)
+                outputConfig["effort"] = ReasoningConfig.ToAnthropicEffort(adaptiveEffort);
+        }
 
         if (r.System.OfType<TextPart>().ToList() is { Count: > 0 } system)
         {
@@ -446,7 +472,7 @@ internal static class AnthropicRequestCodec
             root["tool_choice"] = new JsonObject { ["type"] = "auto", ["disable_parallel_tool_use"] = true };
         }
 
-        if (budget is null)
+        if (budget is null && !adaptive)
         {
             if (r.Temperature is { } temperature) root["temperature"] = temperature;
             if (r.TopP is { } topP) root["top_p"] = topP;
@@ -482,25 +508,32 @@ internal static class AnthropicRequestCodec
         if (r.ServiceTier is { Length: > 0 } tier)
             root["service_tier"] = tier;
 
-        if (r.ResponseFormat is not null)
-            AddWarning(warnings, "dropped response_format: Anthropic Messages has no equivalent");
+        if (r.ResponseFormat is { Type: "json_schema", Schema: { } schema })
+            outputConfig["format"] = new JsonObject { ["type"] = "json_schema", ["schema"] = schema.DeepClone() };
+        else if (r.ResponseFormat is { Type: "json_object" or "json_schema" } lost)
+            AddWarning(warnings, lost.Type == "json_object"
+                ? "dropped response_format json_object: Anthropic output_config.format only supports json_schema"
+                : "dropped response_format json_schema: no schema to send");
+        if (outputConfig.Count > 0)
+            root["output_config"] = outputConfig;
 
         MergeExtensions(root, r);
         return root;
     }
 
-    /// <summary>Effort/budget → thinking budget_tokens, null when thinking is off or unspecified.</summary>
+    /// <summary>Effort/budget → thinking budget_tokens, null when thinking is off, adaptive or unspecified.</summary>
     private static int? ThinkingBudget(UnifiedRequest r, RequestEncodeContext ctx)
     {
         if (r.Reasoning is not { } cfg || !cfg.Enabled) return null;
         if (cfg.BudgetTokens is { } budget) return Math.Max(MinBudgetTokens, budget);
+        if (cfg.Adaptive) return null; // adaptive keeps its effort in output_config, not a budget
         if (cfg.Effort is not { Length: > 0 } effort) return null;
         var budgets = ctx.EffortBudgets;
         return Math.Max(MinBudgetTokens, effort switch
         {
             "minimal" or "low" => budgets.Low,
             "medium" => budgets.Medium,
-            "high" => budgets.High,
+            "high" or "xhigh" or "max" => budgets.High,
             _ => budgets.Medium,
         });
     }

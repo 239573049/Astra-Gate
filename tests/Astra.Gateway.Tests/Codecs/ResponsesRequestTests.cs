@@ -159,10 +159,9 @@ public class ResponsesRequestDecodeTests
         Assert.Equal("user-9", request.User);
         Assert.Equal("v", request.Metadata!["k"]!.GetValue<string>());
 
-        // text.verbosity is not representable → kept under Extensions.text minus format.
-        var extensions = Assert.Single(request.Extensions).Value;
-        Assert.Equal("short", extensions["text"]!["verbosity"]!.GetValue<string>());
-        Assert.Null(extensions["text"]!["format"]);
+        // text.verbosity is mapped into the IR (Chat verbosity); nothing is left for Extensions.
+        Assert.Equal("short", request.Verbosity);
+        Assert.Empty(request.Extensions);
     }
 
     [Fact]

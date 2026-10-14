@@ -87,8 +87,24 @@ public sealed record ToolChoice(ToolChoiceMode Mode, string? Name = null);
 
 public sealed class ReasoningConfig
 {
-    /// <summary>"minimal" | "low" | "medium" | "high" (OpenAI style), null when only a budget is known.</summary>
+    /// <summary>
+    /// "minimal" | "low" | "medium" | "high" | "xhigh" | "max", null when only a budget is known. Anthropic
+    /// output_config.effort has no "minimal" (→ low) and OpenAI has no "max" (→ xhigh): see <see cref="ToOpenAiEffort"/>
+    /// / <see cref="ToAnthropicEffort"/> (lossy at the edges).
+    /// </summary>
     public string? Effort { get; set; }
+
+    /// <summary>Anthropic thinking.display ("summarized" | "omitted"): whether thinking text is returned. Anthropic-only.</summary>
+    public string? Display { get; set; }
+
+    /// <summary>Anthropic thinking.type=adaptive: the model decides when and how much to think (no budget).</summary>
+    public bool Adaptive { get; set; }
+
+    /// <summary>Effort name OpenAI accepts (Chat reasoning_effort / Responses reasoning.effort).</summary>
+    public static string ToOpenAiEffort(string effort) => effort switch { "max" => "xhigh", _ => effort };
+
+    /// <summary>Effort name Anthropic output_config.effort accepts (low | medium | high | xhigh | max).</summary>
+    public static string ToAnthropicEffort(string effort) => effort switch { "minimal" => "low", _ => effort };
 
     /// <summary>Thinking budget (Anthropic budget_tokens / Gemini thinkingBudget).</summary>
     public int? BudgetTokens { get; set; }
@@ -133,6 +149,10 @@ public sealed class UnifiedRequest
     public int? MaxOutputTokens { get; set; }
     public ReasoningConfig? Reasoning { get; set; }
     public ResponseFormat? ResponseFormat { get; set; }
+
+    /// <summary>"low" | "medium" | "high": OpenAI Chat verbosity / Responses text.verbosity; other protocols drop it.</summary>
+    public string? Verbosity { get; set; }
+
     public bool Stream { get; set; }
     public string? User { get; set; }
     public JsonObject? Metadata { get; set; }

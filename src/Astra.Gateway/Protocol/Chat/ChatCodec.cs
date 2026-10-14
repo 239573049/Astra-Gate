@@ -21,7 +21,7 @@ public sealed class ChatCodec : IProtocolCodec
     [
         "model", "messages", "tools", "tool_choice", "parallel_tool_calls", "temperature", "top_p", "stop",
         "max_completion_tokens", "max_tokens", "reasoning_effort", "response_format", "stream", "user",
-        "metadata", "service_tier",
+        "metadata", "service_tier", "verbosity",
     ];
 
     public UnifiedRequest DecodeRequest(JsonObject body, RequestDecodeContext ctx)
@@ -74,6 +74,7 @@ public sealed class ChatCodec : IProtocolCodec
         request.MaxOutputTokens = IntOrNull(body["max_completion_tokens"]) ?? IntOrNull(body["max_tokens"]);
         request.Reasoning = DecodeReasoning(body["reasoning_effort"]);
         request.ResponseFormat = DecodeResponseFormat(body["response_format"]);
+        request.Verbosity = StringOrNull(body, "verbosity");
         if (body["stream"] is JsonValue s && s.TryGetValue<bool>(out var stream)) request.Stream = stream;
         request.User = body["user"] is JsonValue u && u.TryGetValue<string>(out var user) ? user : null;
         request.Metadata = body["metadata"] as JsonObject;
@@ -370,6 +371,7 @@ public sealed class ChatCodec : IProtocolCodec
         var effort = EffortOf(request, ctx.EffortBudgets);
         if (effort is not null) body["reasoning_effort"] = effort;
         if (request.ResponseFormat is { } format) body["response_format"] = EncodeResponseFormat(format);
+        if (request.Verbosity is { Length: > 0 } verbosity) body["verbosity"] = verbosity;
         if (request.Stream)
         {
             body["stream"] = true;
@@ -404,7 +406,7 @@ public sealed class ChatCodec : IProtocolCodec
     private static string? EffortOf(UnifiedRequest request, EffortBudgets budgets)
     {
         if (request.Reasoning is not { } reasoning || !reasoning.Enabled) return null;
-        if (reasoning.Effort is { Length: > 0 } effort) return effort;
+        if (reasoning.Effort is { Length: > 0 } effort) return ReasoningConfig.ToOpenAiEffort(effort);
         if (reasoning.BudgetTokens is { } budget)
             return budget <= budgets.Low ? "low" : budget <= budgets.Medium ? "medium" : "high";
         return null;
@@ -549,7 +551,8 @@ public sealed class ChatCodec : IProtocolCodec
         if (format.Type == "json_schema")
         {
             var schema = new JsonObject();
-            if (format.Name is { } name) schema["name"] = name;
+            // OpenAI requires a schema name; Anthropic / Gemini formats carry none.
+            schema["name"] = format.Name ?? "response";
             if (format.Strict is { } strict) schema["strict"] = strict;
             if (format.Schema is { } body) schema["schema"] = body.DeepClone();
             result["json_schema"] = schema;

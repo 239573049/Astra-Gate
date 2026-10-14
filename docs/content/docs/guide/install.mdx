@@ -8,6 +8,34 @@ description: 通过 npm 安装 Astra，或一并安装桌面端
 - Node.js **≥ 18**（通过 npm 安装 CLI 时需要）
 - macOS / Linux / Windows
 
+## 一键安装脚本（无需 Node.js）
+
+macOS / Linux：
+
+```bash
+curl -fsSL https://astra-gate.si/install.sh | bash
+```
+
+Windows（PowerShell）：
+
+```powershell
+iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex
+```
+
+脚本会询问安装**服务端**（`astra-server` + 网页控制台）还是**桌面端**（已内置服务端），直接回车默认装服务端。也可以提前指定，免去提问：
+
+```bash
+curl -fsSL https://astra-gate.si/install.sh | bash -s -- --desktop
+```
+
+```powershell
+$env:ASTRA_INSTALL = 'desktop'; iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex
+```
+
+服务端装在 `~/.astra/server/`，并在 `~/.local/bin`（Windows 为 `%USERPROFILE%\.astra\bin`）放一个 `astra-server` 启动命令；运行 `astra-server serve` 即可。所有下载都会先校验发布源里的 sha256，不一致就不会安装。再次运行脚本即可更新。
+
+脚本安装的只有 `astra-server`，不含 `astra` 命令行工具；需要 `astra` 命令请用下面的 npm 方式。
+
 ## 安装 CLI
 
 ```bash

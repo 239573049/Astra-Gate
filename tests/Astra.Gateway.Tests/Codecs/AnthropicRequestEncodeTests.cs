@@ -372,4 +372,59 @@ public class AnthropicRequestEncodeTests
         Assert.Equal("any", (string?)withChoice["type"]);
         Assert.True(withChoice["disable_parallel_tool_use"]!.GetValue<bool>());
     }
+
+    [Fact]
+    public void Adaptive_Thinking_And_Effort_Go_To_Output_Config()
+    {
+        var r = Request(User(new TextPart("hi")));
+        r.Reasoning = new ReasoningConfig { Adaptive = true, Effort = "max" };
+
+        var body = Codec.EncodeRequest(r, Ctx());
+
+        Assert.Equal("adaptive", (string?)body["thinking"]!["type"]);
+        Assert.Null(body["thinking"]!["budget_tokens"]);
+        Assert.Equal("max", (string?)body["output_config"]!["effort"]);
+    }
+
+    [Fact]
+    public void Json_Schema_Response_Format_Becomes_Output_Config_Format()
+    {
+        var r = Request(User(new TextPart("hi")));
+        r.ResponseFormat = new ResponseFormat { Type = "json_schema", Name = "x", Schema = JsonNode.Parse("""{"type":"object"}""") };
+
+        var body = Codec.EncodeRequest(r, Ctx());
+
+        Assert.Equal("json_schema", (string?)body["output_config"]!["format"]!["type"]);
+        Assert.Equal("object", (string?)body["output_config"]!["format"]!["schema"]!["type"]);
+    }
+
+    [Fact]
+    public void Json_Object_Response_Format_Is_Dropped_With_A_Warning()
+    {
+        var r = Request(User(new TextPart("hi")));
+        r.ResponseFormat = new ResponseFormat { Type = "json_object" };
+
+        var body = Codec.EncodeRequest(r, Ctx());
+
+        Assert.Null(body["output_config"]);
+        Assert.Contains(r.Warnings, w => w.Contains("json_object"));
+    }
+
+    [Theory]
+    [InlineData("minimal", "low")]
+    [InlineData("xhigh", "xhigh")]
+    public void Effort_Names_Are_Mapped_For_Anthropic(string effort, string expected)
+    {
+        var r = Request(User(new TextPart("hi")));
+        r.Reasoning = new ReasoningConfig { Adaptive = true, Effort = effort };
+        Assert.Equal(expected, (string?)Codec.EncodeRequest(r, Ctx())["output_config"]!["effort"]);
+    }
+
+    [Fact]
+    public void Max_Effort_Becomes_High_Budget_Without_Adaptive()
+    {
+        var r = Request(User(new TextPart("hi")));
+        r.Reasoning = new ReasoningConfig { Effort = "max" };
+        Assert.Equal(16384, (int?)Codec.EncodeRequest(r, Ctx())["thinking"]!["budget_tokens"]);
+    }
 }

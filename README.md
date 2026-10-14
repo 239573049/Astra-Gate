@@ -38,7 +38,17 @@ OpenCode ─────┘   privacy guardrails                └─ OpenRoute
 
 ## Install
 
-Requires Node.js ≥ 18 (npm installs a platform-specific server binary; no .NET needed).
+No Node.js? Use the install script — it asks whether to install the server or the desktop app
+(pass `--server` / `--desktop` to skip the question):
+
+```bash
+curl -fsSL https://astra-gate.si/install.sh | bash          # macOS / Linux
+iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex   # Windows (PowerShell)
+```
+
+It installs `astra-server` only (no `astra` CLI); every download is checked against the sha256 in
+the release feed. For the `astra` CLI, use npm: it requires Node.js ≥ 18 and installs a
+platform-specific server binary (no .NET needed).
 
 ```bash
 npm install -g @aidotnet/astra-gate   # the `astragate` package name is identical

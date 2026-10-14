@@ -260,6 +260,12 @@ sequenceDiagram
   `cli/src/lib/platform.ts:platformInfo`.
 - **A new artifact kind on the download page**: `EXT_BY_KIND` (`docs/lib/releases.ts:72`) + the
   filename→`os/arch/kind` mapping in the upload step (`release.yml:404-419`) + the download panel.
+- **The install scripts** (`docs/public/install.sh` / `install.ps1`, served at `/install.sh` / `/install.ps1`):
+  they read `latest.json` (version + `platforms[<rid>].server/serverSha256`) and `releases.json`
+  (`versions[].files[].name/sha256`), download the server tarball straight from the npm registry and
+  desktop installers from `/v/<version>/Astra-<version>-<os>-<arch>.<ext>` — so a change to those feed
+  shapes, to `canonicalFileName` or to the managed layout (`~/.astra/server/astra-server-<version>`,
+  `install.json`) must be mirrored there. They parse JSON with grep/sed (bash), so keep the feed flat.
 - **A new update setting**: an `AppSettings` property (no migration — `src/Astra.Core/AppSettings.cs:29`)
   + `/api/settings`/UI wiring; the desktop reads `autoCheck` straight off `/api/update/status`
   (`desktop/src/api.ts:60`) and passes no `feedUrl`, so it always follows the built-in feed.

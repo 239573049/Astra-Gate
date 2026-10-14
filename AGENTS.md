@@ -380,6 +380,12 @@ runtime needed on the target).
     `ActivityHeadersPropagator`, and `UpstreamTraceHeadersTests` checks it with the real handler (the integration
     fixture swaps the handler out, so it cannot).
 
+16. **Install scripts** (`docs/public/install.sh`, `install.ps1`): they consume the release feed
+    (`latest.json`, `releases.json`, `/v/<version>/<file>` names from `canonicalFileName`), the npm server
+    package layout (`bin/astra-server`, companions, `wwwroot/`) and the managed layout `update-core` owns
+    (`~/.astra/server/astra-server-<version>`, `install.json` — they preserve its `desktop*` fields). Change
+    them together with those, and with `docs/content/docs/guide/install.mdx`, both READMEs and the download page.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

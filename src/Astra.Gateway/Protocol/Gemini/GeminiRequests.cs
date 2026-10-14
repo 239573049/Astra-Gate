@@ -612,7 +612,7 @@ internal static class GeminiRequests
     {
         "minimal" or "low" => budgets.Low,
         "medium" => budgets.Medium,
-        _ => budgets.High,
+        _ => budgets.High, // high | xhigh | max
     };
 
     private static string GuessMimeType(string uri)
