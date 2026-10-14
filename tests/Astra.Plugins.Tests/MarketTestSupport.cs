@@ -35,7 +35,12 @@ internal static class TestTarballs
         using (var writer = new TarWriter(tar, TarEntryFormat.Ustar, leaveOpen: true))
             foreach (var (name, text) in files)
             {
-                var entry = new UstarTarEntry(TarEntryType.RegularFile, name) { DataStream = new MemoryStream(Encoding.UTF8.GetBytes(text)) };
+                var entry = new UstarTarEntry(TarEntryType.RegularFile, name)
+                {
+                    DataStream = new MemoryStream(Encoding.UTF8.GetBytes(text)),
+                    // Fixed, so the same files always pack to the same bytes (the fixtures hash one copy and serve another).
+                    ModificationTime = DateTimeOffset.UnixEpoch,
+                };
                 writer.WriteEntry(entry);
             }
         tar.Position = 0;
