@@ -1,5 +1,5 @@
 {
- "seed_version": 3,
+ "seed_version": 4,
  "generated_at": "2026-10-11",
  "sources": [
   "https://models.dev/api.json",
@@ -5870,6 +5870,59 @@
        "input": 0.75,
        "cache_read": 0.075,
        "output": 3.75
+      }
+     }
+    }
+   }
+  },
+  {
+   "id": "gemini-4-argon",
+   "display_name": "Gemini 4 Argon",
+   "vendor": "google",
+   "family": "gemini",
+   "aliases": [],
+   "context_window": 1048576,
+   "max_output_tokens": 32768,
+   "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "prompt_cache": true,
+    "audio": true,
+    "pdf": true,
+    "structured_output": true
+   },
+   "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+     "input": 2,
+     "cache_read": 0.1,
+     "output": 10
+    }
+   },
+   "provider_pricing": {
+    "openrouter": {
+     "upstream_model_id": "google/gemini-4-argon",
+     "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+       "input": 2,
+       "cache_read": 0.1,
+       "cache_write_5m": 0.1875,
+       "output": 10
+      }
+     }
+    },
+    "google-vertex": {
+     "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+       "input": 2,
+       "cache_read": 0.1,
+       "output": 10
       }
      }
     }

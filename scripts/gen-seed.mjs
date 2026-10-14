@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const SEED_VERSION = 3;
+const SEED_VERSION = 4;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "src/Astra.Core/Seed/models.json");
 const source = process.argv[2] ?? "https://models.dev/api.json";
