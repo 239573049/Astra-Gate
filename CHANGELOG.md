@@ -4,6 +4,20 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.9.4] - 2026-10-15
+
+### 新增
+
+- **客户端按模型选择协议**：同一个客户端里的不同模型可以各用各的协议。默认按模型的原生协议（网关无需转换即可直通的协议）写入客户端配置，客户端不支持时回退到它的默认协议；也可以在客户端面板里为单个模型手动指定（`extras.protocolOverrides`，无需数据库迁移，校验见 `ClientProtocols`）。已适配的客户端包括 NextCoWork、Droid、Kimi Code、OpenCode、Copilot CLI、MiniMax Code、DeepSeek Harness、VS Code Copilot、Pi、Omp、Qwen Code、Crush、Grok Build、Zed、Hermes Agent、Paseo 等。
+- **开机自启**：**设置** 页新增「开机自动启动」开关（`GET` / `PUT /api/server/autostart`），与 `astra autostart` 写入同一份启动项（macOS LaunchAgent、Linux systemd 用户单元、Windows 注册表 Run 键），CLI 与设置页互相可见；容器和无 systemd 的环境会提示不支持。桌面端新增登录时启动的选项。
+- **安装脚本**：官网提供 `install.sh` / `install.ps1`，直接从发布源下载并安装服务端。
+
+### 改进
+
+- **协议转换**：推理强度支持 `xhigh` / `max`（OpenAI 的 `max` 折为 `xhigh`，Anthropic 的 `minimal` 折为 `low`），Anthropic 的 `thinking.display` 与自适应思考（`adaptive`）在协议间转换时保留；已知的有损映射写在 `Ir.cs` 注释里。
+- **模型库**：种子版本升至 5，补充 DeepSeek V4.1 Flash 的别名（`deepseek-flash`）。
+- 各客户端适配器配置写入更完整，YAML 编辑器支持更多结构；官网文档、README 与教程截图同步更新。
+
 ## [0.9.3] - 2026-10-14
 
 ### 新增

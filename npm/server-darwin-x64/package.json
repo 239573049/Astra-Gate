@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/server-darwin-x64",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Astra self-contained server binary for macOS (Intel).",
   "license": "MIT",
   "os": [
