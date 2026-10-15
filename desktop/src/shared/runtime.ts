@@ -41,3 +41,15 @@ export function parseRuntimeJson(text: string | null | undefined): RuntimeInfo |
 export function isRuntimeStale(runtime: RuntimeInfo, pidAlive: PidAlive): boolean {
   return !pidAlive(runtime.pid);
 }
+
+/**
+ * True when runtime.json was written by the server spawned as `pid` — or, for
+ * a wrapper (ASTRA_SERVER_BIN) that runs the server under another pid, by a
+ * server that started no earlier than the spawn. An entry left by a server
+ * that was already running is neither.
+ */
+export function isRuntimeFrom(runtime: RuntimeInfo, pid: number | undefined, spawnedAtMs: number): boolean {
+  if (pid !== undefined && runtime.pid === pid) return true;
+  const startedAt = runtime.startedAt ? Date.parse(runtime.startedAt) : Number.NaN;
+  return startedAt >= spawnedAtMs;
+}

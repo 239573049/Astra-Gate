@@ -183,7 +183,7 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
       log(`Could not update the web UI files: ${err instanceof Error ? err.message : String(err)}`);
     }
     await o.control.start();
-    const reported = await o.control.probeVersion();
+    const reported = await probeRestartedVersion(o.control);
     if (reported !== o.manifest.version) {
       throw new UpdateError(
         `The server reports ${reported ?? 'no version'} after the restart; expected ${o.manifest.version}.`,
@@ -216,6 +216,24 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
   }
 }
 
+/** How long a restarted server may take to answer /api/version before the update counts as failed. */
+const RESTART_PROBE_TIMEOUT_MS = 30_000;
+const RESTART_PROBE_INTERVAL_MS = 500;
+
+/**
+ * The version the restarted server reports. A server that is up but still busy
+ * starting can miss a single probe, so no answer (null or a throw) is retried
+ * until the deadline; any version it does report is final.
+ */
+async function probeRestartedVersion(control: ServerControl): Promise<string | null> {
+  const deadline = Date.now() + RESTART_PROBE_TIMEOUT_MS;
+  for (;;) {
+    const reported = await control.probeVersion().catch(() => null);
+    if (reported !== null || Date.now() >= deadline) return reported;
+    await new Promise((resolve) => setTimeout(resolve, RESTART_PROBE_INTERVAL_MS));
+  }
+}
+
 async function rollback(
   o: ApplyServerUpdateOptions,
   previousInstall: InstallInfo | null,
@@ -236,7 +254,9 @@ async function rollback(
       log('Rolling back to the server bundled with the app');
       clearServerInfo(o.home, previousInstall);
     }
-    if (await o.control.isRunning()) await o.control.stop();
+    // Unconditional: the failed server may be too busy starting to pass isRunning()'s health
+    // check, and one left running keeps the port while the rollback start lands next to it.
+    await o.control.stop();
     const serverDir = updatePaths(o.home).serverDir;
     if (webRootSwapped) restoreManagedWebRoot(serverDir);
     // Put the previous companion libraries back so a rolled-back AOT binary

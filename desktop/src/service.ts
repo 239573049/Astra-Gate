@@ -1,15 +1,16 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 
 import { checkHealth, fetchVersion, requestShutdown, type ServerVersionInfo } from './api';
 import { parseConfigJson, type ServerConfig } from './shared/config';
 import { parseInstallJson, serverPathFromInstall } from './shared/install';
+import { findServerListenerPid, type RunCommand } from './shared/listener';
 import { type AstraPaths } from './shared/paths';
 import { isPidAlive } from './shared/pid';
 import { apiBase } from './shared/port';
 import { resolveServerBinary, shouldReplaceRunningServer, type ServerBinary } from './shared/resolveServerBinary';
-import { isRuntimeStale, parseRuntimeJson } from './shared/runtime';
+import { isRuntimeFrom, isRuntimeStale, parseRuntimeJson } from './shared/runtime';
 import { STARTED_BY, type InstallInfo, type RuntimeInfo } from './shared/types';
 import { EXPECTED_API_MAJOR, isApiVersionCompatible } from './shared/version';
 
@@ -57,6 +58,8 @@ export interface ServiceManagerOptions {
   env?: NodeJS.ProcessEnv;
   expectedApiMajor?: number;
   log?: (line: string) => void;
+  /** Test seam for the port-owner lookup (lsof / netstat); defaults to execFile. */
+  runCommand?: RunCommand;
 }
 
 /**
@@ -77,6 +80,7 @@ export class ServiceManager {
   private readonly env: NodeJS.ProcessEnv;
   private readonly expectedApiMajor: number;
   private readonly log: (line: string) => void;
+  private readonly runCommand: RunCommand;
 
   constructor(opts: ServiceManagerOptions) {
     this.paths = opts.paths;
@@ -86,6 +90,7 @@ export class ServiceManager {
     this.env = opts.env ?? process.env;
     this.expectedApiMajor = opts.expectedApiMajor ?? EXPECTED_API_MAJOR;
     this.log = opts.log ?? ((line) => console.log(`[astra] ${line}`));
+    this.runCommand = opts.runCommand ?? runCommand;
   }
 
   get dataPaths(): AstraPaths {
@@ -136,50 +141,71 @@ export class ServiceManager {
    * Ensures a healthy server running the binary this app resolved: probes
    * first and adopts a running server whose version matches the target;
    * a mismatching one (an older `astra serve`, a previous install left
-   * running) is stopped and replaced. Otherwise spawns the resolved binary
-   * and waits up to 20s for health. Throws StartupError with the log path
-   * on failure.
+   * running) is stopped and replaced — or adopted after all when it cannot
+   * be stopped. Otherwise spawns the resolved binary and waits up to 20s for
+   * health. Throws StartupError with the log path on failure.
    */
   async ensureRunning(): Promise<RunningService> {
     const probed = await this.probe();
     if (probed.running && probed.port !== null) {
+      const adopt = (): RunningService => ({
+        port: probed.port!,
+        apiBase: apiBase(probed.port!),
+        weStarted: this.weStarted,
+        apiVersion: probed.apiVersion,
+        apiVersionMismatch: this.computeMismatch(probed.apiVersion),
+      });
       const target = await this.resolveBinary();
       // target === null (nothing installed) keeps the running server: it beats failing.
-      if (target === null || !shouldReplaceRunningServer(probed.version, target)) {
-        return {
-          port: probed.port,
-          apiBase: apiBase(probed.port),
-          weStarted: this.weStarted,
-          apiVersion: probed.apiVersion,
-          apiVersionMismatch: this.computeMismatch(probed.apiVersion),
-        };
-      }
+      if (target === null || !shouldReplaceRunningServer(probed.version, target)) return adopt();
       this.log(
         `replacing running server ${probed.version} with the resolved ${target.version} (${target.source} build)`,
       );
-      await this.stopService();
+      if ((await this.stopService()) === 'failed') {
+        // Spawning anyway would put a second server on the next free port while this one keeps
+        // the configured port: the UI, the update checks and the clients would each see another server.
+        this.log(`could not stop the running server ${probed.version}; using it instead of starting a second one`);
+        return adopt();
+      }
     }
     return this.startServer();
   }
 
   /**
    * Stops the service: POST /api/admin/shutdown with the runtime token, wait
-   * up to 5s, then fall back to SIGTERM (taskkill on Windows).
+   * up to 5s, then fall back to SIGTERM (taskkill on Windows) — aimed at the
+   * pid runtime.json records, else the astra-server listening on the port
+   * (a server whose runtime.json entry a later start overwrote), else the
+   * process this app spawned. A spawned server that is too busy starting to
+   * answer the health probe is stopped too rather than left behind.
    */
   async stopService(): Promise<StopResult> {
     const probed = await this.probe(1200);
-    if (!probed.running || probed.port === null) return 'notRunning';
+    const child = this.liveChildPid();
+    if (!probed.running || probed.port === null) {
+      if (child === null) return 'notRunning';
+      this.killTree(child);
+      const deadline = Date.now() + KILL_GRACE_MS;
+      while (Date.now() < deadline) {
+        if (!isPidAlive(child)) return 'stopped';
+        await delay(250);
+      }
+      return 'failed';
+    }
     const base = apiBase(probed.port);
-    const token = probed.runtime?.runtimeToken ?? null;
-    if (token) await requestShutdown(base, token, 3000);
-
-    const httpDeadline = Date.now() + SHUTDOWN_HTTP_GRACE_MS;
-    while (Date.now() < httpDeadline) {
-      if (!(await checkHealth(base, 800))) return 'stopped';
-      await delay(250);
+    // A stale runtime.json belongs to a dead server: its token and pid say nothing about this one.
+    const runtime = probed.runtimeStale ? null : probed.runtime;
+    const token = runtime?.runtimeToken ?? null;
+    if (token && (await requestShutdown(base, token, 3000))) {
+      const httpDeadline = Date.now() + SHUTDOWN_HTTP_GRACE_MS;
+      while (Date.now() < httpDeadline) {
+        if (!(await checkHealth(base, 800))) return 'stopped';
+        await delay(250);
+      }
     }
 
-    const pid = probed.runtime?.pid ?? this.child?.pid ?? null;
+    const pid =
+      runtime?.pid ?? (await findServerListenerPid(probed.port, this.platform, this.runCommand)) ?? child;
     if (pid === null || !Number.isInteger(pid) || pid <= 0) return 'failed';
     this.killTree(pid);
 
@@ -220,6 +246,7 @@ export class ServiceManager {
     await fsp.mkdir(this.paths.logsDir, { recursive: true });
     const out = fs.openSync(todayLog, 'a');
     let child: ChildProcess;
+    const spawnedAt = Date.now();
     try {
       child = spawn(binary.path, ['serve', '--started-by', STARTED_BY, '--port', String(port)], {
         detached: true,
@@ -244,14 +271,17 @@ export class ServiceManager {
       earlyExit = `server process exited before becoming healthy (code=${code ?? 'null'} signal=${signal ?? 'null'})`;
     });
 
-    // The server moves to the next free port when the configured one is taken, so follow runtime.json.
+    // The server moves to the next free port when the configured one is taken, so follow runtime.json —
+    // and only the entry our child writes (at ApplicationStarted, seconds after it listens): until then the
+    // configured port can still answer health checks for another server holding it.
     const deadline = Date.now() + START_TIMEOUT_MS;
     while (Date.now() < deadline) {
       if (earlyExit !== null) throw new StartupError(earlyExit, todayLog);
       await delay(START_POLL_INTERVAL_MS);
       if (earlyExit !== null) throw new StartupError(earlyExit, todayLog);
       const runtime = await this.readRuntime();
-      const actualPort = runtime !== null && !isRuntimeStale(runtime, isPidAlive) ? runtime.port : port;
+      if (runtime === null || !isRuntimeFrom(runtime, child.pid, spawnedAt)) continue;
+      const actualPort = runtime.port;
       const base = apiBase(actualPort);
       if (await checkHealth(base, 1000)) {
         this.weStarted = true;
@@ -311,6 +341,13 @@ export class ServiceManager {
     }
   }
 
+  /** Pid of the server this app spawned, while that process is still alive. */
+  private liveChildPid(): number | null {
+    const pid = this.child?.pid;
+    if (pid === undefined || this.child!.exitCode !== null || this.child!.signalCode !== null) return null;
+    return isPidAlive(pid) ? pid : null;
+  }
+
   private killTree(pid: number): void {
     this.log(`sending kill to server pid ${pid}`);
     if (this.platform === 'win32') {
@@ -323,6 +360,14 @@ export class ServiceManager {
       // already gone
     }
   }
+}
+
+function runCommand(command: string, args: string[]): Promise<string | null> {
+  return new Promise((resolve) => {
+    execFile(command, args, { timeout: 5000, windowsHide: true }, (err, stdout) => {
+      resolve(err ? null : stdout);
+    });
+  });
 }
 
 function delay(ms: number): Promise<void> {

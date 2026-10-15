@@ -449,7 +449,8 @@ runtime needed on the target).
   desktop owns the service version at runtime: `ensureRunning` (`desktop/src/service.ts`) adopts a
   running server only when its version matches the resolved binary's recorded version
   (`shouldReplaceRunningServer`); a mismatching server — an older `astra serve`, a previous
-  install — is stopped and replaced, so a packaged app always serves with its own bits. Env/dev
+  install — is stopped and replaced, so a packaged app always serves with its own bits (one it
+  cannot stop is adopted, never doubled by a second server on a drifted port). Env/dev
   targets and unreadable versions adopt instead of killing. The
   standalone installers (dmg / NSIS / AppImage) ship the server under `resources/server`:
   `release.yml` stages `npm/server-*/bin` into `desktop/server-bundle`, which

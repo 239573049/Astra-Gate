@@ -167,11 +167,13 @@ exist as a GitHub Release, the docs site serves the installers + `latest.json` u
     read (`update-core`)
 34. `apply.ts:152-201` — stop the server, `installManagedWebRoot` (swap `serverDir/wwwroot`, previous
     kept as `wwwroot.prev`; best effort), start, then `control.probeVersion()` must equal
-    `manifest.version` or the run throws; on success `commitNativeCompanions` +
+    `manifest.version` or the run throws (`probeRestartedVersion`, `apply.ts:228`, retries a null or
+    throwing probe for up to 30 s — a server still busy starting is not a failed update); on success `commitNativeCompanions` +
     `commitManagedWebRoot` + staging removed + state reset to `idle` (`update-core`)
 35. `apply.ts:202-250` — failure path: `rolling-back` → repoint `install.json` at
     `previousInstall.serverPath` (or `clearServerInfo` so a standalone installer falls back to its
-    bundled server), restore `wwwroot.prev` and companions, restart, then record
+    bundled server), stop unconditionally (a busy failed server can fail `isRunning()` and would
+    otherwise keep the port), restore `wwwroot.prev` and companions, restart, then record
     `phase: 'failed'` with `failedCount + 1` (`update-core`)
 36. Resolution after the swap: `cli/src/lib/binary.ts:resolveServerBinary` (env > install.json >
     repo dev build > platform package) and `desktop/src/shared/resolveServerBinary.ts:resolveServerBinary`

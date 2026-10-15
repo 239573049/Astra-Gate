@@ -142,11 +142,13 @@ initial delay instead of a shared scheduler:
     and then `/api/version`; if healthy it resolves the target binary and **adopts** the running
     server only when `shouldReplaceRunningServer` is false — i.e. versions match
     (`desktop/src/shared/resolveServerBinary.ts:92`). A version mismatch (an older `astra serve`, a
-    previous install) is logged, `stopService()`d and replaced; `target === null` keeps the running
-    server rather than failing (`service.ts:148`)
+    previous install) is logged, `stopService()`d and replaced — or adopted after all when the stop
+    fails, so there is never a second server on a drifted port; `target === null` keeps the running
+    server rather than failing (`service.ts:156`)
 20. `desktop/src/service.ts:startServer` — spawns `serve --started-by desktop --port <config.port>`
     detached with the log fd, watches `error`/`exit` for an early failure, then polls runtime.json +
-    `/api/health` for 20 s, following the drifted port (`:247-262`)
+    `/api/health` for 20 s, following the drifted port — only once runtime.json is the child's own
+    entry (`isRuntimeFrom`, `:283`), never the configured port while another server may hold it
 21. ⇢ crosses **process** boundary via the runtime token / HTTP: `GET /api/version` →
     `isApiVersionCompatible(apiVersion, EXPECTED_API_MAJOR = 1)` (`desktop/src/shared/version.ts:6-21`).
     A different major shows `showMismatchDialog` (`desktop/src/main.ts:255`) telling the user to run

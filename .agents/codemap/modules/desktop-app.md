@@ -26,7 +26,7 @@ launcher of the same binary with a deliberately different resolution order (`cli
 | `handleAppRequest()` | `desktop/src/appProtocol.ts:22` | `app://astra` request handler: host check, path resolution, CSP + `nosniff` headers, SPA fallback. Registered at `desktop/src/main.ts:187`. |
 | `rendererWebPreferences()` | `desktop/src/main.ts:587` | Shared `WebPreferences` for the main window and the tray panel: `dist/preload.js`, `contextIsolation`, `sandbox: true`, and the four `--astra-*` switch arguments. |
 | `preload.ts` bridge | `desktop/src/preload.ts:35`, `desktop/src/preload.ts:79` | `contextBridge.exposeInMainWorld('__ASTRA__', …)`; reads the switch args at `desktop/src/preload.ts:13`. |
-| `ServiceManager.ensureRunning()` | `desktop/src/service.ts:143` | Probe → adopt a version-matching server, replace a mismatching one, else spawn and wait ≤20 s for health. |
+| `ServiceManager.ensureRunning()` | `desktop/src/service.ts:148` | Probe → adopt a version-matching server, replace a mismatching one (adopt it after all when it cannot be stopped — never a second server), else spawn and wait ≤20 s for health. |
 | `resolveServerBinary()` | `desktop/src/shared/resolveServerBinary.ts:55` | install.json > `ASTRA_SERVER_BIN` > bundled > dev, with the installer-upgrade staleness rule. |
 | `UpdateController.check()` / `applyFromUi()` / `start()` | `desktop/src/update.ts:211`, `:364`, `:143` | Manual check, in-app apply, and the launch + 12 h background checks. |
 | `TrayController` / `buildTrayMenuTemplate()` | `desktop/src/tray.ts:25`, `desktop/src/shared/trayMenu.ts:124` | Tray icon, tooltip/menu-bar title, and the pure native-menu model. |
@@ -37,8 +37,8 @@ launcher of the same binary with a deliberately different resolution order (`cli
 | Symbol | File | Role |
 |---|---|---|
 | `ProbeResult` / `RunningService` / `StopResult` / `StartupError` | `desktop/src/service.ts:31`, `:41`, `:49`, `:21` | Probe and startup results; `StartupError.logPath` is what the retry dialog prints. |
-| `ServiceManager.probe()` | `desktop/src/service.ts:117` | Reads `runtime.json` (falling back to `config.json`'s port when the runtime is stale), health-checks, then `/api/version`. |
-| `ServiceManager.stopService()` / `stopIfOurs()` | `desktop/src/service.ts:169`, `:195` | `POST /api/admin/shutdown` with the runtime token, 5 s HTTP grace, then SIGTERM/`taskkill`; `stopIfOurs` is the quit-time guard. |
+| `ServiceManager.probe()` | `desktop/src/service.ts:122` | Reads `runtime.json` (falling back to `config.json`'s port when the runtime is stale), health-checks, then `/api/version`. |
+| `ServiceManager.stopService()` / `stopIfOurs()` | `desktop/src/service.ts:182`, `:221` | `POST /api/admin/shutdown` with a fresh runtime's token, 5 s HTTP grace, then SIGTERM/`taskkill` at the runtime pid, else the astra-server listening on the port (`findServerListenerPid`, `desktop/src/shared/listener.ts:61`: lsof / netstat + an executable-name check), else the app's own child; `stopIfOurs` is the quit-time guard. |
 | `ServiceManager.computeMismatch()` | `desktop/src/service.ts:111` | `isApiVersionCompatible` against `EXPECTED_API_MAJOR`. |
 | `shouldReplaceRunningServer()` | `desktop/src/shared/resolveServerBinary.ts:92` | Adopt/replace decision; both versions must be known before anything is killed. |
 | `EXPECTED_API_MAJOR` / `isApiVersionCompatible()` | `desktop/src/shared/version.ts:6`, `:15` | The desktop↔server handshake floor; a different major shows the mismatch dialog (`desktop/src/main.ts:258`). |
@@ -163,9 +163,11 @@ launcher of the same binary with a deliberately different resolution order (`cli
   origin must therefore be known *before the first window loads*; a renderer-side fetch to any other origin
   (the docs market, GitHub) needs a CSP change first.
 - **The server's port can drift** — it moves when `config.port` is taken, so the desktop follows
-  `runtime.json` after spawning (`desktop/src/service.ts:247`–`:254`) and `probe()` treats a
+  `runtime.json` after spawning (`desktop/src/service.ts:283`) and `probe()` treats a
   `runtime.json` whose pid is dead as stale (`desktop/src/shared/runtime.ts:41`). Never assume
-  `config.json`'s port.
+  `config.json`'s port — and after a spawn, trust only the entry the child wrote (`isRuntimeFrom`,
+  `desktop/src/shared/runtime.ts:51`): the server writes it at ApplicationStarted, seconds after it
+  listens, and until then the configured port can answer for another server still holding it.
 - **Never kill a server you cannot vouch for** — `shouldReplaceRunningServer` requires both the running
   version and a target version, so env/dev targets and unreadable versions adopt instead
   (`desktop/src/shared/resolveServerBinary.ts:85` comment). A packaged app always serves its own bits

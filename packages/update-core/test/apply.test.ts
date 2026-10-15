@@ -234,6 +234,32 @@ describe('applyServerUpdate', () => {
     expect(readUpdateState(updatePaths(h.home).stateFile)).toMatchObject({ phase: 'idle', failedCount: 0 });
   });
 
+  it('waits for a restarted server that is slow to report its version', async () => {
+    const h = harness(tmp);
+    let probes = 0;
+    h.control.probeVersion = async () => {
+      probes++;
+      if (probes === 1) throw new Error('The operation was aborted due to timeout');
+      return probes === 2 ? null : '0.2.0';
+    };
+
+    await expect(applyServerUpdate(h.opts)).resolves.toMatchObject({ to: '0.2.0' });
+    expect(probes).toBe(3);
+    expect(h.control.starts).toBe(1);
+  });
+
+  it('stops the failed server on rollback even when it does not look running', async () => {
+    const h = harness(tmp);
+    h.control.versionToReport = '0.1.0';
+    // Too busy starting to pass the health check: isRunning() says no, but the process holds the port.
+    h.control.isRunning = async () => false;
+
+    await expect(applyServerUpdate(h.opts)).rejects.toThrow(/reports 0.1.0/);
+
+    expect(h.control.stops).toBe(1);
+    expect(h.control.starts).toBe(2);
+  });
+
   it('does not stop the server when it was not running', async () => {
     const h = harness(tmp);
     h.control.running = false;

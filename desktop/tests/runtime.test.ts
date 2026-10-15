@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 
 import { isPidAlive } from '../src/shared/pid';
-import { isRuntimeStale, parseRuntimeJson } from '../src/shared/runtime';
+import { isRuntimeFrom, isRuntimeStale, parseRuntimeJson } from '../src/shared/runtime';
 import type { RuntimeInfo } from '../src/shared/types';
 
 const valid: RuntimeInfo = {
@@ -51,5 +51,23 @@ describe('isRuntimeStale', () => {
     if (deadPid === undefined) return; // skip on exotic platforms
     const rt: RuntimeInfo = { pid: deadPid, port: 1 };
     expect(isRuntimeStale(rt, isPidAlive)).toBe(true);
+  });
+});
+
+describe('isRuntimeFrom', () => {
+  const spawnedAt = Date.parse('2026-10-15T02:56:47Z');
+
+  it('accepts the entry the spawned pid wrote', () => {
+    expect(isRuntimeFrom({ ...valid, pid: 18515 }, 18515, spawnedAt)).toBe(true);
+  });
+
+  it('accepts a server a wrapper started after the spawn', () => {
+    expect(isRuntimeFrom({ ...valid, startedAt: '2026-10-15T02:56:49Z' }, 18515, spawnedAt)).toBe(true);
+  });
+
+  it('rejects an entry left by a server that was already running', () => {
+    expect(isRuntimeFrom({ ...valid, startedAt: '2026-10-14T09:32:23Z' }, 18515, spawnedAt)).toBe(false);
+    expect(isRuntimeFrom({ pid: 19419, port: 17321 }, 18515, spawnedAt)).toBe(false);
+    expect(isRuntimeFrom({ pid: 19419, port: 17321 }, undefined, spawnedAt)).toBe(false);
   });
 });

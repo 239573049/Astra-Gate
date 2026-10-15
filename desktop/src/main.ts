@@ -18,7 +18,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { handleAppRequest } from './appProtocol';
-import { fetchClients, fetchProviders, fetchVersion, putBinding } from './api';
+import { fetchClients, fetchProviders, putBinding } from './api';
 import { ServiceManager, StartupError, type RunningService } from './service';
 import { TrayController, type TrayCallbacks, type TrayState } from './tray';
 import { TrayPanel } from './trayPanel';
@@ -123,11 +123,11 @@ async function main(): Promise<void> {
       start: async () => {
         await service!.ensureRunning();
       },
+      // probe() already read /api/version and turns a slow answer into null (update-core retries
+      // that after a restart) instead of throwing a timeout out of the apply.
       probeVersion: async () => {
         const probed = await service!.probe();
-        if (!probed.running || probed.port === null) return null;
-        const v = await fetchVersion(apiBase(probed.port));
-        return v.version ?? null;
+        return probed.running ? probed.version : null;
       },
     },
     // Launch-time check + reminder; the circuit breaker state persists in desktop-prefs.json.
