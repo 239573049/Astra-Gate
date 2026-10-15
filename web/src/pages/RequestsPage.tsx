@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, Globe, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Link, useInRouterContext } from 'react-router';
+import { Link, useInRouterContext, useSearchParams } from 'react-router';
 
 import { keys, useProviders, useRequest, useRequestRate, useRequests, useTunnel, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
@@ -62,16 +62,61 @@ type Row = {
   r: RequestSummary;
 };
 
+/** Filters a link can carry: /requests?token=<id>&provider=…&client=…&status=…&origin=…&model=… (comma lists). */
+const URL_FILTERS = ['client', 'token', 'provider', 'status', 'origin'] as const satisfies readonly RequestFilterId[];
+
+function filtersFromParams(params: URLSearchParams): { model: string; filters: RequestFilterValues } {
+  const filters = { ...EMPTY_REQUEST_FILTERS };
+  for (const id of URL_FILTERS) filters[id] = (params.get(id) ?? '').split(',').filter(Boolean);
+  return { model: params.get('model') ?? '', filters };
+}
+
+function paramsFromFilters(model: string, filters: RequestFilterValues): URLSearchParams {
+  const params = new URLSearchParams();
+  if (model) params.set('model', model);
+  for (const id of URL_FILTERS) if (filters[id].length > 0) params.set(id, filters[id].join(','));
+  return params;
+}
+
+/**
+ * The request log. Under the router its filters live in the address (a token's "view requests" link opens it on that
+ * token, and a filtered view can be shared or reloaded); rendered on its own it keeps them in state only.
+ */
 export function RequestsPage() {
+  return useInRouterContext() ? <RoutedRequests /> : <RequestsView />;
+}
+
+function RoutedRequests() {
+  const [params, setParams] = useSearchParams();
+  // Read once: afterwards the page owns the filters and only writes them back.
+  const [initial] = useState(() => filtersFromParams(params));
+  const sync = useCallback(
+    (model: string, filters: RequestFilterValues) => {
+      const next = paramsFromFilters(model, filters);
+      setParams((current) => (current.toString() === next.toString() ? current : next), { replace: true });
+    },
+    [setParams],
+  );
+  return <RequestsView initial={initial} onFiltersChange={sync} />;
+}
+
+function RequestsView({
+  initial,
+  onFiltersChange,
+}: {
+  initial?: { model: string; filters: RequestFilterValues };
+  onFiltersChange?: (model: string, filters: RequestFilterValues) => void;
+}) {
   const { t } = useI18n();
-  const [model, setModel] = useState('');
-  const [filters, setFilters] = useState<RequestFilterValues>(EMPTY_REQUEST_FILTERS);
+  const [model, setModel] = useState(initial?.model ?? '');
+  const [filters, setFilters] = useState<RequestFilterValues>(initial?.filters ?? EMPTY_REQUEST_FILTERS);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const debouncedModel = useDebounced(model.trim());
   // Checking several values in one open menu settles into a single query instead of one per click.
   const debouncedFilters = useDebounced(filters);
+  useEffect(() => onFiltersChange?.(debouncedModel, debouncedFilters), [debouncedModel, debouncedFilters, onFiltersChange]);
   // Comma-joined lists: the server matches any listed value (RequestRepository).
   const listFilters = {
     client: debouncedFilters.client.join(','),
@@ -237,6 +282,7 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
                 <span className="flex min-w-0 items-center gap-1.5">
                   <ModelGlyph model={r.upstreamModel || r.requestedModel} size={15} />
                   <span className="block min-w-0 truncate font-medium hover:text-[var(--accent)]" title={r.requestedModel ?? ''}>{r.requestedModel || '—'}</span>
+                  <MappedModel r={r} />
                 </span>
                 <ReasoningBadge r={r} />
               </span>
@@ -554,14 +600,31 @@ function ReasoningValue({ r }: { r: Pick<RequestSummary, 'reasoningEffort' | 're
   return <span title={t('requests.reasoning.hint')}>{parts.join(' · ')}</span>;
 }
 
-function ResponseModelTag({ r, labeled = false }: { r: Pick<RequestSummary, 'requestedModel' | 'upstreamModel' | 'responseModel'>; labeled?: boolean }) {
+/** The model the gateway sent in place of the requested one (a Claude Desktop role or a provider model mapping). */
+function MappedModel({ r }: { r: Pick<RequestSummary, 'requestedModel' | 'upstreamModel'> }) {
   const { t } = useI18n();
-  const comparable = !!r.responseModel && !!r.requestedModel;
-  const matches = comparable && r.responseModel === r.requestedModel;
-  const value = r.responseModel || t('requests.modelNotRecorded');
+  if (!r.requestedModel || !r.upstreamModel || r.upstreamModel === r.requestedModel) return null;
+  return (
+    <span className="flex min-w-0 items-center gap-1 text-[var(--text-muted)]" title={t('requests.mappedModel.hint', { model: r.upstreamModel })}>
+      <ArrowRight className="size-3 shrink-0" aria-hidden="true" />
+      <span className="truncate">{r.upstreamModel}</span>
+    </span>
+  );
+}
+
+function ResponseModelTag({ r, labeled = false }: { r: Pick<RequestSummary, 'requestedModel' | 'upstreamModel' | 'responseModel' | 'status'>; labeled?: boolean }) {
+  const { t } = useI18n();
+  // Compared with what the gateway sent: a mapping is the user's own setting (shown beside the requested model), a
+  // response naming another model is the upstream's doing.
+  const sent = r.upstreamModel || r.requestedModel;
+  const comparable = !!r.responseModel && !!sent;
+  const matches = comparable && r.responseModel === sent;
+  // The returned model is recorded when the request finishes, so an in-flight one has none yet.
+  const pending = !r.responseModel && r.status === 'pending';
+  const value = r.responseModel || t(pending ? 'requests.modelPending' : 'requests.modelNotRecorded');
   const title = r.responseModel
     ? t('requests.modelComparison', { requested: r.requestedModel ?? '—', upstream: r.upstreamModel ?? '—', returned: r.responseModel })
-    : t('requests.modelNotRecorded.hint');
+    : t(pending ? 'requests.modelPending.hint' : 'requests.modelNotRecorded.hint');
   return (
     <span className={cn('flex min-w-0 items-center gap-1', !comparable ? 'text-[var(--text-muted)]' : matches ? 'text-[var(--success)]' : 'text-[var(--warning)]')} title={title}>
       {comparable && (matches ? <Check className="size-3 shrink-0" aria-hidden="true" /> : <ArrowRight className="size-3 shrink-0" aria-hidden="true" />)}

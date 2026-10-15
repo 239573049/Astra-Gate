@@ -102,3 +102,17 @@ astra uninstall --purge # 连 ~/.astra 数据目录一起删除
   `astra uninstall` 会先用 `restore-all` 的逻辑把每个被接管客户端的配置恢复为启用前的样子，再停止服务——
   客户端不会因为 Astra 卸载而失联。
 </Callout>
+
+## 预览版
+
+正式版的版本号形如 `0.10.0`；预览版形如 `0.10.0-preview.1`，提前提供下一个正式版的新功能，供愿意尝鲜的用户试用和反馈，可能不稳定。**默认只接收正式版**，预览版需要自己开启：
+
+- **接收预览版更新**：控制台 **设置 → 关于** 打开「接收预览版更新」。之后服务端的更新检查、桌面端（含 macOS 安装包的应用内更新）和 `astra update` 都会提供预览版；正式版发布后同样会更新上去。
+- **直接安装预览版**：安装脚本加 `--preview`（Windows 设置 `$env:ASTRA_CHANNEL = 'preview'`），或在[下载页](/download)展开「预览版」；npm 用户可以 `npm install -g @aidotnet/astra-gate@preview`；Docker 镜像使用 `:preview` 标签。
+
+```bash
+curl -fsSL https://astra-gate.si/install.sh | bash -s -- --preview
+astra update --channel preview   # 只这一次按预览版更新，不改设置
+```
+
+关闭「接收预览版更新」**不会降级**：已经装了预览版的话，会停在当前版本，直到发布了比它更新的正式版（例如 `0.10.0-preview.3` 之后的 `0.10.0`）。服务未运行时 `astra update` 读不到这个设置，按正式版处理，需要时加 `--channel preview`。

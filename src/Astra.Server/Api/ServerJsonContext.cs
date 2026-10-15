@@ -139,6 +139,11 @@ namespace Astra.Server;
 [JsonSerializable(typeof(TokenBudgetUsageDto))]
 [JsonSerializable(typeof(TokenSecretDto))]
 [JsonSerializable(typeof(TokenMutationResultDto))]
+[JsonSerializable(typeof(TokenPoolDto))]
+[JsonSerializable(typeof(TokenPoolMemberDto))]
+[JsonSerializable(typeof(PoolMemberHealthDto))]
+[JsonSerializable(typeof(TokenPoolInputDto))]
+[JsonSerializable(typeof(TokenPoolMemberInputDto))]
 // requests and stats
 [JsonSerializable(typeof(RequestEndpoints.RequestSummaryDto))]
 [JsonSerializable(typeof(RequestEndpoints.RequestDetailDto))]
@@ -151,6 +156,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(RequestEndpoints.TimeseriesPointDto))]
 [JsonSerializable(typeof(RequestEndpoints.TopModelDto))]
 [JsonSerializable(typeof(RequestEndpoints.DailyActivityDto))]
+[JsonSerializable(typeof(RequestEndpoints.ProviderStatDto))]
 [JsonSerializable(typeof(RequestEndpoints.RateStatsDto))]
 [JsonSerializable(typeof(RequestEndpoints.SettingsDto))]
 // traces (.plan/observability.md §4)
@@ -226,6 +232,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(List<RequestEndpoints.DailyActivityDto>))]
 [JsonSerializable(typeof(List<RequestEndpoints.TimeseriesPointDto>))]
 [JsonSerializable(typeof(List<RequestEndpoints.TopModelDto>))]
+[JsonSerializable(typeof(List<RequestEndpoints.ProviderStatDto>))]
 [JsonSerializable(typeof(List<PriceKeyInfo>))]
 // The provider model lists (configured and upstream) are materialised as Lists before they leave the endpoint
 // (an interface-typed root makes the serializer probe the whole interface graph), so the Lists are root types.

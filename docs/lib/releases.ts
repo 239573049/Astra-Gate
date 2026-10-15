@@ -12,9 +12,38 @@ import { pipeline } from 'node:stream/promises';
  * `index.json` beside the version directories records every file's hashes and
  * metadata. The directory is designed to be a single mounted volume in the
  * docs container (`-v …:/app/data`), so releases survive image upgrades.
+ *
+ * Two channels, picked by the version (scripts/release-channel.mjs): `stable`
+ * holds x.y.z, `preview` holds x.y.z-preview.N. A channel's feed offers its
+ * own releases plus those of the channels it follows (FEED_SOURCES): preview
+ * also offers every stable, so preview users move on to the stable that
+ * follows their preview while each file is stored once.
  */
 
 export const DEFAULT_CHANNEL = 'stable';
+export const PREVIEW_CHANNEL = 'preview';
+export const CHANNELS = [DEFAULT_CHANNEL, PREVIEW_CHANNEL] as const;
+export type Channel = (typeof CHANNELS)[number];
+
+const FEED_SOURCES: Record<Channel, readonly Channel[]> = {
+  stable: [DEFAULT_CHANNEL],
+  preview: [PREVIEW_CHANNEL, DEFAULT_CHANNEL],
+};
+
+/** stable | preview, or null for anything else. "beta" (the old name of preview) still reads preview. */
+export function normalizeChannel(raw: string | null | undefined): Channel | null {
+  const value = (raw ?? '').trim().toLowerCase();
+  if (value === 'beta') return PREVIEW_CHANNEL;
+  return (CHANNELS as readonly string[]).includes(value) ? (value as Channel) : null;
+}
+
+/** The channel a version belongs to: x.y.z → stable, x.y.z-preview.N → preview, anything else → null. */
+export function channelOfVersion(version: string): Channel | null {
+  const m = /^\d+\.\d+\.\d+(-preview\.[1-9]\d*)?$/.exec(version);
+  if (!m) return null;
+  return m[1] ? PREVIEW_CHANNEL : DEFAULT_CHANNEL;
+}
+
 const INDEX_NAME = 'index.json';
 const MAX_NOTES_BYTES = 64 * 1024;
 
@@ -180,25 +209,70 @@ export async function saveUpload(o: SaveUploadOptions): Promise<SaveUploadResult
   return { file, version };
 }
 
-export function latestVersion(index: ReleaseIndex): ReleaseVersion | null {
-  const versions = Object.values(index.versions);
-  if (versions.length === 0) return null;
-  return versions.sort((a, b) => compareVersions(b.version, a.version))[0] ?? null;
+/** A release as a channel's feed offers it; `channel` is where its files are stored. */
+export interface FeedVersion extends ReleaseVersion {
+  channel: Channel;
 }
 
-/** Numeric semver-ish ordering; suffixes ignored, unparsable entries sink. */
-export function compareVersions(a: string, b: string): number {
-  const parse = (v: string): [number, number, number] => {
-    const m = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(v.trim());
-    if (!m) return [0, 0, 0];
-    return [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)];
-  };
-  const pa = parse(a);
-  const pb = parse(b);
-  for (let i = 0; i < 3; i++) {
-    if (pa[i] !== pb[i]) return (pa[i] ?? 0) > (pb[i] ?? 0) ? 1 : -1;
+/** Every release a channel's feed offers, newest first. */
+export async function readFeed(channel: Channel): Promise<FeedVersion[]> {
+  const byVersion = new Map<string, FeedVersion>();
+  for (const source of FEED_SOURCES[channel]) {
+    const index = await readIndex(source);
+    for (const v of Object.values(index.versions)) {
+      // The channel's own copy wins should a version ever sit in two directories.
+      if (!byVersion.has(v.version)) byVersion.set(v.version, { ...v, channel: source });
+    }
   }
-  return a < b ? -1 : a > b ? 1 : 0;
+  return [...byVersion.values()].sort((a, b) => compareVersions(b.version, a.version));
+}
+
+/**
+ * The newest release that has a file of `kind` (any file when omitted). A release is uploaded file by file — the
+ * installers before npm, the server-update manifest after — so "newest with a manifest" is what latest.json means.
+ */
+export function latestWith<T extends ReleaseVersion>(versions: readonly T[], kind?: string): T | null {
+  const sorted = [...versions].sort((a, b) => compareVersions(b.version, a.version));
+  return sorted.find((v) => v.files.length > 0 && (!kind || v.files.some((f) => f.kind === kind))) ?? null;
+}
+
+export function latestVersion(index: ReleaseIndex): ReleaseVersion | null {
+  return latestWith(Object.values(index.versions));
+}
+
+type ParsedVersion = { core: [number, number, number]; pre: string[] };
+
+function parseSemver(v: string): ParsedVersion | null {
+  const m = /^v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(v.trim());
+  if (!m) return null;
+  return { core: [Number(m[1]), Number(m[2] ?? 0), Number(m[3] ?? 0)], pre: m[4] ? m[4].split('.') : [] };
+}
+
+/**
+ * Semver precedence: numeric cores, then a release above its prereleases (0.10.0 > 0.10.0-preview.2 >
+ * 0.10.0-preview.1), prerelease identifiers compared numerically when numeric. Unparsable entries sink.
+ */
+export function compareVersions(a: string, b: string): number {
+  const pa = parseSemver(a);
+  const pb = parseSemver(b);
+  if (!pa || !pb) return pa ? 1 : pb ? -1 : a < b ? -1 : a > b ? 1 : 0;
+  for (let i = 0; i < 3; i++) {
+    if (pa.core[i] !== pb.core[i]) return pa.core[i]! > pb.core[i]! ? 1 : -1;
+  }
+  if (pa.pre.length === 0 || pb.pre.length === 0) return pb.pre.length - pa.pre.length;
+  for (let i = 0; i < Math.max(pa.pre.length, pb.pre.length); i++) {
+    const x = pa.pre[i];
+    const y = pb.pre[i];
+    if (x === undefined) return -1;
+    if (y === undefined) return 1;
+    if (x === y) continue;
+    const nx = /^\d+$/.test(x);
+    const ny = /^\d+$/.test(y);
+    if (nx && ny) return Number(x) > Number(y) ? 1 : -1;
+    if (nx !== ny) return nx ? -1 : 1;
+    return x > y ? 1 : -1;
+  }
+  return 0;
 }
 
 /** electron-updater generic feed for macOS: latest-mac.yml next to the feed URL. */

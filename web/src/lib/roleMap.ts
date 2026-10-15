@@ -17,3 +17,19 @@ export function rolesOf(extras: Record<string, unknown> | null | undefined): Rol
 
 /** Stable comparison key of a role map. */
 export const roleKey = (m: RoleMap) => ROLES.map((r) => m[r] ?? '').join('\n');
+
+/** Name parts that mark a provider's small, fast tier — what Claude Desktop's haiku role stands for. */
+const SMALL_MODEL = /(^|[-_.:/\s])(haiku|flash|mini|lite|nano|small|fast|air)($|[-_.:/\s])/i;
+
+/**
+ * A role map suggested from a provider's models, for a Claude Desktop that has none yet: the model named after the
+ * role when there is one (Claude models), else the first full-size model for sonnet and opus and the first small one
+ * (flash, mini, air …) for haiku. Empty when there are no models.
+ */
+export function suggestRoles(models: readonly string[]): RoleMap {
+  if (models.length === 0) return {};
+  const named = (r: Role) => models.find((m) => m.toLowerCase().includes(r));
+  const large = models.find((m) => !SMALL_MODEL.test(m)) ?? models[0];
+  const small = models.find((m) => SMALL_MODEL.test(m)) ?? large;
+  return { sonnet: named('sonnet') ?? large, opus: named('opus') ?? named('sonnet') ?? large, haiku: named('haiku') ?? small };
+}

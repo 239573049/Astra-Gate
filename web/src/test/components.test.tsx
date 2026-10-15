@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { X } from 'lucide-react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { RequestQuery } from '../api/hooks';
@@ -392,6 +393,34 @@ describe('RequestsPage filtering', () => {
     expect(lastQuery().client).toBe('claude-code');
   });
 
+  it('opens on the filters in the address and writes changes back to it', async () => {
+    localStorage.setItem('astra.locale', 'en');
+    let search = '';
+    function Location() {
+      search = useLocation().search;
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <I18nProvider>
+          <MemoryRouter initialEntries={['/requests?token=tok-1&status=upstream_error,gateway_error']}>
+            <Routes>
+              <Route path="/requests" element={<><RequestsPage /><Location /></>} />
+            </Routes>
+          </MemoryRouter>
+        </I18nProvider>
+      </QueryClientProvider>,
+    );
+    // The very first query already carries the link's filters.
+    expect(hookSpies.useRequests.mock.calls[0]![0]).toMatchObject({ token: 'tok-1', status: 'upstream_error,gateway_error', page: 1 });
+
+    const group = screen.getByRole('group', { name: 'Active filters' });
+    fireEvent.change(within(group).getByLabelText('Search model IDs (keyword)'), { target: { value: 'gpt-5' } });
+    await waitDebounce();
+    expect(new URLSearchParams(search).get('model')).toBe('gpt-5');
+    expect(new URLSearchParams(search).get('token')).toBe('tok-1');
+  });
+
   it('shows the filtered total spend from the list query in the header', () => {
     hookSpies.useRequests.mockReturnValue(hookResult({ ...pageOf([summary({ id: 'req-1' })]), total: 120, totalCostNanoUsd: 12_340_000_000 }));
     showPage();
@@ -482,8 +511,8 @@ describe('Requests list model column', () => {
     hookSpies.useRequests.mockReturnValue(
       hookResult(
         pageOf([
-          summary({ id: 'r-match', requestedModel: 'gpt-a', upstreamModel: 'up-a', responseModel: 'gpt-a' }),
-          summary({ id: 'r-mismatch', requestedModel: 'gpt-b', upstreamModel: 'up-b', responseModel: 'up-c' }),
+          summary({ id: 'r-match', requestedModel: 'gpt-a', upstreamModel: 'gpt-a', responseModel: 'gpt-a' }),
+          summary({ id: 'r-mismatch', requestedModel: 'gpt-b', upstreamModel: 'gpt-b', responseModel: 'up-c' }),
         ]),
       ),
     );
@@ -491,22 +520,53 @@ describe('Requests list model column', () => {
 
     const match = screen.getByText('Match').parentElement!;
     expect(match).toHaveClass('text-[var(--success)]');
-    expect(match).toHaveAttribute('title', 'Requested: gpt-a; sent upstream: up-a; API returned: gpt-a');
+    expect(match).toHaveAttribute('title', 'Requested: gpt-a; sent upstream: gpt-a; API returned: gpt-a');
 
     const mismatch = screen.getByText('Mismatch').parentElement!;
     expect(mismatch).toHaveClass('text-[var(--warning)]');
-    expect(mismatch).toHaveAttribute('title', 'Requested: gpt-b; sent upstream: up-b; API returned: up-c');
+    expect(mismatch).toHaveAttribute('title', 'Requested: gpt-b; sent upstream: gpt-b; API returned: up-c');
   });
 
-  it('reports a mismatch when the upstream model equals the response but the request differs', () => {
+  it('shows a mapped model beside the requested one and matches the response against what was sent', () => {
     hookSpies.useRequests.mockReturnValue(
-      hookResult(pageOf([summary({ id: 'r-swap', requestedModel: 'gpt-d', upstreamModel: 'up-x', responseModel: 'up-x' })])),
+      hookResult(pageOf([summary({ id: 'r-map', requestedModel: 'claude-opus-5-5', upstreamModel: 'claude-sonnet-5-5', responseModel: 'claude-sonnet-5-5' })])),
+    );
+    showPage();
+
+    // The mapping is the user's own setting: shown next to the requested model, not reported as a mismatch.
+    expect(screen.getByTitle('Sent upstream as claude-sonnet-5-5 (a client role mapping or the provider’s model mapping)')).toHaveTextContent('claude-sonnet-5-5');
+    const match = screen.getByText('Match').parentElement!;
+    expect(match).toHaveClass('text-[var(--success)]');
+    expect(match).toHaveAttribute('title', 'Requested: claude-opus-5-5; sent upstream: claude-sonnet-5-5; API returned: claude-sonnet-5-5');
+  });
+
+  it('reports a mismatch when the response differs from what was sent, even if it equals the request', () => {
+    hookSpies.useRequests.mockReturnValue(
+      hookResult(pageOf([summary({ id: 'r-swap', requestedModel: 'claude-opus-5-5', upstreamModel: 'claude-sonnet-5-5', responseModel: 'claude-opus-5-5' })])),
     );
     showPage();
 
     const mismatch = screen.getByText('Mismatch').parentElement!;
     expect(mismatch).toHaveClass('text-[var(--warning)]');
-    expect(mismatch).toHaveAttribute('title', 'Requested: gpt-d; sent upstream: up-x; API returned: up-x');
+    expect(mismatch).toHaveAttribute('title', 'Requested: claude-opus-5-5; sent upstream: claude-sonnet-5-5; API returned: claude-opus-5-5');
+    expect(screen.queryByText('Match')).toBeNull();
+  });
+
+  it('shows no mapping when the model went upstream unchanged', () => {
+    hookSpies.useRequests.mockReturnValue(hookResult(pageOf([summary({ id: 'r-same', requestedModel: 'gpt-a', upstreamModel: 'gpt-a', responseModel: 'gpt-a' })])));
+    showPage();
+
+    expect(screen.queryByTitle(/^Sent upstream as/)).toBeNull();
+  });
+
+  it('shows Pending (muted) for a request still in flight instead of Not recorded', () => {
+    hookSpies.useRequests.mockReturnValue(hookResult(pageOf([summary({ id: 'r-live', status: 'pending', requestedModel: 'gpt-a', upstreamModel: 'gpt-a' })])));
+    showPage();
+
+    const tag = screen.getByText('Returned: Pending').parentElement!;
+    expect(tag).toHaveClass('text-[var(--text-muted)]');
+    expect(tag).toHaveAttribute('title', 'The model ID the API returns is recorded when the request finishes.');
+    expect(screen.queryByText('Returned: Not recorded')).toBeNull();
   });
 
   it('shows Not recorded (muted) when the response model is null or missing, without guessing', () => {

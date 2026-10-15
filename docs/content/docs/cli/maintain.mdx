@@ -18,7 +18,11 @@ npx @aidotnet/astra-gate install --desktop
 ```bash
 astra update             # 更新 CLI；若装了桌面端也一并更新，最后重启服务
 astra update --desktop   # 只更新桌面端
+astra update --check     # 只检查，不安装
+astra update --channel preview   # 这一次按预览版更新（stable | preview）
 ```
+
+更新通道默认跟随控制台 **设置 → 关于** 的「接收预览版更新」（服务未运行时按正式版），`--channel` 只影响这一次。CLI 会安装与服务端相同的版本（`npm install -g <包名>@<版本>`）。详见[预览版](/docs/guide/install#预览版)。
 
 <Callout type="info" title="版本一致性">
   CLI、服务端与控制台界面共用同一版本号。如果控制台顶部提示「服务端 API 版本与界面不一致」，

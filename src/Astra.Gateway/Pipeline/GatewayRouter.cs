@@ -32,6 +32,12 @@ public sealed record GatewayRoute(TokenRecord Token, ClientRecord? Client, strin
     /// </summary>
     public IReadOnlyList<RouteTarget> Targets { get; init; } = [];
 
+    /// <summary>
+    /// The token's provider pool of a direct call (issue #2); <see cref="Targets"/> then holds its usable members in pool
+    /// order, and <see cref="PoolRouting"/> decides which one a request goes to. Null for every other route.
+    /// </summary>
+    public TokenPool? Pool { get; init; }
+
     /// <summary>The calling client's kind; null for a direct call.</summary>
     public string? ClientKind => Client?.Kind;
 
@@ -57,10 +63,10 @@ public interface IModelProtocolResolver
 
 /// <summary>
 /// Authenticates the gateway token (plan §6.1, tokens) and resolves the provider: "&lt;token&gt;.&lt;kind&gt;" routes through
-/// that client's bindings, a bare token is a direct call to the token's own default provider.
+/// that client's bindings, a bare token is a direct call to the token's own default provider or provider pool.
 /// Tokens are looked up by prefix and compared by hash in constant time.
 /// </summary>
-public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, SettingsService settings)
+public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, SettingsService settings, PoolRouting pools)
 {
     public async Task<GatewayRoute> ResolveAsync(HttpRequest request, CancellationToken ct)
     {
@@ -106,6 +112,7 @@ public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, Setti
 
         if (kind is null)
         {
+            if (token.Pool() is { } pool) return await PoolRouteAsync(token, pool, ct);
             if (token.ProviderId is null)
                 throw new GatewayException(503, "api_error", $"令牌 {token.Name} 没有设置默认提供商，无法直接调用。请在 Astra 的「令牌」页面为它选择提供商，或通过已启用的客户端使用。");
             var direct = await db.Providers.GetAsync(token.ProviderId, ct)
@@ -135,13 +142,36 @@ public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, Setti
     /// <summary>
     /// Picks the provider for the requested model among the route's targets (see <see cref="ClientRouting"/>): the
     /// first serving <paramref name="modelId"/> (a <see cref="GatewayRoute.ClientModelFor"/> id) as an enabled model or
-    /// through its model mapping, else the primary. A route with a single target is returned unchanged.
+    /// through its model mapping, else the primary. A route with a single target is returned unchanged. A pool route gets
+    /// the member its strategy would pick first (<see cref="PoolRouting"/>, read-only); the generation pipeline plans the
+    /// pool itself, with failover.
     /// </summary>
     public async Task<GatewayRoute> ForModelAsync(GatewayRoute route, string modelId, bool isClaudeCode, CancellationToken ct)
     {
+        if (route.Pool is not null)
+        {
+            // A read-only preview of the pool's choice: nothing rotates, no probe is claimed.
+            using var plan = await pools.PlanAsync(route, modelId, isClaudeCode, null, commit: false, ct);
+            return route with { Provider = plan.Order[0].Provider, AccountId = plan.Order[0].AccountId };
+        }
         if (route.Targets.Count < 2) return route;
         var match = await routing.MatchAsync(route.Targets, modelId, isClaudeCode, ct);
         return match is null ? route : route with { Provider = match.Provider, AccountId = match.AccountId };
+    }
+
+    /// <summary>
+    /// A direct call of a token with a provider pool: its usable members in pool order (missing or unusable providers are
+    /// skipped). The refusal when none is left names no member — the caller may be someone the token was shared with.
+    /// </summary>
+    private async Task<GatewayRoute> PoolRouteAsync(TokenRecord token, TokenPool pool, CancellationToken ct)
+    {
+        var targets = new List<RouteTarget>();
+        foreach (var member in pool.Members)
+            if (await db.Providers.GetAsync(member.ProviderId, ct) is { } provider && ClientRouting.IsUsable(provider))
+                targets.Add(new RouteTarget(provider, member.AccountId));
+        if (targets.Count == 0)
+            throw new GatewayException(503, "api_error", $"令牌 {token.Name} 的提供商池中没有可用的提供商。请在 Astra 的「令牌」页面检查提供商池。");
+        return new GatewayRoute(token, null, targets[0].AccountId, targets[0].Provider) { Targets = targets, Pool = pool };
     }
 
     private static Provider RequireUsable(Provider provider)

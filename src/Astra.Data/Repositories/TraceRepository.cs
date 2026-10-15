@@ -193,21 +193,40 @@ public sealed class TraceRepository(SqliteConnectionFactory factory)
             FROM requests WHERE started_at_utc >= @from
             GROUP BY client_kind
             """, p)).ToList();
+        // Requests and failovers count for the provider that answered; attempts and rate limits for the provider each
+        // attempt went to (its astra.provider.id): a provider-pool request's failed attempt belongs to the member that
+        // failed (issue #2). Spans recorded before attempts named their provider fall back to the request's.
         var providers = (await conn.QueryAsync<TraceProviderStat>("""
             SELECT r.provider_id AS ProviderId, MAX(r.provider_name) AS ProviderName, COUNT(*) AS Requests,
                    COALESCE(SUM(CASE WHEN r.status <> 'success' THEN 1 ELSE 0 END), 0) AS Errors,
-                   COALESCE(SUM(a.attempts), 0) AS Attempts,
-                   COALESCE(SUM(a.rate_limited), 0) AS RateLimited,
+                   0 AS Attempts, 0 AS RateLimited,
                    COALESCE(SUM(CASE WHEN a.attempts > 1 THEN 1 ELSE 0 END), 0) AS Failovers
             FROM requests r
             LEFT JOIN (
-                SELECT request_id, COUNT(*) AS attempts,
-                       SUM(CASE WHEN json_extract(attributes_json, '$."http.response.status_code"') = 429 THEN 1 ELSE 0 END) AS rate_limited
-                FROM trace_spans WHERE name = 'upstream.attempt' GROUP BY request_id
+                SELECT request_id, COUNT(*) AS attempts FROM trace_spans WHERE name = 'upstream.attempt' GROUP BY request_id
             ) a ON a.request_id = r.id
             WHERE r.started_at_utc >= @from AND r.provider_id IS NOT NULL
             GROUP BY r.provider_id
             """, p)).ToList();
+        var attempted = (await conn.QueryAsync<TraceProviderStat>("""
+            SELECT COALESCE(json_extract(s.attributes_json, '$."astra.provider.id"'), r.provider_id) AS ProviderId,
+                   COALESCE(MAX(json_extract(s.attributes_json, '$."astra.provider.name"')), MAX(r.provider_name)) AS ProviderName,
+                   0 AS Requests, 0 AS Errors, COUNT(*) AS Attempts,
+                   COALESCE(SUM(CASE WHEN json_extract(s.attributes_json, '$."http.response.status_code"') = 429 THEN 1 ELSE 0 END), 0) AS RateLimited,
+                   0 AS Failovers
+            FROM trace_spans s JOIN requests r ON r.id = s.request_id
+            WHERE s.name = 'upstream.attempt' AND r.started_at_utc >= @from
+            GROUP BY 1
+            """, p)).ToList();
+        foreach (var a in attempted.Where(a => a.ProviderId is not null))
+        {
+            if (providers.Find(x => x.ProviderId == a.ProviderId) is { } stat)
+            {
+                stat.Attempts = a.Attempts;
+                stat.RateLimited = a.RateLimited;
+            }
+            else providers.Add(a);
+        }
         var timings = (await conn.QueryAsync<TraceTimingSample>("""
             SELECT r.provider_id AS ProviderId, r.ttfb_ms AS TtfbMs,
                    (SELECT MIN(s.start_us) FROM trace_spans s WHERE s.request_id = r.id AND s.name = 'upstream.attempt') AS FirstAttemptUs
@@ -224,14 +243,14 @@ public sealed class TraceRepository(SqliteConnectionFactory factory)
               AND s.name IN ('gateway.route', 'gateway.middleware', 'gateway.privacy', 'gateway.resolve', 'gateway.encode')
             """, p)).ToList();
         var accounts = (await conn.QueryAsync<TraceAccountAttempt>("""
-            SELECT r.provider_id AS ProviderId,
+            SELECT COALESCE(json_extract(s.attributes_json, '$."astra.provider.id"'), r.provider_id) AS ProviderId,
                    json_extract(s.attributes_json, '$."astra.account.id"') AS AccountId,
                    MAX(r.started_at_utc) AS AtUtc,
                    s.attributes_json AS AttributesJson
             FROM trace_spans s JOIN requests r ON r.id = s.request_id
             WHERE s.name = 'upstream.attempt' AND r.started_at_utc >= @from
               AND json_extract(s.attributes_json, '$."astra.account.id"') IS NOT NULL
-            GROUP BY r.provider_id, json_extract(s.attributes_json, '$."astra.account.id"')
+            GROUP BY 1, json_extract(s.attributes_json, '$."astra.account.id"')
             """, p)).ToList();
         return new TraceTopologyData { Clients = clients, Providers = providers, Timings = timings, Stages = stages, AccountAttempts = accounts };
     }

@@ -21,6 +21,8 @@ const hookSpies = vi.hoisted(() => ({
   /** Overrides the page's client list for one test; reset before each. */
   clients: undefined as ClientInfo[] | undefined,
   repair: vi.fn(),
+  /** Overrides the models the client's providers offer for one test; reset before each. */
+  models: undefined as string[] | undefined,
 }));
 
 const directState = (over: Record<string, unknown> = {}) => ({
@@ -62,7 +64,7 @@ vi.mock('../api/hooks', () => ({
   useSelectClaudeDirect: () => ({ mutate: hookSpies.select, isPending: false }),
   useClients: () => ({ data: hookSpies.clients ?? clients, isLoading: false, isError: false, error: null }),
   useProviders: () => ({ data: providers, isLoading: false, isError: false, error: null }),
-  useClientModels: () => ({ data: ['claude-sonnet-4-5'], isLoading: false }),
+  useClientModels: () => ({ data: hookSpies.models ?? ['claude-sonnet-4-5'], isLoading: false }),
   useSetBinding: () => ({ mutate: vi.fn(), isPending: false }),
   useSetBindings: () => ({ mutate: vi.fn(), isPending: false }),
   useDisableClient: () => ({ mutate: vi.fn(), isPending: false }),
@@ -251,6 +253,7 @@ beforeEach(() => {
   hookSpies.enabled.mockClear();
   hookSpies.clients = undefined;
   hookSpies.repair.mockClear();
+  hookSpies.models = undefined;
   hookSpies.requestsEnabled.length = 0;
   hookSpies.requestsLive.length = 0;
 });
@@ -560,5 +563,43 @@ describe('Config repair', () => {
     showPage();
     expect(screen.queryByText(/can't read this config file/)).toBeNull();
     expect(screen.queryByRole('button', { name: t('clients.repair.action') })).toBeNull();
+  });
+});
+
+describe('Claude Desktop role map', () => {
+  const claudeDesktop = (over: Partial<ClientInfo> = {}) =>
+    claudeCode({ kind: 'claude-desktop', name: 'Claude Desktop', providerId: 'p1', ...over });
+  // The trigger also renders a hidden copy of its label, so its text holds the value twice.
+  const roleValue = (role: 'sonnet' | 'opus' | 'haiku') => screen.getByRole('combobox', { name: t(`clients.role.${role}`) }).textContent;
+
+  it('prefills the roles from the provider models so enabling is one click', () => {
+    hookSpies.models = ['deepseek-flash', 'deepseek-v4-pro'];
+    hookSpies.clients = [codex(), claudeDesktop()];
+    showPage('/clients/claude-desktop');
+    expect(roleValue('sonnet')).toContain('deepseek-v4-pro');
+    expect(roleValue('opus')).toContain('deepseek-v4-pro');
+    expect(roleValue('haiku')).toContain('deepseek-flash');
+    expect(screen.getByRole('button', { name: t('clients.enable') })).toBeEnabled();
+    expect(screen.queryByText(t('clients.roleMapHint'))).toBeNull();
+  });
+
+  it('keeps a saved role map as it is', () => {
+    hookSpies.models = ['deepseek-flash', 'deepseek-v4-pro'];
+    hookSpies.clients = [codex(), claudeDesktop({ extras: { roleMap: { haiku: 'deepseek-v4-pro' } } })];
+    showPage('/clients/claude-desktop');
+    expect(roleValue('haiku')).toContain('deepseek-v4-pro');
+    expect(roleValue('sonnet')).toContain(t('clients.modelUnset'));
+  });
+
+  it('says why enabling is blocked when there is nothing to prefill, and jumps to the role map', () => {
+    hookSpies.models = [];
+    hookSpies.clients = [codex(), claudeDesktop()];
+    showPage('/clients/claude-desktop');
+    expect(screen.getByRole('button', { name: t('clients.enable') })).toBeDisabled();
+    expect(screen.getByText(t('clients.roleMapHint'))).toBeInTheDocument();
+
+    const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
+    fireEvent.click(screen.getByRole('button', { name: t('clients.roleMapGoto') }));
+    expect(scroll.mock.contexts[0]).toBe(document.getElementById('client-role-map'));
   });
 });

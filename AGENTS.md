@@ -74,7 +74,11 @@ Node (run `pnpm install` first; CI uses `pnpm install --frozen-lockfile`):
 - All packages: `pnpm -r --if-present lint` / `typecheck` / `test` / `build`.
 - One package: `pnpm --filter astragate test`, `pnpm --filter @aidotnet/web dev`, etc.
 - Version gate: `node scripts/sync-versions.mjs --check` (read-only); write mode also rewrites
-  `<Version>` in `Directory.Build.props`.
+  `<Version>` in `Directory.Build.props`. Versions are `x.y.z` (stable) or `x.y.z-preview.N`
+  (preview) only — `scripts/release-channel.mjs` holds the rule and derives the channel.
+- Releasing: follow `.agents/skills/release/SKILL.md` (cutting a stable or preview release),
+  `.agents/skills/release-notes/SKILL.md` (the CHANGELOG section) and
+  `.agents/skills/release-troubleshoot/SKILL.md` (a failed or partial run).
 
 Command sources: package.json scripts plus `.github/workflows/ci.yml` and `release.yml`.
 
@@ -206,6 +210,13 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 - Secrets (provider API keys, local client keys) go through `ISecretProtector` (DataProtection);
   DTOs expose only masks (`ProviderDto.HasApiKey` / `ApiKeyMasked`, `Api/ProviderEndpoints.cs`).
   Never log secrets or echo them back.
+- Token-holder views (`src/Astra.Gateway/Http/KeyInfoEndpoints.cs`: `/v1/astra/key`, `/key/stats`, `/key/requests`,
+  the legacy `/dashboard/billing/*`; the `/key` page) authenticate with the token itself and live under `/v1`, because
+  `/api` needs an admin session off this machine. They show that token's own data only: request metadata and the model
+  the client asked for (`requested_model`) — never a provider or account, the upstream or catalog model, `error_message`
+  (map it through `RequestErrorCategories`), the client IP, the user agent, bodies or trace ids. So never hand them the
+  admin request / stats DTOs or the `COALESCE(system_model_id, requested_model)` queries; `KeySelfServiceTests` and
+  `TokenLimitTests` assert the raw JSON.
 
 ## Desktop app shell
 
@@ -294,7 +305,10 @@ runtime needed on the target).
    specifiers); `release.yml` fails the publish if any drift or a tag/version mismatch remains.
    Add a `## [x.y.z] - date` section to `CHANGELOG.md` in the same change: pushing the bump to
    `main` triggers `release.yml`, which refuses to publish without it and uses it as the GitHub
-   Release, download-page and update-manifest notes. `ServerOptions.ApiVersion` ("1.0") is
+   Release, download-page and update-manifest notes. The version picks the release channel
+   (`x.y.z` stable, `x.y.z-preview.N` preview; `.agents/skills/release/references/channels.md`):
+   it decides the npm dist-tag, the feed directory, the GitHub prerelease flag and the Docker tags,
+   so there is no separate channel switch to set. `ServerOptions.ApiVersion` ("1.0") is
    deliberately **not** synced — it is a
    protocol version, and bumping its major breaks the desktop handshake
    (`desktop/src/shared/version.ts`, `EXPECTED_API_MAJOR`).
@@ -370,6 +384,16 @@ runtime needed on the target).
     site, so check that step's log rather than assuming a release reached the feed. `release.yml`
     is also **two-phase**: a `main` push whose `cli/package.json` version is already on npm stops
     after the `version` job, so the `build` and `publish` jobs never run in that case.
+    Channels: uploads carry `x-astra-channel` (`stable` | `preview`, refused when it disagrees with
+    the version), and the `preview` feed offers preview releases plus every stable (`FEED_SOURCES`,
+    `docs/lib/releases.ts`). The installers go up before npm, the server-update `latest.json` only
+    after npm serves every package it names; the routes serve the newest release that has the file
+    asked for. Clients follow the server's `updateChannel` setting (`UpdateChannels`, default
+    stable): the server check, the desktop (manifest + DMG feed, `desktop/src/shared/updateChannel.ts`)
+    and `astra update` (`--channel` overrides once; the self-update installs the manifest's exact
+    version). The version ordering is semver precedence in four places that move together:
+    `scripts/release-channel.mjs`, `UpdateCheckService.IsNewer`, `packages/update-core/src/version.ts`
+    and `docs/lib/releases.ts` `compareVersions`.
 14. **A `docs/` page or sidebar entry**: the folder's `meta.json` carries `title`/`description`/
     `icon`/`defaultOpen` and lists its `pages` (with `---[Icon]Name---` separators between
     sub-groups); a new page is added there and, when it belongs to a module, to the root
@@ -378,15 +402,17 @@ runtime needed on the target).
     recorded by `GatewayPipeline` through `src/Astra.Gateway/Tracing` (`RequestTrace`; the agent links — session, turn,
     parent call — from `TraceKeys` + `TraceLinker`) and written to `trace_spans` with the request row
     (`RequestRepository.InsertBatchAsync`, migration 0017). The names and the attribute keys the read side depends on
-    (`http.response.status_code`, `astra.account.id`, `astra.ratelimit.*`, `astra.response.*`, …) are also matched by
-    SQL in `TraceRepository`, by `/api/traces` (`TraceEndpoints`) and by the web views (`web/src/components/traces/model.ts`
+    (`http.response.status_code`, `astra.account.id`, `astra.provider.id`, `astra.attempt.retry`, `astra.ratelimit.*`,
+    `astra.response.*`, …) are also matched by SQL in `TraceRepository` and `RequestRepository.ProviderStatsAsync`, by
+    `/api/traces` (`TraceEndpoints`) and by the web views (`web/src/components/traces/model.ts`
     `SPAN` and the inspectors): renaming one changes all of them, and `docs/content/docs/console/traces.mdx` lists what is
     recorded. Upstream requests never carry trace context: `GatewayHttpClients` sets a no-output
     `ActivityHeadersPropagator`, and `UpstreamTraceHeadersTests` checks it with the real handler (the integration
     fixture swaps the handler out, so it cannot).
 
 16. **Install scripts** (`docs/public/install.sh`, `install.ps1`): they consume the release feed
-    (`latest.json`, `releases.json`, `/v/<version>/<file>` names from `canonicalFileName`), the npm server
+    (`<channel>/latest.json`, `releases.json`, `/v/<version>/<file>` names from `canonicalFileName`;
+    channel `stable` unless `--preview` / `ASTRA_CHANNEL=preview`), the npm server
     package layout (`bin/astra-server`, companions, `wwwroot/`) and the managed layout `update-core` owns
     (`~/.astra/server/astra-server-<version>`, `install.json` — they preserve its `desktop*` fields). Change
     them together with those, and with `docs/content/docs/guide/install.mdx`, both READMEs and the download page.
@@ -397,6 +423,16 @@ runtime needed on the target).
     argv and file formats change in both (`AutostartTests.Entry_formats_match_the_cli` and `cli/test/autostart.test.ts`
     pin the text), plus `docs/content/docs/console/settings.mdx` and `cli/service.mdx`. The desktop app's own login
     item is separate (`desktop/src/shared/loginItem.ts`; Linux uses an XDG autostart entry).
+18. **Token provider pools** (GitHub issue #2): `TokenPool` (`src/Astra.Core/Tokens/TokenPool.cs`, stored in
+    `tokens.pool_json`, migration 0018) applies to bare-token direct calls only. `TokenService.ApplyPoolAsync` stores it
+    canonically — one member is just `provider_id` / `account_id`, two or more also mirror the first member there so an
+    older binary still routes; keep that. A new strategy is a `TokenPoolStrategies` constant, its branch in
+    `ProviderPoolScheduler` (`Tiers` / `Pick` / `Rest`), the web editor's `POOL_STRATEGIES` and `expectedShares`
+    (`web/src/components/TokenPoolEditor.tsx`, which mirrors the scheduler), zh/en `tokens.strategy.<id>[.hint]`, and the
+    strategy table in `docs/content/docs/console/tokens.mdx`; what fails over (`ProviderFailover.Classify`) and how long a
+    provider cools (`ProviderHealth`) are the failover table there — change them together. In `GatewayPipeline`, while
+    another pool attempt may follow, never rewrite the client's guarded tree in place and never re-read the request
+    bytes (they are the unredacted original once the privacy guard rewrote the tree): `PrepareAsync` clones instead.
 
 ## Conventions
 
@@ -465,7 +501,9 @@ runtime needed on the target).
   cli and desktop do this today via their devDependency.
 - Release publish order matters: `@aidotnet/server-*` and `@aidotnet/desktop-*` packages must
   be on npm before the `astragate` / `@aidotnet/astra-gate` CLI tarballs, because the CLI's `optionalDependencies` resolve
-  at install time (`.github/workflows/release.yml`). Scoped tarballs are named without `@`/`+`
+  at install time (`.github/workflows/release.yml`), and the server-update manifest goes to the feed after all of
+  them. Every package is published with `--tag <latest|preview>`: a prerelease published without a tag becomes
+  `latest`. Scoped tarballs are named without `@`/`+`
   (`aidotnet-server-*.tgz`) and the workflow globs rely on that. The `docker` job runs after
   `publish` (it unpacks the `pkg-linux-*` artifacts), so an image never exists for an unreleased version.
 - Update flow ownership: the server only checks the feed (`UpdateCheckWorker`,

@@ -17,9 +17,13 @@ function usesShell(command: string): boolean {
   return process.platform === 'win32' && command.endsWith('.cmd');
 }
 
-export async function npmInstallGlobal(): Promise<{ code: number | null; stderr: string }> {
+/**
+ * `npm install -g <this package>@<version>`: the exact version the update feed named (the server
+ * was just updated to it), not a dist-tag — `latest` would move a preview install back to stable.
+ */
+export async function npmInstallGlobal(version: string): Promise<{ code: number | null; stderr: string }> {
   const npm = locateNpm();
-  const full = [...npm.args, 'install', '-g', `${PACKAGE_NAME}@latest`, '--no-audit', '--no-fund', '--loglevel', 'error'];
+  const full = [...npm.args, 'install', '-g', `${PACKAGE_NAME}@${version}`, '--no-audit', '--no-fund', '--loglevel', 'error'];
   return new Promise((resolve, reject) => {
     const child = spawn(npm.command, full, {
       stdio: 'inherit',

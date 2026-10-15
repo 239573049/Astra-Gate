@@ -315,7 +315,7 @@ function GeneralSettings() {
 }
 
 /**
- * Update feed rows: auto-check toggle plus a manual check button. In the
+ * Update feed rows: auto-check and preview-channel toggles plus a manual check button. In the
  * desktop app an available update gets an apply button that runs the shared
  * update engine over the bridge (server first, then the app per track); the
  * plain web UI never installs anything itself and points at the tray menu
@@ -326,15 +326,22 @@ function UpdateRows() {
   const { toast } = useFeedback();
   const qc = useQueryClient();
   const update = useUpdateSettings();
+  const settings = useSettings();
   const status = useUpdateStatus();
   const check = useCheckUpdate();
   const s = status.data;
+  // The saved setting, not the status: the status only changes once a feed check returns (up to 15 s).
+  const channel = settings.data?.updateChannel ?? s?.channel;
   const updates = getBridge()?.updates ?? null;
   const [applying, setApplying] = useState(false);
 
   const runCheck = () =>
     check.mutate(undefined, {
-      onSuccess: (r) => toast(r.available ? t('settings.updateAvailable', { version: r.available }) : t('settings.upToDate')),
+      // A failed feed fetch still answers 200 with the previous result plus `error`: say it failed.
+      onSuccess: (r) =>
+        r.error
+          ? toast(t('settings.updateCheckFailed', { error: r.error }), 'error')
+          : toast(r.available ? t('settings.updateAvailable', { version: r.available }) : t('settings.upToDate')),
       onError: (e) => toast(errorText(e), 'error'),
     });
 
@@ -376,6 +383,18 @@ function UpdateRows() {
           checked={s?.autoCheck ?? true}
           label={t('settings.autoCheck')}
           onChange={(autoCheck) => update.mutate({ updateAutoCheck: autoCheck }, { onError: (e) => toast(errorText(e), 'error') })}
+        />
+      </Row>
+      <Row label={t('settings.previewUpdates')} detail={t('settings.previewUpdatesHint')}>
+        <Switch
+          checked={channel === 'preview'}
+          label={t('settings.previewUpdates')}
+          disabled={!channel || update.isPending}
+          // Flips as soon as the setting is saved; the check for the new channel runs behind it
+          // (the check row shows its spinner).
+          onChange={(on) =>
+            update.mutate({ updateChannel: on ? 'preview' : 'stable' }, { onSuccess: runCheck, onError: (e) => toast(errorText(e), 'error') })
+          }
         />
       </Row>
       <Row

@@ -1,10 +1,10 @@
-import { ChevronRight, Copy, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, Trash2 } from 'lucide-react';
+import { BarChart3, ChevronRight, Copy, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router';
 
 import {
   useCreateToken,
   useDeleteToken,
-  useProviderAccounts,
   useProviders,
   useResetToken,
   useRevealToken,
@@ -18,7 +18,8 @@ import { Alert } from '../components/arc/alert/alert';
 import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { CLIENT_META, ClientGlyph } from '../components/icons';
 import { Page } from '../components/layout/Page';
-import { Badge, Button, EmptyState, Field, Input, NumberInput, Segmented, Spinner } from '../components/ui/controls';
+import { healthTone, poolDraftOf, poolInputOf, TokenPoolEditor, useHealthLabel, type PoolDraft } from '../components/TokenPoolEditor';
+import { Badge, Button, Dot, EmptyState, Field, Input, NumberInput, Segmented, Spinner } from '../components/ui/controls';
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { formatDateTime, formatPercent, formatTime, formatTokens, formatTps, formatUsd } from '../lib/format';
@@ -84,6 +85,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
   const remove = useDeleteToken();
   const [open, setOpen] = useState(defaultOpen);
   const direct = (providers.data ?? []).find((p) => p.id === token.providerId);
+  const healthLabel = useHealthLabel();
   const detailId = `token-detail-${token.id}`;
 
   const reportRewrite = (r: TokenMutationResult, done: string) => {
@@ -153,6 +155,14 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               {token.isDefault && <Badge tone="accent">{t('tokens.default')}</Badge>}
               {!token.enabled && <Badge tone="orange">{t('tokens.disabledBadge')}</Badge>}
               {token.limitUsage.some((u) => u.exhausted) && <Badge tone="orange">{t('tokens.limitExhausted')}</Badge>}
+              {token.pool && (
+                <span className="inline-flex items-center gap-1.5" title={token.pool.members.map((m) => m.providerId).join(', ')}>
+                  <Badge>{t('tokens.pool.summary', { count: token.pool.members.length, strategy: t(`tokens.strategy.${token.pool.strategy}`) })}</Badge>
+                  {token.pool.members.map((m) => (
+                    <Dot key={m.providerId} tone={healthTone(m.health.state)} />
+                  ))}
+                </span>
+              )}
             </div>
             <div className="mt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <code className="font-mono text-[12px] text-[var(--text-secondary)] selectable">{token.keyMasked}</code>
@@ -209,8 +219,19 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               </dd>
             </div>
             <div className="min-w-0">
-              <dt className="text-[var(--text-muted)]">{t('tokens.directProvider')}</dt>
-              <dd className="mt-0.5 truncate text-[var(--text-secondary)]">{direct?.name ?? (token.providerId ? token.providerId : t('tokens.directNone'))}</dd>
+              <dt className="text-[var(--text-muted)]">{token.pool ? t('tokens.pool.title') : t('tokens.directProvider')}</dt>
+              {token.pool ? (
+                <dd className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[var(--text-secondary)]">
+                  {token.pool.members.map((m) => (
+                    <span key={m.providerId} className="inline-flex items-center gap-1.5" title={healthLabel(m.health)}>
+                      <Dot tone={healthTone(m.health.state)} />
+                      {(providers.data ?? []).find((p) => p.id === m.providerId)?.name ?? m.providerId}
+                    </span>
+                  ))}
+                </dd>
+              ) : (
+                <dd className="mt-0.5 truncate text-[var(--text-secondary)]">{direct?.name ?? (token.providerId ? token.providerId : t('tokens.directNone'))}</dd>
+              )}
             </div>
             <div className="min-w-0">
               <dt className="text-[var(--text-muted)]">{t('tokens.allowedClients')}</dt>
@@ -229,6 +250,14 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
           </dl>
           <LimitsSummary token={token} />
           <StatsTable today={token.today} total={token.total} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link to={`/tokens/${encodeURIComponent(token.id)}`}>
+              <Button size="sm" icon={<BarChart3 className="size-3.5" />}>{t('tokens.detail.open')}</Button>
+            </Link>
+            <Link to={`/requests?token=${encodeURIComponent(token.id)}`}>
+              <Button size="sm" icon={<ScrollText className="size-3.5" />}>{t('tokens.detail.viewLogs')}</Button>
+            </Link>
+          </div>
         </div>
       )}
     </article>
@@ -411,24 +440,20 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
   const { t } = useI18n();
   const { toast } = useFeedback();
   const update = useUpdateToken();
-  const { providers, options } = useProviderOptions();
+  const providers = useProviders();
   const [name, setName] = useState('');
-  const [providerId, setProviderId] = useState('');
-  const [accountId, setAccountId] = useState('');
+  const [pool, setPool] = useState<PoolDraft | null>(null);
   const [budgets, setBudgets] = useState<DraftBudget[]>([]);
   const [rpm, setRpm] = useState<number | null>(null);
   const [clientsMode, setClientsMode] = useState<'any' | 'only'>('any');
   const [allowed, setAllowed] = useState<ClientKind[]>([]);
-  const provider = providers.find((p) => p.id === providerId);
-  const isSubscription = provider?.authScheme === 'oauth-subscription' || provider?.authScheme === 'plugin';
-  const accounts = useProviderAccounts(provider?.id, isSubscription);
   const duplicate = new Set(budgets.map((b) => `${b.metric}:${b.period}`)).size < budgets.length;
+  const health = new Map((token?.pool?.members ?? []).map((m) => [m.providerId, m.health]));
 
   useEffect(() => {
     if (!token) return;
     setName(token.name);
-    setProviderId(token.providerId ?? '');
-    setAccountId(token.accountId ?? '');
+    setPool(poolDraftOf(token));
     setBudgets(token.limits?.budgets.map((b) => ({ ...b })) ?? []);
     setRpm(token.limits?.rpm ?? null);
     setClientsMode(token.allowedClients == null ? 'any' : 'only');
@@ -443,8 +468,7 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
       {
         id: token.id,
         name: name.trim(),
-        providerId: providerId || null,
-        accountId: isSubscription ? accountId || null : null,
+        ...(pool ? { pool: poolInputOf(pool, providers.data ?? []) } : {}),
         limits,
         allowedClients: clientsMode === 'any' ? null : allowed,
       },
@@ -476,25 +500,9 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
         <Field label={t('tokens.name')}>
           <Input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
         </Field>
-        <Field label={t('tokens.directProvider')}>
-          <Select
-            value={providerId}
-            onChange={(v) => {
-              setProviderId(v);
-              setAccountId('');
-            }}
-            options={options}
-          />
+        <Field label={t('tokens.pool.title')} hint={t('tokens.pool.hint')}>
+          {pool && <TokenPoolEditor draft={pool} onChange={setPool} providers={providers.data ?? []} health={health} />}
         </Field>
-        {isSubscription && (
-          <Field label={t('tokens.directAccount')}>
-            <Select
-              value={accountId}
-              onChange={setAccountId}
-              options={[{ value: '', label: t('clients.accountDefault') }, ...(accounts.data ?? []).map((a) => ({ value: a.id, label: a.displayName || a.id }))]}
-            />
-          </Field>
-        )}
         <Field label={t('tokens.limits')} hint={t('tokens.limitsHint')} error={duplicate ? t('tokens.limitDuplicate') : undefined}>
           <BudgetsEditor budgets={budgets} onChange={setBudgets} />
         </Field>

@@ -1,4 +1,4 @@
-import { DEFAULT_CHANNEL, DEFAULT_FEED_URL, fetchManifest, type UpdateManifest } from './manifest.js';
+import { DEFAULT_FEED_URL, fetchManifest, normalizeChannel, type UpdateChannel, type UpdateManifest } from './manifest.js';
 import { isNewerVersion } from './version.js';
 
 export interface ServerUpdateStatus {
@@ -15,7 +15,9 @@ export interface ServerUpdateStatus {
 /**
  * Checks for a server update. Prefers the running server's /api/update/status
  * (it caches feed results and works even when the feed is unreachable from the
- * client machine); falls back to fetching the manifest directly.
+ * client machine); falls back to fetching the manifest directly. `channel` is
+ * the one that answered: the server's updateChannel setting, else `o.channel`
+ * (default stable) — fetch the matching manifest with it.
  */
 export async function checkForServerUpdate(o: {
   currentVersion: string;
@@ -26,7 +28,13 @@ export async function checkForServerUpdate(o: {
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
   userAgent?: string;
-}): Promise<{ availableVersion: string | null; notes: string | null; source: 'server' | 'feed'; manifest?: UpdateManifest }> {
+}): Promise<{
+  availableVersion: string | null;
+  notes: string | null;
+  source: 'server' | 'feed';
+  channel: UpdateChannel;
+  manifest?: UpdateManifest;
+}> {
   const doFetch = o.fetchImpl ?? globalThis.fetch;
   if (o.baseUrl && doFetch) {
     try {
@@ -39,6 +47,7 @@ export async function checkForServerUpdate(o: {
           availableVersion: status.available ?? null,
           notes: status.notes ?? null,
           source: 'server',
+          channel: normalizeChannel(status.channel ?? o.channel),
         };
       }
     } catch {
@@ -46,9 +55,10 @@ export async function checkForServerUpdate(o: {
     }
   }
 
+  const channel = normalizeChannel(o.channel);
   const manifest = await fetchManifest({
     feedUrl: o.feedUrl ?? DEFAULT_FEED_URL,
-    channel: o.channel ?? DEFAULT_CHANNEL,
+    channel,
     timeoutMs: o.timeoutMs,
     fetchImpl: o.fetchImpl,
     userAgent: o.userAgent,
@@ -57,6 +67,7 @@ export async function checkForServerUpdate(o: {
     availableVersion: isNewerVersion(manifest.version, o.currentVersion) ? manifest.version : null,
     notes: manifest.notes ?? null,
     source: 'feed',
+    channel,
     manifest,
   };
 }

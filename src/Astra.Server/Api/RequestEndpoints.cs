@@ -75,6 +75,14 @@ public static class RequestEndpoints
     public sealed record DailyActivityDto(string Day, long Requests);
 
     /// <summary>
+    /// One provider over a range: the requests it answered and provider-pool failovers away from it (its failed attempts)
+    /// and to it (requests it took over). <see cref="Name"/> is the provider's current name, else the logged one.
+    /// </summary>
+    public sealed record ProviderStatDto(
+        string ProviderId, string? Name, long Requests, long SuccessRequests, double SuccessRate, decimal CostUsd,
+        long InputTokens, long OutputTokens, double? AvgTtftMs, long FailoversOut, long FailoversIn);
+
+    /// <summary>
     /// Live request-log rate over a trailing window, normalized to per minute: requests (including in-flight ones)
     /// and tokens (completed requests only — usage settles when a request finishes), plus the window's cache-hit
     /// ratio (null when the window has no input tokens).
@@ -204,6 +212,17 @@ public static class RequestEndpoints
                 t.TotalInputTokens + t.TotalOutputTokens, t.TotalInputTokens, t.TotalCacheReadTokens)).ToList());
         });
 
+        // Per provider (a token's pool members, issue #2): answered requests, success, cost, TTFT and failovers.
+        app.MapGet("/api/stats/providers", async (string? range, string? client, string? token, AstraDatabase db, CancellationToken ct) =>
+        {
+            var (_, from, to) = Range(range);
+            var names = (await db.Providers.ListAsync(ct)).ToDictionary(p => p.Id, p => p.Name);
+            var stats = await db.Requests.ProviderStatsAsync(from, to, Str(client), Str(token), ct);
+            return Results.Ok(stats.Select(p => new ProviderStatDto(p.ProviderId, names.GetValueOrDefault(p.ProviderId) ?? p.ProviderName,
+                p.Requests, p.SuccessRequests, p.Requests == 0 ? 0 : (double)p.SuccessRequests / p.Requests, Money.FromNanos(p.CostNanoUsd),
+                p.InputTokens, p.OutputTokens, p.AvgTtftMs, p.FailoversOut, p.FailoversIn)).ToList());
+        });
+
         // Activity heatmap: request counts per local day over a fixed window ("days", 30-730), newest day inclusive.
         app.MapGet("/api/stats/activity-heatmap", async (int? days, string? client, string? token, int? tzOffset,
             AstraDatabase db, CancellationToken ct) =>
@@ -281,9 +300,8 @@ public static class RequestEndpoints
                             break;
                         case "streamIdleTimeoutSec": s.StreamIdleTimeoutSec = Math.Clamp(value?.GetValue<int>() ?? 300, 10, 3600); break;
                         case "updateChannel":
-                            var channel = value?.GetValue<string>();
-                            if (channel is "stable" or "beta") s.UpdateChannel = channel;
-                            else error = "updateChannel must be stable or beta";
+                            if (UpdateChannels.Parse(value?.GetValue<string>()) is { } channel) s.UpdateChannel = channel;
+                            else error = "updateChannel must be stable or preview";
                             break;
                         case "updateAutoCheck": s.UpdateAutoCheck = value?.GetValue<bool>() ?? true; break;
                         case "updateFeedUrl":
@@ -370,7 +388,7 @@ public static class RequestEndpoints
 
     private static SettingsDto ToSettings(AppSettings s, ServerOptions server, AstraPaths paths) => new(
         s.Locale, s.DebugBodies, s.BodyRetentionDays, s.RequestRetentionDays, s.EffortBudgets, s.StreamIdleTimeoutSec,
-        s.UpdateChannel, s.UpdateAutoCheck,
+        UpdateChannels.Normalize(s.UpdateChannel), s.UpdateAutoCheck,
         server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes, s.SubscriptionQuotaIntervalMinutes,
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,

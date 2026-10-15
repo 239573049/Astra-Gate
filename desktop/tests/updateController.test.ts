@@ -26,10 +26,13 @@ import { UpdateController, type UpdateControllerOptions } from '../src/update';
 
 const BASE = 'http://127.0.0.1:17321';
 const FEED = 'https://astra-gate.si/api/client-releases/stable/latest.json';
+const PREVIEW_FEED = 'https://astra-gate.si/api/client-releases/preview/latest.json';
 
 interface World {
   autoCheck: boolean;
   available: string | null;
+  /** The server's updateChannel setting; omitted from the status when undefined (older servers). */
+  channel?: string;
   calls: string[];
 }
 
@@ -41,11 +44,12 @@ function stubFetch(world: World): void {
       const method = init?.method ?? 'GET';
       world.calls.push(`${method} ${url}`);
       const json = (body: unknown): Response => new Response(JSON.stringify(body), { status: 200 });
-      if (url === `${BASE}/api/update/status`) {
-        return json({ current: '0.4.0', available: world.available, autoCheck: world.autoCheck });
+      const status = { current: '0.4.0', available: world.available, autoCheck: world.autoCheck, channel: world.channel };
+      if (url === `${BASE}/api/update/status`) return json(status);
+      if (url === `${BASE}/api/update/check`) return json(status);
+      if (url === (world.channel === 'preview' ? PREVIEW_FEED : FEED)) {
+        return json({ version: world.available ?? '0.4.0', apiVersion: '1.0', notes: 'release notes' });
       }
-      if (url === `${BASE}/api/update/check`) return json({});
-      if (url === FEED) return json({ version: world.available ?? '0.4.0', apiVersion: '1.0', notes: 'release notes' });
       throw new Error(`unexpected fetch ${method} ${url}`);
     }),
   );
@@ -111,6 +115,16 @@ describe('launch-time update check and reminder', () => {
     expect(electron.showMessageBox).toHaveBeenCalledTimes(1);
     expect(electron.showMessageBox.mock.calls[0]![0]).toMatchObject({ message: 'Astra 0.5.0 is available' });
     expect(store).toMatchObject({ version: '0.5.0', count: 1 });
+  });
+
+  it('follows the preview channel the user opted into', async () => {
+    world.channel = 'preview';
+    world.available = '0.5.0-preview.1';
+    const controller = launch({ reminder: undefined });
+    await controller.check();
+    expect(world.calls).toContain(`GET ${PREVIEW_FEED}`);
+    expect(world.calls).not.toContain(`GET ${FEED}`);
+    expect(controller.hasUpdate).toBe(true);
   });
 
   it('does not remind again on the next launch within the cooldown', async () => {

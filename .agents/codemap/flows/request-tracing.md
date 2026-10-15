@@ -23,7 +23,10 @@ stage of that call. The console's 链路追踪 views and `GET /api/traces/**` re
 3. Each stage of `HandleAsync` opens and closes a span on that trace: `gateway.route` (auth, routing, the token-limit
    check), `gateway.body`, `gateway.middleware` (only when a plugin ran), `gateway.privacy`, `gateway.resolve`
    (provider, model, capability discovery — timed on its own), `gateway.encode`, one `upstream.attempt` per send
-   (`TraceSpanKinds.Client`), and `gateway.response`. The names are `TraceSpanNames`
+   (`TraceSpanKinds.Client`, carrying `astra.provider.id` / `astra.provider.name`), and `gateway.response`. A provider-pool
+   failover repeats `gateway.resolve` / `gateway.encode` for the next member and marks the failed attempt
+   `astra.attempt.retry = provider_failover`; `TraceRepository.TopologyAsync` and `ProviderStatsAsync` credit each attempt
+   to its own provider, and the web request view takes the last resolve / encode span. The names are `TraceSpanNames`
    (`src/Astra.Core/Requests/TraceSpan.cs:TraceSpanNames`).
 4. `Tracing/TraceKeys.cs:TraceKeys` — `ChainOf`, `SessionOf` and `LastMessageOf` read the client's own body and
    headers **before** the privacy guard rewrites the tree and before any codec translates it, so the pass-through and

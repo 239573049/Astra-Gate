@@ -8,7 +8,7 @@ import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider, translate } from '../i18n';
 import { TokensPage } from '../pages/TokensPage';
 
-const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[], tunnel: undefined as unknown }));
+const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[], tunnel: undefined as unknown, providers: [] as unknown[] }));
 
 vi.mock('../api/hooks', () => {
   const idle = { mutate: vi.fn(), isPending: false };
@@ -16,7 +16,7 @@ vi.mock('../api/hooks', () => {
     useTokens: () => ({ data: spies.tokens, isLoading: false, isError: false }),
     useSettings: () => ({ data: { gatewayBaseUrl: 'http://astra.test:8787' } }),
     useTunnel: () => ({ data: spies.tunnel }),
-    useProviders: () => ({ data: [] }),
+    useProviders: () => ({ data: spies.providers }),
     useProviderAccounts: () => ({ data: [] }),
     useUpdateToken: () => ({ mutate: spies.update, isPending: false }),
     useCreateToken: () => idle,
@@ -32,6 +32,7 @@ const t = (key: Parameters<typeof translate>[1], vars?: Record<string, string | 
 vi.mock('../components/icons', () => ({
   CLIENT_META: { codex: { name: 'Codex' }, 'claude-code': { name: 'Claude Code' } },
   ClientGlyph: () => <span />,
+  ProviderIcon: () => <span />,
 }));
 
 vi.mock('../components/layout/AppShell', () => ({
@@ -81,6 +82,7 @@ beforeEach(() => {
   spies.update.mockReset();
   spies.tokens = [];
   spies.tunnel = undefined;
+  spies.providers = [];
 });
 afterEach(cleanup);
 
@@ -146,5 +148,60 @@ describe('token limits', () => {
       limits: { budgets: [{ metric: 'cost', period: 'month', limit: 25 }], rpm: 60 },
       allowedClients: ['codex'],
     });
+  });
+
+  it('shows a provider pool on the row and saves its strategy and weights', async () => {
+    spies.providers = [
+      { id: 'pa', name: 'Alpha', enabled: true, authScheme: 'bearer', modelCount: 3 },
+      { id: 'pb', name: 'Beta', enabled: true, authScheme: 'bearer', modelCount: 2 },
+    ];
+    spies.tokens = [
+      token({
+        providerId: 'pa',
+        pool: {
+          strategy: 'weighted', sticky: 'session', failover: true, maxAttempts: 3,
+          members: [
+            { providerId: 'pa', weight: 3, tier: 1, missing: false, health: { state: 'healthy' } },
+            { providerId: 'pb', weight: 1, tier: 1, missing: false, health: { state: 'cooling', until: '2026-10-15T06:32:00Z' } },
+          ],
+        },
+      }),
+    ];
+    show();
+    expect(screen.getByText(t('tokens.pool.summary', { count: 2, strategy: t('tokens.strategy.weighted') }))).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: t('common.more') }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: t('tokens.settings') }));
+    const weights = await screen.findAllByRole('spinbutton', { name: t('tokens.pool.weight') });
+    expect(weights).toHaveLength(2);
+    fireEvent.change(weights[0]!, { target: { value: '5' } });
+    // 5 : 1 → 83% / 17%.
+    expect(screen.getByText('83%')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: t('common.save') }));
+
+    await waitFor(() => expect(spies.update).toHaveBeenCalled());
+    const body = spies.update.mock.calls[0]![0];
+    expect(body).toMatchObject({
+      id: 'default',
+      pool: {
+        strategy: 'weighted', sticky: 'session', failover: true, maxAttempts: 3,
+        members: [{ providerId: 'pa', weight: 5, tier: 1 }, { providerId: 'pb', weight: 1, tier: 1 }],
+      },
+    });
+    expect(body).not.toHaveProperty('providerId');
+  });
+
+  it('turns a single direct provider into the first member of the editor', async () => {
+    spies.providers = [{ id: 'pa', name: 'Alpha', enabled: true, authScheme: 'bearer', modelCount: 3 }];
+    spies.tokens = [token({ providerId: 'pa' })];
+    show();
+    fireEvent.keyDown(screen.getByRole('button', { name: t('common.more') }), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('menuitem', { name: t('tokens.settings') }));
+    // One member: no strategy choice yet.
+    expect(await screen.findByRole('button', { name: t('tokens.pool.remove', { provider: 'Alpha' }) })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: t('tokens.strategy.weighted') })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: t('common.save') }));
+    await waitFor(() => expect(spies.update).toHaveBeenCalled());
+    expect(spies.update.mock.calls[0]![0].pool.members).toEqual([{ providerId: 'pa', accountId: null, weight: 1, tier: 1 }]);
   });
 });

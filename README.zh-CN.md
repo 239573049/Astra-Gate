@@ -29,6 +29,10 @@ OpenCode ─────┘                                       └─ OpenRou
   可警告、拦截或脱敏（发出时替换为占位符、返回时还原），原值永不出本机。
 - **多账号与订阅** — 同一服务商可添加多个提供商条目与订阅账号，客户端一键切换，
   无需重新配置。
+- **令牌提供商池** — 令牌的直接调用可以分配到多个提供商（主备、轮询、加权、分层、最少并发），
+  同一会话固定走同一提供商以保住提示缓存，遇到限流或出错时在回复开始前自动换下一个。
+- **按令牌的日志与统计** — 控制台可查看每个令牌的趋势、模型、提供商（含转移次数）和请求日志；
+  拿到令牌的人在 `/key` 页能查看它自己的额度、统计和请求记录，不会看到任何上游信息。
 - **本机优先** — API Key 用 DataProtection 加密存储在 `~/.astra/keys`；请求体与费用明细
   保存在本机 SQLite（`~/.astra/astra.db`）。不依赖任何云端账号。
 
@@ -41,7 +45,8 @@ curl -fsSL https://astra-gate.si/install.sh | bash          # macOS / Linux
 iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex   # Windows（PowerShell）
 ```
 
-脚本只安装 `astra-server`（不含 `astra` 命令行），所有下载都会校验发布源里的 sha256。
+脚本只安装 `astra-server`（不含 `astra` 命令行），所有下载都会校验发布源里的 sha256；加 `--preview`
+（Windows：`$env:ASTRA_CHANNEL = 'preview'`）安装预览版。预览版默认不推送，在 **设置 → 关于** 打开「接收预览版更新」后才会提供。
 需要 `astra` 命令行请用 npm：要求 Node.js ≥ 18，npm 会安装对应平台的服务端二进制，无需 .NET。
 
 ```bash
@@ -128,7 +133,7 @@ Zed 不会从设置文件读取 API Key，启用后需在 Zed 的提供商设置
 | `astra provider list\|add\|remove` | 管理上游提供商 |
 | `astra client list\|status\|enable\|disable` | 管理客户端接管 |
 | `astra config set-password` | 设置管理密码（绑定非回环地址前必须设置） |
-| `astra update [--check]` | 更新 Astra（及桌面端），随后重启服务 |
+| `astra update [--check] [--channel preview]` | 更新 Astra（及桌面端），随后重启服务 |
 | `astra restore-all [--purge]` | 离线还原全部受管客户端配置 |
 | `astra uninstall [--desktop] [--purge]` | 卸载 Astra（还原客户端配置并停止服务） |
 

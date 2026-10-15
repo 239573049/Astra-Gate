@@ -66,4 +66,52 @@ describe('token self-service page', () => {
     expect(window.location.search).toBe('');
     expect(sessionStorage.getItem('astra.keyLookup')).toBeNull();
   });
+
+  it('shows the key’s statistics and its own request log, a page at a time', async () => {
+    const stats = {
+      range: '7d', timeZone: 'Asia/Shanghai', from: '2026-10-09T16:00:00Z', retentionDays: 30,
+      summary: { requests: 4, successRequests: 3, successRate: 0.75, costUsd: 2.5, inputTokens: 100, outputTokens: 20, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, avgTtftMs: 420 },
+      series: [{ bucket: '2026-10-15', requests: 4, costUsd: 2.5, inputTokens: 100, outputTokens: 20 }],
+      models: [{ model: 'gpt-x', requests: 4, successRequests: 3, costUsd: 2.5, inputTokens: 100, outputTokens: 20 }],
+      clients: [{ client: null, requests: 4, successRequests: 3, costUsd: 2.5, inputTokens: 100, outputTokens: 20 }],
+      errors: [{ category: 'rate_limited', count: 1 }],
+    };
+    const request = (id: string, errorCategory: string | null = null) => ({
+      id, time: '2026-10-15T06:00:00Z', model: 'gpt-x', client: 'codex', stream: true, status: errorCategory ? 'upstream_error' : 'success',
+      httpStatus: errorCategory ? 429 : 200, errorCategory, inputTokens: 10, outputTokens: 2, cacheReadTokens: 0, cacheWriteTokens: 0,
+      reasoningTokens: 0, costUsd: 0.5, ttftMs: 300, totalMs: 900,
+    });
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u.includes('/v1/astra/key/stats')) return Promise.resolve(new Response(JSON.stringify(stats)));
+      if (u.includes('/v1/astra/key/requests'))
+        return Promise.resolve(new Response(JSON.stringify(u.includes('before=r2')
+          ? { items: [request('r3')], nextBefore: null }
+          : { items: [request('r1'), request('r2', 'rate_limited')], nextBefore: 'r2' })));
+      return Promise.resolve(new Response(JSON.stringify(info)));
+    });
+    sessionStorage.setItem('astra.keyLookup', 'sk-astra-secret');
+    show();
+    await waitFor(() => expect(screen.getByText('Shared')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole('button', { name: t('key.tab.stats') }));
+    await waitFor(() => expect(screen.getAllByText('75.0%').length).toBeGreaterThan(0));
+    expect(screen.getByText(`${t('key.category.rate_limited')} · 1`)).toBeInTheDocument();
+    expect(screen.getByText(t('key.stats.direct'))).toBeInTheDocument();
+    expect(screen.getByText(t('key.stats.retention', { days: 30 }))).toBeInTheDocument();
+    const statsCall = fetchMock.mock.calls.find(([u]) => String(u).includes('/stats'))!;
+    expect(String(statsCall[0])).toContain('range=7d');
+    expect((statsCall[1] as RequestInit).headers).toEqual({ Authorization: 'Bearer sk-astra-secret' });
+
+    fireEvent.click(screen.getByRole('button', { name: t('key.tab.requests') }));
+    await waitFor(() => expect(screen.getByText(t('key.category.rate_limited'))).toBeInTheDocument());
+    expect(screen.getAllByText('gpt-x')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: t('key.requests.more') }));
+    await waitFor(() => expect(screen.getAllByText('gpt-x')).toHaveLength(3));
+    expect(screen.queryByRole('button', { name: t('key.requests.more') })).not.toBeInTheDocument();
+
+    // Failed only: the server gets every non-success status.
+    fireEvent.click(screen.getByRole('button', { name: t('key.requests.failed') }));
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => String(u).includes('status=upstream_error'))).toBe(true));
+  });
 });

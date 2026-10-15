@@ -1,15 +1,20 @@
 export {
   DEFAULT_CHANNEL,
   DEFAULT_FEED_URL,
+  PREVIEW_CHANNEL,
   UpdateFeedError,
   fetchManifest,
+  normalizeChannel,
   type FetchManifestOptions,
+  type UpdateChannel,
   type UpdateManifest,
   type UpdatePlatformInfo,
 } from './manifest.js';
 export {
+  compareVersions,
   isApiVersionCompatible,
   isNewerVersion,
+  isPreviewVersion,
   majorOf,
   parseVersion,
 } from './version.js';

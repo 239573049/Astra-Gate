@@ -34,6 +34,6 @@ public static class UpdateEndpoints
         var s = settings.Current;
         return new UpdateStatusDto(
             ServerOptions.Version, state.AvailableVersion, state.LastCheckAt, state.Notes, state.Error,
-            s.UpdateChannel, s.UpdateAutoCheck, checks.EffectiveFeedUrl is not null);
+            UpdateChannels.Normalize(s.UpdateChannel), s.UpdateAutoCheck, checks.EffectiveFeedUrl is not null);
     }
 }

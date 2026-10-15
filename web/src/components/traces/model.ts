@@ -284,12 +284,14 @@ export function buildRequest(
 ): Graph {
   const r = trace.request;
   const byName = (name: string) => trace.spans.find((s) => s.name === name);
+  // A provider-pool failover resolves and encodes once per member tried: the last ones describe what answered.
+  const lastByName = (name: string) => trace.spans.filter((s) => s.name === name).sort((a, b) => a.startUs - b.startUs).at(-1);
   const route = byName(SPAN.route);
   const body = byName(SPAN.body);
   const middleware = byName(SPAN.middleware);
   const privacy = byName(SPAN.privacy);
-  const resolve = byName(SPAN.resolve);
-  const encode = byName(SPAN.encode);
+  const resolve = lastByName(SPAN.resolve);
+  const encode = lastByName(SPAN.encode);
   const response = byName(SPAN.response);
   const attempts = trace.spans.filter((s) => s.name === SPAN.attempt).sort((a, b) => a.startUs - b.startUs);
   const tone = (s: TraceSpan | undefined): Tone => (s?.status === 'error' ? 'error' : 'neutral');
@@ -335,6 +337,24 @@ export function buildRequest(
   const attemptX = x + 20;
   const providerX = attemptX + 200;
   const providerHeight = Math.max(150, attempts.length * 80);
+  // Attempts of a provider pool can go to several providers (issue #2): the one that answered is the main node, the
+  // others failed over and sit above it.
+  const attemptProvider = (a: TraceSpan) => attrStr(a, 'astra.provider.id') ?? r.providerId ?? null;
+  const others = [...new Set(attempts.map(attemptProvider).filter((p): p is string => !!p && p !== r.providerId))];
+  const providerNode = (a: TraceSpan) => {
+    const p = attemptProvider(a);
+    return p && p !== r.providerId ? `provider:${p}` : 'provider';
+  };
+  others.forEach((p, k) => {
+    const named = attempts.find((a) => attemptProvider(a) === p);
+    nodes.push({
+      id: `provider:${p}`,
+      type: 'card',
+      position: { x: providerX, y: center - providerHeight / 2 - 96 * (k + 1) },
+      style: { width: 168 },
+      data: { title: attrStr(named, 'astra.provider.name') ?? p, lines: [t('traces.node.failedOver')], tone: 'error' },
+    });
+  });
   attempts.forEach((a, i) => {
     const y = center - 30 + (i - (attempts.length - 1) / 2) * 80;
     const status = attrNum(a, 'http.response.status_code');
@@ -346,7 +366,10 @@ export function buildRequest(
       style: { width: 136 },
       data: {
         title: t('traces.node.attempt', { n: i + 1 }),
-        lines: [attrStr(a, 'astra.account.id') ?? '—', `${status ?? '—'} · ${formatUs(a.durationUs)}`],
+        lines: [
+          (others.length > 0 ? attrStr(a, 'astra.provider.name') : null) ?? attrStr(a, 'astra.account.id') ?? '—',
+          `${status ?? '—'} · ${formatUs(a.durationUs)}`,
+        ],
         tone: failed ? 'error' : 'ok',
       },
     });
@@ -354,7 +377,7 @@ export function buildRequest(
     edges.push(edgeBase(`e:fork:${i}`, last ? last.id : 'agent', `attempt:${i}`, COLORS.request));
     const color = failed ? COLORS.error : COLORS.ok;
     edges.push(
-      edgeBase(`e:attempt:${i}`, `attempt:${i}`, 'provider', color, {
+      edgeBase(`e:attempt:${i}`, `attempt:${i}`, providerNode(a), color, {
         label: status ? String(status) : undefined,
         style: { stroke: color, strokeWidth: 1.75, strokeDasharray: failed ? '5 4' : undefined },
       }),

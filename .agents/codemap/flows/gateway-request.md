@@ -20,7 +20,9 @@ restored, and a request row, its span tree and usage counters were queued for pe
    `Pipeline/LiveRequestFeed.cs:LiveRequestFeed.Start` so the console shows it immediately.
 3. `Pipeline/GatewayRouter.cs:GatewayRouter.ResolveAsync` — resolves the bearer token/key into a `GatewayRoute`
    (token, client kind, provider). A request marked remote always needs a token even when
-   `RequireGatewayKey=false`; that switch only opens the gateway to this machine (`Pipeline/GatewayRouter.cs`).
+   `RequireGatewayKey=false`; that switch only opens the gateway to this machine (`Pipeline/GatewayRouter.cs`). A bare
+   token with a provider pool (`tokens.pool_json`, `Core/Tokens/TokenPool.cs`, issue #2) gets a route whose `Targets`
+   are its usable members and whose `Pool` is set; `<token>.<kind>` calls never use the pool.
 4. `Pipeline/TokenLimiter.cs:TokenLimiter.CheckAsync` — token budgets and the RPM window are checked once, before
    anything leaves the machine; a refusal throws `GatewayException` (`permission_error` / `rate_limit_error`).
 5. `Pipeline/RequestBody.cs:RequestBody.ReadAsync` — the body is read once into a pooled UTF-8 buffer; everything
@@ -36,8 +38,11 @@ restored, and a request row, its span tree and usage counters were queued for pe
 8. `Pipeline/RequestReasoning.cs:RequestReasoning.Capture` — log-only metadata (reasoning effort etc.), read before
    any codec derives upstream budgets from it. Never touches the wire.
 9. `Pipeline/GatewayRouter.cs:GatewayRouter.ForModelAsync` — a client bound to several providers gets the first one
-   serving this model (as an enabled model or through its mapping), else its primary. `SubscriptionSupport.
-   EnforceClientPolicy` (`Pipeline/UpstreamAuthResolver.cs`) rejects before capability discovery can send anything.
+   serving this model (as an enabled model or through its mapping), else its primary. A pool route instead gets an
+   ordered candidate list from `Pipeline/PoolRouting.cs:PoolRouting.PlanAsync` (members serving the model, minus those
+   `ProviderHealth` cools or without a usable account, ordered by `ProviderPoolScheduler` with sticky sessions).
+   `SubscriptionSupport.EnforceClientPolicy` (`Pipeline/UpstreamAuthResolver.cs`) rejects before capability discovery
+   can send anything.
 10. `Pipeline/EffectiveModelResolver.cs` + `IModelProtocolResolver` — the upstream model and the protocols the
     provider actually supports are resolved (capability discovery may hit the network).
 11. `Pipeline/GatewayRouter.cs:GatewayRouter.SelectEndpoint` + `Protocol/GatewayCodecs.cs:GatewayCodecs.Register` —
@@ -50,7 +55,11 @@ restored, and a request row, its span tree and usage counters were queued for pe
 13. ⇢ network: `Pipeline/GatewayPipeline.cs:GatewayPipeline.SendAsync` sends through `Pipeline/AccountScheduler.cs`
     (`StickyKeys` picks the account; a `Lease` holds the in-flight slot in balanced mode), `UpstreamAuthResolver`
     supplies credentials, and `Pipeline/Upstream.cs:GatewayHttpClients` performs the call. That handler deliberately
-    disables `ActivityHeadersPropagator` so the agent's `traceparent` never leaks to the provider.
+    disables `ActivityHeadersPropagator` so the agent's `traceparent` never leaks to the provider. Steps 10–12 run in
+    `HandleAsync`'s local `PrepareAsync`, once per candidate: a pool request whose attempt fails before anything reached
+    the client (`Pipeline/ProviderFailover.cs` classifies the status / exception) is prepared again for the next member
+    and resent (`astra.attempt.retry = provider_failover`); the client's guarded tree is cloned, never rewritten, while
+    another attempt may follow. Every route reports its outcome to `ProviderHealth`.
 14. Response side: `Protocol/Ir.cs` decode (or passthrough), `Pipeline/PrivacyGuardService.cs:ChunkRestorer`
     restores placeholders (streaming: `Pipeline/GatewayPipeline.cs:StreamAsync`; buffered: `BufferAsync`;
     forced-stream-when-client-wanted-JSON: `CollapseStreamAsync`), `Pipeline/RequestBilling.cs` prices the usage, and

@@ -27,6 +27,20 @@ export const DEFAULT_FEED_URL = 'https://astra-gate.si/api/client-releases';
 
 export const DEFAULT_CHANNEL = 'stable';
 
+/**
+ * Opt-in channel (the server's updateChannel setting): x.y.z-preview.N releases plus every stable, which the
+ * feed merges in, so a preview install moves on to the stable that follows.
+ */
+export const PREVIEW_CHANNEL = 'preview';
+
+export type UpdateChannel = typeof DEFAULT_CHANNEL | typeof PREVIEW_CHANNEL;
+
+/** stable | preview; "beta" (the old name of preview) reads as preview, anything else as stable. */
+export function normalizeChannel(value: string | null | undefined): UpdateChannel {
+  const v = (value ?? '').trim().toLowerCase();
+  return v === PREVIEW_CHANNEL || v === 'beta' ? PREVIEW_CHANNEL : DEFAULT_CHANNEL;
+}
+
 export interface FetchManifestOptions {
   feedUrl?: string;
   channel?: string;
@@ -45,7 +59,7 @@ export class UpdateFeedError extends Error {
 
 export async function fetchManifest(o: FetchManifestOptions = {}): Promise<UpdateManifest> {
   const feed = (o.feedUrl ?? DEFAULT_FEED_URL).trim();
-  const channel = (o.channel ?? DEFAULT_CHANNEL).trim() || DEFAULT_CHANNEL;
+  const channel = normalizeChannel(o.channel);
   const url = `${feed.replace(/\/+$/, '')}/${channel}/latest.json`;
   const doFetch = o.fetchImpl ?? globalThis.fetch;
   if (!doFetch) throw new UpdateFeedError('fetch is unavailable (Node.js 18+ required).');

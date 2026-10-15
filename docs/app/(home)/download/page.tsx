@@ -3,7 +3,7 @@ import { PackageOpen } from 'lucide-react';
 
 import { DownloadPanel } from '@/components/download/download-panel';
 import { Markdown } from '@/components/download/markdown';
-import { DEFAULT_CHANNEL, latestVersion, readIndex } from '@/lib/releases';
+import { DEFAULT_CHANNEL, PREVIEW_CHANNEL, compareVersions, latestWith, readFeed } from '@/lib/releases';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,8 +17,11 @@ export const metadata: Metadata = {
 };
 
 export default async function DownloadPage() {
-  const index = await readIndex(DEFAULT_CHANNEL);
-  const latest = latestVersion(index);
+  const latest = latestWith(await readFeed(DEFAULT_CHANNEL));
+  // Previews stay out of the way: offered only while one is newer than the current stable, folded by default.
+  const newestPreview = latestWith((await readFeed(PREVIEW_CHANNEL)).filter((v) => v.channel === PREVIEW_CHANNEL));
+  const preview =
+    newestPreview && (!latest || compareVersions(newestPreview.version, latest.version) > 0) ? newestPreview : null;
 
   return (
     <div className="flex flex-1 flex-col justify-center px-6 py-24">
@@ -48,6 +51,37 @@ export default async function DownloadPage() {
               <Markdown text={latest.notes} />
             </div>
           </div>
+        )}
+
+        {preview && (
+          <details className="mt-8 rounded-xl border border-dashed border-fd-border p-5">
+            <summary className="cursor-pointer text-sm font-medium">
+              预览版 v{preview.version}
+              <span className="ml-2 font-normal text-fd-muted-foreground">
+                {new Date(preview.releasedAt).toLocaleDateString('zh-CN')} · 尚未正式发布，可能不稳定
+              </span>
+            </summary>
+            <p className="mt-3 text-sm text-fd-muted-foreground">
+              预览版提前提供下一个正式版的新功能，供愿意尝鲜的用户试用和反馈。装好后在 <strong>设置 → 关于</strong> 打开「接收预览版更新」，
+              就会继续收到之后的预览版和正式版；不打开则停在当前版本，直到出现更新的正式版。安装脚本加上
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">--preview</code>
+              （Windows：
+              <code className="mx-1 rounded bg-fd-muted px-1.5 py-0.5 font-mono text-xs">$env:ASTRA_CHANNEL = &apos;preview&apos;</code>
+              ）即可安装预览版。
+            </p>
+            <div className="mt-6">
+              <DownloadPanel
+                version={preview.version}
+                files={preview.files}
+                hrefBase={`/api/client-releases/${PREVIEW_CHANNEL}/v/${preview.version}`}
+              />
+            </div>
+            {preview.notes && (
+              <div className="prose mt-6">
+                <Markdown text={preview.notes} />
+              </div>
+            )}
+          </details>
         )}
 
         <div className="mt-10 flex items-start gap-3 rounded-xl border border-fd-border bg-fd-muted/40 p-5">

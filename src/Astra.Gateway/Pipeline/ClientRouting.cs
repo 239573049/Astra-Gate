@@ -43,13 +43,26 @@ public sealed class ClientRouting(AstraDatabase db, EffectiveModelResolver model
     {
         if (string.IsNullOrEmpty(modelId)) return null;
         foreach (var target in targets)
-        {
-            if (!isClaudeCode && SubscriptionSupport.ClientPolicyOf(target.Provider) == ClientPolicies.ClaudeCodeOnly) continue;
-            var upstream = target.Provider.MapModel(modelId);
-            if (await db.Providers.GetModelAsync(target.Provider.Id, upstream, ct) is not { Enabled: true } pm) continue;
-            if ((await models.ResolveAsync(target.Provider, pm, ct)).Enabled) return target;
-        }
+            if (await ServesAsync(target, modelId, isClaudeCode, ct)) return target;
         return null;
+    }
+
+    /// <summary>Every target that <see cref="MatchAsync"/> would accept, in target order (provider pools, issue #2).</summary>
+    public async Task<List<RouteTarget>> MatchAllAsync(IReadOnlyList<RouteTarget> targets, string modelId, bool isClaudeCode, CancellationToken ct = default)
+    {
+        var result = new List<RouteTarget>();
+        if (string.IsNullOrEmpty(modelId)) return result;
+        foreach (var target in targets)
+            if (await ServesAsync(target, modelId, isClaudeCode, ct)) result.Add(target);
+        return result;
+    }
+
+    private async Task<bool> ServesAsync(RouteTarget target, string modelId, bool isClaudeCode, CancellationToken ct)
+    {
+        if (!isClaudeCode && SubscriptionSupport.ClientPolicyOf(target.Provider) == ClientPolicies.ClaudeCodeOnly) return false;
+        var upstream = target.Provider.MapModel(modelId);
+        if (await db.Providers.GetModelAsync(target.Provider.Id, upstream, ct) is not { Enabled: true } pm) return false;
+        return (await models.ResolveAsync(target.Provider, pm, ct)).Enabled;
     }
 
     /// <summary>

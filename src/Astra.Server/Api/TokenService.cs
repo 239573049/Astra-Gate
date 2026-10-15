@@ -1,6 +1,7 @@
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Clients;
+using Astra.Core.Models;
 using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
@@ -23,14 +24,33 @@ public sealed record TokenBudgetUsageDto(
     string Metric, string Period, decimal Limit, decimal Used, decimal Remaining, double UsedPercent, bool Exhausted,
     DateTimeOffset? ResetsAt);
 
+/// <summary>
+/// Whether a pool member can take requests now: <c>healthy</c>, <c>cooling</c> (rate limited / credentials rejected),
+/// <c>open</c> / <c>half_open</c> (circuit after repeated failures), <c>no_account</c> (an account-based provider without a
+/// usable account), <c>disabled</c> or <c>missing</c> (the provider was deleted).
+/// </summary>
+public sealed record PoolMemberHealthDto(string State, DateTimeOffset? Until, string? Reason);
+
+/// <summary>One provider of a token's pool in the admin API.</summary>
+public sealed record TokenPoolMemberDto(string ProviderId, string? AccountId, int Weight, int Tier, bool Missing, PoolMemberHealthDto Health);
+
+/// <summary>A token's provider pool (<see cref="TokenPool"/>, issue #2) in the admin API.</summary>
+public sealed record TokenPoolDto(string Strategy, string Sticky, bool Failover, int MaxAttempts, List<TokenPoolMemberDto> Members);
+
+/// <summary>The <c>pool</c> field of a create / patch body; omitted fields take the pool defaults.</summary>
+public sealed record TokenPoolMemberInputDto(string? ProviderId, string? AccountId, int? Weight, int? Tier);
+
+public sealed record TokenPoolInputDto(string? Strategy, string? Sticky, bool? Failover, int? MaxAttempts, List<TokenPoolMemberInputDto>? Members);
+
 /// <summary>A token as shown in the admin API: masked key only, never the plaintext.</summary>
 /// <param name="AllowedClients">Client kinds the key may be used with; null = any, empty = direct calls only.</param>
 /// <param name="RecentRequests">Requests let through during the last minute (what the RPM cap counts).</param>
+/// <param name="Pool">The provider pool of direct calls; null = <paramref name="ProviderId"/> alone (or no direct calls).</param>
 public sealed record TokenDto(
     string Id, string Name, bool IsDefault, bool Enabled, string KeyMasked, string? ProviderId, string? AccountId,
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? LastUsedAt, IReadOnlyList<string> Clients,
     TokenStatsDto Today, TokenStatsDto Total, TokenLimitsDto? Limits, List<string>? AllowedClients,
-    List<TokenBudgetUsageDto> LimitUsage, int RecentRequests);
+    List<TokenBudgetUsageDto> LimitUsage, int RecentRequests, TokenPoolDto? Pool);
 
 public sealed record TokenSecretDto(string Token);
 
@@ -42,7 +62,8 @@ public sealed record TokenMutationResultDto(TokenDto? Token, IReadOnlyList<strin
 /// token rewrites the affected client configs through <see cref="ClientService"/> so the restore invariants hold.
 /// </summary>
 public sealed class TokenService(
-    AstraDatabase db, ISecretProtector secrets, ClientService clients, SettingsService settings, TokenUsageLedger ledger)
+    AstraDatabase db, ISecretProtector secrets, ClientService clients, SettingsService settings, TokenUsageLedger ledger,
+    ProviderHealth health, ProviderPoolScheduler poolScheduler)
 {
     private const int MaxNameLength = 64;
 
@@ -75,14 +96,16 @@ public sealed class TokenService(
         var today = (await db.Tokens.UsageAsync(from, to, ct)).ToDictionary(u => u.TokenId);
         var totals = (await db.Tokens.ListTotalsAsync(ct)).ToDictionary(u => u.TokenId);
         var clientRows = await db.Clients.ListAsync(ct);
+        var members = new PoolMemberLookup(db, health);
         var list = new List<TokenDto>(tokens.Count);
         foreach (var t in tokens)
         {
             var limits = t.Limits();
             var usage = limits is null ? [] : await ledger.StatusAsync(t.Id, limits, ct);
+            var pool = t.Pool() is { } p ? await members.DtoAsync(p, ct) : null;
             list.Add(ToDto(t,
                 clientRows.Where(c => (c.TokenId ?? TokenIds.Default) == t.Id && c.Enabled).Select(c => c.Kind).ToList(),
-                today.GetValueOrDefault(t.Id), totals.GetValueOrDefault(t.Id), limits, usage, ledger.RecentRequests(t.Id)));
+                today.GetValueOrDefault(t.Id), totals.GetValueOrDefault(t.Id), limits, usage, ledger.RecentRequests(t.Id), pool));
         }
         return list;
     }
@@ -102,7 +125,9 @@ public sealed class TokenService(
             LimitsJson = body.ContainsKey("limits") ? ReadLimits(body["limits"]) : null,
             AllowedClientsJson = body.ContainsKey("allowedClients") ? ReadAllowedClients(body["allowedClients"]) : null,
         };
-        await ApplyProviderAsync(token, body, ct);
+        RejectPoolWithProvider(body);
+        if (body.ContainsKey("pool")) await ApplyPoolAsync(token, body["pool"], ct);
+        else await ApplyProviderAsync(token, body, ct);
         AssignKey(token, now);
         await db.Tokens.InsertAsync(token, ct);
         return await GetAsync(token.Id, ct);
@@ -110,8 +135,10 @@ public sealed class TokenService(
 
     /// <summary>
     /// Patch: <c>name</c>, <c>enabled</c>, <c>providerId</c> (null clears direct calls), <c>accountId</c>
-    /// (null / "" = the provider's default account), <c>limits</c> (<see cref="TokenLimitsDto"/>; null = unlimited) and
-    /// <c>allowedClients</c> (client kinds; null = any, [] = direct calls only). Never touches client configs.
+    /// (null / "" = the provider's default account), <c>pool</c> (<see cref="TokenPoolInputDto"/>; replaces
+    /// providerId / accountId, which a patch may not send alongside it — a providerId patch without it drops the pool),
+    /// <c>limits</c> (<see cref="TokenLimitsDto"/>; null = unlimited) and <c>allowedClients</c> (client kinds; null = any,
+    /// [] = direct calls only). Never touches client configs.
     /// </summary>
     public async Task<TokenDto> UpdateAsync(string id, JsonObject body, CancellationToken ct)
     {
@@ -121,7 +148,14 @@ public sealed class TokenService(
             token.Enabled = body["enabled"] is JsonValue v && v.TryGetValue<bool>(out var enabled)
                 ? enabled
                 : throw new AdminApiException(400, "enabled must be a boolean");
-        if (body.ContainsKey("providerId") || body.ContainsKey("accountId")) await ApplyProviderAsync(token, body, ct);
+        RejectPoolWithProvider(body);
+        if (body.ContainsKey("pool")) await ApplyPoolAsync(token, body["pool"], ct);
+        else if (body.ContainsKey("providerId") || body.ContainsKey("accountId"))
+        {
+            await ApplyProviderAsync(token, body, ct);
+            token.PoolJson = null;
+            poolScheduler.Forget(token.Id);
+        }
         if (body.ContainsKey("limits")) token.LimitsJson = ReadLimits(body["limits"]);
         if (body.ContainsKey("allowedClients")) token.AllowedClientsJson = ReadAllowedClients(body["allowedClients"]);
         token.UpdatedAt = DateTimeOffset.UtcNow;
@@ -150,6 +184,7 @@ public sealed class TokenService(
         var moved = await db.Clients.ReassignTokenAsync(id, TokenIds.Default, ct);
         await db.Tokens.DeleteAsync(id, CancellationToken.None);
         ledger.Forget(id);
+        poolScheduler.Forget(id);
         var result = moved.Count == 0
             ? new TokenRewriteResult([], [])
             : await clients.RewriteForTokenAsync(TokenIds.Default, CancellationToken.None);
@@ -189,6 +224,62 @@ public sealed class TokenService(
         await clients.RequireProviderAsync(providerId, ct);
         token.ProviderId = providerId;
         token.AccountId = string.IsNullOrWhiteSpace(accountId) ? null : await clients.RequireAccountAsync(providerId, accountId, ct);
+    }
+
+    private static void RejectPoolWithProvider(JsonObject body)
+    {
+        if (body.ContainsKey("pool") && (body.ContainsKey("providerId") || body.ContainsKey("accountId")))
+            throw new AdminApiException(400, "Send either pool or providerId / accountId, not both");
+    }
+
+    /// <summary>
+    /// The <c>pool</c> body field (issue #2). Stored canonically: no members clears direct calls; one member is just
+    /// <c>provider_id</c> / <c>account_id</c>; two or more are <c>pool_json</c>, with the first member also written to
+    /// <c>provider_id</c> / <c>account_id</c> so a binary without pools still routes. A disabled provider may stay in a
+    /// pool it is already in; a new member must be enabled.
+    /// </summary>
+    private async Task ApplyPoolAsync(TokenRecord token, JsonNode? node, CancellationToken ct)
+    {
+        TokenPoolInputDto? dto;
+        try
+        {
+            dto = node is null ? null : Json.DeserializeApi<TokenPoolInputDto>(node);
+        }
+        catch (Exception e) when (e is System.Text.Json.JsonException or InvalidOperationException or FormatException)
+        {
+            throw new AdminApiException(400, "pool must be { strategy, sticky, failover, maxAttempts, members: [{ providerId, accountId, weight, tier }] }");
+        }
+        var pool = new TokenPool
+        {
+            Strategy = dto?.Strategy ?? TokenPoolStrategies.Failover,
+            Sticky = dto?.Sticky ?? TokenPoolSticky.Session,
+            Failover = dto?.Failover ?? true,
+            MaxAttempts = dto?.MaxAttempts ?? TokenPool.DefaultMaxAttempts,
+            Members = (dto?.Members ?? []).Select(m => new TokenPoolMember
+            {
+                ProviderId = m.ProviderId?.Trim() ?? "",
+                AccountId = string.IsNullOrWhiteSpace(m.AccountId) ? null : m.AccountId,
+                Weight = m.Weight ?? 1,
+                Tier = m.Tier ?? 1,
+            }).ToList(),
+        };
+        var errors = pool.Validate();
+        if (errors.Count > 0) throw new AdminApiException(400, string.Join("; ", errors));
+
+        var current = token.Pool()?.Members.Select(m => m.ProviderId).ToHashSet() ?? [];
+        if (token.ProviderId is not null) current.Add(token.ProviderId);
+        foreach (var member in pool.Members)
+        {
+            if (!current.Contains(member.ProviderId)) await clients.RequireProviderAsync(member.ProviderId, ct);
+            else if (await db.Providers.GetAsync(member.ProviderId, ct) is null) throw new AdminApiException(404, "Provider not found");
+            if (member.AccountId is not null) member.AccountId = await clients.RequireAccountAsync(member.ProviderId, member.AccountId, ct);
+        }
+
+        var first = pool.Members.FirstOrDefault();
+        token.ProviderId = first?.ProviderId;
+        token.AccountId = first?.AccountId;
+        token.PoolJson = pool.Members.Count > 1 ? Json.Serialize(pool) : null;
+        poolScheduler.Forget(token.Id);
     }
 
     private async Task<TokenRecord> RequireAsync(string id, CancellationToken ct) =>
@@ -254,14 +345,14 @@ public sealed class TokenService(
     };
 
     private static TokenDto ToDto(TokenRecord t, IReadOnlyList<string> clientKinds, TokenUsage? today, TokenUsage? total,
-        TokenLimits? limits, IReadOnlyList<TokenBudgetStatus> usage, int recentRequests) => new(
+        TokenLimits? limits, IReadOnlyList<TokenBudgetStatus> usage, int recentRequests, TokenPoolDto? pool) => new(
         t.Id, t.Name, t.IsDefault, t.Enabled, GatewayTokens.Mask(t.KeyPrefix), t.ProviderId, t.AccountId,
         t.CreatedAt, t.UpdatedAt, t.LastUsedAt, clientKinds, Stats(today), Stats(total),
         limits is null ? null : new TokenLimitsDto(limits.Budgets.Select(b => new TokenBudgetDto(b.Metric, b.Period, Amount(b.Metric, b.Limit))).ToList(), limits.Rpm),
         t.AllowedClients(),
         usage.Select(s => new TokenBudgetUsageDto(s.Budget.Metric, s.Budget.Period, Amount(s.Budget.Metric, s.Budget.Limit),
             Amount(s.Budget.Metric, s.Used), Amount(s.Budget.Metric, s.Remaining), s.UsedPercent, s.Exhausted, s.ResetsAt)).ToList(),
-        recentRequests);
+        recentRequests, pool);
 
     private static decimal Amount(string metric, long value) => metric == TokenLimitMetrics.Cost ? Money.FromNanos(value) : value;
 
@@ -270,5 +361,54 @@ public sealed class TokenService(
         u ??= new TokenUsage();
         return new TokenStatsDto(Money.FromNanos(u.CostNanoUsd), u.Requests, u.InputTokens, u.OutputTokens,
             u.InputTokens + u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens, u.CacheHitRate, u.Tps);
+    }
+}
+
+/// <summary>
+/// The pool members of the token list with their health, loading each provider and each account list once per listing.
+/// The state mirrors what pool routing decides (<see cref="PoolRouting"/>): API-key providers from <see cref="ProviderHealth"/>,
+/// account-based ones from their accounts.
+/// </summary>
+internal sealed class PoolMemberLookup(AstraDatabase db, ProviderHealth health)
+{
+    private readonly Dictionary<string, Provider?> _providers = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyList<ProviderAccount>> _accounts = new(StringComparer.Ordinal);
+
+    public async Task<TokenPoolDto> DtoAsync(TokenPool pool, CancellationToken ct)
+    {
+        var members = new List<TokenPoolMemberDto>(pool.Members.Count);
+        foreach (var m in pool.Members)
+        {
+            var provider = await ProviderAsync(m.ProviderId, ct);
+            members.Add(new TokenPoolMemberDto(m.ProviderId, m.AccountId, m.Weight, m.Tier, provider is null, await HealthAsync(provider, m.AccountId, ct)));
+        }
+        return new TokenPoolDto(pool.Strategy, pool.Sticky, pool.Failover, pool.MaxAttempts, members);
+    }
+
+    private async Task<Provider?> ProviderAsync(string id, CancellationToken ct)
+    {
+        if (!_providers.TryGetValue(id, out var provider)) _providers[id] = provider = await db.Providers.GetAsync(id, ct);
+        return provider;
+    }
+
+    private async Task<PoolMemberHealthDto> HealthAsync(Provider? provider, string? pinned, CancellationToken ct)
+    {
+        if (provider is null) return new PoolMemberHealthDto("missing", null, null);
+        if (!ClientRouting.IsUsable(provider)) return new PoolMemberHealthDto("disabled", null, null);
+        if (!AuthSchemes.UsesAccounts(provider.AuthScheme))
+        {
+            var status = health.Status(provider.Id);
+            return new PoolMemberHealthDto(status.State, status.Until, status.Reason);
+        }
+        if (!_accounts.TryGetValue(provider.Id, out var accounts)) _accounts[provider.Id] = accounts = await db.Accounts.ListAsync(provider.Id, ct);
+        var now = DateTimeOffset.UtcNow;
+        var relevant = pinned is null ? accounts : accounts.Where(a => a.Id == pinned).ToList();
+        if (relevant.Any(a => SubscriptionSupport.IsUsable(a, now))) return new PoolMemberHealthDto(ProviderHealthStates.Healthy, null, null);
+        // Only cooling accounts left: usable again when the first one's cooldown ends.
+        var cooling = relevant.Where(a => a.Enabled && a.Status == AccountStatus.Active && a.CooldownUntilUtc > now)
+            .Select(a => a.CooldownUntilUtc).Min();
+        return cooling is { } until
+            ? new PoolMemberHealthDto(ProviderHealthStates.Cooling, until, "rate_limited")
+            : new PoolMemberHealthDto("no_account", null, null);
     }
 }

@@ -6,16 +6,20 @@
 #
 #   $env:ASTRA_INSTALL = 'server'; iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex
 #   $env:ASTRA_INSTALL = 'desktop'; iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex
+#   $env:ASTRA_CHANNEL = 'preview'; iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex
 #
 # Installs either
 #   server   the self-contained astra-server.exe (+ web UI) into %USERPROFILE%\.astra\server and an
 #            `astra-server` launcher on your user PATH. No Node.js or npm needed.
 #   desktop  the desktop app (the NSIS installer, run silently, per-user). It bundles its own server.
 #
-# Without ASTRA_INSTALL it asks and defaults to the server.
+# Without ASTRA_INSTALL it asks and defaults to the server. ASTRA_CHANNEL=preview installs the newest
+# preview release (or a newer stable, should one exist); to keep receiving previews afterwards, turn on
+# Settings -> About -> preview updates.
 #
 # Environment:
 #   ASTRA_INSTALL=server|desktop
+#   ASTRA_CHANNEL         release channel: stable (default) | preview
 #   ASTRA_HOME            data directory (default %USERPROFILE%\.astra)
 #   ASTRA_FEED_URL        release feed (default https://astra-gate.si/api/client-releases)
 #   ASTRA_NPM_REGISTRY    where the server tarball comes from (default https://registry.npmjs.org)
@@ -29,7 +33,8 @@ function Install-Astra {
 
     $feed = if ($env:ASTRA_FEED_URL) { $env:ASTRA_FEED_URL.TrimEnd('/') } else { 'https://astra-gate.si/api/client-releases' }
     $registry = if ($env:ASTRA_NPM_REGISTRY) { $env:ASTRA_NPM_REGISTRY.TrimEnd('/') } else { 'https://registry.npmjs.org' }
-    $channel = 'stable'
+    $channel = if ($env:ASTRA_CHANNEL) { $env:ASTRA_CHANNEL.Trim().ToLower() } else { 'stable' }
+    if ($channel -notin 'stable', 'preview') { throw "Unknown release channel '$channel' (use stable or preview)." }
     $astraHome = if ($env:ASTRA_HOME) { $env:ASTRA_HOME } else { Join-Path $env:USERPROFILE '.astra' }
 
     $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }

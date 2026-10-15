@@ -77,13 +77,14 @@ public class UpdateApiTests
     {
         await using var host = await TestHost.StartAsync();
 
+        // "beta" is the old name of the preview channel and is stored as preview.
         await host.SendAsync(HttpMethod.Patch, "/api/settings",
             new JsonObject { ["updateFeedUrl"] = "http://127.0.0.1:9/astra", ["updateChannel"] = "beta" });
         var (_, check) = await host.SendAsync(HttpMethod.Post, "/api/update/check");
         Assert.NotNull(check!["error"]);
 
         var status = await host.GetJsonAsync("/api/update/status");
-        Assert.Equal("beta", status["channel"]!.GetValue<string>());
+        Assert.Equal("preview", status["channel"]!.GetValue<string>());
         Assert.NotNull(status["error"]);
 
         var (badStatus, bad) = await host.SendAsync(HttpMethod.Patch, "/api/settings", new JsonObject { ["updateChannel"] = "canary" });
@@ -105,13 +106,52 @@ public class UpdateApiTests
     }
 
     [Fact]
-    public void IsNewer_ignores_prerelease_and_build_suffixes()
+    public async Task Preview_channel_reads_the_preview_feed_and_defaults_to_stable()
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        var app = builder.Build();
+        app.MapGet("/astra/{channel}/latest.json", (string channel) => channel switch
+        {
+            "stable" => Results.Json(new { version = "98.0.0", apiVersion = "1.0" }),
+            "preview" => Results.Json(new { version = "99.0.0-preview.1", apiVersion = "1.0" }),
+            _ => Results.NotFound(),
+        });
+        await app.StartAsync();
+        using var feed = app.GetTestServer();
+        await using var host = await TestHost.StartAsync(PointFeedAt(feed));
+
+        await host.SendAsync(HttpMethod.Patch, "/api/settings", new JsonObject { ["updateFeedUrl"] = "http://feed.test/astra" });
+        var (_, stable) = await host.SendAsync(HttpMethod.Post, "/api/update/check");
+        Assert.Equal("stable", stable!["channel"]!.GetValue<string>());
+        Assert.Equal("98.0.0", stable["available"]!.GetValue<string>());
+
+        await host.SendAsync(HttpMethod.Patch, "/api/settings", new JsonObject { ["updateChannel"] = "preview" });
+        var (_, preview) = await host.SendAsync(HttpMethod.Post, "/api/update/check");
+        Assert.Equal("preview", preview!["channel"]!.GetValue<string>());
+        Assert.Equal("99.0.0-preview.1", preview["available"]!.GetValue<string>());
+        Assert.Equal("preview", (await host.GetJsonAsync("/api/settings"))["updateChannel"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void IsNewer_follows_semver_precedence()
     {
         Assert.True(UpdateCheckService.IsNewer("0.2.0", "0.1.0"));
+        Assert.True(UpdateCheckService.IsNewer("0.10.0", "0.9.5"));
         Assert.True(UpdateCheckService.IsNewer("1.0.0-rc.1+build", "0.9.9"));
         Assert.False(UpdateCheckService.IsNewer("0.1.0", "0.1.0"));
+        Assert.False(UpdateCheckService.IsNewer("0.1.0+build.7", "0.1.0"));
         Assert.False(UpdateCheckService.IsNewer("0.0.9", "0.1.0"));
         Assert.False(UpdateCheckService.IsNewer("not-a-version", "0.1.0"));
         Assert.False(UpdateCheckService.IsNewer(null, "0.1.0"));
+
+        // A release beats its previews; previews order by their number, not as text.
+        Assert.True(UpdateCheckService.IsNewer("0.10.0", "0.10.0-preview.3"));
+        Assert.False(UpdateCheckService.IsNewer("0.10.0-preview.3", "0.10.0"));
+        Assert.True(UpdateCheckService.IsNewer("0.10.0-preview.2", "0.10.0-preview.1"));
+        Assert.True(UpdateCheckService.IsNewer("0.10.0-preview.10", "0.10.0-preview.9"));
+        Assert.True(UpdateCheckService.IsNewer("0.10.0-preview.1", "0.9.5"));
+        // Turning previews off never downgrades: the older stable is not "newer".
+        Assert.False(UpdateCheckService.IsNewer("0.9.5", "0.10.0-preview.1"));
     }
 }

@@ -197,7 +197,8 @@ const linkTo = (id: string, label: string) => (
 
 function NodeInspector({ id, data, t, locale, brand }: { id: string; data: TraceRequest; t: TFunction; locale: string; brand: ProviderBrand | null }) {
   const r = data.request;
-  const span = (name: string) => data.spans.find((s) => s.name === name);
+  // Resolve / encode repeat per member a provider pool tries: show the last one (what answered).
+  const span = (name: string) => data.spans.filter((s) => s.name === name).sort((a, b) => a.startUs - b.startUs).at(-1);
   const stage = (name: string) => t(`traces.stage.${name}` as 'traces.stage.gateway.route');
   const dur = (s: TraceSpan | undefined) => formatUs(s?.durationUs);
   const yes = (v: unknown) => (v === true ? t('traces.yes') : v === false ? t('traces.no') : '—');
@@ -405,7 +406,7 @@ function NodeInspector({ id, data, t, locale, brand }: { id: string; data: Trace
       return (
         <Inspector
           kind={stage(SPAN.attempt)}
-          title={`${t('traces.node.attempt', { n: index + 1 })} · ${attrStr(a, 'astra.account.id') ?? '—'}`}
+          title={`${t('traces.node.attempt', { n: index + 1 })} · ${attrStr(a, 'astra.provider.name') ?? attrStr(a, 'astra.account.id') ?? '—'}`}
           sub={`${attrNum(a, 'http.response.status_code') ?? '—'} · ${formatUs(a.durationUs)}`}
           rows={[
             at(a),

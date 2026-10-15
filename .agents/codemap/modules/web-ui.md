@@ -161,9 +161,10 @@ Every page renders into `Page` (`web/src/components/layout/Page.tsx:15`) unless 
 | Page | File | What it is for |
 |---|---|---|
 | `OverviewPage` | `web/src/pages/OverviewPage.tsx:59` | Dashboard: range stats, request/cost charts, top models, activity heatmap, gateway `/v1` address to copy. |
-| `RequestsPage` | `web/src/pages/RequestsPage.tsx:64` | The request log — filters, live rows from the stream, RPM/TPM header, and `RequestDetailSheet` (`:576`) as the drawer. Each row links to its trace. |
+| `RequestsPage` | `web/src/pages/RequestsPage.tsx:64` | The request log — filters (kept in the address under the router: `?token=&provider=&client=&status=&origin=&model=`), live rows from the stream, RPM/TPM header, and `RequestDetailSheet` as the drawer. Each row links to its trace. |
 | `TracesPage` | `web/src/pages/TracesPage.tsx:TracesPage` | 链路追踪: topology, session and request canvases (`web/src/components/traces/`, laid out by `model.ts` `SPAN`), fed by `useTraceTopology` / `useTraceSessions` / `useTraceSession` / `useTraceRequest`. |
-| `TokensPage` | `web/src/pages/TokensPage.tsx:28` | Gateway tokens: create/enable/reveal/reset/delete, bind a provider+account, per-token budgets, self-service addresses. |
+| `TokensPage` | `web/src/pages/TokensPage.tsx:28` | Gateway tokens: create/enable/reveal/reset/delete, the provider pool editor (`web/src/components/TokenPoolEditor.tsx`), per-token budgets, self-service addresses, links to the token detail and its filtered request log. |
+| `TokenDetailPage` | `web/src/pages/TokenDetailPage.tsx` | `/tokens/:id`: one token's totals, trend, per-provider (with pool failovers) and per-model breakdown, live pool health, latest requests. |
 | `ClientsPage` | `web/src/pages/ClientsPage.tsx:46` | Client take-over: enable/disable, provider bindings + routing order, install/update jobs, backups, options, Claude Code direct panel. |
 | `ProvidersPage` | `web/src/pages/ProvidersPage.tsx:49` | Provider list with quota lines, create-from-template stepper, import from other apps, reorder. |
 | `ProviderDetailPage` | `web/src/pages/ProviderDetailPage.tsx:47` | One provider: endpoints/auth/headers, model list + overrides + model map, pricing, quota, accounts, plugin accounts, connection test. |
@@ -173,7 +174,7 @@ Every page renders into `Page` (`web/src/components/layout/Page.tsx:15`) unless 
 | `PrivacyPage` | `web/src/pages/PrivacyPage.tsx:14` | Privacy guard tabs: overview stats, interception logs, rules, dry-run tester. |
 | `SettingsPage` | `web/src/pages/SettingsPage.tsx:32` | General (retention, limits, proxy, locale, update), notifications, remote access, tray panel (desktop only). |
 | `LoginPage` | `web/src/pages/LoginPage.tsx:11` | The password form `AuthGate` shows; says why when a tunnel keeps the admin UI local. |
-| `KeyPage` | `web/src/pages/KeyPage.tsx:38` | `/key` outside the shell and outside `AuthGate`: token self-service against `/v1/astra/key`. |
+| `KeyPage` | `web/src/pages/KeyPage.tsx:38` | `/key` outside the shell and outside `AuthGate`: token self-service against `/v1/astra/key` (limits and usage), `/v1/astra/key/stats` and `/v1/astra/key/requests` (statistics and request log tabs). |
 | `TrayPanelPage` | `web/src/pages/TrayPanelPage.tsx:23` | `/tray`, the desktop popover window: transparent background, content height reporting, menu-bar title. |
 
 ## Tests

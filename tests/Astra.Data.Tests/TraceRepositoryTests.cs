@@ -176,4 +176,65 @@ public class TraceRepositoryTests
         Assert.Equal([400L, 600L], data.Stages.Where(s => s.Name == TraceSpanNames.Route).Select(s => s.DurationUs).Order());
         Assert.Equal(["gh-alice", "gh-bob"], data.AccountAttempts.Select(a => a.AccountId).Order());
     }
+
+    [Fact]
+    public async Task Provider_Stats_Count_Answers_And_Pool_Failovers_Per_Provider()
+    {
+        var db = await TestDb.InitializeAsync();
+        static string Attempt(string provider, string? retry) =>
+            $$"""{"astra.provider.id":"{{provider}}","astra.provider.name":"{{provider}}-name"{{(retry is null ? "" : $",\"astra.attempt.retry\":\"{retry}\"")}}}""";
+        RequestRecord Pooled(string id, string provider, string token, params TraceSpan[] spans)
+        {
+            var r = Call(id, T0, id, null, 1, provider, spans: spans);
+            r.TokenId = token;
+            return r;
+        }
+        await db.Requests.InsertBatchAsync([
+            // a failed, b answered (a pool failover)
+            Pooled("r1", "b", "t1",
+                Span("a0000000000000a1", null, TraceSpanNames.Attempt, 0, 10, Attempt("a", "provider_failover")),
+                Span("a0000000000000a2", null, TraceSpanNames.Attempt, 10, 10, Attempt("b", null))),
+            Pooled("r2", "b", "t1", Span("a0000000000000b1", null, TraceSpanNames.Attempt, 0, 10, Attempt("b", null))),
+            Pooled("r3", "a", "t1", Span("a0000000000000c1", null, TraceSpanNames.Attempt, 0, 10, Attempt("a", null))),
+            // another token: filtered out
+            Pooled("r4", "a", "t2", Span("a0000000000000d1", null, TraceSpanNames.Attempt, 0, 10, Attempt("a", null))),
+            // c only failed (never answered within the range)
+            Pooled("r5", "b", "t1",
+                Span("a0000000000000e1", null, TraceSpanNames.Attempt, 0, 10, Attempt("c", "provider_failover")),
+                Span("a0000000000000e2", null, TraceSpanNames.Attempt, 10, 10, Attempt("b", null))),
+        ]);
+
+        var list = await db.Requests.ProviderStatsAsync(T0.AddMinutes(-1), T0.AddMinutes(1), tokenId: "t1");
+        // Busiest first; a provider that only failed still shows.
+        Assert.Equal(["b", "a", "c"], list.Select(s => s.ProviderId));
+        var stats = list.ToDictionary(s => s.ProviderId);
+        Assert.Equal((3L, 0L, 2L), (stats["b"].Requests, stats["b"].FailoversOut, stats["b"].FailoversIn));
+        Assert.Equal((1L, 1L, 0L), (stats["a"].Requests, stats["a"].FailoversOut, stats["a"].FailoversIn));
+        Assert.Equal((0L, 1L, 0L), (stats["c"].Requests, stats["c"].FailoversOut, stats["c"].FailoversIn));
+        Assert.Equal("c-name", stats["c"].ProviderName);
+        Assert.Equal(3_000, stats["b"].CostNanoUsd);
+        Assert.Null(stats["b"].AvgTtftMs); // no TTFT measured in these rows
+
+        var all = await db.Requests.ProviderStatsAsync(T0.AddMinutes(-1), T0.AddMinutes(1));
+        Assert.Equal(2, all.Single(s => s.ProviderId == "a").Requests);
+    }
+
+    [Fact]
+    public async Task Topology_Credits_A_Pool_Attempt_To_The_Provider_It_Went_To()
+    {
+        var db = await TestDb.InitializeAsync();
+        await db.Requests.InsertBatchAsync([
+            Call("r1", T0, "r1", null, 1, "b", spans:
+            [
+                Span("a0000000000000f1", null, TraceSpanNames.Attempt, 0, 10,
+                    """{"astra.provider.id":"a","astra.provider.name":"Alpha","http.response.status_code":429,"astra.attempt.retry":"provider_failover"}"""),
+                Span("a0000000000000f2", null, TraceSpanNames.Attempt, 10, 10, """{"astra.provider.id":"b","http.response.status_code":200}"""),
+            ]),
+        ]);
+        var data = await db.Traces.TopologyAsync(T0.AddHours(-1));
+        var a = data.Providers.Single(p => p.ProviderId == "a");
+        Assert.Equal((0L, 1L, 1L, "Alpha"), (a.Requests, a.Attempts, a.RateLimited, a.ProviderName));
+        var b = data.Providers.Single(p => p.ProviderId == "b");
+        Assert.Equal((1L, 1L, 0L, 1L), (b.Requests, b.Attempts, b.RateLimited, b.Failovers));
+    }
 }

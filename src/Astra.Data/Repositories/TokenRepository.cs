@@ -11,7 +11,7 @@ public sealed class TokenRepository
 {
     private const string Select = """
         SELECT id, name, is_default, enabled, key_enc, key_hash, key_prefix, provider_id, account_id,
-               limits_json, allowed_clients_json, created_at, updated_at, last_used_at
+               limits_json, allowed_clients_json, pool_json, created_at, updated_at, last_used_at
         FROM tokens
         """;
 
@@ -50,9 +50,9 @@ public sealed class TokenRepository
         await using var conn = await _factory.OpenAsync(ct);
         await conn.ExecuteAsync("""
             INSERT INTO tokens(id, name, is_default, enabled, key_enc, key_hash, key_prefix, provider_id, account_id,
-                               limits_json, allowed_clients_json, created_at, updated_at, last_used_at)
+                               limits_json, allowed_clients_json, pool_json, created_at, updated_at, last_used_at)
             VALUES (@id, @name, @is_default, @enabled, @key_enc, @key_hash, @key_prefix, @provider_id, @account_id,
-                    @limits_json, @allowed_clients_json, @created_at, @updated_at, @last_used_at)
+                    @limits_json, @allowed_clients_json, @pool_json, @created_at, @updated_at, @last_used_at)
             """, new
         {
             id = token.Id,
@@ -66,13 +66,14 @@ public sealed class TokenRepository
             account_id = token.AccountId,
             limits_json = token.LimitsJson,
             allowed_clients_json = token.AllowedClientsJson,
+            pool_json = token.PoolJson,
             created_at = DateTimeOffsetHandler.ToStorage(token.CreatedAt),
             updated_at = DateTimeOffsetHandler.ToStorage(token.UpdatedAt),
             last_used_at = token.LastUsedAt is { } used ? DateTimeOffsetHandler.ToStorage(used) : null,
         });
     }
 
-    /// <summary>Saves every editable column (name, enabled, key, direct-call provider, limits); never touches last_used_at.</summary>
+    /// <summary>Saves every editable column (name, enabled, key, direct-call provider and pool, limits); never touches last_used_at.</summary>
     public async Task<bool> UpdateAsync(TokenRecord token, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
@@ -80,7 +81,7 @@ public sealed class TokenRepository
             UPDATE tokens SET name = @name, enabled = @enabled, key_enc = @key_enc, key_hash = @key_hash,
                               key_prefix = @key_prefix, provider_id = @provider_id, account_id = @account_id,
                               limits_json = @limits_json, allowed_clients_json = @allowed_clients_json,
-                              updated_at = @updated_at
+                              pool_json = @pool_json, updated_at = @updated_at
             WHERE id = @id
             """, new
         {
@@ -94,6 +95,7 @@ public sealed class TokenRepository
             account_id = token.AccountId,
             limits_json = token.LimitsJson,
             allowed_clients_json = token.AllowedClientsJson,
+            pool_json = token.PoolJson,
             updated_at = DateTimeOffsetHandler.ToStorage(token.UpdatedAt),
         }) > 0;
     }

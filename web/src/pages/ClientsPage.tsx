@@ -43,7 +43,7 @@ import { formatDateTime } from '../lib/format';
 import { clientOptionsKey, clientOptionsOf, type ClientOptionValues } from '../lib/clientOptions';
 import { protocolModelsOf, protocolOverridesKey, protocolOverridesOf } from '../lib/clientProtocols';
 import { CLAUDE_CODE_MODELS, modelSlotsKey, modelSlotsOf, type ModelSlots } from '../lib/modelSlots';
-import { ROLES, roleKey, rolesOf, type RoleMap } from '../lib/roleMap';
+import { ROLES, roleKey, rolesOf, suggestRoles, type RoleMap } from '../lib/roleMap';
 import { dirnameOf, systemActions } from '../shell/systemActions';
 
 export function ClientsPage() {
@@ -314,6 +314,17 @@ function ClientPanel({ client }: { client: ClientInfo }) {
   useEffect(() => setTokenId(savedToken), [client.kind, savedToken]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setRoles(rolesOf(client.extras)), [client.kind, roleKey(savedRoles)]);
+  // No role map yet: prefill one from the bound providers' models (local until enabling saves it). A provider switch
+  // replaces our own suggestion, never a role the user picked.
+  const suggestedRoles = useRef<RoleMap>({});
+  useEffect(() => {
+    if (!isDesktopClient || client.enabled || ROLES.some((r) => savedRoles[r])) return;
+    const prev = suggestedRoles.current;
+    const next = suggestRoles(models.data ?? []);
+    suggestedRoles.current = next;
+    setRoles((cur) => ((!ROLES.some((r) => cur[r]) || roleKey(cur) === roleKey(prev)) && roleKey(cur) !== roleKey(next) ? next : cur));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client.kind, client.enabled, roleKey(savedRoles), (models.data ?? []).join('\n')]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => setSlots(modelSlotsOf(client.extras)), [client.kind, modelSlotsKey(savedSlots)]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -406,6 +417,15 @@ function ClientPanel({ client }: { client: ClientInfo }) {
           <Row label={<span className="text-[12px] text-[var(--text-secondary)]">{t('clients.appliedAt', { time: formatDateTime(client.appliedAt, locale) })}</span>} />
         )}
       </Group>
+      {/* The enable button's tooltip alone is easy to miss, and the role map sits below the provider list. */}
+      {!soon && !client.enabled && isDesktopClient && client.providerId && !hasRole && (
+        <div className="mb-5 flex flex-col items-start gap-2">
+          <Alert tone="info" className="self-stretch" title={t('clients.roleMapHint')} />
+          <Button onClick={() => document.getElementById(ROLE_MAP_ANCHOR_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+            {t('clients.roleMapGoto')}
+          </Button>
+        </div>
+      )}
       {(client.repairs?.length ?? 0) > 0 && (
         <div className="mb-5 flex flex-col items-start gap-2">
           <Alert tone="danger" className="self-stretch" title={t('clients.repair.title', { name })}>
@@ -490,27 +510,29 @@ function ClientPanel({ client }: { client: ClientInfo }) {
       )}
 
       {!soon && !isDirectMode && client.providerId && isDesktopClient && (
-        <Group title={t('clients.roleMapTitle')} footer={client.enabled ? t('clients.roleMapFooterEnabled') : t('clients.roleMapFooter')}>
-          {ROLES.map((r) => (
-            <Row key={r} label={t(`clients.role.${r}` as 'clients.role.sonnet')}>
-              <Select
-                ariaLabel={t(`clients.role.${r}` as 'clients.role.sonnet')}
-                value={roles[r] ?? ''}
-                onChange={(v) => setRoles((cur) => ({ ...cur, [r]: v || undefined }))}
-                placeholder={t('clients.modelPlaceholder')}
-                options={[{ value: '', label: t('clients.modelUnset') }, ...(models.data ?? []).map((m) => ({ value: m, label: m }))]}
-                className="max-w-[300px]"
-              />
-            </Row>
-          ))}
-          {client.enabled && rolesChanged && (
-            <Row label={hasRole ? '' : <span className="text-[12px] text-[var(--warning)]">{t('clients.roleMapRequired')}</span>}>
-              <Button size="sm" variant="primary" disabled={!hasRole} onClick={() => setEnableOpen(true)}>
-                {t('common.apply')}
-              </Button>
-            </Row>
-          )}
-        </Group>
+        <div id={ROLE_MAP_ANCHOR_ID}>
+          <Group title={t('clients.roleMapTitle')} footer={client.enabled ? t('clients.roleMapFooterEnabled') : t('clients.roleMapFooter')}>
+            {ROLES.map((r) => (
+              <Row key={r} label={t(`clients.role.${r}` as 'clients.role.sonnet')}>
+                <Select
+                  ariaLabel={t(`clients.role.${r}` as 'clients.role.sonnet')}
+                  value={roles[r] ?? ''}
+                  onChange={(v) => setRoles((cur) => ({ ...cur, [r]: v || undefined }))}
+                  placeholder={t('clients.modelPlaceholder')}
+                  options={[{ value: '', label: t('clients.modelUnset') }, ...(models.data ?? []).map((m) => ({ value: m, label: m }))]}
+                  className="max-w-[300px]"
+                />
+              </Row>
+            ))}
+            {client.enabled && rolesChanged && (
+              <Row label={hasRole ? '' : <span className="text-[12px] text-[var(--warning)]">{t('clients.roleMapRequired')}</span>}>
+                <Button size="sm" variant="primary" disabled={!hasRole} onClick={() => setEnableOpen(true)}>
+                  {t('common.apply')}
+                </Button>
+              </Row>
+            )}
+          </Group>
+        </div>
       )}
 
       {!soon && !isDirectMode && client.providerId && !isDesktopClient && (
@@ -833,6 +855,9 @@ const SHADOWED_ALERT_ID = 'client-shadowed-alert';
 
 /** Anchor of the Claude Code direct panel, so the header button can scroll to it. */
 const CLAUDE_DIRECT_ANCHOR_ID = 'claude-direct-panel';
+
+/** Anchor of Claude Desktop's role map, so the "not set yet" hint under the header can scroll to it. */
+const ROLE_MAP_ANCHOR_ID = 'client-role-map';
 
 /** Installed vs latest version, how the client is installed, and why an action is unavailable. */
 function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: () => void }) {

@@ -43,6 +43,9 @@ public sealed class GatewayPipeline(
     PluginFetchHandler pluginTransport,
     TokenLimiter limiter,
     TraceLinker linker,
+    PoolRouting pools,
+    ProviderPoolScheduler poolScheduler,
+    ProviderHealth health,
     ILogger<GatewayPipeline> logger)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
@@ -51,6 +54,9 @@ public sealed class GatewayPipeline(
     internal const long MaxRequestBytes = 64L * 1024 * 1024;
     private const int MaxErrorBodyBytes = 1024 * 1024;
     private const string DefaultAnthropicVersion = "2023-06-01";
+
+    /// <summary><c>astra.attempt.retry</c> of an attempt whose failure handed the request to the next pool member.</summary>
+    public const string ProviderFailoverRetry = "provider_failover";
     private static readonly string UserAgent = $"Astra/{typeof(GatewayPipeline).Assembly.GetName().Version?.ToString(3) ?? "0"}";
 
     // Top-level Responses fields the ChatGPT (Codex) backend rejects with 400 "Unsupported parameter".
@@ -118,6 +124,9 @@ public sealed class GatewayPipeline(
         IResponseDecoder? decoder = null;
         IResponseEncoder? encoder = null;
         AccountScheduler.Lease? accountLease = null;
+        // Provider pools (issue #2): the request's plan (probe slots) and its in-flight hold on the member it went to.
+        PoolPlan? poolPlan = null;
+        ProviderPoolScheduler.Lease? poolLease = null;
         MiddlewareRun? middlewareRun = null;
         MiddlewareResponseStream? middlewareStream = null;
         // Pooled: returned when the request is over (a send still running keeps its own reference).
@@ -213,233 +222,389 @@ public sealed class GatewayPipeline(
             RequestReasoning.Capture(record, inbound, body);
             var requestedModel = (inbound == ApiProtocol.Gemini ? StripModels(pathModel) : null) ?? Str(body, "model") ?? "";
             var isClaudeCode = inbound == ApiProtocol.Anthropic && ClaudeCodeDetector.IsClaudeCode(ctx.Request.Headers, body);
-            // A client bound to several providers: the first one serving this model — as an enabled model or through its
-            // model mapping — else the primary (ClientRouting). Decided before the client policy and capability discovery below.
+            // Read once from the client's own tree, before any attempt rewrites it: the conversation identity (the
+            // rewrites touch model / stream_options / codex fields, none of which it reads), whether an OpenAI Chat client
+            // asked for the usage chunk itself (a pass-through attempt injects include_usage) and its cache TTL option.
+            var stickyKey = StickyKeys.Of(inbound, body, ctx.Request.Headers);
+            var clientWantsChatUsage = inbound == ApiProtocol.OpenAIChat
+                                       && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
+            var clientCacheTtl = ClientOptions.GetCacheTtl(route.Client?.ExtraJson);
+            var clientCodec = codecs.Get(inbound);
+            // Decoded from the client's tree the first time a translated attempt needs it; every encode starts from the
+            // decoder's own warnings, so a retry reports only its own lossy mappings.
+            UnifiedRequest? ir = null;
+            var irDecodeWarnings = 0;
+
+            // Where the request may go, in order. A client bound to several providers: the first one serving this model —
+            // as an enabled model or through its model mapping — else the primary (ClientRouting). A token's provider pool
+            // (issue #2): the members its strategy orders, the next one tried while an attempt fails before anything
+            // reached the client. Decided before the client policy and capability discovery below.
             var resolveSpan = trace.Start(TraceSpanNames.Resolve);
-            route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
-            if (route.Provider.Id != provider.Id)
+            List<GatewayRoute> candidates;
+            var maxAttempts = 1;
+            if (route.Pool is { } pool)
             {
-                provider = route.Provider;
+                poolPlan = await pools.PlanAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, stickyKey, commit: true, ct);
+                candidates = poolPlan.Order.Select(t => route with { Provider = t.Provider, AccountId = t.AccountId }).ToList();
+                maxAttempts = poolPlan.MaxAttempts;
+                resolveSpan.Set("astra.pool.strategy", pool.Strategy).Set("astra.pool.candidates", candidates.Count)
+                    .Set("astra.pool.max_attempts", maxAttempts);
+            }
+            else candidates = [await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct)];
+
+            var attempts = new AttemptTrace();
+            var sends = 0;
+            var nextCandidate = 1;
+            UpstreamPlan plan = null!;
+
+            // One member's version of the request: its model and protocol, its endpoint, the tree and bytes it is sent.
+            // Sets the record and `provider` / `effective` as it goes, so a refusal here is logged against this member.
+            // While another attempt may follow (mayRetry), the client's tree is never rewritten: the next member gets it
+            // as the privacy guard left it (re-reading the request bytes instead would undo a redaction).
+            async Task<UpstreamPlan> PrepareAsync(GatewayRoute candidate, bool mayRetry, TraceSpanBuilder span)
+            {
+                provider = candidate.Provider;
                 record.ProviderId = provider.Id;
                 record.ProviderName = provider.Name;
                 live.Update(record);
-            }
-            // Enforce the client policy before capability discovery sends anything upstream.
-            SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
-            // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
-            // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
-            var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, route.UpstreamModelFor(requestedModel), ct);
-            // Capability discovery may go to the network (a /models listing); timed on its own.
-            var capabilitiesStart = Stopwatch.GetTimestamp();
-            var supportedProtocols = await modelProtocols.ResolveAsync(provider, resolvedModel, route.AccountId, ct);
-            resolveSpan.Set("astra.resolve.capabilities_us", RequestTrace.Micros(capabilitiesStart, Stopwatch.GetTimestamp()));
-            var endpoint = GatewayRouter.SelectEndpoint(provider, inbound, supportedProtocols);
-            var upstreamProtocol = endpoint.Protocol;
-            var passthrough = upstreamProtocol == inbound;
-            record.UpstreamProtocol = upstreamProtocol.ToId();
-            record.Passthrough = passthrough;
-            resolveSpan.Set("astra.provider.id", provider.Id).Set("astra.provider.name", provider.Name)
-                .Set("gen_ai.request.model", requestedModel).Set("astra.protocol.upstream", upstreamProtocol.ToId())
-                .Set("astra.passthrough", passthrough).Ok().End();
+                // Enforce the client policy before capability discovery sends anything upstream.
+                SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
+                // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
+                // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
+                var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, candidate.UpstreamModelFor(requestedModel), ct);
+                // Capability discovery may go to the network (a /models listing); timed on its own.
+                var capabilitiesStart = Stopwatch.GetTimestamp();
+                var supportedProtocols = await modelProtocols.ResolveAsync(provider, resolvedModel, candidate.AccountId, ct);
+                span.Set("astra.resolve.capabilities_us", RequestTrace.Micros(capabilitiesStart, Stopwatch.GetTimestamp()));
+                var endpoint = GatewayRouter.SelectEndpoint(provider, inbound, supportedProtocols);
+                var upstreamProtocol = endpoint.Protocol;
+                var passthrough = upstreamProtocol == inbound;
+                record.UpstreamProtocol = upstreamProtocol.ToId();
+                record.Passthrough = passthrough;
+                span.Set("astra.provider.id", provider.Id).Set("astra.provider.name", provider.Name)
+                    .Set("gen_ai.request.model", requestedModel).Set("astra.protocol.upstream", upstreamProtocol.ToId())
+                    .Set("astra.passthrough", passthrough).Ok().End();
 
-            // Claude subscription (plan §5.4): for Claude Code itself on the pass-through path, a faithful relay of
-            // its own headers; other callers get the minimal OAuth compatibility headers — or, when the user enabled
-            // subscription.mimic_claude_code, the full Claude Code identity (see ClaudeCodeMimicry), which
-            // Anthropic's client check requires from non-Haiku callers.
-            var claudeMode = !SubscriptionSupport.IsClaudeSubscription(provider) || upstreamProtocol != ApiProtocol.Anthropic
-                ? ClaudeHeaderMode.None
-                : passthrough && isClaudeCode ? ClaudeHeaderMode.Relay : ClaudeHeaderMode.Compat;
-            var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
+                // Claude subscription (plan §5.4): for Claude Code itself on the pass-through path, a faithful relay of
+                // its own headers; other callers get the minimal OAuth compatibility headers — or, when the user enabled
+                // subscription.mimic_claude_code, the full Claude Code identity (see ClaudeCodeMimicry), which
+                // Anthropic's client check requires from non-Haiku callers.
+                var claudeMode = !SubscriptionSupport.IsClaudeSubscription(provider) || upstreamProtocol != ApiProtocol.Anthropic
+                    ? ClaudeHeaderMode.None
+                    : passthrough && isClaudeCode ? ClaudeHeaderMode.Relay : ClaudeHeaderMode.Compat;
+                var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
 
-            // Legal per plan §6.2, but worth a line in the log: the provider prefers this protocol, has no address for
-            // it, and the request is translated into a lower-preference protocol instead of passing through.
-            if (!passthrough && GatewayRouter.MissingEndpointFor(provider, inbound) is { } missing)
-                logger.LogInformation("Request {Id}: {Provider} prefers {Preferred} but has no endpoint for it; translating to {Upstream}",
-                    record.Id, provider.Name, missing.ToId(), upstreamProtocol.ToId());
+                // Legal per plan §6.2, but worth a line in the log: the provider prefers this protocol, has no address for
+                // it, and the request is translated into a lower-preference protocol instead of passing through.
+                if (!passthrough && GatewayRouter.MissingEndpointFor(provider, inbound) is { } missing)
+                    logger.LogInformation("Request {Id}: {Provider} prefers {Preferred} but has no endpoint for it; translating to {Upstream}",
+                        record.Id, provider.Name, missing.ToId(), upstreamProtocol.ToId());
 
-            var encodeSpan = trace.Start(TraceSpanNames.Encode);
-            var clientCodec = codecs.Get(inbound);
-            var upstreamCodec = codecs.Get(upstreamProtocol);
-            if (!passthrough && (clientCodec is null || upstreamCodec is null))
-                throw new GatewayException(501, "api_error", $"尚不支持 {inbound.ToId()} → {upstreamProtocol.ToId()} 的协议转换。");
+                var encodeSpan = trace.Start(TraceSpanNames.Encode);
+                var upstreamCodec = codecs.Get(upstreamProtocol);
+                if (!passthrough && (clientCodec is null || upstreamCodec is null))
+                    throw new GatewayException(501, "api_error", $"尚不支持 {inbound.ToId()} → {upstreamProtocol.ToId()} 的协议转换。");
 
-            // What the client asked for.
-            UnifiedRequest? ir = null;
-            string model;
-            bool stream;
-            if (passthrough)
-            {
-                model = (inbound == ApiProtocol.Gemini ? StripModels(pathModel) : null) ?? Str(body, "model")
-                        ?? throw new ProtocolException("请求缺少 model。");
-                stream = inbound == ApiProtocol.Gemini ? pathStream == true : body["stream"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
-            }
-            else
-            {
-                ir = clientCodec!.DecodeRequest(body, new RequestDecodeContext { PathModel = StripModels(pathModel), PathStream = pathStream });
-                model = ir.Model;
-                stream = ir.Stream;
-                if (string.IsNullOrEmpty(model)) throw new ProtocolException("请求缺少 model。");
-                if (ir.PreviousResponseId is not null && upstreamProtocol != ApiProtocol.OpenAIResponses)
-                    throw new ProtocolException($"previous_response_id 依赖 OpenAI Responses 的服务端会话，而提供商 {provider.Name} 的上游协议是 {upstreamProtocol.ToId()}。请让客户端发送完整对话历史（例如关闭 store / 会话续接）。");
-            }
-            record.RequestedModel = model;
-            var upstreamModel = route.UpstreamModelFor(model);
-            record.UpstreamModel = upstreamModel;
-            // ChatGPT 订阅（Codex）的 backend 把请求钉死成 codex-cli 的形状：input 必须是数组、
-            // store 必须是 false、stream 必须是 true（客户端要非流式时我们带 stream:true 发上去，
-            // 再把完整响应一次性回给客户端）。因此上游的流式与否在这里就定下来了。
-            var forceResponsesStream = provider.SettingFlag("force_stream", false) && upstreamProtocol == ApiProtocol.OpenAIResponses;
-            var clientWantsStream = stream;
-            if (forceResponsesStream) stream = true;
-            record.Stream = stream;
-            var clientWantsChatUsage = inbound == ApiProtocol.OpenAIChat
-                                       && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
-
-            // 上游模型名可能与请求里的不同（provider model 映射），按上游名再解析一次取有效模型。
-            (_, effective) = upstreamModel == resolvedModel.ModelId
-                ? (resolvedModel, await models.ResolveAsync(provider, resolvedModel, ct))
-                : await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
-            record.SystemModelId = effective.SystemModelId;
-            live.Update(record);
-
-            // What we send upstream: one tree, serialized once at the end — or the client's bytes when untouched.
-            JsonObject upstreamTree;
-            bool upstreamDirty;
-            var injectedChatUsage = false;
-            if (passthrough)
-            {
-                var rewritten = false;
-                if (upstreamModel != model && inbound != ApiProtocol.Gemini)
+                // What the client asked for.
+                UnifiedRequest? attemptIr = null;
+                string model;
+                bool stream;
+                if (passthrough)
                 {
-                    body["model"] = upstreamModel; // Gemini carries the model in the URL instead.
-                    rewritten = true;
+                    model = (inbound == ApiProtocol.Gemini ? StripModels(pathModel) : null) ?? Str(body, "model")
+                            ?? throw new ProtocolException("请求缺少 model。");
+                    stream = inbound == ApiProtocol.Gemini ? pathStream == true : body["stream"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
                 }
-                if (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
+                else
                 {
-                    // Plan §4.2: always ask for usage; the extra usage chunk is filtered out before it reaches the client.
-                    var options = body["stream_options"] as JsonObject ?? new JsonObject();
-                    options["include_usage"] = true;
-                    body["stream_options"] = options;
-                    injectedChatUsage = true;
-                    rewritten = true;
-                }
-                upstreamTree = body;
-                upstreamDirty = rewritten || !bodyIsClientBytes;
-            }
-            else
-            {
-                upstreamTree = upstreamCodec!.EncodeRequest(ir!, new RequestEncodeContext
-                {
-                    UpstreamModel = upstreamModel,
-                    DefaultMaxOutputTokens = effective.MaxOutputTokens is { } max && max <= int.MaxValue ? (int)max : null,
-                    EffortBudgets = s.EffortBudgets,
-                    AutoCacheControl = provider.SettingFlag("auto_cache_control", true),
-                });
-                upstreamDirty = true;
-                if (ir!.Warnings.Count > 0) logger.LogInformation("Request {Id}: lossy mapping: {Warnings}", record.Id, string.Join("; ", ir.Warnings));
-            }
-            if (forceResponsesStream)
-            {
-                // codex backend: input 必须是数组、store 必须是 false、stream 必须是 true；codex-cli 不发的
-                // 采样/身份参数（user、max_output_tokens、temperature…）一律回 400 "Unsupported parameter"。
-                // 直通与翻译两条路都在这里收口。
-                if (upstreamTree["input"] is JsonValue inputValue && inputValue.TryGetValue<string>(out var inputText))
-                {
-                    upstreamTree["input"] = new JsonArray(new JsonObject
+                    if (ir is null)
                     {
-                        ["type"] = "message", ["role"] = "user",
-                        ["content"] = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = inputText }),
-                    });
+                        ir = clientCodec!.DecodeRequest(body, new RequestDecodeContext { PathModel = StripModels(pathModel), PathStream = pathStream });
+                        irDecodeWarnings = ir.Warnings.Count;
+                    }
+                    else ir.Warnings.RemoveRange(irDecodeWarnings, ir.Warnings.Count - irDecodeWarnings);
+                    attemptIr = ir;
+                    model = ir.Model;
+                    stream = ir.Stream;
+                    if (string.IsNullOrEmpty(model)) throw new ProtocolException("请求缺少 model。");
+                    if (ir.PreviousResponseId is not null && upstreamProtocol != ApiProtocol.OpenAIResponses)
+                        throw new ProtocolException($"previous_response_id 依赖 OpenAI Responses 的服务端会话，而提供商 {provider.Name} 的上游协议是 {upstreamProtocol.ToId()}。请让客户端发送完整对话历史（例如关闭 store / 会话续接）。");
                 }
-                upstreamTree["store"] = false;
-                upstreamTree["stream"] = true;
-                foreach (var name in CodexUnsupportedParams) upstreamTree.Remove(name);
-                upstreamDirty = true;
-            }
-            // The conversation identity, read before the rewrites below can touch system / metadata.
-            var stickyKey = StickyKeys.Of(inbound, body, ctx.Request.Headers);
-            // 模拟 Claude Code（subscription.mimic_claude_code，见 ClaudeCodeMimicry）：把最终发往
-            // 上游的请求体改写成 CLI 的形状（3 块 system + metadata.user_id）。直通与翻译两条路
-            // 都在这里收口，改的是同一棵 upstreamTree。
-            var clientCacheTtl = ClientOptions.GetCacheTtl(route.Client?.ExtraJson);
-            if (claudeMimic)
-                upstreamDirty |= ClaudeCodeMimicry.ApplyBody(upstreamTree, route.AccountId ?? provider.Id,
-                    ctx.Request.Headers["x-claude-code-session-id"].ToString());
-            // Relay（真正的 Claude Code）：经 ANTHROPIC_AUTH_TOKEN 指到 Astra 的 CC 处于 auth-token 模式，
-            // 它的请求体与自己用订阅（OAuth）登录时发的不同——实测抓包（claude-cli/2.1.281 两种模式的原始请求）
-            // 唯一的体差异是 cache_control 没有 ttl:"1h"（计费块、metadata 两种模式都有）。头里的 beta 同理要
-            // 补 oauth + extended-cache-ttl（见 ClaudeOAuthHeaders.MergeRelayBeta）：头体必须自洽，
-            // 只补头不补体，就是"声明订阅身份却带着 API-key 形态的体"，上游回 403 Request not allowed。
-            // 客户端专属的 cacheTtl 选项（ClientOptions）优先于 Relay 的默认 1h；只给没有 ttl 的块补，不增删断点。
-            else if (claudeMode == ClaudeHeaderMode.Relay)
-                upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl ?? "1h");
-            else if (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
-                upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl);
+                record.RequestedModel = model;
+                var upstreamModel = candidate.UpstreamModelFor(model);
+                record.UpstreamModel = upstreamModel;
+                // ChatGPT 订阅（Codex）的 backend 把请求钉死成 codex-cli 的形状：input 必须是数组、
+                // store 必须是 false、stream 必须是 true（客户端要非流式时我们带 stream:true 发上去，
+                // 再把完整响应一次性回给客户端）。因此上游的流式与否在这里就定下来了。
+                var forceResponsesStream = provider.SettingFlag("force_stream", false) && upstreamProtocol == ApiProtocol.OpenAIResponses;
+                var clientWantsStream = stream;
+                if (forceResponsesStream) stream = true;
+                record.Stream = stream;
 
-            PooledBuffer payload;
-            if (upstreamDirty)
-            {
-                // Straight to UTF-8 in a pooled buffer sized like the client's body (the usual outcome).
-                upstreamPayload = payload = new PooledBuffer(requestBody.Buffer.Length + 1024);
-                GatewayJson.WriteTo(upstreamTree, payload);
-            }
-            else
-            {
-                payload = requestBody.Buffer;
-            }
-            capture?.Set(BodyStore.UpstreamRequest, payload.Span);
-            encodeSpan.Set("astra.protocol.inbound", inbound.ToId()).Set("astra.protocol.upstream", upstreamProtocol.ToId())
-                .Set("astra.passthrough", passthrough).Set("astra.encode.rewritten", upstreamDirty)
-                .Set("astra.encode.lossy", ir?.Warnings.Count ?? 0)
-                .Set("astra.encode.warnings", ir is { Warnings.Count: > 0 } ? Truncate(string.Join("; ", ir.Warnings), 300) : null)
-                .Set("gen_ai.request.model", model).Set("astra.upstream.model", upstreamModel).Set("astra.stream", stream)
-                .Set("astra.claude.mode", claudeMode == ClaudeHeaderMode.None ? null
-                    : claudeMimic ? "mimic" : claudeMode == ClaudeHeaderMode.Relay ? "relay" : "compat")
-                .Set("astra.body.bytes", payload.Length).Ok().End();
+                // 上游模型名可能与请求里的不同（provider model 映射），按上游名再解析一次取有效模型。
+                EffectiveModel attemptEffective;
+                (_, attemptEffective) = upstreamModel == resolvedModel.ModelId
+                    ? (resolvedModel, await models.ResolveAsync(provider, resolvedModel, ct))
+                    : await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
+                effective = attemptEffective;
+                record.SystemModelId = attemptEffective.SystemModelId;
+                live.Update(record);
 
-            var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
-            // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
-            if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
-            var (sent, accountId, lease) = await SendAsync(route, endpoint, url, payload, upstreamTree, stream, passthrough, claudeMode, upstreamModel,
-                stickyKey, ctx.Request, capture, trace, ct);
-            accountLease = lease;
-            using var response = sent;
+                // What we send upstream: one tree, serialized once at the end — or the client's bytes when untouched.
+                JsonObject upstreamTree;
+                bool upstreamDirty;
+                var injectedChatUsage = false;
+                if (passthrough)
+                {
+                    // A pool attempt another one may follow rewrites a copy: the client's tree stays as it came.
+                    var mayRewrite = (upstreamModel != model && inbound != ApiProtocol.Gemini)
+                                     || (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
+                                     || forceResponsesStream || claudeMimic || claudeMode == ClaudeHeaderMode.Relay
+                                     || (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic);
+                    upstreamTree = mayRetry && mayRewrite ? (JsonObject)body.DeepClone() : body;
+                    var rewritten = false;
+                    if (upstreamModel != model && inbound != ApiProtocol.Gemini)
+                    {
+                        upstreamTree["model"] = upstreamModel; // Gemini carries the model in the URL instead.
+                        rewritten = true;
+                    }
+                    if (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
+                    {
+                        // Plan §4.2: always ask for usage; the extra usage chunk is filtered out before it reaches the client.
+                        var options = upstreamTree["stream_options"] as JsonObject ?? new JsonObject();
+                        options["include_usage"] = true;
+                        upstreamTree["stream_options"] = options;
+                        injectedChatUsage = true;
+                        rewritten = true;
+                    }
+                    upstreamDirty = rewritten || !bodyIsClientBytes;
+                }
+                else
+                {
+                    upstreamTree = upstreamCodec!.EncodeRequest(ir!, new RequestEncodeContext
+                    {
+                        UpstreamModel = upstreamModel,
+                        DefaultMaxOutputTokens = attemptEffective.MaxOutputTokens is { } max && max <= int.MaxValue ? (int)max : null,
+                        EffortBudgets = s.EffortBudgets,
+                        AutoCacheControl = provider.SettingFlag("auto_cache_control", true),
+                    });
+                    upstreamDirty = true;
+                    if (ir!.Warnings.Count > 0) logger.LogInformation("Request {Id}: lossy mapping: {Warnings}", record.Id, string.Join("; ", ir.Warnings));
+                }
+                if (forceResponsesStream)
+                {
+                    // codex backend: input 必须是数组、store 必须是 false、stream 必须是 true；codex-cli 不发的
+                    // 采样/身份参数（user、max_output_tokens、temperature…）一律回 400 "Unsupported parameter"。
+                    // 直通与翻译两条路都在这里收口。
+                    if (upstreamTree["input"] is JsonValue inputValue && inputValue.TryGetValue<string>(out var inputText))
+                    {
+                        upstreamTree["input"] = new JsonArray(new JsonObject
+                        {
+                            ["type"] = "message", ["role"] = "user",
+                            ["content"] = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = inputText }),
+                        });
+                    }
+                    upstreamTree["store"] = false;
+                    upstreamTree["stream"] = true;
+                    foreach (var name in CodexUnsupportedParams) upstreamTree.Remove(name);
+                    upstreamDirty = true;
+                }
+                // 模拟 Claude Code（subscription.mimic_claude_code，见 ClaudeCodeMimicry）：把最终发往
+                // 上游的请求体改写成 CLI 的形状（3 块 system + metadata.user_id）。直通与翻译两条路
+                // 都在这里收口，改的是同一棵 upstreamTree。
+                if (claudeMimic)
+                    upstreamDirty |= ClaudeCodeMimicry.ApplyBody(upstreamTree, candidate.AccountId ?? provider.Id,
+                        ctx.Request.Headers["x-claude-code-session-id"].ToString());
+                // Relay（真正的 Claude Code）：经 ANTHROPIC_AUTH_TOKEN 指到 Astra 的 CC 处于 auth-token 模式，
+                // 它的请求体与自己用订阅（OAuth）登录时发的不同——实测抓包（claude-cli/2.1.281 两种模式的原始请求）
+                // 唯一的体差异是 cache_control 没有 ttl:"1h"（计费块、metadata 两种模式都有）。头里的 beta 同理要
+                // 补 oauth + extended-cache-ttl（见 ClaudeOAuthHeaders.MergeRelayBeta）：头体必须自洽，
+                // 只补头不补体，就是"声明订阅身份却带着 API-key 形态的体"，上游回 403 Request not allowed。
+                // 客户端专属的 cacheTtl 选项（ClientOptions）优先于 Relay 的默认 1h；只给没有 ttl 的块补，不增删断点。
+                else if (claudeMode == ClaudeHeaderMode.Relay)
+                    upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl ?? "1h");
+                else if (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
+                    upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl);
+
+                PooledBuffer payload;
+                PooledBuffer? owned = null;
+                if (upstreamDirty)
+                {
+                    // Straight to UTF-8 in a pooled buffer sized like the client's body (the usual outcome).
+                    owned = payload = new PooledBuffer(requestBody!.Buffer.Length + 1024);
+                    GatewayJson.WriteTo(upstreamTree, payload);
+                }
+                else
+                {
+                    payload = requestBody!.Buffer;
+                }
+                capture?.Set(BodyStore.UpstreamRequest, payload.Span);
+                encodeSpan.Set("astra.protocol.inbound", inbound.ToId()).Set("astra.protocol.upstream", upstreamProtocol.ToId())
+                    .Set("astra.passthrough", passthrough).Set("astra.encode.rewritten", upstreamDirty)
+                    .Set("astra.encode.lossy", attemptIr?.Warnings.Count ?? 0)
+                    .Set("astra.encode.warnings", attemptIr is { Warnings.Count: > 0 } ? Truncate(string.Join("; ", attemptIr.Warnings), 300) : null)
+                    .Set("gen_ai.request.model", model).Set("astra.upstream.model", upstreamModel).Set("astra.stream", stream)
+                    .Set("astra.claude.mode", claudeMode == ClaudeHeaderMode.None ? null
+                        : claudeMimic ? "mimic" : claudeMode == ClaudeHeaderMode.Relay ? "relay" : "compat")
+                    .Set("astra.body.bytes", payload.Length).Ok().End();
+
+                var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
+                // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
+                if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
+                return new UpstreamPlan(candidate, endpoint, passthrough, claudeMode, upstreamCodec, attemptIr, model, upstreamModel, stream,
+                    clientWantsStream, forceResponsesStream, injectedChatUsage, attemptEffective, upstreamTree, payload, owned, url);
+            }
+
+            // The next pool member that can take the request; null when none is left (the record then describes the
+            // attempt at hand again, whose failure is the answer). A member this request cannot be written for (no
+            // endpoint for the model's protocol, no codec, a Responses-only session) is skipped.
+            async Task<UpstreamPlan?> TryPlanNextAsync()
+            {
+                while (nextCandidate < candidates.Count)
+                {
+                    var candidate = candidates[nextCandidate++];
+                    var span = trace.Start(TraceSpanNames.Resolve).Set("astra.pool.attempt", sends + 1);
+                    try
+                    {
+                        return await PrepareAsync(candidate, sends + 1 < maxAttempts && nextCandidate < candidates.Count, span);
+                    }
+                    catch (Exception e) when (e is GatewayException or ProtocolException)
+                    {
+                        span.Error(e.Message).End();
+                        logger.LogInformation("Request {Id}: pool member {Provider} skipped: {Reason}", record.Id, candidate.Provider.Name, e.Message);
+                    }
+                }
+                plan.ApplyTo(record);
+                provider = plan.Route.Provider;
+                effective = plan.Effective;
+                live.Update(record);
+                return null;
+            }
+
+            bool CanFailOver() => poolPlan is not null && sends < maxAttempts && nextCandidate < candidates.Count;
+
+            // Health of API-key providers (ProviderHealth) is reported from every route and read by pools only; account-based
+            // providers cool their accounts instead.
+            void Report(Provider target, ProviderOutcome outcome, HttpResponseMessage? response)
+            {
+                if (AuthSchemes.UsesAccounts(target.AuthScheme)) return;
+                health.Report(target.Id, outcome,
+                    outcome == ProviderOutcome.RateLimited && response is not null ? RateLimitResetOf(response, DateTimeOffset.UtcNow) : null);
+            }
+
+            // Exception filter: reports the failure, never changes what happens to the exception on a single-provider route.
+            bool Failed(Provider target, Exception e)
+            {
+                if (ProviderFailover.Classify(e, ct) is not { } verdict) return false;
+                Report(target, verdict.Outcome, null);
+                return verdict.FailOver && CanFailOver();
+            }
+
+            void Switch(UpstreamPlan next)
+            {
+                plan.OwnedPayload?.Release();
+                plan = next;
+                upstreamPayload = next.OwnedPayload;
+            }
+
+            plan = await PrepareAsync(candidates[0], maxAttempts > 1 && candidates.Count > 1, resolveSpan);
+            upstreamPayload = plan.OwnedPayload;
+            HttpResponseMessage answered;
+            string? accountId;
+            while (true)
+            {
+                if (sends > 0)
+                {
+                    // A failed attempt's numbers must not stick to the one that answers (the catch blocks only fill gaps).
+                    record.HttpStatus = null;
+                    record.AccountId = null;
+                    record.UpstreamRequestId = null;
+                }
+                if (poolPlan is not null)
+                {
+                    poolLease?.Dispose();
+                    poolLease = poolScheduler.Begin(plan.Route.Provider.Id);
+                }
+                sends++;
+                (HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease) sent;
+                try
+                {
+                    sent = await SendAsync(plan.Route, plan.Endpoint, plan.Url, plan.Payload, plan.UpstreamTree, plan.Stream, plan.Passthrough,
+                        plan.ClaudeMode, plan.UpstreamModel, stickyKey, ctx.Request, capture, trace, attempts, ct);
+                }
+                catch (Exception e) when (Failed(plan.Route.Provider, e))
+                {
+                    var failedSpan = attempts.Last;
+                    if (await TryPlanNextAsync() is not { } next) throw;
+                    failedSpan?.Set("astra.attempt.retry", ProviderFailoverRetry).Error(e.Message).End();
+                    logger.LogInformation("Request {Id}: {From} failed ({Reason}); trying {To}", record.Id, plan.Route.Provider.Name, e.Message, next.Route.Provider.Name);
+                    Switch(next);
+                    continue;
+                }
+                var verdict = ProviderFailover.Classify((int)sent.Response.StatusCode);
+                Report(plan.Route.Provider, verdict.Outcome, sent.Response);
+                if (verdict.FailOver && CanFailOver())
+                {
+                    var failedSpan = attempts.Last;
+                    if (await TryPlanNextAsync() is { } next)
+                    {
+                        failedSpan?.Set("astra.attempt.retry", ProviderFailoverRetry);
+                        logger.LogInformation("Request {Id}: {From} answered {Status}; trying {To}", record.Id, plan.Route.Provider.Name,
+                            (int)sent.Response.StatusCode, next.Route.Provider.Name);
+                        sent.Response.Dispose();
+                        sent.Lease?.Dispose();
+                        Switch(next);
+                        continue;
+                    }
+                }
+                accountLease = sent.Lease;
+                accountId = sent.AccountId;
+                answered = sent.Response;
+                break;
+            }
+            route = plan.Route;
+            // Probe slots of members this request never reached go back now, not when the answer has been streamed.
+            poolPlan?.Dispose();
+            if (route.Pool is { } servedPool && answered.IsSuccessStatusCode)
+                poolScheduler.Bind(route.Token.Id, servedPool, stickyKey, route.Provider.Id);
+
+            using var response = answered;
             responseSpan = trace.Start(TraceSpanNames.Response);
             record.AccountId = accountId;
             record.TtfbMs = sw.ElapsedMilliseconds;
             record.HttpStatus = (int)response.StatusCode;
             record.UpstreamRequestId = FirstHeader(response, "x-request-id", "request-id", "x-goog-request-id", "cf-ray");
-            if (claudeMode == ClaudeHeaderMode.Relay) RelayResponseHeaders(response, ctx.Response);
+            if (plan.ClaudeMode == ClaudeHeaderMode.Relay) RelayResponseHeaders(response, ctx.Response);
             live.Update(record);
 
             if (!response.IsSuccessStatusCode)
             {
-                await ForwardErrorAsync(ctx, response, record, inbound, passthrough, clientCodec, upstreamCodec, capture, ct);
+                await ForwardErrorAsync(ctx, response, record, inbound, plan.Passthrough, clientCodec, plan.UpstreamCodec, capture, ct);
                 return;
             }
 
             var restore = guard.RestoreMap;
             // 被强制成流式的上游（codex backend）遇到"客户端要非流式"时：把 SSE 读完，
             // 再按客户端协议拼成一个完整 JSON 响应回去。
-            var collapseStream = forceResponsesStream && !clientWantsStream;
-            decoder = upstreamCodec?.CreateResponseDecoder(new ResponseDecodeContext { Stream = stream, Model = upstreamModel });
-            encoder = passthrough
+            var collapseStream = plan.ForceResponsesStream && !plan.ClientWantsStream;
+            decoder = plan.UpstreamCodec?.CreateResponseDecoder(new ResponseDecodeContext { Stream = plan.Stream, Model = plan.UpstreamModel });
+            encoder = plan.Passthrough
                 ? null
                 : clientCodec!.CreateResponseEncoder(new ResponseEncodeContext
                 {
-                    Stream = clientWantsStream,
-                    Model = model,
+                    Stream = plan.ClientWantsStream,
+                    Model = plan.Model,
                     ResponseId = record.Id,
                     Created = record.StartedAtUtc,
                     IncludeUsage = inbound != ApiProtocol.OpenAIChat || clientWantsChatUsage,
-                    Request = ir,
+                    Request = plan.Ir,
                 });
 
-            if (stream && !collapseStream)
+            if (plan.Stream && !collapseStream)
             {
                 // Gemini :streamGenerateContent without ?alt=sse answers with a JSON array of chunks, not SSE.
                 var asJsonArray = inbound == ApiProtocol.Gemini && pathAltSse == false;
-                await StreamAsync(ctx, response, decoder, encoder, observer, sw, restore, injectedChatUsage, capture, s.StreamIdleTimeoutSec, asJsonArray, ct);
+                await StreamAsync(ctx, response, decoder, encoder, observer, sw, restore, plan.InjectedChatUsage, capture, s.StreamIdleTimeoutSec, asJsonArray, ct);
             }
             else if (collapseStream)
                 await CollapseStreamAsync(ctx, response, decoder, encoder, observer, sw, restore, capture, s.StreamIdleTimeoutSec, ct);
@@ -518,6 +683,8 @@ public sealed class GatewayPipeline(
             middlewareRun?.Dispose();
             // Balanced mode: the account's in-flight slot is held until the whole response has been streamed back.
             accountLease?.Dispose();
+            poolLease?.Dispose();
+            poolPlan?.Dispose();
             record.ResponseModel = decoder?.ResponseModel;
             Finish(record, observer, sw, effective, provider, s.Locale);
             FinishTrace(record, trace, link, inboundTraceId, observer, responseSpan, middlewareStream is not null, restorable);
@@ -543,7 +710,7 @@ public sealed class GatewayPipeline(
     private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, PooledBuffer body, JsonObject bodyTree, bool stream, bool passthrough,
         ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, RequestTrace trace,
-        CancellationToken ct)
+        AttemptTrace attempts, CancellationToken ct)
     {
         var provider = route.Provider;
         var plugin = provider.AuthScheme == AuthSchemes.Plugin;
@@ -574,7 +741,7 @@ public sealed class GatewayPipeline(
             while (true)
             {
                 // One upstream.attempt span per send (.plan/observability.md §2.3); a retry ends it and starts the next.
-                var attempt = trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client);
+                var attempt = StartAttempt();
                 if (balanced)
                 {
                     // Pick (and hold an in-flight slot on) the account for this attempt; accounts that already failed
@@ -679,8 +846,12 @@ public sealed class GatewayPipeline(
         TraceSpanBuilder Retry(TraceSpanBuilder span, HttpResponseMessage response, string reason, string? account)
         {
             EndAttempt(span, response, reason);
-            return trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client).Set("astra.account.id", account).Set("astra.transport", plugin ? "plugin" : null);
+            return StartAttempt().Set("astra.account.id", account).Set("astra.transport", plugin ? "plugin" : null);
         }
+
+        // Each attempt names its provider: a pool request's attempts can go to several (.plan/observability.md §2.3).
+        TraceSpanBuilder StartAttempt() => attempts.Last = trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client)
+            .Set("astra.provider.id", provider.Id).Set("astra.provider.name", provider.Name);
 
         // What the attempt's response said: status, upstream request id, rate-limit state, why it was retried.
         static void EndAttempt(TraceSpanBuilder span, HttpResponseMessage response, string? retry)
@@ -825,6 +996,35 @@ public sealed class GatewayPipeline(
         foreach (var (name, values) in response.Headers)
             if (ClaudeOAuthHeaders.IsRelayedResponseHeader(name))
                 target.Headers[name] = string.Join(",", values);
+    }
+
+    /// <summary>The upstream attempt span being recorded, so a failover can mark it even when the send threw.</summary>
+    private sealed class AttemptTrace
+    {
+        public TraceSpanBuilder? Last { get; set; }
+    }
+
+    /// <summary>
+    /// One route's version of a request (provider pools, issue #2): where it goes, how it is written for that provider,
+    /// and the bytes sent. <see cref="OwnedPayload"/> is the pooled buffer this plan allocated (null = the client's bytes).
+    /// </summary>
+    private sealed record UpstreamPlan(
+        GatewayRoute Route, ProviderEndpoint Endpoint, bool Passthrough, ClaudeHeaderMode ClaudeMode, IProtocolCodec? UpstreamCodec,
+        UnifiedRequest? Ir, string Model, string UpstreamModel, bool Stream, bool ClientWantsStream, bool ForceResponsesStream,
+        bool InjectedChatUsage, EffectiveModel Effective, JsonObject UpstreamTree, PooledBuffer Payload, PooledBuffer? OwnedPayload, string Url)
+    {
+        /// <summary>Puts this plan's provider, protocol and models back on the record.</summary>
+        public void ApplyTo(RequestRecord record)
+        {
+            record.ProviderId = Route.Provider.Id;
+            record.ProviderName = Route.Provider.Name;
+            record.UpstreamProtocol = Endpoint.Protocol.ToId();
+            record.Passthrough = Passthrough;
+            record.RequestedModel = Model;
+            record.UpstreamModel = UpstreamModel;
+            record.Stream = Stream;
+            record.SystemModelId = Effective.SystemModelId;
+        }
     }
 
     /// <summary>How outbound headers are built for a Claude subscription upstream.</summary>

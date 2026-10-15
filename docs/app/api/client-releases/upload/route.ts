@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 
-import { isValidVersion, sanitizeToken, saveUpload, verifyUploadToken, DEFAULT_CHANNEL } from '@/lib/releases';
+import { channelOfVersion, isValidVersion, normalizeChannel, sanitizeToken, saveUpload, verifyUploadToken, DEFAULT_CHANNEL } from '@/lib/releases';
 
 /**
  * Upload a desktop release artifact.
  *
  *   POST /api/client-releases/upload
  *   Authorization: Bearer $CLIENT_UPLOAD_TOKEN
- *   x-astra-version: 0.2.0        (required, semver)
+ *   x-astra-version: 0.2.0        (required, x.y.z or x.y.z-preview.N)
+ *   x-astra-channel: stable|preview (optional, default stable; must match the version)
  *   x-astra-platform: darwin-arm64 (required)
  *   x-astra-kind: dmg|zip|…        (required, file extension)
  *   x-astra-notes-b64: <base64>    (optional, release notes for the version)
@@ -26,11 +27,20 @@ export async function POST(req: Request): Promise<NextResponse> {
   const version = sanitizeToken(req.headers.get('x-astra-version') ?? '', 32);
   const platform = sanitizeToken(req.headers.get('x-astra-platform') ?? '', 64);
   const kind = sanitizeToken(req.headers.get('x-astra-kind') ?? '', 16);
-  const channel = sanitizeToken(req.headers.get('x-astra-channel') ?? '', 32) || DEFAULT_CHANNEL;
+  const rawChannel = req.headers.get('x-astra-channel');
+  const channel = rawChannel ? normalizeChannel(rawChannel) : DEFAULT_CHANNEL;
   const notesB64 = req.headers.get('x-astra-notes-b64');
 
   if (!isValidVersion(version)) {
     return NextResponse.json({ error: 'Missing or invalid x-astra-version header (expected semver).' }, { status: 400 });
+  }
+  if (!channel) return NextResponse.json({ error: 'Unknown x-astra-channel (use stable or preview).' }, { status: 400 });
+  // The channel follows from the version: a preview must never land in stable, nor a stable in preview.
+  if (channelOfVersion(version) !== channel) {
+    return NextResponse.json(
+      { error: `Version ${version} does not belong in the ${channel} channel (x.y.z is stable, x.y.z-preview.N is preview).` },
+      { status: 400 },
+    );
   }
   if (!platform) return NextResponse.json({ error: 'Missing x-astra-platform header.' }, { status: 400 });
   if (!kind) return NextResponse.json({ error: 'Missing x-astra-kind header.' }, { status: 400 });

@@ -12,9 +12,9 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 ## Entry points
 | Symbol | File | Role |
 |---|---|---|
-| `version` job | `.github/workflows/release.yml:31` | Resolves the version from `cli/package.json`, gates tag↔version, "already on npm", and a non-empty CHANGELOG section; outputs `version` + `publish`. |
+| `version` job | `.github/workflows/release.yml:31` | Resolves the version from `cli/package.json`, derives the channel with `scripts/release-channel.mjs` (fails outside `x.y.z` / `x.y.z-preview.N`), gates tag↔version, "already on npm", and a non-empty CHANGELOG section; outputs `version`, `publish`, `channel`, `npm_tag`, `tag_preview`. |
 | `build` job (6-row matrix) | `.github/workflows/release.yml:74` | Per RID: AOT publish → AOT-warning gate → `plugin-selftest` → version check → manifest partial → server pkg → `server-bundle` → desktop build → `pack-desktop` → `npm pack`; uploads `pkg-<rid>` + `feed-<rid>`. |
-| `publish` job | `.github/workflows/release.yml:315` | Merges partials into `latest.json`, publishes platform packages then the CLI to npm, uploads installers + manifest to the docs site, creates the `v<version>` GitHub Release. |
+| `publish` job | `.github/workflows/release.yml:341` | Merges partials into `out/feed/<channel>/latest.json`, uploads the installers to the docs site, publishes platform packages then the CLI to npm under `--tag <npm_tag>`, then uploads the manifest (after npm), creates the `v<version>` GitHub Release (`--prerelease` for a preview). |
 | `docker` job | `.github/workflows/release.yml:531` | Unpacks `pkg-linux-*` into `docker-bin/{amd64,arm64}`, smoke-tests an amd64 image, pushes multi-arch `ghcr.io/<owner>/<repo>`. |
 | `dotnet` / `node` jobs | `.github/workflows/ci.yml:13`,`:35` | PR + main CI: `dotnet build -warnaserror` + `dotnet test --no-build`; `pnpm -r --if-present lint/typecheck/test/build`. |
 | `build` job | `.github/workflows/docs.yml:31` | Path-filtered build+push of the docs image to `ghcr.io/<owner>/<repo>/docs`. |
@@ -34,7 +34,8 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 | `check-aot-warnings` | `scripts/check-aot-warnings.mjs:21` | Fails on any `IL\d{4}` warning/error line that is not Jint's; de-dupes MSBuild's repeated lines. |
 | `publish-feed` | `scripts/publish-feed.mjs:41`,`:69` | rsync/copy to a local dir or `user@host:/path`: versioned artifacts first, `latest*.json|yml` pointers last; never `--delete`. |
 | `Upload platform packages` step | `.github/workflows/release.yml:285` | Publishes `pkg-<rid>` (the tgz is the artifact, not the directory). |
-| `Publish platform packages first, then the CLI` step | `.github/workflows/release.yml:448` | `publish()` (skip-if-on-npm) + `wait_for()` (90 min) then the CLI, twice (renamed). |
+| `Publish platform packages first, then the CLI` step | `.github/workflows/release.yml:458` | `publish()` (skip-if-on-npm, `--tag $NPM_TAG`) + `wait_for()` (90 min) then the CLI, twice (renamed), a `wait_for` on both CLIs, and the `preview` dist-tag move for a stable with `tag_preview`. |
+| `channelOf` / `compareReleaseVersions` | `scripts/release-channel.mjs` | The release version rule (`x.y.z` stable, `x.y.z-preview.N` preview) and its ordering; imported by `sync-versions.mjs`, run as a CLI by the `version` job. |
 | `Dockerfile` | `Dockerfile:19` | `runtime-deps:10.0` + `COPY docker-bin/${TARGETARCH}/`; `/data` owned by `app`, healthcheck via the `healthcheck` subcommand. |
 
 ## Dependencies
@@ -43,7 +44,7 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 - Uses: `desktop-app` via shell (build + packager) — `pnpm --filter @aidotnet/desktop build` and `electron-builder … --config.directories.output=../out/desktop` (`.github/workflows/release.yml:257`,`:264`); `extraResources: server-bundle → server` (`desktop/electron-builder.yml:15`).
 - Uses: `cli` via npm pack — `npm pack ./cli` then the in-place rename + rebuild as `@aidotnet/astra-gate` (`.github/workflows/release.yml:495`,`:502`); the version source is `cli/package.json:2`.
 - Uses: `update-core` via a JSON contract — `latest.json` written by `scripts/gen-manifest.mjs:83` and fetched from `${feed}/<channel>/latest.json` (`packages/update-core/src/manifest.ts:49`).
-- Uses: `docs-site` via HTTP — `POST ${DOCS_RELEASE_URL}/api/client-releases/upload` with `x-astra-version|platform|kind|notes-b64` (`.github/workflows/release.yml:421`; accepted by `docs/app/api/client-releases/upload/route.ts:26`).
+- Uses: `docs-site` via HTTP — `POST ${DOCS_RELEASE_URL}/api/client-releases/upload` with `x-astra-version|channel|platform|kind|notes-b64` (installers before npm, the manifest after; accepted by `docs/app/api/client-releases/upload/route.ts`).
 - Used by: `cli` via npm — `@aidotnet/server-*` are `optionalDependencies` resolved at install time (`cli/package.json:33`, `.github/workflows/release.yml:483`).
 - Used by: `desktop-app` via npm package contents — `npm/desktop-*/app` (`scripts/pack-desktop.mjs:62`).
 - Used by: `docs-site` via the image it serves + the uploaded files (`.github/workflows/docs.yml:28`, `docs/lib/releases.ts:25`).

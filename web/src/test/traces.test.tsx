@@ -170,6 +170,22 @@ describe('trace layouts', () => {
     expect(graph.edges.some((e) => e.target === 'agent' && e.targetHandle === 'bottom')).toBe(true);
   });
 
+  it('gives each provider of a pool failover its own node, the answering one last', () => {
+    const spans = failoverSpans('r1').map((sp) =>
+      sp.name !== 'upstream.attempt'
+        ? sp
+        : sp.startUs === Math.min(...failoverSpans('r1').filter((x) => x.name === 'upstream.attempt').map((x) => x.startUs))
+          ? { ...sp, attributes: { ...sp.attributes, 'astra.provider.id': 'relay', 'astra.provider.name': 'Relay', 'astra.attempt.retry': 'provider_failover' } }
+          : { ...sp, attributes: { ...sp.attributes, 'astra.provider.id': 'copilot', 'astra.provider.name': 'GitHub Copilot' } },
+    );
+    const trace: TraceRequest = { request: call('r1', 0, 8420, { providerId: 'copilot' }), inFlight: false, spans, parent: null, children: [] };
+    const graph = buildRequest(trace, t, label, { name: 'GitHub Copilot' });
+    expect(graph.nodes.find((n) => n.id === 'provider:relay')!.data).toMatchObject({ title: 'Relay', tone: 'error' });
+    expect(graph.edges.find((e) => e.id === 'e:attempt:0')!.target).toBe('provider:relay');
+    expect(graph.edges.find((e) => e.id === 'e:attempt:1')!.target).toBe('provider');
+    expect(graph.nodes.find((n) => n.id === 'attempt:0')!.data).toMatchObject({ lines: ['Relay', expect.any(String)] });
+  });
+
   it('splits a request into Astra, retries, first byte, first token and generation', () => {
     const split = splitRequestTime(failoverSpans('r1'))!;
     expect(split.astraUs).toBe(5_000);

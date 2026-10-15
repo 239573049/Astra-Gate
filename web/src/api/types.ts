@@ -474,6 +474,37 @@ export interface Token {
   limitUsage: TokenBudgetUsage[];
   /** Requests let through during the last minute (what the RPM cap counts). */
   recentRequests: number;
+  /** Provider pool of direct calls (issue #2); null = `providerId` alone. `providerId` then holds its first member. */
+  pool?: TokenPool | null;
+}
+export type TokenPoolStrategy = 'failover' | 'round_robin' | 'weighted' | 'tiered' | 'least_busy';
+export type TokenPoolSticky = 'session' | 'off';
+/** healthy | cooling (rate limited / key rejected) | open / half_open (circuit) | no_account | disabled | missing (deleted). */
+export type PoolMemberHealthState = 'healthy' | 'cooling' | 'open' | 'half_open' | 'no_account' | 'disabled' | 'missing';
+export interface PoolMemberHealth { state: PoolMemberHealthState; until?: string | null; reason?: string | null }
+export interface TokenPoolMember {
+  providerId: string;
+  /** Pinned account of an account-based provider; null = the provider's own selection. */
+  accountId?: string | null;
+  weight: number;
+  tier: number;
+  missing: boolean;
+  health: PoolMemberHealth;
+}
+export interface TokenPool {
+  strategy: TokenPoolStrategy;
+  sticky: TokenPoolSticky;
+  failover: boolean;
+  maxAttempts: number;
+  members: TokenPoolMember[];
+}
+/** The `pool` field of POST / PATCH: an empty member list clears direct calls, one member is just `providerId`. */
+export interface TokenPoolInput {
+  strategy: TokenPoolStrategy;
+  sticky: TokenPoolSticky;
+  failover: boolean;
+  maxAttempts: number;
+  members: { providerId: string; accountId?: string | null; weight: number; tier: number }[];
 }
 export type TokenLimitMetric = 'cost' | 'requests' | 'tokens';
 export type TokenLimitPeriod = 'day' | 'week' | 'month' | 'total';
@@ -487,8 +518,9 @@ export interface TokenBudgetUsage extends TokenBudget {
 }
 export interface TokenMutationResult { token?: Token | null; rewritten: ClientKind[]; skipped: ClientKind[] }
 // GET /api/tokens -> Token[]
-// POST /api/tokens body {name, providerId?, accountId?} -> Token
-// PATCH /api/tokens/{id} body {name?, enabled?, providerId?, accountId?, limits?, allowedClients?} -> Token   (never touches client configs)
+// GET /api/tokens/{id} -> Token
+// POST /api/tokens body {name, providerId?, accountId? | pool?} -> Token
+// PATCH /api/tokens/{id} body {name?, enabled?, providerId?, accountId? | pool?, limits?, allowedClients?} -> Token   (never touches client configs; pool and providerId are exclusive, a providerId patch drops the pool)
 // Self-service, authenticated by the key itself (no admin session): GET /v1/astra/key, /v1/dashboard/billing/{subscription,usage}
 // POST /api/tokens/{id}/reset -> TokenMutationResult   (new key; rewrites the configs of its enabled clients)
 // POST /api/tokens/{id}/reveal -> {token}
@@ -568,6 +600,14 @@ export interface StatsSummary {
 export interface TimeseriesPoint { bucket: string; key: string; costUsd: number; requests: number; tokens: number }
 /** inputTokens already includes cacheReadTokens; hit rate = cacheReadTokens / inputTokens. */
 export interface TopModel { model: string; costUsd: number; requests: number; tokens: number; inputTokens: number; cacheReadTokens: number }
+/**
+ * One provider over a range (GET /api/stats/providers): the requests it answered, plus provider-pool failovers away from
+ * it (its failed attempts) and to it (requests it took over).
+ */
+export interface ProviderStat {
+  providerId: string; name?: string | null; requests: number; successRequests: number; successRate: number; costUsd: number;
+  inputTokens: number; outputTokens: number; avgTtftMs?: number | null; failoversOut: number; failoversIn: number;
+}
 /** One local day of the activity heatmap; days without requests are absent. */
 export interface DailyActivity { day: string; requests: number }
 /** Live request-log rate over a trailing window, per minute: requests (in-flight included), tokens (completed only), and the window's cache-hit ratio (null without input tokens). */
@@ -783,7 +823,8 @@ export type RequestCompression = "default" | "zstd" | "gzip" | "br" | "deflate" 
 export interface Settings {
   locale: "zh" | "en"; debugBodies: boolean; bodyRetentionDays: number; requestRetentionDays: number | null;
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
-  updateChannel: "stable" | "beta"; updateAutoCheck: boolean;
+  /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */
+  updateChannel: "stable" | "preview"; updateAutoCheck: boolean;
   /** Request body coding for providers that compress (e.g. ChatGPT subscription's zstd): default = each provider's own; none = off. */
   requestCompression: RequestCompression;
   /** false = gateway calls work without a token (served via the default token). */
@@ -863,7 +904,7 @@ export interface DetectedCloudflared { path?: string | null; version?: string | 
 // GET /api/update/status ; POST /api/update/check
 export interface UpdateStatus {
   current: string; available?: string | null; lastCheckAt?: string | null; notes?: string | null;
-  error?: string | null; channel: string; autoCheck: boolean; feedConfigured: boolean;
+  error?: string | null; channel: "stable" | "preview"; autoCheck: boolean; feedConfigured: boolean;
 }
 
 
@@ -1005,6 +1046,32 @@ export interface KeyInfo {
   rpm?: { limit: number; used: number } | null;
   usage: { today: KeyUsage; week: KeyUsage; month: KeyUsage; total: KeyUsage };
   daily: (KeyUsage & { day: string })[];
+}
+
+/** Why a request failed, as a token holder may see it (never the message, which can name the upstream). */
+export type KeyErrorCategory =
+  | 'cancelled' | 'blocked' | 'limit' | 'timeout' | 'rate_limited' | 'auth' | 'unavailable' | 'invalid_request' | 'unsupported' | 'internal' | 'other';
+/** One request of the holder's own log (GET /v1/astra/key/requests): metadata only, `model` is what the client asked for. */
+export interface KeyRequest {
+  id: string; time: string; model?: string | null; client?: string | null; stream: boolean;
+  status: Exclude<RequestStatus, 'pending'>; httpStatus?: number | null; errorCategory?: KeyErrorCategory | null;
+  inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number; reasoningTokens: number;
+  costUsd: number; ttftMs?: number | null; totalMs?: number | null;
+}
+export interface KeyRequestPage { items: KeyRequest[]; nextBefore?: string | null }
+export type KeyStatsRange = 'today' | '7d' | '30d' | '90d';
+export interface KeyUsageBy { requests: number; successRequests: number; costUsd: number; inputTokens: number; outputTokens: number; avgTtftMs?: number | null }
+/** GET /v1/astra/key/stats?range= — the holder's statistics in the usage time zone. */
+export interface KeyStats {
+  range: KeyStatsRange; timeZone: string; from: string; retentionDays?: number | null;
+  summary: {
+    requests: number; successRequests: number; successRate: number; costUsd: number; inputTokens: number; outputTokens: number;
+    cacheReadTokens: number; cacheWriteTokens: number; reasoningTokens: number; avgTtftMs?: number | null;
+  };
+  series: { bucket: string; requests: number; costUsd: number; inputTokens: number; outputTokens: number }[];
+  models: (KeyUsageBy & { model?: string | null })[];
+  clients: (KeyUsageBy & { client?: string | null })[];
+  errors: { category: KeyErrorCategory; count: number }[];
 }
 
 // ---------------------------------------------------------------- traces (/api/traces, .plan/observability.md §4)

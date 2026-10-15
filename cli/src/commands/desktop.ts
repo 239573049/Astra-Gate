@@ -7,10 +7,14 @@ import {
   installDesktopClient,
   isNewerVersion,
   majorOf,
+  normalizeChannel,
   removeLauncher,
   type ServerControl,
+  type ServerUpdateStatus,
+  type UpdateChannel,
   type UpdateManifest,
 } from '@aidotnet/update-core';
+import { AstraError } from '../errors.js';
 import { info, style, success, warn } from '../ui.js';
 import { astraHome, homePaths } from '../lib/paths.js';
 import { npmInstallGlobal } from '../lib/desktop.js';
@@ -69,13 +73,16 @@ export interface UpdateArgs {
   client?: boolean;
   check?: boolean;
   retry?: boolean;
+  /** stable | preview for this run; default: the running server's updateChannel setting, else stable. */
+  channel?: string;
 }
 
 export async function runUpdate(opts: UpdateArgs): Promise<void> {
   const home = astraHome();
+  const channel = await resolveChannel(opts.channel);
 
   if (opts.check) {
-    await reportCheck();
+    await reportCheck(channel, opts.channel !== undefined);
     return;
   }
 
@@ -83,7 +90,7 @@ export async function runUpdate(opts: UpdateArgs): Promise<void> {
   // running CLI version when the feed is unreachable (offline reinstall).
   let manifest: UpdateManifest;
   try {
-    manifest = await fetchManifest({ userAgent: `Astra-CLI/${VERSION}` });
+    manifest = await fetchManifest({ userAgent: `Astra-CLI/${VERSION}`, channel });
   } catch (err) {
     if (!opts.client) throw err;
     manifest = { version: VERSION };
@@ -95,10 +102,11 @@ export async function runUpdate(opts: UpdateArgs): Promise<void> {
     // CLI self-update: the staged/verified flow above covers the server
     // binary; the npm global package carries the CLI code itself.
     if (isNewerVersion(manifest.version, VERSION)) {
-      console.log(`Updating the Astra CLI (npm install -g ${PACKAGE_NAME}@latest)…`);
-      const r = await npmInstallGlobal();
+      const target = `${PACKAGE_NAME}@${manifest.version}`;
+      console.log(`Updating the Astra CLI (npm install -g ${target})…`);
+      const r = await npmInstallGlobal(manifest.version);
       if (r.code !== 0) {
-        info(`npm install -g ${PACKAGE_NAME}@latest failed — the server is updated; run \`npm i -g ${PACKAGE_NAME}\` for the CLI.`);
+        info(`npm install -g ${target} failed — the server is updated; run \`npm i -g ${target}\` for the CLI.`);
       } else {
         success('The new CLI version is used the next time you run `astra`.');
       }
@@ -113,11 +121,38 @@ export async function runUpdate(opts: UpdateArgs): Promise<void> {
   }
 }
 
-async function reportCheck(): Promise<void> {
+/**
+ * The release channel for this run: --channel when given, else the running server's updateChannel setting
+ * (Settings → About → preview updates), else stable — a stopped server's setting cannot be read.
+ */
+async function resolveChannel(explicit: string | undefined): Promise<UpdateChannel> {
+  if (explicit !== undefined) {
+    const value = explicit.trim().toLowerCase();
+    if (value !== 'stable' && value !== 'preview') {
+      throw new AstraError(`Unknown release channel '${explicit}' (use stable or preview).`);
+    }
+    return value;
+  }
+  const status = await serverStatus();
+  if (!status.running || !status.base) return 'stable';
+  try {
+    const s = await apiRequest<ServerUpdateStatus>({ base: status.base, path: '/api/update/status' });
+    const channel = normalizeChannel(s.channel);
+    if (channel === 'preview') info('Preview updates are on (Settings → About); using the preview channel.');
+    return channel;
+  } catch {
+    return 'stable';
+  }
+}
+
+async function reportCheck(channel: UpdateChannel, explicit: boolean): Promise<void> {
   const status = await serverStatus();
   const r = await checkForServerUpdate({
     currentVersion: VERSION,
-    baseUrl: status.running ? (status.base ?? undefined) : undefined,
+    // The server answers for its own channel; an explicit --channel asks the feed directly.
+    baseUrl: status.running && !explicit ? (status.base ?? undefined) : undefined,
+    channel,
+    userAgent: `Astra-CLI/${VERSION}`,
   });
   if (r.availableVersion) {
     console.log(`Update available: ${style.cyan(r.availableVersion)} (current ${VERSION}).`);

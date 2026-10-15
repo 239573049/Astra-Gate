@@ -25,7 +25,7 @@ public sealed class AppSettings
     public EffortBudgets EffortBudgets { get; set; } = new();
     public int StreamIdleTimeoutSec { get; set; } = 300;
 
-    /// <summary>Release feed channel for update checks: "stable" | "beta".</summary>
+    /// <summary>Release feed channel for update checks: "stable" (default) | "preview" (opt-in previews; see UpdateChannels).</summary>
     public string UpdateChannel { get; set; } = "stable";
 
     /// <summary>Whether the server polls the update feed on a schedule (UpdateCheckWorker).</summary>

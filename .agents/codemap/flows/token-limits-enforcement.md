@@ -44,7 +44,11 @@ without ever seeing upstream providers or accounts.
    `<prefix>/astra/key` (Astra's own shape) and the legacy OpenAI `<prefix>/dashboard/billing/subscription|usage`
    that many clients poll for a balance. The token is taken from the bearer header; a missing or unknown key is
    always 401 — `RequireGatewayKey=false` never lends these views the default token. The reply carries the token's own
-   usage only: no provider, account, model or upstream quota. `src/Astra.Gateway/Pipeline/TokenLimiter.cs:Observation`
+   usage only: no provider, account, model or upstream quota. `<prefix>/astra/key/requests` (keyset-paged log,
+   `RequestRepository.ListForKeyAsync`) and `<prefix>/astra/key/stats` (summary, series, `UsageByAsync` per requested
+   model / client, `ErrorBreakdownAsync` → `Core/Requests/RequestErrorCategories.cs`) add the key's own request metadata
+   under their own rate-limit policy (`astra-key-logs`) — the requested model only, never the upstream one or an error
+   message (.agents/memory/key-self-service-requested-model.md). `src/Astra.Gateway/Pipeline/TokenLimiter.cs:Observation`
    is the shape the alert engine receives for the same numbers.
 9. The public `/key` page (outside the admin `AuthGate`) reads the same endpoints with the pasted key
    (`web/src/pages/KeyPage.tsx`).

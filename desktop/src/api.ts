@@ -68,14 +68,20 @@ export async function fetchUpdateAutoCheck(base: string, timeoutMs = 3000): Prom
 
 /**
  * POST /api/update/check — makes the server poll the feed now, so a launch-time check does not
- * read a result cached for up to 12h. Best effort: false on any failure (the cached status is used).
+ * read a result cached for up to 12h. Answers the update status, whose `channel` is the user's
+ * release channel (Settings → About → preview updates). Best effort: null on any failure (the
+ * cached status is used).
  */
-export async function refreshUpdateCheck(base: string, timeoutMs = 20_000): Promise<boolean> {
+export async function refreshUpdateCheck(base: string, timeoutMs = 20_000): Promise<{ channel: string | null } | null> {
   try {
-    await requestJson(base, '/api/update/check', { method: 'POST', headers: adminHeaders(), timeoutMs });
-    return true;
+    const raw = await requestJson<{ channel?: unknown } | null>(base, '/api/update/check', {
+      method: 'POST',
+      headers: adminHeaders(),
+      timeoutMs,
+    });
+    return { channel: typeof raw?.channel === 'string' ? raw.channel : null };
   } catch {
-    return false;
+    return null;
   }
 }
 

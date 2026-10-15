@@ -6,7 +6,9 @@ on:
     # Bumping the version on main (node scripts/sync-versions.mjs --version
     # x.y.z rewrites cli/package.json) releases too, and tags v<version> when
     # done. Path filters only apply to the branch push, not to tags. Pushes
-    # whose version is already on npm stop after the `version` job.
+    # whose version is already on npm stop after the `version` job. The
+    # version picks the channel (scripts/release-channel.mjs): x.y.z is
+    # stable, x.y.z-preview.N is a preview.
     branches: [main]
     paths: ['cli/package.json']
   workflow_dispatch:
@@ -34,6 +36,11 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       publish: ${{ steps.v.outputs.publish }}
+      # stable | preview, the npm dist-tag it publishes under (latest | preview),
+      # and whether the `preview` dist-tag / `:preview` image move to it too.
+      channel: ${{ steps.v.outputs.channel }}
+      npm_tag: ${{ steps.v.outputs.npm_tag }}
+      tag_preview: ${{ steps.v.outputs.tag_preview }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +53,9 @@ jobs:
           set -euo pipefail
           VER=$(node -p "require('./cli/package.json').version")
           echo "version=$VER" >> "$GITHUB_OUTPUT"
+          # Fails for a version that is neither x.y.z nor x.y.z-preview.N.
+          PREVIEW_TAG=$(npm view @aidotnet/astra-gate dist-tags.preview 2>/dev/null || true)
+          node scripts/release-channel.mjs "$VER" --preview-tag "$PREVIEW_TAG" | tee -a "$GITHUB_OUTPUT"
           if [ "$GITHUB_EVENT_NAME" != "push" ]; then
             echo "workflow_dispatch: build only."
             echo "publish=false" >> "$GITHUB_OUTPUT"
@@ -261,7 +271,20 @@ jobs:
             win-*) OS=--win ;;
             *) OS=--linux ;;
           esac
-          pnpm --filter @aidotnet/desktop exec electron-builder "$OS" "$ARCH" --publish never --config.directories.output=../out/desktop
+          # Notarizing talks to Apple twice (notarytool, then stapler's ticket
+          # lookup on CloudKit) and @electron/notarize's own staple retry gives
+          # up within ~7 s: one dropped connection (stapler error 68) failed the
+          # 0.9.5 osx-x64 row after notarization had passed. The mac rows retry
+          # the whole build — it re-extracts the app, re-signs and resubmits.
+          attempts=$([[ "$RID" == osx-* ]] && echo 3 || echo 1)
+          for i in $(seq 1 "$attempts"); do
+            if pnpm --filter @aidotnet/desktop exec electron-builder "$OS" "$ARCH" --publish never --config.directories.output=../out/desktop; then
+              break
+            fi
+            if [ "$i" -eq "$attempts" ]; then exit 1; fi
+            echo "::warning::electron-builder failed (attempt $i of $attempts) — retrying in 60 s."
+            sleep 60
+          done
 
       - name: Collect desktop app into platform package
         if: hashFiles('desktop/package.json') != ''
@@ -298,7 +321,10 @@ jobs:
           if [[ "$RID" == osx-* ]]; then
             cp out/desktop/*.dmg out/feed-upload/
             cp out/desktop/*.zip out/feed-upload/
-            cp out/desktop/latest-mac.yml out/feed-upload/
+            # electron-builder names it after the version's prerelease tag
+            # (preview-mac.yml for x.y.z-preview.N); clients always ask for
+            # latest-mac.yml under their channel's directory.
+            cp out/desktop/*-mac.yml out/feed-upload/latest-mac.yml
           elif [[ "$RID" == win-* ]]; then
             cp out/desktop/Astra-*-setup.exe out/feed-upload/
           else
@@ -324,6 +350,9 @@ jobs:
       contents: write
     env:
       VER: ${{ needs.version.outputs.version }}
+      CHANNEL: ${{ needs.version.outputs.channel }}
+      NPM_TAG: ${{ needs.version.outputs.npm_tag }}
+      TAG_PREVIEW: ${{ needs.version.outputs.tag_preview }}
     steps:
       - uses: actions/checkout@v4
 
@@ -362,7 +391,7 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          mkdir -p out/feed/stable
+          mkdir -p "out/feed/$CHANNEL"
           partials=()
           for f in out/artifacts/partial-*.json; do
             partials+=(--partial "$f")
@@ -371,26 +400,20 @@ jobs:
             --version "$VER" \
             "${partials[@]}" \
             --notes-file out/release-notes.md \
-            --out out/feed/stable/latest.json
-          cp out/artifacts/*.dmg out/feed/stable/
-          cp out/artifacts/*.zip out/feed/stable/
-          cp out/artifacts/latest-mac.yml out/feed/stable/
-          ls -la out/feed/stable
+            --out "out/feed/$CHANNEL/latest.json"
+          cp out/artifacts/*.dmg "out/feed/$CHANNEL/"
+          cp out/artifacts/*.zip "out/feed/$CHANNEL/"
+          cp out/artifacts/latest-mac.yml "out/feed/$CHANNEL/"
+          ls -la "out/feed/$CHANNEL"
 
-      - name: Publish to the update feed
-        # `secrets` is not available in step-level `if` expressions —
-        # evaluate the env copy instead.
-        env:
-          FEED_UPLOAD_TARGET: ${{ secrets.FEED_UPLOAD_TARGET }}
-        if: env.FEED_UPLOAD_TARGET != ''
-        run: node scripts/publish-feed.mjs --dir out/feed --dest "$FEED_UPLOAD_TARGET"
-
-      - name: Upload desktop artifacts to the docs site
+      - name: Upload the installers to the docs site
         # Primary desktop distribution: the official website stores the files
-        # under /app/data/client-releases and serves the download page plus
-        # the electron-updater feed from them. Requires the docs deployment
-        # to run with CLIENT_UPLOAD_TOKEN set; the repo secret may use either
-        # name. Missing secrets warn instead of silently skipping.
+        # under /app/data/client-releases/<channel> and serves the download
+        # page plus the electron-updater feed from them. Installers are
+        # self-contained, so they go up before npm; the server-update manifest
+        # waits for npm (see "Publish the update manifest"). Requires the docs
+        # deployment to run with CLIENT_UPLOAD_TOKEN set; the repo secret may
+        # use either name. Missing secrets warn instead of silently skipping.
         env:
           DOCS_RELEASE_URL: ${{ secrets.DOCS_RELEASE_URL }}
           DOCS_RELEASE_TOKEN: ${{ secrets.DOCS_RELEASE_TOKEN || secrets.CLIENT_UPLOAD_TOKEN }}
@@ -401,6 +424,7 @@ jobs:
             echo "::warning::Not uploading to the docs site: set the DOCS_RELEASE_URL and DOCS_RELEASE_TOKEN (or CLIENT_UPLOAD_TOKEN) secrets."
             exit 0
           fi
+          notes_b64=$(base64 -w0 out/release-notes.md)
           for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip \
                    out/artifacts/Astra-*-setup.exe out/artifacts/Astra-*.AppImage; do
             # electron-builder names: Astra-<ver>-<arch>[-setup].<ext>, where
@@ -417,33 +441,19 @@ jobs:
               *) echo "::warning::skip $f (unknown arch)"; continue ;;
             esac
             platform="$os-$arch"
-            echo "Uploading $(basename "$f") ($platform/$kind)…"
+            echo "Uploading $(basename "$f") ($CHANNEL $platform/$kind)…"
             curl --fail --silent --show-error -X POST \
               "${DOCS_RELEASE_URL%/}/api/client-releases/upload" \
               -H "Authorization: Bearer ${DOCS_RELEASE_TOKEN}" \
               -H "Content-Type: application/octet-stream" \
               -H "x-astra-version: ${VER}" \
+              -H "x-astra-channel: ${CHANNEL}" \
               -H "x-astra-platform: ${platform}" \
               -H "x-astra-kind: ${kind}" \
+              -H "x-astra-notes-b64: ${notes_b64}" \
               --data-binary "@${f}"
             echo
           done
-          # Server-update manifest (update-core / UpdateCheckService fetch
-          # ${FEED}/<channel>/latest.json from the docs site). It also carries
-          # the release notes shown on the download page.
-          if [ -f out/feed/stable/latest.json ]; then
-            echo "Uploading server-update manifest (latest.json)…"
-            curl --fail --silent --show-error -X POST \
-              "${DOCS_RELEASE_URL%/}/api/client-releases/upload" \
-              -H "Authorization: Bearer ${DOCS_RELEASE_TOKEN}" \
-              -H "Content-Type: application/octet-stream" \
-              -H "x-astra-version: ${VER}" \
-              -H "x-astra-platform: manifest" \
-              -H "x-astra-kind: json" \
-              -H "x-astra-notes-b64: $(base64 -w0 out/release-notes.md)" \
-              --data-binary "@out/feed/stable/latest.json"
-            echo
-          fi
 
       - name: Publish platform packages first, then the CLI
         env:
@@ -452,7 +462,9 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           # Idempotent: a re-run after a partial failure skips what is already
-          # on npm (npm refuses to republish a version).
+          # on npm (npm refuses to republish a version). Every package goes out
+          # under the channel's dist-tag: a preview published without --tag
+          # would become `latest` and reach every `npm i -g astragate`.
           platform_ids=()
           publish() {
             local id
@@ -461,7 +473,7 @@ jobs:
             if [ -n "$(npm view "$id" version 2>/dev/null)" ]; then
               echo "$id is already on npm — skipping."
             else
-              npm publish "$1" --access public
+              npm publish "$1" --access public --tag "$NPM_TAG"
             fi
           }
           # npm keeps a fresh publish "being processed" for a while — large
@@ -505,12 +517,60 @@ jobs:
           for f in out/artifacts/aidotnet-astra-gate-[0-9]*.tgz; do
             publish "$f"
           done
+          # The update manifest goes up next and makes `astra update` install
+          # astragate@<version>: the CLIs must be installable first too.
+          wait_for "astragate@$VER"
+          wait_for "@aidotnet/astra-gate@$VER"
+          # A stable newer than the last preview also becomes `preview`, so
+          # `npm i -g astragate@preview` never installs something older than `latest`.
+          if [ "$CHANNEL" = stable ] && [ "$TAG_PREVIEW" = true ]; then
+            npm dist-tag add "astragate@$VER" preview
+            npm dist-tag add "@aidotnet/astra-gate@$VER" preview
+          fi
+
+      - name: Publish the update manifest to the docs site
+        # Last of the feed: latest.json names the npm packages the CLI and the
+        # desktop app install (update-core / UpdateCheckService fetch
+        # ${FEED}/<channel>/latest.json), so it goes up only once npm serves
+        # them — before, clients were offered a version they could not install.
+        # It also carries the release notes shown on the download page.
+        env:
+          DOCS_RELEASE_URL: ${{ secrets.DOCS_RELEASE_URL }}
+          DOCS_RELEASE_TOKEN: ${{ secrets.DOCS_RELEASE_TOKEN || secrets.CLIENT_UPLOAD_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DOCS_RELEASE_URL" ] || [ -z "$DOCS_RELEASE_TOKEN" ]; then
+            echo "::warning::Not publishing the update manifest: set the DOCS_RELEASE_URL and DOCS_RELEASE_TOKEN (or CLIENT_UPLOAD_TOKEN) secrets. No client will be offered $VER."
+            exit 0
+          fi
+          echo "Uploading the $CHANNEL server-update manifest (latest.json)…"
+          curl --fail --silent --show-error -X POST \
+            "${DOCS_RELEASE_URL%/}/api/client-releases/upload" \
+            -H "Authorization: Bearer ${DOCS_RELEASE_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            -H "x-astra-version: ${VER}" \
+            -H "x-astra-channel: ${CHANNEL}" \
+            -H "x-astra-platform: manifest" \
+            -H "x-astra-kind: json" \
+            -H "x-astra-notes-b64: $(base64 -w0 out/release-notes.md)" \
+            --data-binary "@out/feed/$CHANNEL/latest.json"
+          echo
+
+      - name: Publish to the legacy update feed
+        # `secrets` is not available in step-level `if` expressions —
+        # evaluate the env copy instead. After npm for the same reason as the
+        # manifest step: the feed's latest.json names npm packages.
+        env:
+          FEED_UPLOAD_TARGET: ${{ secrets.FEED_UPLOAD_TARGET }}
+        if: env.FEED_UPLOAD_TARGET != ''
+        run: node scripts/publish-feed.mjs --dir out/feed --dest "$FEED_UPLOAD_TARGET"
 
       - name: Create the GitHub Release
         # v<version> with the changelog notes and the installers attached. On
         # a version bump from main this also creates the tag (on this commit);
         # tags made with GITHUB_TOKEN do not start another run. Re-runs update
-        # the existing release instead of failing.
+        # the existing release instead of failing. A preview is marked as a
+        # prerelease, so GitHub's "latest release" stays the newest stable.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -518,14 +578,16 @@ jobs:
           shopt -s nullglob
           assets=(out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip \
                   out/artifacts/Astra-*-setup.exe out/artifacts/Astra-*.AppImage)
+          channel_flags=()
+          if [ "$CHANNEL" = preview ]; then channel_flags=(--prerelease); fi
           if gh release view "v$VER" >/dev/null 2>&1; then
-            gh release edit "v$VER" --title "v$VER" --notes-file out/release-notes.md
+            gh release edit "v$VER" --title "v$VER" --notes-file out/release-notes.md "${channel_flags[@]}"
             if [ ${#assets[@]} -gt 0 ]; then
               gh release upload "v$VER" "${assets[@]}" --clobber
             fi
           else
             gh release create "v$VER" "${assets[@]}" \
-              --target "$GITHUB_SHA" --title "v$VER" --notes-file out/release-notes.md
+              --target "$GITHUB_SHA" --title "v$VER" --notes-file out/release-notes.md "${channel_flags[@]}"
           fi
 
   docker:
@@ -603,12 +665,18 @@ jobs:
           curl --fail --silent http://127.0.0.1:17321/ | grep -qi '<html'
           docker stop astra-smoke
 
+      # stable: latest, x.y.z, x.y (+ preview when newer than the last preview);
+      # preview: x.y.z-preview.N and preview only — metadata-action never derives
+      # {{major}}.{{minor}} from a prerelease, and `latest` is ours to set.
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ needs.version.outputs.channel == 'stable' }}
+            type=raw,value=preview,enable=${{ needs.version.outputs.tag_preview == 'true' }}
             type=semver,pattern={{version}},value=v${{ env.VER }}
             type=semver,pattern={{major}}.{{minor}},value=v${{ env.VER }}
 

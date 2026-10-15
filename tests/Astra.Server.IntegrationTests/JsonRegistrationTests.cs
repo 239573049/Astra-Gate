@@ -85,7 +85,18 @@ public sealed class JsonRegistrationTests
         }
         // Deleting a provider a client is bound to: the conflict and its details.
         Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Delete, $"/api/providers/{quotaId}")).Status);
-        await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Guard" });
+        var guardToken = (await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Guard" })).Body!["id"]!.GetValue<string>();
+        // A provider pool (issue #2): its input DTO and the members' health in the token DTO.
+        foreach (var id in new[] { "guard-pool-a", "guard-pool-b" })
+            await host.Db.Providers.InsertAsync(new Astra.Core.Models.Provider
+            {
+                Id = id, Name = id, Endpoints = [new Astra.Core.Models.ProviderEndpoint { BaseUrl = "https://pool.test/v1" }],
+            });
+        await host.SendAsync(HttpMethod.Patch, $"/api/tokens/{guardToken}", new
+        {
+            pool = new { strategy = "weighted", members = new[] { new { providerId = "guard-pool-a", weight = 2 }, new { providerId = "guard-pool-b", weight = 1 } } },
+        });
+        await host.GetJsonAsync($"/api/tokens/{guardToken}");
         await host.SendAsync(HttpMethod.Patch, "/api/settings", new { locale = "en" });
         await host.SendAsync(HttpMethod.Post, "/api/privacy/dry-run", new { text = "hello" });
         await host.SendAsync(HttpMethod.Post, "/api/auth/login", new { password = "wrong" });

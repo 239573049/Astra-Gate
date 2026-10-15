@@ -2,7 +2,7 @@
 flow: release-and-update
 modules: [packaging-release, astra-server, cli, desktop-app, update-core, docs-site]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-15
 ---
 # release-and-update
 
@@ -10,8 +10,14 @@ updated: 2026-10-14
 or a manual `workflow_dispatch` for a build-only run). **Outcome:** npm carries the versioned platform
 packages and CLI, `ghcr.io/<repo>` carries the matching Docker image, `v<version>` and its installers
 exist as a GitHub Release, the docs site serves the installers + `latest.json` under
-`/api/client-releases/stable/`, and an installed CLI or desktop app can find, stage, verify, swap and
+`/api/client-releases/<channel>/`, and an installed CLI or desktop app can find, stage, verify, swap and
 (if the restart misbehaves) roll back to the previous server binary.
+
+**Channels:** the version picks one — `x.y.z` → `stable`, `x.y.z-preview.N` → `preview`
+(`scripts/release-channel.mjs`, run by the `version` job, outputs `channel` / `npm_tag` / `tag_preview`).
+The channel decides the npm dist-tag, the feed directory, the GitHub prerelease flag and the Docker tags;
+the `preview` feed also offers every stable. Clients follow the server's `updateChannel` setting
+(default stable). The full table is `.agents/skills/release/references/channels.md`.
 
 ## Steps
 
@@ -54,53 +60,65 @@ exist as a GitHub Release, the docs site serves the installers + `latest.json` u
    `npm pack` of the server and (when produced) desktop platform packages; artifacts uploaded as
    `pkg-<rid>` and `feed-<rid>` (`packaging-release`)
 10. `release.yml:publish` — rebuilds the CLI (`pnpm --filter astragate build`), merges the partials with
-    `scripts/gen-manifest.mjs:merge` → `out/feed/stable/latest.json`
+    `scripts/gen-manifest.mjs:merge` → `out/feed/<channel>/latest.json`
     (`{version, apiVersion, releasedAt, notes, platforms}`, `apiVersion` defaulting to `"1.0"` —
     deliberately a protocol version, not the release version), extracts `out/release-notes.md`
     (`packaging-release`)
 11. `release.yml:380-386` — optional legacy host: `scripts/publish-feed.mjs` rsyncs `out/feed` to
     `FEED_UPLOAD_TARGET`, artifacts first and the `latest.json`/`latest-mac.yml` pointers last, so no
     client ever sees a pointer to a missing file (`packaging-release`)
-12. `release.yml:388-446` — **the served manifest bytes**: `curl -X POST
+12. `release.yml` "Upload the installers to the docs site" (before npm) and "Publish the update
+    manifest to the docs site" (**after** npm, because `latest.json` names npm packages) — `curl -X POST
     ${DOCS_RELEASE_URL}/api/client-releases/upload` with `Authorization: Bearer
-    ${DOCS_RELEASE_TOKEN || CLIENT_UPLOAD_TOKEN}` and `x-astra-version` / `x-astra-platform`
-    (`darwin-arm64|…`, or `manifest` for the JSON) / `x-astra-kind` (`dmg|zip|exe|appimage|json`) /
-    `x-astra-notes-b64`; unset secrets ⇒ `::warning::` + `exit 0` (a green run that publishes nothing)
+    ${DOCS_RELEASE_TOKEN || CLIENT_UPLOAD_TOKEN}` and `x-astra-version` / `x-astra-channel` /
+    `x-astra-platform` (`darwin-arm64|…`, or `manifest` for the JSON) / `x-astra-kind`
+    (`dmg|zip|exe|appimage|json`) / `x-astra-notes-b64`; unset secrets ⇒ `::warning::` + `exit 0` (a green
+    run that publishes nothing). The legacy `FEED_UPLOAD_TARGET` step (11) also runs after npm
     (`packaging-release` → `docs-site`)
 13. ⇢ crosses **network** boundary via `POST /api/client-releases/upload`
 14. `docs/app/api/client-releases/upload/route.ts:POST` — `verifyUploadToken` (constant-time bearer,
     503 when `CLIENT_UPLOAD_TOKEN` is unset, `docs/lib/releases.ts:34`), header sanitizing and semver
-    validation, then `docs/lib/releases.ts:saveUpload` (`docs-site`)
+    validation, a 400 when `x-astra-channel` is unknown or disagrees with the version (`channelOfVersion`),
+    then `docs/lib/releases.ts:saveUpload` (`docs-site`)
 15. `docs/lib/releases.ts:saveUpload` — streams to `${DATA_DIR}/client-releases/<channel>/<version>/
     Astra-<ver>-<platform>.<ext>` while computing sha256 **and** sha512 (base64, which
     electron-updater wants), tmp + rename, then merges into that channel's `index.json`
     (`docs/lib/releases.ts:134`) (`docs-site`)
-16. `docs/app/api/client-releases/[channel]/[...path]/route.ts:GET` — public read surface:
-    `/latest.json` (the `kind=json` file of the latest version), `/latest-mac.yml`
-    (`renderLatestMacYml`, `docs/lib/releases.ts:205`), `/releases.json`, `/v/<version>/<file>` and a
-    bare filename resolved against the latest version (`docs-site`)
-17. `docs/app/(home)/download/page.tsx:DownloadPage` — the download page renders `readIndex` +
-    `latestVersion` straight off that directory, so the upload step is what populates the site
+16. `docs/app/api/client-releases/[channel]/[...path]/route.ts:GET` — public read surface over
+    `readFeed(channel)` (the channel's index merged with those in `FEED_SOURCES`: preview = preview +
+    stable, each entry remembering its storage channel; unknown channel ⇒ 404, `beta` reads as preview):
+    `/latest.json` (newest release **with** a `kind=json` file — installers uploaded ahead of the
+    manifest are skipped), `/latest-mac.yml` (newest with a zip, `renderLatestMacYml`), `/releases.json`
+    (semver-sorted, `channel` per version), `/v/<version>/<file>` and a bare filename looked up across
+    the feed (`docs-site`)
+17. `docs/app/(home)/download/page.tsx:DownloadPage` — the download page renders `readFeed('stable')` and,
+    in a folded section, the newest preview while it is newer than that stable, straight off those
+    directories, so the upload step is what populates the site
     (`docs-site`); `docs/proxy.ts:config` deliberately excludes `/api` (the proxy body cap of 10 MB
     truncated installers)
-18. `release.yml:448-507` — npm publish order is a contract: server tarballs → desktop tarballs →
+18. `release.yml` "Publish platform packages first, then the CLI" — npm publish order is a contract, every
+    package under `--tag $NPM_TAG` (`latest` | `preview`): server tarballs → desktop tarballs →
     `wait_for` each id to become visible (`npm view … --prefer-online`, 90-minute deadline) → pack and
     publish `astragate` → rewrite `cli/package.json`'s name to `@aidotnet/astra-gate`, rebuild with tsup
     (it inlines `package.json`, and the CLI's self-update uses the baked-in name) and publish that
-    **last** — which is exactly the marker the `version` job looks for (`packaging-release`)
-19. `release.yml:509-529` — `gh release create v$VER` (or `edit` + `upload --clobber` on a re-run) with
-    the installers and the changelog notes (`packaging-release`)
+    **last** — which is exactly the marker the `version` job looks for — then `wait_for` both CLIs and, for
+    a stable with `tag_preview=true`, `npm dist-tag add … preview` (`packaging-release`)
+19. `release.yml` "Create the GitHub Release" — `gh release create v$VER` (or `edit` + `upload --clobber`
+    on a re-run) with the installers and the changelog notes, `--prerelease` on the preview channel
+    (`packaging-release`)
 20. `release.yml:docker` (`needs: [version, publish]`) — unpacks `pkg-linux-*` into
     `docker-bin/{amd64,arm64}`, builds amd64 for a smoke test (`/api/health`, `/api/auth/status`
     `required:true`, the SPA at `/`), then buildx-pushes linux/amd64 + linux/arm64 to
-    `ghcr.io/<repo>` (`packaging-release`)
+    `ghcr.io/<repo>` — tags `latest`/`x.y`/`x.y.z` for stable, `x.y.z-preview.N` for a preview, plus
+    `preview` when `tag_preview` (`packaging-release`)
 
 ### (b) Updating — the server only checks
 
 21. `src/Astra.Server/Hosting/UpdateCheckService.cs:CheckAsync` — GET
-    `{EffectiveFeedUrl}/{UpdateChannel}/latest.json` with User-Agent `Astra/<ServerOptions.Version>`
-    through the `update-check` HttpClient (15 s timeout, `AstraApp.cs:216`), compares with
-    `IsNewer` against `ServerOptions.Version`, persists `UpdateCheckState` under settings key
+    `{EffectiveFeedUrl}/{UpdateChannels.Normalize(UpdateChannel)}/latest.json` with User-Agent
+    `Astra/<ServerOptions.Version>` through the `update-check` HttpClient (15 s timeout, `AstraApp.cs:216`),
+    compares with `IsNewer` (semver precedence: a release beats its previews, so nothing ever downgrades)
+    against `ServerOptions.Version`, persists `UpdateCheckState` under settings key
     `update.state`, keeps the previous result and records `Error` on failure; `UpdateFeedUrl`
     `""` disables the feed (`feed-not-configured`) (`astra-server`)
 22. `src/Astra.Server/Hosting/UpdateCheckWorker.cs:ExecuteAsync` — background service: 30 s initial
@@ -122,21 +140,24 @@ exist as a GitHub Release, the docs site serves the installers + `latest.json` u
 
 ### (b) Updating — applying is out of process
 
-26. `cli/src/commands/desktop.ts:runUpdate` — `astra update [--check] [--client] [--retry]`:
-    `fetchManifest` (UA `Astra-CLI/<version>`), `updateServer` (confirmation prompt, then
+26. `cli/src/commands/desktop.ts:runUpdate` — `astra update [--check] [--client] [--retry] [--channel]`:
+    `resolveChannel` (`--channel`, else the running server's `/api/update/status` channel, else stable),
+    `fetchManifest` for it (UA `Astra-CLI/<version>`), `updateServer` (confirmation prompt, then
     `applyServerUpdate` with a `ServerControl` over `server-lifecycle`), then an
-    `npm install -g astragate@latest` self-update and the desktop install; `reportCheck` sets exit
-    code 1 when a version is available (`cli`)
+    `npm install -g <package>@<manifest.version>` self-update (never `@latest`) and the desktop install;
+    `reportCheck` sets exit code 1 when a version is available (`cli`)
 27. `desktop/src/update.ts:UpdateController` — three surfaces: electron-updater DMG (macOS installs
     outside the npm prefix), macOS npm self-replace, and the server binary via `update-core`;
     `resolveUpdateTrack` (`desktop/src/shared/updateTrack.ts:17`) picks the track, `start()` schedules a
     launch-time check + 12 h interval (`desktop-app`)
-28. `desktop/src/update.ts:checkServerAndManifest` — POSTs `/api/update/check` to refresh the server's
-    cached status (`desktop/src/api.ts:73`), then gates on the **SERVER's** version:
+28. `desktop/src/update.ts:runCheck` / `checkServerAndManifest` — POSTs `/api/update/check` to refresh the
+    server's cached status (`desktop/src/api.ts:refreshUpdateCheck`, whose answer names the channel; the DMG
+    track then points electron-updater at that channel via `setFeedURL` + `shared/updateChannel.ts`), then
+    gates on the **SERVER's** version:
     `control.probeVersion()` (which is `/api/version` through `desktop/src/main.ts:119`) with
     `app.getVersion()` only as the fallback when the server is down; the status only carries a version,
-    so the manifest is fetched directly for the checksum/platform info the executor needs
-    (`desktop-app`)
+    so the manifest is fetched directly, from the channel that answered, for the checksum/platform info
+    the executor needs (`desktop-app`)
 29. `desktop/src/update.ts:applyServerUpdate` — `currentVersion: (await control.probeVersion()) ??
     '0.0.0'` and `gate()` comparing `manifest.apiVersion`'s major with `EXPECTED_API_MAJOR = 1`
     (`desktop/src/shared/version.ts:6`); `platformKey` is `osx-arm64|linux-x64|win-arm64`, **not**
@@ -199,12 +220,13 @@ sequenceDiagram
   DEV->>GH: push main (cli/package.json) / tag v*
   GH->>NPM: npm view @aidotnet/astra-gate@VER (already released?)
   GH->>GH: build matrix: AOT publish, gen-manifest partial, pack-platform, electron-builder
-  GH->>NPM: publish server-* → desktop-* → astragate → @aidotnet/astra-gate (last)
-  GH->>DOCS: POST /api/client-releases/upload (installers + latest.json, Bearer DOCS_RELEASE_TOKEN)
-  DOCS->>DOCS: saveUpload → DATA_DIR/client-releases/stable/<ver>/ + index.json
+  GH->>DOCS: POST /api/client-releases/upload (installers, x-astra-channel)
+  GH->>NPM: publish server-* → desktop-* → astragate → @aidotnet/astra-gate (last), --tag latest|preview
+  GH->>DOCS: POST /api/client-releases/upload (latest.json, after npm)
+  DOCS->>DOCS: saveUpload → DATA_DIR/client-releases/<channel>/<ver>/ + index.json
   GH->>GH: gh release create vVER; docker: smoke test + ghcr push
 
-  SRV->>DOCS: 12 h poll GET /api/client-releases/stable/latest.json (UpdateCheckWorker)
+  SRV->>DOCS: 12 h poll GET /api/client-releases/<channel>/latest.json (UpdateCheckWorker)
   SRV->>SRV: UpdateCheckState under settings key "update.state"
   CLI->>SRV: GET /api/update/status (checkForServerUpdate)
   DESK->>SRV: POST /api/update/check (refresh), GET /api/version (probeVersion)

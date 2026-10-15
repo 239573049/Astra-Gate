@@ -132,8 +132,9 @@ program
   .option('--client', 'Alias of --desktop')
   .option('--check', 'Only check for updates, do not install')
   .option('--retry', 'Retry even after repeated update failures')
-  .action((opts: { desktop?: boolean; client?: boolean; check?: boolean; retry?: boolean }) =>
-    runUpdate({ client: opts.desktop || opts.client, check: opts.check, retry: opts.retry }),
+  .option('--channel <channel>', 'Release channel for this run: stable | preview (default: the server setting)')
+  .action((opts: { desktop?: boolean; client?: boolean; check?: boolean; retry?: boolean; channel?: string }) =>
+    runUpdate({ client: opts.desktop || opts.client, check: opts.check, retry: opts.retry, channel: opts.channel }),
   );
 
 const client = program.command('client').description('Manage AI clients (Codex, Claude Code, …)');

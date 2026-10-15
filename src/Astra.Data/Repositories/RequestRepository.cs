@@ -137,6 +137,85 @@ public sealed class PrivacyEventStats
 }
 
 /// <summary>One row of the most expensive models in a range.</summary>
+/// <summary>
+/// One provider's share of a range (optionally one client / token): the requests it answered, and how often a provider
+/// pool handed requests away from it (<see cref="FailoversOut"/>, its failed attempts) or to it (<see cref="FailoversIn"/>).
+/// </summary>
+public sealed class ProviderStat
+{
+    public string ProviderId { get; set; } = "";
+    public string? ProviderName { get; set; }
+    public long Requests { get; set; }
+    public long SuccessRequests { get; set; }
+    public long CostNanoUsd { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
+    public double? AvgTtftMs { get; set; }
+    public long FailoversOut { get; set; }
+    public long FailoversIn { get; set; }
+}
+
+/// <summary>
+/// A token holder's view of the request log (self-service, <c>/v1/astra/key/requests</c>): always one token, newest first,
+/// paged by <see cref="Before"/> (the last id of the previous page). <see cref="Status"/> is a comma list,
+/// <see cref="Model"/> an exact requested model.
+/// </summary>
+public sealed record KeyRequestQuery(string TokenId)
+{
+    public DateTimeOffset? From { get; init; }
+    public DateTimeOffset? To { get; init; }
+    public string? Status { get; init; }
+    public string? Model { get; init; }
+    public string? Client { get; init; }
+    public string? Before { get; init; }
+    public int Limit { get; init; } = 50;
+}
+
+/// <summary>
+/// The only columns a token holder's request log reads — nothing names a provider, an account or the upstream model;
+/// <see cref="ErrorType"/> only feeds the error category and is never shown.
+/// </summary>
+public sealed class KeyRequestRow
+{
+    public string Id { get; set; } = "";
+    public DateTimeOffset StartedAtUtc { get; set; }
+    public string? RequestedModel { get; set; }
+    public string? ClientKind { get; set; }
+    public bool Stream { get; set; }
+    public string Status { get; set; } = "";
+    public int? HttpStatus { get; set; }
+    public string? ErrorType { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
+    public long CacheReadTokens { get; set; }
+    public long CacheWriteTokens { get; set; }
+    public long ReasoningTokens { get; set; }
+    public long CostNanoUsd { get; set; }
+    public long? TtftMs { get; set; }
+    public long? TotalMs { get; set; }
+}
+
+/// <summary>A token's usage grouped by the model its client asked for, or by client (self-service statistics).</summary>
+public sealed class KeyUsageRow
+{
+    public string? Key { get; set; }
+    public long Requests { get; set; }
+    public long SuccessRequests { get; set; }
+    public long CostNanoUsd { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
+    public double? AvgTtftMs { get; set; }
+}
+
+/// <summary>Failed requests of a token per (status, HTTP status, error type), for its error categories.</summary>
+public sealed class KeyErrorRow
+{
+    public string Status { get; set; } = "";
+    public int? HttpStatus { get; set; }
+    public string? ErrorType { get; set; }
+    public long Count { get; set; }
+}
+
 public sealed class TopModelStat
 {
     public string ModelId { get; init; } = "";
@@ -653,6 +732,155 @@ public sealed class RequestRepository
     }
 
     /// <summary>
+    /// One token's requests for its holder (see <see cref="KeyRequestQuery"/>), newest first, at most 200 at a time.
+    /// Reads the narrow <see cref="KeyRequestRow"/> columns only, always scoped to the token.
+    /// </summary>
+    public async Task<IReadOnlyList<KeyRequestRow>> ListForKeyAsync(KeyRequestQuery q, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<KeyRequestRow>("""
+            SELECT id AS Id, started_at_utc AS StartedAtUtc, requested_model AS RequestedModel, client_kind AS ClientKind,
+                   stream AS Stream, status AS Status, http_status AS HttpStatus, error_type AS ErrorType,
+                   total_input_tokens AS InputTokens, total_output_tokens AS OutputTokens,
+                   cache_read_tokens AS CacheReadTokens, cache_write_tokens AS CacheWriteTokens,
+                   reasoning_tokens AS ReasoningTokens, cost_nanousd AS CostNanoUsd, ttft_ms AS TtftMs, total_ms AS TotalMs
+            FROM requests
+            WHERE token_id = @token_id
+              AND (@from IS NULL OR started_at_utc >= @from)
+              AND (@to IS NULL OR started_at_utc <= @to)
+              AND (@status IS NULL OR instr(',' || @status || ',', ',' || status || ',') > 0)
+              AND (@model IS NULL OR requested_model = @model)
+              AND (@client IS NULL OR client_kind = @client)
+              AND (@before IS NULL OR (started_at_utc, id) < (SELECT started_at_utc, id FROM requests WHERE id = @before AND token_id = @token_id))
+            ORDER BY started_at_utc DESC, id DESC
+            LIMIT @limit
+            """, new
+        {
+            token_id = q.TokenId,
+            from = q.From is { } from ? DateTimeOffsetHandler.ToStorage(from) : null,
+            to = q.To is { } to ? DateTimeOffsetHandler.ToStorage(to) : null,
+            status = string.IsNullOrWhiteSpace(q.Status) ? null : q.Status,
+            model = string.IsNullOrWhiteSpace(q.Model) ? null : q.Model,
+            client = string.IsNullOrWhiteSpace(q.Client) ? null : q.Client,
+            before = string.IsNullOrWhiteSpace(q.Before) ? null : q.Before,
+            limit = Math.Clamp(q.Limit, 1, 200),
+        })).ToList();
+    }
+
+    /// <summary>
+    /// One token's usage in a range grouped by <paramref name="dimension"/>: "model" (the model the client asked for —
+    /// never the upstream or catalog model, which can reveal the provider) or "client". Busiest first, at most 50.
+    /// </summary>
+    public async Task<IReadOnlyList<KeyUsageRow>> UsageByAsync(
+        string tokenId, DateTimeOffset from, DateTimeOffset to, string dimension, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        var args = new { token_id = tokenId, from = DateTimeOffsetHandler.ToStorage(from), to = DateTimeOffsetHandler.ToStorage(to) };
+        var rows = dimension == "client"
+            ? await conn.QueryAsync<KeyUsageRow>("""
+                SELECT client_kind AS Key, COUNT(*) AS Requests,
+                       COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) AS SuccessRequests,
+                       COALESCE(SUM(cost_nanousd), 0) AS CostNanoUsd, COALESCE(SUM(total_input_tokens), 0) AS InputTokens,
+                       COALESCE(SUM(total_output_tokens), 0) AS OutputTokens, AVG(ttft_ms) AS AvgTtftMs
+                FROM requests
+                WHERE token_id = @token_id AND started_at_utc >= @from AND started_at_utc <= @to
+                GROUP BY client_kind ORDER BY Requests DESC LIMIT 50
+                """, args)
+            : await conn.QueryAsync<KeyUsageRow>("""
+                SELECT requested_model AS Key, COUNT(*) AS Requests,
+                       COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) AS SuccessRequests,
+                       COALESCE(SUM(cost_nanousd), 0) AS CostNanoUsd, COALESCE(SUM(total_input_tokens), 0) AS InputTokens,
+                       COALESCE(SUM(total_output_tokens), 0) AS OutputTokens, AVG(ttft_ms) AS AvgTtftMs
+                FROM requests
+                WHERE token_id = @token_id AND started_at_utc >= @from AND started_at_utc <= @to
+                GROUP BY requested_model ORDER BY Requests DESC LIMIT 50
+                """, args);
+        return rows.ToList();
+    }
+
+    /// <summary>One token's failed requests in a range per (status, HTTP status, error type).</summary>
+    public async Task<IReadOnlyList<KeyErrorRow>> ErrorBreakdownAsync(string tokenId, DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<KeyErrorRow>("""
+            SELECT status AS Status, http_status AS HttpStatus, error_type AS ErrorType, COUNT(*) AS Count
+            FROM requests
+            WHERE token_id = @token_id AND started_at_utc >= @from AND started_at_utc <= @to AND status <> 'success'
+            GROUP BY status, http_status, error_type
+            """, new { token_id = tokenId, from = DateTimeOffsetHandler.ToStorage(from), to = DateTimeOffsetHandler.ToStorage(to) })).ToList();
+    }
+
+    /// <summary>
+    /// Per provider: the requests it answered in the range (<paramref name="clientKind"/> / <paramref name="tokenId"/>
+    /// narrow it), plus provider-pool failovers read from the <c>upstream.attempt</c> spans — an attempt marked
+    /// <c>provider_failover</c> counts against the provider it was sent to (its <c>astra.provider.id</c>), the request it
+    /// handed over counts for the provider that finally answered. Busiest first.
+    /// </summary>
+    public async Task<IReadOnlyList<ProviderStat>> ProviderStatsAsync(
+        DateTimeOffset from, DateTimeOffset to, string? clientKind = null, string? tokenId = null, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        var args = new
+        {
+            from = DateTimeOffsetHandler.ToStorage(from),
+            to = DateTimeOffsetHandler.ToStorage(to),
+            client_kind = clientKind,
+            token_id = tokenId,
+        };
+        var answered = (await conn.QueryAsync<ProviderStatRow>($"""
+            SELECT provider_id AS ProviderId, MAX(provider_name) AS ProviderName, COUNT(*) AS Requests,
+                   COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) AS SuccessRequests,
+                   COALESCE(SUM(cost_nanousd), 0) AS CostNanoUsd,
+                   COALESCE(SUM(total_input_tokens), 0) AS InputTokens,
+                   COALESCE(SUM(total_output_tokens), 0) AS OutputTokens,
+                   AVG(ttft_ms) AS AvgTtftMs
+            FROM requests
+            WHERE started_at_utc >= @from AND started_at_utc <= @to AND provider_id IS NOT NULL{Filters(clientKind, tokenId)}
+            GROUP BY provider_id
+            """, args)).ToList();
+        var handedAway = (await conn.QueryAsync<ProviderCountRow>($"""
+            SELECT COALESCE(json_extract(s.attributes_json, '$."astra.provider.id"'), r.provider_id) AS ProviderId,
+                   MAX(json_extract(s.attributes_json, '$."astra.provider.name"')) AS ProviderName,
+                   COUNT(*) AS Count
+            FROM trace_spans s JOIN requests r ON r.id = s.request_id
+            WHERE s.name = 'upstream.attempt'
+              AND json_extract(s.attributes_json, '$."astra.attempt.retry"') = 'provider_failover'
+              AND r.started_at_utc >= @from AND r.started_at_utc <= @to{Filters(clientKind, tokenId, "r.")}
+            GROUP BY 1
+            """, args)).ToList();
+        var takenOver = (await conn.QueryAsync<ProviderCountRow>($"""
+            SELECT r.provider_id AS ProviderId, MAX(r.provider_name) AS ProviderName, COUNT(*) AS Count
+            FROM requests r
+            WHERE r.started_at_utc >= @from AND r.started_at_utc <= @to AND r.provider_id IS NOT NULL{Filters(clientKind, tokenId, "r.")}
+              AND EXISTS (SELECT 1 FROM trace_spans s WHERE s.request_id = r.id AND s.name = 'upstream.attempt'
+                          AND json_extract(s.attributes_json, '$."astra.attempt.retry"') = 'provider_failover')
+            GROUP BY r.provider_id
+            """, args)).ToList();
+
+        var stats = answered.ToDictionary(r => r.ProviderId, r => new ProviderStat
+        {
+            ProviderId = r.ProviderId,
+            ProviderName = r.ProviderName,
+            Requests = r.Requests,
+            SuccessRequests = r.SuccessRequests,
+            CostNanoUsd = r.CostNanoUsd,
+            InputTokens = r.InputTokens,
+            OutputTokens = r.OutputTokens,
+            AvgTtftMs = r.AvgTtftMs,
+        }, StringComparer.Ordinal);
+        ProviderStat For(ProviderCountRow row)
+        {
+            if (!stats.TryGetValue(row.ProviderId, out var stat))
+                stats[row.ProviderId] = stat = new ProviderStat { ProviderId = row.ProviderId, ProviderName = row.ProviderName };
+            return stat;
+        }
+        foreach (var row in handedAway.Where(r => r.ProviderId is { Length: > 0 })) For(row).FailoversOut = row.Count;
+        foreach (var row in takenOver) For(row).FailoversIn = row.Count;
+        return stats.Values.OrderByDescending(s => s.Requests).ThenByDescending(s => s.FailoversOut)
+            .ThenBy(s => s.ProviderId, StringComparer.Ordinal).ToList();
+    }
+
+    /// <summary>
     /// Cost/usage buckets. <paramref name="groupBy"/> is "day" or "hour"; buckets are UTC wall time shifted by
     /// <paramref name="utcOffsetMinutes"/> (pass the viewer's offset to bucket by local days/hours).
     /// <paramref name="by"/> is "model", "provider", "client" or "token"; <paramref name="clientKind"/> /
@@ -795,9 +1023,9 @@ public sealed class RequestRepository
     /// Extra stats predicates for the optional client / token filters; the values are bound as <c>@client_kind</c> and
     /// <c>@token_id</c>.
     /// </summary>
-    private static string Filters(string? clientKind, string? tokenId) =>
-        (string.IsNullOrEmpty(clientKind) ? "" : " AND client_kind = @client_kind")
-        + (string.IsNullOrEmpty(tokenId) ? "" : " AND token_id = @token_id");
+    private static string Filters(string? clientKind, string? tokenId, string alias = "") =>
+        (string.IsNullOrEmpty(clientKind) ? "" : $" AND {alias}client_kind = @client_kind")
+        + (string.IsNullOrEmpty(tokenId) ? "" : $" AND {alias}token_id = @token_id");
 
     /// <summary>
     /// Literal contains-match for a model term: escape LIKE wildcards so the term never broadens, then wrap it
@@ -828,6 +1056,25 @@ internal sealed class PrivacyCategoryRow
     public long WarnHits { get; set; }
     public long BlockHits { get; set; }
     public long RedactHits { get; set; }
+}
+
+internal sealed class ProviderStatRow
+{
+    public string ProviderId { get; set; } = "";
+    public string? ProviderName { get; set; }
+    public long Requests { get; set; }
+    public long SuccessRequests { get; set; }
+    public long CostNanoUsd { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
+    public double? AvgTtftMs { get; set; }
+}
+
+internal sealed class ProviderCountRow
+{
+    public string ProviderId { get; set; } = "";
+    public string? ProviderName { get; set; }
+    public long Count { get; set; }
 }
 
 internal sealed class SummaryRow

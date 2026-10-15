@@ -41,11 +41,22 @@ public sealed class TokenRecord
     /// </summary>
     public string? AllowedClientsJson { get; set; }
 
+    /// <summary>
+    /// Provider pool of direct calls (<see cref="TokenPool"/>, Json.Storage); null = <see cref="ProviderId"/> alone. When set,
+    /// <see cref="ProviderId"/> / <see cref="AccountId"/> hold its first member, so a binary without pools still routes.
+    /// </summary>
+    public string? PoolJson { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? LastUsedAt { get; set; }
 
     public TokenLimits? Limits() => TokenLimits.Parse(LimitsJson);
+
+    public TokenPool? Pool() => TokenPool.Parse(PoolJson);
+
+    /// <summary>Whether a bare token (direct call) has anywhere to go: a provider or a provider pool.</summary>
+    public bool HasDirectRoute() => ProviderId is not null || Pool() is not null;
 
     public List<string>? AllowedClients() =>
         string.IsNullOrWhiteSpace(AllowedClientsJson) ? null : Json.Deserialize<List<string>>(AllowedClientsJson) ?? [];

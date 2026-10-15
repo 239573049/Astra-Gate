@@ -9,10 +9,12 @@
  *
  * Without --version the version in cli/package.json is the source of truth.
  * --check validates and exits 1 on mismatch without writing anything.
+ * The version must be x.y.z (stable) or x.y.z-preview.N (preview); see release-channel.mjs.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { channelOf, isReleaseVersion } from './release-channel.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -30,8 +32,8 @@ function writeJson(p, data) {
 const cliPkgPath = path.join(root, 'cli', 'package.json');
 const cliPkg = readJson(cliPkgPath);
 const version = explicitVersion ?? cliPkg.version;
-if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
-  console.error(`No valid version found (got: ${version}).`);
+if (!isReleaseVersion(version)) {
+  console.error(`No valid version found (got: ${version}); use x.y.z or x.y.z-preview.N.`);
   process.exit(1);
 }
 
@@ -112,4 +114,4 @@ if (propsMatch[1].trim() !== version) {
 }
 
 if (mismatch) process.exit(1);
-console.log(`All package versions are in sync at ${version}.`);
+console.log(`All package versions are in sync at ${version} (${channelOf(version)} channel).`);

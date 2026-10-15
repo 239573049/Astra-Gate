@@ -11,6 +11,27 @@ public static class UpdateFeed
     public const string DefaultUrl = "https://astra-gate.si/api/client-releases";
 }
 
+/// <summary>
+/// Release channels of the feed (<c>&lt;feed&gt;/&lt;channel&gt;/latest.json</c>). Stable is the default; preview is opt-in and
+/// offers x.y.z-preview.N releases plus every stable (the feed merges them), so it never falls behind stable.
+/// </summary>
+public static class UpdateChannels
+{
+    public const string Stable = "stable";
+    public const string Preview = "preview";
+
+    /// <summary>stable | preview, or null for anything else; "beta", the old name of preview, reads as preview.</summary>
+    public static string? Parse(string? value) => value?.Trim().ToLowerInvariant() switch
+    {
+        Stable => Stable,
+        Preview or "beta" => Preview,
+        _ => null,
+    };
+
+    /// <summary>The stored setting as a channel the feed serves (stable when unrecognized).</summary>
+    public static string Normalize(string? value) => Parse(value) ?? Stable;
+}
+
 /// <summary>latest.json on the feed. camelCase JSON, shared contract with the desktop app and CLI.</summary>
 public sealed class UpdateManifest
 {
@@ -77,7 +98,8 @@ public sealed class UpdateCheckService(AstraDatabase db, SettingsService setting
 
             try
             {
-                using var req = new HttpRequestMessage(HttpMethod.Get, $"{feed.TrimEnd('/')}/{settings.Current.UpdateChannel}/latest.json");
+                var channel = UpdateChannels.Normalize(settings.Current.UpdateChannel);
+                using var req = new HttpRequestMessage(HttpMethod.Get, $"{feed.TrimEnd('/')}/{channel}/latest.json");
                 req.Headers.UserAgent.ParseAdd($"Astra/{ServerOptions.Version}");
                 using var resp = await factory.CreateClient(HttpClientName).SendAsync(req, ct);
                 resp.EnsureSuccessStatusCode();
@@ -118,13 +140,35 @@ public sealed class UpdateCheckService(AstraDatabase db, SettingsService setting
         }
     }
 
-    /// <summary>Semver comparison ignoring -prerelease/+build suffixes; unparsable candidates never count as newer.</summary>
+    /// <summary>
+    /// Semver precedence (build metadata ignored): a release is newer than its prereleases
+    /// (0.10.0 &gt; 0.10.0-preview.2 &gt; 0.10.0-preview.1), so a preview install moves on to the stable that follows,
+    /// and a stable install is never offered an older preview. Unparsable versions never count as newer.
+    /// </summary>
     internal static bool IsNewer(string? candidate, string current)
     {
-        if (!Version.TryParse(Core(candidate), out var c)) return false;
-        if (!Version.TryParse(Core(current), out var cur)) return false;
-        return c > cur;
+        if (Parse(candidate) is not { } c || Parse(current) is not { } cur) return false;
+        if (c.Core != cur.Core) return c.Core > cur.Core;
+        if (c.Pre.Length == 0 || cur.Pre.Length == 0) return c.Pre.Length == 0 && cur.Pre.Length > 0;
+        for (var i = 0; i < Math.Min(c.Pre.Length, cur.Pre.Length); i++)
+        {
+            var (a, b) = (c.Pre[i], cur.Pre[i]);
+            if (a == b) continue;
+            var (na, nb) = (long.TryParse(a, out var x), long.TryParse(b, out var y));
+            if (na && nb) return x > y;
+            if (na != nb) return nb; // numeric identifiers sort below alphanumeric ones
+            return string.CompareOrdinal(a, b) > 0;
+        }
+        return c.Pre.Length > cur.Pre.Length;
     }
 
-    private static string Core(string? v) => (v ?? "").Trim().Split('-', 2)[0].Split('+', 2)[0];
+    private static (Version Core, string[] Pre)? Parse(string? v)
+    {
+        var text = (v ?? "").Trim().TrimStart('v').Split('+', 2)[0];
+        var parts = text.Split('-', 2);
+        if (!Version.TryParse(parts[0], out var core)) return null;
+        // Version treats a missing build/revision as -1; compare x.y.z only.
+        core = new Version(core.Major, core.Minor, Math.Max(core.Build, 0));
+        return (core, parts.Length > 1 ? parts[1].Split('.') : []);
+    }
 }

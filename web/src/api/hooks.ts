@@ -81,7 +81,9 @@ import type {
   Token,
   TokenLimits,
   TokenMutationResult,
+  TokenPoolInput,
   TopModel,
+  ProviderStat,
   TunnelConfig,
   TunnelState,
   TunnelStatus,
@@ -90,7 +92,7 @@ import type {
   ModelOverrides,
 } from './types';
 import type { PrivacyEvent } from './types';
-import type { AlertEvent, AlertRule, AlertState, KeyInfo, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
+import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 
 export const keys = {
@@ -1041,6 +1043,15 @@ export const useTokens = () =>
     refetchInterval: 15_000,
   });
 
+/** One token, with its pool members' live health (refreshed more often than the list). */
+export const useToken = (id: string | undefined) =>
+  useQuery({
+    queryKey: [...keys.tokens, id] as const,
+    queryFn: () => api<Token>('GET', `/api/tokens/${enc(id!)}`),
+    enabled: !!id,
+    refetchInterval: 10_000,
+  });
+
 function useTokenMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
   const qc = useQueryClient();
   return useMutation({
@@ -1053,15 +1064,18 @@ function useTokenMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>)
 }
 
 export const useCreateToken = () =>
-  useTokenMutation((body: { name: string; providerId?: string | null; accountId?: string | null }) =>
+  useTokenMutation((body: { name: string; providerId?: string | null; accountId?: string | null; pool?: TokenPoolInput }) =>
     api<Token>('POST', '/api/tokens', body),
   );
 
-/** providerId: null clears direct calls; accountId: null / "" uses the provider's default account. */
+/**
+ * providerId: null clears direct calls; accountId: null / "" uses the provider's default account. pool replaces both
+ * (never send them together); a providerId patch drops the pool.
+ */
 export const useUpdateToken = () =>
   useTokenMutation((v: {
     id: string; name?: string; enabled?: boolean; providerId?: string | null; accountId?: string | null;
-    limits?: TokenLimits | null; allowedClients?: ClientKind[] | null;
+    pool?: TokenPoolInput; limits?: TokenLimits | null; allowedClients?: ClientKind[] | null;
   }) => {
     const { id, ...body } = v;
     return api<Token>('PATCH', `/api/tokens/${enc(id)}`, body);
@@ -1153,6 +1167,15 @@ export const useTopModels = (range: Range, client?: string, limit = 8, token?: s
   useQuery({
     queryKey: keys.stats('top', range, client ?? '', limit, token ?? ''),
     queryFn: () => api<TopModel[]>('GET', `/api/stats/top-models${qs({ range, limit, client, token })}`),
+    refetchInterval: 30_000,
+    placeholderData: (prev) => prev,
+  });
+
+/** Per provider: answered requests, success, cost, TTFT and provider-pool failovers (a token's pool members). */
+export const useProviderStats = (range: Range, token?: string, client?: string) =>
+  useQuery({
+    queryKey: keys.stats('providers', range, client ?? '', token ?? ''),
+    queryFn: () => api<ProviderStat[]>('GET', `/api/stats/providers${qs({ range, client, token })}`),
     refetchInterval: 30_000,
     placeholderData: (prev) => prev,
   });
@@ -1394,6 +1417,20 @@ export async function fetchKeyInfo(key: string): Promise<KeyInfo> {
   const res = await fetch(`${apiBase()}/v1/astra/key`, { headers: { Authorization: `Bearer ${key}` } });
   if (!res.ok) throw new KeyInfoError(res.status);
   return (await res.json()) as KeyInfo;
+}
+
+/** The holder's own request log, newest first; `before` = the previous page's `nextBefore`. */
+export async function fetchKeyRequests(key: string, q: { before?: string | null; status?: string; model?: string; limit?: number } = {}): Promise<KeyRequestPage> {
+  const res = await fetch(`${apiBase()}/v1/astra/key/requests${qs({ ...q, before: q.before ?? undefined })}`, { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new KeyInfoError(res.status);
+  return (await res.json()) as KeyRequestPage;
+}
+
+/** The holder's statistics for a range (usage time zone). */
+export async function fetchKeyStats(key: string, range: KeyStatsRange): Promise<KeyStats> {
+  const res = await fetch(`${apiBase()}/v1/astra/key/stats${qs({ range })}`, { headers: { Authorization: `Bearer ${key}` } });
+  if (!res.ok) throw new KeyInfoError(res.status);
+  return (await res.json()) as KeyStats;
 }
 
 export class KeyInfoError extends Error {

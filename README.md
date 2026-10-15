@@ -32,6 +32,13 @@ OpenCode ─────┘   privacy guardrails                └─ OpenRoute
   values never leave your machine).
 - **Multi-account** — add several provider entries and subscription accounts for the same
   provider and switch a client between them without touching its config again.
+- **Provider pools per token** — spread a token's direct calls over several providers
+  (failover, round robin, weighted, tiered or least busy), keep each conversation on one
+  provider for the prompt cache, and fail over automatically on rate limits and errors
+  before any reply has started.
+- **Per-token logs and statistics** — open a token's trend, models, providers (with
+  failovers) and request log in the console; whoever holds the token can see its own
+  limits, statistics and request log at `/key`, without anything about the upstream.
 - **Local-first** — API keys are encrypted at rest with DataProtection in `~/.astra/keys`;
   request bodies and billing data live in local SQLite (`~/.astra/astra.db`). No cloud
   account required.
@@ -47,7 +54,8 @@ iwr https://astra-gate.si/install.ps1 -UseBasicParsing | iex   # Windows (PowerS
 ```
 
 It installs `astra-server` only (no `astra` CLI); every download is checked against the sha256 in
-the release feed. For the `astra` CLI, use npm: it requires Node.js ≥ 18 and installs a
+the release feed. Add `--preview` (Windows: `$env:ASTRA_CHANNEL = 'preview'`) for the preview release;
+previews are never offered as updates unless you turn on **Settings → About → Receive preview updates**. For the `astra` CLI, use npm: it requires Node.js ≥ 18 and installs a
 platform-specific server binary (no .NET needed).
 
 ```bash
@@ -140,7 +148,7 @@ server running.
 | `astra provider list\|add\|remove` | Manage upstream providers |
 | `astra client list\|status\|enable\|disable` | Manage client take-over |
 | `astra config set-password` | Set the admin password (required before binding a non-loopback address) |
-| `astra update [--check]` | Update Astra (and the desktop app), then restart the server |
+| `astra update [--check] [--channel preview]` | Update Astra (and the desktop app), then restart the server |
 | `astra restore-all [--purge]` | Restore every managed client config, offline |
 | `astra uninstall [--desktop] [--purge]` | Uninstall Astra (restores client configs, stops the server) |
 

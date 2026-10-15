@@ -81,7 +81,7 @@ and Bun host (`astra-plugins`), and the CLI/web/desktop/docs/packaging side (`cl
 - Admin routes, each mapped in `AstraApp.Create` (`src/Astra.Server/Hosting/AstraApp.cs:270`–`:286`):
   `/api/health|/api/version|/api/admin/shutdown|/api/auth/*|/api/server/listen` (`Api/SystemEndpoints.cs`),
   `/api/models`, `/api/billing/simulate` (`Api/ModelEndpoints.cs:30`), `/api/models/sync/*` (`Api/ModelSyncEndpoints.cs:8`),
-  `/api/requests*`, `/api/stats/*` (`Api/RequestEndpoints.cs:92`), GET/PATCH `/api/settings` (`Api/RequestEndpoints.cs:252`), `/api/clients/*` (`Api/ClientEndpoints.cs:15`),
+  `/api/requests*`, `/api/stats/*` incl. `/api/stats/providers` (`Api/RequestEndpoints.cs:92`), GET/PATCH `/api/settings` (`Api/RequestEndpoints.cs:252`), `/api/clients/*` (`Api/ClientEndpoints.cs:15`),
   `/api/clients/claude-code/direct/*` (`Api/ClaudeDirectService.cs:342`), `/api/tokens/*` (`Api/TokenEndpoints.cs:10`),
   `/api/providers/*` + `/api/provider-templates` + `/api/price-keys` (`Api/ProviderEndpoints.cs:36`), `/api/privacy*` (`Api/PrivacyEndpoints.cs:32`),
   `/api/providers/{id}/accounts*`, `/api/provider-accounts/*`, `/api/subscription/*`, `/api/oauth/callback` (`Api/SubscriptionEndpoints.cs:212`),

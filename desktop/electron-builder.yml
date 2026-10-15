@@ -22,7 +22,9 @@ compression: normal
 # in CI to the stable channel root, e.g. https://feed.example.com/astra/stable.
 # Local builds only produce unpacked output and do not need it. The channel
 # stays the default ("latest"): electron-updater appends the platform suffix
-# itself and requests latest-mac.yml.
+# itself and requests latest-mac.yml. Preview opt-ins swap the URL's last
+# segment for /preview at run time (src/shared/updateChannel.ts), so the URL
+# must keep ending in the channel directory.
 publish:
   provider: generic
   url: ${env.ASTRA_FEED_URL}

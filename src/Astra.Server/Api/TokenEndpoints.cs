@@ -11,6 +11,7 @@ public static class TokenEndpoints
         // Materialized to List<TokenDto>: an interface-typed root makes the serializer probe the
         // interface graph for metadata (see ServerJsonContext).
         group.MapGet("", async (TokenService tokens, CancellationToken ct) => Results.Ok((await tokens.ListAsync(ct)).ToList()));
+        group.MapGet("/{id}", async (string id, TokenService tokens, CancellationToken ct) => Results.Ok(await tokens.GetAsync(id, ct)));
         group.MapPost("", async (JsonObject body, TokenService tokens, CancellationToken ct) =>
             Results.Ok(await tokens.CreateAsync(body, ct)));
         group.MapPatch("/{id}", async (string id, JsonObject body, TokenService tokens, CancellationToken ct) =>

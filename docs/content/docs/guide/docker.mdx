@@ -23,7 +23,7 @@ docker run -d --name astra \
 ASTRA_ADMIN_PASSWORD='换成你自己的密码' docker compose up -d
 ```
 
-可用标签：`latest`、`x.y.z`、`x.y`。
+可用标签：`latest`、`x.y.z`、`x.y`（正式版）；`preview` 指向最新的预览版（`x.y.z-preview.N`，可能不稳定，也有各自的 `x.y.z-preview.N` 标签），正式版比它新时也会指过去。
 
 ## 环境变量
 
@@ -56,7 +56,7 @@ Astra 本身只提供 HTTP。对外暴露时请在前面放一个终止 TLS 的�
 
 用 Cloudflare（包括 Cloudflare Tunnel 的 `cloudflared` sidecar）转发时，带 `Cf-Ray` / `Cf-Connecting-IP` 的请求会被识别为远程请求：网关调用始终需要令牌，不受「强制令牌」开关影响。详见[远程访问](/docs/guide/remote-access)。
 
-令牌的自助查询接口（`/v1/astra/key`、`/v1/dashboard/billing/*`）按来源 IP 限流，每个 IP 每分钟 30 次。放在反向代理后面又没有开启 `ASPNETCORE_FORWARDEDHEADERS_ENABLED` 时，所有请求看起来都来自代理，会共用这一个额度。
+令牌的自助查询接口按来源 IP 限流：额度与余额接口（`/v1/astra/key`、`/v1/dashboard/billing/*`）每个 IP 每分钟 30 次，统计与请求记录接口（`/v1/astra/key/stats`、`/v1/astra/key/requests`）另算 30 次。放在反向代理后面又没有开启 `ASPNETCORE_FORWARDEDHEADERS_ENABLED` 时，所有请求看起来都来自代理，会共用同一份额度。
 
 ## 升级
 

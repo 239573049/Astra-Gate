@@ -4,6 +4,7 @@
 #   curl -fsSL https://astra-gate.si/install.sh | bash
 #   curl -fsSL https://astra-gate.si/install.sh | bash -s -- --server
 #   curl -fsSL https://astra-gate.si/install.sh | bash -s -- --desktop
+#   curl -fsSL https://astra-gate.si/install.sh | bash -s -- --server --preview
 #
 # Installs either
 #   server   the self-contained astra-server binary (+ web UI) into ~/.astra/server and an
@@ -12,9 +13,12 @@
 #            It bundles its own server.
 #
 # Without a flag it asks (when a terminal is available) and defaults to the server.
+# --preview installs the newest preview release (or a newer stable, should one exist) instead of the
+# newest stable; to keep receiving previews afterwards, turn on Settings -> About -> preview updates.
 #
 # Environment:
 #   ASTRA_INSTALL=server|desktop   same as --server / --desktop
+#   ASTRA_CHANNEL=stable|preview   release channel (default stable; --preview = preview)
 #   ASTRA_HOME                     data directory (default ~/.astra)
 #   ASTRA_BIN_DIR                  launcher / AppImage directory (default ~/.local/bin)
 #   ASTRA_FEED_URL                 release feed (default https://astra-gate.si/api/client-releases)
@@ -27,7 +31,7 @@ FEED="${ASTRA_FEED_URL:-https://astra-gate.si/api/client-releases}"
 FEED="${FEED%/}"
 REGISTRY="${ASTRA_NPM_REGISTRY:-https://registry.npmjs.org}"
 REGISTRY="${REGISTRY%/}"
-CHANNEL=stable
+CHANNEL="${ASTRA_CHANNEL:-stable}"
 HOME_DIR="${ASTRA_HOME:-$HOME/.astra}"
 BIN_DIR="${ASTRA_BIN_DIR:-$HOME/.local/bin}"
 MODE="${ASTRA_INSTALL:-}"
@@ -37,20 +41,25 @@ warn() { printf 'warning: %s\n' "$*" >&2; }
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  say "Usage: curl -fsSL https://astra-gate.si/install.sh | bash -s -- [--server | --desktop]"
-  say "Environment: ASTRA_INSTALL, ASTRA_HOME, ASTRA_BIN_DIR, ASTRA_FEED_URL, ASTRA_NPM_REGISTRY"
+  say "Usage: curl -fsSL https://astra-gate.si/install.sh | bash -s -- [--server | --desktop] [--preview]"
+  say "Environment: ASTRA_INSTALL, ASTRA_CHANNEL, ASTRA_HOME, ASTRA_BIN_DIR, ASTRA_FEED_URL, ASTRA_NPM_REGISTRY"
 }
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --server) MODE=server ;;
     --desktop) MODE=desktop ;;
+    --preview) CHANNEL=preview ;;
     -y|--yes) ;;
     -h|--help) usage; exit 0 ;;
     *) die "unknown option '$1' (use --server or --desktop)" ;;
   esac
   shift
 done
+case "$CHANNEL" in
+  stable|preview) ;;
+  *) die "unknown release channel '$CHANNEL' (use stable or preview)." ;;
+esac
 
 command -v curl >/dev/null 2>&1 || die "curl is required."
 command -v tar >/dev/null 2>&1 || die "tar is required."

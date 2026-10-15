@@ -2,18 +2,22 @@ import { app, dialog, Notification } from 'electron';
 import * as fs from 'node:fs';
 import { autoUpdater } from 'electron-updater';
 import {
+  DEFAULT_CHANNEL,
   applyServerUpdate,
   checkForServerUpdate,
   fetchManifest,
   installDesktopClient,
   isApiVersionCompatible,
   isNewerVersion,
+  normalizeChannel,
   type ApplyServerUpdateOptions,
   type ApplyServerUpdateResult,
   type ServerControl,
+  type UpdateChannel,
   type UpdateManifest,
 } from '@aidotnet/update-core';
 import { fetchUpdateAutoCheck, refreshUpdateCheck } from './api';
+import { channelFeedUrl, readBakedFeedUrl } from './shared/updateChannel';
 import { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
 import {
   decideReminder,
@@ -37,6 +41,11 @@ import {
  * desktop updates are delegated to `astra update --desktop`; Windows / Linux
  * installer installs (NSIS / AppImage) are pointed at the download page. The
  * server update flow works everywhere. Unpackaged dev runs never self-update.
+ *
+ * Every surface follows the server's release channel (updateChannel: stable by
+ * default, preview when the user opts in on the Settings page): the manifest is
+ * fetched from that channel, and the DMG track's electron-updater feed is
+ * pointed at the channel's directory before each check.
  */
 export { resolveUpdateTrack, type UpdateTrack } from './shared/updateTrack';
 
@@ -108,6 +117,8 @@ export class UpdateController {
   private dmgDownloadedVersion: string | null = null;
   /** DMG track: a newer app version was found but is still downloading. */
   private dmgAvailableVersion: string | null = null;
+  /** DMG track: the channel electron-updater's feed points at (the baked feed is stable). */
+  private dmgFeedChannel: UpdateChannel = DEFAULT_CHANNEL;
   private reminding = false;
 
   constructor(private readonly o: UpdateControllerOptions) {
@@ -227,12 +238,17 @@ export class UpdateController {
   private async runCheck(): Promise<UpdateSummary> {
     try {
       const parts: string[] = [];
+      const base = this.o.apiBase();
+      // The server only polls the feed every 12h; ask it to poll now so a launch-time check is
+      // fresh. Its answer also names the user's release channel, which every surface follows.
+      const refreshed = base ? await refreshUpdateCheck(base) : null;
+      const channel = normalizeChannel(refreshed?.channel);
 
       if (this.track === 'dmg') {
-        const dmg = await this.checkDesktopDmg();
+        const dmg = await this.checkDesktopDmg(channel);
         if (dmg) parts.push(dmg);
       }
-      const server = await this.checkServerAndManifest();
+      const server = await this.checkServerAndManifest(base, channel);
       if (server) parts.push(server);
 
       if (this.dmgDownloadedVersion) {
@@ -268,8 +284,9 @@ export class UpdateController {
     }
   }
 
-  private async checkDesktopDmg(): Promise<string> {
+  private async checkDesktopDmg(channel: UpdateChannel): Promise<string> {
     try {
+      this.pointDmgFeedAt(channel);
       const result = await autoUpdater.checkForUpdates();
       const v = result?.updateInfo?.version;
       this.dmgAvailableVersion = v && v !== app.getVersion() ? v : null;
@@ -283,10 +300,24 @@ export class UpdateController {
     }
   }
 
-  private async checkServerAndManifest(): Promise<string> {
-    const base = this.o.apiBase();
-    // The server only polls the feed every 12h; ask it to poll now so a launch-time check is fresh.
-    if (base) await refreshUpdateCheck(base);
+  /**
+   * DMG track: electron-updater reads latest-mac.yml from the feed baked into app-update.yml (the
+   * stable directory); a preview opt-in points it at the preview directory instead. electron-updater
+   * still never downgrades, so switching back to stable waits for a newer stable.
+   */
+  private pointDmgFeedAt(channel: UpdateChannel): void {
+    if (channel === this.dmgFeedChannel) return;
+    const url = channelFeedUrl(readBakedFeedUrl(process.resourcesPath), channel);
+    if (!url) {
+      this.o.log(`desktop update feed has no ${channel} channel to switch to; staying on ${this.dmgFeedChannel}`);
+      return;
+    }
+    autoUpdater.setFeedURL({ provider: 'generic', url });
+    this.dmgFeedChannel = channel;
+    this.o.log(`desktop update feed: ${url}`);
+  }
+
+  private async checkServerAndManifest(base: string | null, channel: UpdateChannel): Promise<string> {
     // Gated on the SERVER's version, like the apply gate below: a server left
     // behind by an older install must surface even when this app is current.
     const serverVersion = (await this.o.control.probeVersion()) ?? app.getVersion();
@@ -294,6 +325,7 @@ export class UpdateController {
       currentVersion: serverVersion,
       baseUrl: base ?? undefined,
       feedUrl: this.o.feedUrl,
+      channel,
     });
     if (!r.availableVersion) {
       this.pendingManifest = null;
@@ -301,8 +333,9 @@ export class UpdateController {
       return '';
     }
     // The server-side status carries only the version; fetch the manifest for
-    // the checksum + platform info the executor needs, and re-validate.
-    const manifest = await fetchManifest({ feedUrl: this.o.feedUrl });
+    // the checksum + platform info the executor needs (from the channel that
+    // answered), and re-validate.
+    const manifest = await fetchManifest({ feedUrl: this.o.feedUrl, channel: r.channel });
     if (!isNewerVersion(manifest.version, serverVersion)) {
       this.pendingManifest = null;
       this.desktopUpdatePending = false;
