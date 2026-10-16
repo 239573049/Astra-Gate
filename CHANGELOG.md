@@ -4,6 +4,14 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.9.7] - 2026-10-16
+
+### 修复
+
+- **Claude Code 中途接入的 MCP 工具在转换协议后丢失**：Claude Code 会把会话中途连上的 MCP 工具以 `tool_addition` 块放在系统消息里，之前网关把它们丢掉，经协议转换的上游看不到这些工具。现在它们会并入请求的工具列表，重复声明的同名工具只保留第一个。
+- **带 `[1m]` 后缀的 Claude 模型名无法匹配 Copilot 上游**：`claude-opus-4-8[1m]` 这类带上下文窗口标记的模型名现在会去掉标记再转换；`claude-opus-4-8-fast` 之类带变体后缀的名称保留后缀（转为 `claude-opus-4.8-fast`），并支持更多 `claude-*` 系列名。
+- **Anthropic 上游拒绝工具参数 schema**：部分客户端发来的工具 `input_schema` 顶层带有 `oneOf` / `allOf` / `anyOf`，Anthropic 会直接报错。现在转发给 Anthropic 时会去掉顶层的这几个关键字（嵌套在 `properties` 里的保留），并保证 `type` 为 `object`；没有此类问题的请求不受影响。
+
 ## [0.9.6] - 2026-10-15
 
 ### 新增
