@@ -12,6 +12,7 @@ using Astra.Core.Models;
 using Astra.Core.Requests;
 using Astra.Gateway.Plugins;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Protocol.Anthropic;
 using Astra.Gateway.Tracing;
 using Astra.Plugins.Host;
 using Astra.Plugins.Middleware;
@@ -360,7 +361,8 @@ public sealed class GatewayPipeline(
                     var mayRewrite = (upstreamModel != model && inbound != ApiProtocol.Gemini)
                                      || (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
                                      || forceResponsesStream || claudeMimic || claudeMode == ClaudeHeaderMode.Relay
-                                     || (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic);
+                                     || (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
+                                     || (upstreamProtocol == ApiProtocol.Anthropic && AnthropicToolSchemas.NeedsNormalizingTools(body));
                     upstreamTree = mayRetry && mayRewrite ? (JsonObject)body.DeepClone() : body;
                     var rewritten = false;
                     if (upstreamModel != model && inbound != ApiProtocol.Gemini)
@@ -368,6 +370,9 @@ public sealed class GatewayPipeline(
                         upstreamTree["model"] = upstreamModel; // Gemini carries the model in the URL instead.
                         rewritten = true;
                     }
+                    // Anthropic rejects a tool schema with oneOf/allOf/anyOf at the top level; only such bodies are touched.
+                    if (upstreamProtocol == ApiProtocol.Anthropic && AnthropicToolSchemas.NormalizeTools(upstreamTree))
+                        rewritten = true;
                     if (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
                     {
                         // Plan §4.2: always ask for usage; the extra usage chunk is filtered out before it reaches the client.

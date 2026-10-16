@@ -18,21 +18,31 @@ public static partial class CopilotModelIds
 
     /// <summary>
     /// <c>claude-haiku-5-5</c> / <c>claude-haiku-5-5-20260101</c> → <c>claude-haiku-5.5</c>;
-    /// <c>claude-3-5-sonnet</c> → <c>claude-3.5-sonnet</c>; <c>claude-sonnet-4-20250514</c> → <c>claude-sonnet-4</c>.
+    /// <c>claude-3-5-sonnet</c> → <c>claude-3.5-sonnet</c>; <c>claude-sonnet-4-20250514</c> → <c>claude-sonnet-4</c>;
+    /// <c>claude-opus-4-8-fast</c> → <c>claude-opus-4.8-fast</c> (a trailing variant word is kept).
+    /// Claude Code's context-window marker (<c>[1m]</c>) is dropped first — it is a client hint, not part of the id.
     /// Anything else (already dotted, other vendors, no version match) is returned unchanged.
     /// </summary>
     public static string ToUpstream(string modelId)
     {
+        if (modelId.EndsWith(ContextMarker, StringComparison.OrdinalIgnoreCase))
+            modelId = modelId[..^ContextMarker.Length];
         var m = NewStyleRegex().Match(modelId);
         if (m.Success)
-            return m.Groups["minor"].Success
-                ? $"claude-{m.Groups["family"].Value}-{m.Groups["major"].Value}.{m.Groups["minor"].Value}"
-                : m.Groups["date"].Success ? $"claude-{m.Groups["family"].Value}-{m.Groups["major"].Value}" : modelId;
+        {
+            var family = m.Groups["family"].Value;
+            var major = m.Groups["major"].Value;
+            var variant = m.Groups["variant"].Value;
+            if (m.Groups["minor"].Success) return $"claude-{family}-{major}.{m.Groups["minor"].Value}{variant}";
+            return m.Groups["date"].Success ? $"claude-{family}-{major}{variant}" : modelId;
+        }
         m = OldStyleRegex().Match(modelId);
         return m.Success ? $"claude-{m.Groups["major"].Value}.{m.Groups["minor"].Value}-{m.Groups["family"].Value}" : modelId;
     }
 
-    [GeneratedRegex(@"^claude-(?<family>haiku|sonnet|opus)-(?<major>\d+)(?:-(?<minor>\d{1,2}))?(?:-(?<date>\d{8}))?$", RegexOptions.IgnoreCase)]
+    private const string ContextMarker = "[1m]";
+
+    [GeneratedRegex(@"^claude-(?<family>[a-z]+)-(?<major>\d+)(?:-(?<minor>\d{1,2}))?(?:-(?<date>\d{8}))?(?<variant>(?:-[a-z][a-z0-9]*)*)$", RegexOptions.IgnoreCase)]
     private static partial Regex NewStyleRegex();
 
     [GeneratedRegex(@"^claude-(?<major>\d+)-(?<minor>\d{1,2})-(?<family>haiku|sonnet|opus)(?:-\d{8})?$", RegexOptions.IgnoreCase)]

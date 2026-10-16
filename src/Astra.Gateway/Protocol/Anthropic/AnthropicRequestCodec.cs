@@ -43,7 +43,7 @@ internal static class AnthropicRequestCodec
             if (list.Count > 0) r.Stop = list;
         }
 
-        if (body["system"] is { } system && !AddSystem(system, r.System, warnings))
+        if (body["system"] is { } system && !AddSystem(system, r, warnings))
             throw new ProtocolException("system 必须是字符串或 content block 数组。");
 
         if (body["messages"] is not JsonArray messages || messages.Count == 0)
@@ -58,7 +58,7 @@ internal static class AnthropicRequestCodec
                 // so they join it in order; one that sits after the conversation started loses its position.
                 if (r.Messages.Count > 0)
                     AddWarning(warnings, "moved a system message from inside the conversation into system");
-                if (!AddSystem(msg["content"], r.System, warnings))
+                if (!AddSystem(msg["content"], r, warnings))
                     throw new ProtocolException("system message 的 content 必须是字符串或 content block 数组。");
                 continue;
             }
@@ -91,28 +91,7 @@ internal static class AnthropicRequestCodec
             {
                 if (t is not JsonObject tool)
                     throw new ProtocolException("每个 tool 必须是对象。");
-                var type = Str(tool, "type");
-                if (type is null or "custom")
-                {
-                    r.Tools.Add(new UnifiedTool
-                    {
-                        Name = Str(tool, "name") ?? throw new ProtocolException("tool 缺少 name。"),
-                        Description = Str(tool, "description"),
-                        InputSchema = tool["input_schema"]?.DeepClone(),
-                    });
-                }
-                else
-                {
-                    // Typed / server tools (web_search_*, bash_*, text_editor_*, code_execution_*, computer_* …):
-                    // kept verbatim, only re-emitted to an Anthropic upstream (plan §6.4).
-                    r.Tools.Add(new UnifiedTool
-                    {
-                        Name = Str(tool, "name") ?? type,
-                        BuiltinType = type,
-                        BuiltinOrigin = ApiProtocol.Anthropic,
-                        BuiltinRaw = (JsonObject)tool.DeepClone(),
-                    });
-                }
+                AddTool(r.Tools, ParseTool(tool));
             }
         }
 
@@ -181,20 +160,57 @@ internal static class AnthropicRequestCodec
         return r;
     }
 
-    /// <summary>Adds system content (a string or text blocks) to <paramref name="into"/>; false when the shape is invalid.</summary>
-    private static bool AddSystem(JsonNode? content, List<ContentPart> into, List<string> warnings)
+    private static UnifiedTool ParseTool(JsonObject tool)
+    {
+        var type = Str(tool, "type");
+        if (type is null or "custom")
+        {
+            return new UnifiedTool
+            {
+                Name = Str(tool, "name") ?? throw new ProtocolException("tool 缺少 name。"),
+                Description = Str(tool, "description"),
+                InputSchema = tool["input_schema"]?.DeepClone(),
+            };
+        }
+        // Typed / server tools (web_search_*, bash_*, text_editor_*, code_execution_*, computer_* …):
+        // kept verbatim, only re-emitted to an Anthropic upstream (plan §6.4).
+        return new UnifiedTool
+        {
+            Name = Str(tool, "name") ?? type,
+            BuiltinType = type,
+            BuiltinOrigin = ApiProtocol.Anthropic,
+            BuiltinRaw = (JsonObject)tool.DeepClone(),
+        };
+    }
+
+    /// <summary>A tool announced twice (top-level <c>tools</c> and a <c>tool_addition</c>) is declared once; the first wins.</summary>
+    private static void AddTool(List<UnifiedTool> tools, UnifiedTool tool)
+    {
+        if (!tools.Exists(t => t.Name == tool.Name)) tools.Add(tool);
+    }
+
+    /// <summary>
+    /// Adds system content (a string or text blocks) to <paramref name="r"/>'s System; false when the shape is invalid.
+    /// Claude Code announces tools that join mid-conversation (MCP servers connecting) as <c>tool_addition</c> blocks
+    /// in a system message; the IR has no per-turn tool list, so they join the request's tools.
+    /// </summary>
+    private static bool AddSystem(JsonNode? content, UnifiedRequest r, List<string> warnings)
     {
         switch (content)
         {
             case JsonValue v when v.TryGetValue<string>(out var s):
-                into.Add(new TextPart(s));
+                r.System.Add(new TextPart(s));
                 return true;
             case JsonArray blocks:
                 foreach (var b in blocks)
                 {
                     if (b is not JsonObject o) continue;
                     if (Str(o, "type") == "text" && Str(o, "text") is { } text)
-                        into.Add(new TextPart(text)); // cache_control on system blocks is ignored here
+                        r.System.Add(new TextPart(text)); // cache_control on system blocks is ignored here
+                    else if (Str(o, "type") == "tool_addition"
+                             && o["tool"] is JsonObject added && Str(added, "type") == "tool_definition"
+                             && added["definition"] is JsonObject definition)
+                        AddTool(r.Tools, ParseTool(definition));
                     else if (Str(o, "type") is { } other)
                         AddWarning(warnings, $"dropped unsupported system block '{other}'");
                 }
@@ -388,7 +404,10 @@ internal static class AnthropicRequestCodec
                     var tool = new JsonObject { ["name"] = t.Name };
                     if (t.Description is { Length: > 0 } description) tool["description"] = description;
                     // Anthropic requires an input_schema object on custom tools.
-                    tool["input_schema"] = t.InputSchema?.DeepClone() ?? new JsonObject { ["type"] = "object" };
+                    var inputSchema = t.InputSchema?.DeepClone() ?? new JsonObject { ["type"] = "object" };
+                    if (inputSchema is JsonObject schemaObject && AnthropicToolSchemas.Normalize(schemaObject))
+                        AddWarning(r.Warnings, $"dropped top-level oneOf/allOf/anyOf from the input_schema of tool '{t.Name}'");
+                    tool["input_schema"] = inputSchema;
                     tools.AddNode(tool);
                 }
                 else if (t.BuiltinOrigin == ApiProtocol.Anthropic && t.BuiltinRaw is { } raw)

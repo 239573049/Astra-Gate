@@ -203,6 +203,39 @@ public class AnthropicRequestDecodeTests
         Assert.Single(r.Warnings, w => w.Contains("system message"));
     }
 
+    [Fact]
+    public void Tool_Addition_In_System_Message_Joins_Tools()
+    {
+        // Claude Code announces tools of MCP servers that connect mid-session this way; dropping them hid the tools
+        // from every translated upstream.
+        var body = JsonNode.Parse("""
+            {
+              "model": "glm-5.3",
+              "max_tokens": 100,
+              "tools": [{ "name": "Bash", "input_schema": { "type": "object" } }],
+              "messages": [
+                { "role": "user", "content": "hi" },
+                { "role": "system", "content": [
+                  { "type": "text", "text": "MCP connected." },
+                  { "type": "tool_addition", "tool": { "type": "tool_definition", "definition": {
+                    "name": "mcp__docs__batch", "description": "Batch edit", "input_schema": { "type": "object", "properties": { "id": { "type": "string" } } } } } },
+                  { "type": "tool_addition", "tool": { "type": "tool_definition", "definition": {
+                    "name": "Bash", "input_schema": { "type": "object" } } } }
+                ]}
+              ]
+            }
+            """)!.AsObject()!;
+
+        var r = Codec.DecodeRequest(body, new RequestDecodeContext());
+
+        Assert.Equal(["mcp__docs__batch", "Bash"], r.Tools.Select(t => t.Name));
+        var added = r.Tools[0];
+        Assert.Equal("Batch edit", added.Description);
+        Assert.Equal("string", added.InputSchema!["properties"]!["id"]!["type"]!.GetValue<string>());
+        Assert.Equal(["MCP connected."], r.System.Select(p => Assert.IsType<TextPart>(p).Text));
+        Assert.DoesNotContain(r.Warnings, w => w.Contains("tool_addition"));
+    }
+
     [Theory]
     [InlineData("""{"model":"m","max_tokens":1,"messages":"nope"}""", "messages")]
     [InlineData("""{"model":"m","max_tokens":1,"messages":[{"role":"wizard","content":"x"}]}""", "role")]

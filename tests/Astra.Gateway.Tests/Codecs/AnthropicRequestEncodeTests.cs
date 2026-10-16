@@ -427,4 +427,41 @@ public class AnthropicRequestEncodeTests
         r.Reasoning = new ReasoningConfig { Effort = "max" };
         Assert.Equal(16384, (int?)Codec.EncodeRequest(r, Ctx())["thinking"]!["budget_tokens"]);
     }
+
+    private const string SearchSchema = """
+        { "type": "object", "required": ["query"], "properties": { "query": { "type": "string" }, "options": { "$ref": "#/$defs/Opts" } },
+          "$defs": { "Opts": { "oneOf": [{ "type": "object" }, { "type": "null" }] } },
+          "allOf": [{ "if": { "required": ["provider"] }, "then": { "properties": { "options": { "$ref": "#/$defs/Opts" } } } }] }
+        """;
+
+    [Fact]
+    public void Top_Level_Schema_Combinators_Are_Dropped_And_Nested_Ones_Kept()
+    {
+        var r = Request(User(new TextPart("hi")));
+        r.Tools.Add(new UnifiedTool { Name = "search", InputSchema = JsonNode.Parse(SearchSchema) });
+
+        var body = Codec.EncodeRequest(r, Ctx());
+
+        var schema = Assert.IsType<JsonObject>(body["tools"]![0]!["input_schema"]);
+        Assert.False(schema.ContainsKey("allOf"));
+        Assert.Equal("object", (string?)schema["type"]);
+        Assert.NotNull(schema["properties"]!["query"]);
+        Assert.NotNull(schema["$defs"]!["Opts"]!["oneOf"]);
+        Assert.Contains(r.Warnings, w => w.Contains("search"));
+    }
+
+    [Fact]
+    public void Schema_Normalizing_Fixes_A_Passthrough_Body_And_Leaves_A_Clean_One_Alone()
+    {
+        var dirty = JsonNode.Parse($$"""{ "tools": [ { "name": "search", "input_schema": {{SearchSchema}} }, { "type": "web_search_20250305", "name": "web_search" } ] }""")!.AsObject();
+        Assert.True(AnthropicToolSchemas.NeedsNormalizingTools(dirty));
+        Assert.True(AnthropicToolSchemas.NormalizeTools(dirty));
+        Assert.False(AnthropicToolSchemas.NeedsNormalizingTools(dirty));
+        Assert.False(AnthropicToolSchemas.NormalizeTools(dirty));
+        Assert.Equal("web_search_20250305", (string?)dirty["tools"]![1]!["type"]);
+
+        var clean = JsonNode.Parse("""{ "tools": [ { "name": "t", "input_schema": { "type": "object", "properties": { "a": { "anyOf": [{ "type": "string" }] } } } } ] }""")!.AsObject();
+        Assert.False(AnthropicToolSchemas.NeedsNormalizingTools(clean));
+        Assert.False(AnthropicToolSchemas.NormalizeTools(clean));
+    }
 }
