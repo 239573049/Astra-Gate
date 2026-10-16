@@ -440,6 +440,7 @@ describe('Claude direct launch command', () => {
   it('copies the launcher command with no account id and no credential', async () => {
     const id = 'c0ffee'.repeat(4).slice(0, 32);
     const writeText = vi.fn(async () => {});
+    vi.stubGlobal('isSecureContext', true);
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
     hookSpies.state = { data: directState({ mode: 'direct', accountId: id, accounts: [account({ id, name: 'Work' })] }), isLoading: false, isError: false, error: null };
     showPanel(<ClaudeDirectPanel enabled gatewayEnabled={false} />);
