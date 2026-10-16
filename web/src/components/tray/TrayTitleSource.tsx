@@ -46,13 +46,13 @@ export function useTrayTitle(
 
 /**
  * Keeps the menu-bar title current from the main window (mounted by the app shell, so never alongside the
- * panel window's own copy). It polls the same data the panel polls, so the title is right before the panel
- * window has ever been created — which is the whole point of having the shell report it.
+ * panel window's own copy). It polls the data the title is computed from (not the panel's sections), so the title is
+ * right before the panel window has ever been created — which is the whole point of having the shell report it.
  */
 export function TrayTitleSource() {
   const [prefs] = useTrayPrefs();
   const state = useTrayState();
-  const data = useTrayData(prefs, { enabled: state.running, background: true, live: false });
+  const data = useTrayData(prefs, { enabled: state.running, background: true, live: false, titleOnly: true });
   useTrayTitle(prefs, state, data.summary, data.plans);
   return null;
 }

@@ -52,6 +52,31 @@ public class PluginHostClientTests
             new Dictionary<string, string> { ["content-type"] = "application/json" }, Encoding.UTF8.GetBytes("""{"model":"glm-5"}"""), "s1", null);
 
     [Fact]
+    public void A_Wire_Line_Is_One_Json_Object_With_The_Body_As_Base64_In_Its_Params()
+    {
+        var body = Encoding.UTF8.GetBytes("{\"model\":\"m\",\"input\":\"汉字 é\"}");
+        var message = new JsonObject
+        {
+            ["id"] = 7,
+            ["method"] = "fetch",
+            ["params"] = new JsonObject { ["url"] = "https://x/v1", ["headers"] = new JsonObject { ["a"] = "b" }, ["account"] = null },
+        };
+        var line = PluginHostClient.Line(message, body).ToArray();
+
+        Assert.Equal((byte)'\n', line[^1]);
+        Assert.DoesNotContain((byte)'\n', line[..^1]);
+        var parsed = JsonNode.Parse(line.AsSpan(0, line.Length - 1))!.AsObject();
+        Assert.Equal(7, parsed["id"]!.GetValue<int>());
+        Assert.Equal("fetch", parsed["method"]!.GetValue<string>());
+        var p = parsed["params"]!.AsObject();
+        Assert.Equal("b", p["headers"]!["a"]!.GetValue<string>());
+        Assert.True(p.ContainsKey("account"));
+        Assert.Equal(body, Convert.FromBase64String(p["body"]!.GetValue<string>()));
+        // Without a body the message is written as it is.
+        Assert.Equal(message.ToJsonString() + "\n", Encoding.UTF8.GetString(PluginHostClient.Line(message).Span));
+    }
+
+    [Fact]
     public async Task Rpc_results_and_errors()
     {
         await using var host = new FakeHost();

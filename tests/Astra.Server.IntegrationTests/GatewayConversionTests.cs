@@ -272,6 +272,47 @@ public class GatewayConversionTests
         Assert.True((await gw.RecordOfAsync(response)).Passthrough);
     }
 
+    /// <summary>One assistant message the way Copilot streams it: a new item id on every event.</summary>
+    private const string RotatingIdsStream =
+        "event: response.created\ndata: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"model\":\"gpt-5\",\"status\":\"in_progress\",\"output\":[]}}\n\n" +
+        "event: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"output_index\":0,\"item\":{\"id\":\"msg_enc_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[]}}\n\n" +
+        "event: response.output_text.delta\ndata: {\"type\":\"response.output_text.delta\",\"item_id\":\"msg_enc_2\",\"output_index\":0,\"content_index\":0,\"delta\":\"先读实现\"}\n\n" +
+        "event: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"output_index\":0,\"item\":{\"id\":\"msg_enc_3\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"先读实现\"}]}}\n\n" +
+        "event: response.completed\ndata: {\"type\":\"response.completed\",\"response\":{\"id\":\"resp_2\",\"model\":\"gpt-5\",\"status\":\"completed\",\"output\":[],\"usage\":{\"input_tokens\":5,\"output_tokens\":2}}}\n\n";
+
+    [Fact]
+    public async Task Copilot_Responses_Stream_Reaches_Codex_With_One_Id_Per_Item()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.Codex, ApiProtocol.OpenAIResponses,
+            seen => seen.Method == HttpMethod.Get
+                ? FakeUpstream.Json("""{"data":[{"id":"gpt-5","supported_endpoints":["/responses"]}]}""")
+                : FakeUpstream.Sse(RotatingIdsStream));
+        gw.Provider.TemplateId = "github-copilot-subscription";
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+        var response = await gw.PostAsync("/v1/responses", """{"model":"gpt-5","input":"hi","stream":true,"store":false}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var events = SseParser.ParseAll(await response.Content.ReadAsStringAsync()).Select(e => JsonNode.Parse(e.Data)!).ToList();
+        Assert.Equal(5, events.Count);
+        // Codex starts the message under the added id and completes it under the done id: they must match.
+        Assert.Equal("msg_enc_1", events[1]["item"]!["id"]!.GetValue<string>());
+        Assert.Equal("msg_enc_1", events[2]["item_id"]!.GetValue<string>());
+        Assert.Equal("msg_enc_1", events[3]["item"]!["id"]!.GetValue<string>());
+        Assert.Equal("先读实现", events[2]["delta"]!.GetValue<string>());
+        var record = await gw.RecordOfAsync(response);
+        Assert.True(record.Passthrough);
+        Assert.Equal(RequestStatus.Success, record.Status);
+        Assert.Equal(2, record.TotalOutputTokens);
+    }
+
+    [Fact]
+    public async Task Other_Responses_Providers_Stream_The_Upstream_Bytes_Untouched()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.Codex, ApiProtocol.OpenAIResponses, _ => FakeUpstream.Sse(RotatingIdsStream));
+        var response = await gw.PostAsync("/v1/responses", """{"model":"gpt-5","input":"hi","stream":true,"store":false}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(RotatingIdsStream, await response.Content.ReadAsStringAsync());
+    }
+
     [Fact]
     public async Task Client_Policy_Is_Checked_Before_Copilot_Model_Discovery()
     {

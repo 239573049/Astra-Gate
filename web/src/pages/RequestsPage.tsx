@@ -3,9 +3,9 @@ import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, Globe, KeyRound, L
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useInRouterContext, useSearchParams } from 'react-router';
 
-import { keys, useProviders, useRequest, useRequestRate, useRequests, useTunnel, type RequestQuery } from '../api/hooks';
+import { keys, useProviders, useRequest, useRequestBody, useRequestRate, useRequests, useTunnel, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
-import type { ClientKind, RateStats, RequestDetail, RequestSummary } from '../api/types';
+import { REQUEST_BODY_PARTS, type ClientKind, type RateStats, type RequestBodyKey, type RequestDetail, type RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
 import { Alert } from '../components/arc/alert/alert';
 import { Pagination } from '../components/arc/pagination/pagination';
@@ -21,7 +21,7 @@ import { errorText, Sheet } from '../components/ui/overlays';
 import { useI18n, type MessageKey, type TFunction } from '../i18n';
 import { cn } from '../lib/cn';
 import { useDebounced } from '../lib/hooks';
-import { formatDateTime, formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUnitPrice, pretty } from '../lib/format';
+import { formatBytes, formatDateTime, formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUnitPrice, pretty } from '../lib/format';
 import { useCommandListener } from '../shell/commands';
 
 const PAGE_SIZE = 50;
@@ -650,6 +650,37 @@ function TraceLink({ id, label }: { id: string; label: string }) {
   );
 }
 
+/**
+ * One captured body. The detail carries only its first `limit` bytes: a whole part (up to 8 MB) is fetched on request
+ * and shown as plain text — no pretty-printing or highlighting, which is what made large bodies cost hundreds of MB.
+ */
+function RequestBodyPanel({ id, part, preview, size, limit }: { id: string; part: RequestBodyKey; preview: string; size: number | null; limit: number | null }) {
+  const { t } = useI18n();
+  const truncated = size !== null && limit !== null && size > limit;
+  const [wantAll, setWantAll] = useState(false);
+  const whole = useRequestBody(id, REQUEST_BODY_PARTS[part], truncated && wantAll);
+  const shown = useMemo(() => (truncated ? preview : pretty(preview)), [preview, truncated]);
+  if (!truncated) return <CodeBlock maxHeight={420}>{shown}</CodeBlock>;
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[var(--text-secondary)]">
+        <span>{t('requests.body.truncated', { shown: formatBytes(limit), total: formatBytes(size) })}</span>
+        {!whole.data && (
+          <Button size="sm" loading={whole.isFetching} onClick={() => setWantAll(true)}>
+            {t('requests.body.loadAll')}
+          </Button>
+        )}
+      </div>
+      {whole.isError && <Alert tone="danger" title={t('common.error')}>{errorText(whole.error)}</Alert>}
+      {whole.data != null ? (
+        <pre className="selectable max-h-[420px] overflow-auto rounded-[10px] bg-[var(--surface-muted)] p-3 font-mono text-[11px] leading-[1.5] whitespace-pre">{whole.data}</pre>
+      ) : (
+        <CodeBlock maxHeight={420}>{shown}</CodeBlock>
+      )}
+    </div>
+  );
+}
+
 export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { t, locale } = useI18n();
   const q = useRequest(id);
@@ -691,13 +722,24 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
     { key: 'cost', label: t('billing.cost'), numeric: true, render: (_, row) => formatNanos(row.item.costNanoUsd) },
   ];
 
-  const raw: { title: string; content: string }[] = [];
-  if (r?.usageRaw != null) raw.push({ title: t('requests.detail.usageRaw'), content: pretty(r.usageRaw) });
-  if (r?.pricingSnapshot) raw.push({ title: t('requests.detail.pricingSnapshot'), content: pretty(r.pricingSnapshot) });
-  for (const k of ['clientRequest', 'upstreamRequest', 'upstreamRequestHeaders', 'upstreamResponse', 'clientResponse'] as const) {
-    const body = r?.bodies?.[k];
-    if (body) raw.push({ title: t(`requests.body.${k}`), content: pretty(body) });
-  }
+  // Rebuilt only when the detail changes (it refetches every second while the request is in flight).
+  const raw = useMemo(() => {
+    const items: { title: string; content: ReactNode }[] = [];
+    if (!r) return items;
+    if (r.usageRaw != null) items.push({ title: t('requests.detail.usageRaw'), content: <CodeBlock maxHeight={420}>{pretty(r.usageRaw)}</CodeBlock> });
+    if (r.pricingSnapshot) items.push({ title: t('requests.detail.pricingSnapshot'), content: <CodeBlock maxHeight={420}>{pretty(r.pricingSnapshot)}</CodeBlock> });
+    const bodies = r.bodies;
+    for (const k of Object.keys(REQUEST_BODY_PARTS) as RequestBodyKey[]) {
+      const body = bodies?.[k];
+      if (body) {
+        items.push({
+          title: t(`requests.body.${k}`),
+          content: <RequestBodyPanel id={r.id} part={k} preview={body} size={bodies?.sizes?.[k] ?? null} limit={bodies?.previewLimit ?? null} />,
+        });
+      }
+    }
+    return items;
+  }, [r, t]);
 
   return (
     <Sheet
@@ -817,7 +859,7 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
             {r.billingDescription && <p className="mt-3 text-[12px] leading-relaxed whitespace-pre-line text-[var(--text-secondary)]">{r.billingDescription}</p>}
           </DetailSection>
 
-          {raw.length > 0 && <Accordion defaultOpen={-1} items={raw.map((x) => ({ title: x.title, content: <CodeBlock maxHeight={420}>{x.content}</CodeBlock> }))} />}
+          {raw.length > 0 && <Accordion key={r.id} defaultOpen={-1} items={raw} />}
         </div>
       )}
     </Sheet>

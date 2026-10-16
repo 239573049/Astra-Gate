@@ -105,6 +105,9 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
             if (!_recent.TryGetValue(chosen.Id, out var queue))
                 _recent[chosen.Id] = queue = new Queue<DateTimeOffset>();
             queue.Enqueue(now);
+            // Pruned here too: the pick only counts (and prunes) on a tie, so a sticky or single-account provider would
+            // otherwise keep every assignment for the life of the process.
+            RecentCount(chosen.Id, now);
             return new Lease(this, chosen.Id);
         }
     }
@@ -113,6 +116,12 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
     public int InFlight(string accountId)
     {
         lock (_gate) return _inflight.GetValueOrDefault(accountId);
+    }
+
+    /// <summary>Assignments the account still keeps for the recent-use tie-break, as stored (diagnostics / tests).</summary>
+    public int RecentKept(string accountId)
+    {
+        lock (_gate) return _recent.TryGetValue(accountId, out var queue) ? queue.Count : 0;
     }
 
     /// <summary>The account a sticky key is bound to right now, if any (diagnostics / tests).</summary>

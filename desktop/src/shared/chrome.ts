@@ -30,6 +30,45 @@ export const TRAY_SETTINGS_HASH = '#/settings/tray';
 /** Hash route the tray panel window renders (web/src/App.tsx). */
 export const TRAY_PANEL_HASH = '#/tray';
 
+/**
+ * Hash route of a renderer URL worth reopening a recreated main window on: an app page, never the tray panel's
+ * route. Null for anything else (no hash, unparseable URL).
+ */
+export function restorableHash(url: string): string | null {
+  let hash: string;
+  try {
+    hash = new URL(url).hash;
+  } catch {
+    return null;
+  }
+  if (!hash.startsWith('#/') || hash === TRAY_PANEL_HASH || hash.startsWith(`${TRAY_PANEL_HASH}?`)) return null;
+  return hash;
+}
+
+interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** How much of a remembered window must still overlap a display's work area for it to reopen there. */
+const MIN_VISIBLE = { width: 120, height: 40 };
+
+/**
+ * Bounds a recreated main window may reuse: the remembered ones when enough of the window still lies on some
+ * display (screens can be unplugged while it was gone), else null (the default size, centered).
+ */
+export function restorableBounds(bounds: Box | null, workAreas: readonly Box[]): Box | null {
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
+  const onScreen = workAreas.some((area) => {
+    const w = Math.min(bounds.x + bounds.width, area.x + area.width) - Math.max(bounds.x, area.x);
+    const h = Math.min(bounds.y + bounds.height, area.y + area.height) - Math.max(bounds.y, area.y);
+    return w >= MIN_VISIBLE.width && h >= MIN_VISIBLE.height;
+  });
+  return onScreen ? bounds : null;
+}
+
 export type ThemeSource = 'system' | 'light' | 'dark';
 
 /** Toolbar height in CSS px; the drag region and the Windows title-bar overlay use the same value. */

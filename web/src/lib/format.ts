@@ -135,6 +135,13 @@ export function priceSummary(p: { base?: Record<string, unknown> } | null | unde
   return `${formatUnitPrice(input)} / ${formatUnitPrice(output)}`;
 }
 
+/** A byte count as B / KB / MB (1024-based). */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function pretty(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') {

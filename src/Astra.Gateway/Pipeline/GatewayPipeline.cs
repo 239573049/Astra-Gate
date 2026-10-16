@@ -13,6 +13,7 @@ using Astra.Core.Requests;
 using Astra.Gateway.Plugins;
 using Astra.Gateway.Protocol;
 using Astra.Gateway.Protocol.Anthropic;
+using Astra.Gateway.Protocol.Responses;
 using Astra.Gateway.Tracing;
 using Astra.Plugins.Host;
 using Astra.Plugins.Middleware;
@@ -609,7 +610,10 @@ public sealed class GatewayPipeline(
             {
                 // Gemini :streamGenerateContent without ?alt=sse answers with a JSON array of chunks, not SSE.
                 var asJsonArray = inbound == ApiProtocol.Gemini && pathAltSse == false;
-                await StreamAsync(ctx, response, decoder, encoder, observer, sw, restore, plan.InjectedChatUsage, capture, s.StreamIdleTimeoutSec, asJsonArray, ct);
+                // GitHub Copilot re-encrypts Responses item ids per event; passed through, they are pinned (ResponsesItemIds).
+                var itemIds = plan.Passthrough && inbound == ApiProtocol.OpenAIResponses && CopilotModelIds.IsCopilot(plan.Route.Provider)
+                    ? new ResponsesItemIds() : null;
+                await StreamAsync(ctx, response, decoder, encoder, observer, sw, restore, plan.InjectedChatUsage, itemIds, capture, s.StreamIdleTimeoutSec, asJsonArray, ct);
             }
             else if (collapseStream)
                 await CollapseStreamAsync(ctx, response, decoder, encoder, observer, sw, restore, capture, s.StreamIdleTimeoutSec, ct);
@@ -1048,7 +1052,7 @@ public sealed class GatewayPipeline(
     private async Task StreamAsync(
         HttpContext ctx, HttpResponseMessage response, IResponseDecoder? decoder, IResponseEncoder? encoder,
         ResponseObserver observer, Stopwatch sw, IReadOnlyDictionary<string, string> restore, bool dropChatUsageChunk,
-        BodyCapture? capture, int idleTimeoutSec, bool asJsonArray, CancellationToken ct)
+        ResponsesItemIds? itemIds, BodyCapture? capture, int idleTimeoutSec, bool asJsonArray, CancellationToken ct)
     {
         ctx.Response.StatusCode = 200;
         ctx.Response.ContentType = asJsonArray ? "application/json" : "text/event-stream; charset=utf-8";
@@ -1056,7 +1060,7 @@ public sealed class GatewayPipeline(
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
         var parser = new SseParser();
-        var upstreamCapture = capture is null ? null : new StringBuilder();
+        var upstreamCapture = capture is null ? null : new MemoryStream();
         var clientCapture = capture is null ? null : new StringBuilder();
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct, observer);
@@ -1067,9 +1071,9 @@ public sealed class GatewayPipeline(
         var array = asJsonArray ? new JsonArrayBody() : null;
         var sawSseEvent = false;
         // Pass-through with nothing to change on the way (no placeholder to restore, no injected usage chunk to
-        // drop, no capture, SSE to SSE): the upstream bytes are the answer. They are forwarded as they arrive and
-        // only parsed to observe usage, first token and errors — no event is decoded to text and encoded back.
-        var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && !asJsonArray && capture is null;
+        // drop, no item ids to pin, no capture, SSE to SSE): the upstream bytes are the answer. They are forwarded as
+        // they arrive and only parsed to observe usage, first token and errors — no event is decoded to text and encoded back.
+        var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && itemIds is null && !asJsonArray && capture is null;
         // Upstream bytes until the first SSE event parses: a body that never becomes SSE (a JSON object /
         // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here.
         PooledBuffer? rawPending = null;
@@ -1136,8 +1140,8 @@ public sealed class GatewayPipeline(
             ArrayPool<byte>.Shared.Return(buffer);
             if (capture is not null)
             {
-                capture.Set(BodyStore.UpstreamResponse, upstreamCapture!.ToString());
-                capture.Set(BodyStore.ClientResponse, clientCapture!.ToString());
+                capture.Set(BodyStore.UpstreamResponse, upstreamCapture!);
+                capture.Set(BodyStore.ClientResponse, clientCapture!);
             }
         }
 
@@ -1151,10 +1155,11 @@ public sealed class GatewayPipeline(
             var events = decoder?.DecodeSse(sse) ?? [];
             if (encoder is null)
             {
-                // Pass-through: observe, then forward the event unchanged (minus our injected usage chunk).
+                // Pass-through: observe, then forward the event unchanged (minus our injected usage chunk, with
+                // Copilot's item ids pinned).
                 foreach (var e in events) observer.Observe(e, sw.ElapsedMilliseconds);
                 if (dropChatUsageChunk && IsChatUsageOnlyChunk(sse.Data)) return;
-                WriteFrame(sse);
+                WriteFrame(itemIds is null ? sse : sse with { Data = itemIds.Pin(sse.Data) });
                 return;
             }
             Emit(events);
@@ -1349,7 +1354,7 @@ public sealed class GatewayPipeline(
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct, observer);
         var parser = new SseParser();
-        var upstreamCapture = capture is null ? null : new StringBuilder();
+        var upstreamCapture = capture is null ? null : new MemoryStream();
         var buffer = ArrayPool<byte>.Shared.Rent(16 * 1024);
         PooledBuffer? rawPending = null;
         var sawSseEvent = false;
@@ -1383,7 +1388,7 @@ public sealed class GatewayPipeline(
             ArrayPool<byte>.Shared.Return(buffer);
         }
         Emit(decoder?.Complete() ?? []);
-        capture?.Set(BodyStore.UpstreamResponse, upstreamCapture?.ToString() ?? "");
+        if (capture is not null) capture.Set(BodyStore.UpstreamResponse, upstreamCapture!);
 
         // 非转换路径没有客户端编码器：把上游的完整响应对象原样透出，只是去掉了 SSE 外壳。
         JsonObject payload;
@@ -1402,10 +1407,12 @@ public sealed class GatewayPipeline(
         }
     }
 
-    // Debug capture keeps at most what BodyStore writes; a long stream must not grow it without bound.
-    private static void AppendCapped(StringBuilder capture, ReadOnlySpan<byte> utf8)
+    // Debug capture keeps at most what BodyStore writes, as the upstream's own bytes (no UTF-16 copy); a long stream
+    // must not grow it without bound.
+    private static void AppendCapped(MemoryStream capture, ReadOnlySpan<byte> utf8)
     {
-        if (capture.Length < BodyStore.MaxBytes) capture.Append(Encoding.UTF8.GetString(utf8));
+        var room = BodyStore.MaxBytes - (int)capture.Length;
+        if (room > 0) capture.Write(utf8[..Math.Min(utf8.Length, room)]);
     }
 
     private async Task ForwardErrorAsync(
@@ -1823,13 +1830,25 @@ public sealed class GatewayPipeline(
         /// <summary>Bytes are copied (at most what is written): the source is a pooled buffer.</summary>
         public void Set(string part, ReadOnlySpan<byte> body) => _parts[part] = body[..Math.Min(body.Length, BodyStore.MaxBytes)].ToArray();
 
+        /// <summary>A capped capture buffer is kept as it is (no copy): nothing writes to it after this.</summary>
+        public void Set(string part, MemoryStream body) => _parts[part] = new ReadOnlyMemory<byte>(body.GetBuffer(), 0, (int)body.Length);
+
+        /// <summary>Kept as a builder: BodyStore writes its chunks without making one string of them.</summary>
+        public void Set(string part, StringBuilder body) => _parts[part] = body;
+
         public async Task WriteAsync(BodyStore store, string bodyRef)
         {
             foreach (var (part, body) in _parts)
             {
                 try
                 {
-                    await (body is byte[] bytes ? store.WriteAsync(bodyRef, part, bytes) : store.WriteAsync(bodyRef, part, (string)body));
+                    await (body switch
+                    {
+                        byte[] bytes => store.WriteAsync(bodyRef, part, bytes),
+                        ReadOnlyMemory<byte> memory => store.WriteAsync(bodyRef, part, memory),
+                        StringBuilder builder => store.WriteAsync(bodyRef, part, builder),
+                        _ => store.WriteAsync(bodyRef, part, (string)body),
+                    });
                 }
                 catch (IOException)
                 {

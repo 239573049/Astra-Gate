@@ -8,9 +8,11 @@ import {
   Menu,
   nativeTheme,
   protocol,
+  screen,
   shell,
   systemPreferences,
   type MenuItemConstructorOptions,
+  type Rectangle,
   type WebPreferences,
 } from 'electron';
 import * as fs from 'node:fs';
@@ -30,6 +32,8 @@ import {
   navHash,
   normalizeAccentColor,
   overlaySymbolColor,
+  restorableBounds,
+  restorableHash,
   sanitizeContextMenuItems,
   themeBackground,
   TRAY_PANEL_HASH,
@@ -67,6 +71,12 @@ protocol.registerSchemesAsPrivileged([
 
 const DEV_RENDERER_URL = process.env.ASTRA_RENDERER_URL?.trim() || '';
 const IS_MAC = process.platform === 'darwin';
+/**
+ * How long a window closed to the tray (or a hidden tray panel nobody needs) keeps its renderer. Each is a whole
+ * renderer process running the admin UI, most of the app's memory; after this they are destroyed and recreated
+ * on the next open, so a quick close-and-reopen stays instant.
+ */
+const IDLE_RENDERER_TTL_MS = 60_000;
 
 let paths: AstraPaths | null = null;
 let service: ServiceManager | null = null;
@@ -74,6 +84,9 @@ let tray: TrayController | null = null;
 let trayPanel: TrayPanel | null = null;
 let updater: UpdateController | null = null;
 let mainWindow: BrowserWindow | null = null;
+/** Where the last destroyed main window was, so the recreated one reopens there (same size, same page). */
+let lastMainWindow: { bounds: Rectangle; maximized: boolean; hash: string | null } | null = null;
+let releaseTimer: NodeJS.Timeout | null = null;
 let quitting = false;
 /** Set when Squirrel's quitAndInstall closes the windows ahead of before-quit. */
 let closingForUpdate = false;
@@ -207,6 +220,7 @@ async function main(): Promise<void> {
     platform: process.platform,
     url: rendererUrl(TRAY_PANEL_HASH),
     webPreferences: rendererWebPreferences,
+    onHidden: scheduleRendererRelease,
   });
 
   // Not awaited: the first /api/clients after a server start probes every client's version, and the
@@ -221,15 +235,56 @@ async function main(): Promise<void> {
 
   // Launched at login: stay in the tray / menu bar, no window and no Dock icon. Only then is the panel
   // window created up front — it is the one window that can keep the menu-bar title current.
-  const panel = trayPanel;
   if (startHidden) {
-    panel.ensure();
+    ensureTitleSource();
     return;
   }
   await showMainWindow();
   // Otherwise the panel is created on first use (TrayPanel.show → ensure): a hidden panel window is a whole
   // renderer process, and the main window already reports the menu-bar title while the panel does not exist.
-  if (!mainWindow) panel.ensure();
+  if (!mainWindow) ensureTitleSource();
+}
+
+/**
+ * Without a main window, the tray panel is the renderer that computes the menu-bar title: keep one up unless no
+ * title is configured (then nothing needs a renderer while the app sits in the tray).
+ */
+function ensureTitleSource(): void {
+  if (loadPrefs().tray.title !== 'none') trayPanel?.ensure();
+}
+
+function scheduleRendererRelease(): void {
+  if (releaseTimer) clearTimeout(releaseTimer);
+  releaseTimer = setTimeout(releaseIdleRenderers, IDLE_RENDERER_TTL_MS);
+}
+
+function cancelRendererRelease(): void {
+  if (releaseTimer) clearTimeout(releaseTimer);
+  releaseTimer = null;
+}
+
+/**
+ * Tray-only memory: destroys the main window that was closed to the tray (its renderer exits with it; the next
+ * open recreates it where it was) and, when no menu-bar title is configured, a hidden tray panel too. The tray
+ * icon, its menu and the service polling live in the main process and are unaffected.
+ */
+function releaseIdleRenderers(): void {
+  releaseTimer = null;
+  if (quitting || closingForUpdate) return;
+  const win = mainWindow;
+  if (win && !win.isDestroyed()) {
+    if (win.isVisible() || win.isMinimized()) return;
+    // The panel takes over the menu-bar title before the window that reported it goes away.
+    ensureTitleSource();
+    lastMainWindow = {
+      bounds: win.getNormalBounds(),
+      maximized: win.isMaximized(),
+      hash: restorableHash(win.webContents.getURL()),
+    };
+    mainWindow = null;
+    win.destroy();
+  }
+  if (loadPrefs().tray.title === 'none' && trayPanel?.exists && !trayPanel.visible) trayPanel.destroy();
 }
 
 /** Start (or adopt) the service, looping on a retry dialog on failure. Null = user chose Quit. */
@@ -474,6 +529,7 @@ async function openTraySettings(): Promise<void> {
     mainWindow.webContents.send('astra:menu-command', 'settings:tray' satisfies MenuCommand);
     return;
   }
+  cancelRendererRelease();
   if (IS_MAC) await app.dock?.show();
   mainWindow = createWindow(TRAY_SETTINGS_HASH);
   bringAppToFront();
@@ -641,6 +697,7 @@ function hideToTray(win: BrowserWindow): void {
   win.hide();
   if (IS_MAC) app.dock?.hide();
   showCloseHintOnce();
+  scheduleRendererRelease();
 }
 
 /** Web preferences of every renderer window (main window and tray panel): same preload, same boot switches. */
@@ -667,9 +724,12 @@ function rendererUrl(hash: string): string {
 
 function createWindow(hash = ''): BrowserWindow {
   const dark = nativeTheme.shouldUseDarkColors;
+  const previous = lastMainWindow;
+  const bounds = restorableBounds(previous?.bounds ?? null, screen.getAllDisplays().map((d) => d.workArea));
   const win = new BrowserWindow({
     width: 1280,
     height: 820,
+    ...(bounds ?? {}),
     minWidth: 960,
     minHeight: 640,
     show: false,
@@ -679,6 +739,7 @@ function createWindow(hash = ''): BrowserWindow {
     webPreferences: rendererWebPreferences(),
   });
   win.once('ready-to-show', () => {
+    if (previous?.maximized) win.maximize();
     win.show();
   });
   // No new windows: external http(s) links go to the default browser.
@@ -703,6 +764,7 @@ function createWindow(hash = ''): BrowserWindow {
 
 /** Shows (creating if needed) the main window, optionally on a page; restores the Dock icon on macOS. */
 async function showMainWindow(nav?: NavTarget): Promise<void> {
+  cancelRendererRelease();
   if (IS_MAC) await app.dock?.show();
   if (mainWindow && !mainWindow.isDestroyed()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
@@ -710,7 +772,8 @@ async function showMainWindow(nav?: NavTarget): Promise<void> {
     mainWindow.focus();
     if (nav) mainWindow.webContents.send('astra:menu-command', `nav:${nav}` satisfies MenuCommand);
   } else {
-    mainWindow = createWindow(nav ? navHash(nav) : '');
+    // A window released while in the tray reopens on the page it showed.
+    mainWindow = createWindow(nav ? navHash(nav) : (lastMainWindow?.hash ?? ''));
   }
   // Coming back from accessory (menu-bar-only) mode the app is not active; bring it forward.
   bringAppToFront();
@@ -796,6 +859,11 @@ function registerIpc(): void {
     const next = parseTrayPrefs(raw);
     savePrefs({ ...loadPrefs(), tray: next });
     broadcast('astra:tray-prefs-changed', next);
+    // A title switched on while only the tray is left needs the panel; switched off, the panel may go.
+    if (!mainWindow) {
+      ensureTitleSource();
+      scheduleRendererRelease();
+    }
     return next;
   });
   ipcMain.handle('astra:tray-state-get', () => trayPanelState());
@@ -804,7 +872,8 @@ function registerIpc(): void {
   });
   ipcMain.on('astra:tray-title', (event, raw: unknown) => {
     // The panel window owns the menu-bar title while it exists; before it is created (and if it never is)
-    // the main window sends it — a hidden window keeps its renderer, so this works close-to-tray too.
+    // the main window sends it — also while hidden in the tray, until releaseIdleRenderers hands the title to
+    // the panel and destroys it.
     if (!trayPanel?.isPanel(event.sender)) {
       if (event.sender !== mainWindow?.webContents || trayPanel?.exists) return;
     }

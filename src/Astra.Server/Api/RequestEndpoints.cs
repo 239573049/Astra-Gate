@@ -33,8 +33,23 @@ public static class RequestEndpoints
         string TokenType, long Tokens, bool IsPerCall, string UnitPrice, string? BaseUnitPrice, string TierApplied,
         string? PricedAs, List<string>? Multipliers, long CostNanoUsd, string? Note);
 
+    /// <summary>
+    /// Captured bodies, each cut to its first <see cref="PreviewLimit"/> bytes; <see cref="Sizes"/> holds every part's
+    /// full size, and GET /api/requests/{id}/bodies/{part} serves a whole part.
+    /// </summary>
     public sealed record BodiesDto(string? ClientRequest, string? UpstreamRequest, string? UpstreamRequestHeaders,
-        string? UpstreamResponse, string? ClientResponse);
+        string? UpstreamResponse, string? ClientResponse, BodySizesDto Sizes, int PreviewLimit);
+
+    /// <summary>Full size in bytes of each captured part (null: not captured).</summary>
+    public sealed record BodySizesDto(long? ClientRequest, long? UpstreamRequest, long? UpstreamRequestHeaders,
+        long? UpstreamResponse, long? ClientResponse);
+
+    /// <summary>
+    /// How much of each captured body the request detail carries. A part can be 8 MB (BodyStore.MaxBytes), and the
+    /// detail used to send all five whole: tens of MB of JSON per open, which the UI then parsed, pretty-printed and
+    /// highlighted.
+    /// </summary>
+    internal const int BodyPreviewBytes = 64 * 1024;
 
     public sealed record RequestDetailDto(
         string Id, DateTimeOffset StartedAtUtc, string? ClientKind, string? ProviderId, string? ProviderName,
@@ -181,6 +196,16 @@ public static class RequestEndpoints
         app.MapGet("/api/requests/{id}", async (string id, AstraDatabase db, BodyStore bodies, LiveRequestFeed live, CancellationToken ct) =>
             live.Find(id) is { } e ? Results.Ok(ToDetail(e.Record, bodies, e.InFlight))
             : await db.Requests.GetAsync(id, ct) is { } r ? Results.Ok(ToDetail(r, bodies)) : ModelEndpoints.NotFound(id));
+
+        // One whole captured part as text, streamed from its file (the detail carries only the start of each).
+        app.MapGet("/api/requests/{id}/bodies/{part}", async (string id, string part, AstraDatabase db, BodyStore bodies,
+            LiveRequestFeed live, CancellationToken ct) =>
+        {
+            if (!BodyStore.Parts.Contains(part)) return ModelEndpoints.NotFound(part);
+            var bodyRef = live.Find(id) is { } e ? e.Record.BodyRef : (await db.Requests.GetAsync(id, ct))?.BodyRef;
+            var file = string.IsNullOrEmpty(bodyRef) ? null : bodies.FileFor(bodyRef, part);
+            return file is null ? ModelEndpoints.NotFound($"{id}/{part}") : Results.File(file, "text/plain; charset=utf-8");
+        });
 
         // Stats accept optional `client` (client kind) and `token` (token id) filters; omitted means every request.
         app.MapGet("/api/stats/summary", async (string? range, string? client, string? token, AstraDatabase db, CancellationToken ct) =>
@@ -436,9 +461,14 @@ public static class RequestEndpoints
         BodiesDto? captured = null;
         if (!string.IsNullOrEmpty(r.BodyRef))
         {
-            captured = new BodiesDto(bodies.Read(r.BodyRef, BodyStore.ClientRequest), bodies.Read(r.BodyRef, BodyStore.UpstreamRequest),
-                bodies.Read(r.BodyRef, BodyStore.UpstreamRequestHeaders),
-                bodies.Read(r.BodyRef, BodyStore.UpstreamResponse), bodies.Read(r.BodyRef, BodyStore.ClientResponse));
+            var bodyRef = r.BodyRef;
+            BodyPreview? Part(string part) => bodies.ReadPreview(bodyRef, part, BodyPreviewBytes);
+            var (clientRequest, upstreamRequest, headers, upstreamResponse, clientResponse) = (Part(BodyStore.ClientRequest),
+                Part(BodyStore.UpstreamRequest), Part(BodyStore.UpstreamRequestHeaders), Part(BodyStore.UpstreamResponse),
+                Part(BodyStore.ClientResponse));
+            captured = new BodiesDto(clientRequest?.Text, upstreamRequest?.Text, headers?.Text, upstreamResponse?.Text, clientResponse?.Text,
+                new BodySizesDto(clientRequest?.Size, upstreamRequest?.Size, headers?.Size, upstreamResponse?.Size, clientResponse?.Size),
+                BodyPreviewBytes);
         }
         return new RequestDetailDto(
             r.Id, r.StartedAtUtc, r.ClientKind, r.ProviderId, r.ProviderName, r.InboundProtocol, r.UpstreamProtocol, r.Passthrough,

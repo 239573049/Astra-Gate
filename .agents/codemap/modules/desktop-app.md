@@ -79,7 +79,8 @@ launcher of the same binary with a deliberately different resolution order (`cli
   `prefs` (`desktop/src/main.ts:74`) — an external edit is invisible until restart.
 - In-memory, main process only: `trayState` (`desktop/src/main.ts:75`, rebuilt every 10 s by `refreshTray`),
   `lastBoot` (`:85`, the apiBase passed to each window), `lastPanelStateKey` (`:314`, dedupes broadcasts),
-  `mismatchDialogShown` (`:73`), `quitting` / `closingForUpdate` (`:70`–`:72`).
+  `mismatchDialogShown` (`:73`), `quitting` / `closingForUpdate` (`:70`–`:72`), `lastMainWindow` /
+  `releaseTimer` (where a released main window was, and the pending release).
 - `ServiceManager.weStarted` + the `child` handle (`desktop/src/service.ts:70`, `:72`) — process ownership for
   this app run; cleared with the process.
 - `UpdateController` in-memory state (`desktop/src/update.ts:98`): `track`, the single-flight `busy`/`held`
@@ -195,9 +196,13 @@ launcher of the same binary with a deliberately different resolution order (`cli
   `close` hides unless `quitting`/`closingForUpdate` (`:630`); macOS leaves full screen first to avoid an
   empty Space (`:576`). Squirrel's `quitAndInstall` closes windows *before* `before-quit`, hence the
   `before-quit-for-update` flag (`desktop/src/main.ts:158`).
+- **Tray-only releases renderers**: `IDLE_RENDERER_TTL_MS` (60 s) after the window is closed to the tray (or the
+  panel hides), `releaseIdleRenderers` destroys the hidden main window — remembering bounds, maximized state and
+  page (`restorableBounds` / `restorableHash`, `desktop/src/shared/chrome.ts`) for the next `createWindow` — and,
+  with tray title `none`, the hidden panel too. `showMainWindow` / `openTraySettings` cancel a pending release.
 - **Tray-title ownership is exclusive**: the panel window owns it while it exists, otherwise the main window
-  may send it — and a hidden window keeps its renderer, so this works close-to-tray
-  (`desktop/src/main.ts:732`–`:740`).
+  may send it (also while hidden in the tray). Before a release destroys the main window, `ensureTitleSource`
+  creates the panel unless the title mode is `none` (`desktop/src/main.ts`, `astra:tray-title` handler).
 - **Renderer input is untrusted** — `astra:context-menu` and `astra:tray-title` / `astra:tray-command`
   validate before touching native APIs (`desktop/src/shared/chrome.ts:100`,
   `desktop/src/shared/trayPanel.ts:52`/`:47`).

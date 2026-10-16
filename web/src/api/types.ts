@@ -577,14 +577,28 @@ export interface RequestDetail extends RequestSummary {
   usageRaw?: unknown; pricingSnapshot?: PricingSchedule | null; pricingSource?: string | null; priceKey?: string | null;
   billingTrace: BillingTraceStep[]; billingDescription?: string | null; usageItems: RequestUsageItem[];
   userAgent?: string | null;
-  /** Present only when debug body capture was on for this request. */
+  /**
+   * Present only when debug body capture was on for this request. Each part is cut to its first `previewLimit` bytes;
+   * `sizes` are the whole parts' sizes, and GET /api/requests/{id}/bodies/{part} serves a whole part as text.
+   */
   bodies?: { clientRequest?: string | null; upstreamRequest?: string | null; upstreamRequestHeaders?: string | null;
-    upstreamResponse?: string | null; clientResponse?: string | null } | null;
+    upstreamResponse?: string | null; clientResponse?: string | null; sizes?: Partial<Record<RequestBodyKey, number | null>>;
+    previewLimit?: number } | null;
   /** Privacy guard outcome (plan §6.7); present when the guard produced a report for this request. */
   privacy?: PrivacyReport | null;
 }
 // GET /api/requests?from=&to=&client=&token=&provider=&model=&status=&page=1&pageSize=50 -> Page<RequestSummary>
 // GET /api/requests/{id} -> RequestDetail (served from the live feed while the request is in flight)
+// GET /api/requests/{id}/bodies/{part} -> text/plain: one whole captured part (REQUEST_BODY_PARTS)
+/** The captured parts of a request, in display order, and the part names of their whole-body endpoint. */
+export const REQUEST_BODY_PARTS = {
+  clientRequest: 'client-request',
+  upstreamRequest: 'upstream-request',
+  upstreamRequestHeaders: 'upstream-request-headers',
+  upstreamResponse: 'upstream-response',
+  clientResponse: 'client-response',
+} as const;
+export type RequestBodyKey = keyof typeof REQUEST_BODY_PARTS;
 /** One frame of GET /api/requests/live (SSE): the in-flight snapshot first, then every change. */
 export interface RequestLiveEvent {
   /** started / updated: the row as it stands now; persisted: the row is in the database and list queries return it. */

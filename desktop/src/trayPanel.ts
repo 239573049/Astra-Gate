@@ -10,13 +10,16 @@ export interface TrayPanelOptions {
   /** Renderer URL of the panel route (app://astra/#/tray, or the Vite dev server). */
   url: string;
   webPreferences: () => WebPreferences;
+  /** The panel was hidden (blur, the icon, a command): the app may release renderers nobody sees. */
+  onHidden?: () => void;
 }
 
 /**
  * The tray panel: a frameless popover window that renders the web app's /tray route. It is created on first
  * use (or by the app when it starts without a main window, since the panel is then the window that reports
  * the menu-bar title), toggled from the tray icon, positioned next to it, sized to its content, and hidden
- * again when it loses focus.
+ * again when it loses focus. When no menu-bar title is configured the app destroys it again while it is hidden
+ * (main.ts releaseIdleRenderers): a hidden panel is a whole renderer process.
  */
 export class TrayPanel {
   private win: BrowserWindow | null = null;
@@ -105,6 +108,7 @@ export class TrayPanel {
     this.hiddenAt = Date.now();
     win.hide();
     win.webContents.send('astra:tray-panel-visibility', false);
+    this.opts.onHidden?.();
   }
 
   /** The renderer reports its content height; the window follows (and stays next to the icon). */

@@ -21,6 +21,21 @@ public class AccountSchedulerTests
     private static List<ProviderAccount> Three() => [Account("a", 0), Account("b", 1), Account("c", 2)];
 
     [Fact]
+    public void Recent_Assignments_Older_Than_The_Window_Are_Dropped_With_A_Single_Account()
+    {
+        var clock = new Clock();
+        var scheduler = new AccountScheduler(clock);
+        // One account: the pick never reaches the recent-use tie-break that used to be the only pruning.
+        List<ProviderAccount> accounts = [Account("a", 0)];
+        for (var i = 0; i < 100; i++)
+        {
+            scheduler.Pick("p", accounts, null)!.Dispose();
+            clock.Now += TimeSpan.FromMinutes(1);
+        }
+        Assert.Equal(6, scheduler.RecentKept("a"));
+    }
+
+    [Fact]
     public void Least_In_Flight_Wins_Then_Least_Recent_Then_Order()
     {
         var scheduler = new AccountScheduler(new Clock());

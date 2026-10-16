@@ -150,6 +150,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(RequestEndpoints.RequestLiveEventDto))]
 [JsonSerializable(typeof(RequestEndpoints.UsageItemDto))]
 [JsonSerializable(typeof(RequestEndpoints.BodiesDto))]
+[JsonSerializable(typeof(RequestEndpoints.BodySizesDto))]
 [JsonSerializable(typeof(RequestEndpoints.RequestPageDto))]
 [JsonSerializable(typeof(RequestEndpoints.PageDto<PrivacyEndpoints.PrivacyEventDto>))]
 [JsonSerializable(typeof(RequestEndpoints.StatsSummaryDto))]

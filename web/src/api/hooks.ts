@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 
-import { api, apiBase, apiStream, enc, qs, type SseMessage } from './client';
+import { api, apiBase, apiStream, apiText, enc, qs, type SseMessage } from './client';
 import type {
   MarketListing,
   MarketSearchResult,
@@ -1122,6 +1122,19 @@ export const useRequest = (id: string | null) =>
     enabled: Boolean(id),
     // An in-flight request is served from the live feed; follow it until it finishes.
     refetchInterval: (query) => (query.state.data?.status === 'pending' ? 1000 : false),
+    // Not kept once the sheet closes: a detail carries captured bodies, and every opened request would otherwise
+    // stay in memory for the default five minutes.
+    gcTime: 0,
+  });
+
+/** One whole captured body part, fetched only when asked for (the detail carries the start of each). */
+export const useRequestBody = (id: string, part: string, enabled: boolean) =>
+  useQuery({
+    queryKey: [...keys.request(id), 'body', part] as const,
+    queryFn: ({ signal }) => apiText(`/api/requests/${enc(id)}/bodies/${enc(part)}`, signal),
+    enabled,
+    staleTime: Infinity,
+    gcTime: 0,
   });
 
 /** The list's filters, minus paging — exactly what the live rate endpoint accepts. */

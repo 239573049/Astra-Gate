@@ -64,7 +64,9 @@ a 500. Secrets are masked, never echoed; the server never returns a pole of the 
     - `src/Astra.Server/Api/RequestEndpoints.cs:92` — `GET /api/requests` parses query strings into a
       `RequestQuery` (`:96`), calls `db.Requests.QueryAsync(query, ct)` (`:108`) and returns
       `Results.Ok(new RequestPageDto(...))`; `GET /api/requests/{id}` (`:171`) prefers the in-flight row in
-      `LiveRequestFeed` and falls back to `db.Requests.GetAsync`; `PATCH /api/settings` (`:255`) mutates an
+      `LiveRequestFeed` and falls back to `db.Requests.GetAsync`; its captured bodies are previews
+      (`BodyPreviewBytes`, 64 KB each, plus full `sizes`), and `GET /api/requests/{id}/bodies/{part}` streams one whole
+      part from its file (`BodyStore.FileFor`); `PATCH /api/settings` (`:255`) mutates an
       `AppSettings` blob through `SettingsService.UpdateAsync`
     - `src/Astra.Server/Api/ClientEndpoints.cs:15` — `MapGroup("/api/clients")` + `AdminApiErrorFilter`;
       every handler delegates to `ClientService`, and the list endpoint deliberately materialises

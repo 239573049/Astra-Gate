@@ -6,6 +6,8 @@ import {
   isThemeSource,
   menuLabels,
   normalizeAccentColor,
+  restorableBounds,
+  restorableHash,
   sanitizeContextMenuItems,
   themeBackground,
   windowChromeOptions,
@@ -82,5 +84,33 @@ describe('misc', () => {
     expect(menuLabels('zh-CN').nav.clients).toBe('客户端');
     expect(menuLabels('en-US').nav.clients).toBe('Clients');
     expect(Object.keys(menuLabels('en').nav)).toEqual([...NAV_ORDER]);
+  });
+});
+
+describe('restorableHash', () => {
+  it('keeps an app page route', () => {
+    expect(restorableHash('app://astra/#/requests')).toBe('#/requests');
+    expect(restorableHash('http://localhost:5173/#/settings/tray')).toBe('#/settings/tray');
+  });
+
+  it('drops the tray panel route and URLs without a route', () => {
+    expect(restorableHash('app://astra/#/tray')).toBeNull();
+    expect(restorableHash('app://astra/')).toBeNull();
+    expect(restorableHash('not a url')).toBeNull();
+  });
+});
+
+describe('restorableBounds', () => {
+  const display = { x: 0, y: 0, width: 1920, height: 1080 };
+
+  it('reuses bounds that are still on a display', () => {
+    const bounds = { x: 100, y: 80, width: 1280, height: 820 };
+    expect(restorableBounds(bounds, [display])).toEqual(bounds);
+  });
+
+  it('drops bounds left on an unplugged display, or barely on screen', () => {
+    expect(restorableBounds({ x: 2400, y: 100, width: 1280, height: 820 }, [display])).toBeNull();
+    expect(restorableBounds({ x: 1880, y: 100, width: 1280, height: 820 }, [display])).toBeNull();
+    expect(restorableBounds(null, [display])).toBeNull();
   });
 });

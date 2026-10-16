@@ -109,6 +109,9 @@ public sealed class ProviderPoolScheduler(TimeProvider? timeProvider = null)
             _inflight[providerId] = _inflight.GetValueOrDefault(providerId) + 1;
             if (!_recent.TryGetValue(providerId, out var queue)) _recent[providerId] = queue = new Queue<DateTimeOffset>();
             queue.Enqueue(now);
+            // Pruned here too: only LeastBusy reads (and prunes) it, so every other strategy would keep each assignment
+            // for the life of the process.
+            RecentCount(providerId, now);
             return new Lease(this, providerId);
         }
     }
@@ -152,6 +155,12 @@ public sealed class ProviderPoolScheduler(TimeProvider? timeProvider = null)
     public int InFlight(string providerId)
     {
         lock (_gate) return _inflight.GetValueOrDefault(providerId);
+    }
+
+    /// <summary>Assignments the provider still keeps for the LeastBusy tie-break, as stored (diagnostics / tests).</summary>
+    public int RecentKept(string providerId)
+    {
+        lock (_gate) return _recent.TryGetValue(providerId, out var queue) ? queue.Count : 0;
     }
 
     private static List<List<TokenPoolMember>> Tiers(string strategy, IReadOnlyList<TokenPoolMember> members) => strategy switch

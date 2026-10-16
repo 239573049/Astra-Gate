@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, FileCode2 } from "lucide-react";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from "motion/react";
 import { motionTokens } from "../lib/motion-tokens";
@@ -47,7 +47,14 @@ function tokenKind(value: string, source: string, index: number, language: strin
   return undefined;
 }
 
+/**
+ * Past this many characters the source is shown as plain text: highlighting makes one element per token, which for a
+ * large body is hundreds of thousands of nodes.
+ */
+const highlightLimit = 100_000;
+
 function highlight(code: string, language: string): ReactNode[] {
+  if (code.length > highlightLimit) return [code];
   const parts: ReactNode[] = [];
   let cursor = 0;
 
@@ -107,7 +114,8 @@ export function CodeBlock({ code, filename, language = "tsx", maxLines }: CodeBl
   const displayLanguage = normaliseLanguage(language);
   const reduced = useReducedMotion() ?? false;
   const preId = useId();
-  const lineCount = code.split("\n").length;
+  const lineCount = useMemo(() => code.split("\n").length, [code]);
+  const highlighted = useMemo(() => highlight(code, displayLanguage), [code, displayLanguage]);
   const collapsible = maxLines != null && maxLines > 0 && lineCount > maxLines;
   const [expanded, setExpanded] = useState(false);
   const open = !collapsible || expanded;
@@ -157,7 +165,7 @@ export function CodeBlock({ code, filename, language = "tsx", maxLines }: CodeBl
       <motion.div className={styles.viewport} style={{ height }}>
         <pre ref={preRef} id={preId} className={styles.pre} tabIndex={0} aria-label="Selectable source code">
           <AnimatePresence initial={false} mode="popLayout">
-            <motion.code key={code} className={styles.code} initial={reduced ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={reduced ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, transition: textExit }} transition={reduced ? { duration: 0 } : textEnter}>{highlight(code, displayLanguage)}</motion.code>
+            <motion.code key={code} className={styles.code} initial={reduced ? false : { opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={reduced ? { opacity: 0, transition: { duration: 0 } } : { opacity: 0, transition: textExit }} transition={reduced ? { duration: 0 } : textEnter}>{highlighted}</motion.code>
           </AnimatePresence>
         </pre>
       </motion.div>

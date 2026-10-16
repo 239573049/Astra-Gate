@@ -4,7 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { api, enc } from '../../api/client';
 import { keys } from '../../api/hooks';
 import type { ClientInfo, Provider, ProviderAccount, Settings, StatsSummary, TimeseriesPoint, TopModel } from '../../api/types';
-import type { TrayPrefs } from '../../shell/bridge';
+import { TRAY_SECTIONS, type TrayPrefs } from '../../shell/bridge';
 import { providerQuotaPlans, quotaPlans, type QuotaPlan } from '../../lib/tray';
 
 /** Quota snapshots older than this are refetched from the upstream when the panel needs them. */
@@ -13,6 +13,8 @@ const QUOTA_MAX_AGE_MS = 5 * 60_000;
 const quotaAttempts = new Map<string, number>();
 
 const tzOffset = () => -new Date().getTimezoneOffset();
+
+const NO_SECTIONS = Object.fromEntries(TRAY_SECTIONS.map((s) => [s, false])) as TrayPrefs['sections'];
 
 export interface TrayData {
   settings: Settings | undefined;
@@ -36,14 +38,23 @@ export interface TrayData {
 /**
  * Everything the tray panel shows. Query keys match the ones in api/hooks.ts, so the panel and the pages share a
  * cache. `background` keeps polling while the window is hidden (the panel window computes the menu-bar title
- * even when nobody looks at it); `live` marks the panel as on screen, which is when stale subscription quota
- * snapshots get refreshed from the upstream.
+ * even when nobody looks at it) — but only the queries the title is computed from; `live` marks the panel as on
+ * screen, which is when stale subscription quota snapshots get refreshed from the upstream. `titleOnly` fetches
+ * just what the menu-bar title needs (the main window reports the title but shows none of the panel's sections).
  */
-export function useTrayData(prefs: TrayPrefs, opts: { enabled: boolean; background: boolean; live: boolean }): TrayData {
+export function useTrayData(
+  prefs: TrayPrefs,
+  opts: { enabled: boolean; background: boolean; live: boolean; titleOnly?: boolean },
+): TrayData {
   const qc = useQueryClient();
   const { enabled, background } = opts;
-  const poll = { refetchInterval: 15_000, refetchIntervalInBackground: background } as const;
-  const needQuota = prefs.sections.quota || prefs.title === 'quota' || prefs.title === 'alerts';
+  const sections = opts.titleOnly ? NO_SECTIONS : prefs.sections;
+  // What the menu-bar title is computed from (lib/tray.ts trayTitle): today's summary, and/or the quota plans.
+  const titleSummary = prefs.title !== 'none' && prefs.title !== 'quota';
+  const titleQuota = prefs.title === 'quota' || prefs.title === 'alerts';
+  // A hidden window keeps polling only what the title needs; everything else waits until it is shown again.
+  const poll = { refetchInterval: 15_000, refetchIntervalInBackground: false } as const;
+  const needQuota = sections.quota || titleQuota;
 
   const settings = useQuery({ queryKey: keys.settings, queryFn: () => api<Settings>('GET', '/api/settings'), enabled });
   const summary = useQuery({
@@ -51,39 +62,41 @@ export function useTrayData(prefs: TrayPrefs, opts: { enabled: boolean; backgrou
     queryFn: () => api<StatsSummary>('GET', '/api/stats/summary?range=today'),
     enabled,
     ...poll,
+    refetchIntervalInBackground: background && titleSummary,
   });
   const hourly = useQuery({
     queryKey: keys.stats('timeseries', 'today', 'hour', 'provider', '', '', tzOffset()),
     queryFn: () => api<TimeseriesPoint[]>('GET', `/api/stats/timeseries?range=today&groupBy=hour&by=provider&tzOffset=${tzOffset()}`),
-    enabled: enabled && prefs.sections.chart,
+    enabled: enabled && sections.chart,
     ...poll,
     refetchInterval: 30_000,
   });
   const daily = useQuery({
     queryKey: keys.stats('timeseries', '7d', 'day', 'provider', '', '', tzOffset()),
     queryFn: () => api<TimeseriesPoint[]>('GET', `/api/stats/timeseries?range=7d&groupBy=day&by=provider&tzOffset=${tzOffset()}`),
-    enabled: enabled && prefs.sections.compareYesterday,
+    enabled: enabled && sections.compareYesterday,
     ...poll,
     refetchInterval: 60_000,
   });
   const top = useQuery({
     queryKey: keys.stats('top', 'today', '', 3, ''),
     queryFn: () => api<TopModel[]>('GET', '/api/stats/top-models?range=today&limit=3'),
-    enabled: enabled && prefs.sections.topModel,
+    enabled: enabled && sections.topModel,
     ...poll,
     refetchInterval: 30_000,
   });
   const providers = useQuery({
     queryKey: keys.providers,
     queryFn: () => api<Provider[]>('GET', '/api/providers'),
-    enabled: enabled && (needQuota || prefs.sections.clients),
+    enabled: enabled && (needQuota || sections.clients),
     ...poll,
     refetchInterval: 60_000,
+    refetchIntervalInBackground: background && titleQuota,
   });
   const clients = useQuery({
     queryKey: keys.clients,
     queryFn: () => api<ClientInfo[]>('GET', '/api/clients'),
-    enabled: enabled && prefs.sections.clients,
+    enabled: enabled && sections.clients,
     ...poll,
     refetchInterval: 30_000,
   });
@@ -99,6 +112,7 @@ export function useTrayData(prefs: TrayPrefs, opts: { enabled: boolean; backgrou
       enabled: enabled && needQuota,
       ...poll,
       refetchInterval: 60_000,
+      refetchIntervalInBackground: background && titleQuota,
     })),
   });
   const accountRows = subscriptionProviders.flatMap((provider, i) => (accounts[i]?.data ?? []).map((account) => ({ provider, account })));

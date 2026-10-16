@@ -38,8 +38,15 @@ const contentStill: Variants = { open: { ...contentOpen, transition: { duration:
 export function Accordion({ items, defaultOpen = 0, size = "md" }: AccordionProps) {
   const initialValue = defaultOpen >= 0 && defaultOpen < items.length ? String(defaultOpen) : "";
   const [openValue, setOpenValue] = useState(initialValue);
+  // A panel's content mounts the first time it opens and then stays (so it collapses smoothly and keeps its state):
+  // panels nobody opens never render, which matters when they hold large content.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set(initialValue ? [initialValue] : []));
+  const onValueChange = (value: string) => {
+    setOpenValue(value);
+    if (value && !opened.has(value)) setOpened(new Set(opened).add(value));
+  };
   const reduced = useReducedMotion();
-  return <AccordionPrimitive.Root className={[styles.accordion, size === "lg" ? styles.lg : ""].filter(Boolean).join(" ")} type="single" collapsible value={openValue} onValueChange={setOpenValue}>
+  return <AccordionPrimitive.Root className={[styles.accordion, size === "lg" ? styles.lg : ""].filter(Boolean).join(" ")} type="single" collapsible value={openValue} onValueChange={onValueChange}>
     {items.map((item, index) => { const open = openValue === String(index); return <AccordionPrimitive.Item className={styles.item} value={String(index)} key={`${item.title}-${index}`}>
       <AccordionPrimitive.Header className={styles.header}>
         <AccordionPrimitive.Trigger className={styles.trigger}>
@@ -49,7 +56,7 @@ export function Accordion({ items, defaultOpen = 0, size = "md" }: AccordionProp
       {/* Radix keeps semantics and ids; motion owns the height so a toggle mid-flight retargets instead of restarting. */}
       <AccordionPrimitive.Content forceMount asChild>
         <motion.div className={styles.panel} initial={false} animate={open ? "open" : "closed"} variants={reduced ? panelStill : panelMotion}>
-          <motion.div className={styles.panelInner} variants={reduced ? contentStill : contentMotion}>{item.content}</motion.div>
+          <motion.div className={styles.panelInner} variants={reduced ? contentStill : contentMotion}>{opened.has(String(index)) ? item.content : null}</motion.div>
         </motion.div>
       </AccordionPrimitive.Content>
     </AccordionPrimitive.Item>; })}

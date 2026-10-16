@@ -24,6 +24,20 @@ public class ProviderPoolSchedulerTests
     private static string[] Ids(IReadOnlyList<TokenPoolMember> order) => order.Select(m => m.ProviderId).ToArray();
 
     [Fact]
+    public void Recent_Assignments_Older_Than_The_Window_Are_Dropped_Whatever_The_Strategy()
+    {
+        var clock = new Clock();
+        var s = new ProviderPoolScheduler(clock);
+        // Failover never reads the recent counts, so nothing but Begin prunes them.
+        for (var i = 0; i < 100; i++)
+        {
+            s.Begin("a").Dispose();
+            clock.Now += TimeSpan.FromMinutes(1);
+        }
+        Assert.Equal(6, s.RecentKept("a"));
+    }
+
+    [Fact]
     public void Failover_Always_Starts_With_The_First_Member_And_Keeps_List_Order()
     {
         var s = new ProviderPoolScheduler(new Clock());

@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
@@ -36,6 +37,7 @@ public sealed class PluginHostClient : IAsyncDisposable
     internal const int FrameOverhead = 2048;
     private const int RpcReserve = 64;
     private const int MaxWireLine = 32 << 20;
+    private const int KeptLineCapacity = 1 << 20;
     private const int MaxHeadBytes = 64 << 10;
     private const int MaxHeadEntries = 256;
     private const int HeadEntryCost = 4;
@@ -48,7 +50,7 @@ public sealed class PluginHostClient : IAsyncDisposable
     private readonly Process? _process;
     private readonly Action<JsonObject> _onEvent;
     private readonly ConcurrentDictionary<long, HostCall> _calls = new();
-    private readonly Channel<string> _out = Channel.CreateUnbounded<string>(new UnboundedChannelOptions { SingleReader = true });
+    private readonly Channel<ReadOnlyMemory<byte>> _out = Channel.CreateUnbounded<ReadOnlyMemory<byte>>(new UnboundedChannelOptions { SingleReader = true });
     private readonly SemaphoreSlim _streams = new(StreamBudget / StreamWindow);
     private readonly SemaphoreSlim _slots = new(StreamBudget / StreamWindow + RpcReserve);
     private readonly TaskCompletionSource _dead = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -158,10 +160,9 @@ public sealed class PluginHostClient : IAsyncDisposable
                 ["window"] = StreamWindow,
             };
             if (!string.IsNullOrEmpty(r.Account)) p["account"] = r.Account;
-            if (r.Body is { Length: > 0 } body) p["body"] = Convert.ToBase64String(body);
             if (!string.IsNullOrEmpty(r.Session)) p["session"] = r.Session;
             if (!string.IsNullOrEmpty(r.Proxy)) p["proxy"] = r.Proxy;
-            Send(new JsonObject { ["id"] = call.Id, ["method"] = "fetch", ["params"] = p });
+            Send(new JsonObject { ["id"] = call.Id, ["method"] = "fetch", ["params"] = p }, r.Body);
 
             JsonObject head;
             using (ct.Register(() => call.Fail(new OperationCanceledException(ct))))
@@ -258,7 +259,7 @@ public sealed class PluginHostClient : IAsyncDisposable
     {
         call.Fail(new PluginHostException("the request was given up on"));
         if (Volatile.Read(ref call.HostEnded) == 1 || Interlocked.Exchange(ref call.AbortSent, 1) == 1) return;
-        if (Alive) _out.Writer.TryWrite(new JsonObject { ["method"] = "abort", ["params"] = new JsonObject { ["id"] = call.Id } }.ToJsonString());
+        if (Alive) _out.Writer.TryWrite(Line(new JsonObject { ["method"] = "abort", ["params"] = new JsonObject { ["id"] = call.Id } }));
     }
 
     /// <summary>Takes the call off the host's books once (its stream slot back too).</summary>
@@ -270,10 +271,47 @@ public sealed class PluginHostClient : IAsyncDisposable
         if (call.Stream) _streams.Release();
     }
 
-    private void Send(JsonObject message)
+    private void Send(JsonObject message, byte[]? body = null)
     {
-        if (!_out.Writer.TryWrite(message.ToJsonString()))
+        if (!_out.Writer.TryWrite(Line(message, body)))
             throw new PluginHostException(_deadReason ?? ErrHostGone);
+    }
+
+    /// <summary>
+    /// One wire line: the message as UTF-8 JSON and a newline. A fetch's request body goes into its params as base64,
+    /// encoded straight into the line — not as a base64 string, then a JSON string, then a byte copy of that, which
+    /// for a multi-MB agent request was about ten times its size in large-object garbage per call.
+    /// </summary>
+    internal static ReadOnlyMemory<byte> Line(JsonObject message, byte[]? body = null)
+    {
+        var output = new ArrayBufferWriter<byte>(body is { Length: > 0 } ? (body.Length + 2) / 3 * 4 + 4096 : 256);
+        using (var w = new Utf8JsonWriter(output))
+        {
+            w.WriteStartObject();
+            foreach (var (key, value) in message)
+            {
+                w.WritePropertyName(key);
+                if (key == "params" && value is JsonObject p && body is { Length: > 0 })
+                {
+                    w.WriteStartObject();
+                    foreach (var (k, v) in p) WriteProperty(w, k, v);
+                    w.WriteBase64String("body", body);
+                    w.WriteEndObject();
+                }
+                else if (value is null) w.WriteNullValue();
+                else value.WriteTo(w);
+            }
+            w.WriteEndObject();
+        }
+        output.Write("\n"u8);
+        return output.WrittenMemory;
+
+        static void WriteProperty(Utf8JsonWriter w, string key, JsonNode? value)
+        {
+            w.WritePropertyName(key);
+            if (value is null) w.WriteNullValue();
+            else value.WriteTo(w);
+        }
     }
 
     private async Task WriteLoopAsync()
@@ -282,8 +320,7 @@ public sealed class PluginHostClient : IAsyncDisposable
         {
             await foreach (var line in _out.Reader.ReadAllAsync())
             {
-                var bytes = Encoding.UTF8.GetBytes(line + "\n");
-                await _stdin.WriteAsync(bytes);
+                await _stdin.WriteAsync(line);
                 await _stdin.FlushAsync();
             }
         }
@@ -310,6 +347,8 @@ public sealed class PluginHostClient : IAsyncDisposable
                     line.Write(buffer, start, i - start);
                     Dispatch(line.GetBuffer().AsSpan(0, (int)line.Length));
                     line.SetLength(0);
+                    // A large reply line (up to MaxWireLine) must not pin that much buffer for the host's lifetime.
+                    if (line.Capacity > KeptLineCapacity) line = new MemoryStream();
                     start = i + 1;
                 }
                 line.Write(buffer, start, n - start);

@@ -63,6 +63,28 @@ export async function api<T>(method: Method, path: string, body?: unknown, signa
   return data as T;
 }
 
+/** GET a text resource (no JSON parsing): a JSON body stays the exact text the server sent. */
+export async function apiText(path: string, signal?: AbortSignal): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch(apiBase() + path, { headers: { Accept: 'text/plain' }, credentials: 'include', signal });
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') throw err;
+    throw new ApiError((err as Error)?.message || 'Network error', 0);
+  }
+  const text = await res.text();
+  if (!res.ok) {
+    let message = text;
+    try {
+      message = (JSON.parse(text) as { error?: string }).error || text;
+    } catch {
+      // not JSON: the text itself
+    }
+    throw new ApiError(message || `HTTP ${res.status}`, res.status);
+  }
+  return text;
+}
+
 export function qs(params: Record<string, string | number | boolean | null | undefined>): string {
   const s = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
