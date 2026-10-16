@@ -210,7 +210,8 @@ public class AdminApiTests
         var heatmap = (await host.GetJsonAsync("/api/stats/activity-heatmap?client=codex&tzOffset=0")).AsArray();
         var today = Assert.Single(heatmap)!;
         Assert.Equal(1, today["requests"]!.GetValue<long>());
-        Assert.Equal(DateTimeOffset.Now.ToString("yyyy-MM-dd"), today["day"]!.GetValue<string>());
+        // tzOffset=0 buckets by UTC day, the same clock the request was stamped with.
+        Assert.Equal(DateTimeOffset.UtcNow.ToString("yyyy-MM-dd"), today["day"]!.GetValue<string>());
         Assert.Empty((await host.GetJsonAsync("/api/stats/activity-heatmap?client=claude-code")).AsArray());
         Assert.Single((await host.GetJsonAsync("/api/stats/activity-heatmap?days=730&client=codex")).AsArray());
     }
