@@ -57,7 +57,7 @@ public static class ClientInstallCatalog
         new(ClientKinds.OpenCode, ClientInstallMethod.Npm, "opencode", "opencode-ai", "https://opencode.ai/docs", ["upgrade"]),
         new(ClientKinds.ClaudeDesktop, ClientInstallMethod.Manual, null, null, "https://claude.ai/download"),
         new(ClientKinds.GrokBuild, ClientInstallMethod.Npm, "grok", "@xai-official/grok", "https://www.npmjs.com/package/@xai-official/grok"),
-        new(ClientKinds.Pi, ClientInstallMethod.Npm, "pi", "@mariozechner/pi-coding-agent", "https://www.npmjs.com/package/@mariozechner/pi-coding-agent"),
+        new(ClientKinds.Pi, ClientInstallMethod.Npm, "pi", "@earendil-works/pi-coding-agent", "https://www.npmjs.com/package/@earendil-works/pi-coding-agent"),
         new(ClientKinds.HermesAgent, ClientInstallMethod.Script, "hermes", null, "https://github.com/NousResearch/hermes-agent",
             SelfUpdateArgs: ["update"],
             PosixScriptUrl: "https://hermes-agent.nousresearch.com/install.sh",
@@ -83,6 +83,7 @@ public static class ClientInstallCatalog
         new(ClientKinds.MuseCode, ClientInstallMethod.Manual, "muse", null, "https://dev.meta.ai/docs/muse-code"),
         new(ClientKinds.NextCoWork, ClientInstallMethod.Manual, null, null, "https://nextco.work/"),
         new(ClientKinds.Paseo, ClientInstallMethod.Manual, "paseo", null, "https://paseo.sh/"),
+        new(ClientKinds.ZCode, ClientInstallMethod.Manual, null, null, "https://zcode.z.ai/"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

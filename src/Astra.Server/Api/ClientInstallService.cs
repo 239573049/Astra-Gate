@@ -166,8 +166,10 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         {
             case ClientKinds.ClaudeDesktop:
                 return InspectClaudeDesktop();
-            case ClientKinds.Zed when InspectZedApp() is { } zed:
+            case ClientKinds.Zed when InspectMacApp("Zed.app") is { } zed:
                 return zed;
+            case ClientKinds.ZCode:
+                return InspectMacApp("ZCode.app") ?? (new ClientToolState(false), null);
             case ClientKinds.VsCodeCopilot:
             {
                 var code = env.FindTool("code", VsCodeBinDirectories());
@@ -274,15 +276,18 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         return (new ClientToolState(false), null);
     }
 
-    /// <summary>The macOS app bundle of Zed (version from its Info.plist); null elsewhere, where <c>zed --version</c> is probed.</summary>
-    private (ClientToolState, string?)? InspectZedApp()
+    /// <summary>
+    /// A macOS app bundle (Zed, ZCode; version from its Info.plist); null when absent and on other systems, where Zed's
+    /// <c>zed --version</c> is probed and ZCode has no version Astra can read.
+    /// </summary>
+    private (ClientToolState, string?)? InspectMacApp(string bundle)
     {
         if (env.Os != "osx") return null;
         foreach (var apps in env.ApplicationDirectories)
         {
-            var plist = Path.Combine(apps, "Zed.app", "Contents", "Info.plist");
+            var plist = Path.Combine(apps, bundle, "Contents", "Info.plist");
             if (!File.Exists(plist)) continue;
-            return (new ClientToolState(true, Path.Combine(apps, "Zed.app")), ClientVersions.PlistShortVersion(env.ReadTextOrNull(plist)));
+            return (new ClientToolState(true, Path.Combine(apps, bundle)), ClientVersions.PlistShortVersion(env.ReadTextOrNull(plist)));
         }
         return null;
     }

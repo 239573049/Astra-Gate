@@ -317,7 +317,7 @@ export type ClientKind =
   | "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build"
   | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot"
   | "crush" | "qwen-code" | "droid" | "kimi-code" | "zed"
-  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo";
+  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo" | "zcode";
 /** One provider bound to a client; the list order is the routing order (first = primary). */
 export interface ClientBinding { providerId: string; accountId?: string | null }
 export interface ClientInfo {

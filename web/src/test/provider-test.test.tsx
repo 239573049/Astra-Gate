@@ -19,7 +19,7 @@ vi.mock('@lobehub/icons', () => {
     Grok: stub('grok'), HermesAgent: stub('hermes-agent'), Kimi: stub('kimi'), LmStudio: stub('lm-studio'), Meta: stub('meta'), Qoder: stub('qoder'), Minimax: stub('minimax'),
     Moonshot: stub('moonshot'), Ollama: stub('ollama'), OpenAI: stub('openai'), OpenCode: stub('opencode'),
     OpenRouter: stub('openrouter'), Pi: stub('pi'), Qwen: stub('qwen'), SiliconCloud: stub('siliconcloud'),
-    Volcengine: stub('volcengine'), XAI: stub('xai'), XiaomiMiMo: stub('xiaomi-mimo'), Zhipu: stub('zhipu'),
+    Volcengine: stub('volcengine'), XAI: stub('xai'), XiaomiMiMo: stub('xiaomi-mimo'), ZAI: stub('zai'), Zhipu: stub('zhipu'),
     Baichuan: stub('baichuan'), ChatGLM: stub('chatglm'), Cohere: stub('cohere'), Doubao: stub('doubao'), Gemma: stub('gemma'), Hunyuan: stub('hunyuan'), LongCat: stub('longcat'), Mistral: stub('mistral'), Stepfun: stub('stepfun'), Wenxin: stub('wenxin'), Yi: stub('yi'),
   };
 });

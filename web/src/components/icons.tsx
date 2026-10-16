@@ -1,6 +1,6 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qoder, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
-import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo } from '@lobehub/icons';
+import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo, ZAI } from '@lobehub/icons';
 import { Baichuan, ChatGLM, Cohere, Doubao, Gemma, Hunyuan, LongCat, Mistral, Stepfun, Wenxin, Yi } from '@lobehub/icons';
 import { Box, Code, Globe, Monitor, Puzzle, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType, CSSProperties } from 'react';
@@ -47,6 +47,7 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'muse-code': { name: 'Muse Code' },
   nextcowork: { name: 'NextCoWork' },
   paseo: { name: 'Paseo' },
+  zcode: { name: 'ZCode' },
 };
 
 /**
@@ -61,7 +62,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
   'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
-  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo',
+  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -119,6 +120,8 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   'muse-code': { Mark: Meta.Color, Avatar: Meta.Avatar, badge: SquareTerminal },
   nextcowork: logo(nextcoworkClientLogo),
   paseo: logo(paseoLogo),
+  // ZCode is Z.ai's desktop agent: the Z.ai mark with a desktop badge
+  zcode: { Mark: ZAI, Avatar: ZAI.Avatar, badge: Monitor },
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

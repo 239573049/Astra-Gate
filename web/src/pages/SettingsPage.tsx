@@ -358,6 +358,8 @@ function UpdateRows() {
         } else if (outcome === 'desktop') {
           // The desktop step relaunches the app; say so before it quits.
           toast(t('settings.updateDesktopRelaunch'));
+        } else if (outcome === 'download') {
+          toast(t('settings.updateDownloadOpened'));
         } else {
           toast(t('settings.upToDate'));
         }

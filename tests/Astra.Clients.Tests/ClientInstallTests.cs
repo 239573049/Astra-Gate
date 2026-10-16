@@ -261,6 +261,7 @@ public class ClientInstallPlannerTests
     [InlineData(ClientKinds.MuseCode, "muse")]
     [InlineData(ClientKinds.NextCoWork, null)]
     [InlineData(ClientKinds.Paseo, "paseo")]
+    [InlineData(ClientKinds.ZCode, null)]
     public void New_Manual_Clients_Only_Show_Version_And_Homepage(string kind, string? executable)
     {
         var spec = ClientInstallCatalog.Get(kind)!;

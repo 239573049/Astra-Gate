@@ -32,7 +32,7 @@ Astra's first write. Disabling puts the recorded originals back key by key, skip
    requests can never interleave two config writes (`astra-server`)
 6. `ClientService.RefreshRegistryAsync` (`:511`) → `IAgentPluginCatalog.RefreshAsync`, then
    `src/Astra.Clients/Adapters/ClientAdapterRegistry.cs:18` `CreateDefault(env, db.ClientConfigState, agents,
-   remembered)`: the 26 built-ins (`:30`) plus `PluginClientAdapter`s, cached in a `volatile` field keyed by
+   remembered)`: the 27 built-ins (`:30`) plus `PluginClientAdapter`s, cached in a `volatile` field keyed by
    (plugin generation, remembered plugin ids) (`astra-clients`, `astra-plugins`)
 7. `ClientService.PrepareAsync` (`:286`) — resolves the adapter and asserts `Availability == Available` (409
    otherwise), loads/creates the `clients` row, requires an enabled provider, validates `extras.options` through

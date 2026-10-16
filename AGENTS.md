@@ -512,8 +512,11 @@ runtime needed on the target).
   state in `~/.astra/update-state.json`, executor never replaces a running binary in place).
   The desktop surfaces this to its web UI through the `updates` bridge (`astra:update-check` /
   `astra:update-apply` → `UpdateController.check` / `applyFromUi` in `desktop/src/update.ts`):
-  the server-update check is gated on the running SERVER's version, not the app's (the apply
-  gate always was), so a current app with an old server still offers the update.
+  the npm track's server-update check is gated on the running SERVER's version, not the app's (the
+  apply gate always was), so a current app with an old server still offers the update. The dmg and
+  installer tracks ship the server inside the app, so they never update a server on its own: they check
+  the app (electron-updater / the download page) and the new app's bundled server replaces the old one
+  at launch (`resolveServerBinary` drops a stale managed `install.json`).
 
 ## Ground rules for edits
 

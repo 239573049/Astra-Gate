@@ -55,6 +55,7 @@ vi.mock('@lobehub/icons', () => {
     Wenxin: stub('wenxin'),
     Yi: stub('yi'),
     Zhipu: stub('zhipu'),
+    ZAI: stub('zai'),
   };
 });
 
@@ -96,6 +97,7 @@ describe('client brand icons', () => {
     'muse-code': { brand: 'meta', mark: 'color', badge: true },
     nextcowork: { brand: null, mark: 'logo', badge: false },
     paseo: { brand: null, mark: 'logo', badge: false },
+    zcode: { brand: 'zai', mark: 'mono', badge: true },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

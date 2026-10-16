@@ -1,4 +1,4 @@
-import { app, dialog, Notification } from 'electron';
+import { app, dialog, Notification, shell } from 'electron';
 import * as fs from 'node:fs';
 import { autoUpdater } from 'electron-updater';
 import {
@@ -33,14 +33,17 @@ import {
  *    notarized artifacts from the generic feed configured at build time);
  *  - the desktop app on the npm track under macOS (files of a running bundle
  *    can be replaced safely there);
- *  - the server binary on every track, via the shared update engine
- *    (staged download → sha256 → swap → restart → rollback).
+ *  - the server binary on the npm track, via the shared update engine
+ *    (staged download → sha256 → swap → restart → rollback). The dmg and
+ *    installer tracks ship the server inside the app (resources/server), so
+ *    for them the app update IS the server update: only the app is checked,
+ *    never a server on its own.
  *
  * The track rule lives in shared/updateTrack.ts; Windows and Linux npm
  * installs are npm-track but cannot replace their own running files, so their
  * desktop updates are delegated to `astra update --desktop`; Windows / Linux
- * installer installs (NSIS / AppImage) are pointed at the download page. The
- * server update flow works everywhere. Unpackaged dev runs never self-update.
+ * installer installs (NSIS / AppImage) are pointed at the download page.
+ * Unpackaged dev runs never self-update.
  *
  * Every surface follows the server's release channel (updateChannel: stable by
  * default, preview when the user opts in on the Settings page): the manifest is
@@ -97,11 +100,11 @@ export interface UpdateSummary {
   /** Human-readable result of the check, for dialogs. */
   message: string;
   /** What the user can do right now. */
-  action: 'none' | 'server' | 'desktop-dmg' | 'desktop-npm';
+  action: 'none' | 'server' | 'desktop-dmg' | 'desktop-npm' | 'desktop-download';
 }
 
 /** Outcome of the in-app apply (Settings page button). */
-export type UiApplyOutcome = 'server' | 'desktop' | 'none';
+export type UiApplyOutcome = 'server' | 'desktop' | 'download' | 'none';
 
 export class UpdateController {
   readonly track: UpdateTrack;
@@ -247,9 +250,13 @@ export class UpdateController {
       if (this.track === 'dmg') {
         const dmg = await this.checkDesktopDmg(channel);
         if (dmg) parts.push(dmg);
+      } else if (this.track === 'installer') {
+        const installer = await this.checkInstallerManifest(channel);
+        if (installer) parts.push(installer);
+      } else {
+        const server = await this.checkServerAndManifest(base, channel);
+        if (server) parts.push(server);
       }
-      const server = await this.checkServerAndManifest(base, channel);
-      if (server) parts.push(server);
 
       if (this.dmgDownloadedVersion) {
         return { message: `Desktop app ${this.dmgDownloadedVersion} is downloaded — restart to install.`, action: 'desktop-dmg' };
@@ -268,10 +275,8 @@ export class UpdateController {
         }
         if (this.track === 'installer') {
           return {
-            message:
-              parts.join('\n') +
-              `\n\nTo update the desktop app itself, install the latest version from ${DOWNLOAD_PAGE_URL}.`,
-            action: 'server',
+            message: parts.join('\n') + `\n\nInstall the latest version from ${DOWNLOAD_PAGE_URL}.`,
+            action: 'desktop-download',
           };
         }
         return { message: parts.join('\n'), action: 'server' };
@@ -315,6 +320,22 @@ export class UpdateController {
     autoUpdater.setFeedURL({ provider: 'generic', url });
     this.dmgFeedChannel = channel;
     this.o.log(`desktop update feed: ${url}`);
+  }
+
+  /**
+   * Installer track (NSIS / AppImage): the app carries its own server, so only the app's version
+   * matters — the manifest is compared with this app, never with a running server.
+   */
+  private async checkInstallerManifest(channel: UpdateChannel): Promise<string> {
+    const manifest = await fetchManifest({ feedUrl: this.o.feedUrl, channel });
+    if (!isNewerVersion(manifest.version, app.getVersion())) {
+      this.pendingManifest = null;
+      this.desktopUpdatePending = false;
+      return '';
+    }
+    this.pendingManifest = manifest;
+    this.desktopUpdatePending = true;
+    return `Desktop app ${manifest.version} is available.`;
   }
 
   private async checkServerAndManifest(base: string | null, channel: UpdateChannel): Promise<string> {
@@ -407,6 +428,11 @@ export class UpdateController {
       // null, silently turning "Update now" into "up to date".
       if (!this.pendingManifest) await this.runCheck();
       if (!this.pendingManifest) return 'none';
+      if (this.track === 'installer') {
+        // No in-app self-update for NSIS / AppImage: the installer is the update (it brings the server too).
+        await shell.openExternal(DOWNLOAD_PAGE_URL);
+        return 'download';
+      }
       const updateDesktop =
         this.desktopUpdatePending &&
         this.track === 'npm' &&
@@ -539,6 +565,7 @@ export class UpdateController {
     const summary = await this.check();
     const buttons: string[] = [];
     if (summary.action === 'desktop-dmg') buttons.push(`Restart to ${this.dmgDownloadedVersion}`);
+    if (summary.action === 'desktop-download') buttons.push('Download');
     if (summary.action === 'server' && this.track === 'npm' && (this.o.platform ?? process.platform) === 'darwin') {
       // One executor run covers both the server binary and the app on macOS.
       buttons.push('Update');
@@ -562,6 +589,7 @@ export class UpdateController {
     const action = buttons[response]!;
     try {
       if (action.startsWith('Restart to')) this.applyDesktopDmgUpdate();
+      else if (action === 'Download') await shell.openExternal(DOWNLOAD_PAGE_URL);
       else if (action === 'Update') {
         // Server first — the desktop step relaunches the app.
         await this.applyServerUpdate();

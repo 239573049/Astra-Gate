@@ -1,4 +1,4 @@
-import { BarChart3, ChevronRight, Copy, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, Trash2 } from 'lucide-react';
+import { BarChart3, ChevronRight, Copy, Link2, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -79,6 +79,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
   const { t, locale } = useI18n();
   const { toast, confirm } = useFeedback();
   const providers = useProviders();
+  const settings = useSettings();
   const reveal = useRevealToken();
   const update = useUpdateToken();
   const reset = useResetToken();
@@ -98,9 +99,17 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
     reveal.mutate(token.id, {
       onSuccess: async ({ token: plain }) => {
         if (await systemActions.copy(plain)) toast(t('tokens.copied'));
+        else toast(t('tokens.copyFailed'), 'error');
       },
       onError: (e) => toast(errorText(e), 'error'),
     });
+
+  const copyUrl = async () => {
+    const base = settings.data?.gatewayBaseUrl;
+    if (!base) return;
+    if (await systemActions.copy(`${base}/v1`)) toast(t('tokens.urlCopied'));
+    else toast(t('tokens.copyFailed'), 'error');
+  };
 
   const toggle = async () => {
     if (token.enabled && !(await confirm({ title: t('tokens.disableConfirm', { name: token.name }), detail: t('tokens.disableDetail'), confirmLabel: t('tokens.disable'), destructive: true })))
@@ -167,6 +176,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
             <div className="mt-0.5 flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               <code className="font-mono text-[12px] text-[var(--text-secondary)] selectable">{token.keyMasked}</code>
               <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('tokens.copy')} title={t('tokens.copy')} loading={reveal.isPending} onClick={copy} />
+              <Button size="sm" variant="plain" icon={<Link2 className="size-3.5" />} aria-label={t('tokens.copyUrl')} title={t('tokens.copyUrl')} disabled={!settings.data} onClick={() => void copyUrl()} />
             </div>
           </div>
         </div>

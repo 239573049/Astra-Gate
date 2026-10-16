@@ -55,6 +55,7 @@ public sealed class ClientAdapterRegistry
         new MuseCodeClientAdapter(env, store),
         new NextCoWorkClientAdapter(env, store),
         new PaseoClientAdapter(env, store),
+        new ZCodeClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

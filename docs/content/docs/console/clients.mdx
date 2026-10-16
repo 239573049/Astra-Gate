@@ -17,7 +17,7 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 - **模型** — 启用时写入客户端配置的默认模型。Claude Code 还提供 Opus / Sonnet / Haiku 三档选择，对应 `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`（Haiku 档兼作快速/后台模型）。所有模型选项默认留空，留空就不写入，配置文件里已有的同名设置也不会被改动；修改后需要重新写入客户端配置；
 - **维护** — 复制配置文件路径、配置备份。
 
-支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot，以及 Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness、WorkBuddy、WorkBuddy AI、Muse Code、NextCoWork、Paseo。
+支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot，以及 Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness、WorkBuddy、WorkBuddy AI、Muse Code、NextCoWork、Paseo、ZCode。
 
 后加入的几个客户端由 Astra 写入这些位置（括号内为可覆盖目录的环境变量）：
 
@@ -42,14 +42,15 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 | **WorkBuddy AI** | `~/.workbuddy-ai/models.json` | WorkBuddy 国际版（workbuddy.ai）。与 WorkBuddy 是同一个应用，数据放在 `~/.workbuddy-ai`，写法相同：每个模型一条 `Astra: <模型>` 自定义模型，不动你已有的条目；文件热加载。两个版本是两个独立的客户端，各自启用、各自还原 |
 | **Paseo** | `~/.paseo/config.json`（`PASEO_HOME`） | 在 `agents.providers` 里新增一个名为 Astra 的自定义提供商 `astra`：`extends: "claude"`（仍由你本机的 Claude Code 运行），`env` 里写 `ANTHROPIC_BASE_URL`（网关地址）与 `ANTHROPIC_AUTH_TOKEN`（本客户端的令牌），`models` 列出所绑定提供商的模型（选了模型时它是默认模型，否则第一个），并按 Paseo 文档把第三方端点不支持的 `WebSearch` 放进 `disallowedTools`。原生协议为 Responses 的模型另放进 `astra-codex`（`extends: "codex"`，用你本机的 Codex 运行，`env` 里写 `OPENAI_BASE_URL` / `OPENAI_API_KEY`）。你自己的提供商与 profile 不动。改动在 `paseo reload` 或重启守护进程后生效；需要本机已装好 Claude Code。注意 Claude Code 会读取 `~/.claude/settings.json` 的 `env`，若那里设了别的 `ANTHROPIC_BASE_URL` 会盖过这里的值（同时启用 Astra 的 Claude Code 客户端则没有冲突） |
 | **NextCoWork** | `~/.next-cowork/providers.json` | 新增提供商 `providers.astra`（`openai-chat`，`baseUrl` 为 `<网关>/v1`），列出所绑定提供商的模型；原生协议为 Responses / Anthropic 的模型带 `protocolOverride`。文件热加载。NextCoWork 改动这个条目时（在它的界面里编辑模型、同步模型目录）会补上思考设置、完整能力表等字段，这些归 NextCoWork 管，Astra 重写时原样保留、也不算作改动；你在 NextCoWork 里改的模型协议会被记录为该模型的协议选择 |
+| **ZCode** | `~/.zcode/v2/provider_config.json`（`ZCODE_DESKTOP_HOME_DIR`） | 在「自定义供应商」里新增名为 Astra 的供应商 `astra`（`openai-chat-completions`，`baseUrl` 为 `<网关>/v1`），列出所绑定提供商的模型，并为每个模型写一条模型规则（已知的上下文窗口、是否支持图片 / PDF，以及 `supportsNativeWebSearch: false`——网关不提供服务端搜索工具）。ZCode 的协议按供应商设置，原生协议为 Responses / Anthropic 的模型放进 `astra-responses` / `astra-anthropic`（后者 `baseUrl` 为网关根地址，ZCode 自己补 `/v1/messages`），用不到时不创建。文件热加载（ZCode 每秒检查一次）。ZCode 只在这个文件不存在时导入旧版 `config.json` 里的供应商，所以 Astra 不会替它创建：请先启动一次 ZCode 再启用。你在 ZCode 里关掉这个供应商、拖动模型顺序或开关某个模型，Astra 重写时原样保留，也不算作改动；默认模型由 ZCode 自己管理，请在它的模型选择器里挑 Astra 的模型 |
 
-Pi、MiniMax Code、Copilot CLI、VS Code 系列、Crush、Qwen Code、Droid、Kimi Code、Zed、omp、MiMo Code、DeepSeek Harness、WorkBuddy、WorkBuddy AI、NextCoWork、Paseo 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
+Pi、MiniMax Code、Copilot CLI、VS Code 系列、Crush、Qwen Code、Droid、Kimi Code、Zed、omp、MiMo Code、DeepSeek Harness、WorkBuddy、WorkBuddy AI、NextCoWork、Paseo、ZCode 与 OpenCode 一样会列出所绑定提供商的模型，提供商的模型增减后会自动同步到客户端配置。
 
 ### 模型协议
 
 网关能在四种协议（OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini）之间互相转换，但转换会丢东西，比如只在原协议里有效的加密推理内容。所以 Astra 给每个模型配置它的**原生协议**：所绑定提供商能原样转发、不必转换的协议，按模型自身的限制、再按提供商的「首选上游协议」排序，取客户端支持的第一个。例如 ChatGPT（Codex）订阅的模型只走 Responses，Claude 订阅与 Copilot 的 Claude 模型只走 Anthropic。
 
-客户端能表达的粒度不同：NextCoWork、OpenCode、MiMo Code、Pi、omp、Qwen Code、Kimi Code、Droid、VS Code 系列和 Grok Build 可以按模型设置协议；Crush、Copilot CLI、MiniMax Code、DeepSeek Harness 和 Paseo 的协议跟着提供商走，Astra 会按协议拆成几个提供商（`astra-responses`、`astra-anthropic` 等），用不到时不创建；Hermes Agent 只额外支持 Anthropic，Zed 只额外支持 Responses。Codex、Claude Code、Claude Desktop、Gemini CLI、Muse Code、WorkBuddy 只说一种协议，其它模型由网关转换。
+客户端能表达的粒度不同：NextCoWork、OpenCode、MiMo Code、Pi、omp、Qwen Code、Kimi Code、Droid、VS Code 系列和 Grok Build 可以按模型设置协议；Crush、Copilot CLI、MiniMax Code、DeepSeek Harness、Paseo 和 ZCode 的协议跟着提供商走，Astra 会按协议拆成几个提供商（`astra-responses`、`astra-anthropic` 等），用不到时不创建；Hermes Agent 只额外支持 Anthropic，Zed 只额外支持 Responses。Codex、Claude Code、Claude Desktop、Gemini CLI、Muse Code、WorkBuddy 只说一种协议，其它模型由网关转换。
 
 能按模型选协议的客户端，详情页会多出 **模型协议** 一组：每个模型默认「自动」（即原生协议），也可以手动指定，修改后重新应用。提供商的端点或首选协议改了，已启用的客户端会和模型列表一起自动更新。
 

@@ -118,6 +118,7 @@ vi.mock('@lobehub/icons', () => {
     Volcengine: stub('volcengine'),
     XAI: stub('xai'),
     XiaomiMiMo: stub('xiaomi-mimo'),
+    ZAI: stub('zai'),
     Baichuan: stub('baichuan'),
     ChatGLM: stub('chatglm'),
     Cohere: stub('cohere'),

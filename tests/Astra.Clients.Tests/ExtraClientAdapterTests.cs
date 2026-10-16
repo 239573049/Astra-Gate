@@ -1458,3 +1458,246 @@ public class PaseoClientAdapterTests : AdapterTestBase
         Assert.Contains(ClientKinds.Paseo, ClientKinds.WithModelList);
     }
 }
+
+public class ZCodeClientAdapterTests : AdapterTestBase
+{
+    // provider_config.json as ZCode 3.15 writes it: one provider the user added, a model rule of theirs.
+    private const string Original = """
+        {
+          "schemaVersion": 1,
+          "config": {
+            "providerOrder": [
+              "mine"
+            ],
+            "providerConfigRules": {
+              "providerRules": [
+                {
+                  "providerId": "mine",
+                  "providerName": "Mine",
+                  "enabled": true,
+                  "config": {
+                    "group": "standard-personal",
+                    "access": {
+                      "type": "api-key",
+                      "apiKey": "k"
+                    },
+                    "api": {
+                      "type": "openai-responses",
+                      "baseUrl": "https://example.com/v1"
+                    },
+                    "personalModelIds": [
+                      "m1"
+                    ],
+                    "modelOrder": [
+                      "m1"
+                    ]
+                  }
+                }
+              ]
+            },
+            "modelConfigRules": {
+              "providerModelRules": [
+                {
+                  "modelId": "m1",
+                  "config": {
+                    "properties": {
+                      "contextWindow": 1000000
+                    }
+                  },
+                  "providerId": "mine"
+                }
+              ],
+              "manualProviderModelRules": []
+            }
+          }
+        }
+        """;
+
+    private readonly ZCodeClientAdapter _adapter;
+    private readonly string _config;
+
+    public ZCodeClientAdapterTests()
+    {
+        _adapter = new ZCodeClientAdapter(Home.Env, Store);
+        _config = Home.File(".zcode", "v2", "provider_config.json");
+    }
+
+    private JsonNode Config => Hints.Jsonc(Home.ReadFile(_config))["config"]!;
+
+    private JsonArray Rules => Config["providerConfigRules"]!["providerRules"]!.AsArray();
+
+    private JsonArray ModelRules => Config["modelConfigRules"]!["providerModelRules"]!.AsArray();
+
+    private JsonNode Rule(string id) => Rules.Single(r => r!["providerId"]!.GetValue<string>() == id)!;
+
+    [Fact]
+    public void Enable_AddsAProviderRuleAndModelRules_LeavesTheUsersOwn_DisableRestoresBytes()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("glm-5.3", "deepseek-v4");
+        ((JsonObject)extra["models"]!["glm-5.3"]!)["contextWindow"] = 1_000_000;
+        ((JsonObject)extra["models"]!["glm-5.3"]!)["vision"] = true;
+        ((JsonObject)extra["models"]!["glm-5.3"]!)["pdf"] = false;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-1", "glm-5.3", extra)));
+
+        Assert.Equal(["mine", "astra"], Rules.Select(r => r!["providerId"]!.GetValue<string>()));
+        Assert.Equal("k", Rule("mine")["config"]!["access"]!["apiKey"]!.GetValue<string>());
+        var ours = Rule("astra");
+        Assert.Equal("Astra", ours["providerName"]!.GetValue<string>());
+        Assert.True(ours["enabled"]!.GetValue<bool>());
+        var config = ours["config"]!;
+        Assert.Equal("standard-personal", config["group"]!.GetValue<string>());
+        Assert.Equal("api-key", config["access"]!["type"]!.GetValue<string>());
+        Assert.Equal("astra-zc-1", config["access"]!["apiKey"]!.GetValue<string>());
+        Assert.Equal("openai-chat-completions", config["api"]!["type"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", config["api"]!["baseUrl"]!.GetValue<string>());
+        Assert.Equal(["glm-5.3", "deepseek-v4"], config["personalModelIds"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal(["glm-5.3", "deepseek-v4"], config["modelOrder"]!.AsArray().Select(n => n!.GetValue<string>()));
+        // providerOrder is ZCode's: providers it does not name are listed after the ones it does.
+        Assert.Equal(["mine"], Config["providerOrder"]!.AsArray().Select(n => n!.GetValue<string>()));
+
+        Assert.Equal(3, ModelRules.Count);
+        var glm = ModelRules.Single(r => r!["modelId"]!.GetValue<string>() == "glm-5.3")!;
+        Assert.Equal("astra", glm["providerId"]!.GetValue<string>());
+        var properties = glm["config"]!["properties"]!;
+        Assert.Equal(1_000_000, properties["contextWindow"]!.GetValue<long>());
+        Assert.True(properties["inputFormat"]!["supportsImage"]!.GetValue<bool>());
+        Assert.False(properties["inputFormat"]!["supportsPdf"]!.GetValue<bool>());
+        Assert.False(properties["supportsNativeWebSearch"]!.GetValue<bool>());
+        var deepseek = ModelRules.Single(r => r!["modelId"]!.GetValue<string>() == "deepseek-v4")!;
+        Assert.Null(deepseek["config"]!["properties"]!["contextWindow"]);
+        Assert.Empty(Config["modelConfigRules"]!["manualProviderModelRules"]!.AsArray());
+        Assert.True(_adapter.Inspect().Enabled);
+        Assert.Empty(_adapter.Inspect().Repairs);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+        Assert.False(_adapter.Inspect().Enabled);
+    }
+
+    [Fact]
+    public void ModelsGoToOneProviderPerProtocol_CreatedOnlyWhenNeeded()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "deepseek-v4", "gemini-3-pro");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "gemini-3-pro", "gemini"); // ZCode has no Gemini protocol: the gateway translates
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-2", null, extra)));
+
+        Assert.Equal(["mine", "astra", "astra-responses", "astra-anthropic"], Rules.Select(r => r!["providerId"]!.GetValue<string>()));
+        Assert.Equal(["deepseek-v4", "gemini-3-pro"], Rule("astra")["config"]!["personalModelIds"]!.AsArray().Select(n => n!.GetValue<string>()));
+        var responses = Rule("astra-responses")["config"]!;
+        Assert.Equal("openai-responses", responses["api"]!["type"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", responses["api"]!["baseUrl"]!.GetValue<string>());
+        Assert.Equal(["gpt-5.5"], responses["personalModelIds"]!.AsArray().Select(n => n!.GetValue<string>()));
+        var anthropic = Rule("astra-anthropic")["config"]!;
+        Assert.Equal("anthropic-messages", anthropic["api"]!["type"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321", anthropic["api"]!["baseUrl"]!.GetValue<string>()); // ZCode adds /v1/messages
+        Assert.Equal("Astra (Anthropic)", Rule("astra-anthropic")["providerName"]!.GetValue<string>());
+        Assert.Contains(ModelRules, r => r!["modelId"]!.GetValue<string>() == "claude-sonnet-5" && r["providerId"]!.GetValue<string>() == "astra-anthropic");
+
+        // The user moves Claude to chat: the Anthropic provider and its model rule go, the model rule moves to "astra".
+        TestGateway.Override(extra, "claude-sonnet-5", "openai-chat");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-2", null, extra)));
+        Assert.Equal(["mine", "astra", "astra-responses"], Rules.Select(r => r!["providerId"]!.GetValue<string>()));
+        var claude = Assert.Single(ModelRules, r => r!["modelId"]!.GetValue<string>() == "claude-sonnet-5")!;
+        Assert.Equal("astra", claude["providerId"]!.GetValue<string>());
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void WhatZCodeChangesIsNotDrift_AndSurvivesARewrite()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-3", null, Hints.Extra("a", "b", "c"))));
+
+        // In ZCode's settings the user switches the provider off, drags c to the top and toggles model a; ZCode then saves
+        // the whole file in its canonical form.
+        var json = Hints.Jsonc(Home.ReadFile(_config));
+        var rules = json["config"]!["providerConfigRules"]!["providerRules"]!.AsArray();
+        var ours = rules.Single(r => r!["providerId"]!.GetValue<string>() == "astra")!.AsObject();
+        ours["enabled"] = false;
+        ours["config"]!["modelOrder"] = new JsonArray("c", "a", "b");
+        var a = json["config"]!["modelConfigRules"]!["providerModelRules"]!.AsArray()
+            .Single(r => r!["modelId"]!.GetValue<string>() == "a")!["config"]!.AsObject();
+        a["enabled"] = true;
+        Home.WriteFile(_config, json.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var status = _adapter.Inspect();
+        Assert.True(status.Enabled);
+        Assert.Empty(status.DriftedKeys);
+
+        // A rotated key and a refreshed model list (b left, d came) rewrite the rules: ZCode's choices stay.
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-4", null, Hints.Extra("a", "c", "d"))));
+        var rule = Rule("astra");
+        Assert.False(rule["enabled"]!.GetValue<bool>());
+        Assert.Equal("astra-zc-4", rule["config"]!["access"]!["apiKey"]!.GetValue<string>());
+        Assert.Equal(["a", "c", "d"], rule["config"]!["personalModelIds"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Equal(["c", "a", "d"], rule["config"]!["modelOrder"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.True(ModelRules.Single(r => r!["modelId"]!.GetValue<string>() == "a")!["config"]!["enabled"]!.GetValue<bool>());
+        Assert.DoesNotContain(ModelRules, r => r!["modelId"]!.GetValue<string>() == "b");
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(["mine"], Rules.Select(r => r!["providerId"]!.GetValue<string>()));
+        Assert.Equal(["m1"], ModelRules.Select(r => r!["modelId"]!.GetValue<string>()));
+        Assert.Equal(Hints.Jsonc(System.Text.Encoding.UTF8.GetString(original)).ToJsonString(), Hints.Jsonc(Home.ReadFile(_config)).ToJsonString());
+    }
+
+    [Fact]
+    public void AnAstraValueEditedInZCode_IsDriftAndIsNotRemovedByDisable()
+    {
+        Home.WriteFile(_config, Original);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-5", null, Hints.Extra("a"))));
+        Home.WriteFile(_config, Home.ReadFile(_config).Replace("http://127.0.0.1:17321/v1", "http://127.0.0.1:9999/v1"));
+
+        Assert.Contains("config.providerConfigRules.providerRules.[providerId=astra]", _adapter.Inspect().DriftedKeys);
+        Assert.False(_adapter.Inspect().Enabled);
+        Assert.True(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Contains("127.0.0.1:9999", Home.ReadFile(_config));
+    }
+
+    [Fact]
+    public void WithoutTheFile_EnableRefuses_SoZCodeStillImportsItsOlderConfig()
+    {
+        Home.WriteFile(Home.File(".zcode", "v2", "config.json"), """{"provider":{}}""");
+        Assert.True(_adapter.Detect().Detected);
+        var error = Assert.Throws<EditorException>(() => _adapter.PlanEnable(TestGateway.Context("astra-zc-6", null, Hints.Extra("a"))));
+        Assert.Contains("start ZCode once", error.Message);
+        Assert.False(Home.FileExists(_config));
+    }
+
+    [Fact]
+    public void AModelIdASelectorCannotAddress_IsListedWithoutAModelRule()
+    {
+        Home.WriteFile(_config, Original);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-zc-7", null, Hints.Extra("a&b", "c"))));
+        Assert.Equal(["a&b", "c"], Rule("astra")["config"]!["personalModelIds"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.DoesNotContain(ModelRules, r => r!["modelId"]!.GetValue<string>() == "a&b");
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+    }
+
+    [Fact]
+    public void Detect_FollowsZCodesHome_AStrictParserIsAssumed_AndPathsAreFixed()
+    {
+        Assert.False(_adapter.Detect().Detected);
+        Home.WriteFile(_config, Original.Replace("\"schemaVersion\": 1,", "// mine\n  \"schemaVersion\": 1,"));
+        Assert.True(_adapter.Detect().Detected);
+        Assert.Single(_adapter.Inspect().Repairs);
+        Assert.Equal([_config], _adapter.ConfigPaths());
+        Assert.Equal(ClientMode.Coexist, _adapter.Mode);
+        Assert.Contains(ClientKinds.ZCode, ClientKinds.WithModelList);
+        Assert.True(ClientProtocols.IsPerModel(ClientKinds.ZCode));
+
+        var elsewhere = Path.Combine(Home.Path, "zhome");
+        Home.Variables["ZCODE_DESKTOP_HOME_DIR"] = elsewhere;
+        Assert.False(_adapter.Detect().Detected);
+        Assert.Equal([Path.Combine(elsewhere, ".zcode", "v2", "provider_config.json")], _adapter.ConfigPaths());
+    }
+}

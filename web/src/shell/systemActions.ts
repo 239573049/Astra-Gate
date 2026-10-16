@@ -19,12 +19,17 @@ export const systemActions = {
   },
 
   async copy(text: string): Promise<boolean> {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      return false;
+    // navigator.clipboard only exists in secure contexts (https / localhost); a plain-http
+    // deployment reached by LAN address falls back to a hidden textarea + execCommand.
+    if (window.isSecureContext && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        /* permission denied or unfocused document: try the legacy path */
+      }
     }
+    return legacyCopy(text);
   },
 
   /** Native context menu on desktop; null on web (callers fall back to an in-app menu). */
@@ -52,4 +57,24 @@ export const systemActions = {
 export function dirnameOf(p: string): string {
   const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
   return i > 0 ? p.slice(0, i) : p;
+}
+
+function legacyCopy(text: string): boolean {
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  const active = document.activeElement as HTMLElement | null;
+  document.body.appendChild(area);
+  try {
+    area.focus();
+    area.select();
+    area.setSelectionRange(0, text.length);
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    document.body.removeChild(area);
+    active?.focus?.();
+  }
 }

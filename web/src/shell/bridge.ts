@@ -47,7 +47,7 @@ export interface UpdateSummary {
   action: 'none' | 'server' | 'desktop-dmg' | 'desktop-npm';
 }
 /** What an in-app apply did (mirrors desktop/src/update.ts). */
-export type UiApplyOutcome = 'server' | 'desktop' | 'none';
+export type UiApplyOutcome = 'server' | 'desktop' | 'download' | 'none';
 
 /** Launch the app at login (mirrors desktop/src/shared/loginItem.ts). */
 export interface LoginItemState {

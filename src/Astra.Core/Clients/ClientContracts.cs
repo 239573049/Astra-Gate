@@ -29,12 +29,13 @@ public static class ClientKinds
     public const string MuseCode = "muse-code";
     public const string NextCoWork = "nextcowork";
     public const string Paseo = "paseo";
+    public const string ZCode = "zcode";
 
     public static readonly IReadOnlyList<string> All =
     [
         Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
-        DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo,
+        DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo, ZCode,
     ];
 
     /// <summary>
@@ -47,7 +48,7 @@ public static class ClientKinds
     [
         OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, WorkBuddyAi, NextCoWork,
-        Paseo, MuseCode, Codex, GrokBuild, HermesAgent,
+        Paseo, ZCode, MuseCode, Codex, GrokBuild, HermesAgent,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>

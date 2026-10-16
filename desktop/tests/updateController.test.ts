@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const electron = vi.hoisted(() => ({
   showMessageBox: vi.fn(),
+  openExternal: vi.fn(),
   notifications: [] as { title: string; body: string }[],
 }));
 
 vi.mock('electron', () => ({
   app: { getVersion: () => '0.4.0', getPath: () => '/tmp', isPackaged: true },
   dialog: { showMessageBox: electron.showMessageBox },
+  shell: { openExternal: electron.openExternal },
   Notification: class {
     static isSupported(): boolean {
       return true;
@@ -55,6 +57,9 @@ function stubFetch(world: World): void {
   );
 }
 
+/** The npm track: the server is managed outside the app, so it updates on its own. */
+const NPM_TRACK = { exePath: '/home/u/.astra/desktop/node_modules/@aidotnet/desktop-linux-x64/astra' };
+
 describe('launch-time update check and reminder', () => {
   let world: World;
   let store: UpdateReminderState;
@@ -99,6 +104,7 @@ describe('launch-time update check and reminder', () => {
     clock = 1_800_000_000_000;
     mode = 'dialog';
     electron.showMessageBox.mockReset();
+    electron.openExternal.mockReset();
     electron.showMessageBox.mockResolvedValue({ response: 1 }); // "Remind Me Later"
     electron.notifications.length = 0;
     stubFetch(world);
@@ -111,7 +117,6 @@ describe('launch-time update check and reminder', () => {
     await launch().backgroundCheck();
 
     expect(world.calls).toContain(`POST ${BASE}/api/update/check`);
-    expect(world.calls.indexOf(`POST ${BASE}/api/update/check`)).toBeLessThan(world.calls.indexOf(`GET ${BASE}/api/update/status`, 1));
     expect(electron.showMessageBox).toHaveBeenCalledTimes(1);
     expect(electron.showMessageBox.mock.calls[0]![0]).toMatchObject({ message: 'Astra 0.5.0 is available' });
     expect(store).toMatchObject({ version: '0.5.0', count: 1 });
@@ -195,9 +200,35 @@ describe('launch-time update check and reminder', () => {
     expect(controller.hasUpdate).toBe(true);
   });
 
+  it('installer track: checks only the app, never a server update on its own', async () => {
+    const applied: unknown[] = [];
+    const controller = launch({
+      applyServerUpdate: async (opts) => {
+        applied.push(opts);
+        return { from: opts.currentVersion, to: opts.manifest.version, serverPath: '/tmp/astra-server' };
+      },
+    });
+
+    // The running server is older than the app, but the bundled server comes with the next app.
+    await expect(controller.check()).resolves.toMatchObject({ action: 'desktop-download' });
+    expect(world.calls).not.toContain(`GET ${BASE}/api/update/status`);
+    await expect(controller.applyFromUi()).resolves.toBe('download');
+    expect(electron.openExternal).toHaveBeenCalledWith('https://astra-gate.si/download');
+    expect(applied).toHaveLength(0);
+  });
+
+  it('installer track: a current app has nothing to download even if the server lags', async () => {
+    world.available = '0.4.0';
+    const controller = launch({ control: { isRunning: async () => true, stop: async () => {}, start: async () => {}, probeVersion: async () => '0.3.0' } });
+    await expect(controller.check()).resolves.toMatchObject({ action: 'none' });
+    await expect(controller.applyFromUi()).resolves.toBe('none');
+    expect(electron.openExternal).not.toHaveBeenCalled();
+  });
+
   it('applies an available update without a prior check, instead of reporting up to date', async () => {
     const applied: unknown[] = [];
     const controller = launch({
+      ...NPM_TRACK,
       applyServerUpdate: async (opts) => {
         applied.push(opts);
         return { from: opts.currentVersion, to: opts.manifest.version, serverPath: '/tmp/astra-server' };
@@ -213,6 +244,7 @@ describe('launch-time update check and reminder', () => {
   it('applies while a background check is still running', async () => {
     const applied: unknown[] = [];
     const controller = launch({
+      ...NPM_TRACK,
       applyServerUpdate: async (opts) => {
         applied.push(opts);
         return { from: opts.currentVersion, to: opts.manifest.version, serverPath: '/tmp/astra-server' };
@@ -232,6 +264,7 @@ describe('launch-time update check and reminder', () => {
     });
     let release = (): void => {};
     const controller = launch({
+      ...NPM_TRACK,
       applyServerUpdate: () => {
         entered();
         return new Promise<never>((_resolve, reject) => {

@@ -731,7 +731,7 @@ public class ClientAdapterRegistryTests
         var registry = ClientAdapterRegistry.CreateDefault(home.Env, new InMemoryClientConfigStateStore());
         Assert.Equal(Astra.Core.Clients.ClientKinds.All, registry.All.Select(a => a.Kind));
         var kinds = registry.All.Select(a => a.Kind).OrderBy(k => k, StringComparer.Ordinal).ToList();
-        Assert.Equal(26, kinds.Count);
+        Assert.Equal(27, kinds.Count);
         Assert.Equal(kinds, kinds.Distinct().OrderBy(k => k, StringComparer.Ordinal).ToList());
         Assert.NotNull(registry.Get("codex"));
         Assert.Null(registry.Get("nope"));
