@@ -962,6 +962,7 @@ public sealed class GatewayPipeline(
                 request.Headers.Remove(name);
                 request.Headers.TryAddWithoutValidation(name, value);
             }
+            if (CopilotCliHeaders.Applies(provider)) CopilotCliHeaders.Apply(request, clientRequest.Headers);
             // Non-Claude-Code callers of a Claude subscription: either the Claude Code identity
             // (subscription.mimic_claude_code — canonical headers only, nothing of the client's leaks
             // through) or just the betas OAuth tokens require.

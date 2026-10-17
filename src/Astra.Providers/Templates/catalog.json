@@ -927,7 +927,7 @@
   },
   {
     "id": "github-copilot-subscription",
-    "version": 1,
+    "version": 2,
     "name": "GitHub Copilot 订阅",
     "category": "subscription",
     "icon": "copilot",
@@ -968,11 +968,9 @@
     ],
     "adapter": "openai",
     "defaultHeaders": {
-      "User-Agent": "GitHubCopilotChat/0.26.7",
-      "Editor-Version": "vscode/1.99.3",
-      "Editor-Plugin-Version": "copilot-chat/0.26.7",
-      "Copilot-Integration-Id": "vscode-chat",
-      "X-GitHub-Api-Version": "2024-12-15"
+      "User-Agent": "copilot/1.0.75 (client/github/cli linux v24.16.0) term/unknown",
+      "Copilot-Integration-Id": "copilot-developer-cli",
+      "X-GitHub-Api-Version": "2026-07-01"
     },
     "modelListEndpoint": {
       "protocol": "openai-chat",
