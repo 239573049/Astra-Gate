@@ -4,6 +4,7 @@ import {
   commitNativeCompanions,
   findNativeCompanions,
   installManagedBinary,
+  installNativeCompanions,
   installManagedWebRoot,
   isNewerVersion,
   pruneManagedBinaries,
@@ -74,11 +75,11 @@ export function ensureDesktopServer(o: EnsureDesktopServerOptions): DesktopServe
     const { serverDir } = updatePaths(o.home);
     serverPath = installManagedBinary({
       stagedPath: packaged.path,
-      nativeLibraries: findNativeCompanions(packaged.path),
       serverDir,
       version: o.version,
       platform: o.platform,
     });
+    installNativeCompanions(findNativeCompanions(packaged.path), serverDir);
     if (installManagedWebRoot(packaged.path, serverDir)) commitManagedWebRoot(serverDir);
     commitNativeCompanions(serverDir);
     pruneManagedBinaries(serverDir, serverPath);
