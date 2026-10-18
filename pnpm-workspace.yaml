@@ -1,5 +1,6 @@
 packages:
   - cli
+  - connect
   - web
   - desktop
   - docs

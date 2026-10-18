@@ -14,6 +14,8 @@ export interface HomePaths {
   pluginsDir: string;
   /** Helper programs the server downloads for itself (cloudflared for remote access). */
   toolsDir: string;
+  /** State of astra-connect (the employee CLI): profile.json, state.json, backups/. The server never reads it. */
+  connectDir: string;
   desktopPrefix: string;
 }
 
@@ -35,6 +37,7 @@ export function homePaths(home: string): HomePaths {
     keysDir: path.join(home, 'keys'),
     pluginsDir: path.join(home, 'plugins'),
     toolsDir: path.join(home, 'tools'),
+    connectDir: path.join(home, 'connect'),
     desktopPrefix: path.join(home, 'desktop'),
   };
 }

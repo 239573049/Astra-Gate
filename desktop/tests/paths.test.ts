@@ -14,6 +14,7 @@ describe('astraPaths', () => {
     expect(p.logsDir).toBe(path.join(p.home, 'logs'));
     expect(p.pluginsDir).toBe(path.join(p.home, 'plugins'));
     expect(p.toolsDir).toBe(path.join(p.home, 'tools'));
+    expect(p.connectDir).toBe(path.join(p.home, 'connect'));
   });
 
   it('honors ASTRA_HOME override', () => {

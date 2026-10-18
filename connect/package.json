@@ -1,0 +1,49 @@
+{
+  "name": "@aidotnet/astra-connect",
+  "version": "0.11.2",
+  "description": "Point your local AI clients (Claude Code, Codex, Gemini CLI …) at your company's Astra gateway, and restore them any time.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "astra-connect": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "astra",
+    "ai",
+    "gateway",
+    "llm",
+    "claude-code",
+    "codex"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "watch": "tsup --watch",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@clack/prompts": "^0.11.0",
+    "commander": "^12.1.0",
+    "jsonc-parser": "^3.3.1",
+    "picocolors": "^1.1.1",
+    "toml-eslint-parser": "^1.0.3",
+    "yaml": "^2.6.1"
+  },
+  "devDependencies": {
+    "@aidotnet/client-config": "workspace:*",
+    "@types/node": "^24.0.0",
+    "eslint": "^9.17.0",
+    "prettier": "^3.4.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
