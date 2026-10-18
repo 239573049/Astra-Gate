@@ -9,6 +9,7 @@
     "service",
     "---[Cable]客户端与提供商---",
     "clients",
+    "connect",
     "---[Package]安装与维护---",
     "maintain"
   ]

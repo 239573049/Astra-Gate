@@ -375,6 +375,9 @@ jobs:
       - name: Build CLI
         run: pnpm --filter astragate build
 
+      - name: Build astra-connect
+        run: pnpm --filter @aidotnet/astra-connect build
+
       - name: Download all platform packages
         uses: actions/download-artifact@v4
         with:
@@ -508,6 +511,13 @@ jobs:
           for f in out/artifacts/astragate-[0-9]*.tgz; do
             publish "$f"
           done
+          # The employee CLI is plain JavaScript (no platform packages to wait for). It goes out before
+          # @aidotnet/astra-gate on purpose: that one being on npm is what the `version` job reads as
+          # "this version was fully published".
+          npm pack ./connect --pack-destination out/artifacts
+          for f in out/artifacts/aidotnet-astra-connect-[0-9]*.tgz; do
+            publish "$f"
+          done
           # Same CLI, also published as @aidotnet/astra-gate. Rebuild after the
           # rename: tsup inlines package.json, and the CLI's self-update uses
           # the baked-in name to update the package the user installed.
@@ -521,11 +531,13 @@ jobs:
           # astragate@<version>: the CLIs must be installable first too.
           wait_for "astragate@$VER"
           wait_for "@aidotnet/astra-gate@$VER"
+          wait_for "@aidotnet/astra-connect@$VER"
           # A stable newer than the last preview also becomes `preview`, so
           # `npm i -g astragate@preview` never installs something older than `latest`.
           if [ "$CHANNEL" = stable ] && [ "$TAG_PREVIEW" = true ]; then
             npm dist-tag add "astragate@$VER" preview
             npm dist-tag add "@aidotnet/astra-gate@$VER" preview
+            npm dist-tag add "@aidotnet/astra-connect@$VER" preview
           fi
 
       - name: Publish the update manifest to the docs site

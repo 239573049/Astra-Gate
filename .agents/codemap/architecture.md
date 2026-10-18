@@ -75,6 +75,7 @@ Astra.Core ──┬──> Astra.Data ─────┐
 | A console screen | `web/src/pages` + `web/src/api/hooks.ts` | both i18n catalogs |
 | A documentation page | `docs/content/docs/<module>/` + that folder's `meta.json` | the root `meta.json` when it is a new module |
 | A CLI command | `cli/src/commands` | `cli/src/index.ts` wiring, the command map in `docs/content/docs/cli/index.mdx` |
+| A change to a client adapter, the applier or an editor | `src/Astra.Clients` **and** `packages/client-config` | the golden cases `tests/fixtures/client-config/**` (linked update 20), [connect](modules/connect.md) |
 | A packaging or release step | `.github/workflows/*.yml`, `scripts/*.mjs` | the linked-update list in the root AGENTS.md |
 
 ## Verified module graph

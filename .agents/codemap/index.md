@@ -27,6 +27,7 @@ Rules live in the root AGENTS.md; reasons and history live in `.agents/memory/`.
 | web-ui | `@aidotnet/web`: the bilingual React admin console, bundled to `web/dist` | `web/src/App.tsx` | [web-ui](modules/web-ui.md) |
 | desktop-app | `@aidotnet/desktop`: Electron shell around `web/dist`, server lifecycle, tray, update controller | `desktop/src/main.ts` | [desktop-app](modules/desktop-app.md) |
 | docs-site | `@aidotnet/docs`: Fumadocs site that is also the website, the plugin-market registry, the client-release feed and the cloudflared mirror | `docs/lib/source.ts`, `docs/lib/plugin-market/registry.ts` | [docs-site](modules/docs-site.md) |
+| connect | npm `@aidotnet/astra-connect` + source-only `packages/client-config`: the employee CLI that points local AI clients at a company gateway (TS port of astra-clients, golden-tested against it) | `connect/src/index.ts`, `packages/client-config/src/applier.ts` | [connect](modules/connect.md) |
 | update-core | `@aidotnet/update-core`: source-only shared update engine (manifest, staged swap, rollback, npm runner) | `packages/update-core/src/index.ts` | [update-core](modules/update-core.md) |
 | packaging-release | CI workflows, `scripts/*.mjs`, the `npm/*` platform packages, Docker, version sync and the changelog | `.github/workflows/release.yml`, `scripts/sync-versions.mjs` | [packaging-release](modules/packaging-release.md) |
 

@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Keep one version across cli/package.json, every npm/* platform package,
- * desktop/package.json (the Electron app version), the cli's
+ * desktop/package.json (the Electron app version), connect/package.json
+ * (@aidotnet/astra-connect, the employee CLI), the cli's
  * optionalDependencies pins and the .NET Directory.Build.props.
  *
  * Usage:
@@ -47,6 +48,8 @@ const targets = fs
 // (app.getVersion(), installer names, electron-updater's version compare) —
 // left behind, every installer and desktop npm package reports a stale version.
 if (fs.existsSync(path.join(root, 'desktop', 'package.json'))) targets.push('desktop');
+// @aidotnet/astra-connect is published with every release (release.yml), so it carries the release version.
+if (fs.existsSync(path.join(root, 'connect', 'package.json'))) targets.push('connect');
 
 let mismatch = false;
 let cliDirty = false;

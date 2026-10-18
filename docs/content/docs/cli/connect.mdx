@@ -1,0 +1,104 @@
+---
+title: 员工接入（astra-connect）
+description: 企业给每位员工发一个 API Key，员工一条命令把本机的 AI 客户端接到企业网关，随时可还原
+---
+
+企业把 Astra Server 部署在服务器上，给每位员工一个 API Key（Astra 令牌）。员工在自己的电脑上运行 `astra-connect`：
+验证 Key，把 Claude Code、Codex、Gemini CLI 等本机客户端的配置指向企业网关，并保留备份，随时可以还原。
+它是一个独立的 npm 包，只有几百 KB，不带服务端程序，也不会在员工电脑上常驻任何服务——客户端直连企业网关。
+
+## 管理员要做的
+
+1. 在控制台[令牌页](/docs/console/tokens)为每位员工新建令牌，并给它选好提供商（或提供商池）。员工的客户端发出的请求就由这个提供商处理，也按这个令牌记用量、限额和告警。
+2. 点令牌行上的「复制员工接入命令」按钮，得到 `npx @aidotnet/astra-connect join <网关地址>`。命令里**不含 Key**。
+3. 把这条命令和该员工自己的 Key 分别发给员工。
+
+<Callout type="info" title="网关地址">
+  命令里的地址是「设置」页里的网关地址（容器部署时是 `ASTRA_PUBLIC_URL`）。
+  员工能访问到的地址才有用：放在公司内网、反向代理或[远程访问](/docs/guide/remote-access)之后均可，建议使用 https。
+</Callout>
+
+## 员工要做的
+
+```bash
+npx @aidotnet/astra-connect join https://astra.example.com
+# 或者先安装：npm i -g @aidotnet/astra-connect，之后直接 astra-connect join …
+```
+
+交互流程：
+
+1. 输入 Key（输入时不显示）。会先向网关验证；Key 错了可以重新输入。
+2. 勾选要接入的客户端。默认列出本机检测到的客户端，全部选中。
+3. 选择默认模型：默认「自动」，按客户端挑合适的模型（Claude Code 用 Claude 系列，Codex 用 GPT 系列，其余用这把 Key 的第一个模型）；也可以固定一个模型，或保持客户端自己的模型设置。
+4. 查看将要修改的文件和配置项数量，可展开详细 diff（Key 在 diff 里会被遮掩）；确认后写入。
+5. 重启客户端后生效。
+
+接入的是同一把 Key：再次运行 `join` 就是换 Key、换地址或补接新装的客户端，已接入且没有变化的客户端不会重复备份。
+
+## 命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `astra-connect join [地址]` | 验证 Key，把选中的客户端指向网关 |
+| `astra-connect status` | 令牌的额度和本月用量，以及各客户端的状态（已接入 / 配置被改动） |
+| `astra-connect leave` | 还原客户端的原配置 |
+| `astra-connect doctor` | 检查网关连通性、Key、可用模型和各客户端配置，指出该怎么修 |
+
+`join` 的选项：
+
+| 选项 | 说明 |
+| --- | --- |
+| `--clients <标识,…>` | 要接入的客户端，逗号分隔；`all` 表示本机检测到的全部。标识见[客户端与提供商](/docs/cli/clients) |
+| `--model <模型 id>` | 给所有客户端指定默认模型（必须在这把 Key 的可用列表里） |
+| `-y, --yes` | 不再询问，使用默认选择 |
+| `--key-stdin` | 从标准输入读取 Key |
+| `--json` | 输出机器可读的结果（同时不再询问） |
+
+`leave` 的选项：`--clients`（只还原这些）、`--force`（连被你改过的配置项也强制还原）、`--keep-profile`（保留已保存的网关地址和 Key）、`-y`、`--json`。
+`status` 和 `doctor` 也支持 `--json`；`doctor` 发现问题时退出码为 1。
+
+### 脚本与批量部署
+
+不是交互终端时，命令不会等待输入，缺少信息就直接报错退出。Key 只能通过环境变量 `ASTRA_API_KEY` 或 `--key-stdin` 提供——**没有** `--key <值>` 参数，免得 Key 出现在进程列表和 shell 历史里：
+
+```bash
+ASTRA_API_KEY=sk-astra-xxxx npx -y @aidotnet/astra-connect join https://astra.example.com --clients all --yes
+echo "$KEY" | astra-connect join https://astra.example.com --key-stdin --clients claude-code,codex --yes --json
+```
+
+## 它改了什么，怎么还原
+
+接入的规则与控制台的「启用客户端」完全相同：
+
+- 先备份。每个文件首次被修改前的完整副本永久保留，另有最近 20 次的滚动备份，放在 `~/.astra/connect/backups/<客户端>/`。
+- 只改 Astra 需要的配置项，其余内容（注释、你自己的设置）保持原样；每项记录原值。
+- 写入的是 Key 本身（客户端要用它调用网关），不是带客户端后缀的形式。企业网关上不需要为员工的客户端做任何绑定。
+- `leave` 把原值写回；你在接入之后自己改过的项会被跳过并列出，加 `--force` 才强制还原。Astra 为你新建的文件会被删除，原有文件逐字节恢复。
+
+本机状态都在 `~/.astra/connect/`（`ASTRA_HOME` 可改根目录）：`profile.json`（网关地址和 Key，权限 600）、`state.json`（原值记录）、`backups/`。
+
+## 支持的客户端
+
+与控制台一致的全部内置客户端：`codex`、`claude-code`、`gemini-cli`、`opencode`、`claude-desktop`、`grok-build`、`pi`、`hermes-agent`、`minimax-code`、`copilot-cli`、`vscode-copilot`、`crush`、`qwen-code`、`droid`、`kimi-code`、`zed`、`vscode-insiders`、`vscodium`、`omp`、`mimo-code`、`deepseek-harness`、`workbuddy`、`workbuddy-ai`、`muse-code`、`nextcowork`、`paseo`、`zcode`、`tkcode`。
+插件添加的客户端暂不支持。
+
+## 安全说明
+
+- Key 会以明文写进客户端自己的配置文件（客户端读它才能工作，和在本机用 Astra 启用客户端一样），同时保存在 `profile.json`。请把这些文件当作密钥保管。
+- 网关地址是 `http://`（非本机）时会提醒：Key 会明文经过网络。
+- Key 被管理员停用或重置后，客户端的请求会失败；员工用新 Key 再运行一次 `join` 即可。
+- 网关上的 `GET /v1/astra/connect-context` 用 Key 本身鉴权，只返回令牌名称和它能调用的模型（id、显示名、上下文窗口、能力和直通协议），不暴露提供商、账号和上游模型，详见[令牌页](/docs/console/tokens)。
+
+## 和本机 Astra 共存
+
+如果员工电脑上也在运行自己的 Astra，同一个客户端只能被一个网关接管：`join` 检测到本机 Astra 在运行时会提醒；先在 Astra 的客户端页停用它，再接入企业网关。
+
+## 常见问题
+
+| 现象 | 处理 |
+| --- | --- |
+| Key 无效或已被吊销 | 向管理员确认 Key；被重置过就换新 Key |
+| 网关版本过旧 | 需要管理员把 Astra Server 升级到带有 `astra-connect` 支持的版本 |
+| 这把 Key 暂时不能调用模型 | 管理员没有给这个令牌选提供商（或池），让他在令牌页补上 |
+| `doctor` 提示配置被改动过 | 客户端或你改了 Astra 写入的项：重新运行 `join` 修复，或 `leave --force` 后再接入 |
+| 没有检测到已安装的客户端 | 先装好客户端，或用 `--clients` 指定 |

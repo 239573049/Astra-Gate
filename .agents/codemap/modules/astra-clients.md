@@ -6,6 +6,9 @@ updated: 2026-10-14
 ---
 # astra-clients
 
+> `packages/client-config` is a byte-exact TypeScript port of this module (adapters, editors, applier) used by `astra-connect`; the golden
+> cases in `tests/fixtures/client-config` are run by both — see [connect](connect.md) and AGENTS.md linked update 20.
+
 One adapter per local AI client that knows the client's config files, plans (never performs) the
 edits that point the client at the Astra gateway, and inspects the resulting state; a single
 applier executes those plans with first-write + rolling backups, per-keyPath original/applied

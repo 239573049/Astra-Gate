@@ -18,7 +18,9 @@ Astra (`astragate`) — a local AI gateway. One product, two toolchains:
   `@aidotnet/astra-gate`, whose self-update targets its own baked-in name), `web/` (`@aidotnet/web`, Vite + React admin UI),
   `desktop/` (`@aidotnet/desktop`, Electron shell), `docs/` (`@aidotnet/docs`, Next.js/Fumadocs
   documentation site), `npm/*` (platform packages `@aidotnet/server-*` / `@aidotnet/desktop-*`),
-  `packages/update-core` (shared update engine).
+  `packages/update-core` (shared update engine), `connect/` (npm `@aidotnet/astra-connect`, bin `astra-connect`: the
+  employee-side CLI that points local AI clients at a company's Astra gateway) and `packages/client-config` (source-only:
+  the TypeScript port of `Astra.Clients` that it bundles). Design: `.plan/enterprise-connect.md`.
 
 `docs/` is the fumadocs documentation site (`pnpm --filter @aidotnet/docs dev` / `build`; content in
 `docs/content/docs`, shown as a single grouped sidebar: the root `meta.json` orders the module
@@ -88,6 +90,9 @@ Known command hazards:
   `src/index.ts`; it has no build script and is never published). Consumers (cli via tsup,
   desktop via esbuild) bundle it from source, so its tests and typecheck run against `src`
   directly.
+- `packages/client-config` is source-only like `update-core` (`main`/`exports` point at `src/index.ts`, never published);
+  `connect` bundles it with tsup, but lists its runtime dependencies (`jsonc-parser`, `toml-eslint-parser`, `yaml`) itself:
+  bundling `yaml` into the ESM output breaks it at start ("Dynamic require"), so they stay external.
 - `pnpm --filter @aidotnet/web build` runs `tsc --noEmit && vite build`: type errors block the build.
 - `desktop` build/dev copies `web/dist` first and fails if the web app was not built (`pnpm dev`
   can skip via its `--optional` flag and load the renderer from the Vite dev server).
@@ -323,7 +328,8 @@ runtime needed on the target).
    defines the key set (`MessageKey = keyof typeof zh`) and `web/src/test/i18n.test.ts` enforces
    key and placeholder parity, so missing translations are caught by tests — still add both.
 5. **Data-dir paths**: the `~/.astra` layout is defined in three places that must stay in sync:
-   `src/Astra.Core/AstraPaths.cs`, `cli/src/lib/paths.ts`, `desktop/src/shared/paths.ts`.
+   `src/Astra.Core/AstraPaths.cs`, `cli/src/lib/paths.ts`, `desktop/src/shared/paths.ts` (`connect/` — `ConnectDir` /
+   `connectDir` — is astra-connect's own state; `connect/src/lib/profile.ts` derives it the same way).
 6. **Client config take-over** (`Astra.Clients`): preserve the restore invariants — per-keyPath
    original values recorded in `client_config_state`, first-write backups kept permanently plus
    20 rolling backups (`ClientConfigApplier`), restore skips values the user changed (drift).
@@ -463,6 +469,24 @@ runtime needed on the target).
     reports (`RoutingDecision.FallbackReason`, counted by `RoutingActivity`). The judge only ever reads text the privacy
     guard has already seen (`AskExtractor` works on the guarded body).
 
+20. **Employee onboarding (`astra-connect`)** (`.plan/enterprise-connect.md`): `packages/client-config` is a port of
+    `src/Astra.Clients` — its editors (`src/editing`), `ClientConfigApplier` (`src/applier.ts`), adapter base, the
+    `Astra.Core/Clients` domain types (`src/domain`) and all 28 built-in adapters (`src/adapters`) — and must produce the
+    same bytes. The guard is the shared golden cases in `tests/fixtures/client-config/<kind>/<case>/` (`case.json` +
+    `home/`; `expected/` is generated): `GoldenClientConfigTests` runs the C# adapters over them (regenerate with
+    `ASTRA_UPDATE_FIXTURES=1`, narrow with `ASTRA_FIXTURE_FILTER=<kind>/`), `packages/client-config/test/golden.test.ts`
+    runs the TS ones. So a change to an adapter, `ClientConfigApplier`, an editor, `ClientKinds` / `ClientProtocols` /
+    `ClientOptions` / `ClaudeCodeModels` changes C#, TS, the cases and their `expected/` together — a green C# run with a
+    red TS run means the port is behind. A new client adapter needs its TS adapter, a line in its `adapters/group-N.ts`
+    and cases (the coverage test names what is missing). The server side is `GET /v1/astra/connect-context`
+    (`KeyInfoEndpoints.ConnectContextAsync`: the token's name and the models it can call, in the shape of the "models" extra;
+    token self-service rules apply — no provider, account or upstream model, `KeySelfServiceTests` asserts it). What
+    `astra-connect` writes into a client is the **bare token**: a client-suffixed key would need that client enabled and bound
+    on the server. Keys never go on argv (`ASTRA_API_KEY` / `--key-stdin` / masked prompt); `connect` is published by
+    `release.yml` with the other packages (before `@aidotnet/astra-gate`, whose presence marks a finished release) and
+    versioned by `sync-versions.mjs`. Docs: `docs/content/docs/cli/connect.mdx`; the console's token row has the
+    "copy join command" button (zh/en `tokens.copyJoin` / `tokens.joinCopied`).
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
@@ -476,7 +500,7 @@ runtime needed on the target).
 - Formatting: root `.prettierrc` (100 cols, single quotes, semicolons, trailing commas). There
   is no repo-wide format command — match the surrounding code. ESLint: `web/` and `desktop/`
   have their own flat configs; `cli/` and `packages/*` inherit the root `eslint.config.js`.
-- Tests: vitest with per-package configs — `cli/test`, `desktop/tests`, `packages/update-core/test`
+- Tests: vitest with per-package configs — `cli/test`, `connect/test`, `desktop/tests`, `packages/update-core/test`, `packages/client-config/test`
   (node env, `include: ['test/**/*.test.ts']`), `web/src/test` (jsdom + testing-library, chosen in
   `web/vite.config.ts`). xunit on the .NET side, one test project
   per src project.
