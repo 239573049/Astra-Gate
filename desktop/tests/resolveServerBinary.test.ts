@@ -10,7 +10,7 @@ import {
 } from '../src/shared/resolveServerBinary';
 
 const repoRoot = '/repo';
-const devPath = path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net10.0', 'astra-server');
+const devPath = path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net11.0', 'astra-server');
 const devPathExe = `${devPath}.exe`;
 
 describe('devServerBinaryPath', () => {

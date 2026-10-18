@@ -126,12 +126,12 @@ jobs:
         id: dotnet
         continue-on-error: true
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.100-rc.2.26504.105
 
       - uses: actions/setup-dotnet@v4
         if: steps.dotnet.outcome == 'failure'
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.100-rc.2.26504.105
 
       - name: Check macOS signing credentials
         # Fail before the (long) build when a secret is missing: unsigned mac

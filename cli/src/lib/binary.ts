@@ -53,7 +53,7 @@ function defaultResolveFrom(baseDir: string, request: string): string {
  * Resolution order (mirrors the desktop app's resolver):
  *  1. ASTRA_SERVER_BIN env var
  *  2. install.json serverPath — the updater's managed binary (~/.astra/server/…)
- *  3. repo dev build: src/Astra.Server/bin/Debug/net10.0/astra-server[.exe],
+ *  3. repo dev build: src/Astra.Server/bin/Debug/net11.0/astra-server[.exe],
  *     or `dotnet astra-server.dll` when only the dll exists
  *  4. the installed platform package @aidotnet/server-<platform>
  */
@@ -81,7 +81,7 @@ export function resolveServerBinary(options: ResolveServerBinaryOptions = {}): S
   // 3. in-repo dev build
   const repoRoot = findRepoRoot(cwd, exists);
   if (repoRoot) {
-    const binDir = path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net10.0');
+    const binDir = path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net11.0');
     const native = path.join(binDir, plat.binaryName);
     if (exists(native)) return { command: native, args: [], serverPath: native, source: 'repo' };
     const dll = path.join(binDir, 'astra-server.dll');

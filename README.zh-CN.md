@@ -169,7 +169,7 @@ Zed 不会从设置文件读取 API Key，启用后需在 Zed 的提供商设置
 
 ## 开发
 
-环境要求：[.NET SDK](https://dotnet.microsoft.com/) 10.x（由 `global.json` 锁定）、
+环境要求：[.NET SDK](https://dotnet.microsoft.com/) 11.x（由 `global.json` 锁定）、
 Node.js ≥ 18 与 [pnpm](https://pnpm.io) 9.15.0（`corepack enable` 即可）。
 
 ```bash

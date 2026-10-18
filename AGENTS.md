@@ -9,7 +9,7 @@ the behavior they describe.
 
 Astra (`astragate`) — a local AI gateway. One product, two toolchains:
 
-- **.NET 10** (`Astra.sln`; `global.json` pins SDK 10.0.x): `src/Astra.Server` builds
+- **.NET 11** (`Astra.sln`; `global.json` pins SDK 11.0.100-rc.2, roll-forward within 11.0): `src/Astra.Server` builds
   `astra-server`, an ASP.NET Core host published as a self-contained Native AOT binary (no .NET
   runtime on the target; a JIT single-file publish still works — see Native AOT). The other
   `src/Astra.*` projects are its libraries. Tests live in `tests/Astra.*.Tests` (xunit).

@@ -16,7 +16,7 @@
 #
 # glibc base on purpose: the release RIDs are linux-x64 / linux-arm64 (glibc), not linux-musl-*.
 # runtime-deps ships the libs a self-contained binary needs (OpenSSL, ICU) and a non-root `app` user (uid 1654).
-FROM mcr.microsoft.com/dotnet/runtime-deps:10.0
+FROM mcr.microsoft.com/dotnet/runtime-deps:11.0
 
 ARG TARGETARCH
 WORKDIR /app

@@ -185,7 +185,7 @@ automatic rollback on failure — and never replace a running binary in place.
 
 ## Development
 
-Prerequisites: [.NET SDK](https://dotnet.microsoft.com/) 10.x (pinned by `global.json`),
+Prerequisites: [.NET SDK](https://dotnet.microsoft.com/) 11.x (pinned by `global.json`),
 Node.js ≥ 18 and [pnpm](https://pnpm.io) 9.15.0 (`corepack enable` works).
 
 ```bash

@@ -237,7 +237,7 @@ export class ServiceManager {
       throw new StartupError(
         'Astra server binary not found. Looked at install.json serverPath, ' +
           'ASTRA_SERVER_BIN, the server bundled with this app, and the dev build path ' +
-          '(<repo>/src/Astra.Server/bin/Debug/net10.0/astra-server). ' +
+          '(<repo>/src/Astra.Server/bin/Debug/net11.0/astra-server). ' +
           'Reinstall the desktop app from the download page, run "astra update", or build the server first.',
         todayLog,
       );

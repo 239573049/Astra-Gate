@@ -23,13 +23,13 @@ export interface ResolveServerBinaryOptions {
   exists: (p: string) => boolean;
 }
 
-/** Dev fallback: <repo>/src/Astra.Server/bin/Debug/net10.0/astra-server. */
+/** Dev fallback: <repo>/src/Astra.Server/bin/Debug/net11.0/astra-server. */
 export function devServerBinaryPath(
   repoRoot: string,
   platform: NodeJS.Platform = process.platform,
 ): string {
   const ext = platform === 'win32' ? '.exe' : '';
-  return path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net10.0', `astra-server${ext}`);
+  return path.join(repoRoot, 'src', 'Astra.Server', 'bin', 'Debug', 'net11.0', `astra-server${ext}`);
 }
 
 /** Server bundled with a packaged app: <resources>/server/astra-server[.exe]. */
@@ -48,7 +48,7 @@ export function bundledServerBinaryPath(
  *    not keep winning)
  * 2. ASTRA_SERVER_BIN env
  * 3. the server bundled with the packaged app (standalone installers)
- * 4. dev build under <repoRoot>/src/Astra.Server/bin/Debug/net10.0
+ * 4. dev build under <repoRoot>/src/Astra.Server/bin/Debug/net11.0
  * Only returns candidates that `exists` accepts; null when nothing matches.
  * The returned `version` feeds the running-server takeover check in service.ts.
  */

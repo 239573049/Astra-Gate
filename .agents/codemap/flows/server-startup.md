@@ -176,7 +176,7 @@ initial delay instead of a shared scheduler:
 
 ### Container variant (`packaging-release`)
 
-- `Dockerfile:19-41` — `mcr.microsoft.com/dotnet/runtime-deps:10.0` (glibc, on purpose: the release
+- `Dockerfile:19-41` — `mcr.microsoft.com/dotnet/runtime-deps:11.0` (glibc, on purpose: the release
   RIDs are `linux-x64`/`linux-arm64`), `COPY docker-bin/${TARGETARCH}/` (the unpacked
   `npm/server-linux-*` package, built by the `docker` job in `release.yml`), `ASTRA_HOME=/data`,
   `ASTRA_HOST=0.0.0.0`, `ASTRA_PORT=17321`, `ASTRA_STRICT_PORT=1`, non-root `app` user, `VOLUME /data`

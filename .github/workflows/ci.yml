@@ -18,7 +18,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: 11.0.100-rc.2.26504.105
 
       # The provider-plugin tests run magpie's host.js on a real Bun (BunFact skips them without one).
       # Keep in step with BunRuntime.Version.

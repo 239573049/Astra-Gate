@@ -56,7 +56,7 @@ describe('resolveServerBinary', () => {
   });
 
   it('uses the repo Debug binary when inside the repository', () => {
-    const native = '/repo/src/Astra.Server/bin/Debug/net10.0/astra-server';
+    const native = '/repo/src/Astra.Server/bin/Debug/net11.0/astra-server';
     const cmd = resolveServerBinary({
       ...base,
       env: {},
@@ -68,7 +68,7 @@ describe('resolveServerBinary', () => {
   });
 
   it('falls back to dotnet + dll inside the repository', () => {
-    const dll = '/repo/src/Astra.Server/bin/Debug/net10.0/astra-server.dll';
+    const dll = '/repo/src/Astra.Server/bin/Debug/net11.0/astra-server.dll';
     const cmd = resolveServerBinary({
       ...base,
       env: {},
@@ -110,7 +110,7 @@ describe('resolveServerBinary', () => {
 
   it('env beats repo beats package', () => {
     const envBin = '/env/astra-server';
-    const native = '/repo/src/Astra.Server/bin/Debug/net10.0/astra-server';
+    const native = '/repo/src/Astra.Server/bin/Debug/net11.0/astra-server';
     const files = makeFs(['/repo/src/Astra.Server', native, pkgBin, envBin]);
     const cmd = resolveServerBinary({
       ...base,
@@ -135,7 +135,7 @@ describe('resolveServerBinary', () => {
 
   it('install.json beats repo and package; env still wins', () => {
     const managed = '/home/.astra/server/astra-server-0.2.0';
-    const native = '/repo/src/Astra.Server/bin/Debug/net10.0/astra-server';
+    const native = '/repo/src/Astra.Server/bin/Debug/net11.0/astra-server';
     const files = makeFs(['/repo/src/Astra.Server', native, pkgBin, managed]);
     const cmd = resolveServerBinary({
       ...base,
@@ -160,7 +160,7 @@ describe('resolveServerBinary', () => {
   });
 
   it('skips a missing install.json path and falls through', () => {
-    const native = '/repo/src/Astra.Server/bin/Debug/net10.0/astra-server';
+    const native = '/repo/src/Astra.Server/bin/Debug/net11.0/astra-server';
     const cmd = resolveServerBinary({
       ...base,
       env: {},
