@@ -1,0 +1,48 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "default_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-claude-sonnet-4-5",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-gemini-2-5-pro",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-gpt-5-1",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-kimi-k2-5",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-plain",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

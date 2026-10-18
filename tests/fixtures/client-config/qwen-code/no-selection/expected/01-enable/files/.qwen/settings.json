@@ -1,0 +1,18 @@
+{
+  // Qwen Code settings
+  "theme": "Dracula",
+  "env": { "SOME_OTHER": "1", "ASTRA_QWEN_API_KEY": "sk-astra-enterprise-key" },
+  "modelProviders": {
+    "openai": [
+      { "id": "qwen-plus", "name": "Qwen Plus", "envKey": "DASHSCOPE_API_KEY", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+      {"id":"gpt-5","name":"GPT-5","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1","wireApi":"responses"},
+      {"id":"deepseek-chat","name":"DeepSeek Chat","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1"},
+      {"id":"qwen3-coder","name":"qwen3-coder","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1"},
+      {"id":"glm-4.6","name":"GLM 4.6 \u00E9\u003C\u003E\u0026\u0027\u002B","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1"}
+    ],
+    "anthropic": [ {"id":"claude-sonnet-4-5","name":"Claude Sonnet 4.5","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com"} ],
+    "gemini": [ {"id":"gemini-2.5-pro","name":"Gemini 2.5 Pro","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com"} ]
+  },
+  "security": { "auth": { "selectedType": "openai" } },
+  "model": { "name": "qwen-plus" }
+}

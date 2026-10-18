@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.factory/settings.json",
+      "keyPath": "customModels.[displayName=Astra: gpt-5]",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

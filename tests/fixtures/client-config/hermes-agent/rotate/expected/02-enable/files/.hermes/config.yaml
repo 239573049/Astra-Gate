@@ -1,0 +1,9 @@
+# hermes config
+model:
+  default: "claude-sonnet-4-5"
+  provider: "custom"
+  base_url: "https://astra.corp.com/v1"
+  api_key: "sk-astra-second-key"
+  api_mode: "anthropic_messages"
+display:
+  skin: dark

@@ -1,0 +1,7 @@
+{
+  "language_models": {
+    "openai_compatible": {
+      "astra": { "api_url": "https://somewhere.else/v1" }
+    }
+  }
+}

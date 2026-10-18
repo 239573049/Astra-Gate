@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra&id=ok-model]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"ok-model\",\"provider\":\"astra\",\"maxContextWindowTokens\":100000}"
+  },
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"gpt-4.1\"",
+    "after": "\"astra/ok-model\""
+  }
+]

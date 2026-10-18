@@ -1,0 +1,15 @@
+# omp providers
+providers:
+  ollama:
+    baseUrl: http://localhost:11434/v1
+    api: openai-completions
+    apiKey: ollama
+    models:
+      - id: llama3.1:8b
+  astra:
+    baseUrl: "https://astra.corp.com/v1"
+    api: "openai-completions"
+    apiKey: "sk-astra-enterprise-key"
+    auth: "apiKey"
+    models:
+      - {"id":"gpt-5","name":"gpt-5"}

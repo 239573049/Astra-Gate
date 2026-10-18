@@ -1,0 +1,54 @@
+{
+  "client": "paseo",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "missing-model",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

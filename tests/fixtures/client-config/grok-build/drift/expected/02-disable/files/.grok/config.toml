@@ -1,0 +1,6 @@
+# grok config
+[models]
+default = "other"
+
+[model.grok-3]
+model = "grok-3"

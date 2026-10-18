@@ -1,0 +1,51 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra-kimi-k2-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-kimi-k2-5.capabilities",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"[\\u0022tool_use\\u0022]\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-kimi-k2-5.display_name",
+    "originalAbsent": false,
+    "original": "\"\\u0022Old name\\u0022\"",
+    "applied": "\"\\u0022Kimi K2.5\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-kimi-k2-5.max_context_size",
+    "originalAbsent": false,
+    "original": "\"1000\"",
+    "applied": "\"262144\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-kimi-k2-5.max_output_size",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"4096\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "providers.astra.api_key",
+    "originalAbsent": false,
+    "original": "\"\\u0022sk-old\\u0022\"",
+    "applied": "\"\\u0022sk-astra-enterprise-key\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "providers.astra.base_url",
+    "originalAbsent": false,
+    "original": "\"\\u0022https://old.example.com/v1\\u0022\"",
+    "applied": "\"\\u0022https://astra.corp.com/v1\\u0022\""
+  }
+]

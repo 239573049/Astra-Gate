@@ -1,0 +1,4 @@
+{
+  "env": { "ASTRA_QWEN_API_KEY": "tampered" },
+  "modelProviders": { "openai": [ { "id": "gpt-5", "name": "GPT-5", "envKey": "ASTRA_QWEN_API_KEY", "baseUrl": "https://elsewhere/v1", "wireApi": "responses" } ] }
+}

@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GEMINI_API_KEY",
+    "originalAbsent": false,
+    "original": "\"AIzaSyOriginal0123456789abcdef\"",
+    "applied": "\"sk-astra-rotated-key\""
+  },
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GEMINI_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"gemini-2.5-flash\""
+  },
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GOOGLE_GEMINI_BASE_URL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra2.corp.com\""
+  },
+  {
+    "file": "$HOME/.gemini/settings.json",
+    "keyPath": "security.auth.selectedType",
+    "originalAbsent": false,
+    "original": "\"oauth-personal\"",
+    "applied": "\"gemini-api-key\""
+  }
+]

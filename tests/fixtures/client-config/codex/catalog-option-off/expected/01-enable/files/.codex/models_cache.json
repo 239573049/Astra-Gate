@@ -1,0 +1,1 @@
+{"models":[{"slug":"gpt-5.5","display_name":"gpt-5.5","visibility":"list","priority":1,"supported_reasoning_levels":[{"effort":"high","description":"High"}],"default_reasoning_level":"medium","context_window":272000,"support_verbosity":true,"apply_patch_tool_type":"freeform","model_messages":{"instructions_template":"You are Codex."}}]}

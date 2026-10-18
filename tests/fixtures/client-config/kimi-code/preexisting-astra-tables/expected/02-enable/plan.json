@@ -1,0 +1,42 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra.api_key",
+    "kind": "key",
+    "before": "\"sk-astra-enterprise-key\"",
+    "after": "\"\\u0022sk-astra-second-key\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5.max_context_size",
+    "kind": "key",
+    "before": "262144",
+    "after": "\"131072\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5.max_output_size",
+    "kind": "key",
+    "before": "4096",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5.display_name",
+    "kind": "key",
+    "before": "\"Kimi K2.5\"",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": "\"astra-kimi-k2-5\"",
+    "after": "\"\\u0022astra-kimi-k2-5\\u0022\""
+  }
+]

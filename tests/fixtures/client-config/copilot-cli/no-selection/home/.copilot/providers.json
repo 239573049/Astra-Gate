@@ -1,0 +1,9 @@
+{
+  // BYOK providers
+  "providers": [
+    { "name": "mine", "type": "openai", "baseUrl": "https://api.example.com/v1", "apiKey": "sk-mine" }
+  ],
+  "models": [
+    { "id": "my-model", "provider": "mine" }
+  ]
+}

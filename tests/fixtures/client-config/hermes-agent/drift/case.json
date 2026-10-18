@@ -1,0 +1,33 @@
+{
+  "client": "hermes-agent",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "kimi-k2.5",
+  "extras": {
+    "models": {
+      "kimi-k2.5": {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "contextWindow": 262144
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".hermes/config.yaml",
+          "write": "# hermes config\nmodel:\n  default: anthropic/claude-opus-4  # current\n  provider: custom\n  base_url: https://openrouter.ai/api/v1\n  api_key: sk-or-key\n  api_mode: codex_responses\ndisplay:\n  skin: dark\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

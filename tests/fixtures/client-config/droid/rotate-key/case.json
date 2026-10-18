@@ -1,0 +1,62 @@
+{
+  "client": "droid",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "a": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "b": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "context": {
+        "localKey": "sk-astra-second-key",
+        "model": "deepseek-chat",
+        "extras": {
+          "models": {
+            "c": {
+              "id": "deepseek-chat",
+              "name": "DeepSeek Chat",
+              "contextWindow": 64000,
+              "maxOutputTokens": 8000,
+              "vision": false,
+              "protocols": [
+                "openai-chat"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

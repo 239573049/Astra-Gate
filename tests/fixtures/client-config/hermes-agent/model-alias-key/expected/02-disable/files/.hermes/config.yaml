@@ -1,0 +1,3 @@
+model:
+  model: foo/bar
+  provider: auto

@@ -1,0 +1,39 @@
+{
+  "client": "zed",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".config/zed/settings.json",
+          "write": "{\n  \"language_models\": {\n    \"openai_compatible\": {\n      \"astra\": { \"api_url\": \"https://somewhere.else/v1\" }\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.gemini/.env",
+      "keyPath": "GOOGLE_GEMINI_BASE_URL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/.env",
+      "keyPath": "GEMINI_API_KEY",
+      "outcome": "nottracked",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/settings.json",
+      "keyPath": "security.auth.selectedType",
+      "outcome": "nottracked",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

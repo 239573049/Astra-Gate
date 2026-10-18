@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra-m1\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-m1",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

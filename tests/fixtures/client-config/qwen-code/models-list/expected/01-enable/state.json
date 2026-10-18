@@ -1,0 +1,65 @@
+[
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "env.ASTRA_QWEN_API_KEY",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "model.name",
+    "originalAbsent": false,
+    "original": "\"qwen-plus\"",
+    "applied": "\"gemini-2.5-pro\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.anthropic.[envKey=ASTRA_QWEN_API_KEY&id=claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.gemini.[envKey=ASTRA_QWEN_API_KEY&id=gemini-2.5-pro]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gemini-2.5-pro\",\"name\":\"Gemini 2.5 Pro\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=glm-4.6]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"glm-4.6\",\"name\":\"GLM 4.6 \\u00E9\\u003C\\u003E\\u0026\\u0027\\u002B\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\",\"wireApi\":\"responses\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=qwen3-coder]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"qwen3-coder\",\"name\":\"qwen3-coder\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "security.auth.selectedType",
+    "originalAbsent": false,
+    "original": "\"openai\"",
+    "applied": "\"gemini\""
+  }
+]

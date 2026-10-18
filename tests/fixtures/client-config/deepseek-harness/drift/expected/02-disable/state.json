@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.dsh/.env",
+    "keyPath": "ASTRA_GATEWAY_API_KEY",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "keyPath": "[id=agent-default-model].config.reasoningEffort",
+    "originalAbsent": false,
+    "original": "\"high\"",
+    "applied": null
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "keyPath": "[id=llm-pi-ai].config.providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"displayName\":\"Astra\",\"apiKeyEnv\":\"ASTRA_GATEWAY_API_KEY\",\"api\":\"openai-completions\",\"baseURL\":\"https://astra.corp.com/v1\",\"models\":[{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192}]}"
+  }
+]

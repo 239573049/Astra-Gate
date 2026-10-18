@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.omp/agent/config.yml",
+    "keyPath": "modelRoles.default",
+    "originalAbsent": false,
+    "original": "\"anthropic/claude-opus-4\"",
+    "applied": "\"astra/qwen3-coder\""
+  },
+  {
+    "file": "$HOME/.omp/agent/models.yml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-second-key\",\"auth\":\"apiKey\",\"models\":[{\"id\":\"qwen3-coder\",\"name\":\"Qwen3 Coder\",\"contextWindow\":262144,\"maxTokens\":65536}]}"
+  }
+]

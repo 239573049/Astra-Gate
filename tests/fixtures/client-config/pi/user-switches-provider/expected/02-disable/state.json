@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "keyPath": "defaultModel",
+    "originalAbsent": false,
+    "original": "\"claude-opus-4\"",
+    "applied": "\"gpt-5\""
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "keyPath": "defaultProvider",
+    "originalAbsent": false,
+    "original": "\"anthropic\"",
+    "applied": "\"astra\""
+  }
+]

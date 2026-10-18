@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"openai/gpt-4.1\"",
+    "applied": "\"astra/claude-sonnet-4-5\""
+  },
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra\",\"api\":\"chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-rotated-key\",\"models\":{\"claude-sonnet-4-5\":{\"api\":\"messages\",\"name\":\"Claude Sonnet 4.5\",\"contextWindow\":200000,\"maxTokens\":64000,\"reasoning\":true,\"images\":true},\"deepseek-chat\":{\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192,\"reasoning\":false,\"images\":false}}}"
+  }
+]

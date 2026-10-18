@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zshrc",
+      "keyPath": "muse-code",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.zshrc"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.next-cowork/providers.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"protocol\":\"openai-chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":{\"deepseek-chat\":{\"upstreamModel\":\"deepseek-chat\",\"displayName\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxOutputTokens\":8192,\"capabilities\":{\"vision\":false,\"visionInput\":false}}}}"
+  }
+]

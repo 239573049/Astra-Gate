@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/zed/settings.json",
+      "keyPath": "language_models.openai_compatible.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/zed/settings.json",
+      "keyPath": "agent.default_model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.config/zed/settings.json"
+  ],
+  "warnings": []
+}

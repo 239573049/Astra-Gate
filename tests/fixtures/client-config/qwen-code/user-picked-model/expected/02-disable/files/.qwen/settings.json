@@ -1,0 +1,5 @@
+{
+  "env": {  },
+  "security": { "auth": { "selectedType": "anthropic" } },
+  "model": { "name": "user-choice" }
+}

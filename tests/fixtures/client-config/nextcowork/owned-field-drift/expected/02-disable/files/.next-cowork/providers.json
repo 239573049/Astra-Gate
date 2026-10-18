@@ -1,0 +1,57 @@
+{
+  "providers": {
+    "my-openai": {
+      "name": "Mine",
+      "protocol": "openai-chat",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "sk-user-own",
+      "models": {
+        "gpt-4o": {
+          "upstreamModel": "gpt-4o"
+        }
+      }
+    },
+    "astra": {
+      "name": "Astra",
+      "protocol": "openai-chat",
+      "baseUrl": "https://astra.corp.com/v1",
+      "apiKey": "sk-astra-enterprise-key",
+      "models": {
+        "deepseek-chat": {
+          "upstreamModel": "deepseek-chat",
+          "displayName": "DeepSeek Chat",
+          "contextWindow": 128000,
+          "maxOutputTokens": 8192,
+          "capabilities": {
+            "vision": false,
+            "visionInput": false
+          }
+        },
+        "gpt-5": {
+          "upstreamModel": "gpt-5",
+          "displayName": "Renamed",
+          "protocolOverride": "openai-responses",
+          "contextWindow": 400000,
+          "maxOutputTokens": 128000,
+          "capabilities": {
+            "vision": true,
+            "visionInput": true,
+            "fileInput": true
+          }
+        },
+        "claude-sonnet-4-5": {
+          "upstreamModel": "claude-sonnet-4-5",
+          "displayName": "Claude Sonnet 4.5",
+          "protocolOverride": "anthropic",
+          "contextWindow": 200000,
+          "maxOutputTokens": 64000,
+          "capabilities": {
+            "vision": true,
+            "visionInput": true,
+            "fileInput": false
+          }
+        }
+      }
+    }
+  }
+}

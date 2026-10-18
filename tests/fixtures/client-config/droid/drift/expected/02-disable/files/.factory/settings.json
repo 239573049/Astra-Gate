@@ -1,0 +1,5 @@
+{
+  "customModels": [
+    { "model": "gpt-5", "displayName": "Astra: gpt-5", "baseUrl": "https://elsewhere/v1", "apiKey": "changed", "provider": "openai" }
+  ]
+}

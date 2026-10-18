@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.config/mimocode/mimocode.json",
+    "format": "json",
+    "keyPath": "provider.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Astra\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"},\"models\":{\"7\":{\"name\":\"numeric\"},\"10\":{},\"a\":{\"provider\":{\"npm\":\"@ai-sdk/anthropic\"}},\"b\":{\"provider\":{\"npm\":\"@ai-sdk/anthropic\"},\"reasoning\":true},\"c\":{\"provider\":{\"npm\":\"@ai-sdk/anthropic\"},\"limit\":{\"context\":1000,\"output\":0},\"reasoning\":false},\"d\":{\"modalities\":{\"input\":[\"text\"],\"output\":[\"text\"]}},\"e\":{\"modalities\":{\"input\":[\"text\",\"pdf\"],\"output\":[\"text\"]}},\"f\":{\"modalities\":{\"input\":[\"text\",\"image\"],\"output\":[\"text\"]}}}}"
+  },
+  {
+    "file": "$HOME/.config/mimocode/mimocode.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra/a\""
+  }
+]

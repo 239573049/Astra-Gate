@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "providers.[name=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra&id=ok-model]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

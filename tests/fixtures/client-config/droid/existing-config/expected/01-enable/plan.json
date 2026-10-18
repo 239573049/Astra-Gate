@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.factory/settings.json",
+    "format": "json",
+    "keyPath": "customModels.[displayName=Astra: gpt-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"model\":\"gpt-5\",\"displayName\":\"Astra: gpt-5\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"openai\",\"maxContextLimit\":400000,\"maxOutputTokens\":128000}"
+  }
+]

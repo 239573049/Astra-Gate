@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "agent.default_model",
+    "originalAbsent": false,
+    "original": "{\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-5\"}",
+    "applied": "{\"provider\":\"astra\",\"model\":\"deepseek-chat\"}"
+  },
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "language_models.openai_compatible.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"api_url\":\"https://astra2.corp.com/v1\",\"available_models\":[{\"name\":\"deepseek-chat\",\"display_name\":\"DeepSeek Chat\",\"max_tokens\":128000,\"max_output_tokens\":8192,\"capabilities\":{\"tools\":true,\"images\":false,\"parallel_tool_calls\":false,\"prompt_cache_key\":false}}]}"
+  }
+]

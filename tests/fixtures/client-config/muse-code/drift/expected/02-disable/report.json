@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zshrc",
+      "keyPath": "muse-code",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"claude-sonnet-4-5\",\"displayName\":\"Astra: claude-sonnet-4-5\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"anthropic\",\"maxContextLimit\":200000,\"maxOutputTokens\":64000}"
+  },
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"gpt-5\",\"displayName\":\"Astra: gpt-5\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"openai\",\"maxContextLimit\":400000,\"maxOutputTokens\":128000}"
+  }
+]

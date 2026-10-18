@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "model.name",
+    "originalAbsent": false,
+    "original": "\"qwen-plus\"",
+    "applied": "\"gpt-5\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\",\"wireApi\":\"responses\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "keyPath": "security.auth.selectedType",
+    "originalAbsent": false,
+    "original": "\"openai\"",
+    "applied": "\"openai-responses\""
+  }
+]

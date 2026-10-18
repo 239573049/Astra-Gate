@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/opencode/opencode.json",
+      "keyPath": "provider.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

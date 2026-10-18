@@ -1,0 +1,96 @@
+{
+  "client": "zcode",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "edit": [
+        {
+          "file": ".zcode/v2/provider_config.json",
+          "write": "{\n  \"schemaVersion\": 1,\n  \"config\": {\n    \"providerOrder\": [\n      \"zhipu\",\n      \"my-openai\"\n    ],\n    \"providerConfigRules\": {\n      \"providerRules\": [\n        {\n          \"providerId\": \"my-openai\",\n          \"providerName\": \"My OpenAI\",\n          \"enabled\": true,\n          \"config\": {\n            \"group\": \"standard-personal\",\n            \"access\": {\n              \"type\": \"api-key\",\n              \"apiKey\": \"sk-user-own\"\n            },\n            \"api\": {\n              \"type\": \"openai-chat-completions\",\n              \"baseUrl\": \"https://api.openai.com/v1\"\n            },\n            \"personalModelIds\": [\n              \"gpt-4o\"\n            ],\n            \"modelOrder\": [\n              \"gpt-4o\"\n            ]\n          }\n        },\n        {\n          \"providerId\": \"astra\",\n          \"providerName\": \"Astra\",\n          \"enabled\": false,\n          \"config\": {\n            \"group\": \"standard-personal\",\n            \"access\": {\n              \"type\": \"api-key\",\n              \"apiKey\": \"sk-astra-enterprise-key\"\n            },\n            \"api\": {\n              \"type\": \"openai-chat-completions\",\n              \"baseUrl\": \"https://astra.corp.com/v1\"\n            },\n            \"personalModelIds\": [\n              \"deepseek-chat\"\n            ],\n            \"modelOrder\": [\n              \"deepseek-chat\"\n            ],\n            \"notes\": \"added by ZCode\"\n          },\n          \"sortKey\": 3\n        },\n        {\n          \"providerId\": \"astra-responses\",\n          \"providerName\": \"Astra (Responses)\",\n          \"enabled\": true,\n          \"config\": {\n            \"group\": \"standard-personal\",\n            \"access\": {\n              \"type\": \"api-key\",\n              \"apiKey\": \"sk-astra-enterprise-key\"\n            },\n            \"api\": {\n              \"type\": \"openai-responses\",\n              \"baseUrl\": \"https://astra.corp.com/v1\"\n            },\n            \"personalModelIds\": [\n              \"gpt-5\"\n            ],\n            \"modelOrder\": [\n              \"gpt-5\"\n            ]\n          }\n        },\n        {\n          \"providerId\": \"astra-anthropic\",\n          \"providerName\": \"Astra (Anthropic)\",\n          \"enabled\": true,\n          \"config\": {\n            \"group\": \"standard-personal\",\n            \"access\": {\n              \"type\": \"api-key\",\n              \"apiKey\": \"sk-astra-enterprise-key\"\n            },\n            \"api\": {\n              \"type\": \"anthropic-messages\",\n              \"baseUrl\": \"https://astra.corp.com\"\n            },\n            \"personalModelIds\": [\n              \"claude-sonnet-4-5\"\n            ],\n            \"modelOrder\": [\n              \"claude-sonnet-4-5\"\n            ]\n          }\n        }\n      ]\n    },\n    \"modelConfigRules\": {\n      \"providerModelRules\": [\n        {\n          \"providerId\": \"my-openai\",\n          \"modelId\": \"gpt-4o\",\n          \"config\": {\n            \"properties\": {\n              \"contextWindow\": 128000,\n              \"supportsNativeWebSearch\": true\n            }\n          }\n        },\n        {\n          \"modelId\": \"deepseek-chat\",\n          \"config\": {\n            \"properties\": {\n              \"contextWindow\": 128000,\n              \"inputFormat\": {\n                \"supportsImage\": false\n              },\n              \"supportsNativeWebSearch\": false\n            }\n          },\n          \"providerId\": \"astra\",\n          \"enabled\": false\n        },\n        {\n          \"modelId\": \"gpt-5\",\n          \"config\": {\n            \"properties\": {\n              \"contextWindow\": 400000,\n              \"inputFormat\": {\n                \"supportsImage\": true,\n                \"supportsPdf\": true\n              },\n              \"supportsNativeWebSearch\": false\n            }\n          },\n          \"providerId\": \"astra-responses\",\n          \"enabled\": false\n        },\n        {\n          \"modelId\": \"claude-sonnet-4-5\",\n          \"config\": {\n            \"properties\": {\n              \"contextWindow\": 200000,\n              \"inputFormat\": {\n                \"supportsImage\": true,\n                \"supportsPdf\": false\n              },\n              \"supportsNativeWebSearch\": false\n            }\n          },\n          \"providerId\": \"astra-anthropic\",\n          \"enabled\": false\n        }\n      ],\n      \"manualProviderModelRules\": []\n    }\n  }\n}\n"
+        }
+      ],
+      "context": {
+        "extras": {
+          "models": {
+            "gpt-5": {
+              "id": "gpt-5",
+              "name": "GPT-5",
+              "contextWindow": 400000,
+              "maxOutputTokens": 128000,
+              "reasoning": true,
+              "vision": true,
+              "pdf": true,
+              "protocols": [
+                "openai-responses"
+              ]
+            },
+            "deepseek-chat": {
+              "id": "deepseek-chat",
+              "name": "DeepSeek Chat",
+              "contextWindow": 128000,
+              "maxOutputTokens": 8192,
+              "reasoning": false,
+              "vision": false,
+              "protocols": [
+                "openai-chat"
+              ]
+            },
+            "glm-4.6": {
+              "id": "glm-4.6",
+              "name": "GLM 4.6"
+            }
+          }
+        }
+      }
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

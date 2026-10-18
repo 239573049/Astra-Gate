@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.paseo/config.json",
+      "keyPath": "agents.providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.paseo/config.json"
+  ],
+  "warnings": []
+}

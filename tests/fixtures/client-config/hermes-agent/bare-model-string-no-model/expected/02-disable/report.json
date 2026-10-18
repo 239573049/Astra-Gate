@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.hermes/config.yaml",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

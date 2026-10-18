@@ -1,0 +1,10 @@
+- id: "llm-pi-ai"
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      later:
+        displayName: "Later"
+        apiKeyEnv: "LATER"
+        api: "openai-completions"
+        baseURL: "https://later.example.com/v1"
+        models: []

@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/_meta.json",
+    "keyPath": "entries",
+    "originalAbsent": false,
+    "original": "[{\"id\":\"aaaaaaaa-0000-4000-8000-000000000001\",\"name\":\"Corp \\u00E9quipe \\u003CA\\u0026B\\u003E\"}]",
+    "applied": "[{\"id\":\"aaaaaaaa-0000-4000-8000-000000000001\",\"name\":\"Corp \\u00E9quipe \\u003CA\\u0026B\\u003E\"},{\"id\":\"7f3c1a55-0a17-4000-8000-1cabad000001\",\"name\":\"Astra\"}]"
+  }
+]

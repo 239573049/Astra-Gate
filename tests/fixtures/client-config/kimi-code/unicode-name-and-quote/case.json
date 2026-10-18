@@ -1,0 +1,23 @@
+{
+  "client": "kimi-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-ä\"\\key",
+  "model": "m1",
+  "extras": {
+    "models": {
+      "m1": {
+        "id": "m1",
+        "name": "Mödel \"One\" \\ ü"
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

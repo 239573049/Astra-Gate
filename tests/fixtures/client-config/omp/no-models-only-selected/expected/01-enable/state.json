@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.omp/agent/config.yml",
+    "keyPath": "modelRoles.default",
+    "originalAbsent": false,
+    "original": "\"anthropic/claude-opus-4\"",
+    "applied": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/.omp/agent/models.yml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"auth\":\"apiKey\",\"models\":[{\"id\":\"gpt-5\",\"name\":\"gpt-5\"}]}"
+  }
+]

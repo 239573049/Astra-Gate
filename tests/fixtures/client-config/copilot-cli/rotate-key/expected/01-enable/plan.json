@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra-responses]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra-responses\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"wireApi\":\"responses\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-responses&id=gpt-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"gpt-5\",\"provider\":\"astra-responses\",\"maxContextWindowTokens\":400000,\"maxOutputTokens\":128000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra-anthropic]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra-anthropic\",\"type\":\"anthropic\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-anthropic&id=claude-sonnet-4-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"claude-sonnet-4-5\",\"provider\":\"astra-anthropic\",\"maxContextWindowTokens\":200000,\"maxOutputTokens\":64000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"gpt-4.1\"",
+    "after": "\"astra-anthropic/claude-sonnet-4-5\""
+  }
+]

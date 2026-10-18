@@ -1,0 +1,10 @@
+// TKCode settings
+{
+  "theme": "dark",
+  "model": "openai/gpt-4.1",
+  "providers": {
+    "openai": { "apiKey": "sk-user-own", "enabled": true }, // the user's own provider,
+    "astra": {"name":"Astra","api":"chat","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key"}
+  },
+  "mcpServers": { "fs": { "command": "npx", "args": ["fs-mcp"] } },
+}

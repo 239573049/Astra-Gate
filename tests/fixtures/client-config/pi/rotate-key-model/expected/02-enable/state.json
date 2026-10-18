@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.pi/agent/models.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-second-key\",\"models\":[{\"id\":\"qwen3-coder\",\"name\":\"Qwen3 Coder\",\"contextWindow\":262144,\"maxTokens\":65536}]}"
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "keyPath": "defaultModel",
+    "originalAbsent": false,
+    "original": "\"claude-opus-4\"",
+    "applied": "\"qwen3-coder\""
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "keyPath": "defaultProvider",
+    "originalAbsent": false,
+    "original": "\"anthropic\"",
+    "applied": "\"astra\""
+  }
+]

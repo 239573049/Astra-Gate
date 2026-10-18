@@ -1,0 +1,1 @@
+{ "env": { "ASTRA_QWEN_API_KEY": "sk-astra-enterprise-key" }, "modelProviders": { "openai": [ {"id":"deepseek-chat","name":"DeepSeek Chat","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1"} ] }, "security": { "auth": { "selectedType": "openai" } }, "model": { "name": "deepseek-chat" } }

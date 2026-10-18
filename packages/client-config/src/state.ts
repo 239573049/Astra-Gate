@@ -9,8 +9,13 @@ const keyOf = (clientKind: string, filePath: string, keyPath: string): string =>
 export class InMemoryStateStore implements IClientConfigStateStore {
   protected readonly entries = new Map<string, ClientConfigStateEntry>();
 
+  /** Ordered by file then key (ordinal), like the C# stores: plans built from the list depend on it. */
   list(clientKind: string): ClientConfigStateEntry[] {
-    return [...this.entries.values()].filter((e) => e.clientKind === clientKind).map((e) => ({ ...e }));
+    const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+    return [...this.entries.values()]
+      .filter((e) => e.clientKind === clientKind)
+      .sort((a, b) => cmp(a.filePath, b.filePath) || cmp(a.keyPath, b.keyPath))
+      .map((e) => ({ ...e }));
   }
 
   get(clientKind: string, filePath: string, keyPath: string): ClientConfigStateEntry | null {

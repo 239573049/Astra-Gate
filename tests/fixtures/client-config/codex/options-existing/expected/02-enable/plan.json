@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_provider",
+    "kind": "key",
+    "before": "\"astra\"",
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"gpt-5\"",
+    "after": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_auto_compact_token_limit",
+    "kind": "key",
+    "before": null,
+    "after": "\"90000\""
+  }
+]

@@ -1,0 +1,82 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/Claude/claude_desktop_config.json",
+    "format": "json",
+    "keyPath": "deploymentMode",
+    "kind": "key",
+    "before": "\"3p\"",
+    "after": "\"3p\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/claude_desktop_config.json",
+    "format": "json",
+    "keyPath": "deploymentMode",
+    "kind": "key",
+    "before": "\"3p\"",
+    "after": "\"3p\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "format": "json",
+    "keyPath": "coworkEgressAllowedHosts",
+    "kind": "key",
+    "before": "[\"*\"]",
+    "after": "[\"*\"]"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "format": "json",
+    "keyPath": "disableDeploymentModeChooser",
+    "kind": "key",
+    "before": "true",
+    "after": "true"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "format": "json",
+    "keyPath": "inferenceProvider",
+    "kind": "key",
+    "before": "\"gateway\"",
+    "after": "\"gateway\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "format": "json",
+    "keyPath": "inferenceGatewayAuthScheme",
+    "kind": "key",
+    "before": "\"bearer\"",
+    "after": "\"bearer\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "format": "json",
+    "keyPath": "inferenceGatewayBaseUrl",
+    "kind": "key",
+    "before": "\"https://astra.corp.com\"",
+    "after": "\"https://astra2.corp.com\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "format": "json",
+    "keyPath": "inferenceGatewayApiKey",
+    "kind": "key",
+    "before": "\"sk-astra-enterprise-key\"",
+    "after": "\"sk-astra-rotated-key\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/_meta.json",
+    "format": "json",
+    "keyPath": "entries",
+    "kind": "key",
+    "before": "[{\"id\":\"7f3c1a55-0a17-4000-8000-1cabad000001\",\"name\":\"Astra\"}]",
+    "after": "[{\"id\":\"7f3c1a55-0a17-4000-8000-1cabad000001\",\"name\":\"Astra\"}]"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/_meta.json",
+    "format": "json",
+    "keyPath": "appliedId",
+    "kind": "key",
+    "before": "\"7f3c1a55-0a17-4000-8000-1cabad000001\"",
+    "after": "\"7f3c1a55-0a17-4000-8000-1cabad000001\""
+  }
+]

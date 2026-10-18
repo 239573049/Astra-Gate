@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"name\":\"\\u0022Astra\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"wire_api\":\"\\u0022responses\\u0022\",\"experimental_bearer_token\":\"\\u0022sk-astra-enterprise-key\\u0022\",\"requires_openai_auth\":\"false\"}"
+  }
+]

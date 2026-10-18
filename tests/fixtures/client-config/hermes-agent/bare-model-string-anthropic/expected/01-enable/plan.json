@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"openrouter/some-model\"",
+    "after": "{\"default\":\"claude-sonnet-4-5\",\"provider\":\"custom\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\",\"api_mode\":\"anthropic_messages\"}"
+  }
+]

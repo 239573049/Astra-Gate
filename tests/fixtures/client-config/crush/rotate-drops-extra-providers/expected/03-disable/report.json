@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/crush/crush.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/crush/crush.json",
+      "keyPath": "models.large",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

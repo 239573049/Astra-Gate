@@ -1,0 +1,74 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra&id=gpt-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"gpt-5\",\"provider\":\"astra\",\"maxContextWindowTokens\":400000,\"maxOutputTokens\":128000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra&id=claude-sonnet-4-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"claude-sonnet-4-5\",\"provider\":\"astra\",\"maxContextWindowTokens\":200000,\"maxOutputTokens\":64000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra&id=qwen3-coder]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"qwen3-coder\",\"provider\":\"astra\",\"maxContextWindowTokens\":32000,\"maxOutputTokens\":40000}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra-anthropic]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra-anthropic\",\"type\":\"anthropic\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-anthropic&id=deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"deepseek-chat\",\"provider\":\"astra-anthropic\",\"maxContextWindowTokens\":64000,\"maxOutputTokens\":8000,\"capabilities\":{\"supports\":{\"vision\":false}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-anthropic&id=gemini-2.5-pro]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"gemini-2.5-pro\",\"provider\":\"astra-anthropic\",\"maxContextWindowTokens\":1000000}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-anthropic&id=glm-4.6]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"glm-4.6\",\"provider\":\"astra-anthropic\"}"
+  },
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"gpt-4.1\"",
+    "after": "\"astra/gpt-5\""
+  }
+]

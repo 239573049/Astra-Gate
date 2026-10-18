@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.paseo/config.json",
+      "keyPath": "agents.providers.astra",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.paseo/config.json",
+      "keyPath": "agents.providers.astra-codex",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

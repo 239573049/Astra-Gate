@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.minimax/config.yaml",
+    "format": "yaml",
+    "keyPath": "custom_provider.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"api\":\"openai-completions\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-\\u00E4\\u0027key\"},\"models\":{\"m1\":{\"name\":\"M\\u00F6del \\u003COne\\u003E \\u0026 co\",\"limit\":{\"context\":8000,\"output\":2000},\"modalities\":{\"input\":[\"text\"]},\"reasoning\":true}}}"
+  },
+  {
+    "file": "$HOME/.minimax/config.yaml",
+    "format": "yaml",
+    "keyPath": "defaultModel",
+    "kind": "key",
+    "before": null,
+    "after": "\"custom_provider:astra/m1\""
+  }
+]

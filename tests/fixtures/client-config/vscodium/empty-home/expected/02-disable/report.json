@@ -1,0 +1,26 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json",
+      "keyPath": "[vendor=customendpoint&name=Astra].apiType",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json",
+      "keyPath": "[vendor=customendpoint&name=Astra].models",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json",
+      "keyPath": "[vendor=customendpoint&name=Astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json"
+  ],
+  "warnings": []
+}

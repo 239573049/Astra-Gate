@@ -1,0 +1,26 @@
+{
+  "client": "claude-desktop",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "claude-sonnet-4-5",
+  "extras": {
+    "roleMap": {
+      "sonnet": "claude-sonnet-4-5"
+    },
+    "models": {
+      "a": {
+        "id": "claude-sonnet-4-5",
+        "name": "Sonnet"
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

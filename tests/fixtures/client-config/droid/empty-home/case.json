@@ -1,0 +1,15 @@
+{
+  "client": "droid",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "deepseek-chat",
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

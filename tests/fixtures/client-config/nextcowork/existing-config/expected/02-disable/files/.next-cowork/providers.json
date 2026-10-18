@@ -1,0 +1,15 @@
+{
+  "providers": {
+    "my-openai": {
+      "name": "Mine",
+      "protocol": "openai-chat",
+      "baseUrl": "https://api.openai.com/v1",
+      "apiKey": "sk-user-own",
+      "models": {
+        "gpt-4o": {
+          "upstreamModel": "gpt-4o"
+        }
+      }
+    }
+  }
+}

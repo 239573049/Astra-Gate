@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": "{\"enabled\":false,\"headers\":{\"X-Team\":\"corp\"},\"name\":\"Astra\",\"api\":\"chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":{\"deepseek-chat\":{\"api\":\"messages\",\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192,\"reasoning\":false,\"images\":false},\"gpt-5\":{\"api\":\"responses\",\"name\":\"GPT-5\",\"effort\":\"high\",\"contextWindow\":400000,\"maxTokens\":128000,\"reasoning\":true,\"images\":true},\"claude-sonnet-4-5\":{\"api\":\"messages\",\"name\":\"Claude Sonnet 4.5\",\"contextWindow\":200000,\"maxTokens\":64000,\"reasoning\":true,\"images\":true}}}",
+    "after": "{\"name\":\"Astra\",\"api\":\"chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":{\"gpt-5\":{\"api\":\"responses\",\"name\":\"GPT-5\",\"contextWindow\":400000,\"maxTokens\":128000,\"reasoning\":true,\"images\":true,\"effort\":\"high\"},\"deepseek-chat\":{\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192,\"reasoning\":false,\"images\":false},\"claude-sonnet-4-5\":{\"api\":\"messages\",\"name\":\"Claude Sonnet 4.5\",\"contextWindow\":200000,\"maxTokens\":64000,\"reasoning\":true,\"images\":true}},\"enabled\":false,\"headers\":{\"X-Team\":\"corp\"}}"
+  },
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"astra/gpt-5\"",
+    "after": "\"astra/gpt-5\""
+  }
+]

@@ -1,0 +1,66 @@
+{
+  "client": "paseo",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "context": {
+        "extras": {
+          "models": {
+            "claude-sonnet-4-5": {
+              "id": "claude-sonnet-4-5",
+              "name": "Claude Sonnet 4.5",
+              "contextWindow": 200000,
+              "maxOutputTokens": 64000,
+              "reasoning": true,
+              "vision": true,
+              "pdf": false,
+              "protocols": [
+                "anthropic"
+              ]
+            }
+          }
+        },
+        "model": "claude-sonnet-4-5",
+        "localKey": "sk-astra-rotated-key"
+      }
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

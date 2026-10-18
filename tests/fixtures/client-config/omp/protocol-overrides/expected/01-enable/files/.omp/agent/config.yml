@@ -1,0 +1,5 @@
+# omp config
+modelRoles:
+  default: "astra/deepseek-chat"
+  smol: anthropic/claude-haiku-4
+theme: dark

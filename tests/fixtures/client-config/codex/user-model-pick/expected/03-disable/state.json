@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"\\u0022gpt-5.1-codex\\u0022\"",
+    "applied": "\"\\u0022gpt-5\\u0022\""
+  }
+]

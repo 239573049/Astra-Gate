@@ -1,0 +1,12 @@
+default_model = "astra-m1"
+[providers.astra]
+type = "openai"
+base_url = "https://astra.corp.com/v1"
+api_key = "sk-ä\"\\key"
+
+[models.astra-m1]
+provider = "astra"
+model = "m1"
+max_context_size = 131072
+capabilities = ["tool_use"]
+display_name = "Mödel \"One\" \\ ü"

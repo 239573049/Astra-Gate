@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-gpt-5-1.display_name",
+    "originalAbsent": false,
+    "original": "\"\\u0022GPT 5.1\\u0022\"",
+    "applied": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-gpt-5-1.max_output_size",
+    "originalAbsent": false,
+    "original": "\"128000\"",
+    "applied": null
+  }
+]

@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "env.ASTRA_QWEN_API_KEY",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=ok-model]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"ok-model\",\"name\":\"ok-model\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "security.auth.selectedType",
+    "kind": "key",
+    "before": "\"openai\"",
+    "after": "\"openai\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "model.name",
+    "kind": "key",
+    "before": "\"qwen-plus\"",
+    "after": "\"ok-model\""
+  }
+]

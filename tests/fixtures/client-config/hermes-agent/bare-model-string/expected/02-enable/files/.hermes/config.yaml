@@ -1,0 +1,8 @@
+# old style
+model:
+  default: "kimi-k2.5"
+  provider: "custom"
+  base_url: "https://astra.corp.com/v1"
+  api_key: "sk-astra-second-key"
+tools:
+  web: true

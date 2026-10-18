@@ -1,0 +1,15 @@
+# omp providers
+providers:
+  ollama:
+    baseUrl: http://localhost:11434/v1
+    api: openai-completions
+    apiKey: ollama
+    models:
+      - id: llama3.1:8b
+  astra:
+    baseUrl: "https://astra.corp.com/v1"
+    api: "openai-completions"
+    apiKey: "sk-astra-second-key"
+    auth: "apiKey"
+    models:
+      - {"id":"qwen3-coder","name":"Qwen3 Coder","contextWindow":262144,"maxTokens":65536}

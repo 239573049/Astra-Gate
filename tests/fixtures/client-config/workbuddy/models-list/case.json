@@ -1,0 +1,68 @@
+{
+  "client": "workbuddy",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      },
+      "qwen3-coder": {
+        "id": "qwen3-coder"
+      },
+      "org/model[v=1]&x": {
+        "id": "org/model[v=1]&x",
+        "name": "Weird Model"
+      },
+      "big-window": {
+        "id": "big-window",
+        "name": "big-window",
+        "contextWindow": 5000000000,
+        "maxOutputTokens": 3000000000,
+        "reasoning": true
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

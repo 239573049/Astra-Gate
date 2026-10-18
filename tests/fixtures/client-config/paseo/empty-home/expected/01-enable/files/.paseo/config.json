@@ -1,0 +1,1 @@
+{ "agents": { "providers": { "astra": {"extends":"claude","label":"Astra","description":"Claude Code through the Astra gateway","env":{"ANTHROPIC_BASE_URL":"https://astra.corp.com","ANTHROPIC_AUTH_TOKEN":"sk-astra-enterprise-key"},"disallowedTools":["WebSearch"]} } } }

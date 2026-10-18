@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra&modelId=claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"modelId\":\"claude-sonnet-4-5\",\"config\":{\"properties\":{\"contextWindow\":200000,\"inputFormat\":{\"supportsImage\":true,\"supportsPdf\":false},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra\"}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-anthropic&modelId=gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"modelId\":\"gpt-5\",\"config\":{\"properties\":{\"contextWindow\":400000,\"inputFormat\":{\"supportsImage\":true,\"supportsPdf\":true},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra-anthropic\"}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"modelId\":\"deepseek-chat\",\"config\":{\"properties\":{\"contextWindow\":128000,\"inputFormat\":{\"supportsImage\":false},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra-responses\"}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-anthropic]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"providerId\":\"astra-anthropic\",\"providerName\":\"Astra (Anthropic)\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"anthropic-messages\",\"baseUrl\":\"https://astra.corp.com\"},\"personalModelIds\":[\"gpt-5\"],\"modelOrder\":[\"gpt-5\"]}}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-responses]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"providerId\":\"astra-responses\",\"providerName\":\"Astra (Responses)\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-responses\",\"baseUrl\":\"https://astra.corp.com/v1\"},\"personalModelIds\":[\"deepseek-chat\"],\"modelOrder\":[\"deepseek-chat\"]}}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"providerId\":\"astra\",\"providerName\":\"Astra\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-chat-completions\",\"baseUrl\":\"https://astra.corp.com/v1\"},\"personalModelIds\":[\"claude-sonnet-4-5\"],\"modelOrder\":[\"claude-sonnet-4-5\"]}}"
+  }
+]

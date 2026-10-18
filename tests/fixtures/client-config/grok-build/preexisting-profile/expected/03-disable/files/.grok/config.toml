@@ -1,0 +1,11 @@
+[models]
+default = "grok-3"
+
+[model.astra]
+model = "old"
+base_url = "https://old/v1"
+name = "Astra"
+api_key = "old-key"
+api_backend = "chat_completions"
+context_window = 1000
+custom = "keep"

@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/custom/pi-agent/models.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom/pi-agent/settings.json",
+      "keyPath": "defaultProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom/pi-agent/settings.json",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

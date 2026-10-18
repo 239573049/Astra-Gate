@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra.base_url",
+    "kind": "key",
+    "before": "\"https://old.example.com/v1\"",
+    "after": "\"\\u0022https://astra.corp.com/v1\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra.api_key",
+    "kind": "key",
+    "before": "\"sk-old\"",
+    "after": "\"\\u0022sk-astra-enterprise-key\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5.max_context_size",
+    "kind": "key",
+    "before": "1000",
+    "after": "\"262144\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5.capabilities",
+    "kind": "key",
+    "before": null,
+    "after": "\"[\\u0022tool_use\\u0022]\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5.display_name",
+    "kind": "key",
+    "before": "\"Old name\"",
+    "after": "\"\\u0022Kimi K2.5\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra-kimi-k2-5\\u0022\""
+  }
+]

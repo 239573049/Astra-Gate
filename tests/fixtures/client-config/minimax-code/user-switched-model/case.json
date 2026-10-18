@@ -1,0 +1,30 @@
+{
+  "client": "minimax-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "kimi-k2.5",
+  "extras": {
+    "models": {
+      "kimi-k2.5": {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "contextWindow": 262144
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".minimax/config.yaml",
+          "write": "theme: dark\ndefaultModel: custom_provider:other/foo\ncustom_provider:\n  astra:\n    name: x\n"
+        }
+      ]
+    }
+  ]
+}

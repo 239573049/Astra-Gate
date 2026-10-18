@@ -1,0 +1,41 @@
+{
+  "client": "deepseek-harness",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "deepseek-chat",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "protocols": [
+          "openai-chat"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".dsh/profiles/desktop/cordis.patch.yml",
+          "write": "# Harness profile patch\n- id: llm-pi-ai\n  name: \"@deepseek-ai/dsh-llm-pi-ai\"\n  config:\n    providers:\n      mine:\n        displayName: Mine\n        apiKeyEnv: MY_KEY\n        api: openai-completions\n        baseURL: https://api.example.com/v1\n        models:\n          - id: m1\n            name: M1\n- id: agent-default-model\n  name: \"@deepseek-ai/dsh-agent-default-model\"\n  config:\n    provider: astra\n    model: deepseek-chat\n    reasoningEffort: low\n- id: other-pkg\n  name: \"@deepseek-ai/other\"\n  config:\n    flag: true\n"
+        },
+        {
+          "file": ".dsh/.env",
+          "write": "# harness env\nOTHER_KEY=abc\nASTRA_GATEWAY_API_KEY=changed\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

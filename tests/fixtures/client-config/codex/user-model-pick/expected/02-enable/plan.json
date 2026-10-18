@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_provider",
+    "kind": "key",
+    "before": "\"astra\"",
+    "after": "\"\\u0022astra\\u0022\""
+  }
+]

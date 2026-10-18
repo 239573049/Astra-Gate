@@ -1,0 +1,5 @@
+theme: dark
+defaultModel: "builtin/minimax-m2"
+custom_provider:
+  astra:
+    name: Mine

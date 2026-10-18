@@ -1,0 +1,27 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "providers.[name=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra&id=deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.copilot/providers.json",
+    "$HOME/.copilot/settings.json"
+  ],
+  "warnings": []
+}

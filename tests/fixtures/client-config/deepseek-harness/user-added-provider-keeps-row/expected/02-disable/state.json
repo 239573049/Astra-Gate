@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "keyPath": "[id=agent-default-model]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "true"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "keyPath": "[id=agent-default-model].config.model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"deepseek-chat\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "keyPath": "[id=agent-default-model].config.provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "keyPath": "[id=llm-pi-ai]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "true"
+  }
+]

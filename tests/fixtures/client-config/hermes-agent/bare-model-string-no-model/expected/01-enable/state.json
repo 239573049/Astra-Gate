@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"openrouter/some-model\"",
+    "applied": "{\"default\":\"openrouter/some-model\",\"provider\":\"custom\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\"}"
+  }
+]

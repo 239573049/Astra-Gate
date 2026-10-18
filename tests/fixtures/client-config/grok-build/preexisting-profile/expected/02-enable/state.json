@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "model.astra.api_backend",
+    "originalAbsent": false,
+    "original": "\"\\u0022chat_completions\\u0022\"",
+    "applied": "\"\\u0022messages\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "model.astra.api_key",
+    "originalAbsent": false,
+    "original": "\"\\u0022old-key\\u0022\"",
+    "applied": "\"\\u0022sk-astra-second-key\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "model.astra.base_url",
+    "originalAbsent": false,
+    "original": "\"\\u0022https://old/v1\\u0022\"",
+    "applied": "\"\\u0022https://astra.corp.com/v1\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "model.astra.context_window",
+    "originalAbsent": false,
+    "original": "\"1000\"",
+    "applied": "\"200000\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "model.astra.model",
+    "originalAbsent": false,
+    "original": "\"\\u0022old\\u0022\"",
+    "applied": "\"\\u0022claude-sonnet-4-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "models.default",
+    "originalAbsent": false,
+    "original": "\"\\u0022grok-3\\u0022\"",
+    "applied": "\"\\u0022astra\\u0022\""
+  }
+]

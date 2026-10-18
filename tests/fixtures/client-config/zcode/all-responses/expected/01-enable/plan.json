@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"providerId\":\"astra\",\"providerName\":\"Astra\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-chat-completions\",\"baseUrl\":\"https://astra.corp.com/v1\"}}}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-responses]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"providerId\":\"astra-responses\",\"providerName\":\"Astra (Responses)\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-responses\",\"baseUrl\":\"https://astra.corp.com/v1\"},\"personalModelIds\":[\"gpt-5\",\"o4-mini\"],\"modelOrder\":[\"gpt-5\",\"o4-mini\"]}}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=gpt-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"modelId\":\"gpt-5\",\"config\":{\"properties\":{\"contextWindow\":400000,\"inputFormat\":{\"supportsImage\":true,\"supportsPdf\":true},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra-responses\"}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=o4-mini]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"modelId\":\"o4-mini\",\"config\":{\"properties\":{\"supportsNativeWebSearch\":false}},\"providerId\":\"astra-responses\"}"
+  }
+]

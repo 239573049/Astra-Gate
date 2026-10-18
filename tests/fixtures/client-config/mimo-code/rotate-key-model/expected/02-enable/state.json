@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.config/mimocode/mimocode.json",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"ollama/llama3\"",
+    "applied": "\"astra/claude-sonnet-4-5\""
+  },
+  {
+    "file": "$HOME/.config/mimocode/mimocode.json",
+    "keyPath": "provider.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Astra\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-second-key\"},\"models\":{\"claude-sonnet-4-5\":{\"name\":\"Claude Sonnet 4.5\",\"provider\":{\"npm\":\"@ai-sdk/anthropic\"},\"limit\":{\"context\":200000,\"output\":64000},\"modalities\":{\"input\":[\"text\",\"image\"],\"output\":[\"text\"]},\"reasoning\":true},\"qwen3-coder\":{\"name\":\"Qwen3 Coder\",\"limit\":{\"context\":262144,\"output\":65536}}}}"
+  }
+]

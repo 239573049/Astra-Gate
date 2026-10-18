@@ -1,0 +1,24 @@
+{
+  "client": "hermes-agent",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "kimi-k2.5",
+  "extras": {
+    "models": {
+      "kimi-k2.5": {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "contextWindow": 262144
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "purge"
+    }
+  ]
+}

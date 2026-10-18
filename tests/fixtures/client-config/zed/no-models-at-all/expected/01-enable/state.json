@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "language_models.openai_compatible.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"api_url\":\"https://astra.corp.com/v1\"}"
+  }
+]

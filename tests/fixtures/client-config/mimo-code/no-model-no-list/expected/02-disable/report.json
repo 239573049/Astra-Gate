@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/mimocode/mimocode.json",
+      "keyPath": "provider.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

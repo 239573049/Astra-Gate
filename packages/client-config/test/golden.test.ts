@@ -82,7 +82,7 @@ const reportJson = (report: RestoreReport, home: string) => ({
   keys: report.keys.map((k) => ({
     file: normalize(k.filePath, home),
     keyPath: k.keyPath,
-    outcome: k.outcome,
+    outcome: k.outcome.toLowerCase(), // the C# test writes the enum name lower-cased
     detail: k.detail ?? null,
   })),
   deletedFiles: report.deletedFiles.map((f) => normalize(f, home)),
@@ -198,6 +198,13 @@ describe('golden cases shared with the C# adapters', () => {
     const registry = ClientAdapterRegistry.createDefault(new ClientEnvironment('/', 'osx'), new InMemoryStateStore());
     const withCases = [...new Set(cases().map((n) => n.split('/')[0]!))];
     expect(withCases.filter((c) => !registry.get(c))).toEqual([]);
+  });
+
+  it('ports an adapter for every built-in client kind, each with golden cases', () => {
+    const registry = ClientAdapterRegistry.createDefault(new ClientEnvironment('/', 'osx'), new InMemoryStateStore());
+    expect(registry.all.map((a) => a.kind)).toEqual([...ALL_CLIENT_KINDS]);
+    const withCases = new Set(cases().map((n) => n.split('/')[0]!));
+    expect(ALL_CLIENT_KINDS.filter((k) => !withCases.has(k))).toEqual([]);
   });
 
   it('knows only client kinds that exist', () => {

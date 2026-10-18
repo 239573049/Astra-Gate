@@ -1,0 +1,4 @@
+- id: other-pkg
+  name: "@deepseek-ai/other"
+  config:
+    flag: true

@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.factory/settings.json",
+    "format": "json",
+    "keyPath": "customModels.[displayName=Astra: ok-model]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"model\":\"ok-model\",\"displayName\":\"Astra: ok-model\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"generic-chat-completion-api\"}"
+  }
+]

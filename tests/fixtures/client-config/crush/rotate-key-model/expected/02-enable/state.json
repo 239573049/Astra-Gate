@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "models.large",
+    "originalAbsent": false,
+    "original": "{\"provider\":\"ollama\",\"model\":\"llama3\"}",
+    "applied": "{\"provider\":\"astra\",\"model\":\"qwen3-coder\"}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra\",\"type\":\"openai-compat\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-second-key\",\"models\":[{\"id\":\"qwen3-coder\",\"name\":\"Qwen3 Coder\",\"context_window\":262144,\"default_max_tokens\":65536,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false}]}"
+  }
+]

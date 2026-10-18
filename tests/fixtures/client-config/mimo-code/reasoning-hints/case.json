@@ -1,0 +1,66 @@
+{
+  "client": "mimo-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "a",
+  "extras": {
+    "models": {
+      "7": {
+        "id": "7",
+        "name": "numeric"
+      },
+      "10": {
+        "id": "10"
+      },
+      "a": {
+        "id": "a",
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ]
+      },
+      "b": {
+        "id": "b",
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ],
+        "maxOutputTokens": 8000
+      },
+      "c": {
+        "id": "c",
+        "reasoning": false,
+        "protocols": [
+          "anthropic"
+        ],
+        "contextWindow": 1000
+      },
+      "d": {
+        "id": "d",
+        "vision": false
+      },
+      "e": {
+        "id": "e",
+        "pdf": true
+      },
+      "f": {
+        "id": "f",
+        "name": "",
+        "vision": true,
+        "pdf": false
+      },
+      "": {
+        "id": ""
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

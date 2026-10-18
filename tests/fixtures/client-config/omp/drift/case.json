@@ -1,0 +1,93 @@
+{
+  "client": "omp",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "m1": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "pdf": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses",
+          "openai-chat"
+        ]
+      },
+      "m2": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ]
+      },
+      "m3": {
+        "id": "gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
+        "contextWindow": 1048576,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "gemini",
+          "openai-chat"
+        ]
+      },
+      "m4": {
+        "id": "deepseek-chat",
+        "name": "深度求索 <chat> & co",
+        "contextWindow": 64000,
+        "maxOutputTokens": 64000,
+        "vision": false,
+        "reasoning": false
+      },
+      "m5": {
+        "id": "o3-mini",
+        "protocols": [
+          "openai-responses"
+        ],
+        "reasoning": true
+      },
+      "m6": {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5",
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ],
+        "contextWindow": 200000
+      },
+      "m7": {
+        "id": "qwen3-coder",
+        "name": "Qwen3 Coder",
+        "contextWindow": 262144,
+        "maxOutputTokens": 65536
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".omp/agent/models.yml",
+          "write": "# omp providers\nproviders:\n  ollama:\n    baseUrl: http://localhost:11434/v1\n    api: openai-completions\n    x: 1\n    apiKey: ollama\n    models:\n      - id: llama3.1:8b\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

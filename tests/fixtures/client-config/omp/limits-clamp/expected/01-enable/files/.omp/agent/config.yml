@@ -1,0 +1,5 @@
+# omp config
+modelRoles:
+  default: "astra/x"
+  smol: anthropic/claude-haiku-4
+theme: dark

@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"type\":\"openai-compat\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\"}"
+  }
+]

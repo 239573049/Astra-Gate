@@ -1,0 +1,23 @@
+# Harness profile patch
+- id: llm-pi-ai
+  name: "@deepseek-ai/dsh-llm-pi-ai"
+  config:
+    providers:
+      mine:
+        displayName: Mine
+        apiKeyEnv: MY_KEY
+        api: openai-completions
+        baseURL: https://api.example.com/v1
+        models:
+          - id: m1
+            name: M1
+- id: "agent-default-model"
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: "mine"
+    model: "m1"
+    reasoningEffort: "high"
+- id: other-pkg
+  name: "@deepseek-ai/other"
+  config:
+    flag: true

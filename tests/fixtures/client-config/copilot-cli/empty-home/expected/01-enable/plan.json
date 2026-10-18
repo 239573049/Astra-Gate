@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra&id=deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"deepseek-chat\",\"provider\":\"astra\",\"maxContextWindowTokens\":64000,\"maxOutputTokens\":8000,\"capabilities\":{\"supports\":{\"vision\":false}}}"
+  },
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra/deepseek-chat\""
+  }
+]

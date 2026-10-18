@@ -1,0 +1,42 @@
+[
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "models.default",
+    "kind": "key",
+    "before": "\"astra\"",
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.api_key",
+    "kind": "key",
+    "before": "\"sk-astra-enterprise-key\"",
+    "after": "\"\\u0022sk-astra-second-key\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.model",
+    "kind": "key",
+    "before": "\"gpt-5.1\"",
+    "after": "\"\\u0022kimi-k2.5\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.api_backend",
+    "kind": "key",
+    "before": "\"responses\"",
+    "after": "\"\\u0022chat_completions\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.context_window",
+    "kind": "key",
+    "before": "400000",
+    "after": "\"262144\""
+  }
+]

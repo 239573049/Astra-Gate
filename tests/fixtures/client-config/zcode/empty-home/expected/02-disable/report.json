@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zcode/v2/provider_config.json",
+      "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

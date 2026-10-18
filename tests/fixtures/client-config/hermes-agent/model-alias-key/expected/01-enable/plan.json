@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.provider",
+    "kind": "key",
+    "before": "\"auto\"",
+    "after": "\"custom\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.base_url",
+    "kind": "key",
+    "before": null,
+    "after": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.api_key",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.model",
+    "kind": "key",
+    "before": "\"foo/bar\"",
+    "after": "\"kimi-k2.5\""
+  }
+]

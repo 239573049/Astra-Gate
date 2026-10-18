@@ -1,0 +1,74 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra.api_key",
+    "kind": "key",
+    "before": "\"sk-astra-enterprise-key\"",
+    "after": "\"\\u0022sk-astra-second-key\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gpt-5-1.max_context_size",
+    "kind": "key",
+    "before": "400000",
+    "after": "\"131072\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gpt-5-1.capabilities",
+    "kind": "key",
+    "before": "[\"tool_use\", \"thinking\"]",
+    "after": "\"[\\u0022tool_use\\u0022]\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gpt-5-1.max_output_size",
+    "kind": "key",
+    "before": "128000",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gpt-5-1.display_name",
+    "kind": "key",
+    "before": "\"GPT 5.1\"",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-claude-sonnet-4-5",
+    "kind": "table",
+    "before": "true",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gemini-2-5-pro",
+    "kind": "table",
+    "before": "true",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5",
+    "kind": "table",
+    "before": "true",
+    "after": null
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": "\"astra-kimi-k2-5\"",
+    "after": "\"\\u0022astra-plain\\u0022\""
+  }
+]

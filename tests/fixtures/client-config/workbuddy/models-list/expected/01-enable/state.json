@@ -1,0 +1,37 @@
+[
+  {
+    "file": "$HOME/.workbuddy/models.json",
+    "keyPath": "models.[name=Astra: big-window]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"big-window\",\"name\":\"Astra: big-window\",\"vendor\":\"Astra\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"maxInputTokens\":5000000000,\"maxOutputTokens\":3000000000,\"supportsToolCall\":true,\"supportsReasoning\":true}"
+  },
+  {
+    "file": "$HOME/.workbuddy/models.json",
+    "keyPath": "models.[name=Astra: claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"claude-sonnet-4-5\",\"name\":\"Astra: claude-sonnet-4-5\",\"vendor\":\"Astra\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"maxInputTokens\":200000,\"maxOutputTokens\":64000,\"supportsToolCall\":true,\"supportsImages\":true,\"supportsReasoning\":true}"
+  },
+  {
+    "file": "$HOME/.workbuddy/models.json",
+    "keyPath": "models.[name=Astra: deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"deepseek-chat\",\"name\":\"Astra: deepseek-chat\",\"vendor\":\"Astra\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"maxInputTokens\":128000,\"maxOutputTokens\":8192,\"supportsToolCall\":true,\"supportsImages\":false,\"supportsReasoning\":false}"
+  },
+  {
+    "file": "$HOME/.workbuddy/models.json",
+    "keyPath": "models.[name=Astra: gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gpt-5\",\"name\":\"Astra: gpt-5\",\"vendor\":\"Astra\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"maxInputTokens\":400000,\"maxOutputTokens\":128000,\"supportsToolCall\":true,\"supportsImages\":true,\"supportsReasoning\":true}"
+  },
+  {
+    "file": "$HOME/.workbuddy/models.json",
+    "keyPath": "models.[name=Astra: qwen3-coder]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"qwen3-coder\",\"name\":\"Astra: qwen3-coder\",\"vendor\":\"Astra\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"supportsToolCall\":true}"
+  }
+]

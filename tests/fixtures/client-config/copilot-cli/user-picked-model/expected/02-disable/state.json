@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"gpt-4.1\"",
+    "applied": "\"astra-responses/gpt-5\""
+  }
+]

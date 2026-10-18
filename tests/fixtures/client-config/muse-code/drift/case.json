@@ -1,0 +1,24 @@
+{
+  "client": "muse-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "muse-spark-1.3",
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".zshrc",
+          "write": "# my zshrc\nexport PATH=\"$HOME/bin:$PATH\"\nalias ll=\"ls -la\"\n# >>> astra muse-code >>>\n# Muse Code is routed through Astra. Turn the Muse Code client off in Astra to remove this block.\nmuse() {\n  case \"${1-}\" in\n    exec)\n      shift\n      META_API_KEY='sk-astra-enterprise-key' MUSE_MODEL='mine' command muse exec --base-url 'https://astra.corp.com/v1' \"$@\"\n      ;;\n    resume|export|trace|skills|sandbox|session-message|auth|login|logout|init|config|help)\n      command muse \"$@\"\n      ;;\n    *)\n      META_API_KEY='sk-astra-enterprise-key' MUSE_MODEL='mine' command muse --base-url 'https://astra.corp.com/v1' \"$@\"\n      ;;\n  esac\n}\n# <<< astra muse-code <<<\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

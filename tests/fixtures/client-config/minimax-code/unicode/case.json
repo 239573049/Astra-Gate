@@ -1,0 +1,27 @@
+{
+  "client": "minimax-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-ä'key",
+  "model": "m1",
+  "extras": {
+    "models": {
+      "m1": {
+        "id": "m1",
+        "name": "Mödel <One> & co",
+        "contextWindow": 8000,
+        "maxOutputTokens": 2000,
+        "vision": false,
+        "reasoning": true
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

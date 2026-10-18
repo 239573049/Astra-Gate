@@ -1,0 +1,30 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/Claude/claude_desktop_config.json",
+      "keyPath": "deploymentMode",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/Claude-3p/claude_desktop_config.json",
+      "keyPath": "deploymentMode",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+      "keyPath": "inferenceGatewayBaseUrl",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/_meta.json",
+      "keyPath": "entries",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

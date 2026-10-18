@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-kimi-k2-5.display_name",
+    "originalAbsent": false,
+    "original": "\"\\u0022Old name\\u0022\"",
+    "applied": null
+  }
+]

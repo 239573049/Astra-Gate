@@ -1,0 +1,37 @@
+[
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "keyPath": "model.api_key",
+    "originalAbsent": false,
+    "original": "\"sk-or-key\"",
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "keyPath": "model.api_mode",
+    "originalAbsent": false,
+    "original": "\"codex_responses\"",
+    "applied": "\"chat_completions\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "keyPath": "model.base_url",
+    "originalAbsent": false,
+    "original": "\"https://openrouter.ai/api/v1\"",
+    "applied": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "keyPath": "model.default",
+    "originalAbsent": false,
+    "original": "\"anthropic/claude-opus-4\"",
+    "applied": "\"gpt-5.1\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "keyPath": "model.provider",
+    "originalAbsent": false,
+    "original": "\"openrouter\"",
+    "applied": "\"custom\""
+  }
+]

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/Code - Insiders/User/chatLanguageModels.json",
+    "format": "json",
+    "keyPath": "[vendor=customendpoint&name=Astra]",
+    "kind": "table",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"vendor\":\"customendpoint\"}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Code - Insiders/User/chatLanguageModels.json",
+    "format": "json",
+    "keyPath": "[vendor=customendpoint&name=Astra].apiType",
+    "kind": "key",
+    "before": null,
+    "after": "\"chat-completions\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Code - Insiders/User/chatLanguageModels.json",
+    "format": "json",
+    "keyPath": "[vendor=customendpoint&name=Astra].models",
+    "kind": "key",
+    "before": null,
+    "after": "[{\"id\":\"deepseek-chat\",\"name\":\"deepseek-chat\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiType\":\"chat-completions\",\"toolCalling\":true,\"vision\":false,\"thinking\":false,\"maxInputTokens\":111616,\"maxOutputTokens\":16384,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}}]"
+  }
+]

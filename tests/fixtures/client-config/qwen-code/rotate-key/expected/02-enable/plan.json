@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "env.ASTRA_QWEN_API_KEY",
+    "kind": "key",
+    "before": "\"sk-astra-enterprise-key\"",
+    "after": "\"sk-astra-second-key\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "modelProviders.anthropic.[envKey=ASTRA_QWEN_API_KEY&id=claude-sonnet-4-5]",
+    "kind": "key",
+    "before": "{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com\"}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=gpt-5]",
+    "kind": "key",
+    "before": "{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\",\"wireApi\":\"responses\"}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "security.auth.selectedType",
+    "kind": "key",
+    "before": "\"anthropic\"",
+    "after": "\"openai\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "model.name",
+    "kind": "key",
+    "before": "\"claude-sonnet-4-5\"",
+    "after": "\"deepseek-chat\""
+  }
+]

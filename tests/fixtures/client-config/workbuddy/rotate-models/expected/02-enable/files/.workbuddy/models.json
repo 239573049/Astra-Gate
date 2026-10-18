@@ -1,0 +1,18 @@
+{
+  "availableModels": [
+    "gpt-4o",
+    "Astra: gpt-5"
+  ],
+  "models": [
+    {
+      "id": "my-model",
+      "name": "My Model",
+      "vendor": "Me",
+      "url": "https://example.com/v1/chat/completions",
+      "apiKey": "sk-user-own",
+      "supportsToolCall": true
+    },
+    {"id":"deepseek-chat","name":"Astra: deepseek-chat","vendor":"Astra","url":"https://astra.corp.com/v1/chat/completions","apiKey":"sk-astra-rotated-key","maxInputTokens":128000,"maxOutputTokens":8192,"supportsToolCall":true,"supportsImages":false,"supportsReasoning":false},
+    {"id":"claude-sonnet-4-5","name":"Astra: claude-sonnet-4-5","vendor":"Astra","url":"https://astra.corp.com/v1/chat/completions","apiKey":"sk-astra-rotated-key","maxInputTokens":200000,"maxOutputTokens":64000,"supportsToolCall":true,"supportsImages":true,"supportsReasoning":true}
+  ]
+}

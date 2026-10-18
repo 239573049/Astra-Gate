@@ -1,0 +1,16 @@
+{
+  // my opencode setup
+  "$schema": "https://opencode.ai/config.json",
+  "theme": "tokyonight",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama",
+      "options": { "baseURL": "http://localhost:11434/v1" },
+      "models": { "llama3": { "name": "Llama 3" } }
+    },
+    "astra": {"npm":"@ai-sdk/openai-compatible","name":"Astra","options":{"baseURL":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key"}}
+  },
+  "model": "ollama/llama3",
+  "autoupdate": true
+}

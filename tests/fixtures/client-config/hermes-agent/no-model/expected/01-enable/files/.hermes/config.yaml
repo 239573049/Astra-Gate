@@ -1,0 +1,9 @@
+# hermes config
+model:
+  default: anthropic/claude-opus-4  # current
+  provider: "custom"
+  base_url: "https://astra.corp.com/v1"
+  api_key: "sk-astra-enterprise-key"
+  api_mode: "chat_completions"
+display:
+  skin: dark

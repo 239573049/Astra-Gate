@@ -1,0 +1,10 @@
+[
+  {
+    "vendor": "customendpoint",
+    "name": "Astra",
+    "apiType": "responses",
+    "models": [ { "id": "stale-model", "name": "Stale", "url": "https://old.example.com/v1/chat/completions" } ],
+    "settings": { "stale-model": { "enabled": true } }
+  },
+  { "vendor": "openai", "name": "Mine", "models": [] }
+]

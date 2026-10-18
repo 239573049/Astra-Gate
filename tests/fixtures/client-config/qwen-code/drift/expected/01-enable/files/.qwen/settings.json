@@ -1,0 +1,1 @@
+{ "env": { "ASTRA_QWEN_API_KEY": "sk-astra-enterprise-key" }, "modelProviders": { "openai": [ {"id":"gpt-5","name":"GPT-5","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1","wireApi":"responses"} ] }, "security": { "auth": { "selectedType": "openai-responses" } }, "model": { "name": "gpt-5" } }

@@ -1,0 +1,9 @@
+{
+  // Factory settings
+  "model": "claude-opus-4-1",
+  "customModels": [
+    { "model": "my-model", "displayName": "Mine", "baseUrl": "https://api.example.com/v1", "apiKey": "sk-mine", "provider": "generic-chat-completion-api" },
+    {"model":"ok-model","displayName":"Astra: ok-model","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","provider":"generic-chat-completion-api"}
+  ],
+  "cloudSessionSync": false
+}

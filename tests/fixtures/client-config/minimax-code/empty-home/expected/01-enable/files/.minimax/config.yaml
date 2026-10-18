@@ -1,0 +1,13 @@
+custom_provider:
+  astra:
+    name: "Astra"
+    api: "openai-completions"
+    options:
+      baseURL: "https://astra.corp.com/v1"
+      apiKey: "sk-astra-enterprise-key"
+    models:
+      kimi-k2.5:
+        name: "Kimi K2.5"
+        limit:
+          context: 262144
+defaultModel: "custom_provider:astra/kimi-k2.5"

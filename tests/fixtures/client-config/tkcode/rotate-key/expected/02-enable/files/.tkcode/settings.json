@@ -1,0 +1,10 @@
+// TKCode settings
+{
+  "theme": "dark",
+  "model": "astra/claude-sonnet-4-5",
+  "providers": {
+    "openai": { "apiKey": "sk-user-own", "enabled": true }, // the user's own provider,
+    "astra": {"name":"Astra","api":"chat","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-rotated-key","models":{"claude-sonnet-4-5":{"api":"messages","name":"Claude Sonnet 4.5","contextWindow":200000,"maxTokens":64000,"reasoning":true,"images":true},"deepseek-chat":{"name":"DeepSeek Chat","contextWindow":128000,"maxTokens":8192,"reasoning":false,"images":false}}}
+  },
+  "mcpServers": { "fs": { "command": "npx", "args": ["fs-mcp"] } },
+}

@@ -1,0 +1,6 @@
+{
+  "defaultProvider": "astra",
+  "defaultModel": "qwen3-coder",
+  "theme": "dark",
+  "quietStartup": true
+}

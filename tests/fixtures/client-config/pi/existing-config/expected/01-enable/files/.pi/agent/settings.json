@@ -1,0 +1,6 @@
+{
+  "defaultProvider": "astra",
+  "defaultModel": "gpt-5",
+  "theme": "dark",
+  "quietStartup": true
+}

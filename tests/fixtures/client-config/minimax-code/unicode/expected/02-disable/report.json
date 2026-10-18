@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.minimax/config.yaml",
+      "keyPath": "custom_provider.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.minimax/config.yaml",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.minimax/config.yaml"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,12 @@
+# my kimi config
+default_model = "mine"
+
+[providers.moonshot]
+type = "kimi"
+base_url = "https://api.moonshot.ai/v1"
+api_key = "sk-moon"
+
+[models.mine]
+provider = "moonshot"
+model = "kimi-k2"
+max_context_size = 262144

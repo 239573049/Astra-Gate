@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.paseo/config.json",
+    "format": "json",
+    "keyPath": "agents.providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"extends\":\"claude\",\"label\":\"Astra\",\"description\":\"Claude Code through the Astra gateway\",\"env\":{\"ANTHROPIC_BASE_URL\":\"https://astra.corp.com\",\"ANTHROPIC_AUTH_TOKEN\":\"sk-astra-enterprise-key\"},\"disallowedTools\":[\"WebSearch\"],\"models\":[{\"id\":\"gpt-5\",\"label\":\"GPT-5\",\"isDefault\":true},{\"id\":\"o4-mini\",\"label\":\"o4-mini\"}]}"
+  },
+  {
+    "file": "$HOME/.paseo/config.json",
+    "format": "json",
+    "keyPath": "agents.providers.astra-codex",
+    "kind": "key",
+    "before": null,
+    "after": "{\"extends\":\"codex\",\"label\":\"Astra (Codex)\",\"description\":\"Codex through the Astra gateway, for models served over the Responses API\",\"env\":{\"OPENAI_BASE_URL\":\"https://astra.corp.com\",\"OPENAI_API_KEY\":\"sk-astra-enterprise-key\"},\"models\":[{\"id\":\"gpt-5\",\"label\":\"GPT-5\",\"isDefault\":true},{\"id\":\"o4-mini\",\"label\":\"o4-mini\"}]}"
+  }
+]

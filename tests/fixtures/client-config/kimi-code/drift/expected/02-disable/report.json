@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/cfg/grok/config.toml",
+      "keyPath": "models.default",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cfg/grok/config.toml",
+      "keyPath": "model.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

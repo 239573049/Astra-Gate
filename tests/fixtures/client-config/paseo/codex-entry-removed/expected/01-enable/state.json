@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.paseo/config.json",
+    "keyPath": "agents.providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"extends\":\"claude\",\"label\":\"Astra\",\"description\":\"Claude Code through the Astra gateway\",\"env\":{\"ANTHROPIC_BASE_URL\":\"https://astra.corp.com\",\"ANTHROPIC_AUTH_TOKEN\":\"sk-astra-enterprise-key\"},\"disallowedTools\":[\"WebSearch\"],\"models\":[{\"id\":\"claude-sonnet-4-5\",\"label\":\"Claude Sonnet 4.5\",\"isDefault\":true}]}"
+  },
+  {
+    "file": "$HOME/.paseo/config.json",
+    "keyPath": "agents.providers.astra-codex",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"extends\":\"codex\",\"label\":\"Astra (Codex)\",\"description\":\"Codex through the Astra gateway, for models served over the Responses API\",\"env\":{\"OPENAI_BASE_URL\":\"https://astra.corp.com\",\"OPENAI_API_KEY\":\"sk-astra-enterprise-key\"},\"models\":[{\"id\":\"gpt-5\",\"label\":\"GPT-5\",\"isDefault\":true}]}"
+  }
+]

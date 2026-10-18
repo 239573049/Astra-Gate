@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "agent.default_model",
+    "originalAbsent": false,
+    "original": "{\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-5\"}",
+    "applied": "{\"provider\":\"astra\",\"model\":\"gpt-5\"}"
+  }
+]

@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "config": {
+    "providerOrder": [
+      "zhipu",
+      "my-openai"
+    ],
+    "providerConfigRules": {
+      "providerRules": [
+        {
+          "providerId": "my-openai",
+          "providerName": "My OpenAI",
+          "enabled": true,
+          "config": {
+            "group": "standard-personal",
+            "access": {
+              "type": "api-key",
+              "apiKey": "sk-user-own"
+            },
+            "api": {
+              "type": "openai-chat-completions",
+              "baseUrl": "https://api.openai.com/v1"
+            },
+            "personalModelIds": [
+              "gpt-4o"
+            ],
+            "modelOrder": [
+              "gpt-4o"
+            ]
+          }
+        },
+        {"providerId":"astra","providerName":"Astra","enabled":true,"config":{"group":"standard-personal","access":{"type":"api-key","apiKey":"sk-astra-enterprise-key"},"api":{"type":"openai-chat-completions","baseUrl":"https://astra.corp.com/v1"},"personalModelIds":["deepseek-chat"],"modelOrder":["deepseek-chat"]}},
+        {"providerId":"astra-responses","providerName":"Astra (Responses)","enabled":true,"config":{"group":"standard-personal","access":{"type":"api-key","apiKey":"sk-astra-enterprise-key"},"api":{"type":"openai-responses","baseUrl":"https://astra.corp.com/v1"},"personalModelIds":["gpt-5"],"modelOrder":["gpt-5"]}}
+      ]
+    },
+    "modelConfigRules": {
+      "providerModelRules": [
+        {
+          "providerId": "my-openai",
+          "modelId": "gpt-4o",
+          "config": {
+            "properties": {
+              "contextWindow": 128000,
+              "supportsNativeWebSearch": true
+            }
+          }
+        },
+        {"modelId":"deepseek-chat","config":{"properties":{"contextWindow":128000,"inputFormat":{"supportsImage":false},"supportsNativeWebSearch":false}},"providerId":"astra"},
+        {"modelId":"gpt-5","config":{"properties":{"contextWindow":400000,"inputFormat":{"supportsImage":true,"supportsPdf":true},"supportsNativeWebSearch":false}},"providerId":"astra-responses"}
+      ],
+      "manualProviderModelRules": []
+    }
+  }
+}

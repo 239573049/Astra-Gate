@@ -1,0 +1,72 @@
+[
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"gpt-4.1\"",
+    "applied": "\"astra/deepseek-chat\""
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "models.[provider=astra&id=deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"deepseek-chat\",\"provider\":\"astra\",\"maxContextWindowTokens\":64000,\"maxOutputTokens\":8000,\"capabilities\":{\"supports\":{\"vision\":false}}}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "models.[provider=astra&id=gemini-2.5-pro]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gemini-2.5-pro\",\"provider\":\"astra\",\"maxContextWindowTokens\":1000000}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "models.[provider=astra&id=glm-4.6]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"glm-4.6\",\"provider\":\"astra\"}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "models.[provider=astra&id=qwen3-coder]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"qwen3-coder\",\"provider\":\"astra\",\"maxContextWindowTokens\":32000,\"maxOutputTokens\":40000}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "models.[provider=astra-anthropic&id=claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"claude-sonnet-4-5\",\"provider\":\"astra-anthropic\",\"maxContextWindowTokens\":200000,\"maxOutputTokens\":64000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "models.[provider=astra-responses&id=gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gpt-5\",\"provider\":\"astra-responses\",\"maxContextWindowTokens\":400000,\"maxOutputTokens\":128000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "providers.[name=astra-anthropic]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra-anthropic\",\"type\":\"anthropic\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "providers.[name=astra-responses]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra-responses\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"wireApi\":\"responses\"}"
+  },
+  {
+    "file": "$HOME/elsewhere/byok.json",
+    "keyPath": "providers.[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  }
+]

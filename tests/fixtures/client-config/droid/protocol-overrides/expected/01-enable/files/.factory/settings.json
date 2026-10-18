@@ -1,0 +1,14 @@
+{
+  // Factory settings
+  "model": "claude-opus-4-1",
+  "customModels": [
+    { "model": "my-model", "displayName": "Mine", "baseUrl": "https://api.example.com/v1", "apiKey": "sk-mine", "provider": "generic-chat-completion-api" },
+    {"model":"gpt-5","displayName":"Astra: gpt-5","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","provider":"generic-chat-completion-api","maxContextLimit":400000,"maxOutputTokens":128000},
+    {"model":"claude-sonnet-4-5","displayName":"Astra: claude-sonnet-4-5","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","provider":"generic-chat-completion-api","maxContextLimit":200000,"maxOutputTokens":64000},
+    {"model":"deepseek-chat","displayName":"Astra: deepseek-chat","baseUrl":"https://astra.corp.com","apiKey":"sk-astra-enterprise-key","provider":"anthropic","maxContextLimit":64000,"maxOutputTokens":8000,"noImageSupport":true},
+    {"model":"gemini-2.5-pro","displayName":"Astra: gemini-2.5-pro","baseUrl":"https://astra.corp.com","apiKey":"sk-astra-enterprise-key","provider":"anthropic","maxContextLimit":1000000},
+    {"model":"qwen3-coder","displayName":"Astra: qwen3-coder","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","provider":"generic-chat-completion-api","maxContextLimit":32000,"maxOutputTokens":40000},
+    {"model":"glm-4.6","displayName":"Astra: glm-4.6","baseUrl":"https://astra.corp.com","apiKey":"sk-astra-enterprise-key","provider":"anthropic"}
+  ],
+  "cloudSessionSync": false
+}

@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "models.large",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"provider\":\"astra-anthropic\",\"model\":\"claude-sonnet-4-5\"}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra\",\"type\":\"openai-compat\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\",\"discover_models\":false}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "providers.astra-anthropic",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra (Anthropic)\",\"type\":\"anthropic\",\"base_url\":\"https://astra.corp.com\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"context_window\":200000,\"default_max_tokens\":64000,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":true},{\"id\":\"claude-haiku-4-5\",\"name\":\"Claude Haiku 4.5\",\"context_window\":200000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":false}]}"
+  }
+]

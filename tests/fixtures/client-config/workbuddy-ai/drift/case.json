@@ -1,0 +1,63 @@
+{
+  "client": "workbuddy-ai",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".workbuddy-ai/models.json",
+          "write": "{\n  \"availableModels\": [\n    \"gpt-4o\",\n    \"Astra: gpt-5\"\n  ],\n  \"models\": [\n    {\n      \"id\": \"my-model\",\n      \"name\": \"My Model\",\n      \"vendor\": \"Me\",\n      \"url\": \"https://example.com/v1/chat/completions\",\n      \"apiKey\": \"sk-user-own\",\n      \"supportsToolCall\": true\n    },\n    {\n      \"id\": \"deepseek-chat\",\n      \"name\": \"Astra: deepseek-chat\",\n      \"vendor\": \"Astra\",\n      \"url\": \"https://astra.corp.com/v1/chat/completions\",\n      \"apiKey\": \"sk-astra-enterprise-key\",\n      \"maxInputTokens\": 128000,\n      \"maxOutputTokens\": 8192,\n      \"supportsToolCall\": true,\n      \"supportsImages\": false,\n      \"supportsReasoning\": false\n    },\n    {\n      \"id\": \"gpt-5\",\n      \"name\": \"Astra: gpt-5\",\n      \"vendor\": \"Astra\",\n      \"url\": \"https://astra.corp.com/v1/chat/completions\",\n      \"apiKey\": \"sk-someone-else\",\n      \"maxInputTokens\": 400000,\n      \"maxOutputTokens\": 128000,\n      \"supportsToolCall\": true,\n      \"supportsImages\": true,\n      \"supportsReasoning\": true\n    },\n    {\n      \"id\": \"claude-sonnet-4-5\",\n      \"name\": \"Astra: claude-sonnet-4-5\",\n      \"vendor\": \"Astra\",\n      \"url\": \"https://astra.corp.com/v1/chat/completions\",\n      \"apiKey\": \"sk-astra-enterprise-key\",\n      \"maxInputTokens\": 200000,\n      \"maxOutputTokens\": 64000,\n      \"supportsToolCall\": true,\n      \"supportsImages\": true,\n      \"supportsReasoning\": true\n    }\n  ]\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

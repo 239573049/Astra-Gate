@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"openai/gpt-4.1\"",
+    "applied": "\"astra/gpt-5\""
+  }
+]

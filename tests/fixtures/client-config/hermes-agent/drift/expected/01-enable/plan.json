@@ -1,0 +1,42 @@
+[
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.provider",
+    "kind": "key",
+    "before": "\"openrouter\"",
+    "after": "\"custom\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.base_url",
+    "kind": "key",
+    "before": "\"https://openrouter.ai/api/v1\"",
+    "after": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.api_key",
+    "kind": "key",
+    "before": "\"sk-or-key\"",
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.default",
+    "kind": "key",
+    "before": "\"anthropic/claude-opus-4\"",
+    "after": "\"kimi-k2.5\""
+  },
+  {
+    "file": "$HOME/.hermes/config.yaml",
+    "format": "yaml",
+    "keyPath": "model.api_mode",
+    "kind": "key",
+    "before": "\"codex_responses\"",
+    "after": "\"chat_completions\""
+  }
+]

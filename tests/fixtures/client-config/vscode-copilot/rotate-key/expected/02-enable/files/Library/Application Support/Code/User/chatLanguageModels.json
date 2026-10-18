@@ -1,0 +1,14 @@
+// User-defined chat language models
+[
+  // my own local endpoint
+  {
+    "vendor": "customendpoint",
+    "name": "Local Ollama",
+    "apiType": "chat-completions",
+    "models": [
+      { "id": "llama3", "name": "Llama 3", "url": "http://localhost:11434/v1/chat/completions", "toolCalling": true, "vision": false, "maxInputTokens": 8000, "maxOutputTokens": 2000 }
+    ]
+  },
+  { "vendor": "azure", "name": "Corp Azure", "models": [] },
+  {"name":"Astra","vendor":"customendpoint", "apiType": "chat-completions", "models": [{"id":"deepseek-chat","name":"DeepSeek Chat","url":"https://astra.corp.com/v1/chat/completions","apiType":"chat-completions","toolCalling":true,"vision":false,"thinking":false,"maxInputTokens":56000,"maxOutputTokens":8000,"requestHeaders":{"Authorization":"Bearer sk-astra-second-key"}}]}
+]

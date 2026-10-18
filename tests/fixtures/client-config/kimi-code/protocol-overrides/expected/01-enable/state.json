@@ -1,0 +1,51 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine\\u0022\"",
+    "applied": "\"\\u0022astra-kimi-k2-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-claude-sonnet-4-5",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-gemini-2-5-pro",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-gpt-5-1",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-kimi-k2-5",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-plain",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

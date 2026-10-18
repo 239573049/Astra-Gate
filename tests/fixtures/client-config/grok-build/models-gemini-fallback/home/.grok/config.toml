@@ -1,0 +1,8 @@
+# grok config
+[models]
+default = "grok-3"
+
+[model.grok-3]
+model = "grok-3"
+base_url = "https://api.x.ai/v1"
+api_key = "xai-key"

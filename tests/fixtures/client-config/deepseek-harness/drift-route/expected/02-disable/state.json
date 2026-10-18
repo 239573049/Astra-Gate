@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.dsh/.env",
+    "keyPath": "ASTRA_GATEWAY_API_KEY",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  }
+]

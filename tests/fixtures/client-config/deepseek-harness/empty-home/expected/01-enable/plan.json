@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.dsh/.env",
+    "format": "env",
+    "keyPath": "ASTRA_GATEWAY_API_KEY",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=llm-pi-ai]",
+    "kind": "table",
+    "before": null,
+    "after": "{\"id\":\"llm-pi-ai\",\"name\":\"@deepseek-ai/dsh-llm-pi-ai\"}"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=llm-pi-ai].config.providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"displayName\":\"Astra\",\"apiKeyEnv\":\"ASTRA_GATEWAY_API_KEY\",\"api\":\"openai-completions\",\"baseURL\":\"https://astra.corp.com/v1\",\"models\":[{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192}]}"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=agent-default-model]",
+    "kind": "table",
+    "before": null,
+    "after": "{\"id\":\"agent-default-model\",\"name\":\"@deepseek-ai/dsh-agent-default-model\"}"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=agent-default-model].config.provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=agent-default-model].config.model",
+    "kind": "key",
+    "before": null,
+    "after": "\"deepseek-chat\""
+  }
+]

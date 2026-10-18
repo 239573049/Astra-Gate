@@ -1,0 +1,63 @@
+{
+  "client": "tkcode",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".tkcode/settings.json",
+          "write": "// TKCode settings\n{\n  \"theme\": \"dark\",\n  \"model\": \"astra/gpt-5\",\n  \"providers\": {\n    \"openai\": { \"apiKey\": \"sk-user-own\", \"enabled\": true }, // the user's own provider,\n    \"astra\": {\"name\":\"Astra\",\"api\":\"chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-someone-else\",\"models\":{\"deepseek-chat\":{\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192,\"reasoning\":false,\"images\":false},\"gpt-5\":{\"api\":\"responses\",\"name\":\"GPT-5\",\"contextWindow\":400000,\"maxTokens\":128000,\"reasoning\":true,\"images\":true},\"claude-sonnet-4-5\":{\"api\":\"messages\",\"name\":\"Claude Sonnet 4.5\",\"contextWindow\":200000,\"maxTokens\":64000,\"reasoning\":true,\"images\":true}}}\n  },\n  \"mcpServers\": { \"fs\": { \"command\": \"npx\", \"args\": [\"fs-mcp\"] } },\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

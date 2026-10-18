@@ -1,0 +1,5 @@
+{
+  "theme": "tokyonight",
+  "provider": { "astra": { "npm": "x", "name": "Hacked" } },
+  "model": "ollama/llama3"
+}

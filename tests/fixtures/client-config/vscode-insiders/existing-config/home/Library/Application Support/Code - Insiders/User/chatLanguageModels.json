@@ -1,0 +1,13 @@
+// User-defined chat language models
+[
+  // my own local endpoint
+  {
+    "vendor": "customendpoint",
+    "name": "Local Ollama",
+    "apiType": "chat-completions",
+    "models": [
+      { "id": "llama3", "name": "Llama 3", "url": "http://localhost:11434/v1/chat/completions", "toolCalling": true, "vision": false, "maxInputTokens": 8000, "maxOutputTokens": 2000 }
+    ]
+  },
+  { "vendor": "azure", "name": "Corp Azure", "models": [] }
+]

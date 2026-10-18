@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "models.large",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"provider\":\"astra-responses\",\"model\":\"gpt-4.1\"}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra\",\"type\":\"openai-compat\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gpt-3.5-turbo\",\"name\":\"gpt-3.5-turbo\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false},{\"id\":\"o1\",\"name\":\"o1\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false}]}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "keyPath": "providers.astra-responses",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra (Responses)\",\"type\":\"openai\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gpt-4.1\",\"name\":\"gpt-4.1\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false},{\"id\":\"GPT-5-mini\",\"name\":\"GPT-5-mini\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false},{\"id\":\"gpt-10\",\"name\":\"gpt-10\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false},{\"id\":\"chatgpt-4o-latest\",\"name\":\"chatgpt-4o-latest\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false}]}"
+  }
+]

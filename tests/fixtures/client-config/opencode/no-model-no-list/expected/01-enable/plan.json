@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.config/opencode/opencode.json",
+    "format": "json",
+    "keyPath": "provider.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Astra\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}}"
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "availableModels": [
+    "gpt-4o",
+    "Astra: gpt-5"
+  ],
+  "models": [
+    {
+      "id": "my-model",
+      "name": "My Model",
+      "vendor": "Me",
+      "url": "https://example.com/v1/chat/completions",
+      "apiKey": "sk-user-own",
+      "supportsToolCall": true
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"api\":\"chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  }
+]

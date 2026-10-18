@@ -1,0 +1,16 @@
+{
+  // my opencode setup
+  "$schema": "https://opencode.ai/config.json",
+  "theme": "tokyonight",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama",
+      "options": { "baseURL": "http://localhost:11434/v1" },
+      "models": { "llama3": { "name": "Llama 3" } }
+    },
+    "astra": {"npm":"@ai-sdk/openai-compatible","name":"Astra","options":{"baseURL":"https://astra.corp.com/v1","apiKey":"sk-astra-second-key"},"models":{"claude-sonnet-4-5":{"name":"Claude Sonnet 4.5","provider":{"npm":"@ai-sdk/anthropic"},"limit":{"context":200000,"output":64000},"modalities":{"input":["text","image"],"output":["text"]},"reasoning":true},"qwen3-coder":{"name":"Qwen3 Coder","limit":{"context":262144,"output":65536}}}}
+  },
+  "model": "astra/claude-sonnet-4-5",
+  "autoupdate": true
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json",
+    "format": "json",
+    "keyPath": "[vendor=customendpoint&name=Astra]",
+    "kind": "table",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"vendor\":\"customendpoint\"}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json",
+    "format": "json",
+    "keyPath": "[vendor=customendpoint&name=Astra].apiType",
+    "kind": "key",
+    "before": null,
+    "after": "\"chat-completions\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/VSCodium/User/chatLanguageModels.json",
+    "format": "json",
+    "keyPath": "[vendor=customendpoint&name=Astra].models",
+    "kind": "key",
+    "before": null,
+    "after": "[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"url\":\"https://astra.corp.com/v1/responses\",\"apiType\":\"responses\",\"toolCalling\":true,\"vision\":true,\"thinking\":true,\"maxInputTokens\":272000,\"maxOutputTokens\":128000,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"},\"zeroDataRetentionEnabled\":true},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"url\":\"https://astra.corp.com/v1/messages\",\"apiType\":\"messages\",\"toolCalling\":true,\"vision\":true,\"thinking\":true,\"maxInputTokens\":136000,\"maxOutputTokens\":64000,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiType\":\"chat-completions\",\"toolCalling\":true,\"vision\":false,\"thinking\":false,\"maxInputTokens\":56000,\"maxOutputTokens\":8000,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}},{\"id\":\"gemini-2.5-pro\",\"name\":\"Gemini 2.5 Pro\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiType\":\"chat-completions\",\"toolCalling\":true,\"vision\":false,\"thinking\":false,\"maxInputTokens\":983616,\"maxOutputTokens\":16384,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}},{\"id\":\"qwen3-coder\",\"name\":\"qwen3-coder\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiType\":\"chat-completions\",\"toolCalling\":true,\"vision\":false,\"thinking\":false,\"maxInputTokens\":24000,\"maxOutputTokens\":8000,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}},{\"id\":\"glm-4.6\",\"name\":\"GLM 4.6 \\u00E9\\u003C\\u003E\\u0026\\u0027\\u002B\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiType\":\"chat-completions\",\"toolCalling\":true,\"vision\":false,\"thinking\":false,\"maxInputTokens\":111616,\"maxOutputTokens\":16384,\"requestHeaders\":{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}}]"
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.minimax/config.yaml",
+    "keyPath": "custom_provider.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra\",\"api\":\"openai-completions\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"},\"models\":{\"kimi-k2.5\":{\"name\":\"Kimi K2.5\",\"limit\":{\"context\":262144,\"output\":32768},\"modalities\":{\"input\":[\"text\",\"image\"]},\"reasoning\":true},\"gemini-2.5-pro\":{\"name\":\"Gemini 2.5 Pro\",\"limit\":{\"context\":1048576},\"modalities\":{\"input\":[\"text\",\"image\"]},\"reasoning\":true},\"plain\":{}}}"
+  },
+  {
+    "file": "$HOME/.minimax/config.yaml",
+    "keyPath": "custom_provider.astra-anthropic",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra (Anthropic)\",\"api\":\"anthropic-messages\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"},\"models\":{\"claude-sonnet-4-5\":{\"name\":\"Claude Sonnet 4.5\",\"limit\":{\"context\":200000,\"output\":64000},\"modalities\":{\"input\":[\"text\",\"image\"]},\"reasoning\":false}}}"
+  },
+  {
+    "file": "$HOME/.minimax/config.yaml",
+    "keyPath": "custom_provider.astra-responses",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra (Responses)\",\"api\":\"openai-responses\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"},\"models\":{\"gpt-5.1\":{\"name\":\"GPT 5.1\",\"limit\":{\"context\":400000,\"output\":128000},\"modalities\":{\"input\":[\"text\"]},\"reasoning\":true}}}"
+  }
+]

@@ -1,0 +1,18 @@
+custom_provider:
+  astra:
+    name: "Astra"
+    api: "openai-completions"
+    options:
+      baseURL: "https://astra.corp.com/v1"
+      apiKey: "sk-ä'key"
+    models:
+      m1:
+        name: "Mödel <One> & co"
+        limit:
+          context: 8000
+          output: 2000
+        modalities:
+          input:
+            - "text"
+        reasoning: true
+defaultModel: "custom_provider:astra/m1"

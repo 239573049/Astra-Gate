@@ -1,0 +1,5 @@
+theme: dark
+defaultModel: custom_provider:other/foo
+custom_provider:
+  astra:
+    name: x

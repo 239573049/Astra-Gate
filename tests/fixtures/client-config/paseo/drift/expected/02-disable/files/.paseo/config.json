@@ -1,0 +1,39 @@
+{
+  "daemon": {
+    "port": 6767
+  },
+  "agents": {
+    "providers": {
+      "my-claude": {
+        "extends": "claude",
+        "label": "Mine",
+        "env": {
+          "ANTHROPIC_BASE_URL": "https://example.com"
+        }
+      },
+      "astra": {
+        "extends": "claude",
+        "label": "Astra",
+        "description": "Claude Code through the Astra gateway",
+        "env": {
+          "ANTHROPIC_BASE_URL": "https://astra.corp.com",
+          "ANTHROPIC_AUTH_TOKEN": "sk-someone-else"
+        },
+        "disallowedTools": [
+          "WebSearch"
+        ],
+        "models": [
+          {
+            "id": "deepseek-chat",
+            "label": "DeepSeek Chat"
+          },
+          {
+            "id": "claude-sonnet-4-5",
+            "label": "Claude Sonnet 4.5",
+            "isDefault": true
+          }
+        ]
+      }
+    }
+  }
+}

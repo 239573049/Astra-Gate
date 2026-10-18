@@ -1,0 +1,23 @@
+{
+  "client": "claude-desktop",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": null,
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "context": {
+        "localKey": "sk-astra-rotated-key",
+        "gatewayBaseUrl": "https://astra2.corp.com"
+      }
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

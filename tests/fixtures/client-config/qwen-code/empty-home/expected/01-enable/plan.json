@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "env.ASTRA_QWEN_API_KEY",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"envKey\":\"ASTRA_QWEN_API_KEY\",\"baseUrl\":\"https://astra.corp.com/v1\"}"
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "security.auth.selectedType",
+    "kind": "key",
+    "before": null,
+    "after": "\"openai\""
+  },
+  {
+    "file": "$HOME/.qwen/settings.json",
+    "format": "json",
+    "keyPath": "model.name",
+    "kind": "key",
+    "before": null,
+    "after": "\"deepseek-chat\""
+  }
+]

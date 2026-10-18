@@ -1,0 +1,9 @@
+# hermes config
+model:
+  default: anthropic/claude-opus-4  # current
+  provider: "openrouter"
+  base_url: https://openrouter.ai/api/v1
+  api_key: sk-or-key
+  api_mode: codex_responses
+display:
+  skin: dark

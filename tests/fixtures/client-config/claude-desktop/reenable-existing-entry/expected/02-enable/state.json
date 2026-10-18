@@ -1,0 +1,72 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/claude_desktop_config.json",
+    "keyPath": "deploymentMode",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"3p\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "keyPath": "coworkEgressAllowedHosts",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "[\"*\"]"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "keyPath": "disableDeploymentModeChooser",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "true"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "keyPath": "inferenceGatewayApiKey",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-rotated-key\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "keyPath": "inferenceGatewayAuthScheme",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"bearer\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "keyPath": "inferenceGatewayBaseUrl",
+    "originalAbsent": false,
+    "original": "\"https://old.example.com\"",
+    "applied": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/7f3c1a55-0a17-4000-8000-1cabad000001.json",
+    "keyPath": "inferenceProvider",
+    "originalAbsent": false,
+    "original": "\"anthropic\"",
+    "applied": "\"gateway\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/_meta.json",
+    "keyPath": "appliedId",
+    "originalAbsent": false,
+    "original": "\"aaaaaaaa-0000-4000-8000-000000000001\"",
+    "applied": "\"7f3c1a55-0a17-4000-8000-1cabad000001\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude-3p/configLibrary/_meta.json",
+    "keyPath": "entries",
+    "originalAbsent": false,
+    "original": "[{\"id\":\"aaaaaaaa-0000-4000-8000-000000000001\",\"name\":\"Corp \\u00E9quipe \\u003CA\\u0026B\\u003E\"}]",
+    "applied": "[{\"id\":\"aaaaaaaa-0000-4000-8000-000000000001\",\"name\":\"Corp \\u00E9quipe \\u003CA\\u0026B\\u003E\"},{\"id\":\"7f3c1a55-0a17-4000-8000-1cabad000001\",\"name\":\"Astra\"}]"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Claude/claude_desktop_config.json",
+    "keyPath": "deploymentMode",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"3p\""
+  }
+]

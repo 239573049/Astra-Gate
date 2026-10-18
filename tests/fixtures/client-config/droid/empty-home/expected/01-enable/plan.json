@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.factory/settings.json",
+    "format": "json",
+    "keyPath": "customModels.[displayName=Astra: deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"model\":\"deepseek-chat\",\"displayName\":\"Astra: deepseek-chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"generic-chat-completion-api\"}"
+  }
+]

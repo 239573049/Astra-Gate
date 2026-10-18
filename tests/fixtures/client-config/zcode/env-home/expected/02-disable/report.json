@@ -1,0 +1,42 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/zhome/.zcode/v2/provider_config.json",
+      "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra&modelId=deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/zhome/.zcode/v2/provider_config.json",
+      "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-anthropic&modelId=claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/zhome/.zcode/v2/provider_config.json",
+      "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/zhome/.zcode/v2/provider_config.json",
+      "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-anthropic]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/zhome/.zcode/v2/provider_config.json",
+      "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-responses]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/zhome/.zcode/v2/provider_config.json",
+      "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

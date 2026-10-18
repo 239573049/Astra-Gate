@@ -1,0 +1,5 @@
+# omp config
+modelRoles:
+  default: "astra/gemini-2.5-pro"
+  smol: anthropic/claude-haiku-4
+theme: dark

@@ -1,0 +1,37 @@
+{
+  "client": "deepseek-harness",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "deepseek-chat",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "protocols": [
+          "openai-chat"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".dsh/profiles/desktop/cordis.patch.yml",
+          "write": "- id: llm-pi-ai\n  name: \"@deepseek-ai/dsh-llm-pi-ai\"\n  config:\n    providers:\n      astra:\n        displayName: Astra\n        apiKeyEnv: ASTRA_GATEWAY_API_KEY\n        api: openai-completions\n        baseURL: https://astra.corp.com/v1\n        models:\n          - id: deepseek-chat\n            name: DeepSeek Chat\n            contextWindow: 128000\n            maxTokens: 8192\n      later:\n        displayName: Later\n        apiKeyEnv: LATER\n        api: openai-completions\n        baseURL: https://later.example.com/v1\n        models: []\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

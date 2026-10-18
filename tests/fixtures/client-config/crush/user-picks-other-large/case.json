@@ -1,0 +1,93 @@
+{
+  "client": "crush",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "m1": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "pdf": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses",
+          "openai-chat"
+        ]
+      },
+      "m2": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ]
+      },
+      "m3": {
+        "id": "gemini-2.5-pro",
+        "name": "Gemini 2.5 Pro",
+        "contextWindow": 1048576,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "gemini",
+          "openai-chat"
+        ]
+      },
+      "m4": {
+        "id": "deepseek-chat",
+        "name": "深度求索 <chat> & co",
+        "contextWindow": 64000,
+        "maxOutputTokens": 64000,
+        "vision": false,
+        "reasoning": false
+      },
+      "m5": {
+        "id": "o3-mini",
+        "protocols": [
+          "openai-responses"
+        ],
+        "reasoning": true
+      },
+      "m6": {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5",
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ],
+        "contextWindow": 200000
+      },
+      "m7": {
+        "id": "qwen3-coder",
+        "name": "Qwen3 Coder",
+        "contextWindow": 262144,
+        "maxOutputTokens": 65536
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".config/crush/crush.json",
+          "write": "{\n  \"$schema\": \"https://charm.land/crush.json\",\n  \"providers\": {\n    \"ollama\": {\n      \"name\": \"Ollama\",\n      \"type\": \"openai-compat\",\n      \"base_url\": \"http://localhost:11434/v1\",\n      \"models\": [{ \"id\": \"llama3\", \"name\": \"Llama 3\", \"context_window\": 8192, \"default_max_tokens\": 2048 }]\n    }\n  },\n  \"models\": {\n    \"large\": { \"provider\": \"ollama\", \"model\": \"mistral\" },\n    \"small\": { \"provider\": \"ollama\", \"model\": \"llama3\" }\n  },\n  \"options\": { \"debug\": false }\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

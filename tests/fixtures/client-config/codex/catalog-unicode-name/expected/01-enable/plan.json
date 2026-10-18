@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"name\":\"\\u0022Astra\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"wire_api\":\"\\u0022responses\\u0022\",\"experimental_bearer_token\":\"\\u0022sk-astra-enterprise-key\\u0022\",\"requires_openai_auth\":\"false\"}"
+  },
+  {
+    "file": "$HOME/.codex/astra-models.json",
+    "format": "json",
+    "keyPath": "models",
+    "kind": "key",
+    "before": null,
+    "after": "[{\"slug\":\"gpt-5.5\",\"display_name\":\"GPT-5.5 \\u00E9 \\u003Cb\\u003E\",\"visibility\":\"list\",\"priority\":1,\"supported_reasoning_levels\":[{\"effort\":\"high\",\"description\":\"High\"}],\"default_reasoning_level\":\"medium\",\"context_window\":272000,\"support_verbosity\":true,\"apply_patch_tool_type\":\"freeform\",\"model_messages\":{\"instructions_template\":\"You are Codex.\"}},{\"slug\":\"x-1\",\"display_name\":\"Mod\\u00E8le \\u0026 co \\u003C1\\u003E\",\"visibility\":\"list\",\"priority\":2,\"supported_reasoning_levels\":[{\"effort\":\"high\",\"description\":\"High\"}],\"default_reasoning_level\":\"medium\",\"support_verbosity\":false,\"apply_patch_tool_type\":null,\"model_messages\":{\"instructions_template\":\"You are Codex.\"},\"supports_search_tool\":false,\"use_responses_lite\":false,\"supports_experimental_context\":false,\"supports_reasoning_effort_updates\":false,\"supports_image_detail_original\":false,\"description\":\"Astra\",\"supported_in_api\":true,\"upgrade\":null,\"availability_nux\":null,\"default_verbosity\":null,\"experimental_supported_tools\":[],\"additional_speed_tiers\":[],\"service_tiers\":[]}]"
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_catalog_json",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022$HOME/.codex/astra-models.json\\u0022\""
+  }
+]

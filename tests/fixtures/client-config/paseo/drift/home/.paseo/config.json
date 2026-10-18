@@ -1,0 +1,16 @@
+{
+  "daemon": {
+    "port": 6767
+  },
+  "agents": {
+    "providers": {
+      "my-claude": {
+        "extends": "claude",
+        "label": "Mine",
+        "env": {
+          "ANTHROPIC_BASE_URL": "https://example.com"
+        }
+      }
+    }
+  }
+}

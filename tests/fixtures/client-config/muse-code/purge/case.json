@@ -1,0 +1,15 @@
+{
+  "client": "muse-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "muse-spark-1.3",
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "purge"
+    }
+  ]
+}

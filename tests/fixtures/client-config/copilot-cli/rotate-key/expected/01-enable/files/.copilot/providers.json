@@ -1,0 +1,14 @@
+{
+  // BYOK providers
+  "providers": [
+    { "name": "mine", "type": "openai", "baseUrl": "https://api.example.com/v1", "apiKey": "sk-mine" },
+    {"name":"astra","type":"openai","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key"},
+    {"name":"astra-responses","type":"openai","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","wireApi":"responses"},
+    {"name":"astra-anthropic","type":"anthropic","baseUrl":"https://astra.corp.com","apiKey":"sk-astra-enterprise-key"}
+  ],
+  "models": [
+    { "id": "my-model", "provider": "mine" },
+    {"id":"gpt-5","provider":"astra-responses","maxContextWindowTokens":400000,"maxOutputTokens":128000,"capabilities":{"supports":{"vision":true}}},
+    {"id":"claude-sonnet-4-5","provider":"astra-anthropic","maxContextWindowTokens":200000,"maxOutputTokens":64000,"capabilities":{"supports":{"vision":true}}}
+  ]
+}

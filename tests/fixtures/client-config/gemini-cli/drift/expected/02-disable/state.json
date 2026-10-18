@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GOOGLE_GEMINI_BASE_URL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com\""
+  }
+]

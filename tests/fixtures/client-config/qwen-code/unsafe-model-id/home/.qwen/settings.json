@@ -1,0 +1,12 @@
+{
+  // Qwen Code settings
+  "theme": "Dracula",
+  "env": { "SOME_OTHER": "1" },
+  "modelProviders": {
+    "openai": [
+      { "id": "qwen-plus", "name": "Qwen Plus", "envKey": "DASHSCOPE_API_KEY", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" }
+    ]
+  },
+  "security": { "auth": { "selectedType": "openai" } },
+  "model": { "name": "qwen-plus" }
+}

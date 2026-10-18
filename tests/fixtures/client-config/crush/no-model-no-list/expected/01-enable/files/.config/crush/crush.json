@@ -1,0 +1,17 @@
+{
+  "$schema": "https://charm.land/crush.json",
+  "providers": {
+    "ollama": {
+      "name": "Ollama",
+      "type": "openai-compat",
+      "base_url": "http://localhost:11434/v1",
+      "models": [{ "id": "llama3", "name": "Llama 3", "context_window": 8192, "default_max_tokens": 2048 }]
+    },
+    "astra": {"name":"Astra","type":"openai-compat","base_url":"https://astra.corp.com/v1","api_key":"sk-astra-enterprise-key"}
+  },
+  "models": {
+    "large": { "provider": "ollama", "model": "llama3" },
+    "small": { "provider": "ollama", "model": "llama3" }
+  },
+  "options": { "debug": false }
+}

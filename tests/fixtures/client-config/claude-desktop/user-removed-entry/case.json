@@ -1,0 +1,22 @@
+{
+  "client": "claude-desktop",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": null,
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": "Library/Application Support/Claude-3p/configLibrary/_meta.json",
+          "write": "{\n  \"entries\": [\n    { \"id\": \"bbbbbbbb-0000-4000-8000-000000000002\", \"name\": \"Other\" }\n  ],\n  \"appliedId\": \"7f3c1a55-0a17-4000-8000-1cabad000001\"\n}\n"
+        }
+      ]
+    }
+  ]
+}

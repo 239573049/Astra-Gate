@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.paseo/config.json",
+    "keyPath": "agents.providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"extends\":\"claude\",\"label\":\"Astra\",\"description\":\"Claude Code through the Astra gateway\",\"env\":{\"ANTHROPIC_BASE_URL\":\"https://astra.corp.com\",\"ANTHROPIC_AUTH_TOKEN\":\"sk-astra-enterprise-key\"},\"disallowedTools\":[\"WebSearch\"],\"models\":[{\"id\":\"deepseek-chat\",\"label\":\"DeepSeek Chat\"},{\"id\":\"claude-sonnet-4-5\",\"label\":\"Claude Sonnet 4.5\",\"isDefault\":true}]}"
+  }
+]

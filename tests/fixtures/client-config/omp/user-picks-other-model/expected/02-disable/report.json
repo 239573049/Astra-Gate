@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.omp/agent/models.yml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

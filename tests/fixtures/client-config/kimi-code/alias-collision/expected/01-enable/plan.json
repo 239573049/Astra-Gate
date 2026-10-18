@@ -1,0 +1,42 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"type\":\"\\u0022openai\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"api_key\":\"\\u0022sk-astra-enterprise-key\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-a-b",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022a.b\\u0022\",\"max_context_size\":\"131072\",\"capabilities\":\"[\\u0022tool_use\\u0022]\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-a-b-2",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022a-b\\u0022\",\"max_context_size\":\"131072\",\"capabilities\":\"[\\u0022tool_use\\u0022]\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-a-b-3",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022a b\\u0022\",\"max_context_size\":\"131072\",\"capabilities\":\"[\\u0022tool_use\\u0022]\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": "\"mine\"",
+    "after": "\"\\u0022astra-a-b\\u0022\""
+  }
+]

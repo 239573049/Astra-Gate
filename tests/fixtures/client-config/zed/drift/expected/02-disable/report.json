@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/zed/settings.json",
+      "keyPath": "language_models.openai_compatible.astra",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

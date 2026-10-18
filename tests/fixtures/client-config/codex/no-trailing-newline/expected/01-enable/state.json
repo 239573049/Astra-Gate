@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

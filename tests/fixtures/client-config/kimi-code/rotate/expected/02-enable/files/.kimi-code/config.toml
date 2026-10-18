@@ -1,0 +1,30 @@
+# my kimi config
+default_model = "astra-plain"
+
+[providers.moonshot]
+type = "kimi"
+base_url = "https://api.moonshot.ai/v1"
+api_key = "sk-moon"
+
+[models.mine]
+provider = "moonshot"
+model = "kimi-k2"
+max_context_size = 262144
+
+[providers.astra]
+type = "openai"
+base_url = "https://astra.corp.com/v1"
+api_key = "sk-astra-second-key"
+
+[models.astra-gpt-5-1]
+provider = "astra"
+model = "gpt-5.1"
+max_context_size = 131072
+capabilities = ["tool_use"]
+protocol = "openai_responses"
+
+[models.astra-plain]
+provider = "astra"
+model = "plain"
+max_context_size = 131072
+capabilities = ["tool_use"]

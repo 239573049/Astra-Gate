@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.workbuddy/models.json",
+      "keyPath": "models.[name=Astra: deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

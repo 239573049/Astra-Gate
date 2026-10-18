@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GEMINI_API_KEY",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GEMINI_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"gemini-2.5-pro\""
+  },
+  {
+    "file": "$HOME/.gemini/.env",
+    "keyPath": "GOOGLE_GEMINI_BASE_URL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/.gemini/settings.json",
+    "keyPath": "security.auth.selectedType",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"gemini-api-key\""
+  }
+]

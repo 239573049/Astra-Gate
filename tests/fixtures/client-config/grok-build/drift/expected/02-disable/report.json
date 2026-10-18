@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "models.default",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "model.astra",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

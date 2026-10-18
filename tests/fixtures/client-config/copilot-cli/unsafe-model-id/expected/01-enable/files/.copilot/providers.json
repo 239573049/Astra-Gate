@@ -1,0 +1,11 @@
+{
+  // BYOK providers
+  "providers": [
+    { "name": "mine", "type": "openai", "baseUrl": "https://api.example.com/v1", "apiKey": "sk-mine" },
+    {"name":"astra","type":"openai","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key"}
+  ],
+  "models": [
+    { "id": "my-model", "provider": "mine" },
+    {"id":"ok-model","provider":"astra","maxContextWindowTokens":100000}
+  ]
+}

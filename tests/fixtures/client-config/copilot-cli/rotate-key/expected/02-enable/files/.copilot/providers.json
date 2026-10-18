@@ -1,0 +1,11 @@
+{
+  // BYOK providers
+  "providers": [
+    { "name": "mine", "type": "openai", "baseUrl": "https://api.example.com/v1", "apiKey": "sk-mine" },
+    {"name":"astra","type":"openai","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-second-key"}
+  ],
+  "models": [
+    { "id": "my-model", "provider": "mine" },
+    {"id":"deepseek-chat","provider":"astra","maxContextWindowTokens":64000,"maxOutputTokens":8000,"capabilities":{"supports":{"vision":false}}}
+  ]
+}

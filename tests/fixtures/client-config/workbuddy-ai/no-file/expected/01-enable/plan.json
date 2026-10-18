@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.workbuddy-ai/models.json",
+    "format": "json",
+    "keyPath": "models.[name=Astra: deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"deepseek-chat\",\"name\":\"Astra: deepseek-chat\",\"vendor\":\"Astra\",\"url\":\"https://astra.corp.com/v1/chat/completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"maxInputTokens\":128000,\"maxOutputTokens\":8192,\"supportsToolCall\":true,\"supportsImages\":false,\"supportsReasoning\":false}"
+  }
+]

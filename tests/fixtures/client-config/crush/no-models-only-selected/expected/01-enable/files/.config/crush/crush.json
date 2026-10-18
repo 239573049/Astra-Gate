@@ -1,0 +1,17 @@
+{
+  "$schema": "https://charm.land/crush.json",
+  "providers": {
+    "ollama": {
+      "name": "Ollama",
+      "type": "openai-compat",
+      "base_url": "http://localhost:11434/v1",
+      "models": [{ "id": "llama3", "name": "Llama 3", "context_window": 8192, "default_max_tokens": 2048 }]
+    },
+    "astra": {"name":"Astra","type":"openai-compat","base_url":"https://astra.corp.com/v1","api_key":"sk-astra-enterprise-key","models":[{"id":"qwen3-coder","name":"qwen3-coder","context_window":128000,"default_max_tokens":16384,"cost_per_1m_in":0,"cost_per_1m_out":0,"cost_per_1m_in_cached":0,"cost_per_1m_out_cached":0,"can_reason":false,"supports_attachments":false}]}
+  },
+  "models": {
+    "large": {"provider":"astra","model":"qwen3-coder"},
+    "small": { "provider": "ollama", "model": "llama3" }
+  },
+  "options": { "debug": false }
+}

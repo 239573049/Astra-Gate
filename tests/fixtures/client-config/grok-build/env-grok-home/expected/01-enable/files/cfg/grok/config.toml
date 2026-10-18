@@ -1,0 +1,16 @@
+# grok config
+[models]
+default = "astra"
+
+[model.grok-3]
+model = "grok-3"
+base_url = "https://api.x.ai/v1"
+api_key = "xai-key"
+
+[model.astra]
+model = "gpt-5.1"
+base_url = "https://astra.corp.com/v1"
+name = "Astra"
+api_key = "sk-astra-enterprise-key"
+api_backend = "responses"
+context_window = 400000

@@ -1,0 +1,60 @@
+{
+  "client": "nextcowork",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".next-cowork/providers.json",
+          "write": "{\n  \"providers\": {\n    \"my-openai\": {\n      \"name\": \"Mine\",\n      \"protocol\": \"openai-chat\",\n      \"baseUrl\": \"https://api.openai.com/v1\",\n      \"apiKey\": \"sk-user-own\",\n      \"models\": {\n        \"gpt-4o\": {\n          \"upstreamModel\": \"gpt-4o\"\n        }\n      }\n    },\n    \"astra\": {\n      \"name\": \"Astra\",\n      \"protocol\": \"openai-chat\",\n      \"baseUrl\": \"https://astra.corp.com/v1\",\n      \"apiKey\": \"sk-astra-enterprise-key\",\n      \"models\": {\n        \"deepseek-chat\": {\n          \"upstreamModel\": \"deepseek-chat\",\n          \"displayName\": \"DeepSeek Chat\",\n          \"contextWindow\": 128000,\n          \"maxOutputTokens\": 8192,\n          \"capabilities\": {\n            \"vision\": false,\n            \"visionInput\": false,\n            \"toolUse\": true\n          },\n          \"protocolOverride\": \"anthropic\"\n        },\n        \"gpt-5\": {\n          \"upstreamModel\": \"gpt-5\",\n          \"displayName\": \"GPT-5\",\n          \"protocolOverride\": \"openai-chat\",\n          \"contextWindow\": 400000,\n          \"maxOutputTokens\": 128000,\n          \"capabilities\": {\n            \"vision\": true,\n            \"visionInput\": true,\n            \"fileInput\": true,\n            \"toolUse\": true\n          },\n          \"thinkingConfig\": {\n            \"type\": \"enabled\",\n            \"budget\": 8000\n          },\n          \"source\": \"catalog\",\n          \"catalogOverrides\": {\n            \"x\": 1\n          }\n        },\n        \"claude-sonnet-4-5\": {\n          \"upstreamModel\": \"claude-sonnet-4-5\",\n          \"displayName\": \"Claude Sonnet 4.5\",\n          \"protocolOverride\": \"anthropic\",\n          \"contextWindow\": 200000,\n          \"maxOutputTokens\": 64000,\n          \"capabilities\": {\n            \"vision\": true,\n            \"visionInput\": true,\n            \"fileInput\": false\n          }\n        }\n      },\n      \"priority\": 10,\n      \"enabled\": true\n    }\n  }\n}\n"
+        }
+      ]
+    }
+  ]
+}

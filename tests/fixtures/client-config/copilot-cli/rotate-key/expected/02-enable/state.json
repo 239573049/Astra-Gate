@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "keyPath": "models.[provider=astra&id=deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"deepseek-chat\",\"provider\":\"astra\",\"maxContextWindowTokens\":64000,\"maxOutputTokens\":8000,\"capabilities\":{\"supports\":{\"vision\":false}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "keyPath": "providers.[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-second-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"gpt-4.1\"",
+    "applied": "\"astra/deepseek-chat\""
+  }
+]

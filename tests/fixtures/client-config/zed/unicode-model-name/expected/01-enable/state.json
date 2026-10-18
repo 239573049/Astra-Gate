@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "agent.default_model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"provider\":\"astra\",\"model\":\"m-1\"}"
+  },
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "language_models.openai_compatible.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"api_url\":\"https://astra.corp.com/v1\",\"available_models\":[{\"name\":\"m-1\",\"display_name\":\"Mod\\u00E8le \\u003C1\\u003E \\u0026 \\u4E2D\\u6587\",\"max_tokens\":32000,\"max_output_tokens\":4096,\"capabilities\":{\"tools\":true,\"images\":true,\"parallel_tool_calls\":false,\"prompt_cache_key\":false}}]}"
+  }
+]

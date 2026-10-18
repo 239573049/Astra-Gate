@@ -1,0 +1,4 @@
+# old style
+model: openrouter/some-model
+tools:
+  web: true

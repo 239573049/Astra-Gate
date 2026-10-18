@@ -1,0 +1,57 @@
+{
+  "client": "codex",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    },
+    "options": {
+      "contextWindow": 200000,
+      "reasoningEffort": "low"
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "context": {
+        "extras": {
+          "models": {
+            "gpt-5": {
+              "id": "gpt-5",
+              "name": "GPT-5",
+              "contextWindow": 400000,
+              "maxOutputTokens": 128000,
+              "vision": true,
+              "reasoning": true,
+              "protocols": [
+                "openai-responses"
+              ]
+            }
+          },
+          "options": {
+            "autoCompactTokenLimit": 90000
+          }
+        }
+      }
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "client": "crush",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "claude-sonnet-4-5",
+  "extras": {
+    "models": {
+      "a": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ]
+      },
+      "b": {
+        "id": "claude-haiku-4-5",
+        "name": "Claude Haiku 4.5",
+        "reasoning": true,
+        "protocols": [
+          "anthropic"
+        ],
+        "contextWindow": 200000
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

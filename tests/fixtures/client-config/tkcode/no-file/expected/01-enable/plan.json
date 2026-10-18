@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"api\":\"chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":{\"gpt-5\":{\"api\":\"responses\",\"name\":\"GPT-5\",\"contextWindow\":400000,\"maxTokens\":128000,\"reasoning\":true,\"images\":true}}}"
+  },
+  {
+    "file": "$HOME/.tkcode/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra/gpt-5\""
+  }
+]

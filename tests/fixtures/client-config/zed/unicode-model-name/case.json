@@ -1,0 +1,26 @@
+{
+  "client": "zed",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "m-1",
+  "extras": {
+    "models": {
+      "m-1": {
+        "id": "m-1",
+        "name": "Modèle <1> & 中文",
+        "contextWindow": 32000,
+        "maxOutputTokens": 4096,
+        "vision": true
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

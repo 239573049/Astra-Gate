@@ -1,0 +1,48 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "default_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-gpt-5-1.capabilities",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-gpt-5-1.max_context_size",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "providers.astra.api_key",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-gpt-5-1",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "models.astra-plain",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.kimi-code/config.toml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.bashrc",
+      "keyPath": "muse-code",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

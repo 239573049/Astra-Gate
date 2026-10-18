@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.config/zed/settings.json",
+    "keyPath": "language_models.openai_compatible.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"api_url\":\"https://astra.corp.com/v1\",\"available_models\":[{\"name\":\"gpt-5\",\"display_name\":\"GPT-5\",\"max_tokens\":400000,\"max_output_tokens\":128000,\"capabilities\":{\"tools\":true,\"images\":true,\"parallel_tool_calls\":false,\"prompt_cache_key\":false,\"chat_completions\":false}},{\"name\":\"deepseek-chat\",\"display_name\":\"DeepSeek Chat\",\"max_tokens\":128000,\"max_output_tokens\":8192,\"capabilities\":{\"tools\":true,\"images\":false,\"parallel_tool_calls\":false,\"prompt_cache_key\":false}},{\"name\":\"claude-sonnet-4-5\",\"display_name\":\"Claude Sonnet 4.5\",\"max_tokens\":200000,\"capabilities\":{\"tools\":true,\"images\":true,\"parallel_tool_calls\":false,\"prompt_cache_key\":false}},{\"name\":\"qwen-plus\",\"display_name\":\"qwen-plus\",\"max_tokens\":128000,\"capabilities\":{\"tools\":true,\"images\":false,\"parallel_tool_calls\":false,\"prompt_cache_key\":false}}]}"
+  }
+]

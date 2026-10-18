@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.omp/agent/config.yml",
+    "keyPath": "modelRoles.default",
+    "originalAbsent": false,
+    "original": "\"anthropic/claude-opus-4\"",
+    "applied": "\"astra/gpt-5\""
+  }
+]

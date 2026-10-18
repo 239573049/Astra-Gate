@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/opencode/opencode.jsonc",
+      "keyPath": "provider.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/opencode/opencode.jsonc",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

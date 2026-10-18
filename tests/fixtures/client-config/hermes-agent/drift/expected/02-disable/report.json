@@ -1,0 +1,36 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.hermes/config.yaml",
+      "keyPath": "model.provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.hermes/config.yaml",
+      "keyPath": "model.base_url",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.hermes/config.yaml",
+      "keyPath": "model.api_key",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.hermes/config.yaml",
+      "keyPath": "model.default",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.hermes/config.yaml",
+      "keyPath": "model.api_mode",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

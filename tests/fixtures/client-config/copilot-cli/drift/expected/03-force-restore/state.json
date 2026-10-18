@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "keyPath": "providers.[name=astra-responses]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra-responses\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"wireApi\":\"responses\"}"
+  }
+]

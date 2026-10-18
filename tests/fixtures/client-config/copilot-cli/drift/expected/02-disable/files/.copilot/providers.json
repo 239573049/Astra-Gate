@@ -1,0 +1,8 @@
+{
+  "providers": [
+    { "name": "astra", "type": "openai", "baseUrl": "https://other.example.com/v1", "apiKey": "changed" }
+  ],
+  "models": [
+    { "id": "gpt-5", "provider": "astra-responses", "maxOutputTokens": 1 }
+  ]
+}

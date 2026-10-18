@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+    "kind": "key",
+    "before": "{\"providerId\":\"astra\",\"providerName\":\"Astra\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-chat-completions\",\"baseUrl\":\"https://astra.corp.com/v1\"},\"personalModelIds\":[\"deepseek-chat\"],\"modelOrder\":[\"deepseek-chat\"]}}",
+    "after": "{\"providerId\":\"astra\",\"providerName\":\"Astra\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-rotated-key\"},\"api\":{\"type\":\"openai-chat-completions\",\"baseUrl\":\"https://astra.corp.com/v1\"},\"personalModelIds\":[\"deepseek-chat\"],\"modelOrder\":[\"deepseek-chat\"]}}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra&modelId=deepseek-chat]",
+    "kind": "key",
+    "before": "{\"modelId\":\"deepseek-chat\",\"config\":{\"properties\":{\"contextWindow\":128000,\"inputFormat\":{\"supportsImage\":false},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra\"}",
+    "after": "{\"modelId\":\"deepseek-chat\",\"config\":{\"properties\":{\"contextWindow\":128000,\"inputFormat\":{\"supportsImage\":false},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra\"}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-anthropic]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"providerId\":\"astra-anthropic\",\"providerName\":\"Astra (Anthropic)\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-rotated-key\"},\"api\":{\"type\":\"anthropic-messages\",\"baseUrl\":\"https://astra.corp.com\"},\"personalModelIds\":[\"claude-sonnet-4-5\"],\"modelOrder\":[\"claude-sonnet-4-5\"]}}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-anthropic&modelId=claude-sonnet-4-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"modelId\":\"claude-sonnet-4-5\",\"config\":{\"properties\":{\"contextWindow\":200000,\"inputFormat\":{\"supportsImage\":true,\"supportsPdf\":false},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra-anthropic\"}"
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=gpt-5]",
+    "kind": "key",
+    "before": "{\"modelId\":\"gpt-5\",\"config\":{\"properties\":{\"contextWindow\":400000,\"inputFormat\":{\"supportsImage\":true,\"supportsPdf\":true},\"supportsNativeWebSearch\":false}},\"providerId\":\"astra-responses\"}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "format": "json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-responses]",
+    "kind": "key",
+    "before": "{\"providerId\":\"astra-responses\",\"providerName\":\"Astra (Responses)\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-responses\",\"baseUrl\":\"https://astra.corp.com/v1\"},\"personalModelIds\":[\"gpt-5\"],\"modelOrder\":[\"gpt-5\"]}}",
+    "after": null
+  }
+]

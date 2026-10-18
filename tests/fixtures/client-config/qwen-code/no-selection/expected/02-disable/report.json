@@ -1,0 +1,48 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "env.ASTRA_QWEN_API_KEY",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "modelProviders.anthropic.[envKey=ASTRA_QWEN_API_KEY&id=claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "modelProviders.gemini.[envKey=ASTRA_QWEN_API_KEY&id=gemini-2.5-pro]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=glm-4.6]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwen/settings.json",
+      "keyPath": "modelProviders.openai.[envKey=ASTRA_QWEN_API_KEY&id=qwen3-coder]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

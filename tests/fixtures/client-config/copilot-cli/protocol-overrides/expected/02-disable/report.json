@@ -1,0 +1,60 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "providers.[name=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "providers.[name=astra-anthropic]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra&id=claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra&id=gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra&id=qwen3-coder]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra-anthropic&id=deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra-anthropic&id=gemini-2.5-pro]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra-anthropic&id=glm-4.6]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.copilot/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

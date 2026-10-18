@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "providers.[name=astra]",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.copilot/providers.json",
+      "keyPath": "models.[provider=astra-responses&id=gpt-5]",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.copilot/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

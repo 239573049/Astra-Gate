@@ -1,0 +1,5 @@
+# omp config
+modelRoles:
+  default: anthropic/claude-opus-4
+  smol: anthropic/claude-haiku-4
+theme: dark

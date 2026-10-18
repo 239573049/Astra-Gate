@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/opencode/opencode.json",
+      "keyPath": "provider.astra",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.config/opencode/opencode.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

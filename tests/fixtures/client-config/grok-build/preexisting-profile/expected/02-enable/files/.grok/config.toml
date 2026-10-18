@@ -1,0 +1,11 @@
+[models]
+default = "astra"
+
+[model.astra]
+model = "claude-sonnet-4-5"
+base_url = "https://astra.corp.com/v1"
+name = "Astra"
+api_key = "sk-astra-second-key"
+api_backend = "messages"
+context_window = 200000
+custom = "keep"

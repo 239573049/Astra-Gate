@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.pi/agent/models.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"api\":\"openai-responses\",\"reasoning\":true,\"input\":[\"text\",\"image\"],\"contextWindow\":400000,\"maxTokens\":128000},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"api\":\"anthropic-messages\",\"baseUrl\":\"https://astra.corp.com\",\"reasoning\":true,\"input\":[\"text\",\"image\"],\"contextWindow\":200000,\"maxTokens\":64000},{\"id\":\"gemini-2.5-pro\",\"name\":\"Gemini 2.5 Pro\",\"api\":\"google-generative-ai\",\"baseUrl\":\"https://astra.corp.com/v1beta\",\"reasoning\":true,\"input\":[\"text\",\"image\"],\"contextWindow\":1048576},{\"id\":\"deepseek-chat\",\"name\":\"\\u6DF1\\u5EA6\\u6C42\\u7D22 \\u003Cchat\\u003E \\u0026 co\",\"reasoning\":false,\"input\":[\"text\"],\"contextWindow\":64000,\"maxTokens\":64000},{\"id\":\"o3-mini\",\"api\":\"openai-responses\",\"reasoning\":true},{\"id\":\"claude-haiku-4-5\",\"name\":\"Claude Haiku 4.5\",\"api\":\"anthropic-messages\",\"baseUrl\":\"https://astra.corp.com\",\"reasoning\":true,\"contextWindow\":200000},{\"id\":\"qwen3-coder\",\"name\":\"Qwen3 Coder\",\"contextWindow\":262144,\"maxTokens\":65536}]}"
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "format": "json",
+    "keyPath": "defaultProvider",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "format": "json",
+    "keyPath": "defaultModel",
+    "kind": "key",
+    "before": null,
+    "after": "\"claude-sonnet-4-5\""
+  }
+]

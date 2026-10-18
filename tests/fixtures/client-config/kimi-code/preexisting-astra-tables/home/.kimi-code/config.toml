@@ -1,0 +1,12 @@
+[providers.astra]
+type = "openai"
+base_url = "https://old.example.com/v1"
+api_key = "sk-old"
+# keep me
+extra = "x"
+
+[models.astra-kimi-k2-5]
+provider = "astra"
+model = "kimi-k2.5"
+max_context_size = 1000
+display_name = "Old name"

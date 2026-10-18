@@ -1,0 +1,39 @@
+{
+  "client": "omp",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "x",
+  "extras": {
+    "models": {
+      "a": {
+        "id": "x",
+        "contextWindow": 8000,
+        "maxOutputTokens": 8000
+      },
+      "b": {
+        "id": "y",
+        "contextWindow": 8000,
+        "maxOutputTokens": 9001
+      },
+      "c": {
+        "id": "z",
+        "contextWindow": 10,
+        "maxOutputTokens": 100
+      },
+      "d": {
+        "id": "w",
+        "contextWindow": 1,
+        "maxOutputTokens": 5
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

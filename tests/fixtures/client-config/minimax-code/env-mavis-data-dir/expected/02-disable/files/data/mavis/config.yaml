@@ -1,0 +1,10 @@
+# minimax config
+theme: dark
+defaultModel: builtin/minimax-m2
+custom_provider:
+  other:
+    name: Other
+    api: openai-completions
+    options:
+      baseURL: https://other.example.com/v1
+      apiKey: sk-other

@@ -1,0 +1,9 @@
+{
+  "inferenceProvider": "gateway",
+  "inferenceGatewayBaseUrl": "https://astra.corp.com",
+  "customKey": 1,
+  "coworkEgressAllowedHosts": ["*"],
+  "disableDeploymentModeChooser": true,
+  "inferenceGatewayAuthScheme": "bearer",
+  "inferenceGatewayApiKey": "sk-astra-rotated-key"
+}

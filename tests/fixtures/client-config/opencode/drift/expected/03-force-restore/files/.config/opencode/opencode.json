@@ -1,0 +1,5 @@
+{
+  "theme": "tokyonight",
+  "provider": {  },
+  "model": "ollama/llama3"
+}

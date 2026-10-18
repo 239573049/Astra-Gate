@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"claude-sonnet-4-5\",\"displayName\":\"Astra: claude-sonnet-4-5\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"generic-chat-completion-api\",\"maxContextLimit\":200000,\"maxOutputTokens\":64000}"
+  },
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"deepseek-chat\",\"displayName\":\"Astra: deepseek-chat\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"anthropic\",\"maxContextLimit\":64000,\"maxOutputTokens\":8000,\"noImageSupport\":true}"
+  },
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: gemini-2.5-pro]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"gemini-2.5-pro\",\"displayName\":\"Astra: gemini-2.5-pro\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"anthropic\",\"maxContextLimit\":1000000}"
+  },
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: glm-4.6]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"glm-4.6\",\"displayName\":\"Astra: glm-4.6\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"anthropic\"}"
+  },
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"gpt-5\",\"displayName\":\"Astra: gpt-5\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"generic-chat-completion-api\",\"maxContextLimit\":400000,\"maxOutputTokens\":128000}"
+  },
+  {
+    "file": "$HOME/.factory/settings.json",
+    "keyPath": "customModels.[displayName=Astra: qwen3-coder]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"model\":\"qwen3-coder\",\"displayName\":\"Astra: qwen3-coder\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"provider\":\"generic-chat-completion-api\",\"maxContextLimit\":32000,\"maxOutputTokens\":40000}"
+  }
+]

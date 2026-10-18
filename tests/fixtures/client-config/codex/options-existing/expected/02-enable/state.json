@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"\\u0022gpt-5.1-codex\\u0022\"",
+    "applied": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_auto_compact_token_limit",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"90000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_context_window",
+    "originalAbsent": false,
+    "original": "\"100000\"",
+    "applied": "\"200000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_reasoning_effort",
+    "originalAbsent": false,
+    "original": "\"\\u0022high\\u0022\"",
+    "applied": "\"\\u0022low\\u0022\""
+  }
+]

@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.tkcode/settings.json",
+      "keyPath": "providers.astra",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.tkcode/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

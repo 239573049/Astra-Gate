@@ -1,0 +1,22 @@
+{
+  "client": "muse-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "muse-spark-1.3",
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "context": {
+        "localKey": "sk-astra'second",
+        "model": "deepseek-v4-pro"
+      }
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+approval_policy = "never"
+model_provider = "astra"
+model = "gpt-5"
+
+[model_providers.astra]
+name = "Astra"
+base_url = "https://astra.corp.com/v1"
+wire_api = "responses"
+experimental_bearer_token = "sk-astra-enterprise-key"
+requires_openai_auth = false

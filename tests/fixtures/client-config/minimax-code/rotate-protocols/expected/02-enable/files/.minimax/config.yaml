@@ -1,0 +1,21 @@
+# minimax config
+theme: dark
+defaultModel: "custom_provider:astra/kimi-k2.5"
+custom_provider:
+  other:
+    name: Other
+    api: openai-completions
+    options:
+      baseURL: https://other.example.com/v1
+      apiKey: sk-other
+  astra:
+    name: "Astra"
+    api: "openai-completions"
+    options:
+      baseURL: "https://astra.corp.com/v1"
+      apiKey: "sk-astra-second-key"
+    models:
+      kimi-k2.5:
+        name: "Kimi K2.5"
+        limit:
+          context: 262144

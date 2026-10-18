@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.pi/agent/models.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gpt-5\"}]}"
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "format": "json",
+    "keyPath": "defaultProvider",
+    "kind": "key",
+    "before": "\"anthropic\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.pi/agent/settings.json",
+    "format": "json",
+    "keyPath": "defaultModel",
+    "kind": "key",
+    "before": "\"claude-opus-4\"",
+    "after": "\"gpt-5\""
+  }
+]

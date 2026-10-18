@@ -1,0 +1,12 @@
+default_model = "astra-kimi-k2-5"
+[providers.astra]
+type = "openai"
+base_url = "https://astra.corp.com/v1"
+api_key = "sk-astra-enterprise-key"
+
+[models.astra-kimi-k2-5]
+provider = "astra"
+model = "kimi-k2.5"
+max_context_size = 262144
+capabilities = ["tool_use"]
+display_name = "Kimi K2.5"

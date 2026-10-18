@@ -1,0 +1,26 @@
+{
+  "client": "codex",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": {
+    "models": {
+      "x-1": {
+        "id": "x-1",
+        "name": "Modèle & co <1>"
+      }
+    },
+    "options": {
+      "modelCatalog": true
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

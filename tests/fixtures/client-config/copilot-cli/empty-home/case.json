@@ -1,0 +1,29 @@
+{
+  "client": "copilot-cli",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "deepseek-chat",
+  "extras": {
+    "models": {
+      "c": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 64000,
+        "maxOutputTokens": 8000,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

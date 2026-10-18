@@ -1,0 +1,14 @@
+{
+  // Qwen Code settings
+  "theme": "Dracula",
+  "env": { "SOME_OTHER": "1", "ASTRA_QWEN_API_KEY": "sk-astra-enterprise-key" },
+  "modelProviders": {
+    "openai": [
+      { "id": "qwen-plus", "name": "Qwen Plus", "envKey": "DASHSCOPE_API_KEY", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1" },
+      {"id":"gpt-5","name":"GPT-5","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com/v1","wireApi":"responses"}
+    ],
+    "anthropic": [ {"id":"claude-sonnet-4-5","name":"Claude Sonnet 4.5","envKey":"ASTRA_QWEN_API_KEY","baseUrl":"https://astra.corp.com"} ]
+  },
+  "security": { "auth": { "selectedType": "anthropic" } },
+  "model": { "name": "claude-sonnet-4-5" }
+}

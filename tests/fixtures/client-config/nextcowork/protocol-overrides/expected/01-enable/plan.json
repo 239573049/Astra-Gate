@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.next-cowork/providers.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"protocol\":\"openai-chat\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":{\"deepseek-chat\":{\"upstreamModel\":\"deepseek-chat\",\"displayName\":\"DeepSeek Chat\",\"protocolOverride\":\"anthropic\",\"contextWindow\":128000,\"maxOutputTokens\":8192,\"capabilities\":{\"vision\":false,\"visionInput\":false}},\"gpt-5\":{\"upstreamModel\":\"gpt-5\",\"displayName\":\"GPT-5\",\"contextWindow\":400000,\"maxOutputTokens\":128000,\"capabilities\":{\"vision\":true,\"visionInput\":true,\"fileInput\":true}},\"claude-sonnet-4-5\":{\"upstreamModel\":\"claude-sonnet-4-5\",\"displayName\":\"Claude Sonnet 4.5\",\"protocolOverride\":\"openai-responses\",\"contextWindow\":200000,\"maxOutputTokens\":64000,\"capabilities\":{\"vision\":true,\"visionInput\":true,\"fileInput\":false}}}}"
+  }
+]

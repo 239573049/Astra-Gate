@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "keyPath": "models.[provider=astra-responses&id=gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"gpt-5\",\"provider\":\"astra-responses\",\"maxContextWindowTokens\":400000,\"maxOutputTokens\":128000,\"capabilities\":{\"supports\":{\"vision\":true}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "keyPath": "providers.[name=astra-responses]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra-responses\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"wireApi\":\"responses\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "keyPath": "providers.[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}"
+  }
+]

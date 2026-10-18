@@ -1,0 +1,6 @@
+{
+  "defaultProvider": "astra",
+  "defaultModel": "deepseek-chat",
+  "theme": "dark",
+  "quietStartup": true
+}

@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "fs": { "command": "npx", "args": ["-y", "server-filesystem"] }
+  },
+  "theme": "dark",
+  "deploymentMode": "3p"
+}

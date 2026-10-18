@@ -1,0 +1,30 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zcode/v2/provider_config.json",
+      "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.zcode/v2/provider_config.json",
+      "keyPath": "config.modelConfigRules.providerModelRules.[providerId=astra-responses&modelId=o4-mini]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.zcode/v2/provider_config.json",
+      "keyPath": "config.providerConfigRules.providerRules.[providerId=astra-responses]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.zcode/v2/provider_config.json",
+      "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

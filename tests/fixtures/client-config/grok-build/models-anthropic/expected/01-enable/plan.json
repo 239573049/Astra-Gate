@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "models.default",
+    "kind": "key",
+    "before": "\"grok-3\"",
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"model\":\"\\u0022claude-sonnet-4-5\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"name\":\"\\u0022Astra\\u0022\",\"api_key\":\"\\u0022sk-astra-enterprise-key\\u0022\",\"api_backend\":\"\\u0022messages\\u0022\",\"context_window\":\"200000\"}"
+  }
+]

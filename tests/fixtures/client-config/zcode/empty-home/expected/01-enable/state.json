@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.zcode/v2/provider_config.json",
+    "keyPath": "config.providerConfigRules.providerRules.[providerId=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"providerId\":\"astra\",\"providerName\":\"Astra\",\"enabled\":true,\"config\":{\"group\":\"standard-personal\",\"access\":{\"type\":\"api-key\",\"apiKey\":\"sk-astra-enterprise-key\"},\"api\":{\"type\":\"openai-chat-completions\",\"baseUrl\":\"https://astra.corp.com/v1\"}}}"
+  }
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model",
+    "originalAbsent": false,
+    "original": "\"\\u0022gpt-5.1-codex\\u0022\"",
+    "applied": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_providers.astra.base_url",
+    "originalAbsent": false,
+    "original": "\"\\u0022https://old.example.com/v1\\u0022\"",
+    "applied": "\"\\u0022https://astra.corp.com/v1\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_providers.astra.experimental_bearer_token",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022sk-astra-enterprise-key\\u0022\""
+  }
+]

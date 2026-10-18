@@ -1,0 +1,5 @@
+{
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-4o",
+  "theme": "dark"
+}

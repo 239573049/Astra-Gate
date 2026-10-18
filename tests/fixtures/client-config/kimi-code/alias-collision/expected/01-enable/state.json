@@ -1,0 +1,37 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine\\u0022\"",
+    "applied": "\"\\u0022astra-a-b\\u0022\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-a-b",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-a-b-2",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "models.astra-a-b-3",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

@@ -1,0 +1,58 @@
+[
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"type\":\"\\u0022openai\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"api_key\":\"\\u0022sk-astra-enterprise-key\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-kimi-k2-5",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022kimi-k2.5\\u0022\",\"max_context_size\":\"262144\",\"capabilities\":\"[\\u0022tool_use\\u0022, \\u0022thinking\\u0022, \\u0022image_in\\u0022]\",\"max_output_size\":\"32768\",\"display_name\":\"\\u0022Kimi K2.5\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gpt-5-1",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022gpt-5.1\\u0022\",\"max_context_size\":\"400000\",\"capabilities\":\"[\\u0022tool_use\\u0022, \\u0022thinking\\u0022]\",\"protocol\":\"\\u0022openai_responses\\u0022\",\"max_output_size\":\"128000\",\"display_name\":\"\\u0022GPT 5.1\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-claude-sonnet-4-5",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022claude-sonnet-4-5\\u0022\",\"max_context_size\":\"200000\",\"capabilities\":\"[\\u0022tool_use\\u0022, \\u0022image_in\\u0022]\",\"protocol\":\"\\u0022anthropic\\u0022\",\"max_output_size\":\"64000\",\"display_name\":\"\\u0022Claude Sonnet 4.5\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gemini-2-5-pro",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022gemini-2.5-pro\\u0022\",\"max_context_size\":\"1048576\",\"capabilities\":\"[\\u0022tool_use\\u0022, \\u0022thinking\\u0022, \\u0022image_in\\u0022]\",\"display_name\":\"\\u0022Gemini 2.5 Pro\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-plain",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022plain\\u0022\",\"max_context_size\":\"131072\",\"capabilities\":\"[\\u0022tool_use\\u0022]\"}"
+  },
+  {
+    "file": "$HOME/.kimi-code/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": "\"mine\"",
+    "after": "\"\\u0022astra-kimi-k2-5\\u0022\""
+  }
+]

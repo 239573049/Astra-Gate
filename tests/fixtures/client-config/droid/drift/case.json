@@ -1,0 +1,39 @@
+{
+  "client": "droid",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".factory/settings.json",
+          "write": "{\n  \"customModels\": [\n    { \"model\": \"gpt-5\", \"displayName\": \"Astra: gpt-5\", \"baseUrl\": \"https://elsewhere/v1\", \"apiKey\": \"changed\", \"provider\": \"openai\" }\n  ]\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

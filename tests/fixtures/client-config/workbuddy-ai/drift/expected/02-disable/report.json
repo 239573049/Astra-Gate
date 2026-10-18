@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: gpt-5]",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

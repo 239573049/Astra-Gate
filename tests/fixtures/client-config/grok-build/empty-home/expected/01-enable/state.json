@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "model.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.grok/config.toml",
+    "keyPath": "models.default",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra\\u0022\""
+  }
+]

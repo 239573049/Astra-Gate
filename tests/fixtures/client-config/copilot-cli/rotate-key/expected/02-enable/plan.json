@@ -1,0 +1,58 @@
+[
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra]",
+    "kind": "key",
+    "before": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"}",
+    "after": "{\"name\":\"astra\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-second-key\"}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra&id=deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"deepseek-chat\",\"provider\":\"astra\",\"maxContextWindowTokens\":64000,\"maxOutputTokens\":8000,\"capabilities\":{\"supports\":{\"vision\":false}}}"
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra-responses]",
+    "kind": "key",
+    "before": "{\"name\":\"astra-responses\",\"type\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"wireApi\":\"responses\"}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "providers.[name=astra-anthropic]",
+    "kind": "key",
+    "before": "{\"name\":\"astra-anthropic\",\"type\":\"anthropic\",\"baseUrl\":\"https://astra.corp.com\",\"apiKey\":\"sk-astra-enterprise-key\"}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-anthropic&id=claude-sonnet-4-5]",
+    "kind": "key",
+    "before": "{\"id\":\"claude-sonnet-4-5\",\"provider\":\"astra-anthropic\",\"maxContextWindowTokens\":200000,\"maxOutputTokens\":64000,\"capabilities\":{\"supports\":{\"vision\":true}}}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.copilot/providers.json",
+    "format": "json",
+    "keyPath": "models.[provider=astra-responses&id=gpt-5]",
+    "kind": "key",
+    "before": "{\"id\":\"gpt-5\",\"provider\":\"astra-responses\",\"maxContextWindowTokens\":400000,\"maxOutputTokens\":128000,\"capabilities\":{\"supports\":{\"vision\":true}}}",
+    "after": null
+  },
+  {
+    "file": "$HOME/.copilot/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"astra-anthropic/claude-sonnet-4-5\"",
+    "after": "\"astra/deepseek-chat\""
+  }
+]

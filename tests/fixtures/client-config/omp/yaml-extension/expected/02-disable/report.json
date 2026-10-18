@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.omp/agent/models.yaml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.omp/agent/config.yaml",
+      "keyPath": "modelRoles.default",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

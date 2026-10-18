@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/Code/User/chatLanguageModels.json",
+      "keyPath": "[vendor=customendpoint&name=Astra].apiType",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/Code/User/chatLanguageModels.json",
+      "keyPath": "[vendor=customendpoint&name=Astra].models",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

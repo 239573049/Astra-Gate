@@ -1,0 +1,42 @@
+[
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"type\":\"openai-compat\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"deepseek-chat\",\"name\":\"\\u6DF1\\u5EA6\\u6C42\\u7D22 \\u003Cchat\\u003E \\u0026 co\",\"context_window\":64000,\"default_max_tokens\":16000,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false},{\"id\":\"o3-mini\",\"name\":\"o3-mini\",\"context_window\":128000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":false},{\"id\":\"qwen3-coder\",\"name\":\"Qwen3 Coder\",\"context_window\":262144,\"default_max_tokens\":65536,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":false,\"supports_attachments\":false}]}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "format": "json",
+    "keyPath": "providers.astra-responses",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra (Responses)\",\"type\":\"openai\",\"base_url\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"context_window\":400000,\"default_max_tokens\":128000,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":true}]}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "format": "json",
+    "keyPath": "providers.astra-anthropic",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra (Anthropic)\",\"type\":\"anthropic\",\"base_url\":\"https://astra.corp.com\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"context_window\":200000,\"default_max_tokens\":64000,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":true},{\"id\":\"claude-haiku-4-5\",\"name\":\"Claude Haiku 4.5\",\"context_window\":200000,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":false}]}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "format": "json",
+    "keyPath": "providers.astra-gemini",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra (Gemini)\",\"type\":\"google\",\"base_url\":\"https://astra.corp.com\",\"api_key\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gemini-2.5-pro\",\"name\":\"Gemini 2.5 Pro\",\"context_window\":1048576,\"default_max_tokens\":16384,\"cost_per_1m_in\":0,\"cost_per_1m_out\":0,\"cost_per_1m_in_cached\":0,\"cost_per_1m_out_cached\":0,\"can_reason\":true,\"supports_attachments\":true}]}"
+  },
+  {
+    "file": "$HOME/.config/crush/crush.json",
+    "format": "json",
+    "keyPath": "models.large",
+    "kind": "key",
+    "before": "{\"provider\":\"ollama\",\"model\":\"llama3\"}",
+    "after": "{\"provider\":\"astra-responses\",\"model\":\"gpt-5\"}"
+  }
+]

@@ -1,0 +1,48 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/custom-dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=agent-default-model].config.model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom-dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=agent-default-model].config.provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom-dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=llm-pi-ai].config.providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom-dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=llm-pi-ai].config.providers.astra-responses",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom-dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=llm-pi-ai].config.providers.astra-anthropic",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom-dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=agent-default-model].config.reasoningEffort",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/custom-dsh/.env",
+      "keyPath": "ASTRA_GATEWAY_API_KEY",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

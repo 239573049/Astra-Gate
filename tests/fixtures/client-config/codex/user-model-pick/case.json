@@ -1,0 +1,39 @@
+{
+  "client": "codex",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "enable",
+      "edit": [
+        {
+          "file": ".codex/config.toml",
+          "write": "# Codex configuration\n# Written by hand; keep the comments.\n\nmodel = \"user-pick\"\nmodel_reasoning_effort = \"high\"\napproval_policy = \"on-request\"\nsandbox_mode = \"workspace-write\"\nmodel_provider = \"astra\"\n\n# My preferred shell environment\n[shell_environment_policy]\ninherit = \"core\"\nignore = [\"AWS_*\", \"AZURE_*\"]\n\n[projects.\"/Users/token/code/astra\"]\ntrust_level = \"trusted\"\n\n[sandbox_workspace_write]\nnetwork_access = true\n\n# Third-party providers live here\n[model_providers.openrouter]\nname = \"OpenRouter\"\nbase_url = \"https://openrouter.ai/api/v1\"\nenv_key = \"OPENROUTER_API_KEY\"\nwire_api = \"responses\"\n\n[profiles.fast]\nmodel_provider = \"openrouter\"\nmodel = \"openai/gpt-5.1\"\n\n[model_providers.astra]\nname = \"Astra\"\nbase_url = \"https://astra.corp.com/v1\"\nwire_api = \"responses\"\nexperimental_bearer_token = \"sk-astra-enterprise-key\"\nrequires_openai_auth = false\n"
+        }
+      ]
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

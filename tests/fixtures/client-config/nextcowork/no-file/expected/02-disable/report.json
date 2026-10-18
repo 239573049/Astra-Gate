@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.next-cowork/providers.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.next-cowork/providers.json"
+  ],
+  "warnings": []
+}

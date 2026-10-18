@@ -1,0 +1,22 @@
+{
+  "client": "claude-desktop",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": {
+    "roleMap": {
+      "sonnet": "claude-sonnet-4-5",
+      "opus": "gpt-5",
+      "haiku": "deepseek-chat"
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "purge"
+    }
+  ]
+}

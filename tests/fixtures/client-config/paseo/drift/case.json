@@ -1,0 +1,63 @@
+{
+  "client": "paseo",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "claude-sonnet-4-5",
+  "extras": {
+    "models": {
+      "deepseek-chat": {
+        "id": "deepseek-chat",
+        "name": "DeepSeek Chat",
+        "contextWindow": 128000,
+        "maxOutputTokens": 8192,
+        "reasoning": false,
+        "vision": false,
+        "protocols": [
+          "openai-chat"
+        ]
+      },
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      },
+      "claude-sonnet-4-5": {
+        "id": "claude-sonnet-4-5",
+        "name": "Claude Sonnet 4.5",
+        "contextWindow": 200000,
+        "maxOutputTokens": 64000,
+        "reasoning": true,
+        "vision": true,
+        "pdf": false,
+        "protocols": [
+          "anthropic"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".paseo/config.json",
+          "write": "{\n  \"daemon\": {\n    \"port\": 6767\n  },\n  \"agents\": {\n    \"providers\": {\n      \"my-claude\": {\n        \"extends\": \"claude\",\n        \"label\": \"Mine\",\n        \"env\": {\n          \"ANTHROPIC_BASE_URL\": \"https://example.com\"\n        }\n      },\n      \"astra\": {\n        \"extends\": \"claude\",\n        \"label\": \"Astra\",\n        \"description\": \"Claude Code through the Astra gateway\",\n        \"env\": {\n          \"ANTHROPIC_BASE_URL\": \"https://astra.corp.com\",\n          \"ANTHROPIC_AUTH_TOKEN\": \"sk-someone-else\"\n        },\n        \"disallowedTools\": [\n          \"WebSearch\"\n        ],\n        \"models\": [\n          {\n            \"id\": \"deepseek-chat\",\n            \"label\": \"DeepSeek Chat\"\n          },\n          {\n            \"id\": \"claude-sonnet-4-5\",\n            \"label\": \"Claude Sonnet 4.5\",\n            \"isDefault\": true\n          }\n        ]\n      },\n      \"astra-codex\": {\n        \"extends\": \"codex\",\n        \"label\": \"Astra (Codex)\",\n        \"description\": \"Codex through the Astra gateway, for models served over the Responses API\",\n        \"env\": {\n          \"OPENAI_BASE_URL\": \"https://astra.corp.com\",\n          \"OPENAI_API_KEY\": \"sk-astra-enterprise-key\"\n        },\n        \"models\": [\n          {\n            \"id\": \"gpt-5\",\n            \"label\": \"GPT-5\",\n            \"isDefault\": true\n          }\n        ]\n      }\n    }\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

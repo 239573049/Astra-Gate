@@ -1,0 +1,42 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "models.default",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "model.astra.base_url",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "model.astra.api_key",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "model.astra.model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "model.astra.api_backend",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.grok/config.toml",
+      "keyPath": "model.astra.context_window",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

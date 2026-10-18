@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.zshrc",
+    "format": "shellblock",
+    "keyPath": "muse-code",
+    "kind": "key",
+    "before": null,
+    "after": "\"# Muse Code is routed through Astra. Turn the Muse Code client off in Astra to remove this block.\\nmuse() {\\n  case \\u0022${1-}\\u0022 in\\n    exec)\\n      shift\\n      META_API_KEY=\\u0027sk-astra-enterprise-key\\u0027 MUSE_MODEL=\\u0027muse-spark-1.3\\u0027 command muse exec --base-url \\u0027https://astra.corp.com/v1\\u0027 \\u0022$@\\u0022\\n      ;;\\n    resume|export|trace|skills|sandbox|session-message|auth|login|logout|init|config|help)\\n      command muse \\u0022$@\\u0022\\n      ;;\\n    *)\\n      META_API_KEY=\\u0027sk-astra-enterprise-key\\u0027 MUSE_MODEL=\\u0027muse-spark-1.3\\u0027 command muse --base-url \\u0027https://astra.corp.com/v1\\u0027 \\u0022$@\\u0022\\n      ;;\\n  esac\\n}\""
+  }
+]

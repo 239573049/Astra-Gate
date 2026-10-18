@@ -1,0 +1,36 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: big-window]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.workbuddy-ai/models.json",
+      "keyPath": "models.[name=Astra: qwen3-coder]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

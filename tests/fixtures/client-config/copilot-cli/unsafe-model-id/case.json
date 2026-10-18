@@ -1,0 +1,26 @@
+{
+  "client": "copilot-cli",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "ok-model",
+  "extras": {
+    "models": {
+      "x": {
+        "id": "bad=id&x"
+      },
+      "y": {
+        "id": "ok-model",
+        "contextWindow": 100000
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

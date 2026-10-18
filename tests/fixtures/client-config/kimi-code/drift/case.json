@@ -1,0 +1,33 @@
+{
+  "client": "kimi-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "kimi-k2.5",
+  "extras": {
+    "models": {
+      "kimi-k2.5": {
+        "id": "kimi-k2.5",
+        "name": "Kimi K2.5",
+        "contextWindow": 262144
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".kimi-code/config.toml",
+          "write": "default_model = \"mine\"\n\n[providers.astra]\ntype = \"openai\"\nbase_url = \"https://astra.corp.com/v1\"\napi_key = \"sk-changed\"\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

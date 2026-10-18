@@ -1,0 +1,39 @@
+{
+  "client": "qwen-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".qwen/settings.json",
+          "write": "{\n  \"env\": { \"ASTRA_QWEN_API_KEY\": \"tampered\" },\n  \"modelProviders\": { \"openai\": [ { \"id\": \"gpt-5\", \"name\": \"GPT-5\", \"envKey\": \"ASTRA_QWEN_API_KEY\", \"baseUrl\": \"https://elsewhere/v1\", \"wireApi\": \"responses\" } ] },\n  \"security\": { \"auth\": { \"selectedType\": \"openai-responses\" } },\n  \"model\": { \"name\": \"gpt-5\" }\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

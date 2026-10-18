@@ -1,0 +1,36 @@
+{
+  "client": "zed",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "vision": true,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".config/zed/settings.json",
+          "write": "// Zed settings\n//\n// For information on how to configure Zed, see the Zed\n// documentation: https://zed.dev/docs/configuring-zed\n{\n  \"theme\": \"One Dark\", // my theme\n  \"buffer_font_size\": 15,\n  \"language_models\": {\n    \"openai_compatible\": {\n      \"other\": {\n        \"api_url\": \"https://other.example.com/v1\",\n        \"available_models\": [{ \"name\": \"o-1\", \"max_tokens\": 8000 }]\n      },\n      \"astra\": {\"api_url\":\"https://astra.corp.com/v1\",\"available_models\":[{\"name\":\"gpt-5\",\"display_name\":\"GPT-5\",\"max_tokens\":400000,\"max_output_tokens\":128000,\"capabilities\":{\"tools\":true,\"images\":true,\"parallel_tool_calls\":false,\"prompt_cache_key\":false,\"chat_completions\":false}}]}\n    }\n  },\n  \"agent\": {\n    \"default_model\": {\"provider\":\"anthropic\",\"model\":\"claude-sonnet-4-5\"},\n    \"always_allow_tool_actions\": false,\n  },\n}\n"
+        }
+      ]
+    }
+  ]
+}

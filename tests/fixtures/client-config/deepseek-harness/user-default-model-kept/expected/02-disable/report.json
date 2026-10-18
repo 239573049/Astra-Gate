@@ -1,0 +1,30 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=agent-default-model].config.model",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=agent-default-model].config.provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+      "keyPath": "[id=agent-default-model].config.reasoningEffort",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.dsh/.env",
+      "keyPath": "ASTRA_GATEWAY_API_KEY",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}
