@@ -7,6 +7,7 @@ import type { Token } from '../api/types';
 import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider, translate } from '../i18n';
 import { TokensPage } from '../pages/TokensPage';
+import { systemActions } from '../shell/systemActions';
 
 const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[], tunnel: undefined as unknown, providers: [] as unknown[] }));
 
@@ -85,6 +86,18 @@ beforeEach(() => {
   spies.providers = [];
 });
 afterEach(cleanup);
+
+describe('employee join command', () => {
+  it('copies the command with the gateway address and no key', async () => {
+    const copy = vi.spyOn(systemActions, 'copy').mockResolvedValue(true);
+    spies.tokens = [token({ isDefault: false, id: 't1', name: 'Zhang' })];
+    show();
+    fireEvent.click(screen.getByRole('button', { name: t('tokens.copyJoin') }));
+    await waitFor(() => expect(copy).toHaveBeenCalledWith('npx @aidotnet/astra-connect join http://astra.test:8787'));
+    expect(copy.mock.calls[0]![0]).not.toContain('sk-astra');
+    copy.mockRestore();
+  });
+});
 
 describe('remote access', () => {
   it('adds the tunnel addresses while it is connected, and only then', () => {

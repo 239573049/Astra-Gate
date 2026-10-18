@@ -1,4 +1,4 @@
-import { BarChart3, ChevronRight, Copy, Link2, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, Trash2 } from 'lucide-react';
+import { BarChart3, ChevronRight, Copy, Link2, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, SquareTerminal, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -111,6 +111,14 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
     else toast(t('tokens.copyFailed'), 'error');
   };
 
+  // The employee-side CLI (plan: enterprise-connect): the command carries the gateway address, never the key.
+  const copyJoin = async () => {
+    const base = settings.data?.gatewayBaseUrl;
+    if (!base) return;
+    if (await systemActions.copy(`npx @aidotnet/astra-connect join ${base}`)) toast(t('tokens.joinCopied'));
+    else toast(t('tokens.copyFailed'), 'error');
+  };
+
   const toggle = async () => {
     if (token.enabled && !(await confirm({ title: t('tokens.disableConfirm', { name: token.name }), detail: t('tokens.disableDetail'), confirmLabel: t('tokens.disable'), destructive: true })))
       return;
@@ -177,6 +185,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               <code className="font-mono text-[12px] text-[var(--text-secondary)] selectable">{token.keyMasked}</code>
               <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('tokens.copy')} title={t('tokens.copy')} loading={reveal.isPending} onClick={copy} />
               <Button size="sm" variant="plain" icon={<Link2 className="size-3.5" />} aria-label={t('tokens.copyUrl')} title={t('tokens.copyUrl')} disabled={!settings.data} onClick={() => void copyUrl()} />
+              <Button size="sm" variant="plain" icon={<SquareTerminal className="size-3.5" />} aria-label={t('tokens.copyJoin')} title={t('tokens.copyJoin')} disabled={!settings.data} onClick={() => void copyJoin()} />
             </div>
           </div>
         </div>
