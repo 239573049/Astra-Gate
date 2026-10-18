@@ -1,0 +1,3 @@
+# Golden cases carry deliberate CRLF and BOM bytes (tests/Astra.Clients.Tests/GoldenClientConfigTests.cs):
+# never let git normalise them.
+tests/fixtures/client-config/** -text
