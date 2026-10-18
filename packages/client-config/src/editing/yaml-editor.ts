@@ -274,7 +274,6 @@ function splitPath(path: string): string[] {
 type YNode = Node | null;
 type Entry = { key: Scalar; value: YNode };
 
-const isFlow = (n: YNode): boolean => (isMap(n) || isSeq(n)) && n.flow === true;
 const isBlockMap = (n: YNode): n is YAMLMap => isMap(n) && !n.flow && n.items.length > 0;
 const isBlockSeq = (n: YNode): n is YAMLSeq => isSeq(n) && !n.flow && n.items.length > 0;
 const isEmptyPlain = (n: YNode): boolean =>

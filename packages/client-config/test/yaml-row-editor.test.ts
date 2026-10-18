@@ -18,7 +18,7 @@ const Patch = `# Your patch layer
 `;
 
 const row = (id: string): string => `[id=${id}]`;
-type Obj = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+type Obj = Record<string, any>;
 
 describe('YamlEditor rows', () => {
   it('Reads_Rows_And_Nested_Values', () => {
