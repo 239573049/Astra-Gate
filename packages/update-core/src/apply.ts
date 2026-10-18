@@ -22,6 +22,7 @@ import {
   commitManagedWebRoot,
   commitNativeCompanions,
   installManagedBinary,
+  installNativeCompanions,
   installManagedWebRoot,
   pruneManagedBinaries,
   restoreManagedWebRoot,
@@ -160,7 +161,6 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
     if (backupPath) log(`Backed up the current binary to ${backupPath}`);
     const serverPath = installManagedBinary({
       stagedPath: staged.path,
-      nativeLibraries: staged.nativeLibraries,
       serverDir: paths.serverDir,
       version: o.manifest.version,
       platform: o.platform,
@@ -174,6 +174,9 @@ export async function applyServerUpdate(o: ApplyServerUpdateOptions): Promise<Ap
       log('Restarting the Astra server…');
       await o.control.stop();
     }
+    // The native companions keep their filename across versions and the old server has its
+    // copy loaded, so Windows only lets them be replaced now that it is down.
+    installNativeCompanions(staged.nativeLibraries, paths.serverDir);
     // The web UI is read from wwwroot beside the binary; swap it while the
     // server is down (no open handles on Windows). Best effort: a failure
     // leaves the previous UI in place rather than failing the update.

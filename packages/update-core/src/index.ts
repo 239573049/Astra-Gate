@@ -44,6 +44,7 @@ export {
   commitNativeCompanions,
   installManagedBinary,
   installManagedWebRoot,
+  installNativeCompanions,
   pruneBackups,
   pruneManagedBinaries,
   restoreManagedWebRoot,

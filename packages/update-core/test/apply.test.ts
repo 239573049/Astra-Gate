@@ -296,6 +296,48 @@ describe('applyServerUpdate', () => {
     expect(fs.existsSync(path.join(serverDir, 'libe_sqlite3.dylib.tmp'))).toBe(false);
   });
 
+  it('replaces the native companion libraries only after the server is stopped', async () => {
+    const h = harness(tmp);
+    h.control.running = true;
+    const { serverDir } = updatePaths(h.home);
+    const lib = path.join(serverDir, 'libe_sqlite3.dylib');
+    fs.mkdirSync(serverDir, { recursive: true });
+    fs.writeFileSync(lib, 'sqlite-old');
+    h.opts.installIntoPrefix = fakeInstaller(() => FAKE_BINARY, undefined, {
+      'libe_sqlite3.dylib': 'sqlite-new',
+    });
+    // Windows cannot overwrite a library the running server has loaded.
+    const stop = h.control.stop.bind(h.control);
+    let seenWhileRunning: string | null = null;
+    h.control.stop = async () => {
+      seenWhileRunning = fs.readFileSync(lib, 'utf8');
+      await stop();
+    };
+
+    await applyServerUpdate(h.opts);
+
+    expect(seenWhileRunning).toBe('sqlite-old');
+    expect(fs.readFileSync(lib, 'utf8')).toBe('sqlite-new');
+  });
+
+  it('leaves an unchanged native companion library alone', async () => {
+    const h = harness(tmp);
+    const { serverDir } = updatePaths(h.home);
+    const lib = path.join(serverDir, 'libe_sqlite3.dylib');
+    fs.mkdirSync(serverDir, { recursive: true });
+    fs.writeFileSync(lib, 'sqlite-same');
+    const before = fs.statSync(lib).ino;
+    h.opts.installIntoPrefix = fakeInstaller(() => FAKE_BINARY, undefined, {
+      'libe_sqlite3.dylib': 'sqlite-same',
+    });
+
+    await applyServerUpdate(h.opts);
+
+    expect(fs.statSync(lib).ino).toBe(before);
+    expect(fs.existsSync(`${lib}.tmp`)).toBe(false);
+    expect(fs.existsSync(`${lib}.prev`)).toBe(false);
+  });
+
   it('restores the previous companion libraries on rollback', async () => {
     const h = harness(tmp);
     h.control.versionToReport = '0.1.0'; // server somehow still reports the old build

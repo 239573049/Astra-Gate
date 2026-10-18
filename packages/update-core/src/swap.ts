@@ -71,24 +71,14 @@ export interface InstallManagedBinaryOptions {
   serverDir: string;
   version: string;
   platform: string;
-  /**
-   * Companion native libraries to place beside the binary (staged paths from
-   * StagedServerBinary.nativeLibraries / findNativeCompanions). The AOT loader
-   * resolves them relative to the executable's directory, so a binary without
-   * them dies on the first database access.
-   */
-  nativeLibraries?: string[];
 }
 
 /**
  * Copies the verified staged binary to its managed, version-suffixed home
- * (~/.astra/server/astra-server-<version>), together with its native companion
- * libraries. A fresh file per version means Windows file locks on a running
- * binary are never an issue, and install.json is what makes both resolvers
- * pick this one after the restart. Companions share their filename across
- * versions, so the replaced copy is kept as `<name>.prev` — the same
- * temp-copy + rename + prev lifecycle as wwwroot — until
- * commitNativeCompanions / restoreNativeCompanions decides its fate.
+ * (~/.astra/server/astra-server-<version>). A fresh file per version means
+ * Windows file locks on a running binary are never an issue, and install.json
+ * is what makes both resolvers pick this one after the restart. The native
+ * companions are not installed here: see installNativeCompanions.
  */
 export function installManagedBinary(o: InstallManagedBinaryOptions): string {
   const target = managedServerBinaryPath(o.serverDir, o.version, o.platform);
@@ -97,19 +87,43 @@ export function installManagedBinary(o: InstallManagedBinaryOptions): string {
   fs.copyFileSync(o.stagedPath, tmp);
   fs.renameSync(tmp, target);
   if (o.platform !== 'win32') fs.chmodSync(target, 0o755);
-  for (const lib of o.nativeLibraries ?? []) installNativeCompanion(lib, o.serverDir);
   return target;
 }
 
-/** Installs one companion beside the binary, keeping the replaced copy as `<name>.prev`. */
+/**
+ * Places the companion native libraries (staged paths from
+ * StagedServerBinary.nativeLibraries / findNativeCompanions) beside the
+ * binaries. The AOT loader resolves them relative to the executable's
+ * directory, so a binary without them dies on the first database access.
+ * Companions share their filename across versions and the running server has
+ * its copy loaded (Windows refuses to overwrite it), so call this only once
+ * the server is stopped. The replaced copy is kept as `<name>.prev` — the same
+ * temp-copy + rename + prev lifecycle as wwwroot — until commitNativeCompanions
+ * / restoreNativeCompanions decides its fate; a library whose bytes did not
+ * change is left alone.
+ */
+export function installNativeCompanions(staged: string[], serverDir: string): void {
+  fs.mkdirSync(serverDir, { recursive: true });
+  for (const lib of staged) installNativeCompanion(lib, serverDir);
+}
+
 function installNativeCompanion(staged: string, serverDir: string): void {
   const dest = path.join(serverDir, path.basename(staged));
+  if (fs.existsSync(dest) && sameContent(staged, dest)) return;
   const tmp = `${dest}.tmp`;
   const prev = `${dest}.prev`;
   fs.copyFileSync(staged, tmp);
   fs.rmSync(prev, { force: true });
   if (fs.existsSync(dest)) fs.copyFileSync(dest, prev);
   fs.renameSync(tmp, dest);
+}
+
+function sameContent(a: string, b: string): boolean {
+  try {
+    return fs.readFileSync(a).equals(fs.readFileSync(b));
+  } catch {
+    return false;
+  }
 }
 
 /** The `<name>.prev` companion snapshots currently kept in serverDir. */
