@@ -46,6 +46,9 @@ namespace Astra.Server;
 [JsonSerializable(typeof(ErrorBody))]
 [JsonSerializable(typeof(UpstreamStatusDetailsDto))]
 [JsonSerializable(typeof(BoundClientsDetailsDto))]
+// Object-typed error details also probe the record's interface graph on .NET 11.
+[JsonSerializable(typeof(IEquatable<UpstreamStatusDetailsDto>))]
+[JsonSerializable(typeof(IEquatable<BoundClientsDetailsDto>))]
 [JsonSerializable(typeof(ErrorOnlyDto))]
 [JsonSerializable(typeof(ErrorStatusDto))]
 [JsonSerializable(typeof(ErrorVerificationDto))]
@@ -70,6 +73,9 @@ namespace Astra.Server;
 [JsonSerializable(typeof(BillingResultDto))]
 // providers
 [JsonSerializable(typeof(ProviderDto))]
+[JsonSerializable(typeof(ProviderUsageDto))]
+[JsonSerializable(typeof(ProviderAccountUsageDto))]
+[JsonSerializable(typeof(ProviderUsageTotalsDto))]
 [JsonSerializable(typeof(ModelOverridesDto))]
 [JsonSerializable(typeof(EffectiveModelDto))]
 [JsonSerializable(typeof(ProviderModelDto))]
@@ -215,6 +221,14 @@ namespace Astra.Server;
 [JsonSerializable(typeof(TunnelEndpoints.TunnelStatusDto))]
 [JsonSerializable(typeof(TunnelEndpoints.TunnelConfigRequest))]
 [JsonSerializable(typeof(TunnelEndpoints.DetectedCloudflaredDto))]
+// smart routing
+[JsonSerializable(typeof(SmartRoutingEndpoints.SmartRoutingDto))]
+[JsonSerializable(typeof(SmartRoutingEndpoints.SmartRoutingUpdate))]
+[JsonSerializable(typeof(SmartRoutingEndpoints.SmartRoutingTestRequest))]
+[JsonSerializable(typeof(SmartRoutingEndpoints.SmartRoutingTestDto))]
+[JsonSerializable(typeof(SmartRoutingEndpoints.RoutingProblemsDetails))]
+[JsonSerializable(typeof(IEquatable<SmartRoutingEndpoints.RoutingProblemsDetails>))]
+[JsonSerializable(typeof(List<SmartRoutingEndpoints.RoutingModelDto>))]
 // server-owned documents
 [JsonSerializable(typeof(ServerOptions))]
 [JsonSerializable(typeof(RuntimeInfo))]

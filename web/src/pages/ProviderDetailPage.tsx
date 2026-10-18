@@ -13,6 +13,7 @@ import {
   usePriceKeys,
   useProvider,
   useProviderModels,
+  useProviderUsage,
   useRemoteModels,
   useSetProviderModelMap,
   useTemplateUpdate,
@@ -26,6 +27,7 @@ import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import ConfirmMorph from '../components/arc/confirm-morph/confirm-morph';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
 import { PricingSourceBadge } from '../components/Billing';
+import { AccountUsageStats, ProviderUsageHint } from '../components/AccountUsageStats';
 import { CLIENT_META } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { PricingEditor } from '../components/PricingEditor';
@@ -670,6 +672,7 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
   const { t } = useI18n();
   const { toast } = useFeedback();
   const update = useUpdateProvider(provider.id);
+  const usage = useProviderUsage(provider.id);
   const [key, setKey] = useState('');
 
   const save = () =>
@@ -696,6 +699,12 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
           </div>
         </Row>
       </Group>
+      <section className="card my-4 flex flex-col gap-2 p-4">
+        <h3 className="text-[13px] font-medium">{t('providers.usage.title')}</h3>
+        {usage.isError && <Alert tone="danger" title={t('providers.usage.error')}>{errorText(usage.error)}</Alert>}
+        <AccountUsageStats usage={usage.data?.accounts.find((u) => !u.accountId)} />
+        <ProviderUsageHint timeZone={usage.data?.timeZone} />
+      </section>
       <ProviderQuotaSection provider={provider} />
     </>
   );

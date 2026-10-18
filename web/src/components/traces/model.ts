@@ -108,6 +108,85 @@ export const attrStr = (span: TraceSpan | undefined, key: string): string | unde
   return typeof v === 'string' ? v : undefined;
 };
 
+const ROUTE_SOURCES = ['judge', 'pin', 'turn', 'fallback', 'breaker'] as const;
+const ROUTE_MODES = ['session', 'turn'] as const;
+const ROUTE_REASONS = [
+  'timeout', 'network', 'auth', 'rate_limited', 'overloaded', 'bad_request', 'bad_response',
+  'low_confidence', 'breaker', 'no_text', 'not_configured', 'error',
+] as const;
+
+/** A smart-routing decision recorded on a resolve span (`astra.route.*`; plan §5.9 — no span of its own). */
+export interface RouteDecision {
+  /** The resolve span that recorded it. A pool failover resolves again per member; only the first one judged. */
+  span: TraceSpan;
+  mode?: string;
+  source?: string;
+  grade?: string;
+  model?: string;
+  confidence?: number;
+  fallbackReason?: string;
+  adjustedFrom?: string;
+  judgeProtocol?: string;
+  judgeModel?: string;
+  /** Milliseconds the judge call took; 0 when the decision was reused and no judge ran. */
+  judgeMs: number;
+  judgeInput?: number;
+  judgeOutput?: number;
+  newConnection: boolean;
+}
+
+/** The decision on this request, if it asked for the virtual model. */
+export function routeDecision(spans: readonly TraceSpan[]): RouteDecision | null {
+  const span = spans.find((s) => s.name === SPAN.resolve && (attrStr(s, 'astra.route.grade') || attrStr(s, 'astra.route.source')));
+  if (!span) return null;
+  return {
+    span,
+    mode: attrStr(span, 'astra.route.mode'),
+    source: attrStr(span, 'astra.route.source'),
+    grade: attrStr(span, 'astra.route.grade'),
+    model: attrStr(span, 'astra.route.model'),
+    confidence: attrNum(span, 'astra.route.confidence'),
+    fallbackReason: attrStr(span, 'astra.route.fallback_reason'),
+    adjustedFrom: attrStr(span, 'astra.route.adjusted_from'),
+    judgeProtocol: attrStr(span, 'astra.route.judge.protocol'),
+    judgeModel: attrStr(span, 'astra.route.judge.model'),
+    judgeMs: attrNum(span, 'astra.route.judge.ms') ?? 0,
+    judgeInput: attrNum(span, 'astra.route.judge.input_tokens'),
+    judgeOutput: attrNum(span, 'astra.route.judge.output_tokens'),
+    newConnection: attr(span, 'astra.route.judge.new_connection') === true,
+  };
+}
+
+const isOneOf = <T extends string>(value: string | undefined, options: readonly T[]): value is T =>
+  value !== undefined && (options as readonly string[]).includes(value);
+
+export function routeSourceLabel(source: string | undefined, t: TFunction): string {
+  return isOneOf(source, ROUTE_SOURCES) ? t(`traces.route.source.${source}`) : (source ?? '—');
+}
+
+export function routeModeLabel(mode: string | undefined, t: TFunction): string {
+  return isOneOf(mode, ROUTE_MODES) ? t(`traces.route.mode.${mode}`) : (mode ?? '—');
+}
+
+/** A fallback reason in the words the smart-routing page already uses; the raw reason when it is a new one. */
+export function routeReasonLabel(reason: string | undefined, t: TFunction): string | undefined {
+  if (!reason) return undefined;
+  return isOneOf(reason, ROUTE_REASONS) ? t(`smartRouting.failure.${reason}`) : reason;
+}
+
+/** Judge time inside a resolve span, in microseconds; 0 when this span is not the one that recorded the decision. */
+export function judgeUsOn(span: TraceSpan | undefined, decision: RouteDecision | null): number {
+  if (!span || !decision || span.spanId !== decision.span.spanId || decision.judgeMs <= 0) return 0;
+  return Math.min(span.durationUs, Math.round(decision.judgeMs * 1000));
+}
+
+/** "standard · Judged · 2.01 s" — the decision in one line. */
+export function routeSummary(d: RouteDecision, t: TFunction): string {
+  const parts = [d.grade ?? '—', routeSourceLabel(d.source, t)];
+  if (d.judgeMs > 0) parts.push(formatUs(Math.round(d.judgeMs * 1000)));
+  return parts.join(' · ');
+}
+
 const edgeBase = (id: string, source: string, target: string, color: string, extra: Partial<Edge> = {}): Edge => ({
   id,
   source,
@@ -241,7 +320,10 @@ function withLive(data: TraceTopology, live: readonly RequestSummary[], brands: 
 // ------------------------------------------------------------------ B · one request
 
 export interface TimeSplit {
+  /** Everything before the first upstream attempt, including a smart-routing judge. */
   astraUs: number;
+  /** The judge call, already included in `astraUs`. 0 when no judge ran (a pin, a turn, or no routing). */
+  routingUs: number;
   retryUs: number;
   ttfbUs: number;
   firstTokenUs: number;
@@ -250,7 +332,7 @@ export interface TimeSplit {
   totalUs: number;
 }
 
-/** Where one request's time went: Astra itself, wasted attempts, upstream first byte, first token, generation. */
+/** Where one request's time went: Astra itself, the routing judge, wasted attempts, upstream first byte, first token, generation. */
 export function splitRequestTime(spans: TraceSpan[]): TimeSplit | null {
   const root = spans.find((s) => s.name === SPAN.request);
   const attempts = spans.filter((s) => s.name === SPAN.attempt).sort((a, b) => a.startUs - b.startUs);
@@ -262,8 +344,10 @@ export function splitRequestTime(spans: TraceSpan[]): TimeSplit | null {
   const firstToken = response?.events?.find((e) => e.name === 'first_token')?.offset_us;
   const responseEnd = response ? response.startUs + response.durationUs : headersAt;
   const tokenAt = firstToken !== undefined && firstToken >= headersAt ? firstToken : headersAt;
+  const routing = routeDecision(spans);
   return {
     astraUs: first.startUs,
+    routingUs: Math.min(first.startUs, judgeUsOn(routing?.span, routing)),
     retryUs: Math.max(0, last.startUs - first.startUs),
     ttfbUs: last.durationUs,
     firstTokenUs: Math.max(0, tokenAt - headersAt),
@@ -308,9 +392,9 @@ export function buildRequest(
   });
   const chain: { id: string; x: number }[] = [];
   let x = 170;
-  const stage = (id: string, span: TraceSpan | undefined, title: string, lines: string[]) => {
+  const stage = (id: string, span: TraceSpan | undefined, title: string, lines: string[], toneOverride?: Tone) => {
     if (!span) return;
-    nodes.push({ id, type: 'card', position: { x, y: rowY }, style: { width: 140 }, data: { title, lines, tone: tone(span) } });
+    nodes.push({ id, type: 'card', position: { x, y: rowY }, style: { width: 140 }, data: { title, lines, tone: toneOverride ?? tone(span) } });
     chain.push({ id, x });
     x += PITCH;
   };
@@ -326,7 +410,25 @@ export function buildRequest(
     t('traces.node.hits', { count: attrNum(privacy, 'astra.privacy.hits') ?? 0 }),
     formatUs(privacy?.durationUs),
   ]);
-  stage('resolve', resolve, t('traces.node.resolve'), [attrStr(resolve, 'astra.provider.name') ?? r.providerName ?? '—', formatUs(resolve?.durationUs)]);
+  // Smart routing is attributes on the resolve span, not a span of its own (plan §5.9). Drawn between the guard and
+  // the resolve, and its judge time is taken back out of the resolve node so the two don't both claim it.
+  const decision = routeDecision(trace.spans);
+  if (decision) {
+    const sourceLabel = routeSourceLabel(decision.source, t);
+    const warn = decision.source === 'fallback' || decision.source === 'breaker' || !!decision.adjustedFrom;
+    stage(
+      'routing',
+      decision.span,
+      t('traces.node.routing'),
+      [decision.grade ?? '—', decision.judgeMs > 0 ? `${sourceLabel} · ${formatUs(Math.round(decision.judgeMs * 1000))}` : sourceLabel],
+      warn ? 'warn' : 'ok',
+    );
+  }
+  const judged = judgeUsOn(resolve, decision);
+  stage('resolve', resolve, t('traces.node.resolve'), [
+    attrStr(resolve, 'astra.provider.name') ?? r.providerName ?? '—',
+    formatUs(resolve ? Math.max(0, resolve.durationUs - judged) : undefined),
+  ]);
   const passthrough = attr(encode, 'astra.passthrough') === true || r.passthrough;
   stage('encode', encode, passthrough ? t('traces.node.passthrough') : t('traces.node.encode'), [
     passthrough ? (r.upstreamProtocol ?? r.inboundProtocol) : `→ ${r.upstreamProtocol ?? '—'}`,
@@ -750,6 +852,7 @@ export function buildSession(
     const brand = c.providerId ? (brands.get(c.providerId) ?? { name: c.providerName ?? '' }) : null;
     const n = tries(c);
     const phases = phaseLine(callPhases(by.get(c.id) ?? []), t);
+    const routed = routeDecision(by.get(c.id) ?? []);
     nodes.push({
       id: c.id,
       type: 'card',
@@ -759,6 +862,7 @@ export function buildSession(
         title: `${sub ? (c.callKind === 'sidechain' ? t('traces.kind.sidechain') : t('traces.kind.aux')) : 'LLM'} #${c.step ?? 1} · ${shortModel(c.upstreamModel ?? c.requestedModel)}`,
         lines: [
           `${formatMs(c.totalMs)} · ${formatTokens(c.totalInputTokens, true)}→${formatTokens(c.totalOutputTokens, true)}${n > 1 ? ` · ${t('traces.session.tries', { count: n })}` : ''}`,
+          ...(routed ? [t('traces.session.routing', { grade: routed.grade ?? '—' })] : []),
           ...(phases ? [phases] : []),
         ],
         tone: c.status !== 'success' ? 'error' : n > 1 ? 'warn' : sub ? 'sub' : 'neutral',

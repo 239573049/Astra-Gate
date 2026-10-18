@@ -84,6 +84,7 @@ public static class ClientInstallCatalog
         new(ClientKinds.NextCoWork, ClientInstallMethod.Manual, null, null, "https://nextco.work/"),
         new(ClientKinds.Paseo, ClientInstallMethod.Manual, "paseo", null, "https://paseo.sh/"),
         new(ClientKinds.ZCode, ClientInstallMethod.Manual, null, null, "https://zcode.z.ai/"),
+        new(ClientKinds.TKCode, ClientInstallMethod.Manual, null, null, "https://github.com/AtomUICommunity/TKCode"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

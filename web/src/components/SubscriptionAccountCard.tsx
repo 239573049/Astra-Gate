@@ -1,6 +1,7 @@
 import { ArrowDown, ArrowRightLeft, ArrowUp, Ellipsis, Gauge, Globe, Power, RotateCcw, Trash2 } from 'lucide-react';
 
-import type { AccountQuota, ProviderAccount } from '../api/types';
+import type { AccountQuota, ProviderAccount, ProviderAccountUsage } from '../api/types';
+import { AccountUsageStats } from './AccountUsageStats';
 import { Checkbox } from './arc/checkbox/checkbox';
 import { Button } from './ui/controls';
 import { Menu, type MenuItem } from './ui/overlays';
@@ -61,8 +62,7 @@ export interface AccountActions {
 }
 
 /**
- * 紧凑的账户卡片（约 76px 高，网格里一行两三张）：身份 + 当前标记 + 套餐 + 状态点 + ⋯ 菜单；
- * 第二行是类型 · 来源 · 一句话状态；第三行是额度细条（失效时换成「重新登录」）。
+ * 账户卡片：身份、状态、今日 / 累计请求用量与费用，底部保留上游额度细条（失效时换成「重新登录」）。
  * 点击卡片打开详情；悬停或多选时左上角出现复选框。
  */
 export function SubscriptionAccountCard({
@@ -74,6 +74,7 @@ export function SubscriptionAccountCard({
   onToggleSelect,
   onMove,
   quotaPending,
+  usage,
 }: {
   account: ProviderAccount;
   /** Position in the failover order (0-based). */
@@ -86,6 +87,7 @@ export function SubscriptionAccountCard({
   /** Moves the account one place up / down in the failover order; undefined at that edge. */
   onMove?: { up?: () => void; down?: () => void };
   quotaPending?: boolean;
+  usage?: ProviderAccountUsage;
 }) {
   const { t, locale } = useI18n();
   const state = accountState(account);
@@ -163,7 +165,7 @@ export function SubscriptionAccountCard({
     <div
       data-testid="account-card"
       className={cn(
-        'group card relative flex aspect-square min-w-0 cursor-pointer flex-col overflow-hidden transition-colors hover:bg-[var(--fill)]',
+        'group card relative flex min-h-[292px] min-w-0 cursor-pointer flex-col overflow-hidden transition-colors hover:bg-[var(--fill)]',
         account.isCurrent && 'ring-1 ring-[var(--accent)]',
         selected && 'bg-[var(--accent-subtle)]',
         state === 'disabled' && 'opacity-55',
@@ -229,11 +231,17 @@ export function SubscriptionAccountCard({
         </div>
 
         {/* 冷却 / 失效 / 没有额度的账户：把一句话状态放在这里（到期时间、冷却至、失效原因）。 */}
-        {meta && (state === 'cooling' || state === 'dead' || !hasQuota) && (
-          <div className="mt-1.5 line-clamp-2 text-[11px] leading-snug" style={{ color: meta.tone ?? 'var(--text-muted)' }} title={meta.text}>
-            {meta.text}
-          </div>
-        )}
+        <div className="mt-1.5 min-h-[28px]">
+          {meta && (state === 'cooling' || state === 'dead' || !hasQuota) && (
+            <div className="line-clamp-2 text-[11px] leading-snug" style={{ color: meta.tone ?? 'var(--text-muted)' }} title={meta.text}>
+              {meta.text}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 shrink-0 border-t border-[var(--border-subtle)] pt-2">
+          <AccountUsageStats usage={usage} compact />
+        </div>
 
         {state === 'dead' ? (
           <div className="mt-auto flex items-center gap-2 pt-2">

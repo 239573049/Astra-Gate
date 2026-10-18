@@ -383,6 +383,47 @@ public class AlertTests
     }
 
     [Fact]
+    public async Task Cooling_Accounts_Are_Rechecked_And_Released_Once_The_Quota_Has_Room()
+    {
+        var session = 100;
+        var calls = 0;
+        var (host, _) = await StartAsync(b => b.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new FakeUpstream(_ =>
+            {
+                Interlocked.Increment(ref calls);
+                return FakeUpstream.Json("{\"five_hour\":{\"utilization\":" + session + "},\"seven_day\":{\"utilization\":40}}");
+            })));
+        await using var _host = host;
+        var (_, created) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        await host.Db.Accounts.InsertAsync(new ProviderAccount
+        {
+            Id = "acc-cool", ProviderId = created!["id"]!.GetValue<string>(), DisplayName = "me@example.com", Status = AccountStatus.Active,
+            AccessTokenEnc = protector.Protect("at"), RefreshTokenEnc = protector.Protect("rt"), ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+        });
+        var sync = host.App.Services.GetRequiredService<SubscriptionQuotaSync>();
+
+        // Not cooling: nothing to look at.
+        Assert.Equal(0, await sync.RecheckCooledAsync(10, CancellationToken.None));
+
+        await host.Db.Accounts.SetCooldownAsync("acc-cool", DateTimeOffset.UtcNow.AddHours(3), "429", CancellationToken.None);
+        Assert.Equal(1, await sync.RecheckCooledAsync(10, CancellationToken.None));
+        Assert.NotNull((await host.Db.Accounts.GetAsync("acc-cool"))!.CooldownUntilUtc); // the five hours are still used up
+        Assert.Equal(0, await sync.RecheckCooledAsync(10, CancellationToken.None)); // just looked
+
+        // The window has room again (a reset credit): the next look, five minutes on, lifts the cooldown.
+        session = 20;
+        var account = (await host.Db.Accounts.GetAsync("acc-cool"))!;
+        account.Extra["quota"]!["fetchedAtUtc"] = DateTimeOffset.UtcNow.Subtract(SubscriptionQuotaSync.CooledRecheck).AddSeconds(-1).ToString("o");
+        await host.Db.Accounts.UpdateAsync(account);
+        Assert.Equal(1, await sync.RecheckCooledAsync(10, CancellationToken.None));
+        account = (await host.Db.Accounts.GetAsync("acc-cool"))!;
+        Assert.Null(account.CooldownUntilUtc);
+        Assert.Equal(20, account.Extra["quota"]!["session"]!["usedPercent"]!.GetValue<double>());
+        Assert.Equal(0, await sync.RecheckCooledAsync(10, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Feishu_Webhooks_Get_A_Signed_Text_Message_And_Error_Codes_Fail()
     {
         var (host, receiver) = await StartAsync();

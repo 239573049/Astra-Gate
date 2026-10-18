@@ -6,6 +6,7 @@ using Astra.Core.Models;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Routing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -53,7 +54,7 @@ public static class GatewayEndpoints
 
 /// <summary>Model listing and token counting (no usage record, no billing).</summary>
 public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs, GatewayHttpClients http,
-    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing)
+    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing, SmartRouter smartRouter)
 {
     /// <summary>
     /// The model ids every provider the caller can reach serves (the client's bound providers in binding order, their
@@ -87,6 +88,9 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             list = (await routing.ListModelsAsync(targets, ctx.RequestAborted))
                 .Select(m => (m.Id, m.Id == m.Model.ModelId ? m.Model.Overrides.DisplayName ?? m.Id : m.Id, m.Target.Provider))
                 .ToList();
+            // Smart routing's virtual model (plan §5.8), while it is on: clients pick it like any other model.
+            if (smartRouter.AdvertisedModel is { } virtualModel && list.All(m => m.Id != virtualModel))
+                list.Add((virtualModel, "Astra Auto", new Provider { Id = "astra", Name = "astra", CreatedAt = route.Provider.CreatedAt }));
         }
         JsonObject body = protocol switch
         {
@@ -158,6 +162,15 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             var json = parsed?.Object ?? (pathModel is null ? JsonNode.Parse(text!) as JsonObject : null);
             var dirty = guard.Rewritten;
             var requestedModel = pathModel ?? json?["model"]?.GetValue<string>() ?? "";
+            // Smart routing's virtual model counts as its fallback grade's model, on that grade's provider when this caller
+            // may use it: a token count needs no judgement.
+            if (smartRouter.IsVirtual(requestedModel))
+            {
+                var routed = smartRouter.FallbackModel(requestedModel);
+                route = route with { Routed = routed };
+                if (routed.ProviderId is not null && await router.GradeTargetAsync(route, routed.ProviderId, routed.ModelId, isClaudeCode, ct) is { } target)
+                    route = GatewayRouter.WithTarget(route, target);
+            }
             // Same provider choice as the generation request for this model (ClientRouting); nothing has left the machine yet.
             route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
             SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);

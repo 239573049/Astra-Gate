@@ -1,6 +1,7 @@
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Routing;
 using Astra.Core.Tokens;
 using Astra.Data;
 using Microsoft.AspNetCore.Http;
@@ -38,15 +39,25 @@ public sealed record GatewayRoute(TokenRecord Token, ClientRecord? Client, strin
     /// </summary>
     public TokenPool? Pool { get; init; }
 
+    /// <summary>
+    /// Smart routing (plan §5.2): the concrete model chosen for the virtual model the client asked for; null when the
+    /// request did not ask for it. It is set before the candidates are picked, so <see cref="ClientModelFor"/> — and with it
+    /// the provider choice, the pool plan and the model sent upstream — sees the concrete model, while the request log
+    /// still records the virtual one as what the client asked for.
+    /// </summary>
+    public RoutedModel? Routed { get; init; }
+
     /// <summary>The calling client's kind; null for a direct call.</summary>
     public string? ClientKind => Client?.Kind;
 
     /// <summary>
-    /// The model the client means, before any provider is involved: model names pass through, except for Claude
-    /// Desktop, whose role ids are mapped to provider models (plan §7.5). This is what routing matches on.
+    /// The model the client means, before any provider is involved: model names pass through, except for the virtual
+    /// model smart routing replaced with a concrete one (<see cref="Routed"/>) and, for Claude Desktop, role ids, which
+    /// are mapped to provider models (plan §7.5). This is what routing matches on.
     /// </summary>
     public string ClientModelFor(string requested) =>
-        Client?.Kind == ClientKinds.ClaudeDesktop ? ClaudeDesktopRoles.Map(ClaudeDesktopRoles.Parse(Client.ExtraJson), requested) : requested;
+        Routed is { } routed && string.Equals(routed.VirtualModel, requested, StringComparison.Ordinal) ? routed.ModelId
+        : Client?.Kind == ClientKinds.ClaudeDesktop ? ClaudeDesktopRoles.Map(ClaudeDesktopRoles.Parse(Client.ExtraJson), requested) : requested;
 
     /// <summary>
     /// The model sent upstream: <see cref="ClientModelFor"/>, then the chosen provider's model mapping
@@ -54,6 +65,13 @@ public sealed record GatewayRoute(TokenRecord Token, ClientRecord? Client, strin
     /// </summary>
     public string UpstreamModelFor(string requested) => Provider.MapModel(ClientModelFor(requested));
 }
+
+/// <summary>
+/// What smart routing made of a request to the virtual model: the model of the grade it chose
+/// (<see cref="GatewayRoute.Routed"/>), and the provider the grade names (<see cref="GatewayRouter.GradeTargetAsync"/>
+/// decides whether this caller may go there). <paramref name="GradeId"/> is for the trace only.
+/// </summary>
+public sealed record RoutedModel(string VirtualModel, string ModelId, string GradeId, string? ProviderId = null);
 
 /// <summary>Resolves a model's supported upstream protocols, discovering missing capabilities when needed.</summary>
 public interface IModelProtocolResolver
@@ -158,6 +176,47 @@ public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, Setti
         var match = await routing.MatchAsync(route.Targets, modelId, isClaudeCode, ct);
         return match is null ? route : route with { Provider = match.Provider, AccountId = match.AccountId };
     }
+
+    /// <summary>
+    /// Where a smart-routing grade's request goes for this caller (plan §5.2): the provider the grade names, if this
+    /// caller may use it and it serves <paramref name="modelId"/> (for this caller: a Claude-Code-only subscription refuses
+    /// others). A provider among the caller's own targets comes with that binding's account. One outside them is open to
+    /// a token that may use any client — it can already reach every client's providers — but not to a token limited to
+    /// some clients or to direct calls: the virtual model must not carry a limited token past what it may reach. A grade
+    /// that names no provider goes to the first of the caller's targets serving the model. Null when the caller cannot
+    /// use the grade.
+    /// </summary>
+    public async Task<RouteTarget?> GradeTargetAsync(GatewayRoute route, string? providerId, string modelId, bool isClaudeCode, CancellationToken ct) =>
+        (await GradeUseAsync(route, providerId, modelId, isClaudeCode, ct)).Target;
+
+    /// <summary>
+    /// <see cref="GradeTargetAsync"/>, and when the caller cannot use the grade, why (<see cref="GradeProblems"/>) — what
+    /// the console and the request log tell the user, with the provider's name.
+    /// </summary>
+    public async Task<(RouteTarget? Target, GradeProblem? Problem)> GradeUseAsync(
+        GatewayRoute route, string? providerId, string modelId, bool isClaudeCode, CancellationToken ct)
+    {
+        if (providerId is null)
+            return await routing.MatchAsync(route.Targets, modelId, isClaudeCode, ct) is { } own ? (own, null) : (null, new GradeProblem(GradeProblems.ModelNotServed, null));
+        var target = route.Targets.FirstOrDefault(t => t.Provider.Id == providerId);
+        if (target is null)
+        {
+            var provider = await db.Providers.GetAsync(providerId, ct);
+            if (provider is null) return (null, new GradeProblem(GradeProblems.ProviderMissing, null));
+            if (route.Token.AllowedClients() is not null) return (null, new GradeProblem(GradeProblems.TokenLimited, provider.Name));
+            if (!ClientRouting.IsUsable(provider)) return (null, new GradeProblem(GradeProblems.ProviderOff, provider.Name));
+            target = new RouteTarget(provider, null);
+        }
+        if (!isClaudeCode && SubscriptionSupport.ClientPolicyOf(target.Provider) == ClientPolicies.ClaudeCodeOnly)
+            return (null, new GradeProblem(GradeProblems.ClaudeCodeOnly, target.Provider.Name));
+        return await routing.MatchAsync([target], modelId, isClaudeCode, ct) is { } served
+            ? (served, null)
+            : (null, new GradeProblem(GradeProblems.ModelNotServed, target.Provider.Name));
+    }
+
+    /// <summary>The route sent to one target alone — a grade's provider: no other binding, no pool.</summary>
+    public static GatewayRoute WithTarget(GatewayRoute route, RouteTarget target) =>
+        route with { Provider = target.Provider, AccountId = target.AccountId, Targets = [target], Pool = null };
 
     /// <summary>
     /// A direct call of a token with a provider pool: its usable members in pool order (missing or unusable providers are

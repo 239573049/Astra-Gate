@@ -1,0 +1,26 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.codex/config.toml"
+  ],
+  "warnings": []
+}

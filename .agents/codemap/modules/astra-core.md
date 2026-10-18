@@ -2,7 +2,7 @@
 module: astra-core
 sources: ["src/Astra.Core/**"]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 # astra-core — the domain assembly
 
@@ -44,7 +44,7 @@ token refresh (`astra-providers`); writing client config files (`astra-clients`)
 | `ModelMerger.Merge` | `src/Astra.Core/Models/EffectiveModel.cs:ModelMerger` | Per-field system-model → provider-model overlay producing `EffectiveModel` + `Origins`. |
 | `ModelIdMatcher` | `src/Astra.Core/Models/ModelIdMatcher.cs:ModelIdMatcher` | Links an upstream model id to a system model: exact → index → alias → `Normalize`. |
 | `Provider` | `src/Astra.Core/Models/Provider.cs:Provider` | Provider instance incl. `EndpointFor`, `ModelMap`/`MapModel`, `SettingFlag`, `PriceKey`, `PriceMultiplier`. |
-| `ProviderAccount` | `src/Astra.Core/Models/ProviderAccount.cs:ProviderAccount` | Subscription/plugin account: encrypted tokens, status, current/cooldown/sort-order switching state. |
+| `ProviderAccount` | `src/Astra.Core/Models/ProviderAccount.cs:ProviderAccount` | Subscription/plugin account: encrypted tokens, status, current/cooldown/sort-order switching state. Auth cooldowns prefix `LastError` with `401 ` / `403 `; quota headroom must not lift them. |
 | `EffectivePrivacyPolicy` | `src/Astra.Core/Privacy/PrivacyTypes.cs:EffectivePrivacyPolicy` | Per-request rule set compiled from settings; `ActionFor` resolves rule → category → client → default. |
 | `ChunkRestorer` | `src/Astra.Core/Privacy/ChunkRestorer.cs:ChunkRestorer` | Re-expands placeholders across streaming chunks with a tail hold-back. |
 | `TokenLimits` / `UsagePeriods` | `src/Astra.Core/Tokens/TokenLimits.cs:TokenLimits`, `:UsagePeriods` | Budget validation/parse, `Counts` (refusals are not billed), and local-day/week/month window arithmetic. |

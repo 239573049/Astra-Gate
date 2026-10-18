@@ -4,6 +4,7 @@ using Astra.Core.Billing;
 using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Privacy;
+using Astra.Core.Routing;
 using Astra.Core.Seed;
 
 namespace Astra.Core;
@@ -29,6 +30,8 @@ namespace Astra.Core;
 [JsonSerializable(typeof(PrivacyCustomRule))]
 [JsonSerializable(typeof(PrivacyHit))]
 [JsonSerializable(typeof(PrivacyReport))]
+[JsonSerializable(typeof(SmartRoutingSettings))]
+[JsonSerializable(typeof(RoutingReport))]
 [JsonSerializable(typeof(SeedFile))]
 [JsonSerializable(typeof(SeedModel))]
 [JsonSerializable(typeof(SeedProviderPrice))]

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
+using System.Net.Sockets;
 using Astra.Core;
 using Astra.Core.Models;
 using Astra.Gateway.Protocol;
@@ -68,12 +69,21 @@ public static class UpstreamUrls
 }
 
 /// <summary>
-/// Long-lived upstream HttpClients, one per proxy setting. No overall timeout: streams can run for minutes;
-/// the pipeline enforces the connect timeout here and an idle timeout per read.
+/// Long-lived upstream HttpClients, one per proxy setting, plus the smart-routing judge's own (<see cref="ForJudge"/>).
+/// No overall timeout: streams can run for minutes; the pipeline enforces the connect timeout here and an idle timeout per read.
 /// </summary>
 public sealed class GatewayHttpClients : IDisposable
 {
+    /// <summary>The key of <see cref="ForJudge"/>'s client: no proxy URL looks like it.</summary>
+    private const string JudgeKey = "\0judge";
+
     private readonly ConcurrentDictionary<string, HttpClient> _clients = new();
+
+    /// <summary>
+    /// Set on a request sent through <see cref="ForJudge"/>: called when that request has to open a new connection
+    /// before it can be sent, so its sender can allow for the handshake.
+    /// </summary>
+    public static readonly HttpRequestOptionsKey<Action> NewConnection = new("astra.new-connection");
 
     /// <summary>Overrides the transport (tests point the gateway at an in-process fake upstream).</summary>
     public Func<string?, HttpMessageHandler>? HandlerFactory { get; set; }
@@ -82,6 +92,46 @@ public sealed class GatewayHttpClients : IDisposable
 
     /// <summary>The client for one proxy URL (a subscription account's own proxy, or the provider's); null = system proxy.</summary>
     public HttpClient For(string? proxy) => _clients.GetOrAdd(proxy ?? "", key => Create(key.Length == 0 ? null : key));
+
+    /// <summary>
+    /// The smart-routing judge's client (system proxy, like <c>For(null)</c>). A judgement is made once per session or
+    /// turn, often minutes apart, and must answer within about two seconds — less than opening a connection can take
+    /// (a TLS handshake through a local proxy took 1–5 s when measured). So its connections stay pooled for an hour
+    /// instead of two minutes, HTTP/2 (when the service offers it) lets concurrent judgements share one, and keep-alive
+    /// pings keep an idle one alive — and notice one that died, where an idle HTTP/1.1 connection was seen to hang
+    /// silently. A request that still has to connect first is told so through <see cref="NewConnection"/>.
+    /// </summary>
+    public HttpClient ForJudge() => _clients.GetOrAdd(JudgeKey, _ => new HttpClient(HandlerFactory?.Invoke(null) ?? new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        ConnectTimeout = TimeSpan.FromSeconds(30),
+        AutomaticDecompression = DecompressionMethods.All,
+        PooledConnectionIdleTimeout = TimeSpan.FromHours(1),
+        KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(15),
+        KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always,
+        Proxy = SystemProxy.Dynamic,
+        UseProxy = true,
+        ActivityHeadersPropagator = DistributedContextPropagator.CreateNoOutputPropagator(),
+        ConnectCallback = ConnectAsync,
+    }) { Timeout = Timeout.InfiniteTimeSpan });
+
+    /// <summary>The handler's own way of connecting (a dual-mode TCP socket without Nagle), after telling the request that needs it.</summary>
+    private static async ValueTask<Stream> ConnectAsync(SocketsHttpConnectionContext context, CancellationToken ct)
+    {
+        if (context.InitialRequestMessage.Options.TryGetValue(NewConnection, out var notify)) notify();
+        var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
+        try
+        {
+            await socket.ConnectAsync(context.DnsEndPoint, ct);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+    }
 
     private HttpClient Create(string? proxy)
     {

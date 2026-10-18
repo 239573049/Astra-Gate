@@ -173,7 +173,7 @@ public class SubscriptionTokenServiceTests
     public async Task Missing_Refresh_Token_Marks_The_Account_Expired()
     {
         var store = new InMemoryAccountStore();
-        var account = Account("at-old", TimeSpan.FromSeconds(10));
+        var account = Account("at-old", TimeSpan.FromSeconds(-1));
         account.RefreshTokenEnc = null;
         await store.InsertAsync(account);
         var handler = new StubHandler("{}");
@@ -182,6 +182,31 @@ public class SubscriptionTokenServiceTests
         await Assert.ThrowsAsync<SubscriptionAuthException>(
             () => service.GetValidAccessTokenAsync(account, Config));
         Assert.Equal(AccountStatus.Expired, (await store.GetAsync("acc-1"))!.Status);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(30)]
+    [InlineData(60)]
+    public async Task Direct_Copilot_Tokens_Are_Used_Until_Their_Actual_Expiry(int secondsLeft)
+    {
+        var store = new InMemoryAccountStore();
+        var account = Account("tid=direct;exp=1791288030;sku=copilot_pro", TimeSpan.FromSeconds(secondsLeft));
+        account.RefreshTokenEnc = null;
+        await store.InsertAsync(account);
+        var original = account.AccessTokenEnc;
+        var handler = new StubHandler("{}");
+        var service = new SubscriptionTokenService(store, new FakeProtector(), new StubFactory(handler), new FakeClock());
+        var config = SubscriptionCatalog.Find("github-copilot-subscription")!;
+
+        // Both a request and the background refresh worker must leave the still-valid direct token alone.
+        Assert.Equal(new FakeProtector().Unprotect(original!), await service.GetValidAccessTokenAsync(account, config));
+        await service.RefreshAsync(account, config, force: false);
+
+        Assert.Equal(AccountStatus.Active, account.Status);
+        Assert.Equal(original, account.AccessTokenEnc);
+        Assert.Null(account.RefreshTokenEnc);
         Assert.Equal(0, handler.Calls);
     }
 

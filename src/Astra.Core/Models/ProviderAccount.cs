@@ -73,10 +73,13 @@ public sealed class ProviderAccount
     /// <summary>Failover order inside the provider (ascending).</summary>
     public int SortOrder { get; set; }
 
-    /// <summary>Rate-limited until then (automatic failover skips it meanwhile); null = not cooling down.</summary>
+    /// <summary>Cooling down after a rate limit or auth rejection (automatic failover skips it); null = not cooling down.</summary>
     public DateTimeOffset? CooldownUntilUtc { get; set; }
 
-    /// <summary>Why the account was last taken out of rotation (display only).</summary>
+    /// <summary>
+    /// Why the account was last taken out of rotation. Auth rejections start with "401 " / "403 " so quota recovery
+    /// does not mistake them for a rate-limit cooldown; the rest is display text.
+    /// </summary>
     public string? LastError { get; set; }
 
     /// <summary><see cref="AccountKinds"/> value.</summary>

@@ -218,7 +218,7 @@ public static partial class SubscriptionEndpoints
             {
                 // 直连令牌不需要换：原样当访问令牌存下，到期时间取自 exp=。没有 GitHub token 就没法续。
                 var expiresAt = parsed.ExpiresAt!.Value;
-                if (expiresAt <= now.Add(SubscriptionTokenService.RefreshLead))
+                if (expiresAt <= now)
                     return (null, false, $"这个 Copilot 令牌已过期（{expiresAt:u}）");
                 var direct = await ImportDirectCopilotTokenAsync(db, protector, providerId, config, parsed.Secret, expiresAt, source, accountProxy);
                 return (direct, false, $"直连令牌，不会自动续期，{expiresAt:u} 到期");

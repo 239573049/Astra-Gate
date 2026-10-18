@@ -155,6 +155,21 @@ public sealed class ProviderStat
     public long FailoversIn { get; set; }
 }
 
+/// <summary>One provider credential's lifetime counters and request-log usage for the given calendar day.</summary>
+public sealed class ProviderAccountUsage
+{
+    /// <summary>Empty for a provider's own API key; otherwise the account that finally served the request.</summary>
+    public string AccountId { get; set; } = "";
+    public long TotalRequests { get; set; }
+    public long TotalInputTokens { get; set; }
+    public long TotalOutputTokens { get; set; }
+    public long TotalCostNanoUsd { get; set; }
+    public long TodayRequests { get; set; }
+    public long TodayInputTokens { get; set; }
+    public long TodayOutputTokens { get; set; }
+    public long TodayCostNanoUsd { get; set; }
+}
+
 /// <summary>
 /// A token holder's view of the request log (self-service, <c>/v1/astra/key/requests</c>): always one token, newest first,
 /// paged by <see cref="Before"/> (the last id of the previous page). <see cref="Status"/> is a comma list,
@@ -238,7 +253,7 @@ public sealed class RequestRepository
                http_status, error_type, error_message, upstream_request_id, ttfb_ms, ttft_ms, total_ms,
                generation_ms, output_tps, total_input_tokens, total_output_tokens, cache_read_tokens, cache_write_tokens,
                reasoning_tokens, cost_nanousd, usage_source, usage_raw_json, pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
-               billing_description, privacy_json, body_ref, user_agent,
+               billing_description, privacy_json, routing_json, body_ref, user_agent,
                reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip,
                trace_id, parent_span_id, session_key, chain_key, turn_id, parent_request_id, step, call_kind,
                link_source, finish_reason, tool_calls,
@@ -261,7 +276,7 @@ public sealed class RequestRepository
                              total_input_tokens, total_output_tokens, cache_read_tokens, cache_write_tokens,
                              reasoning_tokens, cost_nanousd, usage_source, usage_raw_json,
                              pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
-                             billing_description, privacy_json, body_ref, user_agent,
+                             billing_description, privacy_json, routing_json, body_ref, user_agent,
                              reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip,
                              trace_id, parent_span_id, session_key, chain_key, turn_id, parent_request_id, step,
                              call_kind, link_source, finish_reason, tool_calls)
@@ -273,7 +288,7 @@ public sealed class RequestRepository
                 @total_input_tokens, @total_output_tokens, @cache_read_tokens, @cache_write_tokens,
                 @reasoning_tokens, @cost_nanousd, @usage_source, @usage_raw_json,
                 @pricing_snapshot_json, @pricing_source, @price_key, @billing_trace_json,
-                @billing_description, @privacy_json, @body_ref, @user_agent,
+                @billing_description, @privacy_json, @routing_json, @body_ref, @user_agent,
                 @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id, @remote, @client_ip,
                 @trace_id, @parent_span_id, @session_key, @chain_key, @turn_id, @parent_request_id, @step,
                 @call_kind, @link_source, @finish_reason, @tool_calls)
@@ -330,6 +345,17 @@ public sealed class RequestRepository
         UPDATE tokens SET last_used_at = MAX(COALESCE(last_used_at, ''), @used_at) WHERE id = @token_id
         """;
 
+    private const string AddProviderAccountTotalsSql = """
+        INSERT INTO provider_account_usage_totals(provider_id, account_id, requests, input_tokens, output_tokens, cost_nanousd)
+        SELECT @provider_id, @account_id, 1, @input_tokens, @output_tokens, @cost_nanousd
+        WHERE EXISTS (SELECT 1 FROM providers WHERE id = @provider_id)
+        ON CONFLICT(provider_id, account_id) DO UPDATE SET
+            requests = requests + 1,
+            input_tokens = input_tokens + excluded.input_tokens,
+            output_tokens = output_tokens + excluded.output_tokens,
+            cost_nanousd = cost_nanousd + excluded.cost_nanousd
+        """;
+
     // Filters are expressed against a fixed parameter shape (Dapper.AOT cannot read DynamicParameters):
     // a null/empty parameter means "no filter" for that predicate, matching the previous string-built
     // predicate list row-for-row. The SQL text below is constant; the parameter objects are anonymous.
@@ -369,8 +395,9 @@ public sealed class RequestRepository
 
     /// <summary>
     /// Inserts records and their usage items in ONE transaction (called by the background usage writer), adding
-    /// each record to its token's lifetime and daily counters in that same transaction (requests refused by a token
-    /// limit are not counted, see <see cref="TokenLimits.Counts"/>). Fills missing record ids with fresh ULIDs.
+    /// each record to its provider credential's lifetime counters and its token's lifetime and daily counters in
+    /// that same transaction (requests refused by a token limit are not counted, see <see cref="TokenLimits.Counts"/>).
+    /// Fills missing record ids with fresh ULIDs.
     /// </summary>
     /// <param name="usageZone">Time zone of the daily counters' days; null = the process's local zone.</param>
     public async Task InsertBatchAsync(IReadOnlyList<RequestRecord> records, CancellationToken ct = default, TimeZoneInfo? usageZone = null)
@@ -424,6 +451,7 @@ public sealed class RequestRepository
                 billing_trace_json = record.BillingTraceJson,
                 billing_description = record.BillingDescription,
                 privacy_json = record.PrivacyJson,
+                routing_json = record.RoutingJson,
                 body_ref = record.BodyRef,
                 user_agent = record.UserAgent,
                 reasoning_effort = record.ReasoningEffort,
@@ -479,6 +507,17 @@ public sealed class RequestRepository
                     multipliers_json = item.MultipliersJson,
                     cost_nanousd = item.CostNanoUsd,
                     note = item.Note,
+                }, transaction: tx);
+            }
+            if (record.ProviderId is not null && TokenLimits.Counts(record))
+            {
+                await conn.ExecuteAsync(AddProviderAccountTotalsSql, new
+                {
+                    provider_id = record.ProviderId,
+                    account_id = record.AccountId ?? "",
+                    input_tokens = record.TotalInputTokens,
+                    output_tokens = record.TotalOutputTokens,
+                    cost_nanousd = record.CostNanoUsd,
                 }, transaction: tx);
             }
             if (record.TokenId is not null && TokenLimits.Counts(record))
@@ -808,6 +847,51 @@ public sealed class RequestRepository
             WHERE token_id = @token_id AND started_at_utc >= @from AND started_at_utc <= @to AND status <> 'success'
             GROUP BY status, http_status, error_type
             """, new { token_id = tokenId, from = DateTimeOffsetHandler.ToStorage(from), to = DateTimeOffsetHandler.ToStorage(to) })).ToList();
+    }
+
+    /// <summary>
+    /// Lifetime usage and a half-open calendar-day window, per current credential (including unused or disabled
+    /// accounts). Lifetime counters survive log retention; today's usage follows the caller's usage time zone.
+    /// </summary>
+    public async Task<IReadOnlyList<ProviderAccountUsage>> ProviderAccountUsageAsync(
+        string providerId, DateTimeOffset dayFrom, DateTimeOffset dayTo, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<ProviderAccountUsage>("""
+            WITH credentials AS (
+                SELECT id AS account_id FROM provider_accounts WHERE provider_id = @provider_id
+                UNION ALL
+                SELECT '' FROM providers
+                WHERE id = @provider_id AND auth_scheme NOT IN ('oauth-subscription', 'plugin')
+            ), today AS (
+                SELECT COALESCE(account_id, '') AS account_id, COUNT(*) AS requests,
+                       SUM(total_input_tokens) AS input_tokens, SUM(total_output_tokens) AS output_tokens,
+                       SUM(cost_nanousd) AS cost_nanousd
+                FROM requests
+                WHERE provider_id = @provider_id AND started_at_utc >= @day_from AND started_at_utc < @day_to
+                  AND COALESCE(error_type, '') <> @refused_error
+                GROUP BY COALESCE(account_id, '')
+            )
+            SELECT c.account_id AS AccountId,
+                   COALESCE(t.requests, 0) AS TotalRequests,
+                   COALESCE(t.input_tokens, 0) AS TotalInputTokens,
+                   COALESCE(t.output_tokens, 0) AS TotalOutputTokens,
+                   COALESCE(t.cost_nanousd, 0) AS TotalCostNanoUsd,
+                   COALESCE(d.requests, 0) AS TodayRequests,
+                   COALESCE(d.input_tokens, 0) AS TodayInputTokens,
+                   COALESCE(d.output_tokens, 0) AS TodayOutputTokens,
+                   COALESCE(d.cost_nanousd, 0) AS TodayCostNanoUsd
+            FROM credentials c
+            LEFT JOIN provider_account_usage_totals t ON t.provider_id = @provider_id AND t.account_id = c.account_id
+            LEFT JOIN today d ON d.account_id = c.account_id
+            ORDER BY c.account_id
+            """, new
+        {
+            provider_id = providerId,
+            day_from = DateTimeOffsetHandler.ToStorage(dayFrom),
+            day_to = DateTimeOffsetHandler.ToStorage(dayTo),
+            refused_error = TokenLimits.RefusedErrorType,
+        })).ToList();
     }
 
     /// <summary>

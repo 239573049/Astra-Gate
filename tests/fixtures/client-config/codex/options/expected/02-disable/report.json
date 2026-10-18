@@ -1,0 +1,42 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_context_window",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_auto_compact_token_limit",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_reasoning_effort",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

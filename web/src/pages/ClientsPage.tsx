@@ -101,7 +101,7 @@ export function ClientsPage() {
 const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'nextcowork',
-  'paseo', 'zcode', 'muse-code', 'codex', 'grok-build', 'hermes-agent',
+  'paseo', 'zcode', 'tkcode', 'muse-code', 'codex', 'grok-build', 'hermes-agent',
 ]);
 
 /** The built-in clients in their order, then the clients agent plugins add ("plugin-<id>"), by name. */

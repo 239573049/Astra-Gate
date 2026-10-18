@@ -1,0 +1,19 @@
+{
+  "model": "jev-latest",
+  "state": {
+    "request": "Fix the flaky login test",
+    "earlier_requests": ["Add a login test"],
+    "conversation": { "messages": 14, "tools": 22, "has_images": false }
+  },
+  "questions": {
+    "grade": {
+      "type": "choice",
+      "instructions": "Which grade?",
+      "criteria": {
+        "light": "Simple things.",
+        "standard": "Everyday things.",
+        "heavy": "Hard things."
+      }
+    }
+  }
+}

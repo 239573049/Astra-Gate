@@ -12,7 +12,25 @@ import { Button, EmptyState, Spinner } from '../ui/controls';
 import { TraceCanvas } from './canvas';
 import { TraceError } from './error';
 import { Inspector, TimeBar } from './inspector';
-import { attr, attrNum, attrStr, buildRequest, callPhases, formatUs, PHASE_COLOR, splitRequestTime, SPAN, toolSummary, type ProviderBrand } from './model';
+import {
+  attr,
+  attrNum,
+  attrStr,
+  buildRequest,
+  callPhases,
+  formatUs,
+  judgeUsOn,
+  PHASE_COLOR,
+  routeDecision,
+  routeModeLabel,
+  routeReasonLabel,
+  routeSourceLabel,
+  routeSummary,
+  splitRequestTime,
+  SPAN,
+  toolSummary,
+  type ProviderBrand,
+} from './model';
 import { labelOfClient, TraceChip, useProviderBrands } from './topology';
 
 /** The most recent requests, to pick one to trace. */
@@ -60,6 +78,7 @@ export function RequestTraceView({ id }: { id: string }) {
   const brand = data?.request.providerId ? (brands.get(data.request.providerId) ?? null) : null;
   const graph = useMemo(() => (data ? buildRequest(data, t, labelOfClient, brand) : { nodes: [], edges: [] }), [data, t, brand]);
   const split = useMemo(() => (data ? splitRequestTime(data.spans) : null), [data]);
+  const decision = useMemo(() => (data ? routeDecision(data.spans) : null), [data]);
   // generation by what the model produced (the rest: pauses between phases)
   const generation = useMemo(() => {
     const p = data ? callPhases(data.spans) : null;
@@ -94,6 +113,12 @@ export function RequestTraceView({ id }: { id: string }) {
           <b>{brand?.name ?? r.providerName ?? '—'}</b>
         </TraceChip>
         <TraceChip>{r.requestedModel ?? '—'}</TraceChip>
+        {decision ? (
+          <TraceChip>
+            {t('traces.node.routing')} · <b>{decision.grade ?? '—'}</b>
+            {decision.source ? ` · ${routeSourceLabel(decision.source, t)}` : null}
+          </TraceChip>
+        ) : null}
         {attempts > 1 ? <TraceChip>{t('traces.session.tries', { count: attempts })}</TraceChip> : null}
         <TraceChip>
           {t('traces.kv.duration')} <b>{formatMs(r.totalMs)}</b>
@@ -146,7 +171,15 @@ export function RequestTraceView({ id }: { id: string }) {
           title={t('traces.request.time.title')}
           total={formatUs(split.totalUs)}
           parts={[
-            { label: t('traces.request.time.astra'), value: split.astraUs, text: formatUs(split.astraUs), color: 'var(--accent-2)' },
+            {
+              label: t('traces.request.time.astra'),
+              value: Math.max(0, split.astraUs - split.routingUs),
+              text: formatUs(Math.max(0, split.astraUs - split.routingUs)),
+              color: 'var(--accent-2)',
+            },
+            ...(split.routingUs > 0
+              ? [{ label: t('traces.request.time.routing'), value: split.routingUs, text: formatUs(split.routingUs), color: 'var(--orange)' }]
+              : []),
             { label: t('traces.request.time.retries'), value: split.retryUs, text: formatUs(split.retryUs), color: 'var(--red)' },
             { label: t('traces.request.time.ttfb'), value: split.ttfbUs, text: formatUs(split.ttfbUs), color: 'var(--label-3)' },
             { label: t('traces.request.time.firstToken'), value: split.firstTokenUs, text: formatUs(split.firstTokenUs), color: 'color-mix(in oklab, var(--accent) 45%, transparent)' },
@@ -206,6 +239,7 @@ function NodeInspector({ id, data, t, locale, brand }: { id: string; data: Trace
   const at = (s: TraceSpan | undefined): [string, string] => [t('traces.kv.startAt'), s ? `+${formatUs(s.startUs)}` : '—'];
   const root = span(SPAN.request);
   const count = (n: number | undefined) => (n === undefined ? '—' : String(n));
+  const decision = routeDecision(data.spans);
 
   switch (id) {
     case 'agent':
@@ -290,15 +324,49 @@ function NodeInspector({ id, data, t, locale, brand }: { id: string; data: Trace
         />
       );
     }
+    case 'routing': {
+      if (!decision) return null;
+      const reason = routeReasonLabel(decision.fallbackReason, t);
+      const judge = [decision.judgeProtocol, decision.judgeModel].filter(Boolean).join(' · ');
+      const routeLines = Object.entries(decision.span.attributes ?? {})
+        .filter(([k]) => k.startsWith('astra.route.'))
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([k, v]) => `${k} = ${String(v)}`);
+      return (
+        <Inspector
+          kind={t('traces.node.routing')}
+          title={decision.grade ?? t('traces.node.routing')}
+          sub={decision.judgeMs > 0 ? formatUs(Math.round(decision.judgeMs * 1000)) : routeSourceLabel(decision.source, t)}
+          rows={[
+            [t('traces.kv.startAt'), `+${formatUs(decision.span.startUs)}`],
+            [t('traces.kv.routeSource'), routeSourceLabel(decision.source, t)],
+            [t('traces.kv.routeMode'), routeModeLabel(decision.mode, t)],
+            [t('traces.kv.model'), decision.model ?? '—'],
+            ...(decision.confidence !== undefined ? [[t('traces.kv.routeConfidence'), `${Math.round(decision.confidence * 100)}%`] as [string, string]] : []),
+            ...(reason ? [[t('traces.kv.routeFallback'), reason] as [string, string]] : []),
+            ...(decision.adjustedFrom ? [[t('traces.kv.routeAdjusted'), decision.adjustedFrom] as [string, string]] : []),
+            ...(judge ? [[t('traces.kv.routeJudge'), judge] as [string, string]] : []),
+            ...(decision.judgeInput !== undefined || decision.judgeOutput !== undefined
+              ? [[t('traces.kv.routeJudgeTokens'), `${decision.judgeInput ?? 0} / ${decision.judgeOutput ?? 0}`] as [string, string]]
+              : []),
+            ...(decision.newConnection ? [[t('traces.kv.routeNewConnection'), t('traces.yes')] as [string, string]] : []),
+          ]}
+          raw={routeLines.length > 0 ? { title: t('traces.kv.raw'), lines: routeLines } : null}
+        />
+      );
+    }
     case 'resolve': {
       const s = span(SPAN.resolve);
+      // The judge runs inside this span; the routing node owns that time, so here it starts after the judge.
+      const judged = judgeUsOn(s, decision);
       return (
         <Inspector
           kind={stage(SPAN.resolve)}
           title={t('traces.node.resolve')}
-          sub={dur(s)}
+          sub={s ? formatUs(Math.max(0, s.durationUs - judged)) : dur(s)}
           rows={[
-            at(s),
+            [t('traces.kv.startAt'), s ? `+${formatUs(s.startUs + judged)}` : '—'],
+            ...(decision ? [[t('traces.node.routing'), routeSummary(decision, t)] as [string, string]] : []),
             [t('traces.kv.provider'), attrStr(s, 'astra.provider.name') ?? r.providerName ?? '—'],
             [t('traces.kv.model'), attrStr(s, 'gen_ai.request.model') ?? r.requestedModel ?? '—'],
             [t('traces.kv.protocols'), attrStr(s, 'astra.protocol.upstream') ?? '—'],

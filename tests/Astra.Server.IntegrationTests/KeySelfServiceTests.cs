@@ -2,8 +2,11 @@ using System.Net;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Clients;
+using Astra.Core.Models;
 using Astra.Core.Requests;
 using Astra.Core.Tokens;
+using Astra.Gateway.Pipeline;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Astra.Server.IntegrationTests;
 
@@ -75,6 +78,49 @@ public class KeySelfServiceTests
             Assert.DoesNotContain(secret, raw);
         Assert.DoesNotContain("provider", raw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("account", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Connect_Context_Lists_The_Models_Of_The_Key_And_Names_No_Upstream()
+    {
+        await using var gw = await StartAsync();
+        var token = (await gw.Host.Db.Tokens.GetAsync(TokenIds.Default))!;
+        token.ProviderId = gw.Provider.Id;
+        await gw.Host.Db.Tokens.UpdateAsync(token);
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "gpt-x" });
+
+        // The bare token (a company-issued key) and its client-suffixed form both get the list.
+        foreach (var key in new[] { gw.Token, gw.Key })
+        {
+            var (status, body, raw) = await GetAsync(gw, "/v1/astra/connect-context", key);
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal(token.Name, body!["name"]!.GetValue<string>());
+            var model = Assert.Single(body["models"]!.AsArray());
+            Assert.Equal("gpt-x", model!["id"]!.GetValue<string>());
+            Assert.Contains("openai-chat", raw);
+            foreach (var secret in new[] { gw.Provider.Id, gw.Provider.Name, "sk-upstream-secret", "upstream.test" })
+                Assert.DoesNotContain(secret, raw);
+            Assert.DoesNotContain("provider", raw, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("account", raw, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public async Task Connect_Context_Needs_A_Valid_Key_Even_Without_The_Key_Requirement()
+    {
+        await using var gw = await StartAsync();
+        await gw.Host.App.Services.GetRequiredService<SettingsService>().UpdateAsync(s => s.RequireGatewayKey = false);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(gw, "/v1/astra/connect-context", null)).Status);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await GetAsync(gw, "/v1/astra/connect-context", "sk-not-an-astra-key")).Status);
+    }
+
+    [Fact]
+    public async Task Connect_Context_Of_A_Key_Without_A_Provider_Explains_Why()
+    {
+        await using var gw = await StartAsync();
+        var (status, body, _) = await GetAsync(gw, "/v1/astra/connect-context", gw.Token);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.Equal("api_error", body!["error"]!["type"]!.GetValue<string>());
     }
 
     [Fact]

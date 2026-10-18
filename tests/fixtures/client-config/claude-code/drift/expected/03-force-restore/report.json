@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_BASE_URL",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

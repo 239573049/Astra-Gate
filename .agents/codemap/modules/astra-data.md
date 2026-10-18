@@ -2,7 +2,7 @@
 module: astra-data
 sources: ["src/Astra.Data/**"]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 # astra-data
 
@@ -35,7 +35,8 @@ decides what a row should say (`astra-gateway`), and the TS/Docker side that onl
 | `ModelRepository.ApplySyncBatchAsync` | `src/Astra.Data/Repositories/ModelRepository.cs:ModelRepository.ApplySyncBatchAsync` | Model-sync batch: expectations re-read under a **non-deferred** transaction, then inserts/updates/price upserts commit together or not at all. |
 | `ProviderRepository.UpdateQuotaAsync` | `src/Astra.Data/Repositories/ProviderRepository.cs:ProviderRepository.UpdateQuotaAsync` | Touches only `quota_json` + `quota_checked_at_utc` — a background refresh must not bump `updated_at` or race a settings edit. |
 | `ProviderAccountStore.SetCurrentAsync` | `src/Astra.Data/Repositories/ProviderAccountStore.cs:ProviderAccountStore.SetCurrentAsync` | Makes one account the provider's only `is_current=1` and lifts its cooldown, in one transaction; `is_current`/`cooldown_until_utc` are deliberately not written by `UpdateAsync`. |
-| `RequestRepository.InsertBatchAsync` | `src/Astra.Data/Repositories/RequestRepository.cs:RequestRepository.InsertBatchAsync` | One transaction per batch: `requests` (including the tracing columns) + each row's `trace_spans` + `request_usage_items` + token lifetime/daily counters + `tokens.last_used_at`; fills missing ids with ULIDs. |
+| `RequestRepository.InsertBatchAsync` | `src/Astra.Data/Repositories/RequestRepository.cs:RequestRepository.InsertBatchAsync` | One transaction per batch: `requests` (including the tracing columns) + each row's `trace_spans` + `request_usage_items` + provider credential lifetime counters + token lifetime/daily counters + `tokens.last_used_at`; fills missing ids with ULIDs. |
+| `RequestRepository.ProviderAccountUsageAsync` | `src/Astra.Data/Repositories/RequestRepository.cs:RequestRepository.ProviderAccountUsageAsync` | Each current account (including disabled/unused accounts), or the provider's own API key: persisted lifetime requests/tokens/cost plus today's request-log sums in a half-open UTC window supplied by the caller. |
 | `TraceRepository` | `src/Astra.Data/Repositories/TraceRepository.cs:TraceRepository` | Read side of tracing: `ListSpansAsync` / `ListTurnSpansAsync`, `ListSessionsAsync` / `GetSessionAsync` / `ListTurnsAsync`, and `TopologyAsync`. Spans are written by `RequestRepository`, not here. |
 | `RequestRepository.QueryAsync` / `QueryPrivacyEventsAsync` / `TimeseriesAsync` | `src/Astra.Data/Repositories/RequestRepository.cs:RequestRepository.QueryAsync` | The read side: fixed SQL text with null-means-no-filter parameters (Dapper.AOT cannot read `DynamicParameters`). |
 | `TokenRepository` | `src/Astra.Data/Repositories/TokenRepository.cs:TokenRepository` | `tokens` plus its `token_usage_totals` / `token_usage_daily` counters; `DeleteAsync` refuses the default token. |
@@ -56,10 +57,10 @@ decides what a row should say (`astra-gateway`), and the TS/Docker side that onl
 
 ## State it owns
 - **Source of truth:** the SQLite file itself, `AstraPaths.Database` = `<root>/astra.db` (`src/Astra.Core/AstraPaths.cs:14`), plus `astra.db-wal` / `astra.db-shm` in WAL mode. `AstraPaths` and `EnsureCreated` are `astra-core`'s, not this module's.
-- **Tables** (created by migrations 0001–0018): `schema_version`, `settings`, `models`, `model_prices`, `providers`, `provider_models`, `provider_accounts`, `clients`, `client_bindings`, `client_config_state`, `requests`, `request_usage_items`, `request_attempts`, `trace_spans`, `tokens`, `token_usage_totals`, `token_usage_daily`, `claude_direct_requests`, `plugins`, `plugin_provider_prefs`, `webhooks`, `alert_rules`, `alert_rule_webhooks`, `alert_states`, `webhook_deliveries`.
+- **Tables** (created by migrations 0001–0019): `schema_version`, `settings`, `models`, `model_prices`, `providers`, `provider_models`, `provider_accounts`, `clients`, `client_bindings`, `client_config_state`, `requests`, `request_usage_items`, `request_attempts`, `trace_spans`, `tokens`, `token_usage_totals`, `token_usage_daily`, `provider_account_usage_totals`, `claude_direct_requests`, `plugins`, `plugin_provider_prefs`, `webhooks`, `alert_rules`, `alert_rule_webhooks`, `alert_states`, `webhook_deliveries`.
 - **Files it writes:** `<backups>/db/astra-<stamp>-v<n>.db` before a migration of an existing DB (`src/Astra.Core/AstraPaths.cs:22`, `src/Astra.Data/MigrationRunner.cs:BackupDatabase`).
 - **Settings keys it stores:** `"app"` (`AppSettings.StorageKey`, `src/Astra.Core/AppSettings.cs:6`), `"privacy"` (`PrivacySettings.StorageKey`, `src/Astra.Core/Privacy/PrivacyTypes.cs:72`), `"seed_version"` (`SeedImporter.SeedVersionKey`, `src/Astra.Data/SeedImporter.cs:30`) — plus the one-shot `"token_migration"` marker migration 0006 inserts.
-- **Derived, never written directly:** the SQL read models returned by `RequestRepository` (`RequestPage`, `RequestSummary`, `RateWindow`, `TimeseriesPoint`, `PrivacyEventStat*`) and `TokenRepository.UsageAsync` — they aggregate `requests` at query time; `token_usage_totals`/`token_usage_daily` are the persisted counters and are only written by `RequestRepository.InsertBatchAsync` and by migrations 0006/0013.
+- **Derived, never written directly:** the SQL read models returned by `RequestRepository` (`RequestPage`, `RequestSummary`, `RateWindow`, `TimeseriesPoint`, `PrivacyEventStat*`) and `TokenRepository.UsageAsync` — they aggregate `requests` at query time; `token_usage_totals`/`token_usage_daily` and `provider_account_usage_totals` are the persisted counters, written by `RequestRepository.InsertBatchAsync` and backfilled by migrations 0006/0013/0019. Credential costs sum the request's original bill, never current catalog prices; token-limit refusals are excluded.
 - **Read-only foreign state:** another application's SQLite files, opened through `ForeignSqliteOpener` — never written.
 
 ## Contracts it exposes
@@ -78,7 +79,8 @@ decides what a row should say (`astra-gateway`), and the TS/Docker side that onl
   - `0015_webhook_format.sql` — `webhooks.format` (`generic` default).
   - `0016_request_origin.sql` — `requests.remote` / `requests.client_ip`.
   - `0017_tracing.sql` — the agent-link columns on `requests` (`trace_id`, `parent_span_id`, `session_key`, `chain_key`, `turn_id`, `parent_request_id`, `step`, `call_kind`, `link_source`, `finish_reason`, `tool_calls`) and the `trace_spans` table (`ON DELETE CASCADE`, so request-log retention removes both). All new columns are nullable or defaulted: rows logged before this migration have no trace, and nothing is back-filled. `request_attempts` (0001) stays unused — attempts are `upstream.attempt` spans.
-  - `0018_token_pool.sql` — `tokens.pool_json` (a `TokenPool`; NULL = the single `provider_id`). Member provider ids are not foreign keys; the first member is mirrored in `provider_id` / `account_id` for older binaries. The newest migration.
+  - `0018_token_pool.sql` — `tokens.pool_json` (a `TokenPool`; NULL = the single `provider_id`). Member provider ids are not foreign keys; the first member is mirrored in `provider_id` / `account_id` for older binaries.
+  - `0019_provider_account_usage.sql` — `provider_account_usage_totals`, keyed by provider and account (`''` = the provider's own API key). Backfilled once from retained request history; log cleanup never reduces it. The newest migration.
 - **Repository methods other modules depend on:** `SettingsRepository.GetAsync/SetAsync` (settings blob), `ModelRepository.GetPriceTableAsync`/`GetUpstreamIdIndexAsync`/`GetMatcherCandidatesAsync` (pricing + linking inputs), `ProviderRepository.UpdateQuotaAsync`, `ProviderAccountStore.ListExpiringAsync`/`UpdateTokensAsync`/`SetCooldownAsync`, `ClientRepository.ListBindingsAsync`/`ReplaceBindingsAsync`, `TokenRepository.FindByPrefixAsync`, `RequestRepository.InsertBatchAsync`, `IPluginListStore`, `IClientConfigStateStore`.
 - **A row-level contract:** every timestamp column is the `DateTimeOffsetHandler` text format; every money column is an INTEGER in nanodollars.
 

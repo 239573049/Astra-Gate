@@ -433,6 +433,35 @@ runtime needed on the target).
     provider cools (`ProviderHealth`) are the failover table there — change them together. In `GatewayPipeline`, while
     another pool attempt may follow, never rewrite the client's guarded tree in place and never re-read the request
     bytes (they are the unredacted original once the privacy guard rewrote the tree): `PrepareAsync` clones instead.
+19. **Smart routing** (`.plan/smart-routing.md`): a request for the virtual model (`SmartRoutingSettings.VirtualModel`,
+    default `astra-auto`) gets the model of the grade a judge picks. Settings live under their own `settings` key
+    `smart_routing` (`SmartRoutingService`, a snapshot like `PrivacyGuardService`; no migration), the judge key is
+    `ApiKeyProtected`, and changing the judge's address or dialect without a new key drops it (`SmartRoutingEndpoints.Apply`).
+    The judge is an `IRoutingJudge` per wire dialect (`src/Astra.Gateway/Routing`, registered in `RoutingJudges.Register`);
+    a new dialect is a class, a `JudgeProtocols` constant, the web `PRESETS` and `smartRouting.judge.protocol.<id>[.hint]`
+    keys, the table in `docs/content/docs/console/smart-routing.mdx` and its tests with golden fixtures
+    (`tests/Astra.Gateway.Tests/Fixtures/routing`). A dialect posts through `JudgeHttp.PostAsync`, which uses the judge's
+    own long-lived HTTP/2 client (`GatewayHttpClients.ForJudge`) and gives a call that must connect first
+    `JudgeEndpoint.ConnectAllowance` more — never `GatewayHttpClients.For`, whose two-minute pool made nearly every judgement
+    a cold one that missed its 2 s deadline. The `openai` dialect is a draft built from LiteLLM's description of
+    OpenAI's format — check it against OpenAI's own reference before relying on it. The pipeline seam is right after the
+    `gateway.resolve` span starts: it sets `GatewayRoute.Routed`, which `ClientModelFor` honours — never rewrite
+    `body["model"]` (see `upstreamDirty` in `.agents/codemap/flows/gateway-request.md`). The virtual model also has to be
+    offered (or refused) by `GatewayAuxiliary.ListModelsAsync` / `CountTokensAsync` and `ClientService.ModelsAsync` /
+    `ContextAsync`. A grade names its provider (`RoutingGrade.ProviderId`; one saved without gets the first provider serving
+    its model), and its requests go there (`GatewayRouter.GradeTargetAsync` / `WithTarget`): a token that allows any client
+    may use any grade's provider, a token limited to some clients only its own targets — anything else would let the
+    virtual model carry a limited token past its reach; a grade the caller cannot use gives way (`AdjustedFrom`), and why is
+    a `GradeProblems` code (`GatewayRouter.GradeUseAsync`) — each has zh/en `smartRouting.unusable.<code>[.fix]` and a row in
+    the docs page's reasons table. A decision
+    is `RoutingDecision` (`astra.route.*` attributes on the `gateway.resolve` span — no new span name, so linked update 15 is
+    not touched) and, for the request log's mark, `RoutingReport` in `requests.routing_json` (migration 0020; the
+    request DTOs' `routing`). It names the grade's model, so the token self-service views never show it. The zh/en
+    `smartRouting.*` keys include one `smartRouting.problem.<code>`
+    per `SmartRoutingValidator.Codes` constant (the console turns a refusal's `details.problems[].code` into its own words),
+    and one `smartRouting.failure.<reason>` plus `smartRouting.recent.hint.<reason>` per fallback reason the status
+    reports (`RoutingDecision.FallbackReason`, counted by `RoutingActivity`). The judge only ever reads text the privacy
+    guard has already seen (`AskExtractor` works on the guarded body).
 
 ## Conventions
 

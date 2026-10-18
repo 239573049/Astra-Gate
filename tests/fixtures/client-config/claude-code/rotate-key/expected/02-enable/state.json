@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-second-key\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_BASE_URL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"claude-haiku-4-5\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"claude-opus-4-5\""
+  }
+]

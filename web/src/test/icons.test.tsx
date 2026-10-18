@@ -98,6 +98,7 @@ describe('client brand icons', () => {
     nextcowork: { brand: null, mark: 'logo', badge: false },
     paseo: { brand: null, mark: 'logo', badge: false },
     zcode: { brand: 'zai', mark: 'mono', badge: true },
+    tkcode: { brand: null, mark: 'logo', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

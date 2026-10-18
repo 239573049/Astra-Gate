@@ -162,6 +162,7 @@ describe('trace layouts', () => {
     const ids = graph.nodes.map((n) => n.id);
     expect(ids).toEqual(expect.arrayContaining(['agent', 'route', 'privacy', 'encode', 'attempt:0', 'attempt:1', 'provider', 'decode', 'reencode', 'restore']));
     expect(ids).not.toContain('middleware');
+    expect(ids).not.toContain('routing');
     const failed = graph.edges.find((e) => e.id === 'e:attempt:0')!;
     expect(failed.style).toMatchObject({ strokeDasharray: '5 4' });
     expect(failed.label).toBe('429');
@@ -194,6 +195,115 @@ describe('trace layouts', () => {
     expect(split.firstTokenUs).toBe(270_000);
     expect(split.generationUs).toBe(6_580_000);
     expect(split.totalUs).toBe(8_420_000);
+    expect(split.routingUs).toBe(0);
+  });
+
+  const routed = (id: string, startUs: number, durationUs: number, attributes: TraceSpan['attributes']): TraceSpan =>
+    span(id, 'gateway.resolve', startUs, durationUs, { attributes });
+
+  it('draws a judged request as its own node and takes the judge out of resolve', () => {
+    const spans = [
+      span('r1', 'gateway.request', 0, 5_000_000),
+      span('r1', 'gateway.privacy', 700, 2_000),
+      routed('r1', 3_000, 2_030_000, {
+        'astra.provider.name': 'Grok',
+        'astra.route.mode': 'session',
+        'astra.route.source': 'judge',
+        'astra.route.grade': 'standard',
+        'astra.route.model': 'grok-4.7',
+        'astra.route.confidence': 0.82,
+        'astra.route.judge.protocol': 'typesafe',
+        'astra.route.judge.model': 'jev-1',
+        'astra.route.judge.ms': 2010,
+        'astra.route.judge.new_connection': true,
+      }),
+      span('r1', 'upstream.attempt', 2_050_000, 2_000_000, { attributes: { 'http.response.status_code': 200 } }),
+    ];
+    const trace: TraceRequest = { request: call('r1', 0, 5000, { requestedModel: 'astra-auto' }), inFlight: false, spans, parent: null, children: [] };
+    const graph = buildRequest(trace, t, label, { name: 'Grok' });
+    const order = graph.nodes.map((n) => n.id);
+    expect(order.indexOf('routing')).toBeGreaterThan(order.indexOf('privacy'));
+    expect(order.indexOf('routing')).toBeLessThan(order.indexOf('resolve'));
+    expect(graph.nodes.find((n) => n.id === 'routing')!.data).toMatchObject({
+      title: 'Smart routing',
+      tone: 'ok',
+      lines: ['standard', 'Judged · 2.01 s'],
+    });
+    // 2.03 s of resolve, of which 2.01 s was the judge
+    expect(graph.nodes.find((n) => n.id === 'resolve')!.data.lines).toEqual(['Grok', '20 ms']);
+    const split = splitRequestTime(spans)!;
+    expect(split.routingUs).toBe(2_010_000);
+    expect(split.astraUs).toBe(2_050_000);
+  });
+
+  it('warns on a fallback and does not charge a reused decision to the judge', () => {
+    const fallback: TraceRequest = {
+      request: call('r1', 0, 1000),
+      inFlight: false,
+      parent: null,
+      children: [],
+      spans: [
+        routed('r1', 0, 320_000, {
+          'astra.provider.name': 'Grok',
+          'astra.route.source': 'fallback',
+          'astra.route.grade': 'standard',
+          'astra.route.fallback_reason': 'low_confidence',
+          'astra.route.judge.ms': 300,
+        }),
+        span('r1', 'upstream.attempt', 320_000, 10_000, { attributes: { 'http.response.status_code': 200 } }),
+      ],
+    };
+    const fallen = buildRequest(fallback, t, label, null);
+    expect(fallen.nodes.find((n) => n.id === 'routing')!.data).toMatchObject({ tone: 'warn', lines: ['standard', 'Fallback · 300 ms'] });
+
+    const moved: TraceRequest = {
+      ...fallback,
+      spans: [
+        routed('r1', 0, 15_000, {
+          'astra.provider.name': 'Grok',
+          'astra.route.source': 'judge',
+          'astra.route.grade': 'strong',
+          'astra.route.adjusted_from': 'light',
+        }),
+      ],
+    };
+    expect(buildRequest(moved, t, label, null).nodes.find((n) => n.id === 'routing')!.data).toMatchObject({ tone: 'warn', lines: ['strong', 'Judged'] });
+
+    const pinned: TraceRequest = {
+      ...fallback,
+      spans: [
+        span('r1', 'gateway.request', 0, 100_000),
+        routed('r1', 0, 15_000, { 'astra.provider.name': 'Grok', 'astra.route.source': 'pin', 'astra.route.grade': 'light' }),
+        span('r1', 'upstream.attempt', 20_000, 10_000, { attributes: { 'http.response.status_code': 200 } }),
+      ],
+    };
+    const graph = buildRequest(pinned, t, label, null);
+    expect(graph.nodes.find((n) => n.id === 'routing')!.data).toMatchObject({ tone: 'ok', lines: ['light', 'Session pin'] });
+    expect(graph.nodes.find((n) => n.id === 'resolve')!.data).toMatchObject({ lines: ['Grok', '15 ms'] });
+    expect(splitRequestTime(pinned.spans)!.routingUs).toBe(0);
+  });
+
+  it('keeps the routing node when a pool resolves again, without charging the judge to the member that answered', () => {
+    const spans = [
+      routed('r1', 1_000, 2_000_000, {
+        'astra.provider.name': 'Relay',
+        'astra.route.source': 'judge',
+        'astra.route.grade': 'fast',
+        'astra.route.judge.ms': 1900,
+      }),
+      routed('r1', 2_100_000, 4_000, { 'astra.provider.name': 'GitHub Copilot' }),
+      span('r1', 'upstream.attempt', 2_200_000, 100_000, { attributes: { 'http.response.status_code': 200, 'astra.provider.id': 'copilot' } }),
+    ];
+    const trace: TraceRequest = { request: call('r1', 0, 5000, { providerId: 'copilot' }), inFlight: false, spans, parent: null, children: [] };
+    const graph = buildRequest(trace, t, label, { name: 'GitHub Copilot' });
+    expect(graph.nodes.find((n) => n.id === 'routing')!.data).toMatchObject({ lines: ['fast', 'Judged · 1.90 s'], tone: 'ok' });
+    expect(graph.nodes.find((n) => n.id === 'resolve')!.data.lines).toEqual(['GitHub Copilot', '4.0 ms']);
+  });
+
+  it('mentions the grade on a session call that was smart-routed', () => {
+    const spans = [routed('m1', 0, 10, { 'astra.route.source': 'pin', 'astra.route.grade': 'light' })];
+    const graph = buildSession([call('m1', 0, 1000)], spans, t, new Map());
+    expect(graph.nodes.find((n) => n.id === 'm1')!.data.lines).toContain('Smart routing · light');
   });
 
   it('writes the tools between two calls on the line joining them and hangs sub-agents underneath', () => {

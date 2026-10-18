@@ -132,7 +132,7 @@ public static class SwitchModes
     /// <summary>The current account changes only when the user switches (or it stops being usable).</summary>
     public const string Manual = "manual";
 
-    /// <summary>A rate-limited (429) account cools down and the next usable account becomes current automatically.</summary>
+    /// <summary>A rate-limited or auth-rejected account hands over to the next usable account, which becomes current.</summary>
     public const string Failover = "failover";
 
     /// <summary>
@@ -162,6 +162,9 @@ public sealed record UpstreamAuth(
 
     /// <summary>The subscription account these credentials belong to; null for static API keys.</summary>
     public string? AccountId { get; init; }
+
+    /// <summary>Whether rejected credentials can be renewed (or a plugin sign-in can be reloaded) before retrying.</summary>
+    public bool CanRefresh { get; init; }
 
     /// <summary>The account's own proxy (overrides the provider's); null = the provider's / system proxy.</summary>
     public string? Proxy { get; init; }
@@ -201,7 +204,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         {
             // A plugin's provider: the plugin adds the account's sign-in itself; the request only says which account.
             var (_, signedIn, _) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
-            return UpstreamAuth.None with { AccountId = signedIn.Id, Proxy = signedIn.HttpProxy, PluginKey = PluginKeyOf(signedIn) };
+            return UpstreamAuth.None with { AccountId = signedIn.Id, CanRefresh = true, Proxy = signedIn.HttpProxy, PluginKey = PluginKeyOf(signedIn) };
         }
 
         if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
@@ -210,7 +213,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         var (_, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
         return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token, ChatGptAccountHeader(token))
-            with { AccountId = account.Id, Proxy = account.HttpProxy };
+            with { AccountId = account.Id, CanRefresh = SubscriptionTokenService.CanRefresh(account), Proxy = account.HttpProxy };
     }
 
     /// <summary>The provider's accounts in failover order (what <see cref="AccountScheduler"/> picks from).</summary>
@@ -228,7 +231,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
             throw new SubscriptionAuthException(account.Id, "刷新后仍没有访问令牌，请重新登录");
         var accessToken = protector.Unprotect(refreshed.AccessTokenEnc);
         return Build(SubscriptionSupport.UpstreamSchemeOf(provider), accessToken, ChatGptAccountHeader(accessToken))
-            with { AccountId = account.Id, Proxy = refreshed.HttpProxy };
+            with { AccountId = account.Id, CanRefresh = SubscriptionTokenService.CanRefresh(refreshed), Proxy = refreshed.HttpProxy };
     }
 
     /// <summary>

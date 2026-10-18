@@ -481,7 +481,7 @@ public static partial class SubscriptionEndpoints
 
         // 额度查询（plan §5.4）：实时拉取上游用量并持久化快照；失效账号会被自动禁用（409 + status）。
         app.MapPost("/api/provider-accounts/{id}/quota", async (
-            string id, AstraDatabase db, SubscriptionQuotaService quotaService) =>
+            string id, AstraDatabase db, SubscriptionQuotaService quotaService, SubscriptionQuotaSync sync) =>
         {
             var account = await db.Accounts.GetAsync(id);
             if (account is null) return Results.NotFound(new ErrorOnlyDto("账号不存在"));
@@ -491,9 +491,9 @@ public static partial class SubscriptionEndpoints
             try
             {
                 var (updated, quota) = await quotaService.FetchAsync(provider, account, SubscriptionSupport.EffectiveConfig(provider));
-                return quota is null
-                    ? ApiJson.Result(new ErrorOnlyDto("该订阅暂不支持额度查询"), StatusCodes.Status501NotImplemented)
-                    : Results.Ok(ToDto(updated));
+                if (quota is null) return ApiJson.Result(new ErrorOnlyDto("该订阅暂不支持额度查询"), StatusCodes.Status501NotImplemented);
+                if (await sync.ReleaseIfRecoveredAsync(id)) updated = await db.Accounts.GetAsync(id) ?? updated;
+                return Results.Ok(ToDto(updated));
             }
             catch (SubscriptionAuthException e)
             {
@@ -538,7 +538,7 @@ public static partial class SubscriptionEndpoints
 
         // 用掉一张重置卡；成功后再拉一次额度，让 UI 立刻看到新的限流窗口。
         app.MapPost("/api/provider-accounts/{id}/reset-credits/{creditId}/consume", async (
-            string id, string creditId, AstraDatabase db, SubscriptionQuotaService quotaService) =>
+            string id, string creditId, AstraDatabase db, SubscriptionQuotaService quotaService, SubscriptionQuotaSync sync) =>
         {
             var account = await db.Accounts.GetAsync(id);
             if (account is null) return Results.NotFound(new ErrorOnlyDto("账号不存在"));
@@ -570,6 +570,8 @@ public static partial class SubscriptionEndpoints
                 var (updated, fresh) = await quotaService.FetchAsync(provider, refreshed ?? account, config);
                 account = updated;
                 quota = fresh ?? quota;
+                // 重置卡的目的就是恢复被限流的账号：额度有余量就不必等 429 给的重置时间。
+                if (await sync.ReleaseIfRecoveredAsync(id)) account = await db.Accounts.GetAsync(id) ?? account;
             }
             catch (Exception e) when (e is SubscriptionAuthException or OAuthProtocolException)
             {

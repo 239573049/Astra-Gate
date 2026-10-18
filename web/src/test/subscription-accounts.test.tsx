@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api/client';
 import { countImportEntries } from '../components/AccountImportSheet';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
-import type { AccountImportInfo, Provider, ProviderAccount } from '../api/types';
+import type { AccountImportInfo, Provider, ProviderAccount, ProviderUsage } from '../api/types';
 import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider } from '../i18n';
 
@@ -43,6 +43,7 @@ const spies = vi.hoisted(() => ({
 vi.mock('../api/hooks', () => ({
   keys: { providerAccounts: (id: string) => ['provider-accounts', id] as const },
   useProviderAccounts: () => ({ data: accounts, isLoading: false, refetch: vi.fn() }),
+  useProviderUsage: () => ({ data: accountUsage, isError: false }),
   useStartProviderLogin: () => ({ mutate: spies.start, isPending: false }),
   usePollProviderLogin: () => ({ mutateAsync: spies.poll, isPending: false }),
   useCompleteProviderLogin: () => ({ mutateAsync: spies.complete, isPending: false }),
@@ -85,6 +86,14 @@ const accounts: ProviderAccount[] = [
 
 const subscriptionProvider = { id: 'p1', name: 'Claude 订阅', authScheme: 'oauth-subscription', httpProxy: null } as unknown as Provider;
 const plainProvider = { id: 'p2', name: 'Static', authScheme: 'bearer' } as unknown as Provider;
+
+const accountUsage: ProviderUsage = {
+  day: '2026-10-18', timeZone: 'Asia/Shanghai',
+  accounts: [
+    { accountId: 'acc-1', today: { requests: 3, inputTokens: 100, outputTokens: 50, tokens: 150, costNanoUsd: 5_000_000 }, total: { requests: 12, inputTokens: 1000, outputTokens: 500, tokens: 1500, costNanoUsd: 250_000_000 } },
+    { accountId: 'acc-2', today: { requests: 0, inputTokens: 0, outputTokens: 0, tokens: 0, costNanoUsd: 0 }, total: { requests: 4, inputTokens: 2000, outputTokens: 1000, tokens: 3000, costNanoUsd: 750_000_000 } },
+  ],
+};
 
 const show = (ui: React.ReactNode) => {
   localStorage.setItem('astra.locale', 'en');
@@ -156,6 +165,22 @@ describe('SubscriptionAccounts', () => {
     expect(screen.getByText('2 accounts')).toBeInTheDocument();
     expect(screen.getByText('1 usable')).toBeInTheDocument();
     expect(screen.getByText('1 signed out')).toBeInTheDocument();
+  });
+
+  it('shows each account\'s own today and total usage on its card and in its detail', () => {
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    const [first, second] = screen.getAllByTestId('account-card');
+    const usage = within(first).getByRole('table', { name: 'Request usage' });
+    expect(within(usage).getByRole('columnheader', { name: 'Today' })).toBeInTheDocument();
+    expect(within(usage).getByRole('columnheader', { name: 'Total' })).toBeInTheDocument();
+    expect(within(usage).getByRole('row', { name: 'Requests 3 12' })).toBeInTheDocument();
+    expect(within(usage).getByRole('row', { name: 'Tokens 150 1,500' })).toBeInTheDocument();
+    expect(within(usage).getByRole('row', { name: 'Cost $0.005 $0.25' })).toBeInTheDocument();
+    expect(within(second).getByRole('row', { name: 'Requests 0 4' })).toBeInTheDocument();
+    fireEvent.click(first);
+    const detail = screen.getByRole('dialog');
+    expect(within(detail).getByRole('row', { name: 'Requests 3 12' })).toBeInTheDocument();
+    expect(within(detail).getByText(/Asia\/Shanghai/)).toBeInTheDocument();
   });
 
   it('filters by state and searches by name', () => {

@@ -1,0 +1,16 @@
+{
+  "model": "decision-model",
+  "input": "Current request:\nFix the flaky login test\n\nEarlier requests (context only, oldest first):\n1. Add a login test\n\nConversation: 14 messages, 22 tools available, images in the current request: no",
+  "questions": [
+    {
+      "type": "choice",
+      "name": "grade",
+      "instructions": "Which grade?",
+      "choices": [
+        { "value": "light", "description": "Simple things." },
+        { "value": "standard", "description": "Everyday things." },
+        { "value": "heavy", "description": "Hard things." }
+      ]
+    }
+  ]
+}

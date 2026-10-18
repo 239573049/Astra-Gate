@@ -65,6 +65,7 @@ import type {
   ProviderTemplate,
   ProviderTestRequest,
   ProviderUpdate,
+  ProviderUsage,
   Range,
   RateStats,
   RemoteModel,
@@ -94,6 +95,7 @@ import type {
 import type { PrivacyEvent } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
+import type { RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
 
 export const keys = {
   health: ['health'] as const,
@@ -128,9 +130,12 @@ export const keys = {
   backups: (kind: string) => ['backups', kind] as const,
   clientInstallJob: (kind: string) => ['client-install-job', kind] as const,
   privacy: ['privacy'] as const,
+  smartRouting: ['smart-routing'] as const,
+  routingModels: ['routing-models'] as const,
   privacyEvents: (q: PrivacyEventQuery) => ['privacy-events', q] as const,
   privacyEventStats: (...args: unknown[]) => ['privacy-event-stats', ...args] as const,
   providerAccounts: (id: string) => ['provider-accounts', id] as const,
+  providerUsage: (id: string) => ['provider-usage', id] as const,
   subscriptionPolicy: (id: string) => ['subscription-policy', id] as const,
   localCodexLogin: ['local-codex-login'] as const,
   localCopilotLogin: ['local-copilot-login'] as const,
@@ -665,8 +670,17 @@ export const useProviderAccounts = (id: string | undefined, enabled = true) =>
     enabled: Boolean(id) && enabled,
   });
 
+export const useProviderUsage = (id: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: keys.providerUsage(id ?? ''),
+    queryFn: ({ signal }) => api<ProviderUsage>('GET', `/api/providers/${enc(id!)}/usage`, undefined, signal),
+    enabled: Boolean(id) && enabled,
+    refetchInterval: 5_000,
+  });
+
 function invalidateProviderAccounts(qc: ReturnType<typeof useQueryClient>, providerId: string) {
   void qc.invalidateQueries({ queryKey: keys.providerAccounts(providerId) });
+  void qc.invalidateQueries({ queryKey: keys.providerUsage(providerId) });
 }
 
 export function useRefreshProviderAccount(providerId: string) {
@@ -690,7 +704,10 @@ function useAccountListMutation<V>(providerId: string, fn: (v: V) => Promise<Pro
   const qc = useQueryClient();
   return useMutation({
     mutationFn: fn,
-    onSuccess: (list) => qc.setQueryData(keys.providerAccounts(providerId), list),
+    onSuccess: (list) => {
+      qc.setQueryData(keys.providerAccounts(providerId), list);
+      void qc.invalidateQueries({ queryKey: keys.providerUsage(providerId) });
+    },
   });
 }
 
@@ -1282,6 +1299,7 @@ export const pluginValidate = (provider: string, method: number, key: string, va
 
 function invalidatePluginAccounts(qc: ReturnType<typeof useQueryClient>, provider: string) {
   void qc.invalidateQueries({ queryKey: keys.providerAccounts(provider) });
+  void qc.invalidateQueries({ queryKey: keys.providerUsage(provider) });
   void qc.invalidateQueries({ queryKey: keys.providers });
 }
 
@@ -1489,3 +1507,34 @@ export const useTraceRequest = (id: string | undefined) =>
     enabled: Boolean(id),
     refetchInterval: (query) => (query.state.data?.inFlight ? 1000 : false),
   });
+
+// ---------- smart routing ----------
+
+/** The settings, with the live status (a judge being left alone, sessions holding a grade): polled slowly. */
+export const useSmartRouting = () =>
+  useQuery({
+    queryKey: keys.smartRouting,
+    queryFn: ({ signal }) => api<SmartRouting>('GET', '/api/smart-routing', undefined, signal),
+    refetchInterval: 30_000,
+  });
+
+export function useUpdateSmartRouting() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (update: SmartRoutingUpdate) => api<SmartRouting>('PUT', '/api/smart-routing', update),
+    onSuccess: (saved) => {
+      qc.setQueryData(keys.smartRouting, saved);
+      // The virtual model joins (or leaves) the clients' model pickers and the lists of grade models.
+      void qc.invalidateQueries({ queryKey: ['client-models'] });
+      void qc.invalidateQueries({ queryKey: keys.routingModels });
+    },
+  });
+}
+
+/** Asks the judge about a sample text with the settings as they are being edited; saves nothing. */
+export const useTestSmartRouting = () =>
+  useMutation({ mutationFn: (req: SmartRoutingTestRequest) => api<SmartRoutingTestResult>('POST', '/api/smart-routing/test', req) });
+
+/** Every model id a provider serves: what a grade can be given. */
+export const useRoutingModels = () =>
+  useQuery({ queryKey: keys.routingModels, queryFn: ({ signal }) => api<RoutingModel[]>('GET', '/api/smart-routing/models', undefined, signal) });

@@ -2,7 +2,7 @@
 module: astra-providers
 sources: ["src/Astra.Providers/**"]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 # astra-providers — templates, quota probes, subscription credentials
 
@@ -28,7 +28,7 @@ plugin providers that mirror into the provider list (`astra-plugins`); client co
 | `QuotaTemplateCatalog.Suggest` | `src/Astra.Providers/Quota/QuotaTemplate.cs:QuotaTemplateCatalog.Suggest` | Picks the default template by provider-template id first, then by endpoint host. |
 | `QuotaConfig.From` / `.ToNode()` / `.Validate` | `src/Astra.Providers/Quota/QuotaConfig.cs:QuotaConfig` | The `settings.quota` document: read leniently, write back, validate (used by `ProviderQuotaManager`). |
 | `SubscriptionQuotaService.FetchAsync` | `src/Astra.Providers/Subscription/SubscriptionQuotaService.cs:SubscriptionQuotaService.FetchAsync` | Per-family usage probe, persists `extra.quota`, marks the account revoked when the grant is dead. |
-| `SubscriptionTokenService.GetValidAccessTokenAsync` | `src/Astra.Providers/Subscription/SubscriptionTokenService.cs:SubscriptionTokenService.GetValidAccessTokenAsync` | Returns a usable access token, refreshing shortly before expiry. |
+| `SubscriptionTokenService.GetValidAccessTokenAsync` / `.CanRefresh` | `src/Astra.Providers/Subscription/SubscriptionTokenService.cs:SubscriptionTokenService.GetValidAccessTokenAsync` | Returns a usable access token; renewal grants refresh shortly before expiry, direct tokens last until actual expiry, and API keys are used as provided. `CanRefresh` identifies renewal grants for gateway auth recovery. |
 | `SubscriptionTokenService.RefreshAsync` | `src/Astra.Providers/Subscription/SubscriptionTokenService.cs:SubscriptionTokenService.RefreshAsync` | The only writer of account status on OAuth errors (serialized per account). |
 | `OAuthClient` | `src/Astra.Providers/Subscription/OAuthClient.cs:OAuthClient` | Every OAuth hop: authorize URL, code exchange, refresh, device code, ZCode CLI, Copilot second hop, identity. |
 | `SubscriptionCatalog.All` / `.Effective` / `.IsReady` | `src/Astra.Providers/Subscription/SubscriptionOAuth.cs:SubscriptionCatalog` | The per-family OAuth endpoints and the `settings.subscription_oauth` override merge. |

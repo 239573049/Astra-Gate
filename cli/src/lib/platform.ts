@@ -70,6 +70,7 @@ export const CLIENT_KINDS = [
   'workbuddy-ai',
   'muse-code',
   'paseo',
+  'tkcode',
 ] as const;
 
 /** A client a plugin adds (a magpie agent plugin): "plugin-" and magpie's agent id. */

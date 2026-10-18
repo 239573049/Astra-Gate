@@ -63,7 +63,7 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 `KimiCodeClientAdapter.cs`, `ZedClientAdapter.cs`, `OmpClientAdapter.cs`,
 `DeepSeekHarnessClientAdapter.cs`, `WorkBuddyClientAdapter.cs` (also `workbuddy-ai`),
 `MuseCodeClientAdapter.cs`, `NextCoWorkClientAdapter.cs`, `PaseoClientAdapter.cs`,
-plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`ZCodeClientAdapter.cs`, `TKCodeClientAdapter.cs`, plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

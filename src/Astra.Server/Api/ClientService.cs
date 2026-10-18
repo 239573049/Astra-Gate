@@ -8,6 +8,7 @@ using Astra.Core.Plugins;
 using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
+using Astra.Gateway.Routing;
 using Astra.Server.Hosting;
 
 namespace Astra.Server.Api;
@@ -39,7 +40,7 @@ public sealed record TokenRewriteResult(IReadOnlyList<string> Rewritten, IReadOn
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
-    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents)
+    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents, SmartRouter smartRouter)
 {
     /// <summary>The key in a plugin client's extras holding its plugin's descriptor, for restoring it offline.</summary>
     public const string PluginExtrasKey = "plugin";
@@ -293,13 +294,18 @@ public sealed class ClientService(
     /// <summary>Whether the client is enabled in Astra.</summary>
     public async Task<bool> IsEnabledAsync(string kind, CancellationToken ct) => (await db.Clients.GetAsync(kind, ct))?.Enabled == true;
 
-    /// <summary>The model ids the client can use: enabled models of its usable bound providers, each id once.</summary>
+    /// <summary>
+    /// The model ids the client can use: enabled models of its usable bound providers, each id once, and smart routing's
+    /// virtual model while it is on.
+    /// </summary>
     public async Task<IReadOnlyList<string>> ModelsAsync(string kind, CancellationToken ct)
     {
         await RefreshRegistryAsync(ct);
         Require(kind);
         var targets = await routing.TargetsAsync(await db.Clients.ListBindingsAsync(kind, ct), ct);
-        return (await routing.ListModelsAsync(targets, ct)).Select(m => m.Id).ToList();
+        var models = (await routing.ListModelsAsync(targets, ct)).Select(m => m.Id).ToList();
+        if (smartRouter.AdvertisedModel is { } virtualModel && !models.Contains(virtualModel)) models.Add(virtualModel);
+        return models;
     }
 
     private async Task<(IClientAdapter Adapter, ClientRecord Record, EnableContext Context, string ProviderId, string TokenId, List<string> Warnings)>
@@ -372,6 +378,9 @@ public sealed class ClientService(
                 if (protocols.Count > 0) entry["protocols"] = new JsonArray([.. protocols.Select(p => (JsonNode)p.ToId())]);
                 list[id] = entry;
             }
+            // Smart routing's virtual model (plan §5.8), while it is on: the client offers it like any other model.
+            if (smartRouter.AdvertisedModel is { } virtualModel && !list.ContainsKey(virtualModel))
+                list[virtualModel] = new JsonObject { ["id"] = virtualModel, ["name"] = "Astra Auto" };
             extras["models"] = list;
         }
         // A protocol the user changed in the client's own UI since Astra last wrote it is their choice: it joins the
@@ -600,7 +609,7 @@ public sealed class ClientService(
         ClientKinds.KimiCode => "Kimi Code", ClientKinds.Zed => "Zed", ClientKinds.VsCodeInsiders => "VS Code Insiders", ClientKinds.VsCodium => "VSCodium",
         ClientKinds.Omp => "omp (oh-my-pi)", ClientKinds.MiMoCode => "MiMo Code", ClientKinds.DeepSeekHarness => "DeepSeek Harness",
         ClientKinds.WorkBuddy => "WorkBuddy", ClientKinds.WorkBuddyAi => "WorkBuddy AI", ClientKinds.MuseCode => "Muse Code", ClientKinds.NextCoWork => "NextCoWork",
-        ClientKinds.Paseo => "Paseo", ClientKinds.ZCode => "ZCode",
+        ClientKinds.Paseo => "Paseo", ClientKinds.ZCode => "ZCode", ClientKinds.TKCode => "TKCode",
         _ => kind,
     };
 }

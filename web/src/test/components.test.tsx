@@ -528,6 +528,33 @@ describe('Requests list model column', () => {
     expect(mismatch).toHaveAttribute('title', 'Requested: gpt-b; sent upstream: gpt-b; API returned: up-c');
   });
 
+  it('marks how smart routing sent each request: as judged, or not — fallen back or moved to another grade', () => {
+    const routed = (id: string, routing: RequestSummary['routing']) =>
+      summary({ id, requestedModel: 'astra-auto', upstreamModel: routing?.model, responseModel: routing?.model, routing });
+    hookSpies.useRequests.mockReturnValue(
+      hookResult(
+        pageOf([
+          routed('r-judged', { grade: 'light', model: 'small-model', source: 'judge', mode: 'session', confidence: 0.9, judgeMs: 320 }),
+          routed('r-fallback', { grade: 'standard', model: 'mid-model', source: 'fallback', mode: 'session', fallbackReason: 'timeout' }),
+          routed('r-moved', { grade: 'standard', model: 'mid-model', source: 'judge', mode: 'session', confidence: 1, adjustedFrom: 'light', adjustedReason: 'token_limited' }),
+          summary({ id: 'r-plain', requestedModel: 'gpt-a', upstreamModel: 'gpt-a', responseModel: 'gpt-a' }),
+        ]),
+      ),
+    );
+    showPage();
+
+    const judged = screen.getByText('Smart routing: light');
+    expect(judged.closest('[title]')).toHaveAttribute('title', 'Smart routing: Judged “light” (90% sure), sent to small-model');
+    const fallback = screen.getByText('Smart routing: fallback standard (timed out)');
+    expect(fallback.closest('[title]')).toHaveAttribute('title', 'Smart routing: The judge’s grade was not used (timed out): the fallback grade “standard” sent it to mid-model');
+    const moved = screen.getByText('Smart routing: light → standard (out of reach)');
+    expect(moved.closest('[title]')).toHaveAttribute(
+      'title',
+      'Smart routing: Judged “light”, but it cannot be used (its token is limited to some clients and keeps to its own providers): “standard” sent it to mid-model',
+    );
+    expect(screen.getAllByText(/^Smart routing:/)).toHaveLength(3); // the request for a real model carries no mark
+  });
+
   it('shows a mapped model beside the requested one and matches the response against what was sent', () => {
     hookSpies.useRequests.mockReturnValue(
       hookResult(pageOf([summary({ id: 'r-map', requestedModel: 'claude-opus-5-5', upstreamModel: 'claude-sonnet-5-5', responseModel: 'claude-sonnet-5-5' })])),

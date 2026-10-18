@@ -27,7 +27,8 @@ public static class ClientProtocols
     {
         ClientKinds.NextCoWork or ClientKinds.Droid or ClientKinds.KimiCode or ClientKinds.OpenCode or ClientKinds.MiMoCode
             or ClientKinds.CopilotCli or ClientKinds.MiniMaxCode or ClientKinds.DeepSeekHarness
-            or ClientKinds.VsCodeCopilot or ClientKinds.VsCodeInsiders or ClientKinds.VsCodium or ClientKinds.ZCode => OpenAiAndAnthropic,
+            or ClientKinds.VsCodeCopilot or ClientKinds.VsCodeInsiders or ClientKinds.VsCodium or ClientKinds.ZCode
+            or ClientKinds.TKCode => OpenAiAndAnthropic,
         ClientKinds.Pi or ClientKinds.Omp or ClientKinds.QwenCode or ClientKinds.Crush => AllFour,
         ClientKinds.GrokBuild => [ApiProtocol.OpenAIResponses, ApiProtocol.OpenAIChat, ApiProtocol.Anthropic],
         ClientKinds.Zed => [ApiProtocol.OpenAIChat, ApiProtocol.OpenAIResponses],

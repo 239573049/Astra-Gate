@@ -8,6 +8,7 @@ using Astra.Data;
 using Astra.Data.Repositories;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Routing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
@@ -57,6 +58,7 @@ public static class KeyInfoEndpoints
         foreach (var prefix in new[] { "/v1", "" })
         {
             app.MapGet($"{prefix}/astra/key", KeyAsync).RequireRateLimiting(RateLimitPolicy).ExcludeFromDescription();
+            app.MapGet($"{prefix}/astra/connect-context", ConnectContextAsync).RequireRateLimiting(RateLimitPolicy).ExcludeFromDescription();
             app.MapGet($"{prefix}/dashboard/billing/subscription", SubscriptionAsync).RequireRateLimiting(RateLimitPolicy).ExcludeFromDescription();
             app.MapGet($"{prefix}/dashboard/billing/usage", UsageAsync).RequireRateLimiting(RateLimitPolicy).ExcludeFromDescription();
             app.MapGet($"{prefix}/astra/key/requests", RequestsAsync).RequireRateLimiting(LogsRateLimitPolicy).ExcludeFromDescription();
@@ -97,6 +99,45 @@ public static class KeyInfoEndpoints
             }).ToArray()),
         };
         return Json(body);
+    }
+
+    /// <summary>
+    /// What <c>astra-connect</c> (the employee CLI, plan: enterprise-connect §6) needs to point a client at this gateway: the
+    /// token's name and the models it can call, in the shape of the "models" extra the client adapters take. The list is
+    /// what <c>/v1/models</c> offers this key — ids as the client asks for them, never a provider, account or upstream model;
+    /// "protocols" is only which wire protocols a model passes through untranslated. A missing or unknown key is 401 even
+    /// when <c>RequireGatewayKey</c> is off.
+    /// </summary>
+    private static async Task<IResult> ConnectContextAsync(HttpContext ctx, AstraDatabase db, GatewayRouter router,
+        ClientRouting routing, SmartRouter smartRouter, CancellationToken ct)
+    {
+        if (await AuthenticateAsync(ctx, db, ct) is not { } token) return Unauthorized();
+        GatewayRoute route;
+        try
+        {
+            route = await router.ResolveAsync(ctx.Request, ct);
+        }
+        catch (GatewayException e)
+        {
+            return Json(new JsonObject { ["error"] = new JsonObject { ["message"] = e.Message, ["type"] = e.Type } }, e.Status);
+        }
+        var targets = route.Targets.Count > 0 ? route.Targets : [new RouteTarget(route.Provider, route.AccountId)];
+        var models = new List<JsonNode>();
+        foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ct))
+        {
+            var entry = new JsonObject { ["id"] = id, ["name"] = id == pm.ModelId ? effective.DisplayName : id };
+            if (effective.ContextWindow is { } context) entry["contextWindow"] = context;
+            if (effective.MaxOutputTokens is { } maxOut) entry["maxOutputTokens"] = maxOut;
+            if (effective.Capabilities.Vision is { } vision) entry["vision"] = vision;
+            if (effective.Capabilities.Reasoning is { } reasoning) entry["reasoning"] = reasoning;
+            if (effective.Capabilities.Pdf is { } pdf) entry["pdf"] = pdf;
+            var protocols = GatewayRouter.PassthroughProtocols(target.Provider, pm.UpstreamProtocols);
+            if (protocols.Count > 0) entry["protocols"] = new JsonArray([.. protocols.Select(p => (JsonNode)p.ToId())]);
+            models.Add(entry);
+        }
+        if (smartRouter.AdvertisedModel is { } virtualModel && models.All(m => m["id"]!.GetValue<string>() != virtualModel))
+            models.Add(new JsonObject { ["id"] = virtualModel, ["name"] = "Astra Auto" });
+        return Json(new JsonObject { ["name"] = token.Name, ["models"] = new JsonArray(models.ToArray()) });
     }
 
     private static async Task<IResult> SubscriptionAsync(HttpContext ctx, AstraDatabase db, TokenUsageLedger ledger, CancellationToken ct)

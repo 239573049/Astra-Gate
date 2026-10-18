@@ -432,6 +432,22 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Routing_Report_Round_Trips_In_The_Page_And_The_Detail()
+    {
+        var db = await TestDb.InitializeAsync();
+        var routed = Success("01TEST0000000000000000000R", T0, "tkcode", "p1", "Alpha", "deepseek-v4.1-flash", 0, 10, 5, 100);
+        routed.RequestedModel = "astra-auto";
+        routed.RoutingJson = """{"grade":"standard","model":"grok-4.7-build-fast","source":"fallback","mode":"session","fallback_reason":"timeout"}""";
+        var plain = Success("01TEST0000000000000000000S", T1, "codex", "p1", "Alpha", "gpt-5", 1, 10, 5, 100);
+        await db.Requests.InsertBatchAsync([routed, plain]);
+
+        Assert.Equal(routed.RoutingJson, (await db.Requests.GetAsync(routed.Id))!.RoutingJson);
+        var page = await db.Requests.QueryAsync(new RequestQuery());
+        Assert.Equal(routed.RoutingJson, page.Items.Single(r => r.Id == routed.Id).RoutingJson);
+        Assert.Null(page.Items.Single(r => r.Id == plain.Id).RoutingJson); // only the virtual model's requests carry one
+    }
+
+    [Fact]
     public async Task Privacy_Report_Round_Trips_And_Status_Filters()
     {
         var db = await TestDb.InitializeAsync();

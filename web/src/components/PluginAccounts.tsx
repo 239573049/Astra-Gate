@@ -12,12 +12,14 @@ import {
   usePluginSignOut,
   usePluginUsage,
   useProviderAccounts,
+  useProviderUsage,
   useStartPluginSignIn,
   useSubmitPluginCode,
   useSubscriptionPolicy,
   useUpdateSubscriptionPolicy,
 } from '../api/hooks';
-import type { PluginAuthMethod, PluginPrompt, Provider, ProviderAccount } from '../api/types';
+import type { PluginAuthMethod, PluginPrompt, Provider, ProviderAccount, ProviderAccountUsage } from '../api/types';
+import { AccountUsageStats, ProviderUsageHint } from './AccountUsageStats';
 import { Alert } from './arc/alert/alert';
 import { SwitchModePicker } from './SubscriptionAccounts';
 import { Badge, Button, EmptyState, Field, Input, KV, Spinner, Switch } from './ui/controls';
@@ -33,6 +35,7 @@ import { formatDateTime } from '../lib/format';
 export function PluginAccounts({ provider }: { provider: Provider }) {
   const { t } = useI18n();
   const accounts = useProviderAccounts(provider.id);
+  const gatewayUsage = useProviderUsage(provider.id);
   const methods = usePluginMethods(provider.id);
   // with more than one sign-in: how requests pick between them (the same switch modes as a subscription's)
   const policy = useSubscriptionPolicy(provider.id, true);
@@ -82,10 +85,12 @@ export function PluginAccounts({ provider }: { provider: Provider }) {
       {accounts.data && accounts.data.length > 0 && (
         <div className="card divide-y divide-[var(--border-subtle)] overflow-hidden p-0">
           {accounts.data.map((a) => (
-            <AccountRow key={a.id} provider={provider} account={a} />
+            <AccountRow key={a.id} provider={provider} account={a} gatewayUsage={gatewayUsage.data?.accounts.find((u) => u.accountId === a.id)} />
           ))}
         </div>
       )}
+      {gatewayUsage.isError && <Alert tone="danger" title={t('providers.usage.error')}>{errorText(gatewayUsage.error)}</Alert>}
+      {accounts.data && accounts.data.length > 0 && <ProviderUsageHint timeZone={gatewayUsage.data?.timeZone} />}
       <CheckinSection provider={provider} />
       {method && <SignInSheet provider={provider} method={method} onClose={() => setMethod(null)} />}
     </div>
@@ -136,7 +141,7 @@ function CheckinSection({ provider }: { provider: Provider }) {
   );
 }
 
-function AccountRow({ provider, account: a }: { provider: Provider; account: ProviderAccount }) {
+function AccountRow({ provider, account: a, gatewayUsage }: { provider: Provider; account: ProviderAccount; gatewayUsage?: ProviderAccountUsage }) {
   const { t, locale } = useI18n();
   const { toast, confirm } = useFeedback();
   const signOut = usePluginSignOut(provider.id);
@@ -165,6 +170,7 @@ function AccountRow({ provider, account: a }: { provider: Provider; account: Pro
         </Button>
       </div>
       {a.status !== 'active' && <p className="text-[12px] text-[var(--danger)]">{t('pluginAccounts.lapsedDetail')}</p>}
+      <AccountUsageStats usage={gatewayUsage} />
       {showUsage && (
         <div className="flex flex-col gap-1 rounded-md bg-[var(--surface-muted)] px-3 py-2">
           {usage.isLoading && <Spinner lines={2} />}

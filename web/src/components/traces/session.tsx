@@ -21,6 +21,8 @@ import {
   buildSession,
   buildTimeline,
   callPhases,
+  routeDecision,
+  routeSummary,
   shortModel,
   spansByRequest,
   PHASE_COLOR as PHASE,
@@ -548,6 +550,7 @@ function CallInspector({ id, calls, spans, t, brands }: { id: string; calls: Tra
   if (!call) return null;
   const own = by.get(call.id) ?? [];
   const attempts = own.filter((s) => s.name === SPAN.attempt);
+  const routed = routeDecision(own);
   const brand = call.providerId ? brands.get(call.providerId) : undefined;
   const phases = callPhases(own);
   const response = own.find((s) => s.name === SPAN.response);
@@ -584,6 +587,7 @@ function CallInspector({ id, calls, spans, t, brands }: { id: string; calls: Tra
       sub={[call.providerName, call.accountName ?? call.accountId].filter(Boolean).join(' · ')}
       rows={[
         [t('traces.kv.status'), call.httpStatus ? `${call.status} · ${call.httpStatus}` : call.status],
+        ...(routed ? [[t('traces.node.routing'), routeSummary(routed, t)] as [string, ReactNode]] : []),
         [t('traces.kv.duration'), `${formatMs(call.totalMs)}${call.ttftMs ? ` · ${t('traces.kv.firstToken')} ${formatMs(call.ttftMs)}` : ''}`],
         [t('traces.kv.tokens'), `${formatTokens(call.totalInputTokens, true)} / ${formatTokens(call.totalOutputTokens, true)}`],
         ...optional,

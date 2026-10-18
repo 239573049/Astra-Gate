@@ -1,5 +1,6 @@
 using System.Net;
 using Astra.Core;
+using Astra.Gateway.Pipeline;
 using Astra.Server.Api;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -35,6 +36,7 @@ public sealed class JsonRegistrationTests
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/provider-quota/templates",
             "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
+            "/api/smart-routing", "/api/smart-routing/models",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -60,6 +62,7 @@ public sealed class JsonRegistrationTests
             apiKey = "sk-guard-0000", models = Array.Empty<string>(),
         });
         var quotaId = quotaProvider.Body!["id"]!.GetValue<string>();
+        await host.GetJsonAsync($"/api/providers/{quotaId}/usage");
         await host.SendAsync(HttpMethod.Put, $"/api/providers/{quotaId}/quota/config", new
         {
             enabled = true, template = "custom", request = new { url = "{{origin}}/balance" }, extract = new { remaining = "balance" },
@@ -103,6 +106,14 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Put, "/api/tunnel", new { mode = "named", hostname = "astra.example.com" });
         await host.SendAsync(HttpMethod.Post, "/api/tunnel/start");
         await host.SendAsync(HttpMethod.Put, "/api/server/autostart", new { enabled = false });
+        // Smart routing: a saved update, a refusal with its problems, and trying the judge (an answer, then a failure).
+        host.App.Services.GetRequiredService<GatewayHttpClients>().HandlerFactory = _ => new GuardUpstream();
+        await host.SendAsync(HttpMethod.Put, "/api/smart-routing",
+            new { judge = new { baseUrl = "https://judge.guard.invalid", apiKey = "sk-guard-0000" }, rules = new { mode = "turn" } });
+        await host.SendAsync(HttpMethod.Put, "/api/smart-routing", new { enabled = true });
+        await host.SendAsync(HttpMethod.Post, "/api/smart-routing/test", new { text = "redesign the billing module" });
+        await host.SendAsync(HttpMethod.Post, "/api/smart-routing/test",
+            new { text = "hello", judge = new { baseUrl = "https://down.guard.invalid", apiKey = "sk-guard-0000" } });
         await host.SendAsync(HttpMethod.Delete, "/api/provider-accounts/missing");
         await host.SendAsync(HttpMethod.Get, "/api/models/missing");
         await host.SendAsync(HttpMethod.Get, "/api/nope");
@@ -127,6 +138,7 @@ public sealed class JsonRegistrationTests
 
         var claude = await ClaudeDirectTests.AddClaudeProviderAsync(host);
         await ClaudeDirectTests.AddAccountAsync(host, claude, "guard-acc", "Guard");
+        await host.GetJsonAsync($"/api/providers/{claude.Id}/usage");
         await host.SendAsync(HttpMethod.Put, "/api/clients/claude-code/direct", new { mode = "direct", accountId = "guard-acc", telemetryEnabled = true });
         await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/direct/prepare", new { accountId = "guard-acc" });
         await host.GetJsonAsync("/api/clients/claude-code/direct");
@@ -170,6 +182,8 @@ public sealed class JsonRegistrationTests
             {
                 "models.guard.invalid" => Task.FromResult(Json(HttpStatusCode.OK, """{"data":[{"id":"guard-model"}]}""")),
                 "denied.guard.invalid" => Task.FromResult(Json(HttpStatusCode.Unauthorized, """{"error":{"message":"invalid api key"}}""")),
+                "judge.guard.invalid" => Task.FromResult(Json(HttpStatusCode.OK,
+                    """{"model":"jev-1.13.0","answers":{"grade":{"type":"choice","choice":"heavy","confidence":0.9,"probabilities":{"light":0.05,"standard":0.05,"heavy":0.9}}},"usage":{"input_tokens":10,"output_tokens":2}}""")),
                 _ => Task.FromException<HttpResponseMessage>(new HttpRequestException("unreachable in the guard test")),
             };
 

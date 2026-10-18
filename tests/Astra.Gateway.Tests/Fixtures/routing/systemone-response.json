@@ -1,0 +1,12 @@
+{
+  "model": "jev-1.13.0",
+  "answers": {
+    "grade": {
+      "type": "choice",
+      "choice": "heavy",
+      "confidence": 0.82,
+      "probabilities": { "light": 0.02, "standard": 0.1, "heavy": 0.88 }
+    }
+  },
+  "usage": { "input_tokens": 412, "output_tokens": 18 }
+}

@@ -16,6 +16,7 @@ import {
   useLocalCopilotLogin,
   usePollProviderLogin,
   useProviderAccounts,
+  useProviderUsage,
   useRefreshProviderAccount,
   useReorderProviderAccounts,
   useStartProviderLogin,
@@ -26,6 +27,7 @@ import {
 import type { Provider, ProviderAccount, SubscriptionLoginStart, SubscriptionPolicy as Policy } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
 import { AccountImportSheet, type ImportMode } from './AccountImportSheet';
+import { ProviderUsageHint } from './AccountUsageStats';
 import { Button, Input, SearchField, Segmented, Spinner } from './ui/controls';
 import { accountState, SubscriptionAccountCard, type AccountActions, type AccountState } from './SubscriptionAccountCard';
 import { SubscriptionAccountDetail } from './SubscriptionAccountDetail';
@@ -58,6 +60,7 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   const qc = useQueryClient();
   const isSubscription = provider.authScheme === 'oauth-subscription';
   const accounts = useProviderAccounts(provider.id, isSubscription);
+  const usage = useProviderUsage(provider.id, isSubscription);
   const policy = useSubscriptionPolicy(provider.id, isSubscription);
   const updatePolicy = useUpdateSubscriptionPolicy(provider.id);
   const importInfo = useAccountImportInfo(provider.id, isSubscription);
@@ -474,6 +477,7 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
             <SubscriptionAccountCard
               key={a.id}
               account={a}
+              usage={usage.data?.accounts.find((u) => u.accountId === a.id)}
               index={index}
               actions={actions}
               selected={selected.has(a.id)}
@@ -489,6 +493,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
           ))}
         </div>
       )}
+      {usage.isError && <Alert tone="danger" title={t('providers.usage.error')}>{errorText(usage.error)}</Alert>}
+      {list.length > 0 && <ProviderUsageHint timeZone={usage.data?.timeZone} />}
       <p className="mt-2 px-1 text-[11px] text-[var(--text-muted)]">{t('providers.subscription.footer')}</p>
 
       {selecting && (
@@ -519,6 +525,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
       <SubscriptionAccountDetail
         provider={provider}
         account={detail}
+        usage={usage.data?.accounts.find((u) => u.accountId === detail?.id)}
+        usageTimeZone={usage.data?.timeZone}
         index={detail ? list.indexOf(detail) : 0}
         actions={actions}
         onClose={() => setDetailId(null)}

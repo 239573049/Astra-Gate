@@ -14,6 +14,7 @@ using Astra.Gateway.Plugins;
 using Astra.Gateway.Protocol;
 using Astra.Gateway.Protocol.Anthropic;
 using Astra.Gateway.Protocol.Responses;
+using Astra.Gateway.Routing;
 using Astra.Gateway.Tracing;
 using Astra.Plugins.Host;
 using Astra.Plugins.Middleware;
@@ -48,6 +49,7 @@ public sealed class GatewayPipeline(
     PoolRouting pools,
     ProviderPoolScheduler poolScheduler,
     ProviderHealth health,
+    SmartRouter smartRouter,
     ILogger<GatewayPipeline> logger)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
@@ -242,6 +244,37 @@ public sealed class GatewayPipeline(
             // (issue #2): the members its strategy orders, the next one tried while an attempt fails before anything
             // reached the client. Decided before the client policy and capability discovery below.
             var resolveSpan = trace.Start(TraceSpanNames.Resolve);
+            // Smart routing (plan §5): the virtual model becomes the model of the grade chosen for this request, before any
+            // provider is picked — the route's ClientModelFor / UpstreamModelFor carry it on from here, the client's own body
+            // stays untouched. The judge's time counts as part of resolving. Off, the virtual model is refused here.
+            if (smartRouter.IsVirtual(requestedModel))
+            {
+                RoutingDecision decision;
+                var caller = route;
+                try
+                {
+                    decision = await smartRouter.DecideAsync(new RoutingInput(route.Token.Id, inbound, body, link!)
+                    {
+                        Caller = route.ClientKind ?? route.Token.Name,
+                        // A grade this caller cannot use (its provider out of reach, or no longer serving the model) gives way.
+                        ProblemOf = async (grade, token) => (await router.GradeUseAsync(caller, grade.ProviderId, grade.Model, isClaudeCode, token)).Problem,
+                    }, ct);
+                }
+                catch (GatewayException)
+                {
+                    resolveSpan.Error("smart routing is off").End();
+                    throw;
+                }
+                route = route with { Routed = new RoutedModel(requestedModel, decision.Model, decision.GradeId, decision.ProviderId) };
+                // The grade's requests go to the provider it names — not to whichever of the caller's own providers serves
+                // the same model id first. A grade nobody here can use keeps the caller's own routing below.
+                if (decision.ProviderId is not null
+                    && await router.GradeTargetAsync(caller, decision.ProviderId, decision.Model, isClaudeCode, ct) is { } target)
+                    route = GatewayRouter.WithTarget(route, target);
+                decision.Annotate(resolveSpan);
+                // The request log shows how this request was routed — judged, reused, fallen back or moved — at a glance.
+                record.RoutingJson = Json.Serialize(decision.Report());
+            }
             List<GatewayRoute> candidates;
             var maxAttempts = 1;
             if (route.Pool is { } pool)
@@ -767,7 +800,15 @@ public sealed class GatewayPipeline(
                 }
                 catch (SubscriptionAuthException e)
                 {
-                    attempt.Set("astra.account.id", accountId).Error(e.Message);
+                    var used = string.IsNullOrEmpty(e.AccountId) ? accountId : e.AccountId;
+                    attempt.Set("astra.account.id", used).Error(e.Message);
+                    // A direct token may already have expired before the first send; the remaining accounts still get a turn.
+                    if (failover && used is not null && await FailOverAsync(used, null, e.Message) is { } next)
+                    {
+                        attempt.Set("astra.attempt.retry", "auth_failover").End();
+                        accountId = next;
+                        continue;
+                    }
                     throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
                 }
                 // A subscription token close to expiry is refreshed here, on the network.
@@ -793,9 +834,9 @@ public sealed class GatewayPipeline(
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 }
-                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription)
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription && credentials.CanRefresh)
                 {
-                    // Plan §5.4: refresh the subscription token once and retry before reporting the 401.
+                    // Plan §5.4: renew a grant once before switching accounts. Direct tokens / API keys cannot be renewed.
                     var used = credentials.AccountId ?? accountId;
                     attempt = Retry(attempt, response, "auth_refresh", used);
                     response.Dispose();
@@ -825,6 +866,20 @@ public sealed class GatewayPipeline(
                     request = Build(credentials);
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                }
+                if (failover && response.StatusCode is (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    && credentials.AccountId is { } rejected)
+                {
+                    // A new token can still be refused by this model/channel. Cool the account without revoking its grant,
+                    // then move the conversation on; direct credentials reach this branch without any refresh attempt.
+                    var until = DateTimeOffset.UtcNow + ProviderHealth.AuthCooldown;
+                    if (await FailOverAsync(rejected, until, $"{(int)response.StatusCode} 认证被上游拒绝，冷却至 {until.UtcDateTime:yyyy-MM-dd HH:mm} UTC") is { } next)
+                    {
+                        EndAttempt(attempt, response, "auth_failover");
+                        response.Dispose();
+                        accountId = next;
+                        continue;
+                    }
                 }
                 if (failover && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
                 {

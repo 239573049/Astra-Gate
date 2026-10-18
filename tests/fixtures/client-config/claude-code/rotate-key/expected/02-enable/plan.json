@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_BASE_URL",
+    "kind": "key",
+    "before": "\"https://astra.corp.com\"",
+    "after": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+    "kind": "key",
+    "before": "\"sk-astra-enterprise-key\"",
+    "after": "\"sk-astra-second-key\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_MODEL",
+    "kind": "key",
+    "before": "\"claude-sonnet-4-5\"",
+    "after": "\"claude-opus-4-5\""
+  }
+]

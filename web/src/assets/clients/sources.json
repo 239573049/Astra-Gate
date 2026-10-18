@@ -145,6 +145,15 @@
       "kind": "product",
       "note": "Official Paseo app icon (1024px), downscaled to 256px locally.",
       "sha256": "23dad36791b80a850251e35d800a9fca1859a5ee5e6ff33ec0c0ddd1bfd3ef3d"
+    },
+    "tkcode": {
+      "file": "tkcode.png",
+      "source": "https://github.com/AtomUICommunity/TKCode/blob/main/logo.png",
+      "website": "https://github.com/AtomUICommunity/TKCode",
+      "mark": "TKCode",
+      "kind": "product",
+      "note": "Official TKCode app logo from the project repository (512px, Apache-2.0 repository), downscaled to 256px locally.",
+      "sha256": "ca5653965ea580425a04f307fcca8c3e0792cfd71ada829ff347fd11f1c79c59"
     }
   }
 }

@@ -1,0 +1,29 @@
+{
+  "client": "codex",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "purge"
+    }
+  ]
+}

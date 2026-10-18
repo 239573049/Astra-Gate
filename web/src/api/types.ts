@@ -317,7 +317,7 @@ export type ClientKind =
   | "codex" | "claude-code" | "gemini-cli" | "opencode" | "claude-desktop" | "grok-build"
   | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot"
   | "crush" | "qwen-code" | "droid" | "kimi-code" | "zed"
-  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo" | "zcode";
+  | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo" | "zcode" | "tkcode";
 /** One provider bound to a client; the list order is the routing order (first = primary). */
 export interface ClientBinding { providerId: string; accountId?: string | null }
 export interface ClientInfo {
@@ -566,6 +566,26 @@ export interface RequestSummary {
   parentRequestId?: string | null;
   /** Live feed only: when each stage began — "thinking@1530,writing@6020,tool:Bash@9100" (ms since arrival). */
   phases?: string | null;
+  /** Smart routing's decision, for a request to the virtual model only. */
+  routing?: RequestRouting | null;
+}
+/**
+ * How smart routing sent one request (requests.routing_json). source: judge (judged now) | pin | turn (a session's or
+ * turn's decision, reused) | fallback | breaker. fallbackReason is set whenever the fallback grade was used — also on a
+ * reused decision of a turn that fell back; adjustedFrom when the caller could not use the grade first decided.
+ */
+export interface RequestRouting {
+  grade: string;
+  model: string;
+  source: string;
+  mode: string;
+  confidence?: number | null;
+  fallbackReason?: string | null;
+  adjustedFrom?: string | null;
+  /** This request's own judge call; absent when it made none. */
+  judgeMs?: number | null;
+  /** Why the caller could not use adjustedFrom (a GradeProblem). */
+  adjustedReason?: string | null;
 }
 export interface RequestUsageItem {
   tokenType: string; tokens: number; isPerCall: boolean; unitPrice: string; baseUnitPrice?: string | null;
@@ -716,6 +736,31 @@ export interface ProviderAccount {
   /** Masked key of an api_key account (the key itself never crosses the wire). */
   keyMasked?: string | null;
 }
+
+/** Finished requests, with the cost saved by model billing at request time (integer nano-USD). */
+export interface ProviderUsageTotals {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Input + output; cache and reasoning tokens are already included. */
+  tokens: number;
+  costNanoUsd: number;
+}
+
+export interface ProviderAccountUsage {
+  /** Omitted / null for a provider's own API key. */
+  accountId?: string | null;
+  total: ProviderUsageTotals;
+  today: ProviderUsageTotals;
+}
+
+/** GET /api/providers/{id}/usage; today follows the configured usage time zone. */
+export interface ProviderUsage {
+  day: string;
+  timeZone: string;
+  accounts: ProviderAccountUsage[];
+}
+
 export type AccountKind = "oauth" | "api_key" | "plugin";
 export type AccountSource = "login" | "local" | "token" | "batch" | "plugin";
 /** Who may use a subscription provider and how its accounts switch. */
@@ -1254,4 +1299,153 @@ export interface TraceTopology {
   };
   clients: TraceClientNode[];
   providers: TraceProviderNode[];
+}
+
+// ---------- smart routing (plan §5.7) ----------
+
+/** The wire dialect of the judge: TypeSafe System One (Jev, and the hosts that serve it) or OpenAI Decisions. */
+export type JudgeProtocol = 'typesafe' | 'openai';
+/** When the judge is asked: once per session (the default) or for every new user turn. */
+export type RoutingMode = 'session' | 'turn';
+
+export interface SmartRoutingJudge {
+  protocol: JudgeProtocol;
+  /** The saved address; null/absent = the dialect's own. */
+  baseUrl?: string | null;
+  effectiveBaseUrl: string;
+  hasApiKey: boolean;
+  apiKeyMasked?: string | null;
+  model: string;
+  timeoutMs: number;
+  /** Replaces the built-in question; null/absent = built-in. */
+  instructions?: string | null;
+}
+
+/** One rung of the ladder, cheapest first: what the judge reads, and the model its requests go to. */
+export interface SmartRoutingGrade {
+  id: string;
+  name: string;
+  description: string;
+  model: string;
+  /** The provider the model was picked from, which the grade's requests go to; null while no provider serves the model. */
+  providerId?: string | null;
+}
+
+export interface SmartRoutingRules {
+  mode: RoutingMode;
+  sessionTtlMinutes: number;
+  fallbackGrade: string;
+  minConfidence: number;
+  contextTurns: number;
+  maxChars: number;
+}
+
+export interface JudgeProtocolInfo {
+  id: JudgeProtocol;
+  defaultBaseUrl: string;
+  defaultModel: string;
+}
+
+/**
+ * The last fresh decisions under the current settings (a decision a session or turn keeps is not counted again):
+ * outcomes maps "judge" — routed as the judge said — and each fallback reason ("timeout", "low_confidence", "breaker" …) to a count.
+ */
+export interface SmartRoutingRecent {
+  total: number;
+  outcomes: Record<string, number>;
+  /** Median time of the judge calls that answered; null when none did. */
+  medianJudgeMs?: number | null;
+  lastFallback?: string | null;
+  lastFallbackAt?: string | null;
+}
+
+/** GradeProblems: why a caller cannot use a grade. */
+export type GradeProblem = 'token_limited' | 'provider_missing' | 'provider_off' | 'claude_code_only' | 'model_not_served';
+
+/** A caller (client kind, or token name) that cannot use grade, why, and the grade it was given instead. */
+export interface SmartRoutingUnreachable {
+  caller: string;
+  grade: string;
+  model: string;
+  /** null when the caller could use no grade at all. */
+  usedGrade?: string | null;
+  count: number;
+  lastAt: string;
+  /** Absent from a server built before reasons were reported. */
+  reason?: GradeProblem | string;
+  providerName?: string | null;
+}
+
+export interface SmartRouting {
+  enabled: boolean;
+  virtualModel: string;
+  judge: SmartRoutingJudge;
+  grades: SmartRoutingGrade[];
+  rules: SmartRoutingRules;
+  /**
+   * breakerOpen: the judge kept failing and is being left alone for a while; pins: sessions holding a grade. recent and
+   * unreachable are absent from a server built before them.
+   */
+  status: { breakerOpen: boolean; pins: number; recent?: SmartRoutingRecent; unreachable?: SmartRoutingUnreachable[] };
+  defaultInstructions: string;
+  protocols: JudgeProtocolInfo[];
+}
+
+/** Partial update: what is left out stays. judge.apiKey is write-only ("" clears it); grades replaces the whole list. */
+export interface SmartRoutingJudgeUpdate {
+  protocol?: JudgeProtocol;
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+  timeoutMs?: number;
+  instructions?: string;
+}
+export interface SmartRoutingUpdate {
+  enabled?: boolean;
+  virtualModel?: string;
+  judge?: SmartRoutingJudgeUpdate;
+  grades?: SmartRoutingGrade[];
+  rules?: Partial<SmartRoutingRules>;
+}
+export interface SmartRoutingTestRequest {
+  text: string;
+  /** The judge and grades as they are being edited (unsaved); what is left out is taken from the saved ones. */
+  judge?: SmartRoutingJudgeUpdate;
+  grades?: SmartRoutingGrade[];
+}
+export interface SmartRoutingTestResult {
+  ok: boolean;
+  grade?: string | null;
+  gradeName?: string | null;
+  model?: string | null;
+  confidence?: number | null;
+  /** The confidence reaches rules.minConfidence: a request would go to model rather than the fallback grade. */
+  confident?: boolean | null;
+  probabilities?: Record<string, number> | null;
+  judgeModel?: string | null;
+  latencyMs: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** timeout | network | auth | rate_limited | overloaded | bad_request | bad_response */
+  failure?: string | null;
+  message?: string | null;
+  /**
+   * How long a request would have waited for this answer: the timeout, plus the connect allowance when the call had to
+   * open its connection (newConnection). The test waits longer; latencyMs above this means a request would have fallen back.
+   */
+  limitMs: number;
+  newConnection: boolean;
+}
+/** A model id a grade can be given, with the provider that serves it. */
+export interface RoutingModel {
+  id: string;
+  name: string;
+  providerId: string;
+  providerName: string;
+}
+/** One reason a save was refused (error.details.problems); code is stable, message is the server's English. */
+export interface RoutingProblem {
+  code: string;
+  message: string;
+  field?: string | null;
 }

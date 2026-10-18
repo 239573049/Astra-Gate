@@ -187,4 +187,31 @@ public class AccountImportTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.False(body!["supported"]!.GetValue<bool>());
     }
+
+    [Theory]
+    [InlineData(30, "imported")]
+    [InlineData(-30, "failed")]
+    public async Task Direct_Copilot_Import_Uses_The_Actual_Expiry(int secondsLeft, string expected)
+    {
+        var upstream = new Upstream(_ => Json("{\"data\":[]}"));
+        await using var host = await StartAsync(upstream);
+        var providerId = await CreateAsync(host, "github-copilot-subscription");
+        var expires = DateTimeOffset.UtcNow.AddSeconds(secondsLeft).ToUnixTimeSeconds();
+        var token = $"tid=direct-import;exp={expires};sku=copilot_pro";
+
+        var (status, result) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{providerId}/accounts/import", new { text = token });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(expected, result!["items"]![0]!["status"]!.GetValue<string>());
+        Assert.DoesNotContain("/copilot_internal/v2/token", upstream.Paths);
+        if (expected == "imported")
+        {
+            var account = Assert.Single(await host.Db.Accounts.ListAsync(providerId));
+            var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+            Assert.Equal(token, protector.Unprotect(account.AccessTokenEnc!));
+            Assert.Null(account.RefreshTokenEnc);
+            Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(expires), account.ExpiresAtUtc);
+        }
+        else Assert.Empty(await host.Db.Accounts.ListAsync(providerId));
+    }
 }

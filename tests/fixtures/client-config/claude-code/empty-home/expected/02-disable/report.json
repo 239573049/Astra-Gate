@@ -1,0 +1,32 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_BASE_URL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_MODEL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.claude/settings.json"
+  ],
+  "warnings": []
+}

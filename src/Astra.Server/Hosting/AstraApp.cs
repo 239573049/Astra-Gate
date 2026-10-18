@@ -6,6 +6,7 @@ using Astra.Data;
 using Astra.Gateway.Http;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Routing;
 using Astra.Plugins;
 using Astra.Plugins.Packages;
 using Astra.Plugins.Runtime;
@@ -90,6 +91,7 @@ public static class AstraApp
         builder.Services.AddSingleton<Astra.Core.Models.IProviderAccountStore>(database.Accounts);
         builder.Services.AddSingleton<SettingsService>();
         builder.Services.AddSingleton<PrivacyGuardService>();
+        builder.Services.AddSingleton<SmartRoutingService>();
         builder.Services.AddSingleton<EffectiveModelResolver>();
         builder.Services.AddSingleton<BodyStore>();
         builder.Services.AddSingleton<LiveRequestFeed>();
@@ -113,6 +115,9 @@ public static class AstraApp
         builder.Services.AddSingleton<GatewayRouter>();
         builder.Services.AddSingleton<GatewayHttpClients>();
         builder.Services.AddSingleton<Astra.Gateway.Tracing.TraceLinker>(_ => new Astra.Gateway.Tracing.TraceLinker());
+        // Smart routing (plan §5): the routing judges (one per wire dialect) and the router that asks them.
+        RoutingJudges.Register(builder.Services);
+        builder.Services.AddSingleton<SmartRouter>();
         builder.Services.AddSingleton<GatewayPipeline>();
         builder.Services.AddSingleton<GatewayAuxiliary>();
         builder.Services.AddSingleton<PendingSubscriptionLogins>();
@@ -258,6 +263,7 @@ public static class AstraApp
         var app = builder.Build();
         app.Services.GetRequiredService<SettingsService>().LoadAsync().GetAwaiter().GetResult();
         app.Services.GetRequiredService<PrivacyGuardService>().LoadAsync().GetAwaiter().GetResult();
+        app.Services.GetRequiredService<SmartRoutingService>().LoadAsync().GetAwaiter().GetResult();
         // Tokens: the 0006 migration inserts the default token without a key; generate it before the gateway serves.
         app.Services.GetRequiredService<TokenService>().EnsureDefaultAsync().GetAwaiter().GetResult();
 
@@ -286,6 +292,7 @@ public static class AstraApp
         app.MapTokenEndpoints();
         app.MapProviderEndpoints();
         app.MapPrivacyEndpoints();
+        app.MapSmartRoutingEndpoints();
         app.MapSubscriptionEndpoints();
         app.MapUpdateEndpoints();
         app.MapPluginEndpoints();

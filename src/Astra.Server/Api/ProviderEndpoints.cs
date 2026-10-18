@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
@@ -22,6 +23,18 @@ public sealed record ProviderDto(
 
 public sealed record ModelOverridesDto(string? DisplayName, long? ContextWindow, long? MaxOutputTokens, ModelCapabilities? Capabilities, JsonNode? Pricing);
 public sealed record EffectiveModelDto(string DisplayName, long? ContextWindow, long? MaxOutputTokens, ModelCapabilities Capabilities);
+
+/// <summary>Usage priced by the request's saved model billing result; cache and reasoning are already included in the token totals.</summary>
+public sealed record ProviderUsageTotalsDto(long Requests, long InputTokens, long OutputTokens, long CostNanoUsd)
+{
+    public long Tokens => InputTokens + OutputTokens;
+}
+
+/// <summary>One account's usage; null AccountId represents a provider's own API key.</summary>
+public sealed record ProviderAccountUsageDto(string? AccountId, ProviderUsageTotalsDto Total, ProviderUsageTotalsDto Today);
+
+/// <summary>All current provider credentials, with the calendar day and time zone used for today's usage.</summary>
+public sealed record ProviderUsageDto(string Day, string TimeZone, List<ProviderAccountUsageDto> Accounts);
 
 /// <summary>Diff between the provider's snapshot template version and the shipped one.</summary>
 public sealed record TemplateUpdateDto(int CurrentVersion, int LatestVersion, List<string> Changes);
@@ -64,6 +77,18 @@ public static class ProviderEndpoints
         });
         group.MapGet("/{id}", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
             Results.Ok(await ToDtoAsync(await RequireAsync(db, id, ct), db, catalog, secrets, quota, ct)));
+        group.MapGet("/{id}/usage", async (string id, AstraDatabase db, SettingsService settings, CancellationToken ct) =>
+        {
+            await RequireAsync(db, id, ct);
+            var zone = UsagePeriods.Zone(settings.Current.UsageTimeZone);
+            var day = UsagePeriods.LocalDay(DateTimeOffset.UtcNow, zone);
+            var usage = await db.Requests.ProviderAccountUsageAsync(id,
+                UsagePeriods.StartOf(day, zone), UsagePeriods.StartOf(day.AddDays(1), zone), ct);
+            return Results.Ok(new ProviderUsageDto(UsagePeriods.DayKey(day), zone.Id, usage.Select(u =>
+                new ProviderAccountUsageDto(u.AccountId.Length == 0 ? null : u.AccountId,
+                    new(u.TotalRequests, u.TotalInputTokens, u.TotalOutputTokens, u.TotalCostNanoUsd),
+                    new(u.TodayRequests, u.TodayInputTokens, u.TodayOutputTokens, u.TodayCostNanoUsd))).ToList()));
+        });
         group.MapImportEndpoints();
 
         group.MapPost("", async (JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets,

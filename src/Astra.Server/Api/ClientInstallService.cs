@@ -170,6 +170,8 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
                 return zed;
             case ClientKinds.ZCode:
                 return InspectMacApp("ZCode.app") ?? (new ClientToolState(false), null);
+            case ClientKinds.TKCode:
+                return InspectMacApp("TKCode.app") ?? (new ClientToolState(false), null);
             case ClientKinds.VsCodeCopilot:
             {
                 var code = env.FindTool("code", VsCodeBinDirectories());
@@ -277,8 +279,8 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     }
 
     /// <summary>
-    /// A macOS app bundle (Zed, ZCode; version from its Info.plist); null when absent and on other systems, where Zed's
-    /// <c>zed --version</c> is probed and ZCode has no version Astra can read.
+    /// A macOS app bundle (Zed, ZCode, TKCode; version from its Info.plist); null when absent and on other systems, where Zed's
+    /// <c>zed --version</c> is probed and ZCode and TKCode have no version Astra can read.
     /// </summary>
     private (ClientToolState, string?)? InspectMacApp(string bundle)
     {

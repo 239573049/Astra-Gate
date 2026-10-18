@@ -21,6 +21,7 @@ const ProviderDetailPage = lazy(() =>
 const ProvidersPage = lazy(() => import('./pages/ProvidersPage').then((m) => ({ default: m.ProvidersPage })));
 const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ default: m.RequestsPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const SmartRoutingPage = lazy(() => import('./pages/SmartRoutingPage').then((m) => ({ default: m.SmartRoutingPage })));
 const TokensPage = lazy(() => import('./pages/TokensPage').then((m) => ({ default: m.TokensPage })));
 const TokenDetailPage = lazy(() => import('./pages/TokenDetailPage').then((m) => ({ default: m.TokenDetailPage })));
 const TracesPage = lazy(() => import('./pages/TracesPage').then((m) => ({ default: m.TracesPage })));
@@ -77,6 +78,7 @@ function AdminApp() {
             <Route path="plugins/:tab" element={<PluginsPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="privacy/:tab" element={<PrivacyPage />} />
+            <Route path="smart-routing" element={<SmartRoutingPage />} />
             <Route path="settings" element={<SettingsPage />} />
             <Route path="settings/:tab" element={<SettingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />

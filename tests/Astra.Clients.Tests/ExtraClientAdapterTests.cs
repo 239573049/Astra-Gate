@@ -1701,3 +1701,247 @@ public class ZCodeClientAdapterTests : AdapterTestBase
         Assert.Equal([Path.Combine(elsewhere, ".zcode", "v2", "provider_config.json")], _adapter.ConfigPaths());
     }
 }
+
+public class TKCodeClientAdapterTests : AdapterTestBase
+{
+    // settings.json as a TKCode user keeps it: JSONC with a comment, a built-in provider, a custom one and other settings.
+    private const string Original = """
+        {
+          "$schema": "./settings.schema.json",
+          // default for new chats
+          "model": "anthropic/claude-opus-5-5",
+          "language": "en-US",
+          "providers": {
+            "anthropic": { "apiKey": "{env:ANTHROPIC_API_KEY}" },
+            "mine": { "api": "chat", "baseUrl": "https://example.com/v1", "apiKey": "k", "models": { "m1": {} } }
+          },
+          "mcpServers": { "fs": { "command": "npx" } }
+        }
+        """;
+
+    private readonly TKCodeClientAdapter _adapter;
+    private readonly string _config;
+
+    public TKCodeClientAdapterTests()
+    {
+        _adapter = new TKCodeClientAdapter(Home.Env, Store);
+        _config = Home.File(".tkcode", "settings.json");
+    }
+
+    private JsonNode Settings => Hints.Jsonc(Home.ReadFile(_config));
+
+    private JsonNode Ours => Settings["providers"]!["astra"]!;
+
+    private JsonNode Model(string id) => Ours["models"]![id]!;
+
+    private static string[] Keys(JsonNode node) => [.. node.AsObject().Select(p => p.Key)];
+
+    [Fact]
+    public void Enable_AddsAProviderAndSelectsTheModel_LeavesTheUsersOwn_DisableRestoresBytes()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("glm-5.3", "deepseek-v4");
+        var glm = (JsonObject)extra["models"]!["glm-5.3"]!;
+        glm["contextWindow"] = 1_000_000;
+        glm["maxOutputTokens"] = 128_000;
+        glm["vision"] = true;
+        glm["reasoning"] = true;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-1", "glm-5.3", extra)));
+
+        var text = Home.ReadFile(_config);
+        Assert.Contains("// default for new chats", text);
+        Assert.Equal(["anthropic", "mine", "astra"], Keys(Settings["providers"]!));
+        Assert.Equal("{env:ANTHROPIC_API_KEY}", Settings["providers"]!["anthropic"]!["apiKey"]!.GetValue<string>());
+        Assert.Equal("npx", Settings["mcpServers"]!["fs"]!["command"]!.GetValue<string>());
+        Assert.Equal("astra/glm-5.3", Settings["model"]!.GetValue<string>());
+
+        Assert.Equal("Astra", Ours["name"]!.GetValue<string>());
+        Assert.Equal("chat", Ours["api"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", Ours["baseUrl"]!.GetValue<string>());
+        Assert.Equal("astra-tk-1", Ours["apiKey"]!.GetValue<string>());
+        Assert.Equal(["glm-5.3", "deepseek-v4"], Keys(Ours["models"]!));
+        Assert.Equal("GLM-5.3", Model("glm-5.3")["name"]!.GetValue<string>());
+        Assert.Equal(1_000_000, Model("glm-5.3")["contextWindow"]!.GetValue<int>());
+        Assert.Equal(128_000, Model("glm-5.3")["maxTokens"]!.GetValue<int>());
+        Assert.True(Model("glm-5.3")["images"]!.GetValue<bool>());
+        Assert.True(Model("glm-5.3")["reasoning"]!.GetValue<bool>());
+        // Nothing is invented for a model Astra knows nothing about: TKCode's catalog and defaults apply.
+        Assert.Equal(["name"], Keys(Model("deepseek-v4")));
+        Assert.True(_adapter.Inspect().Enabled);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+        Assert.False(_adapter.Inspect().Enabled);
+    }
+
+    [Fact]
+    public void AModelGoesOverItsNativeProtocol_NamedOnTheModelNotTheProvider()
+    {
+        Home.WriteFile(_config, Original);
+        var original = Home.ReadFileBytes(_config);
+        var extra = Hints.Extra("gpt-5.5", "claude-sonnet-5", "deepseek-v4", "gemini-3-pro");
+        TestGateway.Native(extra, "gpt-5.5", "openai-responses");
+        TestGateway.Native(extra, "claude-sonnet-5", "anthropic");
+        TestGateway.Native(extra, "gemini-3-pro", "gemini"); // TKCode has no Gemini protocol: the gateway translates
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-2", null, extra)));
+
+        // One /v1 base serves all three: TKCode drops it again for messages and adds /v1/messages itself.
+        Assert.Equal("chat", Ours["api"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:17321/v1", Ours["baseUrl"]!.GetValue<string>());
+        Assert.Equal("responses", Model("gpt-5.5")["api"]!.GetValue<string>());
+        Assert.Equal("messages", Model("claude-sonnet-5")["api"]!.GetValue<string>());
+        Assert.Null(Model("deepseek-v4")["api"]);
+        Assert.Null(Model("gemini-3-pro")["api"]);
+        Assert.Equal("anthropic/claude-opus-5-5", Settings["model"]!.GetValue<string>()); // no model selected: the user's stays
+
+        // The user moves Claude to chat: its own api goes.
+        TestGateway.Override(extra, "claude-sonnet-5", "openai-chat");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-2", null, extra)));
+        Assert.Null(Model("claude-sonnet-5")["api"]);
+        Assert.Equal("responses", Model("gpt-5.5")["api"]!.GetValue<string>());
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(original, Home.ReadFileBytes(_config));
+    }
+
+    [Fact]
+    public void WhatTKCodeChangesIsNotDrift_AndSurvivesARewrite()
+    {
+        Home.WriteFile(_config, Original);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-3", null, Hints.Extra("a", "b", "c"))));
+
+        // In TKCode's settings the user switches the provider off and overrides model a's efforts; TKCode then saves the file.
+        var json = Settings;
+        var ours = json["providers"]!["astra"]!.AsObject();
+        ours["enabled"] = false;
+        ours["headers"] = new JsonObject { ["x-team"] = "me" };
+        ours["models"]!["a"]!["efforts"] = new JsonArray("low", "high");
+        Home.WriteFile(_config, json.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+
+        var status = _adapter.Inspect();
+        Assert.True(status.Enabled);
+        Assert.Empty(status.DriftedKeys);
+
+        // A rotated key and a refreshed model list (b left, d came) rewrite the entry: TKCode's choices stay.
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-4", null, Hints.Extra("a", "c", "d"))));
+        Assert.False(Ours["enabled"]!.GetValue<bool>());
+        Assert.Equal("me", Ours["headers"]!["x-team"]!.GetValue<string>());
+        Assert.Equal("astra-tk-4", Ours["apiKey"]!.GetValue<string>());
+        Assert.Equal(["a", "c", "d"], Keys(Ours["models"]!));
+        Assert.Equal(["low", "high"], Model("a")["efforts"]!.AsArray().Select(n => n!.GetValue<string>()));
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal(["anthropic", "mine"], Keys(Settings["providers"]!));
+        Assert.Equal(Hints.Jsonc(Original).ToJsonString(), Settings.ToJsonString());
+    }
+
+    [Fact]
+    public void AProtocolChangedInTKCode_IsTheUsersChoice_NotDrift()
+    {
+        Home.WriteFile(_config, Original);
+        var extra = Hints.Extra("a", "b");
+        TestGateway.Native(extra, "a", "openai-responses");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-5", null, extra)));
+        Assert.Empty(_adapter.ChangedProtocolChoices());
+
+        // In the model's editor the user picks chat for a (the provider's own) and messages for b.
+        var json = Settings;
+        var models = json["providers"]!["astra"]!["models"]!.AsObject();
+        models["a"]!.AsObject().Remove("api");
+        models["b"]!["api"] = "messages";
+        Home.WriteFile(_config, json.ToJsonString());
+
+        Assert.Empty(_adapter.Inspect().DriftedKeys);
+        var changed = _adapter.ChangedProtocolChoices();
+        Assert.Equal(Astra.Core.ApiProtocol.OpenAIChat, changed["a"]);
+        Assert.Equal(Astra.Core.ApiProtocol.Anthropic, changed["b"]);
+
+        // The server records them as overrides, so the rewrite keeps them instead of putting the native protocol back.
+        TestGateway.Override(extra, "a", "openai-chat");
+        TestGateway.Override(extra, "b", "anthropic");
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-5", null, extra)));
+        Assert.Null(Model("a")["api"]);
+        Assert.Equal("messages", Model("b")["api"]!.GetValue<string>());
+        Assert.Empty(_adapter.ChangedProtocolChoices());
+    }
+
+    [Fact]
+    public void AnAstraValueEditedInTKCode_IsDriftAndIsNotRemovedByDisable()
+    {
+        Home.WriteFile(_config, Original);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-6", null, Hints.Extra("a", "b"))));
+        Home.WriteFile(_config, Home.ReadFile(_config).Replace("http://127.0.0.1:17321/v1", "http://127.0.0.1:9999/v1"));
+
+        Assert.Contains("providers.astra", _adapter.Inspect().DriftedKeys);
+        Assert.False(_adapter.Inspect().Enabled);
+        Assert.True(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Contains("127.0.0.1:9999", Home.ReadFile(_config));
+    }
+
+    [Fact]
+    public void ModelsSwitchedOffInTKCode_AreDrift()
+    {
+        Home.WriteFile(_config, Original);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-7", null, Hints.Extra("a", "b"))));
+        var json = Settings;
+        json["providers"]!["astra"]!["models"]!.AsObject().Remove("b");
+        Home.WriteFile(_config, json.ToJsonString());
+
+        Assert.Contains("providers.astra", _adapter.Inspect().DriftedKeys);
+    }
+
+    [Fact]
+    public void ANumberTKCodeCannotReadIsLeftOut_SoItNeverRejectsTheFile()
+    {
+        Home.WriteFile(_config, Original);
+        var extra = Hints.Extra("a");
+        ((JsonObject)extra["models"]!["a"]!)["contextWindow"] = 3_000_000_000L;
+        ((JsonObject)extra["models"]!["a"]!)["maxOutputTokens"] = 8192;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-8", null, extra)));
+
+        Assert.Null(Model("a")["contextWindow"]);
+        Assert.Equal(8192, Model("a")["maxTokens"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public void WithoutAFile_EnableCreatesIt_AndDisableRemovesIt()
+    {
+        Home.WriteFile(Home.File(".tkcode", "state.json"), "{}");
+        Assert.True(_adapter.Detect().Detected);
+        Assert.False(Home.FileExists(_config));
+
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-9", "a", Hints.Extra("a"))));
+        Assert.Equal("astra/a", Settings["model"]!.GetValue<string>());
+        Assert.Equal(["astra"], Keys(Settings["providers"]!));
+
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.False(Home.FileExists(_config));
+    }
+
+    [Fact]
+    public void Detect_FollowsTKCodesHome_AndAModelSelectionOfTheUsersIsNotTouched()
+    {
+        Assert.False(_adapter.Detect().Detected);
+        Home.WriteFile(_config, Original);
+        Assert.True(_adapter.Detect().Detected);
+        Assert.Equal([_config], _adapter.ConfigPaths());
+        Assert.Equal(ClientMode.Coexist, _adapter.Mode);
+        Assert.Contains(ClientKinds.TKCode, ClientKinds.WithModelList);
+        Assert.True(ClientProtocols.IsPerModel(ClientKinds.TKCode));
+        Assert.Equal(
+            [Astra.Core.ApiProtocol.OpenAIChat, Astra.Core.ApiProtocol.OpenAIResponses, Astra.Core.ApiProtocol.Anthropic],
+            ClientProtocols.For(ClientKinds.TKCode));
+
+        // Disabling leaves the default model alone when it is not Astra's.
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-tk-10", null, Hints.Extra("a"))));
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Equal("anthropic/claude-opus-5-5", Settings["model"]!.GetValue<string>());
+
+        var elsewhere = Path.Combine(Home.Path, "tkhome");
+        Home.Variables["TKCODE_HOME"] = elsewhere;
+        Assert.False(_adapter.Detect().Detected);
+        Assert.Equal([Path.Combine(elsewhere, "settings.json")], _adapter.ConfigPaths());
+    }
+}

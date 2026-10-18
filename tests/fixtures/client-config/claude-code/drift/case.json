@@ -1,0 +1,30 @@
+{
+  "client": "claude-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": {
+    "models": {
+      "ANTHROPIC_MODEL": "claude-sonnet-4-5",
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5"
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable",
+      "edit": [
+        {
+          "file": ".claude/settings.json",
+          "write": "{\n  \"env\": {\n    \"ANTHROPIC_BASE_URL\": \"https://somewhere.else\",\n    \"ANTHROPIC_AUTH_TOKEN\": \"sk-astra-enterprise-key\"\n  }\n}\n"
+        }
+      ]
+    },
+    {
+      "op": "force-restore"
+    }
+  ]
+}

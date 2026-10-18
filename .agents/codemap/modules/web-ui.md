@@ -2,7 +2,7 @@
 module: web-ui
 sources: ["web/**"]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 # web-ui
 
@@ -107,6 +107,10 @@ browser-local or in-memory, and none of it is authoritative:
   `web/src/api/hooks.ts:93`, wire the UI, then add zh **and** en keys. Missing the invalidation in the
   mutation's `onSuccess` leaves stale data on the page that wrote it (the `invalidateProviders` pattern,
   `web/src/api/hooks.ts:364`).
+- Provider credential usage: `useProviderUsage` polls GET `/api/providers/{id}/usage` every five seconds while mounted;
+  `AccountUsageStats` shows each credential's Today/Total request count, input+output tokens and saved model cost on
+  subscription cards/details, plugin account rows and the ordinary API-key tab. Zero usage is explicit; unavailable
+  data stays `—`. `ProviderUsageHint` explains subscription equivalents and the server's usage time zone.
 - To add a UI string: add it to `zh` (`web/src/i18n/messages.ts:3`) and `en` (`:1854`). `en` is
   `Record<MessageKey, string>`, so a zh-only key fails the typecheck in the web build; `web/src/test/i18n.test.ts:9`
   additionally pins key-set and `{placeholder}` parity — a mismatch only surfaces when that suite runs.

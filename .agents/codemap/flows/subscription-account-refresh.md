@@ -2,7 +2,7 @@
 flow: subscription-account-refresh
 modules: [astra-providers, astra-server, astra-data, astra-core, astra-gateway, web-ui]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 # Subscription account refresh
 
@@ -21,6 +21,13 @@ it, and the console plus the alert engine see the new state.
    an enabled OAuth subscription, the account is enabled and `Active`, and `SubscriptionQuotaService.CanProbe` says the
    family has a probe; the interval is multiplied by the failure backoff (`BackoffFactor` after
    `ProviderQuotaManager.BackoffAfterFailures`, ×4). `RefreshDueAsync` takes the least recently checked first.
+2b. `SubscriptionQuotaSync.RecheckCooledAsync` (called by `ProviderQuotaWorker` before `RefreshDueAsync`, same 1-min tick
+   and round budget) re-queries accounts that are cooling down after a 429 every `CooledRecheck` (5 min, ×4 after
+   repeated failures; off with the background refresh), and `ReleaseIfRecoveredAsync` clears `cooldown_until_utc` when
+   the stored snapshot has room (`HasHeadroom`: at least one of session/weekly/credits `usedPercent`, none >= 100).
+   The reset-credit consume and manual quota endpoints call `ReleaseIfRecoveredAsync` right after their fetch.
+   Auth-rejection cooldowns are excluded from quota recovery (`LastError` starts with `401 ` / `403 `); headroom on a
+   usage endpoint does not prove that the inference model/channel accepts the account.
 3. `src/Astra.Providers/Subscription/SubscriptionQuotaService.cs:SubscriptionQuotaService.FetchAsync` — the family key
    is the provider *template id* (`TemplateId ?? PriceKey ?? Id`, deliberately mirroring the gateway's
    `SubscriptionSupport.ProviderKeyOf`); a Claude `setup-token` account returns no quota on purpose. The switch maps
@@ -32,7 +39,8 @@ it, and the console plus the alert engine see the new state.
    proxy > provider proxy > system proxy), so concurrent queries of different accounts cannot borrow each other's.
 5. Token: `src/Astra.Providers/Subscription/SubscriptionTokenService.cs:SubscriptionTokenService.GetValidAccessTokenAsync`
    returns a usable access token, calling `RefreshAsync(force: false)` when the stored one is not fresh
-   (`IsFresh`: `Active` + a token + more than `RefreshLead` left; an API-key account never expires).
+   (`IsFresh`: `Active` + a token + more than `RefreshLead` left for a renewal grant; a direct token stays valid until
+   its actual expiry, and an API-key account never expires). `CanRefresh` requires an OAuth account with a renewal grant.
 6. `SubscriptionTokenService.RefreshAsync` — serialized per account by a semaphore, re-reads the row before acting, and
    decides status: an OAuth `invalid_grant` → `Revoked`; any other OAuth error → `Expired`; a missing or undecryptable
    refresh token → `Expired`; an API-key account told to force-refresh → `Revoked` (the key itself was rejected). A
@@ -48,8 +56,11 @@ it, and the console plus the alert engine see the new state.
    snapshot; a success removes it.
 9. ⇢ in-process: requests pick an account through `src/Astra.Gateway/Pipeline/AccountScheduler.cs` (switch mode
    `manual` / `failover` / `balanced`; `StickyKeys` keeps one conversation on one account — in-memory bindings with a
-   1 h idle TTL), and `UpstreamAuthResolver` supplies the refreshed credentials. A 401 mid-request forces one refresh
-   (`RefreshAfterUnauthorizedAsync`) and then fails over or reports "re-login", never loops.
+   1 h idle TTL), and `UpstreamAuthResolver` supplies credentials with `UpstreamAuth.CanRefresh`. A 401/403 forces one
+   renewal/reload only when supported; direct tokens and API keys skip renewal. Failover/balanced modes cool a still
+   rejected account for 10 min and hand over (`auth_failover`), including when renewal succeeded but inference still
+   refuses it. Resolution failures (e.g. a direct token that already expired) also hand over. Manual mode preserves
+   the upstream rejection. Attempts exclude accounts already tried; a channel rejection alone does not revoke a grant.
 10. ⇢ HTTP: `src/Astra.Server/Api/SubscriptionEndpoints.cs` (and `SubscriptionEndpoints.Import.cs`) serve accounts,
     import and manual refresh; the console renders them from `web/src/components/Subscription*.tsx`.
 11. ⇢ in-process: `src/Astra.Server/Alerts/AlertEngine.cs:AlertEngine.SweepAsync` derives account observations from

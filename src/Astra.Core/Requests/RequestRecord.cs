@@ -106,6 +106,9 @@ public sealed class RequestRecord
     /// <summary>Privacy guard outcome (hits / actions / dry-run). Originals of redacted values are never stored.</summary>
     public string? PrivacyJson { get; set; }
 
+    /// <summary>Smart routing's decision (<see cref="Routing.RoutingReport"/>, Json.Storage); null unless the virtual model was asked for.</summary>
+    public string? RoutingJson { get; set; }
+
     public string? BodyRef { get; set; }
     public string? UserAgent { get; set; }
 

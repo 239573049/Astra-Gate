@@ -5,8 +5,8 @@ using Astra.Core.Models;
 namespace Astra.Providers.Subscription;
 
 /// <summary>
-/// Keeps one subscription account usable: returns a valid access token (refreshing shortly before
-/// expiry), rotates tokens after refreshes, and reacts to upstream 401s with a forced refresh.
+/// Keeps one subscription account usable: returns a valid access token, refreshing renewable tokens shortly before
+/// expiry. Direct tokens are kept until their actual expiry; only a renewal grant can replace them after a 401.
 /// Refreshes are serialized per account.
 /// </summary>
 public sealed class SubscriptionTokenService(
@@ -24,8 +24,8 @@ public sealed class SubscriptionTokenService(
     private OAuthClient Client { get; } = new(httpClientFactory);
 
     /// <summary>
-    /// Returns a decrypted access token that is good for at least <see cref="RefreshLead"/>,
-    /// refreshing first when needed. Throws <see cref="SubscriptionAuthException"/> when the
+    /// Returns a decrypted access token, refreshing renewable credentials when less than <see cref="RefreshLead"/>
+    /// remains. Direct credentials are used until they expire. Throws <see cref="SubscriptionAuthException"/> when the
     /// account cannot be made usable.
     /// </summary>
     public async Task<string> GetValidAccessTokenAsync(ProviderAccount account, SubscriptionOAuthConfig config, CancellationToken ct = default)
@@ -200,12 +200,18 @@ public sealed class SubscriptionTokenService(
         ProviderAccount account, SubscriptionOAuthConfig config, CancellationToken ct = default) =>
         RefreshAsync(account, config, force: true, ct);
 
+    /// <summary>Whether an account has a renewal grant; a callable access token or API key alone cannot be refreshed.</summary>
+    public static bool CanRefresh(ProviderAccount account) =>
+        account.Kind == AccountKinds.OAuth && !string.IsNullOrWhiteSpace(account.RefreshTokenEnc);
+
     private bool IsFresh(ProviderAccount account) =>
         account.Status == AccountStatus.Active
         && account.AccessTokenEnc is not null
-        // API Key 不过期：只要还是 active 就一直可用（失效由上游 401 → RefreshAsync 标记）。
+        // API Key 不过期：active 时直接使用；上游拒绝由网关按账号切换策略处理。
         && (account.Kind == AccountKinds.ApiKey
-            || (account.ExpiresAtUtc is { } expires && expires - _clock.GetUtcNow() > RefreshLead));
+            // A direct token has nothing to refresh: the lead must not cut short its actual validity.
+            || (account.ExpiresAtUtc is { } expires
+                && expires - _clock.GetUtcNow() > (CanRefresh(account) ? RefreshLead : TimeSpan.Zero)));
 
     /// <summary>Expiry of a token result; providers without expires_in get a conservative 1 hour.</summary>
     public static DateTimeOffset ExpiresAt(OAuthClient.TokenResult token, DateTimeOffset now) =>

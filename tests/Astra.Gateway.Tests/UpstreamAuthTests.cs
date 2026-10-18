@@ -313,7 +313,28 @@ public class UpstreamAuthResolverTests
         var auth = await resolver.ResolveAsync("p-claude-sub", null);
 
         Assert.Equal("Bearer at-OLD", auth!.HeaderValue);
+        Assert.True(auth.CanRefresh);
         Assert.Empty(handler.Bodies); // no refresh happened
+    }
+
+    [Theory]
+    [InlineData(AccountKinds.OAuth)]
+    [InlineData(AccountKinds.ApiKey)]
+    public async Task Direct_Credentials_Are_Not_Offered_For_Auth_Refresh(string kind)
+    {
+        var db = await NewDb();
+        await InsertSubscriptionProviderAsync(db);
+        var account = Account("direct-credential", TimeSpan.FromHours(1));
+        account.Kind = kind;
+        account.RefreshTokenEnc = null;
+        await db.Accounts.InsertAsync(account);
+        var (_, handler, _, resolver) = Build(db, RefreshResponse);
+
+        var auth = await resolver.ResolveAsync("p-claude-sub", null);
+
+        Assert.Equal("Bearer direct-credential", auth!.HeaderValue);
+        Assert.False(auth.CanRefresh);
+        Assert.Empty(handler.Bodies);
     }
 
     [Fact]

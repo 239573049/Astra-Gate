@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_BASE_URL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"claude-haiku-4-5\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "keyPath": "env.ANTHROPIC_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"claude-sonnet-4-5\""
+  }
+]

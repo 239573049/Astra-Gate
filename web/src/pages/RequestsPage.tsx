@@ -1,11 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Ban, Brain, Check, CircleCheck, CircleX, Globe, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
+import { ArrowRight, Ban, Brain, Check, CircleAlert, CircleCheck, CircleX, Globe, KeyRound, LoaderCircle, RefreshCw, ScrollText } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, useInRouterContext, useSearchParams } from 'react-router';
 
 import { keys, useProviders, useRequest, useRequestBody, useRequestRate, useRequests, useTunnel, type RequestQuery } from '../api/hooks';
 import { useLiveRequest, useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../api/liveRequests';
-import { REQUEST_BODY_PARTS, type ClientKind, type RateStats, type RequestBodyKey, type RequestDetail, type RequestSummary } from '../api/types';
+import { REQUEST_BODY_PARTS, type ClientKind, type RateStats, type RequestBodyKey, type RequestDetail, type RequestRouting, type RequestSummary } from '../api/types';
 import { Accordion } from '../components/arc/accordion/accordion';
 import { Alert } from '../components/arc/alert/alert';
 import { Pagination } from '../components/arc/pagination/pagination';
@@ -19,6 +19,7 @@ import { CacheUsageCell, TokenTotalsCell, TokenTypeLabel, TokenUsageSummary } fr
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, KV, Spinner } from '../components/ui/controls';
 import { errorText, Sheet } from '../components/ui/overlays';
 import { useI18n, type MessageKey, type TFunction } from '../i18n';
+import { zh } from '../i18n/messages';
 import { cn } from '../lib/cn';
 import { useDebounced } from '../lib/hooks';
 import { formatBytes, formatDateTime, formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUnitPrice, pretty } from '../lib/format';
@@ -285,6 +286,7 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
                   <MappedModel r={r} />
                 </span>
                 <ReasoningBadge r={r} />
+                <RoutingBadge routing={r.routing} />
               </span>
               <span className="block text-[11px]">
                 <ResponseModelTag r={r} labeled />
@@ -586,6 +588,61 @@ function ReasoningBadge({ r }: { r: Pick<RequestSummary, 'reasoningEffort' | 're
   );
 }
 
+const ROUTE_SOURCES = ['judge', 'pin', 'turn', 'fallback', 'breaker'] as const;
+const ROUTE_MODES = ['session', 'turn'] as const;
+
+/** Where a routing decision came from, in the words the trace view uses; as recorded when this build does not know it. */
+function routeSourceText(source: string, t: TFunction): string {
+  return (ROUTE_SOURCES as readonly string[]).includes(source) ? t(`traces.route.source.${source}` as MessageKey) : source;
+}
+
+function routeModeText(mode: string, t: TFunction): string {
+  return (ROUTE_MODES as readonly string[]).includes(mode) ? t(`traces.route.mode.${mode}` as MessageKey) : mode;
+}
+
+/** Why the caller could not use the grade decided first, in the smart-routing page's words. */
+function unusableText(reason: string | null | undefined, t: TFunction): string {
+  const key = `smartRouting.unusable.${reason}`;
+  return reason && key in zh ? t(key as MessageKey) : t('smartRouting.unusable.unknown');
+}
+
+/** Why the fallback grade was used, in the smart-routing page's words. */
+function routeReasonText(reason: string, t: TFunction): string {
+  const key = `smartRouting.failure.${reason}`;
+  return key in zh ? t(key as MessageKey) : reason;
+}
+
+/**
+ * How smart routing sent a request to the virtual model, marked in the list: green when it went the judge's way (judged
+ * now, or a session's / turn's judged grade reused), orange when it did not — the judge was not used and the fallback grade
+ * took it, or the caller could not use the grade decided and got another. Hidden for every other request.
+ */
+function RoutingBadge({ routing }: { routing?: RequestRouting | null }) {
+  const { t } = useI18n();
+  if (!routing) return null;
+  const vars = { grade: routing.grade, model: routing.model };
+  const [ok, text, title] = routing.fallbackReason
+    ? [false, t('requests.routing.fallback', { ...vars, reason: routeReasonText(routing.fallbackReason, t) }),
+      t('requests.routing.hint.fallback', { ...vars, reason: routeReasonText(routing.fallbackReason, t) })]
+    : routing.adjustedFrom
+      ? [false, t('requests.routing.moved', { ...vars, from: routing.adjustedFrom }),
+        t('requests.routing.hint.moved', { ...vars, from: routing.adjustedFrom, reason: unusableText(routing.adjustedReason, t) })]
+      : routing.source === 'judge'
+        ? [true, routing.grade, t('requests.routing.hint.judge', { ...vars, percent: Math.round((routing.confidence ?? 0) * 100) })]
+        : [true, `${routing.grade} · ${routeSourceText(routing.source, t)}`, t('requests.routing.hint.reused', { ...vars, source: routeSourceText(routing.source, t) })];
+  const Icon = ok ? CircleCheck : CircleAlert;
+  return (
+    <Badge tone={ok ? 'green' : 'orange'} className="max-w-56 text-[10px] font-normal" title={`${t('traces.node.routing')}: ${title}`}>
+      <span className="inline-flex min-w-0 items-center gap-1">
+        <Icon className="size-3 shrink-0" aria-hidden="true" />
+        <span className="block max-w-52 min-w-0 truncate">
+          {t('traces.node.routing')}: {text}
+        </span>
+      </span>
+    </Badge>
+  );
+}
+
 /** Detail-sheet value: the recorded config, or an explicit muted "not recorded" (never a guess). */
 function ReasoningValue({ r }: { r: Pick<RequestSummary, 'reasoningEffort' | 'reasoningMode' | 'reasoningBudgetTokens'> }) {
   const { t } = useI18n();
@@ -807,6 +864,24 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
             <Alert tone="danger" title={r.errorType ?? t('requests.detail.error')}>
               {r.errorMessage ?? undefined}
             </Alert>
+          )}
+
+          {r.routing && (
+            <DetailSection title={t('traces.node.routing')} action={<RoutingBadge routing={r.routing} />}>
+              <KV label={t('requests.routing.grade')}>
+                {r.routing.grade} · {r.routing.model}
+              </KV>
+              <KV label={t('traces.kv.routeSource')}>{routeSourceText(r.routing.source, t)}</KV>
+              <KV label={t('traces.kv.routeMode')}>{routeModeText(r.routing.mode, t)}</KV>
+              {r.routing.confidence != null && <KV label={t('traces.kv.routeConfidence')}>{formatPercent(r.routing.confidence)}</KV>}
+              {r.routing.fallbackReason && <KV label={t('traces.kv.routeFallback')}>{routeReasonText(r.routing.fallbackReason, t)}</KV>}
+              {r.routing.adjustedFrom && (
+                <KV label={t('traces.kv.routeAdjusted')}>
+                  {r.routing.adjustedFrom} · {unusableText(r.routing.adjustedReason, t)}
+                </KV>
+              )}
+              {r.routing.judgeMs != null && <KV label={t('requests.routing.judgeMs')}>{formatMs(r.routing.judgeMs)}</KV>}
+            </DetailSection>
           )}
 
           {r.privacy && (

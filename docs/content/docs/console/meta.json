@@ -8,6 +8,7 @@
     "---[Boxes]服务商与模型---",
     "providers",
     "models",
+    "smart-routing",
     "---[KeyRound]客户端与令牌---",
     "clients",
     "tokens",

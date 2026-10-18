@@ -1,0 +1,17 @@
+{
+  "model": "decision-model-2026-10-06",
+  "answers": [
+    {
+      "type": "choice",
+      "name": "grade",
+      "choice": "standard",
+      "probabilities": [
+        { "value": "light", "probability": 0.1 },
+        { "value": "standard", "probability": 0.7 },
+        { "value": "heavy", "probability": 0.2 }
+      ],
+      "confidence": 0.55
+    }
+  ],
+  "usage": { "input_tokens": 300, "output_tokens": 12, "total_tokens": 312 }
+}

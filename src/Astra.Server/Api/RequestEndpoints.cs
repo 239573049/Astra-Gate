@@ -6,6 +6,7 @@ using Astra.Core.Billing;
 using Astra.Core.Clients;
 using Astra.Core.Privacy;
 using Astra.Core.Requests;
+using Astra.Core.Routing;
 using Astra.Core.Tokens;
 using Astra.Data;
 using Astra.Data.Repositories;
@@ -27,7 +28,7 @@ public static class RequestEndpoints
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
         string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp,
         string? SessionKey = null, string? Stage = null, string? TurnId = null, string? CallKind = null, string? ParentRequestId = null,
-        string? Phases = null);
+        string? Phases = null, RoutingReport? Routing = null);
 
     public sealed record UsageItemDto(
         string TokenType, long Tokens, bool IsPerCall, string UnitPrice, string? BaseUnitPrice, string TierApplied,
@@ -62,7 +63,8 @@ public static class RequestEndpoints
         string? PriceKey, List<BillingTraceStep> BillingTrace, string? BillingDescription, List<UsageItemDto> UsageItems,
         string? UserAgent, BodiesDto? Bodies, PrivacyReport? Privacy,
         string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
-        string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp);
+        string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp,
+        RoutingReport? Routing = null);
 
     /// <summary>
     /// One live request-log event (SSE <c>/api/requests/live</c>): "started" / "updated" carry the row as it stands
@@ -454,7 +456,7 @@ public static class RequestEndpoints
         r.CostNanoUsd, r.UsageSource,
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
         r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp,
-        r.SessionKey, inFlight ? r.LiveStage : null, r.TurnId, r.CallKind, r.ParentRequestId, inFlight ? r.LivePhases : null);
+        r.SessionKey, inFlight ? r.LiveStage : null, r.TurnId, r.CallKind, r.ParentRequestId, inFlight ? r.LivePhases : null, RoutingOf(r));
 
     private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies, bool inFlight = false)
     {
@@ -485,8 +487,11 @@ public static class RequestEndpoints
                 i.CostNanoUsd, i.Note)).ToList(),
             r.UserAgent, captured, r.PrivacyJson is null ? null : Json.Deserialize<PrivacyReport>(r.PrivacyJson),
             r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-            r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp);
+            r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp, RoutingOf(r));
     }
+
+    /// <summary>Smart routing's decision for a request to the virtual model; null for every other request.</summary>
+    private static RoutingReport? RoutingOf(RequestRecord r) => r.RoutingJson is null ? null : Json.Deserialize<RoutingReport>(r.RoutingJson);
 
     private static JsonNode? ParseNode(string? json)
     {

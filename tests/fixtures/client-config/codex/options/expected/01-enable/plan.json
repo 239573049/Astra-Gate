@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"gpt-5.1-codex\"",
+    "after": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_context_window",
+    "kind": "key",
+    "before": null,
+    "after": "\"200000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_auto_compact_token_limit",
+    "kind": "key",
+    "before": null,
+    "after": "\"150000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_reasoning_effort",
+    "kind": "key",
+    "before": "\"high\"",
+    "after": "\"\\u0022high\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"name\":\"\\u0022Astra\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"wire_api\":\"\\u0022responses\\u0022\",\"experimental_bearer_token\":\"\\u0022sk-astra-enterprise-key\\u0022\",\"requires_openai_auth\":\"false\"}"
+  }
+]

@@ -154,6 +154,7 @@ curl -H "Authorization: Bearer sk-astra-…" http://<网关地址>/v1/astra/key
 
 | 接口 | 返回 |
 | --- | --- |
+| `GET /v1/astra/connect-context` | 给员工端 CLI（`astra-connect`）用：令牌的名称，以及这个令牌能调用的模型（`id`、显示名、上下文窗口、最大输出、视觉 / 推理 / PDF 能力，以及模型不经转换直通的协议 `protocols`）。不返回提供商、账号和上游模型 |
 | `GET /v1/astra/key/stats?range=today\|7d\|30d\|90d` | 汇总（请求数、成功数、成功率、费用、各类 token、平均首字时间）、时间序列（今天按小时，其余按天）、按模型和按客户端的用量、按失败原因的次数，以及请求日志保留天数。时间范围按「令牌额度时区」计算 |
 | `GET /v1/astra/key/requests` | 最近的请求，新的在前；`limit`（默认 50，最多 100）、`before`（上一页的 `nextBefore`）、`status`（逗号分隔，如 `upstream_error,gateway_error`）、`model`、`client`、`from` / `to` |
 

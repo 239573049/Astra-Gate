@@ -2,7 +2,8 @@ import { ArrowRightLeft, Gauge, RotateCcw, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useUpdateProviderAccount } from '../api/hooks';
-import type { Provider, ProviderAccount } from '../api/types';
+import type { Provider, ProviderAccount, ProviderAccountUsage } from '../api/types';
+import { AccountUsageStats, ProviderUsageHint } from './AccountUsageStats';
 import { Alert } from './arc/alert/alert';
 import { Badge, Button, Input, KV } from './ui/controls';
 import { errorText, Sheet, useFeedback } from './ui/overlays';
@@ -28,12 +29,16 @@ export function SubscriptionAccountDetail({
   index,
   actions,
   onClose,
+  usage,
+  usageTimeZone,
 }: {
   provider: Provider;
   account: ProviderAccount | null;
   index: number;
   actions: AccountActions;
   onClose: () => void;
+  usage?: ProviderAccountUsage;
+  usageTimeZone?: string;
 }) {
   const { t, locale } = useI18n();
   const { toast } = useFeedback();
@@ -88,6 +93,12 @@ export function SubscriptionAccountDetail({
         </div>
 
         {state === 'dead' && account.lastError && <Alert tone="danger" title={account.lastError} />}
+
+        <section className="flex flex-col gap-2">
+          <h4 className="text-[11px] font-medium text-[var(--text-secondary)]">{t('providers.usage.title')}</h4>
+          <div className="card px-3 py-2"><AccountUsageStats usage={usage} /></div>
+          <ProviderUsageHint timeZone={usageTimeZone} />
+        </section>
 
         <section className="flex flex-col gap-2">
           <h4 className="text-[11px] font-medium text-[var(--text-secondary)]">{t('providers.accounts.detail.identity')}</h4>

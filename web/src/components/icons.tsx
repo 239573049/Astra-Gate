@@ -14,6 +14,7 @@ import crushLogo from '../assets/clients/crush.png';
 import droidLogo from '../assets/clients/droid.svg';
 import nextcoworkClientLogo from '../assets/clients/nextcowork.png';
 import paseoLogo from '../assets/clients/paseo.png';
+import tkcodeLogo from '../assets/clients/tkcode.png';
 import ompLogo from '../assets/clients/omp.png';
 import vscodeInsidersLogo from '../assets/clients/vscode-insiders.png';
 import vscodiumLogo from '../assets/clients/vscodium.svg';
@@ -48,6 +49,7 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   nextcowork: { name: 'NextCoWork' },
   paseo: { name: 'Paseo' },
   zcode: { name: 'ZCode' },
+  tkcode: { name: 'TKCode' },
 };
 
 /**
@@ -62,7 +64,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'codex', 'claude-code', 'gemini-cli', 'opencode', 'claude-desktop', 'grok-build',
   'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
-  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode',
+  'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode', 'tkcode',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -122,6 +124,7 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   paseo: logo(paseoLogo),
   // ZCode is Z.ai's desktop agent: the Z.ai mark with a desktop badge
   zcode: { Mark: ZAI, Avatar: ZAI.Avatar, badge: Monitor },
+  tkcode: logo(tkcodeLogo),
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

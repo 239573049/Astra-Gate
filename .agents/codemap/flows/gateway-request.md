@@ -2,7 +2,7 @@
 flow: gateway-request
 modules: [astra-gateway, astra-core, astra-data, astra-providers, astra-plugins, astra-server]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-18
 ---
 # Gateway request
 
@@ -37,38 +37,59 @@ restored, and a request row, its span tree and usage counters were queued for pe
    tree in place and the placeholder→original map becomes `RestoreMap`.
 8. `Pipeline/RequestReasoning.cs:RequestReasoning.Capture` — log-only metadata (reasoning effort etc.), read before
    any codec derives upstream budgets from it. Never touches the wire.
-9. `Pipeline/GatewayRouter.cs:GatewayRouter.ForModelAsync` — a client bound to several providers gets the first one
+9. ⇢ network (only for the virtual model, `SmartRoutingSettings.VirtualModel`, default `astra-auto`; the span
+   `gateway.resolve` is already open): `Routing/SmartRouter.cs:SmartRouter.DecideAsync` reads the session's pin or the
+   turn's grade from memory (`Routing/DecisionStore.cs`, keyed by token + `TraceLink.SessionKey` / `TurnId`; a pin of the
+   lowest grade does not hold a new turn), else `Routing/AskExtractor.cs:AskExtractor.Extract` takes the user's own words
+   out of the *guarded* body and an `IRoutingJudge` (`Routing/IRoutingJudge.cs`; TypeSafe System One or OpenAI
+   Decisions, posted by `Routing/JudgeHttp.cs` on the judge's own long-lived HTTP/2 client,
+   `GatewayHttpClients.ForJudge()`) picks one grade. A grade names its provider; `GatewayRouter.GradeTargetAsync` says
+   whether this caller may use it (any provider for a token that allows any client, only its own targets for a limited
+   one) and whether it serves the model — a grade the caller cannot use moves to the nearest one it can, stronger first
+   (`RoutingDecision.AdjustedFrom`). The result sets `GatewayRoute.Routed`, which `ClientModelFor` honours, and
+   `GatewayRouter.WithTarget` points the route at the grade's provider alone — so steps 10–13 see the grade's model and
+   provider while the record keeps the virtual one as `requested_model` (and the decision as `routing_json`). A judge that
+   fails, is not confident or has nothing to read falls back to `rules.fallbackGrade` (never pinned); off, the virtual
+   model is refused with a 400. Attributes `astra.route.*` go on the `gateway.resolve` span; recent outcomes are kept in
+   memory (`Routing/RoutingActivity.cs`) for the console's status. Settings: `Routing/SmartRoutingService.cs` (key
+   `smart_routing`).
+10. `Pipeline/GatewayRouter.cs:GatewayRouter.ForModelAsync` — a client bound to several providers gets the first one
    serving this model (as an enabled model or through its mapping), else its primary. A pool route instead gets an
    ordered candidate list from `Pipeline/PoolRouting.cs:PoolRouting.PlanAsync` (members serving the model, minus those
    `ProviderHealth` cools or without a usable account, ordered by `ProviderPoolScheduler` with sticky sessions).
    `SubscriptionSupport.EnforceClientPolicy` (`Pipeline/UpstreamAuthResolver.cs`) rejects before capability discovery
    can send anything.
-10. `Pipeline/EffectiveModelResolver.cs` + `IModelProtocolResolver` — the upstream model and the protocols the
+11. `Pipeline/EffectiveModelResolver.cs` + `IModelProtocolResolver` — the upstream model and the protocols the
     provider actually supports are resolved (capability discovery may hit the network).
-11. `Pipeline/GatewayRouter.cs:GatewayRouter.SelectEndpoint` + `Protocol/GatewayCodecs.cs:GatewayCodecs.Register` —
+12. `Pipeline/GatewayRouter.cs:GatewayRouter.SelectEndpoint` + `Protocol/GatewayCodecs.cs:GatewayCodecs.Register` —
     the upstream protocol is chosen per model; `passthrough = upstreamProtocol == inbound`. With passthrough the
     client's own bytes (or the middleware's rewrite) go upstream; otherwise `IProtocolCodec.DecodeRequest` builds the
     IR (`Protocol/Ir.cs`) and the upstream codec re-encodes it. Missing codec → 501.
-12. Same-host rewrites while the body tree is still ours: model mapping, `stream_options.include_usage` injection for
+13. Same-host rewrites while the body tree is still ours: model mapping, `stream_options.include_usage` injection for
     OpenAI Chat streaming, the `force_stream` Responses shape, and the Claude Code mimicry / Relay `cache_control`
     TTL. Every stage that mutates the tree must set `upstreamDirty`, or the client's original bytes go upstream.
-13. ⇢ network: `Pipeline/GatewayPipeline.cs:GatewayPipeline.SendAsync` sends through `Pipeline/AccountScheduler.cs`
+14. ⇢ network: `Pipeline/GatewayPipeline.cs:GatewayPipeline.SendAsync` sends through `Pipeline/AccountScheduler.cs`
     (`StickyKeys` picks the account; a `Lease` holds the in-flight slot in balanced mode), `UpstreamAuthResolver`
     supplies credentials, and `Pipeline/Upstream.cs:GatewayHttpClients` performs the call. That handler deliberately
-    disables `ActivityHeadersPropagator` so the agent's `traceparent` never leaks to the provider. Steps 10–12 run in
+    disables `ActivityHeadersPropagator` so the agent's `traceparent` never leaks to the provider. Steps 11–13 run in
     `HandleAsync`'s local `PrepareAsync`, once per candidate: a pool request whose attempt fails before anything reached
     the client (`Pipeline/ProviderFailover.cs` classifies the status / exception) is prepared again for the next member
     and resent (`astra.attempt.retry = provider_failover`); the client's guarded tree is cloned, never rewritten, while
     another attempt may follow. Every route reports its outcome to `ProviderHealth`.
-14. Response side: `Protocol/Ir.cs` decode (or passthrough), `Pipeline/PrivacyGuardService.cs:ChunkRestorer`
+    Account recovery is separate: `UpstreamAuth.CanRefresh` permits one renewal/reload on 401/403; direct tokens and
+    API keys skip it. Failover/balanced modes cool a still-rejected account for `ProviderHealth.AuthCooldown` (10 min)
+    and try an untried usable account (`auth_failover`), even after a successful renewal. Credential-resolution
+    failures also hand over in those modes. Manual mode returns an upstream rejection without cooling or switching.
+15. Response side: `Protocol/Ir.cs` decode (or passthrough), `Pipeline/PrivacyGuardService.cs:ChunkRestorer`
     restores placeholders (streaming: `Pipeline/GatewayPipeline.cs:StreamAsync`; buffered: `BufferAsync`;
     forced-stream-when-client-wanted-JSON: `CollapseStreamAsync`), `Pipeline/RequestBilling.cs` prices the usage, and
     an upstream failure goes through `ForwardErrorAsync` — rendered in the **inbound** protocol's error shape.
-15. `finally`: `Finish` builds the record (status, tokens, cost, protocol, passthrough), `FinishTrace` writes its
+16. `finally`: `Finish` builds the record (status, tokens, cost, protocol, passthrough), `FinishTrace` writes its
     spans, `usageWriter.Enqueue(record)` hands it to `Pipeline/UsageWriter.cs`, which batch-writes through
-    `RequestRepository` in the same transaction that accumulates `token_usage_totals` / `token_usage_daily`, then
+    `RequestRepository` in the same transaction that accumulates `token_usage_totals` / `token_usage_daily` and
+    `provider_account_usage_totals` (the final account, or the provider's own API key), then
     tells `TokenUsageLedger.Persisted`. `LiveRequestFeed.Finish` closes the live row.
-16. ⇢ HTTP: the console reads the same rows back via `src/Astra.Server/Api/RequestEndpoints.cs`; the live view stays
+17. ⇢ HTTP: the console reads the same rows back via `src/Astra.Server/Api/RequestEndpoints.cs`; the live view stays
     on the SSE feed.
 
 ## Sequence
@@ -116,10 +137,14 @@ sequenceDiagram
   the agent's body first and its output is still subject to the privacy guard.
 - **Supported:** a new wire protocol is one `IProtocolCodec` plus a `GatewayCodecs.Register` entry and golden fixtures;
   a new lossy mapping belongs in `Protocol/Ir.cs`'s comments and in `ir.Warnings`.
+- **Supported:** a new smart-routing judge dialect is one `IRoutingJudge` plus a `RoutingJudges.Register` entry, a
+  `JudgeProtocols` constant and golden fixtures (`tests/Astra.Gateway.Tests/RoutingJudgeTests.cs`).
 - **Looks tempting but breaks:** rewriting the request tree without setting `upstreamDirty` silently ships the
-  client's original bytes; managing the `AccountScheduler.Lease` by hand double-disposes it (`SendAsync` already
+  client's original bytes — which is why smart routing changes the model through `GatewayRoute.Routed`, never through
+  `body["model"]`; managing the `AccountScheduler.Lease` by hand double-disposes it (`SendAsync` already
   disposes on its throwing path); a new capability probe placed before `EnforceClientPolicy` sends a request the
-  client policy forbids.
+  client policy forbids; a routing decision keyed by the session alone (`TraceLink.SessionKey` is not scoped to a
+  token — `SmartRouter` prefixes the token id).
 
 ## Related
 - Modules: [astra-gateway](../modules/astra-gateway.md), [astra-core](../modules/astra-core.md),

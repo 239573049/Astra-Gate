@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_BASE_URL",
+      "outcome": "drifted",
+      "detail": "current value differs from what Astra wrote"
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}
