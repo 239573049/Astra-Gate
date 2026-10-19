@@ -155,7 +155,10 @@ the `preview` feed also offers every stable. Clients follow the server's `update
     track then points electron-updater at that channel via `setFeedURL` + `shared/updateChannel.ts`), then
     gates, on the npm track only, on the **SERVER's** version (the dmg and installer tracks bundle the
     server, so they check just the app: `checkDesktopDmg` / `checkInstallerManifest`, and the installer
-    track's `applyFromUi` opens the download page, outcome `download`):
+    track's `applyFromUi` opens the download page, outcome `download`; the dmg track never has a pending
+    manifest, so while electron-updater is still downloading the new app `applyFromUi` answers
+    `downloading` — not `none`, which the Settings page words as "up to date" — and `update-downloaded`
+    then reminds; `UiApplyOutcome` is mirrored in `web/src/shell/bridge.ts`):
     `control.probeVersion()` (which is `/api/version` through `desktop/src/main.ts:119`) with
     `app.getVersion()` only as the fallback when the server is down; the status only carries a version,
     so the manifest is fetched directly, from the channel that answered, for the checksum/platform info

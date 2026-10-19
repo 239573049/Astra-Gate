@@ -360,6 +360,8 @@ function UpdateRows() {
           toast(t('settings.updateDesktopRelaunch'));
         } else if (outcome === 'download') {
           toast(t('settings.updateDownloadOpened'));
+        } else if (outcome === 'downloading') {
+          toast(t('settings.updateDownloading'));
         } else {
           toast(t('settings.upToDate'));
         }

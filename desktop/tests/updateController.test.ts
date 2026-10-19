@@ -21,8 +21,9 @@ vi.mock('electron', () => ({
     }
   },
 }));
-vi.mock('electron-updater', () => ({ autoUpdater: { on: vi.fn(), checkForUpdates: vi.fn() } }));
+vi.mock('electron-updater', () => ({ autoUpdater: { on: vi.fn(), checkForUpdates: vi.fn(), quitAndInstall: vi.fn() } }));
 
+import { autoUpdater } from 'electron-updater';
 import { REMINDER_COOLDOWN_MS, EMPTY_REMINDER_STATE, type UpdateReminderState } from '../src/shared/updateReminder';
 import { UpdateController, type UpdateControllerOptions } from '../src/update';
 
@@ -223,6 +224,35 @@ describe('launch-time update check and reminder', () => {
     await expect(controller.check()).resolves.toMatchObject({ action: 'none' });
     await expect(controller.applyFromUi()).resolves.toBe('none');
     expect(electron.openExternal).not.toHaveBeenCalled();
+  });
+
+  describe('dmg track', () => {
+    const DMG_TRACK = { platform: 'darwin' as const, exePath: '/Applications/Astra.app/Contents/MacOS/Astra' };
+    const feedOffers = (version: string): void => {
+      vi.mocked(autoUpdater.checkForUpdates).mockResolvedValue({ updateInfo: { version } } as never);
+    };
+
+    it('says the app update is downloading, not up to date, until electron-updater has it', async () => {
+      feedOffers('0.5.0');
+      const controller = launch(DMG_TRACK);
+
+      await expect(controller.applyFromUi()).resolves.toBe('downloading');
+      expect(vi.mocked(autoUpdater.quitAndInstall)).not.toHaveBeenCalled();
+
+      // electron-updater finishes: the same click now restarts into the new app.
+      const onDownloaded = vi
+        .mocked(autoUpdater.on)
+        .mock.calls.filter(([event]) => event === 'update-downloaded')
+        .pop()![1] as (info: { version: string }) => void;
+      onDownloaded({ version: '0.5.0' });
+      await expect(controller.applyFromUi()).resolves.toBe('desktop');
+      expect(vi.mocked(autoUpdater.quitAndInstall)).toHaveBeenCalledTimes(1);
+    });
+
+    it('still reports up to date when the feed offers nothing newer', async () => {
+      feedOffers('0.4.0');
+      await expect(launch(DMG_TRACK).applyFromUi()).resolves.toBe('none');
+    });
   });
 
   it('applies an available update without a prior check, instead of reporting up to date', async () => {

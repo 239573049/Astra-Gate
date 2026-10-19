@@ -24,3 +24,9 @@ never the configured port. When a mismatching server cannot be stopped, adopt it
 second one. A server without a record is found by its port (`findServerListenerPid`). When "update
 says up to date but the UI shows an old server" is reported, check
 `lsof -nP -iTCP -sTCP:LISTEN | grep astra` for two servers first.
+
+A second cause of the same symptom (2026-10-19, one server, versions matching): on the dmg track the
+Settings download button answered "up to date" while electron-updater was still fetching the new app
+(`~/Library/Caches/@aidotnetdesktop-updater/pending/temp-*.zip` still growing). Fixed with the
+`downloading` outcome of `UpdateController.applyFromUi`; if the symptom comes back with one server,
+look at that cache directory before suspecting the lifecycle.

@@ -103,8 +103,11 @@ export interface UpdateSummary {
   action: 'none' | 'server' | 'desktop-dmg' | 'desktop-npm' | 'desktop-download';
 }
 
-/** Outcome of the in-app apply (Settings page button). */
-export type UiApplyOutcome = 'server' | 'desktop' | 'download' | 'none';
+/**
+ * Outcome of the in-app apply (Settings page button). 'downloading' is the DMG track's newer app
+ * still being fetched by electron-updater: nothing to install yet, which is not 'none' (up to date).
+ */
+export type UiApplyOutcome = 'server' | 'desktop' | 'download' | 'downloading' | 'none';
 
 export class UpdateController {
   readonly track: UpdateTrack;
@@ -413,7 +416,7 @@ export class UpdateController {
    * installs; otherwise the server updates first, then the desktop app when
    * the macOS npm track has one pending (that step relaunches the app).
    * Throws with a user-facing message on failure; 'none' means the automatic
-   * re-check found nothing newer.
+   * re-check found nothing newer, 'downloading' that the DMG track's newer app is still downloading.
    */
   async applyFromUi(): Promise<UiApplyOutcome> {
     const held = this.claim();
@@ -427,6 +430,9 @@ export class UpdateController {
       // check() would refuse (its guard sees our lock) and leave the manifest
       // null, silently turning "Update now" into "up to date".
       if (!this.pendingManifest) await this.runCheck();
+      // DMG track never has a pending manifest: the app update is found by electron-updater and is
+      // only installable once downloaded (update-downloaded then reminds). Until then it is not "up to date".
+      if (this.track === 'dmg' && this.dmgAvailableVersion && !this.dmgDownloadedVersion) return 'downloading';
       if (!this.pendingManifest) return 'none';
       if (this.track === 'installer') {
         // No in-app self-update for NSIS / AppImage: the installer is the update (it brings the server too).
