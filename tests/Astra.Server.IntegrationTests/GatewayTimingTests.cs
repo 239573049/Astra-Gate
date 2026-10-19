@@ -116,6 +116,79 @@ public class GatewayTimingTests
     }
 
     [Fact]
+    public async Task Answer_Replayed_In_A_Burst_After_Late_Headers_Has_No_Speed()
+    {
+        // A relay that holds the headers until it has the whole answer, then replays it: the answer was generated
+        // before the window after the headers opened, so 300 tokens "in a few ms" is not a speed.
+        var frames = AnthropicTextStream(deltas: 6, outputTokens: 300);
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeCode, ApiProtocol.Anthropic, _ =>
+        {
+            Thread.Sleep(400);
+            return FakeUpstream.Sse(string.Concat(frames.Select(f => SseWriter.Format(f))));
+        });
+
+        var response = await gw.PostAsync("/v1/messages",
+            """{"model":"claude-opus-5.5","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"hi"}]}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await response.Content.ReadAsStringAsync();
+        var record = await gw.RecordOfAsync(response);
+
+        Assert.Equal(300, record.TotalOutputTokens);
+        Assert.True(record.TtfbMs >= 400, $"ttfb {record.TtfbMs} ms");
+        Assert.NotNull(record.TtftMs);
+        Assert.Null(record.GenerationMs);
+        Assert.Null(record.OutputTps);
+    }
+
+    [Fact]
+    public async Task Paced_Answer_After_Late_Headers_Keeps_Its_Speed()
+    {
+        // The same late headers, but the answer streams at a pace of its own (six deltas 20 ms apart, 40 tokens).
+        var frames = AnthropicTextStream(deltas: 6, outputTokens: 40);
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeCode, ApiProtocol.Anthropic, _ =>
+        {
+            Thread.Sleep(600);
+            var content = new StreamContent(new DelayedSseStream(frames));
+            content.Headers.ContentType = new MediaTypeHeaderValue("text/event-stream");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        });
+
+        var response = await gw.PostAsync("/v1/messages",
+            """{"model":"claude-opus-5.5","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"hi"}]}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await response.Content.ReadAsStringAsync();
+        var record = await gw.RecordOfAsync(response);
+
+        Assert.True(record.TtfbMs > record.TotalMs - record.TtfbMs, $"ttfb {record.TtfbMs} ms, total {record.TotalMs} ms");
+        Assert.NotNull(record.GenerationMs);
+        Assert.Equal(Math.Round(40 / (record.GenerationMs.Value / 1000.0), 2), record.OutputTps);
+    }
+
+    private static IReadOnlyList<SseEvent> AnthropicTextStream(int deltas, int outputTokens)
+    {
+        var text = string.Concat(Enumerable.Range(0, deltas).Select(i =>
+            $"event: content_block_delta\ndata: {{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{{\"type\":\"text_delta\",\"text\":\"word{i} \"}}}}\n\n"));
+        return SseParser.ParseAll("""
+            event: message_start
+            data: {"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5.5","content":[],"usage":{"input_tokens":10,"output_tokens":1}}}
+
+            event: content_block_start
+            data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+            @TEXT@event: content_block_stop
+            data: {"type":"content_block_stop","index":0}
+
+            event: message_delta
+            data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":@TOKENS@}}
+
+            event: message_stop
+            data: {"type":"message_stop"}
+
+
+            """.ReplaceLineEndings("\n").Replace("@TEXT@", text).Replace("@TOKENS@", outputTokens.ToString()));
+    }
+
+    [Fact]
     public async Task Non_Stream_Output_Records_No_Ttft_Or_Tps()
     {
         var body = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "responses", "response-completed.json"));

@@ -41,6 +41,8 @@ public sealed class ProviderTestRun(ApiProtocol protocol, string modelId, Func<P
 
     /// <summary>Milliseconds from sending the request to the first token of the answer.</summary>
     public long? FirstTokenMs { get; internal set; }
+    /// <summary>Milliseconds from sending the request to the last output event of the answer.</summary>
+    public long? LastOutputMs { get; internal set; }
     /// <summary>Reasoning text reported by the upstream, concatenated.</summary>
     public string Reasoning { get; internal set; } = "";
 
@@ -235,6 +237,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                         record.ErrorMessage = error ?? "Upstream returned an unusable response";
                     }
                     run.FirstTokenMs = sink.FirstTokenMs;
+                    run.LastOutputMs = sink.LastOutputMs;
                     run.Reasoning = sink.Reasoning.ToString();
                     run.HasEvents = sink.HasEvents;
                     run.Usage = (JsonObject)sink.Usage.DeepClone();
@@ -282,14 +285,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             record.TtfbMs = httpMs;
             record.TtftMs = run.FirstTokenMs;
             record.TotalMs = sw.ElapsedMilliseconds;
-            // From the response start, as in GatewayPipeline.Finish (hidden reasoning is billed but not streamed).
-            if (run.FirstTokenMs is not null && httpMs is { } ttfb && record.TotalMs > ttfb)
-            {
-                record.GenerationMs = record.TotalMs - ttfb;
-                var generated = usage is null ? 0 : usage.Get(TokenTypes.Output) + usage.Get(TokenTypes.Reasoning);
-                if (generated > 0 && record.GenerationMs > 0)
-                    record.OutputTps = Math.Round(generated / (record.GenerationMs.Value / 1000.0), 2);
-            }
+            GenerationTiming.Apply(record, usage is null ? 0 : usage.Get(TokenTypes.Output) + usage.Get(TokenTypes.Reasoning), run.LastOutputMs);
             if (usageRaw is not null)
             {
                 record.UsageSource = usage is null ? "missing" : "reported";
@@ -447,6 +443,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         public bool Ok { get; private set; } = true;
         public bool HasEvents { get; private set; }
         public long? FirstTokenMs { get; private set; }
+        public long? LastOutputMs { get; private set; }
         public StringBuilder Reasoning { get; } = new();
 
         /// <summary>Usage reported by the upstream, verbatim; empty when it reported none.</summary>
@@ -472,6 +469,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         {
             HasEvents = true;
             FirstTokenMs ??= elapsedMs;
+            LastOutputMs = elapsedMs;
         }
 
         public void SawUsage() => HasEvents = true;

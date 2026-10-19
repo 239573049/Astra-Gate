@@ -1533,16 +1533,8 @@ public sealed class GatewayPipeline(
                 logger.LogError(e, "Billing failed for request {Id}", record.Id);
             }
         }
-        // Generation runs from the response start (TTFB), not the first visible token: hidden reasoning (e.g.
-        // Anthropic thinking with display "omitted") is billed as output but streams nothing until it is done,
-        // so timing from the first token would divide those tokens by the last few ms. A streamed first token
-        // is still required — a whole body's headers arrive only after the generation, leaving nothing to time.
-        if (record.TtftMs is not null && record.TtfbMs is { } ttfb && record.TotalMs > ttfb)
-        {
-            record.GenerationMs = record.TotalMs - ttfb;
-            var generated = observer.Usage is null ? 0 : observer.Usage.Get(TokenTypes.Output) + observer.Usage.Get(TokenTypes.Reasoning);
-            if (generated > 0 && record.GenerationMs > 0) record.OutputTps = Math.Round(generated / (record.GenerationMs.Value / 1000.0), 2);
-        }
+        var generated = observer.Usage is null ? 0 : observer.Usage.Get(TokenTypes.Output) + observer.Usage.Get(TokenTypes.Reasoning);
+        GenerationTiming.Apply(record, generated, observer.LastOutputMs);
     }
 
     // ------------------------------------------------------------------ tracing
@@ -1745,6 +1737,9 @@ public sealed class GatewayPipeline(
     private sealed class ResponseObserver
     {
         public long? TtftMs { get; private set; }
+
+        /// <summary>When the last output event of a stream arrived (the same events that set <see cref="TtftMs"/>).</summary>
+        public long? LastOutputMs { get; private set; }
         public NormalizedUsage? Usage { get; private set; }
         public JsonObject? RawUsage { get; private set; }
         public FinishReason? Finish { get; private set; }
@@ -1861,6 +1856,7 @@ public sealed class GatewayPipeline(
                         TtftMs = elapsedMs;
                         FirstToken?.Invoke(elapsedMs);
                     }
+                    if (!wholeBody) LastOutputMs = elapsedMs;
                     break;
                 case UsageEvent u:
                     Usage = u.Usage;
