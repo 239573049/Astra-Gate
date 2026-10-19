@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/desktop-linux-arm64",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "Astra desktop app for Linux (arm64).",
   "license": "MIT",
   "os": [
