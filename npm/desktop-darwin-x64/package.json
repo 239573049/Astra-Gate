@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/desktop-darwin-x64",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "description": "Astra desktop app for macOS (Intel).",
   "license": "MIT",
   "os": [
