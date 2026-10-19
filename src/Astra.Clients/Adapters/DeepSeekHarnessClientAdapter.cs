@@ -21,8 +21,10 @@ namespace Astra.Clients.Adapters;
 /// "Custom model API" form writes; it is re-read on the next request. A patch replaces a row's whole config, so the existing
 /// providers are kept and only <c>providers.astra</c> is touched.</item>
 /// <item>Row <c>agent-default-model</c>: <c>config.provider</c> / <c>config.model</c> pick the default model for new sessions
-/// when a model is chosen. Its optional <c>reasoningEffort</c> is dropped while enabled (a custom model declares no effort
-/// levels, and an effort a model does not declare is refused); disabling puts it back.</item>
+/// when a model is chosen. Its optional <c>reasoningEffort</c> is dropped while enabled (an effort a model does not declare
+/// is refused, and the user's may be one Astra's models do not declare); disabling puts it back. A model the gateway knows
+/// to think declares <c>reasoningEfforts</c> (<c>low</c> / <c>medium</c> / <c>high</c>) — without it Harness offers no effort
+/// picker (GitHub issue 7); one it does not know declares nothing and keeps Harness's own default.</item>
 /// <item>Harness never keeps a literal key in the patch file (only <c>apiKeyEnv</c>, a credential reference). The reference
 /// resolves from the launch environment, the stored <c>.credentials.yaml</c>, a project <c>.env</c> and finally
 /// <c>$DSH_HOME/.env</c>; Astra writes <c>ASTRA_GATEWAY_API_KEY</c> to the last one, so nothing a user saved is overridden.</item>
@@ -150,7 +152,7 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
             changes.AddRange(EnsureRow(file, DefaultRow, DefaultRowId, DefaultRowName));
             changes.Add(Key(file, DefaultProviderPath, JsonString(selectedRoute)));
             changes.Add(Key(file, DefaultModelPath, JsonString(selected)));
-            // A custom model declares no effort levels; an effort it does not declare is refused.
+            // An effort the model does not declare is refused (Astra's models declare low / medium / high at most).
             if (CurrentValue(file, ConfigFileFormat.Yaml, DefaultEffortPath) is { } effort)
                 changes.Add(new ConfigChange(file, ConfigFileFormat.Yaml, DefaultEffortPath, effort, null));
         }
@@ -255,8 +257,18 @@ public sealed class DeepSeekHarnessClientAdapter(ClientEnvironment env, IClientC
             if (context is not null) model["contextWindow"] = context;
             if (maxTokens is not null) model["maxTokens"] = maxTokens;
             if (BoolHint(info?["vision"]) == true) model["input"] = new JsonArray("text", "image");
+            // Without a declaration Harness reads a hand-declared model as non-reasoning (levels: just "off") and shows no
+            // effort picker. Its `reasoningEfforts` is the capability; the route's `reasoning` key only picks a default.
+            if (BoolHint(info?["reasoning"]) == true) model["reasoningEfforts"] = ReasoningEfforts();
             models.AddNode(model);
         }
         return models;
     }
+
+    /// <summary>
+    /// The levels Harness's effort picker offers a thinking model, each with the spelling it sends: the OpenAI-style names the
+    /// gateway passes through. No <c>off</c>: a valueless one only omits the field, which leaves the model's own default
+    /// (usually thinking on) in force, so offering it would promise what it does not do. Only <c>off</c> may be valueless.
+    /// </summary>
+    private static JsonObject ReasoningEfforts() => new() { ["low"] = "low", ["medium"] = "medium", ["high"] = "high" };
 }

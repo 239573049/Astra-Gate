@@ -154,7 +154,7 @@ export class DeepSeekHarnessClientAdapter extends ClientAdapterBase {
         this.key(file, DEFAULT_PROVIDER_PATH, ClientAdapterBase.jsonString(selectedRoute)),
       );
       changes.push(this.key(file, DEFAULT_MODEL_PATH, ClientAdapterBase.jsonString(selected)));
-      // A custom model declares no effort levels; an effort it does not declare is refused.
+      // An effort the model does not declare is refused (Astra's models declare low / medium / high at most).
       const effort = this.currentValue(file, 'yaml', DEFAULT_EFFORT_PATH);
       if (effort !== null)
         changes.push(new ConfigChange(file, 'yaml', DEFAULT_EFFORT_PATH, effort, null));
@@ -277,6 +277,11 @@ export class DeepSeekHarnessClientAdapter extends ClientAdapterBase {
       if (context !== null) model.contextWindow = context;
       if (maxTokens !== null) model.maxTokens = maxTokens;
       if (ClientAdapterBase.boolHint(info?.vision) === true) model.input = ['text', 'image'];
+      // Without a declaration Harness reads a hand-declared model as non-reasoning (levels: just "off") and shows no
+      // effort picker. Its `reasoningEfforts` is the capability; the route's `reasoning` key only picks a default.
+      // No `off`: a valueless one only omits the field, leaving the model's own default in force.
+      if (ClientAdapterBase.boolHint(info?.reasoning) === true)
+        model.reasoningEfforts = { low: 'low', medium: 'medium', high: 'high' };
       models.push(model);
     }
     return models;

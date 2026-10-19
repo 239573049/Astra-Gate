@@ -22,6 +22,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Usage writer ceiling](usage-writer-ceiling.md) — 2,000-record buffering trades ~6% sustained throughput for ~39% lower RSS; 1,000 cost more throughput; ordinal binding +73% is isolated AOT; include drain
 - [Dapper.AOT sequence cast](dapper-aot-sequence-cast.md) — a List<anonymous> sequence parameter throws InvalidCastException at run time; pass IEnumerable
 - [astra-server --help starts a server](astra-server-flag-first-serves.md) — a flag-first call runs `serve` on ~/.astra and overwrites runtime.json; use ASTRA_HOME for throwaway servers
+- [Harness thinking picker needs reasoningEfforts](harness-reasoning-efforts-field.md) — `reasoning` is a route default; models without `reasoningEfforts` get no effort picker (issue #7)
 - [Client default provider is read-side](client-default-provider-read-side.md) — a client with no bindings reads as bound to the first usable provider; stored on enable or a bindings edit, never on read
 
 ## Reference

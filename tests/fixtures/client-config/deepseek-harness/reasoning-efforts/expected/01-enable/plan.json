@@ -1,0 +1,58 @@
+[
+  {
+    "file": "$HOME/.dsh/.env",
+    "format": "env",
+    "keyPath": "ASTRA_GATEWAY_API_KEY",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=llm-pi-ai].config.providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"displayName\":\"Astra\",\"apiKeyEnv\":\"ASTRA_GATEWAY_API_KEY\",\"api\":\"openai-completions\",\"baseURL\":\"https://astra.corp.com/v1\",\"models\":[{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"contextWindow\":128000,\"maxTokens\":8192,\"reasoningEfforts\":{\"low\":\"low\",\"medium\":\"medium\",\"high\":\"high\"}},{\"id\":\"plain-chat\",\"name\":\"Plain Chat\"}]}"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=llm-pi-ai].config.providers.astra-responses",
+    "kind": "key",
+    "before": null,
+    "after": "{\"displayName\":\"Astra (Responses)\",\"apiKeyEnv\":\"ASTRA_GATEWAY_API_KEY\",\"api\":\"openai-responses\",\"baseURL\":\"https://astra.corp.com/v1\",\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"contextWindow\":400000,\"maxTokens\":128000,\"input\":[\"text\",\"image\"],\"reasoningEfforts\":{\"low\":\"low\",\"medium\":\"medium\",\"high\":\"high\"}}]}"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=llm-pi-ai].config.providers.astra-anthropic",
+    "kind": "key",
+    "before": null,
+    "after": "{\"displayName\":\"Astra (Anthropic)\",\"apiKeyEnv\":\"ASTRA_GATEWAY_API_KEY\",\"api\":\"anthropic-messages\",\"baseURL\":\"https://astra.corp.com\",\"models\":[{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"contextWindow\":200000,\"maxTokens\":64000,\"input\":[\"text\",\"image\"],\"reasoningEfforts\":{\"low\":\"low\",\"medium\":\"medium\",\"high\":\"high\"}}]}"
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=agent-default-model].config.provider",
+    "kind": "key",
+    "before": "\"mine\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=agent-default-model].config.model",
+    "kind": "key",
+    "before": "\"m1\"",
+    "after": "\"deepseek-chat\""
+  },
+  {
+    "file": "$HOME/.dsh/profiles/desktop/cordis.patch.yml",
+    "format": "yaml",
+    "keyPath": "[id=agent-default-model].config.reasoningEffort",
+    "kind": "key",
+    "before": "\"high\"",
+    "after": null
+  }
+]

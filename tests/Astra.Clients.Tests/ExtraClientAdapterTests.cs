@@ -808,7 +808,7 @@ public class DeepSeekHarnessClientAdapterTests : AdapterTestBase
         var defaults = Row(text, "agent-default-model")["config"]!;
         Assert.Equal("astra", defaults["provider"]!.GetValue<string>());
         Assert.Equal("gpt-5.1", defaults["model"]!.GetValue<string>());
-        Assert.Null(defaults["reasoningEffort"]); // a custom model declares no effort levels
+        Assert.Null(defaults["reasoningEffort"]); // an effort the model does not declare is refused
         Assert.Equal("detailed", Row(text, "ui-chat")["config"]!["transcriptView"]!.GetValue<string>());
         var envText = Home.ReadFile(_env);
         Assert.Contains("ASTRA_GATEWAY_API_KEY=astra-dsh-1", envText);
@@ -819,6 +819,27 @@ public class DeepSeekHarnessClientAdapterTests : AdapterTestBase
         Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
         Assert.Equal(desktopOriginal, Home.ReadFileBytes(_desktop));
         Assert.Equal(envOriginal, Home.ReadFileBytes(_env));
+    }
+
+    [Fact]
+    public void ThinkingModelsDeclareReasoningEfforts_OthersDeclareNothing()
+    {
+        // GitHub issue 7: a model without `reasoningEfforts` is a non-reasoning one to Harness, which then offers no effort picker.
+        Home.WriteFile(_desktop, Desktop);
+        var extra = Hints.Extra("thinks", "plain", "unknown");
+        ((JsonObject)extra["models"]!["thinks"]!)["reasoning"] = true;
+        ((JsonObject)extra["models"]!["plain"]!)["reasoning"] = false;
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-dsh-9", null, extra)));
+
+        var models = Row(Home.ReadFile(_desktop), "llm-pi-ai")["config"]!["providers"]!["astra"]!["models"]!.AsArray();
+        JsonNode Model(string id) => models.Single(m => m!["id"]!.GetValue<string>() == id)!;
+        var efforts = Model("thinks")["reasoningEfforts"]!.AsObject();
+        Assert.Equal(["low", "medium", "high"], efforts.Select(p => p.Key)); // only `off` may be valueless, and it is not offered
+        Assert.All(efforts, p => Assert.Equal(p.Key, p.Value!.GetValue<string>()));
+        Assert.Null(Model("thinks")["reasoning"]); // the route's `reasoning` is a default selection, not a capability
+        Assert.Null(Model("plain")["reasoningEfforts"]);
+        Assert.Null(Model("unknown")["reasoningEfforts"]);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
     }
 
     [Fact]
