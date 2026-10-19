@@ -22,8 +22,13 @@ public sealed class TokenRepository
         """;
 
     private readonly SqliteConnectionFactory _factory;
+    private readonly RowCache<string, List<TokenRecord>> _byPrefix;
 
-    public TokenRepository(SqliteConnectionFactory factory) => _factory = factory;
+    public TokenRepository(SqliteConnectionFactory factory)
+    {
+        _factory = factory;
+        _byPrefix = new RowCache<string, List<TokenRecord>>(factory);
+    }
 
     /// <summary>All tokens: the default token first, then by creation time.</summary>
     public async Task<IReadOnlyList<TokenRecord>> ListAsync(CancellationToken ct = default)
@@ -38,11 +43,20 @@ public sealed class TokenRepository
         return await conn.QuerySingleOrDefaultAsync<TokenRecord>($"{Select} WHERE id = @id", new { id });
     }
 
-    /// <summary>Candidates for a presented token (the caller verifies the hash).</summary>
+    /// <summary>
+    /// Candidates for a presented token (the caller verifies the hash). Cached (<see cref="RowCache{TKey,TValue}"/>):
+    /// every request authenticates through here. <see cref="TokenRecord.LastUsedAt"/> may lag, because the request log
+    /// updates it without invalidating the cache; read <see cref="ListAsync"/> / <see cref="GetAsync"/> to show it.
+    /// </summary>
     public async Task<IReadOnlyList<TokenRecord>> FindByPrefixAsync(string prefix, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        return (await conn.QueryAsync<TokenRecord>($"{Select} WHERE key_prefix = @prefix", new { prefix })).ToList();
+        var rows = await _byPrefix.GetAsync(prefix, async (p, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            var found = (await conn.QueryAsync<TokenRecord>($"{Select} WHERE key_prefix = @prefix", new { prefix = p })).ToList();
+            return found.Count == 0 ? null : found;
+        }, ct);
+        return rows is null ? [] : rows.Select(t => t.Clone()).ToList();
     }
 
     public async Task InsertAsync(TokenRecord token, CancellationToken ct = default)

@@ -24,7 +24,18 @@ public sealed class ProviderRepository
 
     private readonly SqliteConnectionFactory _factory;
 
-    public ProviderRepository(SqliteConnectionFactory factory) => _factory = factory;
+    // Raw rows, mapped per call: every request reads its provider and model (see RowCache).
+    private readonly RowCache<string, ProviderRow> _providers;
+    private readonly RowCache<(string ProviderId, string ModelId), ProviderModelRow> _models;
+    private readonly RowCache<string, List<ProviderModelRow>> _modelLists;
+
+    public ProviderRepository(SqliteConnectionFactory factory)
+    {
+        _factory = factory;
+        _providers = new RowCache<string, ProviderRow>(factory);
+        _models = new RowCache<(string ProviderId, string ModelId), ProviderModelRow>(factory, 4096, cacheMisses: true);
+        _modelLists = new RowCache<string, List<ProviderModelRow>>(factory);
+    }
 
     // ----- providers -----
 
@@ -38,8 +49,11 @@ public sealed class ProviderRepository
 
     public async Task<Provider?> GetAsync(string id, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var row = await conn.QuerySingleOrDefaultAsync<ProviderRow>($"{ProviderSelect} WHERE id = @id", new { id });
+        var row = await _providers.GetAsync(id, async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return await conn.QuerySingleOrDefaultAsync<ProviderRow>($"{ProviderSelect} WHERE id = @id", new { id = key });
+        }, ct);
         return row?.ToProvider();
     }
 
@@ -220,19 +234,25 @@ public sealed class ProviderRepository
     /// <summary>The provider's models ordered by sort_order.</summary>
     public async Task<IReadOnlyList<ProviderModel>> ListModelsAsync(string providerId, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<ProviderModelRow>(
-            $"{ProviderModelSelect} WHERE provider_id = @provider_id ORDER BY sort_order, id",
-            new { provider_id = providerId });
-        return rows.Select(r => r.ToProviderModel()).ToList();
+        var rows = await _modelLists.GetAsync(providerId, async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return (await conn.QueryAsync<ProviderModelRow>(
+                $"{ProviderModelSelect} WHERE provider_id = @provider_id ORDER BY sort_order, id",
+                new { provider_id = key })).ToList();
+        }, ct);
+        return rows!.Select(r => r.ToProviderModel()).ToList();
     }
 
     public async Task<ProviderModel?> GetModelAsync(string providerId, string modelId, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var row = await conn.QuerySingleOrDefaultAsync<ProviderModelRow>(
-            $"{ProviderModelSelect} WHERE provider_id = @provider_id AND model_id = @model_id",
-            new { provider_id = providerId, model_id = modelId });
+        var row = await _models.GetAsync((providerId, modelId), async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return await conn.QuerySingleOrDefaultAsync<ProviderModelRow>(
+                $"{ProviderModelSelect} WHERE provider_id = @provider_id AND model_id = @model_id",
+                new { provider_id = key.ProviderId, model_id = key.ModelId });
+        }, ct);
         return row?.ToProviderModel();
     }
 

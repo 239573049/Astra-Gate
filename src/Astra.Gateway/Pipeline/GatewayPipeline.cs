@@ -162,7 +162,7 @@ public sealed class GatewayPipeline(
             // API first, before the privacy guard — which still applies to whatever they send on — and the
             // reply on its way back to the agent. A reject is answered in the agent's API's error shape.
             var middlewareStart = Stopwatch.GetTimestamp();
-            middlewareRun = await middleware.BeginAsync(
+            middlewareRun = await middleware.BeginAsync(() =>
                 GatewayMiddleware.Info(inbound, requestBody.Utf8, ctx.Request.Path,
                     route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream), ct);
             if (middlewareRun is not null)
@@ -306,7 +306,7 @@ public sealed class GatewayPipeline(
                 SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
                 // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
                 // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
-                var (resolvedModel, _) = await models.ResolveByModelIdAsync(provider, candidate.UpstreamModelFor(requestedModel), ct);
+                var resolvedModel = await models.ResolveProviderModelAsync(provider, candidate.UpstreamModelFor(requestedModel), ct);
                 // Capability discovery may go to the network (a /models listing); timed on its own.
                 var capabilitiesStart = Stopwatch.GetTimestamp();
                 var supportedProtocols = await modelProtocols.ResolveAsync(provider, resolvedModel, candidate.AccountId, ct);
@@ -376,7 +376,7 @@ public sealed class GatewayPipeline(
                 if (forceResponsesStream) stream = true;
                 record.Stream = stream;
 
-                // 上游模型名可能与请求里的不同（provider model 映射），按上游名再解析一次取有效模型。
+                // Capabilities may await the network. Merge current billing data once, after the final upstream model is known.
                 EffectiveModel attemptEffective;
                 (_, attemptEffective) = upstreamModel == resolvedModel.ModelId
                     ? (resolvedModel, await models.ResolveAsync(provider, resolvedModel, ct))
@@ -739,7 +739,7 @@ public sealed class GatewayPipeline(
             upstreamPayload?.Release();
             requestBody?.Dispose();
             live.Finish(record);
-            usageWriter.Enqueue(record);
+            await usageWriter.EnqueueAsync(record);
         }
     }
 

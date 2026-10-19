@@ -164,6 +164,10 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   `ASTRA_STRICT_PORT` disables the drift. `GatewayBaseUrl` is `ASTRA_PUBLIC_URL` when set, else
   `LocalUrl` (what `healthcheck` probes).
 - Everything else lives in SQLite (`Astra.Data`, Dapper.AOT, WAL; see Native AOT).
+  The rows the gateway reads per request (tokens, providers and their models, system models and prices, clients and
+  bindings) are cached (`Astra.Data/RowCache.cs`): write them through `SqliteConnectionFactory.Open`/`OpenAsync`, whose
+  connections invalidate the cache on commit — a write any other way (another process, a raw connection,
+  `OpenUntrackedAsync`, which only the request log uses) shows up only after 2 s.
   The one exception is `~/.astra/plugins/` (`AstraPaths.PluginsDir`, owner-only): magpie's plugin host
   and Bun need files — `plugin-auth.json` (plugin sign-ins in OpenCode's auth.json shape, plaintext by
   that format, never logged or returned by the API), `packages/` (`bun add` / npm tarball installs),

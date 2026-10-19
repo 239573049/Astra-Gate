@@ -17,17 +17,30 @@ public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<
     private const int BatchSize = 50;
     private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(1);
 
-    private readonly Channel<RequestRecord> _queue = Channel.CreateUnbounded<RequestRecord>(
-        new UnboundedChannelOptions { SingleReader = true });
+    /// <summary>
+    /// Buffered records before a finishing request waits for the writer. Keep burst absorption modest: completed
+    /// records retain their spans and billing data, and a large backlog increases both memory and persistence lag.
+    /// Waiting producers still own their records, so this bounds the channel, not all outstanding requests.
+    /// </summary>
+    public const int QueueCapacity = 2_000;
+
+    private readonly Channel<RequestRecord> _queue = Channel.CreateBounded<RequestRecord>(
+        new BoundedChannelOptions(QueueCapacity) { SingleReader = true, FullMode = BoundedChannelFullMode.Wait });
 
     private int _pending;
     private Exception? _writeError;
 
-    public void Enqueue(RequestRecord record)
+    /// <summary>Queues a finished request; completes at once unless <see cref="QueueCapacity"/> records are waiting.</summary>
+    public async ValueTask EnqueueAsync(RequestRecord record)
     {
         ledger?.Add(record);
         Interlocked.Increment(ref _pending);
-        if (!_queue.Writer.TryWrite(record))
+        if (_queue.Writer.TryWrite(record)) return;
+        try
+        {
+            await _queue.Writer.WriteAsync(record);
+        }
+        catch (ChannelClosedException)
         {
             Interlocked.Decrement(ref _pending);
             logger.LogWarning("Usage writer closed; dropping request {Id}", record.Id);

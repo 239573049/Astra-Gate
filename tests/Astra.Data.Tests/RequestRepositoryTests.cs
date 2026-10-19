@@ -720,6 +720,154 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Logged_Rows_Keep_The_Storage_Classes_Queries_Compare_Against()
+    {
+        // The request, span and usage-item rows are bound by RowInserter, not Dapper: bools stay INTEGER 0/1, prices
+        // TEXT, timestamps the fixed-width text format, so "passthrough = 1" and string ordering keep working.
+        var db = await TestDb.InitializeAsync();
+        var record = Success("01TEST0000000000000000003A", T0, "codex", "p1", "Alpha", "gpt-5", 1_000, 100, 10, 200,
+            new RequestUsageItem { TokenType = "input", Tokens = 100, UnitPrice = "0.000003", IsPerCall = false, CostNanoUsd = 300 });
+        record.Spans.Add(new TraceSpan { SpanId = "s1", Name = "gateway.request", StartUs = 5, DurationUs = 7 });
+        await db.Requests.InsertBatchAsync([record]);
+
+        await using var conn = await db.Factory.OpenAsync();
+        Assert.Equal("integer|integer|integer|text|integer|real|2026-10-01T10:00:00.000Z|1", await conn.ExecuteScalarAsync<string>("""
+            SELECT typeof(passthrough) || '|' || typeof(stream) || '|' || typeof(remote) || '|' || typeof(started_at_utc) || '|'
+                   || typeof(ttft_ms) || '|' || typeof(output_tps) || '|' || started_at_utc || '|' || passthrough
+            FROM requests
+            """));
+        Assert.Equal("integer|text|integer", await conn.ExecuteScalarAsync<string>(
+            "SELECT typeof(is_per_call) || '|' || typeof(unit_price) || '|' || typeof(cost_nanousd) FROM request_usage_items"));
+        Assert.Equal("integer|integer|text", await conn.ExecuteScalarAsync<string>(
+            "SELECT typeof(start_us) || '|' || typeof(duration_us) || '|' || typeof(name) FROM trace_spans"));
+    }
+
+    [Fact]
+    public async Task A_Batch_Adds_Up_To_The_Same_Counters_As_Its_Records_One_By_One()
+    {
+        // The writer sums a batch's counters per token, day and credential before one upsert each.
+        static List<RequestRecord> Records()
+        {
+            string[] tokens = ["t1", "t1", "t2", "t1", "t2", "t1", "t1"];
+            var list = new List<RequestRecord>();
+            for (var i = 0; i < tokens.Length; i++)
+            {
+                var r = Success($"01TEST00000000000000000F{i:D2}", i % 2 == 0 ? T0 : T2, "codex", i < 3 ? "p1" : "p2", "Alpha", "gpt-5",
+                    1_000 * (i + 1), 100 + i, 10 + i, 200);
+                r.TokenId = tokens[i];
+                r.CacheReadTokens = i;
+                r.ReasoningTokens = 2 * i;
+                list.Add(r);
+            }
+            list[1].GenerationMs = null;                                        // not timed: no TPS
+            list[2].Status = RequestStatus.UpstreamError;                       // counted, not a success
+            list[4].AccountId = "acc";                                          // its own credential row
+            list[5].Status = RequestStatus.GatewayError;
+            list[5].ErrorType = Astra.Core.Tokens.TokenLimits.RefusedErrorType; // logged, never counted
+            list[6].TokenId = "missing";                                        // no token row to add to
+            return list;
+        }
+        static async Task<string> CountersAsync(AstraDatabase db)
+        {
+            await using var conn = await db.Factory.OpenAsync();
+            var tables = new List<string>();
+            foreach (var sql in new[]
+                     {
+                         "SELECT * FROM token_usage_totals ORDER BY token_id",
+                         "SELECT * FROM token_usage_daily ORDER BY token_id, day",
+                         "SELECT * FROM provider_account_usage_totals ORDER BY provider_id, account_id",
+                         "SELECT id, last_used_at FROM tokens ORDER BY id",
+                     })
+            {
+                var rows = (await conn.QueryAsync(sql)).Select(r => string.Join(",", ((IDictionary<string, object?>)r).Select(kv => $"{kv.Key}={kv.Value}")));
+                tables.Add(string.Join("\n", rows));
+            }
+            return string.Join("\n--\n", tables);
+        }
+
+        var oneByOne = await TestDb.InitializeAsync();
+        var batched = await TestDb.InitializeAsync();
+        var now = DateTimeOffset.UtcNow;
+        foreach (var db in new[] { oneByOne, batched })
+        {
+            foreach (var id in new[] { "t1", "t2" })
+                await db.Tokens.InsertAsync(new Astra.Core.Tokens.TokenRecord { Id = id, Name = id, CreatedAt = now, UpdatedAt = now });
+            foreach (var id in new[] { "p1", "p2" })
+                await db.Providers.InsertAsync(new Astra.Core.Models.Provider { Id = id, Name = id, Category = "custom", AuthScheme = "bearer", Enabled = true });
+        }
+        var zone = Astra.Core.Tokens.UsagePeriods.Zone("Asia/Shanghai");
+        foreach (var record in Records()) await oneByOne.Requests.InsertBatchAsync([record], usageZone: zone);
+        await batched.Requests.InsertBatchAsync(Records(), usageZone: zone);
+
+        var expected = await CountersAsync(oneByOne);
+        Assert.Contains("token_id=t1,requests=3,success_requests=3", expected); // the refused and the missing token's are not counted
+        Assert.Equal(expected, await CountersAsync(batched));
+    }
+
+    [Fact]
+    public async Task A_span_failure_rolls_back_prior_rows_and_releases_the_statement_for_the_next_batch()
+    {
+        var db = await TestDb.InitializeAsync();
+        var record = new RequestRecord
+        {
+            Id = "rollback", StartedAtUtc = T0, TokenId = "default",
+            Spans = [new TraceSpan { SpanId = "duplicate", Name = "one" }, new TraceSpan { SpanId = "duplicate", Name = "two" }],
+        };
+        await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(() => db.Requests.InsertBatchAsync([record]));
+        Assert.Null(await db.Requests.GetAsync(record.Id));
+        await using (var conn = await db.Factory.OpenAsync())
+            Assert.Equal(0, await conn.ExecuteScalarAsync<long>("SELECT count(*) FROM trace_spans"));
+
+        record.Spans.RemoveAt(1);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            db.Requests.InsertBatchAsync([record], new CancellationToken(canceled: true)));
+        Assert.Null(await db.Requests.GetAsync(record.Id));
+        await db.Requests.InsertBatchAsync([record]);
+        Assert.NotNull(await db.Requests.GetAsync(record.Id));
+        await using var read = await db.Factory.OpenAsync();
+        Assert.Equal(1, await read.ExecuteScalarAsync<long>("SELECT requests FROM token_usage_totals WHERE token_id = 'default'"));
+    }
+
+    [Fact]
+    public async Task Positional_inserts_preserve_unicode_nulls_and_large_integer_values_between_rows()
+    {
+        var db = await TestDb.InitializeAsync();
+        var first = new RequestRecord
+        {
+            Id = "first", StartedAtUtc = T0, ProviderName = "供应商🦜", ErrorMessage = "before\0after",
+            TotalInputTokens = 9_007_199_254_740_993L, CostNanoUsd = 9_007_199_254_740_995L,
+            TtftMs = 123, OutputTps = 0.125, Stream = true, Passthrough = true, Remote = true,
+            Spans = [new TraceSpan { SpanId = "s1", Name = "阶段🦜", StatusMessage = "消息" }],
+            UsageItems = [new RequestUsageItem { TokenType = "input", UnitPrice = "0.000000001", IsPerCall = true }],
+        };
+        var second = new RequestRecord
+        {
+            Id = "second", StartedAtUtc = T0, ProviderName = "", ErrorMessage = null, TtftMs = null, OutputTps = null,
+            Spans = [new TraceSpan { SpanId = "s1", Name = "", StatusMessage = null }],
+            UsageItems = [new RequestUsageItem { TokenType = "input", UnitPrice = "0", IsPerCall = false }],
+        };
+        await db.Requests.InsertBatchAsync([first, second]);
+        var stored = (await db.Requests.GetAsync("first"))!;
+        Assert.Equal(first.ProviderName, stored.ProviderName);
+        Assert.Equal(first.ErrorMessage, stored.ErrorMessage);
+        Assert.Equal(first.TotalInputTokens, stored.TotalInputTokens);
+        Assert.Equal(first.CostNanoUsd, stored.CostNanoUsd);
+        Assert.Equal(first.OutputTps, stored.OutputTps);
+        Assert.True(stored.Stream && stored.Passthrough && stored.Remote);
+        var empty = (await db.Requests.GetAsync("second"))!;
+        Assert.Equal("", empty.ProviderName);
+        Assert.Null(empty.ErrorMessage);
+        Assert.Null(empty.TtftMs);
+        Assert.Null(empty.OutputTps);
+        Assert.False(empty.Stream || empty.Passthrough || empty.Remote);
+        await using var conn = await db.Factory.OpenAsync();
+        Assert.Equal("消息", await conn.ExecuteScalarAsync<string>("SELECT status_message FROM trace_spans WHERE request_id = 'first'"));
+        Assert.Null(await conn.ExecuteScalarAsync<string>("SELECT status_message FROM trace_spans WHERE request_id = 'second'"));
+        Assert.Equal("0.000000001", await conn.ExecuteScalarAsync<string>("SELECT unit_price FROM request_usage_items WHERE request_id = 'first'"));
+        Assert.Equal(0, await conn.ExecuteScalarAsync<int>("SELECT is_per_call FROM request_usage_items WHERE request_id = 'second'"));
+    }
+
+    [Fact]
     public async Task Requests_And_Stats_Filter_And_Group_By_Token_With_Current_Name()
     {
         var db = await TestDb.InitializeAsync();

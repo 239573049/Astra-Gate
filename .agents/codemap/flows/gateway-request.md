@@ -2,7 +2,7 @@
 flow: gateway-request
 modules: [astra-gateway, astra-core, astra-data, astra-providers, astra-plugins, astra-server]
 commit: 6324e30
-updated: 2026-10-18
+updated: 2026-10-20
 ---
 # Gateway request
 
@@ -19,7 +19,8 @@ restored, and a request row, its span tree and usage counters were queued for pe
    `StartedAtUtc`, `Remote` from `RequestOrigin.IsRemote`, client IP), sets `x-astra-request-id`, and publishes it to
    `Pipeline/LiveRequestFeed.cs:LiveRequestFeed.Start` so the console shows it immediately.
 3. `Pipeline/GatewayRouter.cs:GatewayRouter.ResolveAsync` — resolves the bearer token/key into a `GatewayRoute`
-   (token, client kind, provider). A request marked remote always needs a token even when
+   (token, client kind, provider); the token, provider and client rows come from `astra-data`'s `RowCache`, so a steady
+   request reads no SQLite here (an admin write invalidates it at once). A request marked remote always needs a token even when
    `RequireGatewayKey=false`; that switch only opens the gateway to this machine (`Pipeline/GatewayRouter.cs`). A bare
    token with a provider pool (`tokens.pool_json`, `Core/Tokens/TokenPool.cs`, issue #2) gets a route whose `Targets`
    are its usable members and whose `Pool` is set; `<token>.<kind>` calls never use the pool.
@@ -28,7 +29,9 @@ restored, and a request row, its span tree and usage counters were queued for pe
 5. `Pipeline/RequestBody.cs:RequestBody.ReadAsync` — the body is read once into a pooled UTF-8 buffer; everything
    after this reads that buffer or one JSON tree over it.
 6. ⇢ in-process call into `astra-plugins`: `Pipeline/GatewayPipeline.cs:GatewayPipeline.HandleAsync` calls
-   `MiddlewareEngine.BeginAsync` (`src/Astra.Plugins/Middleware/MiddlewareEngine.cs`) with the agent's own body.
+   `MiddlewareEngine.BeginAsync` (`src/Astra.Plugins/Middleware/MiddlewareEngine.cs`) with the agent's own body; the
+   request info (model and stream flag, `GatewayMiddleware.Info`, a scan of the whole body) is built only when a
+   middleware is loaded.
    A hook may rewrite the bytes or reject; a rewrite is `RequestBody.Replace`, a reply is wrapped by
    `Plugins/MiddlewareResponseStream.cs:MiddlewareResponseStream.Install`. The reject is thrown in the agent's own
    error shape (`Plugins/GatewayMiddleware.cs:GatewayMiddleware.Rejected`).
@@ -60,7 +63,7 @@ restored, and a request row, its span tree and usage counters were queued for pe
    `SubscriptionSupport.EnforceClientPolicy` (`Pipeline/UpstreamAuthResolver.cs`) rejects before capability discovery
    can send anything.
 11. `Pipeline/EffectiveModelResolver.cs` + `IModelProtocolResolver` — the upstream model and the protocols the
-    provider actually supports are resolved (capability discovery may hit the network).
+    provider actually supports are resolved without merging billing data (`ResolveProviderModelAsync`; capability discovery may hit the network). Unlisted names use the cached immutable matcher; provider-model misses share the 2-second/generation invalidation and 4,096-entry cache bound. Effective pricing is merged once afterwards, against the then-current catalog.
 12. `Pipeline/GatewayRouter.cs:GatewayRouter.SelectEndpoint` + `Protocol/GatewayCodecs.cs:GatewayCodecs.Register` —
     the upstream protocol is chosen per model; `passthrough = upstreamProtocol == inbound`. With passthrough the
     client's own bytes (or the middleware's rewrite) go upstream; otherwise `IProtocolCodec.DecodeRequest` builds the
@@ -85,7 +88,9 @@ restored, and a request row, its span tree and usage counters were queued for pe
     forced-stream-when-client-wanted-JSON: `CollapseStreamAsync`), `Pipeline/RequestBilling.cs` prices the usage, and
     an upstream failure goes through `ForwardErrorAsync` — rendered in the **inbound** protocol's error shape.
 16. `finally`: `Finish` builds the record (status, tokens, cost, protocol, passthrough), `FinishTrace` writes its
-    spans, `usageWriter.Enqueue(record)` hands it to `Pipeline/UsageWriter.cs`, which batch-writes through
+    spans, `usageWriter.EnqueueAsync(record)` hands it to `Pipeline/UsageWriter.cs` (a bounded channel: past
+    `QueueCapacity` = 2,000 buffered records a finishing request waits for the writer; waiting producers still
+    retain their records, so this is not a bound on all outstanding work), which batch-writes through
     `RequestRepository` in the same transaction that accumulates `token_usage_totals` / `token_usage_daily` and
     `provider_account_usage_totals` (the final account, or the provider's own API key), then
     tells `TokenUsageLedger.Persisted`. `LiveRequestFeed.Finish` closes the live row.
@@ -114,7 +119,7 @@ sequenceDiagram
   U-->>P: SSE chunks / JSON
   P->>PR: ChunkRestorer.Push / Restore
   PR-->>C: restored answer
-  P->>D: UsageWriter.Enqueue -> request row + counters
+  P->>D: UsageWriter.EnqueueAsync -> request row + counters
 ```
 
 ## Errors and cancellation

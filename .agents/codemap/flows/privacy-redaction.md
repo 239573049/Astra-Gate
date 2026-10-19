@@ -92,7 +92,7 @@ that row is what the console's interception log, stats, request detail and the p
     `Flush` (`:46`) is the only thing that ends the stream. An empty map is a pass-through and `_holdback` is 0
     (`astra-core`)
 16. `src/Astra.Gateway/Pipeline/GatewayPipeline.cs:509` `Finish` + `:510` `FinishTrace` →
-    `:520` `usageWriter.Enqueue(record)` → `UsageWriter` batch → `RequestRepository.InsertBatchAsync`
+    `:520` `usageWriter.EnqueueAsync(record)` → `UsageWriter` batch → `RequestRepository.InsertBatchAsync`
     (`src/Astra.Data/Repositories/RequestRepository.cs:297`, `privacy_json` at `:347`) (`astra-server`/`astra-data`)
 17. ⇢ crosses process boundary via HTTP with cookies + `X-Astra-Admin: 1` (`web/src/api/client.ts`) —
     `web/src/api/hooks.ts:575` `usePrivacy`, `:578` `useUpdatePrivacy`, `:587` `usePrivacyDryRun`,

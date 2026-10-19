@@ -15,6 +15,7 @@ public sealed class ForeignSqliteOpener : IForeignDbOpener
     public IForeignDb Open(string path)
     {
         if (!File.Exists(path)) throw new ForeignDbException($"Database not found: {path}");
+        SqliteSetup.Ensure();
         var conn = new SqliteConnection(new SqliteConnectionStringBuilder
         {
             DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false, DefaultTimeout = 3,

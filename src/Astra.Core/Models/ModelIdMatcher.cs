@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 
 namespace Astra.Core.Models;
@@ -6,6 +7,46 @@ namespace Astra.Core.Models;
 public static partial class ModelIdMatcher
 {
     public sealed record Candidate(string SystemModelId, IReadOnlyList<string> Aliases);
+
+    /// <summary>
+    /// Immutable lookup for repeated matches against one catalog snapshot. Normalizes the catalog once, rather
+    /// than once per request. Like <see cref="Match"/>, ties in each matching tier go to the first candidate.
+    /// </summary>
+    public sealed class Index
+    {
+        private readonly FrozenDictionary<string, string> _exact;
+        private readonly FrozenDictionary<string, string> _aliases;
+        private readonly FrozenDictionary<string, string> _normalized;
+
+        public Index(IEnumerable<Candidate> candidates)
+        {
+            var exact = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var aliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var normalized = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var candidate in candidates)
+            {
+                exact.TryAdd(candidate.SystemModelId, candidate.SystemModelId);
+                normalized.TryAdd(Normalize(candidate.SystemModelId), candidate.SystemModelId);
+                foreach (var alias in candidate.Aliases)
+                {
+                    aliases.TryAdd(alias, candidate.SystemModelId);
+                    normalized.TryAdd(Normalize(alias), candidate.SystemModelId);
+                }
+            }
+            _exact = exact.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            _aliases = aliases.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+            _normalized = normalized.ToFrozenDictionary(StringComparer.Ordinal);
+        }
+
+        public string? Match(string upstreamModelId, IReadOnlyDictionary<string, string>? upstreamIdIndex = null)
+        {
+            if (_exact.TryGetValue(upstreamModelId, out var exact)) return exact;
+            if (upstreamIdIndex is not null && upstreamIdIndex.TryGetValue(upstreamModelId, out var upstream)) return upstream;
+            if (_aliases.TryGetValue(upstreamModelId, out var alias)) return alias;
+            var normalized = Normalize(upstreamModelId);
+            return normalized.Length > 0 && _normalized.TryGetValue(normalized, out var match) ? match : null;
+        }
+    }
 
     public static string? Match(string upstreamModelId, IEnumerable<Candidate> candidates,
         IReadOnlyDictionary<string, string>? upstreamIdIndex = null)

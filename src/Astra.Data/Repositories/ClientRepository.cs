@@ -18,7 +18,16 @@ public sealed class ClientRepository
 
     private readonly SqliteConnectionFactory _factory;
 
-    public ClientRepository(SqliteConnectionFactory factory) => _factory = factory;
+    // Every "<token>.<kind>" request reads its client and bindings (see RowCache); handed out as copies.
+    private readonly RowCache<string, ClientRecord> _clients;
+    private readonly RowCache<string, List<ClientBinding>> _bindings;
+
+    public ClientRepository(SqliteConnectionFactory factory)
+    {
+        _factory = factory;
+        _clients = new RowCache<string, ClientRecord>(factory);
+        _bindings = new RowCache<string, List<ClientBinding>>(factory);
+    }
 
     /// <summary>All configured clients, ordered by kind. Empty when none is configured.</summary>
     public async Task<IReadOnlyList<ClientRecord>> ListAsync(CancellationToken ct = default)
@@ -29,8 +38,12 @@ public sealed class ClientRepository
 
     public async Task<ClientRecord?> GetAsync(string kind, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        return await conn.QuerySingleOrDefaultAsync<ClientRecord>($"{ClientSelect} WHERE kind = @kind", new { kind });
+        var client = await _clients.GetAsync(kind, async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return await conn.QuerySingleOrDefaultAsync<ClientRecord>($"{ClientSelect} WHERE kind = @kind", new { kind = key });
+        }, ct);
+        return client?.Clone();
     }
 
     /// <summary>Inserts or updates the client row by kind.</summary>
@@ -123,10 +136,14 @@ public sealed class ClientRepository
     /// <summary>All bindings of one client ordered by priority — the order the gateway tries them in for a model.</summary>
     public async Task<IReadOnlyList<ClientBinding>> ListBindingsAsync(string clientKind, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        return (await conn.QueryAsync<ClientBinding>(
-            $"{BindingSelect} WHERE client_kind = @client_kind ORDER BY priority",
-            new { client_kind = clientKind })).ToList();
+        var bindings = await _bindings.GetAsync(clientKind, async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return (await conn.QueryAsync<ClientBinding>(
+                $"{BindingSelect} WHERE client_kind = @client_kind ORDER BY priority",
+                new { client_kind = key })).ToList();
+        }, ct);
+        return bindings!.Select(b => b.Clone()).ToList();
     }
 
     /// <summary>

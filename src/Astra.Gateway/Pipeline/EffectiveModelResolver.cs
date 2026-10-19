@@ -23,23 +23,27 @@ public sealed class EffectiveModelResolver(AstraDatabase db)
     public async Task<(ProviderModel Model, EffectiveModel Effective)> ResolveByModelIdAsync(
         Provider provider, string modelId, CancellationToken ct = default)
     {
-        var pm = await db.Providers.GetModelAsync(provider.Id, modelId, ct)
-                 ?? new ProviderModel
-                 {
-                     ProviderId = provider.Id,
-                     ModelId = modelId,
-                     SystemModelId = await LinkAsync(provider, modelId, ct),
-                     Enabled = true,
-                 };
+        var pm = await ResolveProviderModelAsync(provider, modelId, ct);
         return (pm, await ResolveAsync(provider, pm, ct));
     }
+
+    /// <summary>Resolves identity and capabilities without loading and merging billing data.</summary>
+    public async Task<ProviderModel> ResolveProviderModelAsync(Provider provider, string modelId, CancellationToken ct = default) =>
+        await db.Providers.GetModelAsync(provider.Id, modelId, ct)
+        ?? new ProviderModel
+        {
+            ProviderId = provider.Id,
+            ModelId = modelId,
+            SystemModelId = await LinkAsync(provider, modelId, ct),
+            Enabled = true,
+        };
 
     /// <summary>Auto-link an upstream model id to a system model (exact → provider upstream id → alias → normalized).</summary>
     public async Task<string?> LinkAsync(Provider provider, string modelId, CancellationToken ct = default)
     {
-        var candidates = await db.Models.GetMatcherCandidatesAsync(ct);
+        var matcher = await db.Models.GetMatcherIndexAsync(ct);
         var priceKey = provider.PriceKey ?? provider.TemplateId;
         var index = priceKey is null ? null : await db.Models.GetUpstreamIdIndexAsync(priceKey, ct);
-        return ModelIdMatcher.Match(modelId, candidates, index);
+        return matcher.Match(modelId, index);
     }
 }

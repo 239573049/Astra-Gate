@@ -726,6 +726,53 @@ public class ClientApiTests
         Assert.Equal(["gpt-5"], OpenCodeModels(config));
     }
 
+    [Fact]
+    public async Task A_Client_Nobody_Configured_Defaults_To_The_First_Usable_Provider_Without_Storing_It()
+    {
+        await using var host = await TestHost.StartAsync();
+        Assert.Null((await ClientInfo(host, "codex"))["providerId"]); // nothing to default to yet
+
+        var off = await AddProvider(host, "A disabled one");
+        off.Enabled = false;
+        await host.Db.Providers.UpdateAsync(off);
+        var first = await AddProvider(host, "B first usable");
+        await AddProvider(host, "C second");
+        var info = await ClientInfo(host, "codex");
+        Assert.False(info["enabled"]!.GetValue<bool>());
+        Assert.Equal(first.Id, info["providerId"]!.GetValue<string>());
+        Assert.Equal([first.Id], info["bindings"]!.AsArray().Select(b => b!["providerId"]!.GetValue<string>()));
+        Assert.Equal(["gpt-5"], (await host.GetJsonAsync("/api/clients/codex/models")).AsArray().Select(m => m!.GetValue<string>()));
+        // A read never writes: the default is shown, not stored.
+        Assert.Empty(await host.Db.Clients.ListAsync());
+        Assert.Empty(await host.Db.Clients.ListBindingsAsync("codex"));
+
+        // Editing the list stores what the page showed, the default first.
+        var (status, edited) = await host.SendAsync(HttpMethod.Put, "/api/clients/codex/bindings",
+            new { bindings = new[] { new { providerId = first.Id }, new { providerId = (await host.Db.Providers.ListAsync()).First(p => p.Name == "C second").Id } } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(first.Id, edited!["providerId"]!.GetValue<string>());
+        Assert.Equal(2, (await host.Db.Clients.ListBindingsAsync("codex")).Count);
+    }
+
+    [Fact]
+    public async Task Enabling_Without_Naming_A_Provider_Uses_And_Stores_The_Default()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        await WriteCodexConfig(host);
+        var (status, enabled) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(provider.Id, enabled!["providerId"]!.GetValue<string>());
+        Assert.Equal([provider.Id], (await host.Db.Clients.ListBindingsAsync("codex")).Select(b => b.ProviderId));
+
+        // Once enabled, an empty list is no longer papered over: the gateway would refuse it, so the page must not claim a provider.
+        await host.Db.Clients.ReplaceBindingsAsync("codex", []);
+        Assert.Null((await ClientInfo(host, "codex"))["providerId"]);
+    }
+
+    private static async Task<JsonNode> ClientInfo(TestHost host, string kind) =>
+        (await host.GetJsonAsync("/api/clients")).AsArray().First(c => c!["kind"]!.GetValue<string>() == kind)!;
+
     private static async Task<Provider> AddProvider(TestHost host, string name = "Mock provider")
     {
         var provider = new Provider { Id = Ulid.NewUlid(), Name = name, AuthScheme = AuthSchemes.None,

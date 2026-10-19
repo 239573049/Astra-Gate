@@ -34,7 +34,7 @@ without ever seeing upstream providers or accounts.
    provider or account — the caller may be someone the token was shared with.
 6. `src/Astra.Gateway/Pipeline/TokenUsageLedger.cs:TokenUsageLedger` — in-memory usage. A token's book loads
    `token_usage_daily` (last `DaysKept` = 40 days) plus `token_usage_totals` once, then `Add(record)` applies every
-   finished request the instant `UsageWriter.Enqueue` queues it; records queued before a load are kept in `_pending`
+   finished request the instant `UsageWriter.EnqueueAsync` queues it; records queued before a load are kept in `_pending`
    and replayed. `Persisted` drops them once the rows are in the database. The RPM window (`TryTakeMinuteSlot`) is
    deliberately not persisted — a restart clears it. Changing `AppSettings.UsageTimeZone` drops every loaded book.
 7. Settlement: `src/Astra.Gateway/Pipeline/RequestBilling.cs:RequestBilling` prices the usage,

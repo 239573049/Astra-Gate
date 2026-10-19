@@ -18,6 +18,11 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Smart routing decisions](smart-routing-decisions.md) — virtual model trigger, judge is not a Provider, session pin by default, neither a fallback nor the lowest grade is pinned, a grade names its provider (limited tokens keep to theirs), the request log marks each decision, the OpenAI dialect is still a draft
 - [Smart routing's cold judge](smart-routing-cold-judge.md) — the first real use timed out on every cold connection and sent "1+1" to the fallback grade; why the judge has its own long-lived HTTP/2 client
 - [Enterprise join uses API key](enterprise-join-uses-api-key.md) — `astra join` takes gateway URL + company-issued API key; join codes rejected
+- [Gateway read cache](gateway-read-cache.md) — why per-request SQLite reads go through RowCache (Generation + 2 s MaxAge), and the SQLite mutex/PRAGMA findings behind it
+- [Usage writer ceiling](usage-writer-ceiling.md) — 2,000-record buffering trades ~6% sustained throughput for ~39% lower RSS; 1,000 cost more throughput; ordinal binding +73% is isolated AOT; include drain
+- [Dapper.AOT sequence cast](dapper-aot-sequence-cast.md) — a List<anonymous> sequence parameter throws InvalidCastException at run time; pass IEnumerable
+- [astra-server --help starts a server](astra-server-flag-first-serves.md) — a flag-first call runs `serve` on ~/.astra and overwrites runtime.json; use ASTRA_HOME for throwaway servers
+- [Client default provider is read-side](client-default-provider-read-side.md) — a client with no bindings reads as bound to the first usable provider; stored on enable or a bindings edit, never on read
 
 ## Reference
 

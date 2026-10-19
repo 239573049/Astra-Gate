@@ -3,6 +3,7 @@ using Dapper;
 using Astra.Core;
 using Astra.Core.Requests;
 using Astra.Core.Tokens;
+using Microsoft.Data.Sqlite;
 
 namespace Astra.Data.Repositories;
 
@@ -267,56 +268,110 @@ public sealed class RequestRepository
         FROM request_usage_items
         """;
 
-    private const string InsertRequestSql = """
-        INSERT INTO requests(id, started_at_utc, client_kind, token_id, token_name, provider_id, provider_name, inbound_protocol,
-                             upstream_protocol, passthrough, requested_model, upstream_model, system_model_id,
-                             response_model,
-                             stream, service_tier, status, http_status, error_type, error_message,
-                             upstream_request_id, ttfb_ms, ttft_ms, total_ms, generation_ms, output_tps,
-                             total_input_tokens, total_output_tokens, cache_read_tokens, cache_write_tokens,
-                             reasoning_tokens, cost_nanousd, usage_source, usage_raw_json,
-                             pricing_snapshot_json, pricing_source, price_key, billing_trace_json,
-                             billing_description, privacy_json, routing_json, body_ref, user_agent,
-                             reasoning_effort, reasoning_mode, reasoning_budget_tokens, account_id, remote, client_ip,
-                             trace_id, parent_span_id, session_key, chain_key, turn_id, parent_request_id, step,
-                             call_kind, link_source, finish_reason, tool_calls)
-        VALUES (@id, @started_at_utc, @client_kind, @token_id, @token_name, @provider_id, @provider_name, @inbound_protocol,
-                @upstream_protocol, @passthrough, @requested_model, @upstream_model, @system_model_id,
-                @response_model,
-                @stream, @service_tier, @status, @http_status, @error_type, @error_message,
-                @upstream_request_id, @ttfb_ms, @ttft_ms, @total_ms, @generation_ms, @output_tps,
-                @total_input_tokens, @total_output_tokens, @cache_read_tokens, @cache_write_tokens,
-                @reasoning_tokens, @cost_nanousd, @usage_source, @usage_raw_json,
-                @pricing_snapshot_json, @pricing_source, @price_key, @billing_trace_json,
-                @billing_description, @privacy_json, @routing_json, @body_ref, @user_agent,
-                @reasoning_effort, @reasoning_mode, @reasoning_budget_tokens, @account_id, @remote, @client_ip,
-                @trace_id, @parent_span_id, @session_key, @chain_key, @turn_id, @parent_request_id, @step,
-                @call_kind, @link_source, @finish_reason, @tool_calls)
-        """;
+    // The three rows every logged request writes, column → value (the INSERT text is built from these lists).
+    private static readonly RowInserter<RequestRecord> RequestInsert = new("requests",
+    [
+        ("id", r => r.Id),
+        ("started_at_utc", r => DateTimeOffsetHandler.ToStorage(r.StartedAtUtc)),
+        ("client_kind", r => r.ClientKind),
+        ("token_id", r => r.TokenId),
+        ("token_name", r => r.TokenName),
+        ("provider_id", r => r.ProviderId),
+        ("provider_name", r => r.ProviderName),
+        ("inbound_protocol", r => r.InboundProtocol),
+        ("upstream_protocol", r => r.UpstreamProtocol),
+        ("passthrough", r => r.Passthrough),
+        ("requested_model", r => r.RequestedModel),
+        ("upstream_model", r => r.UpstreamModel),
+        ("system_model_id", r => r.SystemModelId),
+        ("response_model", r => r.ResponseModel),
+        ("stream", r => r.Stream),
+        ("service_tier", r => r.ServiceTier),
+        ("status", r => r.Status),
+        ("http_status", r => r.HttpStatus),
+        ("error_type", r => r.ErrorType),
+        ("error_message", r => r.ErrorMessage),
+        ("upstream_request_id", r => r.UpstreamRequestId),
+        ("ttfb_ms", r => r.TtfbMs),
+        ("ttft_ms", r => r.TtftMs),
+        ("total_ms", r => r.TotalMs),
+        ("generation_ms", r => r.GenerationMs),
+        ("output_tps", r => r.OutputTps),
+        ("total_input_tokens", r => r.TotalInputTokens),
+        ("total_output_tokens", r => r.TotalOutputTokens),
+        ("cache_read_tokens", r => r.CacheReadTokens),
+        ("cache_write_tokens", r => r.CacheWriteTokens),
+        ("reasoning_tokens", r => r.ReasoningTokens),
+        ("cost_nanousd", r => r.CostNanoUsd),
+        ("usage_source", r => r.UsageSource),
+        ("usage_raw_json", r => r.UsageRawJson),
+        ("pricing_snapshot_json", r => r.PricingSnapshotJson),
+        ("pricing_source", r => r.PricingSource),
+        ("price_key", r => r.PriceKey),
+        ("billing_trace_json", r => r.BillingTraceJson),
+        ("billing_description", r => r.BillingDescription),
+        ("privacy_json", r => r.PrivacyJson),
+        ("routing_json", r => r.RoutingJson),
+        ("body_ref", r => r.BodyRef),
+        ("user_agent", r => r.UserAgent),
+        ("reasoning_effort", r => r.ReasoningEffort),
+        ("reasoning_mode", r => r.ReasoningMode),
+        ("reasoning_budget_tokens", r => r.ReasoningBudgetTokens),
+        ("account_id", r => r.AccountId),
+        ("remote", r => r.Remote),
+        ("client_ip", r => r.ClientIp),
+        ("trace_id", r => r.TraceId),
+        ("parent_span_id", r => r.ParentSpanId),
+        ("session_key", r => r.SessionKey),
+        ("chain_key", r => r.ChainKey),
+        ("turn_id", r => r.TurnId),
+        ("parent_request_id", r => r.ParentRequestId),
+        ("step", r => r.Step),
+        ("call_kind", r => r.CallKind),
+        ("link_source", r => r.LinkSource),
+        ("finish_reason", r => r.FinishReason),
+        ("tool_calls", r => r.ToolCalls),
+    ]);
 
-    private const string InsertSpanSql = """
-        INSERT INTO trace_spans(request_id, span_id, parent_span_id, name, kind, start_us, duration_us, status,
-                                status_message, attributes_json, events_json)
-        VALUES (@request_id, @span_id, @parent_span_id, @name, @kind, @start_us, @duration_us, @status,
-                @status_message, @attributes_json, @events_json)
-        """;
+    private static readonly RowInserter<TraceSpan> SpanInsert = new("trace_spans",
+    [
+        ("request_id", span => span.RequestId),
+        ("span_id", span => span.SpanId),
+        ("parent_span_id", span => span.ParentSpanId),
+        ("name", span => span.Name),
+        ("kind", span => span.Kind),
+        ("start_us", span => span.StartUs),
+        ("duration_us", span => span.DurationUs),
+        ("status", span => span.Status),
+        ("status_message", span => span.StatusMessage),
+        ("attributes_json", span => span.AttributesJson),
+        ("events_json", span => span.EventsJson),
+    ]);
 
-    private const string InsertItemSql = """
-        INSERT INTO request_usage_items(request_id, token_type, tokens, is_per_call, unit_price, base_unit_price,
-                                        tier_applied, priced_as, multipliers_json, cost_nanousd, note)
-        VALUES (@request_id, @token_type, @tokens, @is_per_call, @unit_price, @base_unit_price,
-                @tier_applied, @priced_as, @multipliers_json, @cost_nanousd, @note)
-        """;
+    private static readonly RowInserter<RequestUsageItem> ItemInsert = new("request_usage_items",
+    [
+        ("request_id", item => item.RequestId),
+        ("token_type", item => item.TokenType),
+        ("tokens", item => item.Tokens),
+        ("is_per_call", item => item.IsPerCall),
+        ("unit_price", item => item.UnitPrice),
+        ("base_unit_price", item => item.BaseUnitPrice),
+        ("tier_applied", item => item.TierApplied),
+        ("priced_as", item => item.PricedAs),
+        ("multipliers_json", item => item.MultipliersJson),
+        ("cost_nanousd", item => item.CostNanoUsd),
+        ("note", item => item.Note),
+    ]);
 
     // Lifetime token counters (plan: tokens). Skipped when the token was deleted meanwhile (no row to attach to).
     private const string AddTokenTotalsSql = """
         INSERT INTO token_usage_totals(token_id, requests, success_requests, cost_nanousd, input_tokens, output_tokens,
                                        cache_read_tokens, cache_write_tokens, reasoning_tokens, tps_output_tokens, tps_generation_ms)
-        SELECT @token_id, 1, @success, @cost_nanousd, @input_tokens, @output_tokens, @cache_read_tokens, @cache_write_tokens,
+        SELECT @token_id, @requests, @success, @cost_nanousd, @input_tokens, @output_tokens, @cache_read_tokens, @cache_write_tokens,
                @reasoning_tokens, @tps_output_tokens, @tps_generation_ms
         WHERE EXISTS (SELECT 1 FROM tokens WHERE id = @token_id)
         ON CONFLICT(token_id) DO UPDATE SET
-            requests = requests + 1,
+            requests = requests + excluded.requests,
             success_requests = success_requests + excluded.success_requests,
             cost_nanousd = cost_nanousd + excluded.cost_nanousd,
             input_tokens = input_tokens + excluded.input_tokens,
@@ -331,10 +386,10 @@ public sealed class RequestRepository
     // Daily token counters (plan: alerts-webhooks-token-limits §1.2); same skip rule as the lifetime counters.
     private const string AddTokenDailySql = """
         INSERT INTO token_usage_daily(token_id, day, requests, success_requests, cost_nanousd, input_tokens, output_tokens)
-        SELECT @token_id, @day, 1, @success, @cost_nanousd, @input_tokens, @output_tokens
+        SELECT @token_id, @day, @requests, @success, @cost_nanousd, @input_tokens, @output_tokens
         WHERE EXISTS (SELECT 1 FROM tokens WHERE id = @token_id)
         ON CONFLICT(token_id, day) DO UPDATE SET
-            requests = requests + 1,
+            requests = requests + excluded.requests,
             success_requests = success_requests + excluded.success_requests,
             cost_nanousd = cost_nanousd + excluded.cost_nanousd,
             input_tokens = input_tokens + excluded.input_tokens,
@@ -347,10 +402,10 @@ public sealed class RequestRepository
 
     private const string AddProviderAccountTotalsSql = """
         INSERT INTO provider_account_usage_totals(provider_id, account_id, requests, input_tokens, output_tokens, cost_nanousd)
-        SELECT @provider_id, @account_id, 1, @input_tokens, @output_tokens, @cost_nanousd
+        SELECT @provider_id, @account_id, @requests, @input_tokens, @output_tokens, @cost_nanousd
         WHERE EXISTS (SELECT 1 FROM providers WHERE id = @provider_id)
         ON CONFLICT(provider_id, account_id) DO UPDATE SET
-            requests = requests + 1,
+            requests = requests + excluded.requests,
             input_tokens = input_tokens + excluded.input_tokens,
             output_tokens = output_tokens + excluded.output_tokens,
             cost_nanousd = cost_nanousd + excluded.cost_nanousd
@@ -404,159 +459,74 @@ public sealed class RequestRepository
     {
         if (records.Count == 0) return;
         var zone = usageZone ?? TimeZoneInfo.Local;
-        await using var conn = await _factory.OpenAsync(ct);
-        await using var tx = await conn.BeginTransactionAsync(ct);
         foreach (var record in records)
         {
             if (string.IsNullOrEmpty(record.Id)) record.Id = Ulid.NewUlid();
-            await conn.ExecuteAsync(InsertRequestSql, new
-            {
-                id = record.Id,
-                started_at_utc = DateTimeOffsetHandler.ToStorage(record.StartedAtUtc),
-                client_kind = record.ClientKind,
-                token_id = record.TokenId,
-                token_name = record.TokenName,
-                provider_id = record.ProviderId,
-                provider_name = record.ProviderName,
-                inbound_protocol = record.InboundProtocol,
-                upstream_protocol = record.UpstreamProtocol,
-                passthrough = record.Passthrough,
-                requested_model = record.RequestedModel,
-                upstream_model = record.UpstreamModel,
-                system_model_id = record.SystemModelId,
-                response_model = record.ResponseModel,
-                stream = record.Stream,
-                service_tier = record.ServiceTier,
-                status = record.Status,
-                http_status = record.HttpStatus,
-                error_type = record.ErrorType,
-                error_message = record.ErrorMessage,
-                upstream_request_id = record.UpstreamRequestId,
-                ttfb_ms = record.TtfbMs,
-                ttft_ms = record.TtftMs,
-                total_ms = record.TotalMs,
-                generation_ms = record.GenerationMs,
-                output_tps = record.OutputTps,
-                total_input_tokens = record.TotalInputTokens,
-                total_output_tokens = record.TotalOutputTokens,
-                cache_read_tokens = record.CacheReadTokens,
-                cache_write_tokens = record.CacheWriteTokens,
-                reasoning_tokens = record.ReasoningTokens,
-                cost_nanousd = record.CostNanoUsd,
-                usage_source = record.UsageSource,
-                usage_raw_json = record.UsageRawJson,
-                pricing_snapshot_json = record.PricingSnapshotJson,
-                pricing_source = record.PricingSource,
-                price_key = record.PriceKey,
-                billing_trace_json = record.BillingTraceJson,
-                billing_description = record.BillingDescription,
-                privacy_json = record.PrivacyJson,
-                routing_json = record.RoutingJson,
-                body_ref = record.BodyRef,
-                user_agent = record.UserAgent,
-                reasoning_effort = record.ReasoningEffort,
-                reasoning_mode = record.ReasoningMode,
-                reasoning_budget_tokens = record.ReasoningBudgetTokens,
-                account_id = record.AccountId,
-                remote = record.Remote,
-                client_ip = record.ClientIp,
-                trace_id = record.TraceId,
-                parent_span_id = record.ParentSpanId,
-                session_key = record.SessionKey,
-                chain_key = record.ChainKey,
-                turn_id = record.TurnId,
-                parent_request_id = record.ParentRequestId,
-                step = record.Step,
-                call_kind = record.CallKind,
-                link_source = record.LinkSource,
-                finish_reason = record.FinishReason,
-                tool_calls = record.ToolCalls,
-            }, transaction: tx);
-            // Tracing (.plan/observability.md §2.1): the request's span tree goes in with its row.
-            foreach (var span in record.Spans)
-            {
-                span.RequestId = record.Id;
-                await conn.ExecuteAsync(InsertSpanSql, new
-                {
-                    request_id = span.RequestId,
-                    span_id = span.SpanId,
-                    parent_span_id = span.ParentSpanId,
-                    name = span.Name,
-                    kind = span.Kind,
-                    start_us = span.StartUs,
-                    duration_us = span.DurationUs,
-                    status = span.Status,
-                    status_message = span.StatusMessage,
-                    attributes_json = span.AttributesJson,
-                    events_json = span.EventsJson,
-                }, transaction: tx);
-            }
-            foreach (var item in record.UsageItems)
-            {
-                item.RequestId = record.Id;
-                await conn.ExecuteAsync(InsertItemSql, new
-                {
-                    request_id = item.RequestId,
-                    token_type = item.TokenType,
-                    tokens = item.Tokens,
-                    is_per_call = item.IsPerCall,
-                    unit_price = item.UnitPrice,
-                    base_unit_price = item.BaseUnitPrice,
-                    tier_applied = item.TierApplied,
-                    priced_as = item.PricedAs,
-                    multipliers_json = item.MultipliersJson,
-                    cost_nanousd = item.CostNanoUsd,
-                    note = item.Note,
-                }, transaction: tx);
-            }
-            if (record.ProviderId is not null && TokenLimits.Counts(record))
-            {
-                await conn.ExecuteAsync(AddProviderAccountTotalsSql, new
-                {
-                    provider_id = record.ProviderId,
-                    account_id = record.AccountId ?? "",
-                    input_tokens = record.TotalInputTokens,
-                    output_tokens = record.TotalOutputTokens,
-                    cost_nanousd = record.CostNanoUsd,
-                }, transaction: tx);
-            }
-            if (record.TokenId is not null && TokenLimits.Counts(record))
-            {
-                // TPS only counts requests carrying both a measured generation window and output tokens: a timed
-                // request without usage would add time without tokens and drag the weighted speed down.
-                var timed = record.Status == RequestStatus.Success && record.GenerationMs > 0 && record.TotalOutputTokens > 0;
-                await conn.ExecuteAsync(AddTokenTotalsSql, new
-                {
-                    token_id = record.TokenId,
-                    success = record.Status == RequestStatus.Success ? 1 : 0,
-                    cost_nanousd = record.CostNanoUsd,
-                    input_tokens = record.TotalInputTokens,
-                    output_tokens = record.TotalOutputTokens,
-                    cache_read_tokens = record.CacheReadTokens,
-                    cache_write_tokens = record.CacheWriteTokens,
-                    reasoning_tokens = record.ReasoningTokens,
-                    tps_output_tokens = timed ? record.TotalOutputTokens : 0,
-                    tps_generation_ms = timed ? record.GenerationMs!.Value : 0,
-                }, transaction: tx);
-                await conn.ExecuteAsync(AddTokenDailySql, new
-                {
-                    token_id = record.TokenId,
-                    day = UsagePeriods.DayKey(record.StartedAtUtc, zone),
-                    success = record.Status == RequestStatus.Success ? 1 : 0,
-                    cost_nanousd = record.CostNanoUsd,
-                    input_tokens = record.TotalInputTokens,
-                    output_tokens = record.TotalOutputTokens,
-                }, transaction: tx);
-            }
-            if (record.TokenId is not null)
-            {
-                await conn.ExecuteAsync(TouchTokenSql, new
-                {
-                    token_id = record.TokenId,
-                    used_at = DateTimeOffsetHandler.ToStorage(record.StartedAtUtc),
-                }, transaction: tx);
-            }
+            foreach (var span in record.Spans) span.RequestId = record.Id;
+            foreach (var item in record.UsageItems) item.RequestId = record.Id;
         }
+        var counted = records.Where(TokenLimits.Counts).ToList();
+
+        // Untracked: this commits many times a second, and of the rows RowCache serves it only moves
+        // tokens.last_used_at, which the cached token lookup is allowed to lag on.
+        await using var conn = await _factory.OpenUntrackedAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        // Each statement runs over all of the batch's rows with one prepared command (preparing it per row was most of
+        // this method's cost): the requests first, then the span trees and usage items that reference them
+        // (.plan/observability.md §2.1). These three bind through RowInserter, the counters below through Dapper.
+        var sqliteTx = (SqliteTransaction)tx;
+        await RequestInsert.InsertAsync(conn, sqliteTx, records, ct);
+        await SpanInsert.InsertAsync(conn, sqliteTx, records.SelectMany(r => r.Spans), ct);
+        await ItemInsert.InsertAsync(conn, sqliteTx, records.SelectMany(r => r.UsageItems), ct);
+
+        // Counters are summed per key first: one upsert per credential, token and day instead of one per request.
+        await conn.ExecuteAsync(AddProviderAccountTotalsSql, counted.Where(r => r.ProviderId is not null)
+            .GroupBy(r => (ProviderId: r.ProviderId!, AccountId: r.AccountId ?? ""))
+            .Select(g => new
+            {
+                provider_id = g.Key.ProviderId,
+                account_id = g.Key.AccountId,
+                requests = g.Count(),
+                input_tokens = g.Sum(r => r.TotalInputTokens),
+                output_tokens = g.Sum(r => r.TotalOutputTokens),
+                cost_nanousd = g.Sum(r => r.CostNanoUsd),
+            }), transaction: tx);
+        // TPS only counts requests carrying both a measured generation window and output tokens: a timed request without
+        // usage would add time without tokens and drag the weighted speed down.
+        static bool Timed(RequestRecord r) => r.Status == RequestStatus.Success && r.GenerationMs > 0 && r.TotalOutputTokens > 0;
+        await conn.ExecuteAsync(AddTokenTotalsSql, counted.Where(r => r.TokenId is not null).GroupBy(r => r.TokenId!)
+            .Select(g => new
+            {
+                token_id = g.Key,
+                requests = g.Count(),
+                success = g.Count(r => r.Status == RequestStatus.Success),
+                cost_nanousd = g.Sum(r => r.CostNanoUsd),
+                input_tokens = g.Sum(r => r.TotalInputTokens),
+                output_tokens = g.Sum(r => r.TotalOutputTokens),
+                cache_read_tokens = g.Sum(r => r.CacheReadTokens),
+                cache_write_tokens = g.Sum(r => r.CacheWriteTokens),
+                reasoning_tokens = g.Sum(r => r.ReasoningTokens),
+                tps_output_tokens = g.Sum(r => Timed(r) ? r.TotalOutputTokens : 0),
+                tps_generation_ms = g.Sum(r => Timed(r) ? r.GenerationMs!.Value : 0),
+            }), transaction: tx);
+        await conn.ExecuteAsync(AddTokenDailySql, counted.Where(r => r.TokenId is not null)
+            .GroupBy(r => (TokenId: r.TokenId!, Day: UsagePeriods.DayKey(r.StartedAtUtc, zone)))
+            .Select(g => new
+            {
+                token_id = g.Key.TokenId,
+                day = g.Key.Day,
+                requests = g.Count(),
+                success = g.Count(r => r.Status == RequestStatus.Success),
+                cost_nanousd = g.Sum(r => r.CostNanoUsd),
+                input_tokens = g.Sum(r => r.TotalInputTokens),
+                output_tokens = g.Sum(r => r.TotalOutputTokens),
+            }), transaction: tx);
+        await conn.ExecuteAsync(TouchTokenSql, records.Where(r => r.TokenId is not null).GroupBy(r => r.TokenId!)
+            .Select(g => new
+            {
+                token_id = g.Key,
+                used_at = DateTimeOffsetHandler.ToStorage(g.Max(r => r.StartedAtUtc)),
+            }), transaction: tx);
         await tx.CommitAsync(ct);
     }
 

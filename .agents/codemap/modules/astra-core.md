@@ -42,7 +42,7 @@ token refresh (`astra-providers`); writing client config files (`astra-clients`)
 | `TokenTypes` | `src/Astra.Core/Billing/TokenTypes.cs:TokenTypes` | Token category constants, display order, input-like test, and the price fallback chain. |
 | `NormalizedUsage` | `src/Astra.Core/Billing/TokenTypes.cs:NormalizedUsage` | The counts themselves: `Tokens`/`Calls`, `TotalInput`, `MergeMax`. |
 | `ModelMerger.Merge` | `src/Astra.Core/Models/EffectiveModel.cs:ModelMerger` | Per-field system-model → provider-model overlay producing `EffectiveModel` + `Origins`. |
-| `ModelIdMatcher` | `src/Astra.Core/Models/ModelIdMatcher.cs:ModelIdMatcher` | Links an upstream model id to a system model: exact → index → alias → `Normalize`. |
+| `ModelIdMatcher` | `src/Astra.Core/Models/ModelIdMatcher.cs:ModelIdMatcher` | Links an upstream model id to a system model: exact → index → alias → `Normalize`. Its immutable `Index` precomputes the catalog for repeated matches, preserving tier priority and first-candidate ties. |
 | `Provider` | `src/Astra.Core/Models/Provider.cs:Provider` | Provider instance incl. `EndpointFor`, `ModelMap`/`MapModel`, `SettingFlag`, `PriceKey`, `PriceMultiplier`. |
 | `ProviderAccount` | `src/Astra.Core/Models/ProviderAccount.cs:ProviderAccount` | Subscription/plugin account: encrypted tokens, status, current/cooldown/sort-order switching state. Auth cooldowns prefix `LastError` with `401 ` / `403 `; quota headroom must not lift them. |
 | `EffectivePrivacyPolicy` | `src/Astra.Core/Privacy/PrivacyTypes.cs:EffectivePrivacyPolicy` | Per-request rule set compiled from settings; `ActionFor` resolves rule → category → client → default. |

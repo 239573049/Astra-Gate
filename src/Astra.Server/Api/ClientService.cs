@@ -56,7 +56,8 @@ public sealed class ClientService(
         // Probes every client's version in parallel up front (cached afterwards), so InfoAsync below stays cheap.
         var install = await installs.DescribeAllAsync(ct);
         var result = new List<ClientInfoDto>();
-        foreach (var adapter in _registry.All) result.Add(await InfoAsync(adapter, ct, install.GetValueOrDefault(adapter.Kind)));
+        var defaultProvider = DefaultProvider(ct); // read once for the whole list, only if some client needs it
+        foreach (var adapter in _registry.All) result.Add(await InfoAsync(adapter, ct, install.GetValueOrDefault(adapter.Kind), defaultProvider));
         return result;
     }
 
@@ -112,6 +113,24 @@ public sealed class ClientService(
             if (ClientKinds.HasModelList(kind)) await SyncModelListCoreAsync(kind, null, ct);
             return await InfoAsync(adapter, ct);
         }, ct);
+
+    /// <summary>The provider a client nobody has configured yet defaults to: the first usable one, in the providers page's order.</summary>
+    private Lazy<Task<string?>> DefaultProvider(CancellationToken ct) =>
+        new(async () => (await db.Providers.ListAsync(ct)).FirstOrDefault(ClientRouting.IsUsable)?.Id);
+
+    /// <summary>
+    /// The client's bindings, with a default for one nobody has chosen a provider for yet: until it is enabled, a client
+    /// with nothing stored is bound to <paramref name="defaultProvider"/>, so it is ready to enable the way cc-switch
+    /// treats its first provider as current. Read side only — nothing is stored until the client is enabled or its list
+    /// is edited, and an enabled client with no bindings stays unbound (the gateway refuses it, so the page must not
+    /// claim a provider).
+    /// </summary>
+    private async Task<IReadOnlyList<ClientBinding>> BindingsOrDefaultAsync(string kind, bool enabled, Lazy<Task<string?>> defaultProvider, CancellationToken ct)
+    {
+        var bindings = await db.Clients.ListBindingsAsync(kind, ct);
+        if (bindings.Count > 0 || enabled) return bindings;
+        return await defaultProvider.Value is { } id ? [new ClientBinding { ClientKind = kind, ProviderId = id }] : bindings;
+    }
 
     /// <summary>The bindings with <paramref name="providerId"/> as the primary: it replaces slot 0, later slots keep their order.</summary>
     private static List<ClientBinding> WithPrimary(IReadOnlyList<ClientBinding> bindings, string kind, string providerId, string? accountId) =>
@@ -302,7 +321,7 @@ public sealed class ClientService(
     {
         await RefreshRegistryAsync(ct);
         Require(kind);
-        var targets = await routing.TargetsAsync(await db.Clients.ListBindingsAsync(kind, ct), ct);
+        var targets = await routing.TargetsAsync(await BindingsOrDefaultAsync(kind, await IsEnabledAsync(kind, ct), DefaultProvider(ct), ct), ct);
         var models = (await routing.ListModelsAsync(targets, ct)).Select(m => m.Id).ToList();
         if (smartRouter.AdvertisedModel is { } virtualModel && !models.Contains(virtualModel)) models.Add(virtualModel);
         return models;
@@ -314,7 +333,7 @@ public sealed class ClientService(
         var adapter = Require(kind);
         if (adapter.Availability != ClientAvailability.Available) throw new AdminApiException(409, adapter.UnavailableReason ?? "Client not supported yet");
         var record = await db.Clients.GetAsync(kind, ct) ?? new ClientRecord { Kind = kind };
-        var bindings = await db.Clients.ListBindingsAsync(kind, ct);
+        var bindings = await BindingsOrDefaultAsync(kind, record.Enabled, DefaultProvider(ct), ct);
         var providerId = input["providerId"]?.GetValue<string>() ?? bindings.FirstOrDefault()?.ProviderId;
         if (string.IsNullOrWhiteSpace(providerId)) throw new AdminApiException(400, "Choose a provider first");
         await RequireProviderAsync(providerId, ct);
@@ -445,11 +464,11 @@ public sealed class ClientService(
         _ => "model",
     };
 
-    private async Task<ClientInfoDto> InfoAsync(IClientAdapter adapter, CancellationToken ct, ClientInstallDto? install = null)
+    private async Task<ClientInfoDto> InfoAsync(IClientAdapter adapter, CancellationToken ct, ClientInstallDto? install = null, Lazy<Task<string?>>? defaultProvider = null)
     {
         install ??= installs.Describe(adapter.Kind);
         var record = await db.Clients.GetAsync(adapter.Kind, ct);
-        var bindings = await db.Clients.ListBindingsAsync(adapter.Kind, ct);
+        var bindings = await BindingsOrDefaultAsync(adapter.Kind, record?.Enabled ?? false, defaultProvider ?? DefaultProvider(ct), ct);
         var warnings = new List<string>();
         ClientStatus? inspected = null;
         try { inspected = adapter.Inspect(); }

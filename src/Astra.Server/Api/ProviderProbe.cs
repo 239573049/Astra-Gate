@@ -309,7 +309,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                     catch (IOException) { }
                 }
             }
-            writer.Enqueue(record);
+            await writer.EnqueueAsync(record);
         }
 
         await run.EmitAsync("done", new JsonObject

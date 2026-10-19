@@ -103,10 +103,16 @@ public sealed class ClientRecord
     public string? ExtraJson { get; set; }
 
     public DateTimeOffset? AppliedAt { get; set; }
+
+    /// <summary>An independent copy (every member is an immutable value), for handing out cached rows.</summary>
+    public ClientRecord Clone() => (ClientRecord)MemberwiseClone();
 }
 
 public sealed class ClientBinding
 {
+    /// <summary>An independent copy (every member is an immutable value), for handing out cached rows.</summary>
+    public ClientBinding Clone() => (ClientBinding)MemberwiseClone();
+
     public string ClientKind { get; set; } = "";
     public string ProviderId { get; set; } = "";
 

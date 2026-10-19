@@ -60,6 +60,9 @@ public sealed class TokenRecord
 
     public List<string>? AllowedClients() =>
         string.IsNullOrWhiteSpace(AllowedClientsJson) ? null : Json.Deserialize<List<string>>(AllowedClientsJson) ?? [];
+
+    /// <summary>An independent copy (every member is an immutable value), for handing out cached rows.</summary>
+    public TokenRecord Clone() => (TokenRecord)MemberwiseClone();
 }
 
 /// <summary>Usage numbers of one token, either lifetime (persisted counters) or for a time range (from the request log).</summary>

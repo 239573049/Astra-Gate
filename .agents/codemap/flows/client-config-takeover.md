@@ -35,7 +35,7 @@ Astra's first write. Disabling puts the recorded originals back key by key, skip
    remembered)`: the 28 built-ins (`:30`) plus `PluginClientAdapter`s, cached in a `volatile` field keyed by
    (plugin generation, remembered plugin ids) (`astra-clients`, `astra-plugins`)
 7. `ClientService.PrepareAsync` (`:286`) — resolves the adapter and asserts `Availability == Available` (409
-   otherwise), loads/creates the `clients` row, requires an enabled provider, validates `extras.options` through
+   otherwise), loads/creates the `clients` row, requires an enabled provider (a client with no stored bindings that is not yet enabled reads as bound to the first usable provider — `BindingsOrDefaultAsync`, also behind `InfoAsync` / `ModelsAsync`; nothing is stored until enable or a bindings edit), validates `extras.options` through
    `ClientOptions.Validate` (`19d9778`), requires the token (`record.TokenId` ?? `TokenIds.Default`) and derives the
    key `GatewayTokens.ForClient(secrets.Unprotect(token.KeyEnc), kind)` (`astra-server`, `astra-core`)
 8. `ClientService.ContextAsync` (`:325`) → `EnableContext { GatewayBaseUrl, LocalKey, Model, Extras }`

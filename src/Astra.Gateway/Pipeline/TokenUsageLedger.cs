@@ -81,7 +81,7 @@ public sealed class TokenUsageLedger(AstraDatabase db, SettingsService settings,
         }
     }
 
-    /// <summary>A finished request was queued for writing (<see cref="UsageWriter.Enqueue"/>).</summary>
+    /// <summary>A finished request was queued for writing (<see cref="UsageWriter.EnqueueAsync"/>).</summary>
     public void Add(RequestRecord record)
     {
         if (record.TokenId is null || !TokenLimits.Counts(record)) return;

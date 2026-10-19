@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Data;
 using System.Text.Json.Nodes;
 using Dapper;
@@ -28,7 +29,21 @@ public sealed class ModelRepository
 
     private readonly SqliteConnectionFactory _factory;
 
-    public ModelRepository(SqliteConnectionFactory factory) => _factory = factory;
+    // Raw rows (mapped per call), or results nobody mutates: billing reads a request's system model and price table,
+    // and a model missing from its provider's list is linked through the whole candidate list (see RowCache).
+    private readonly RowCache<string, ModelRow> _models;
+    private readonly RowCache<string, List<PriceRow>> _prices;
+    private readonly RowCache<string, FrozenDictionary<string, string>> _upstreamIds;
+    private readonly RowCache<string, MatcherSnapshot> _candidates;
+
+    public ModelRepository(SqliteConnectionFactory factory)
+    {
+        _factory = factory;
+        _models = new RowCache<string, ModelRow>(factory, 4096);
+        _prices = new RowCache<string, List<PriceRow>>(factory, 4096);
+        _upstreamIds = new RowCache<string, FrozenDictionary<string, string>>(factory);
+        _candidates = new RowCache<string, MatcherSnapshot>(factory, 1);
+    }
 
     /// <summary>Lists all models ordered by vendor then id; <paramref name="search"/> filters across id, display name, vendor, family and aliases.</summary>
     public async Task<IReadOnlyList<SystemModel>> ListAsync(string? search = null, CancellationToken ct = default)
@@ -42,8 +57,11 @@ public sealed class ModelRepository
 
     public async Task<SystemModel?> GetAsync(string id, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var row = await conn.QuerySingleOrDefaultAsync<ModelRow>($"{ModelSelect} WHERE id = @id", new { id });
+        var row = await _models.GetAsync(id, async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return await conn.QuerySingleOrDefaultAsync<ModelRow>($"{ModelSelect} WHERE id = @id", new { id = key });
+        }, ct);
         return row?.ToModel();
     }
 
@@ -75,10 +93,13 @@ public sealed class ModelRepository
 
     public async Task<IReadOnlyList<ModelPrice>> ListPricesAsync(string modelId, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<PriceRow>($"{PriceSelect} WHERE model_id = @model_id ORDER BY price_key",
-            new { model_id = modelId });
-        return rows.Select(r => r.ToPrice()).ToList();
+        var rows = await _prices.GetAsync(modelId, async (key, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            return (await conn.QueryAsync<PriceRow>($"{PriceSelect} WHERE model_id = @model_id ORDER BY price_key",
+                new { model_id = key })).ToList();
+        }, ct);
+        return rows!.Select(r => r.ToPrice()).ToList();
     }
 
     public async Task<ModelPrice?> GetPriceAsync(string modelId, string priceKey, CancellationToken ct = default)
@@ -233,32 +254,49 @@ public sealed class ModelRepository
     }
 
     /// <summary>upstream_model_id → model_id for one price key (used by <see cref="ModelIdMatcher"/> auto-linking).</summary>
-    public async Task<Dictionary<string, string>> GetUpstreamIdIndexAsync(string priceKey, CancellationToken ct = default)
+    public async Task<IReadOnlyDictionary<string, string>> GetUpstreamIdIndexAsync(string priceKey, CancellationToken ct = default)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<UpstreamRow>("""
-            SELECT upstream_model_id AS UpstreamModelId, model_id AS ModelId
-            FROM model_prices
-            WHERE price_key = @price_key AND upstream_model_id IS NOT NULL
-            """, new { price_key = priceKey });
-        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var row in rows)
+        var index = await _upstreamIds.GetAsync(priceKey, async (key, token) =>
         {
-            if (!string.IsNullOrWhiteSpace(row.UpstreamModelId)) index[row.UpstreamModelId] = row.ModelId;
-        }
-        return index;
+            await using var conn = await _factory.OpenAsync(token);
+            var rows = await conn.QueryAsync<UpstreamRow>("""
+                SELECT upstream_model_id AS UpstreamModelId, model_id AS ModelId
+                FROM model_prices
+                WHERE price_key = @price_key AND upstream_model_id IS NOT NULL
+                """, new { price_key = key });
+            var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in rows)
+                if (!string.IsNullOrWhiteSpace(row.UpstreamModelId)) values[row.UpstreamModelId] = row.ModelId;
+            return values.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+        }, ct);
+        return index!;
     }
 
     /// <summary>Matcher candidates (system model id + aliases) for all enabled models.</summary>
-    public async Task<IReadOnlyList<ModelIdMatcher.Candidate>> GetMatcherCandidatesAsync(CancellationToken ct = default)
+    /// <remarks>Cached as built (records the matcher only reads): it covers every enabled model.</remarks>
+    public async Task<IReadOnlyList<ModelIdMatcher.Candidate>> GetMatcherCandidatesAsync(CancellationToken ct = default) =>
+        (await GetMatcherSnapshotAsync(ct)).Candidates;
+
+    /// <summary>Immutable matcher built with the candidates, sharing their generation and expiration.</summary>
+    public async Task<ModelIdMatcher.Index> GetMatcherIndexAsync(CancellationToken ct = default) =>
+        (await GetMatcherSnapshotAsync(ct)).Index;
+
+    private async Task<MatcherSnapshot> GetMatcherSnapshotAsync(CancellationToken ct)
     {
-        await using var conn = await _factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<CandidateRow>(
-            "SELECT id AS SystemModelId, aliases_json AS AliasesJson FROM models WHERE enabled = 1 ORDER BY id");
-        return rows.Select(r => new ModelIdMatcher.Candidate(
-            r.SystemModelId,
-            Json.Deserialize<List<string>>(r.AliasesJson) ?? [])).ToList();
+        var candidates = await _candidates.GetAsync("", async (_, token) =>
+        {
+            await using var conn = await _factory.OpenAsync(token);
+            var rows = await conn.QueryAsync<CandidateRow>(
+                "SELECT id AS SystemModelId, aliases_json AS AliasesJson FROM models WHERE enabled = 1 ORDER BY id");
+            var list = rows.Select(r => new ModelIdMatcher.Candidate(
+                r.SystemModelId,
+                (Json.Deserialize<List<string>>(r.AliasesJson) ?? []).AsReadOnly())).ToList().AsReadOnly();
+            return new MatcherSnapshot(list, new ModelIdMatcher.Index(list));
+        }, ct);
+        return candidates!;
     }
+
+    private sealed record MatcherSnapshot(IReadOnlyList<ModelIdMatcher.Candidate> Candidates, ModelIdMatcher.Index Index);
 
     /// <summary>model_id → price keys that have a provider-specific price (for model lists).</summary>
     public async Task<Dictionary<string, List<string>>> GetPriceKeysByModelAsync(CancellationToken ct = default)

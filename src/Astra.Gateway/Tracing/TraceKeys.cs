@@ -1,5 +1,8 @@
+using System.Buffers;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Gateway.Pipeline;
@@ -24,6 +27,12 @@ public static class TraceKeys
 
     /// <summary>Session ids kept verbatim are at most this long and use [A-Za-z0-9_-]; anything else is hashed.</summary>
     private const int MaxRawIdLength = 100;
+
+    /// <summary>
+    /// String values longer than this (raw JSON bytes) are read through a pooled buffer rather than as one string: an
+    /// agent's system prompt can run to hundreds of KB, and each copy would land on the large object heap.
+    /// </summary>
+    private const int LargeValueBytes = 4096;
 
     /// <summary>The trailing tool results of the request and whether its last message is user input.</summary>
     public static LastMessage LastMessageOf(ApiProtocol inbound, JsonObject body)
@@ -110,9 +119,9 @@ public static class TraceKeys
         }
         if (system.Length == 0 && first.Length == 0) return null;
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        hash.AppendData(Encoding.UTF8.GetBytes(system.ToString()));
+        AppendUtf8(hash, system);
         hash.AppendData("\n\0\n"u8);
-        hash.AppendData(Encoding.UTF8.GetBytes(first.ToString()));
+        AppendUtf8(hash, first);
         return "fp:" + Convert.ToHexStringLower(hash.GetHashAndReset().AsSpan(0, 12));
     }
 
@@ -215,26 +224,115 @@ public static class TraceKeys
         if (node is null || into.Length >= MaxFingerprintChars) return;
         switch (node)
         {
-            case JsonValue v when v.TryGetValue<string>(out var s):
-                Append(into, s);
+            case JsonValue v:
+                AppendString(into, v);
                 break;
             case JsonArray a:
                 foreach (var item in a) CollectText(item, into);
                 break;
             case JsonObject o:
                 if (Str(o, "type") is "tool_result" or "function_call_output" or "image" or "image_url" or "input_image" or "document") return;
-                if (o["text"] is JsonValue t && t.TryGetValue<string>(out var text)) Append(into, text);
-                else if (o["parts"] is JsonArray parts) CollectText(parts, into);
+                if (o["text"] is JsonValue t && AppendString(into, t)) break;
+                if (o["parts"] is JsonArray parts) CollectText(parts, into);
                 else if (o["content"] is { } content) CollectText(content, into);
                 break;
         }
     }
 
-    private static void Append(StringBuilder into, string text)
+    /// <summary>Appends a string value's text (see <see cref="Append"/>); false, appending nothing, when it is no string.</summary>
+    private static bool AppendString(StringBuilder into, JsonValue value)
+    {
+        if (value.TryGetValue<JsonElement>(out var element))
+        {
+            if (element.ValueKind != JsonValueKind.String) return false;
+            if (into.Length >= MaxFingerprintChars) return true;
+            var raw = JsonMarshal.GetRawUtf8Value(element);
+            if (raw.Length > LargeValueBytes)
+            {
+                var buffer = ArrayPool<char>.Shared.Rent(raw.Length);
+                try
+                {
+                    Append(into, buffer.AsSpan(0, Unescape(raw, buffer)));
+                }
+                finally
+                {
+                    ArrayPool<char>.Shared.Return(buffer);
+                }
+                return true;
+            }
+        }
+        if (!value.TryGetValue<string>(out var s)) return false;
+        Append(into, s);
+        return true;
+    }
+
+    /// <summary>A string value's length in UTF-16 code units (what <see cref="string.Length"/> gives); null when it is no string.</summary>
+    private static long? StringLength(JsonValue value)
+    {
+        if (value.TryGetValue<JsonElement>(out var element))
+        {
+            if (element.ValueKind != JsonValueKind.String) return null;
+            var raw = JsonMarshal.GetRawUtf8Value(element);
+            if (raw.Length > LargeValueBytes)
+            {
+                if (!raw.Contains((byte)'\\')) return Encoding.UTF8.GetCharCount(raw[1..^1]);
+                var buffer = ArrayPool<char>.Shared.Rent(raw.Length);
+                try
+                {
+                    return Unescape(raw, buffer);
+                }
+                finally
+                {
+                    ArrayPool<char>.Shared.Return(buffer);
+                }
+            }
+        }
+        return value.TryGetValue<string>(out var s) ? s.Length : null;
+    }
+
+    /// <summary>Unescapes a raw JSON string (quotes included) into <paramref name="into"/>, which must hold its byte length.</summary>
+    private static int Unescape(ReadOnlySpan<byte> rawString, Span<char> into)
+    {
+        var reader = new Utf8JsonReader(rawString);
+        reader.Read();
+        return reader.CopyString(into);
+    }
+
+    private static void Append(StringBuilder into, ReadOnlySpan<char> text)
     {
         var room = MaxFingerprintChars - into.Length;
         if (room <= 0) return;
         into.Append(text.Length <= room ? text : text[..room]).Append('\n');
+    }
+
+    /// <summary>
+    /// Hashes the UTF-8 of <paramref name="text"/> chunk by chunk — the same bytes as
+    /// <c>Encoding.UTF8.GetBytes(text.ToString())</c> (the stateful encoder carries a surrogate pair across chunks and
+    /// replaces a lone one), without the string and byte copies.
+    /// </summary>
+    private static void AppendUtf8(IncrementalHash hash, StringBuilder text)
+    {
+        var encoder = Encoding.UTF8.GetEncoder();
+        var bytes = ArrayPool<byte>.Shared.Rent(16 * 1024);
+        try
+        {
+            foreach (var chunk in text.GetChunks())
+            {
+                var chars = chunk.Span;
+                while (!chars.IsEmpty)
+                {
+                    encoder.Convert(chars, bytes, flush: false, out var used, out var written, out _);
+                    hash.AppendData(bytes, 0, written);
+                    chars = chars[used..];
+                }
+            }
+            encoder.Convert([], bytes, flush: true, out _, out var tail, out _);
+            hash.AppendData(bytes, 0, tail);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(bytes);
+        }
     }
 
     private static string Keep(string prefix, string id) =>
@@ -287,7 +385,7 @@ public static class TraceKeys
     /// <summary>Characters of text in a string, a list of blocks / parts, or an object with <c>parts</c>.</summary>
     private static long? TextLength(JsonNode? node) => node switch
     {
-        JsonValue v when v.TryGetValue<string>(out var s) => s.Length,
+        JsonValue v => StringLength(v),
         JsonArray a => a.Sum(x => TextLength(x is JsonObject o ? o["text"] ?? o["parts"] : x) ?? 0),
         JsonObject o => TextLength(o["parts"] ?? o["text"]),
         _ => null,

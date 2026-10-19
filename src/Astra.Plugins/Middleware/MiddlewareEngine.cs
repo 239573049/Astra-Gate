@@ -29,10 +29,16 @@ public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, strin
     private long _nextCheck;
 
     /// <summary>Starts a request's middleware; null when there is none.</summary>
-    public async ValueTask<MiddlewareRun?> BeginAsync(MiddlewareInfo info, CancellationToken ct = default)
+    public ValueTask<MiddlewareRun?> BeginAsync(MiddlewareInfo info, CancellationToken ct = default) => BeginAsync(() => info, ct);
+
+    /// <summary>
+    /// Starts a request's middleware, building its info only when there is one: the gateway's reads the model and
+    /// stream flag by scanning the whole body, which a large agent request should not pay for without a plugin.
+    /// </summary>
+    public async ValueTask<MiddlewareRun?> BeginAsync(Func<MiddlewareInfo> info, CancellationToken ct = default)
     {
         var set = await CurrentAsync(ct);
-        return set.Modules.Count == 0 ? null : new MiddlewareRun(set, info);
+        return set.Modules.Count == 0 ? null : new MiddlewareRun(set, info());
     }
 
     /// <summary>Each middleware plugin's state, by spec: its hooks and counts, or why it didn't load.</summary>
