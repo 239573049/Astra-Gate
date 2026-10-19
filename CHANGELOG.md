@@ -4,6 +4,13 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.11.6] - 2026-10-20
+
+### 修复
+
+- **WorkBuddy 的 `models.json` 顶层是空数组时也能启用**：以前只有文件内容恰好是 `[]` 才行；`[ ]`、换行的 `[\n]`、带注释的空数组会报「Cannot create 'models': parent is missing or not an object」，无法启用。现在这些都按空配置处理，文件里的注释保留。顶层是有内容的数组（或 `null`）时，Astra 仍不会改动文件，但会明确提示「the file's top level is an array, not an object」，请自行把内容挪进 `{"models": [...]}`。WorkBuddy AI 和 `astra-connect` 同样适用。
+- **DeepSeek Harness 里的模型有了思考程度选择**：以前 Astra 写进 Harness 的模型都没有声明思考能力，Harness 把它们当成不会思考的模型，输入框旁不显示思考程度。现在 Astra 已知会思考的模型会声明 `low` / `medium` / `high` 三档（Chat、Responses、Anthropic 三种协议的路由都有）。已启用的 Harness 需要在「客户端」页重新「应用」一次才生效；Astra 不确定是否支持思考的模型仍然不显示。
+
 ## [0.11.5] - 2026-10-20
 
 ### 改进
