@@ -461,8 +461,13 @@ export class JsoncEditor {
 
     const segments = splitPath(path);
     let data = this.blank && isSelector(segments[0]!) ? '[]' : this.data;
-    // A document that is just "[]" holds nothing to keep: an object key replaces it with "{}".
-    if (!isSelector(segments[0]!) && data.trim() === '[]') data = '{}';
+    // A document whose root is an empty array holds nothing to keep: an object key replaces the array with "{}".
+    // Spacing inside the brackets and comments around them do not matter, and the comments stay.
+    if (!isSelector(segments[0]!)) {
+      const root = build(data);
+      if (root.kind === 'array' && root.elements.length === 0)
+        data = splice(data, root.start, root.end, '{}');
+    }
     for (let i = 0; i < segments.length - 1; i++) {
       if (isSelector(segments[i]!)) {
         // Array elements are never created implicitly: only whole elements are appended.
@@ -486,6 +491,8 @@ export class JsoncEditor {
     }
     const last = segments[segments.length - 1]!;
     const selector = isSelector(last);
+    if (parentSegments.length === 0 && !selector && parent.kind !== 'object')
+      throw nonObjectRoot(path, parent.kind);
     if (parent.kind !== (selector ? 'array' : 'object'))
       throw new EditorException(
         `Cannot set '${last}' inside a non-${selector ? 'array' : 'object'} at '${parentSegments.join('.')}'.`,
@@ -597,12 +604,22 @@ export class JsoncEditor {
 
 // ------------------------------------------------------------------ container scaffolding
 
+/** A key cannot be written into a document whose top level is not an object (an empty array is replaced before this). */
+function nonObjectRoot(path: string, kind: Node['kind']): EditorException {
+  return new EditorException(
+    `Cannot write '${path}': the file's top level is ${kind === 'array' ? 'an array' : 'a value'}, not an object. ` +
+      'Astra only replaces an empty array; move its entries into an object by hand.',
+  );
+}
+
 function ensureContainer(data: string, segments: string[], array: boolean): string {
   const kind = array ? 'array' : 'object';
   const model = build(data);
   const parentSegments = segments.slice(0, -1);
   const parent =
     parentSegments.length === 0 ? model : (navigate(model, parentSegments)?.value ?? null);
+  if (parent !== null && parent.kind !== 'object' && parentSegments.length === 0)
+    throw nonObjectRoot(segments.join('.'), parent.kind);
   if (parent === null || parent.kind !== 'object')
     throw new EditorException(
       `Cannot create '${segments.join('.')}': parent is missing or not an object.`,

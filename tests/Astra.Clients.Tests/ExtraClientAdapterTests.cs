@@ -1045,6 +1045,32 @@ public class WorkBuddyClientAdapterTests : AdapterTestBase
         Assert.Empty(Assert.IsType<JsonObject>(Hints.Jsonc(Home.ReadFile(_config)))); // no Astra entries left; still an empty config
     }
 
+    [Theory]
+    [InlineData("[ ]")]
+    [InlineData("[\n]\n")]
+    [InlineData("// models go here\n[]\n")]
+    public void EmptyArrayFileInAnyLayout_IsTreatedAsAnEmptyConfig(string text)
+    {
+        // GitHub issue 5: only the exact text "[]" used to be recognised, the rest failed with "parent is missing".
+        Home.WriteFile(_config, text);
+        Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-wb-7", null, Hints.Extra("a"))));
+        Assert.Equal(["a"], Hints.Jsonc(Home.ReadFile(_config))["models"]!.AsArray().Select(e => e!["id"]!.GetValue<string>()));
+        Assert.True(_adapter.Inspect().Enabled);
+        Assert.False(Applier.Disable(_adapter.PlanDisable()).HasDrift);
+        Assert.Empty(Assert.IsType<JsonObject>(Hints.Jsonc(Home.ReadFile(_config))));
+    }
+
+    [Fact]
+    public void BareArrayHoldingModels_IsRefusedWithAClearMessage_AndLeftAlone()
+    {
+        const string text = """[{"id":"mine","name":"Mine","vendor":"OpenAI","url":"https://example.com/v1/chat/completions","apiKey":"k"}]""";
+        Home.WriteFile(_config, text);
+        var ex = Assert.Throws<EditorException>(() =>
+            Applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-wb-8", null, Hints.Extra("a")))));
+        Assert.Contains("top level is an array", ex.Message);
+        Assert.Equal(text, Home.ReadFile(_config));
+    }
+
     [Fact]
     public void LegacyCodeBuddyEntries_AreRemovedOnTheNextApply()
     {

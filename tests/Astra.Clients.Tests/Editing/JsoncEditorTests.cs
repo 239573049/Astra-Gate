@@ -5,6 +5,36 @@ namespace Astra.Clients.Tests.Editing;
 
 public class JsoncEditorTests
 {
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("[ ]")]
+    [InlineData("[\n]\n")]
+    [InlineData("// WorkBuddy\n[]\n")]
+    [InlineData("[] // nothing yet")]
+    public void Set_ObjectKey_ReplacesAnEmptyRootArray(string text)
+    {
+        var result = new JsoncEditor(text).Set("models", new JsonArray());
+        Assert.Empty(Assert.IsType<JsonArray>(result.Get("models")));
+    }
+
+    [Fact]
+    public void Set_ObjectKey_OnAnEmptyRootArray_KeepsTheCommentsAroundIt()
+    {
+        var result = new JsoncEditor("// WorkBuddy\n[ ] // none yet\n").Set("models", new JsonArray());
+        Assert.StartsWith("// WorkBuddy\n", result.Text);
+        Assert.Contains("// none yet", result.Text);
+    }
+
+    [Theory]
+    [InlineData("""[{"id":"mine"}]""", "an array")]
+    [InlineData("null", "a value")]
+    [InlineData("3", "a value")]
+    public void Set_ObjectKey_RefusesARootThatHoldsDataAndIsNotAnObject(string text, string kind)
+    {
+        var ex = Assert.Throws<EditorException>(() => new JsoncEditor(text).Set("models", new JsonArray()));
+        Assert.Contains($"top level is {kind}", ex.Message);
+    }
+
     [Fact]
     public void Get_NestedValue_WithCommentsAndTrailingCommas()
     {

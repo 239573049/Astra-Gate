@@ -5,6 +5,27 @@ import { JsoncEditor, jsonDeepEquals, parseJsonc } from '../src/editing/jsonc-ed
 const parse = (text: string) => parseJsonc(text).value;
 
 describe('JsoncEditor', () => {
+  it.each(['[]', '[ ]', '[\n]\n', '// WorkBuddy\n[]\n', '[] // nothing yet'])(
+    'Set object key replaces an empty root array (%j)',
+    (text) => {
+      expect(new JsoncEditor(text).set('models', []).get('models')).toEqual([]);
+    },
+  );
+
+  it('Set object key on an empty root array keeps the comments around it', () => {
+    const result = new JsoncEditor('// WorkBuddy\n[ ] // none yet\n').set('models', []);
+    expect(result.text.startsWith('// WorkBuddy\n')).toBe(true);
+    expect(result.text).toContain('// none yet');
+  });
+
+  it.each([
+    ['[{"id":"mine"}]', 'an array'],
+    ['null', 'a value'],
+    ['3', 'a value'],
+  ])('Set object key refuses a root that holds data and is not an object (%s)', (text, kind) => {
+    expect(() => new JsoncEditor(text).set('models', [])).toThrow(`top level is ${kind}`);
+  });
+
   it('Get nested value with comments and trailing commas', () => {
     const text = '{\n  // comment\n  "env": {\n    "A": "1",\n  },\n}';
     const editor = new JsoncEditor(text);

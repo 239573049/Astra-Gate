@@ -74,9 +74,11 @@ public sealed class JsoncEditor
 
         var segments = SplitPath(path);
         var data = _blank && IsSelector(segments[0]) ? "[]"u8.ToArray() : _data;
-        // A document that is just "[]" holds nothing to keep: an object key replaces it with "{}" (WorkBuddy's own
-        // models.json starts out as "[]" and its daemon reads a bare array as an empty config).
-        if (!IsSelector(segments[0]) && Encoding.UTF8.GetString(data).Trim() == "[]") data = "{}"u8.ToArray();
+        // A document whose root is an empty array holds nothing to keep: an object key replaces the array with "{}"
+        // (WorkBuddy's own models.json starts out as "[]" and its daemon reads a bare array as an empty config). Spacing
+        // inside the brackets and comments around them do not matter, and the comments stay.
+        if (!IsSelector(segments[0]) && Build(data).Root is { Kind: NodeKind.Array, Elements.Count: 0 } emptyRoot)
+            data = Splice(data, (int)emptyRoot.Start, (int)emptyRoot.End, "{}"u8.ToArray());
         for (var i = 0; i < segments.Length - 1; i++)
         {
             if (IsSelector(segments[i]))
@@ -97,6 +99,7 @@ public sealed class JsoncEditor
             : Navigate(model, parentSegments)?.Value ?? throw new EditorException($"Self-check failed: parent of '{path}' missing.");
         var last = segments[^1];
         var selector = IsSelector(last);
+        if (parentSegments.Length == 0 && !selector && parent.Kind != NodeKind.Object) throw NonObjectRoot(path, parent.Kind);
         if (parent.Kind != (selector ? NodeKind.Array : NodeKind.Object))
             throw new EditorException($"Cannot set '{last}' inside a non-{(selector ? "array" : "object")} at '{string.Join(".", parentSegments)}'.");
 
@@ -177,6 +180,11 @@ public sealed class JsoncEditor
 
     // ---------------------------------------------------------------- container scaffolding
 
+    /// <summary>A key cannot be written into a document whose top level is not an object (an empty array is replaced before this is reached).</summary>
+    private static EditorException NonObjectRoot(string path, NodeKind kind) => new(
+        $"Cannot write '{path}': the file's top level is {(kind == NodeKind.Array ? "an array" : "a value")}, not an object. "
+        + "Astra only replaces an empty array; move its entries into an object by hand.");
+
     /// <summary>Guarantees that the object (or array) at <paramref name="segments"/> exists (creating it as <c>{}</c> / <c>[]</c>).</summary>
     private static byte[] EnsureContainer(byte[] data, string[] segments, bool array)
     {
@@ -184,6 +192,8 @@ public sealed class JsoncEditor
         var model = Build(data);
         var parentSegments = segments[..^1];
         var parent = parentSegments.Length == 0 ? model.Root : Navigate(model, parentSegments)?.Value;
+        if (parent is { Kind: not NodeKind.Object } && parentSegments.Length == 0)
+            throw NonObjectRoot(string.Join(".", segments), parent.Kind);
         if (parent is null || parent.Kind != NodeKind.Object)
             throw new EditorException($"Cannot create '{string.Join(".", segments)}': parent is missing or not an object.");
         var idx = FindMember(model, parent, segments[^1]);
