@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Guidance for coding agents working in this repository. It covers the whole repo; no scoped
-AGENTS.md files exist yet. Design rationale lives in `.plan/*.md` (local planning docs,
+Guidance for coding agents working in this repository. It covers the whole repo; the only
+scoped file is `docs/AGENTS.md`, Next.js notes that `next dev` writes into the docs site. Design rationale lives in `.plan/*.md` (local planning docs,
 gitignored) — code comments cite them as "plan §N"; keep such comments true when you change
 the behavior they describe.
 
