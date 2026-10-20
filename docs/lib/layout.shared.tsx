@@ -28,6 +28,7 @@ export function homeOptions(lang: HomeLang): BaseLayoutProps {
       { text: t.docs, url: '/docs/guide', active: 'nested-url' },
       { text: t.cli, url: '/docs/cli', active: 'nested-url' },
       { text: t.download, url: '/download', active: 'url' },
+      { text: t.pet, url: '/pet', active: 'url' },
       { text: t.plugins, url: '/plugins', active: 'nested-url' },
       { text: t.switchLang, url: t.switchLangUrl },
     ],

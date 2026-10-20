@@ -34,6 +34,20 @@ pnpm --filter @aidotnet/docs build
 | `app/sitemap.ts` / `app/robots.ts` | sitemap.xml / robots.txt |
 | `app/llms.txt` / `app/llms-full.txt` / `app/llms.mdx/**` | 面向 AI 的文档索引 / 全文 / 单页 Markdown（GEO） |
 
+## 桌宠（Astra Pet）发布
+
+Astra Pet 是另一个独立项目（桌面宠物），它的 GitHub 工作流把各平台的压缩包推到本站，本站只负责存储、提供更新检测接口和下载页。
+与桌面客户端共用 `lib/releases.ts` 的存储逻辑（`product: 'pet'`），但目录、令牌、文件名前缀都分开，互不影响：
+
+- 存储：`${DATA_DIR}/pet-releases/<stable|preview>/<version>/AstraPet-<version>-<platform>.zip` 和 `index.json`。
+- 上传：`POST /api/pet-releases/upload`，`Authorization: Bearer $PET_UPLOAD_TOKEN`，请求头 `x-astra-version`、`x-astra-platform`（`darwin-arm64` / `darwin-x64` / `win32-x64`）、`x-astra-kind: zip`、可选 `x-astra-channel` 和 `x-astra-notes-b64`，请求体是文件原始字节。响应里有服务端算出的 `sha256`，工作流用它和本地文件核对。
+- 更新检测：`GET /api/pet-releases/<channel>/latest.json?platform=<platform>`（返回该平台最新版本和文件，地址是相对站点根的路径）；`releases.json` 列出所有版本。
+- 下载页：`/pet`。
+
+| 环境变量 | 作用 |
+| --- | --- |
+| `PET_UPLOAD_TOKEN` | 桌宠上传用的 Bearer token；未设置时上传接口返回 503（与 `CLIENT_UPLOAD_TOKEN`、`PLUGIN_UPLOAD_TOKEN` 分开）。GitHub 仓库里存同一个值，名字是 `PET_UPLOAD_TOKEN` |
+
 ## 插件市场
 
 实现在 `lib/plugin-market/`，数据存放在 `${DATA_DIR}/plugin-market/`（与客户端发布共用 `/app/data` 卷）。

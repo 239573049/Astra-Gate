@@ -20,6 +20,16 @@ import { pipeline } from 'node:stream/promises';
  * follows their preview while each file is stored once.
  */
 
+/**
+ * The products sharing this store. `client` is the Astra desktop app (the original and the default everywhere below,
+ * so existing callers are untouched); `pet` is the Astra Pet desktop companion, kept in its own directory, with its
+ * own upload token and its own file-name prefix, so the two release streams can never overwrite each other.
+ */
+export type Product = 'client' | 'pet';
+const PRODUCT_DIR: Record<Product, string> = { client: 'client-releases', pet: 'pet-releases' };
+const PRODUCT_FILE_PREFIX: Record<Product, string> = { client: 'Astra', pet: 'AstraPet' };
+const PRODUCT_TOKEN_ENV: Record<Product, string> = { client: 'CLIENT_UPLOAD_TOKEN', pet: 'PET_UPLOAD_TOKEN' };
+
 export const DEFAULT_CHANNEL = 'stable';
 export const PREVIEW_CHANNEL = 'preview';
 export const CHANNELS = [DEFAULT_CHANNEL, PREVIEW_CHANNEL] as const;
@@ -51,18 +61,20 @@ export function dataDir(): string {
   return process.env.DATA_DIR?.trim() || '/app/data';
 }
 
-export function releasesRoot(channel: string): string {
-  return path.join(dataDir(), 'client-releases', channel);
+export function releasesRoot(channel: string, product: Product = 'client'): string {
+  return path.join(dataDir(), PRODUCT_DIR[product], channel);
 }
 
-export function uploadToken(): string | null {
-  return process.env.CLIENT_UPLOAD_TOKEN?.trim() || null;
+export function uploadToken(product: Product = 'client'): string | null {
+  return process.env[PRODUCT_TOKEN_ENV[product]]?.trim() || null;
 }
 
 /** Constant-time bearer-token check; uploads are disabled when no token is configured. */
-export function verifyUploadToken(req: Request): { ok: boolean; status: number; error: string } {
-  const expected = uploadToken();
-  if (!expected) return { ok: false, status: 503, error: 'Client uploads are disabled (CLIENT_UPLOAD_TOKEN is not configured).' };
+export function verifyUploadToken(req: Request, product: Product = 'client'): { ok: boolean; status: number; error: string } {
+  const expected = uploadToken(product);
+  if (!expected) {
+    return { ok: false, status: 503, error: `Uploads are disabled (${PRODUCT_TOKEN_ENV[product]} is not configured).` };
+  }
   const given = (req.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
   if (!given) return { ok: false, status: 401, error: 'Missing bearer token.' };
   const a = Buffer.from(given);
@@ -109,21 +121,21 @@ export function isValidVersion(version: string): boolean {
   return /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version);
 }
 
-export function canonicalFileName(version: string, platform: string, kind: string): string {
+export function canonicalFileName(version: string, platform: string, kind: string, product: Product = 'client'): string {
   const ext = EXT_BY_KIND[kind] ?? 'bin';
-  return `Astra-${version}-${platform}.${ext}`;
+  return `${PRODUCT_FILE_PREFIX[product]}-${version}-${platform}.${ext}`;
 }
 
-export function resolveVersionDir(channel: string, version: string): string {
-  const dir = path.join(releasesRoot(channel), sanitizeToken(version));
+export function resolveVersionDir(channel: string, version: string, product: Product = 'client'): string {
+  const dir = path.join(releasesRoot(channel, product), sanitizeToken(version));
   // Defense in depth: the version segment must stay inside the channel dir.
-  if (path.relative(releasesRoot(channel), dir).startsWith('..')) throw new Error('invalid version');
+  if (path.relative(releasesRoot(channel, product), dir).startsWith('..')) throw new Error('invalid version');
   return dir;
 }
 
-export async function readIndex(channel: string): Promise<ReleaseIndex> {
+export async function readIndex(channel: string, product: Product = 'client'): Promise<ReleaseIndex> {
   try {
-    const raw = await fsp.readFile(path.join(releasesRoot(channel), INDEX_NAME), 'utf8');
+    const raw = await fsp.readFile(path.join(releasesRoot(channel, product), INDEX_NAME), 'utf8');
     const parsed = JSON.parse(raw) as ReleaseIndex;
     if (parsed && typeof parsed === 'object' && parsed.versions && typeof parsed.versions === 'object') return parsed;
   } catch {
@@ -132,8 +144,8 @@ export async function readIndex(channel: string): Promise<ReleaseIndex> {
   return { channel, versions: {} };
 }
 
-export async function writeIndex(channel: string, index: ReleaseIndex): Promise<void> {
-  const root = releasesRoot(channel);
+export async function writeIndex(channel: string, index: ReleaseIndex, product: Product = 'client'): Promise<void> {
+  const root = releasesRoot(channel, product);
   await fsp.mkdir(root, { recursive: true });
   const target = path.join(root, INDEX_NAME);
   const tmp = `${target}.tmp`;
@@ -142,6 +154,8 @@ export async function writeIndex(channel: string, index: ReleaseIndex): Promise<
 }
 
 export interface SaveUploadOptions {
+  /** Defaults to the desktop client. */
+  product?: Product;
   channel: string;
   version: string;
   platform: string;
@@ -161,9 +175,10 @@ export interface SaveUploadResult {
  * never leaves a partial file or a mutated index behind.
  */
 export async function saveUpload(o: SaveUploadOptions): Promise<SaveUploadResult> {
-  const dir = resolveVersionDir(o.channel, o.version);
+  const product = o.product ?? 'client';
+  const dir = resolveVersionDir(o.channel, o.version, product);
   await fsp.mkdir(dir, { recursive: true });
-  const name = canonicalFileName(o.version, sanitizeToken(o.platform, 64), sanitizeToken(o.kind, 16));
+  const name = canonicalFileName(o.version, sanitizeToken(o.platform, 64), sanitizeToken(o.kind, 16), product);
   const target = path.join(dir, name);
   const tmp = `${target}.tmp`;
 
@@ -195,7 +210,7 @@ export async function saveUpload(o: SaveUploadOptions): Promise<SaveUploadResult
     sha512: sha512.digest('base64'),
   };
 
-  const index = await readIndex(o.channel);
+  const index = await readIndex(o.channel, product);
   const notes = o.notesB64 ? Buffer.from(o.notesB64, 'base64').toString('utf8').slice(0, MAX_NOTES_BYTES) : undefined;
   const existing = index.versions[o.version];
   const version: ReleaseVersion = {
@@ -205,7 +220,7 @@ export async function saveUpload(o: SaveUploadOptions): Promise<SaveUploadResult
     files: [...(existing?.files ?? []).filter((f) => f.name !== name), file].sort((a, b) => a.name.localeCompare(b.name)),
   };
   index.versions[o.version] = version;
-  await writeIndex(o.channel, index);
+  await writeIndex(o.channel, index, product);
   return { file, version };
 }
 
@@ -215,10 +230,10 @@ export interface FeedVersion extends ReleaseVersion {
 }
 
 /** Every release a channel's feed offers, newest first. */
-export async function readFeed(channel: Channel): Promise<FeedVersion[]> {
+export async function readFeed(channel: Channel, product: Product = 'client'): Promise<FeedVersion[]> {
   const byVersion = new Map<string, FeedVersion>();
   for (const source of FEED_SOURCES[channel]) {
-    const index = await readIndex(source);
+    const index = await readIndex(source, product);
     for (const v of Object.values(index.versions)) {
       // The channel's own copy wins should a version ever sit in two directories.
       if (!byVersion.has(v.version)) byVersion.set(v.version, { ...v, channel: source });

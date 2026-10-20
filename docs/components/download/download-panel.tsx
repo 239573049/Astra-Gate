@@ -60,6 +60,16 @@ const OS_PREFIX: Record<Os, string> = { mac: 'darwin', win: 'win32', linux: 'lin
 /** Installer kind promoted per OS: dmg / exe / AppImage (zips are update plumbing). */
 const OS_KIND: Record<Os, string> = { mac: 'dmg', win: 'exe', linux: 'appimage' };
 
+/**
+ * The panel serves two products. `client` (the default) is the Astra desktop app, shipped as installers;
+ * `pet` is Astra Pet, shipped as one zip per platform that is unpacked and run.
+ */
+export type DownloadVariant = 'client' | 'pet';
+const VARIANTS: Record<DownloadVariant, { kinds: Record<Os, string>; zipLabel: string; button: string }> = {
+  client: { kinds: OS_KIND, zipLabel: '压缩包（自动更新用）', button: '下载安装包' },
+  pet: { kinds: { mac: 'zip', win: 'zip', linux: 'zip' }, zipLabel: '压缩包（解压即用）', button: '下载桌宠' },
+};
+
 function osForPlatform(platform: string): Os | null {
   if (platform.startsWith('darwin')) return 'mac';
   if (platform.startsWith('win32')) return 'win';
@@ -102,10 +112,10 @@ async function refineArch(): Promise<'arm64' | 'x64' | null> {
 }
 
 /** The installer to recommend: same OS first, detected arch first, else the other arch. */
-function pickFile(files: ReleaseFile[], detected: Detected): ReleaseFile | null {
+function pickFile(files: ReleaseFile[], detected: Detected, kinds: Record<Os, string>): ReleaseFile | null {
   const archs: Array<'arm64' | 'x64'> = detected.arch === 'arm64' ? ['arm64', 'x64'] : ['x64', 'arm64'];
   for (const arch of archs) {
-    const found = files.find((f) => f.platform === `${OS_PREFIX[detected.os]}-${arch}` && f.kind === OS_KIND[detected.os]);
+    const found = files.find((f) => f.platform === `${OS_PREFIX[detected.os]}-${arch}` && f.kind === kinds[detected.os]);
     if (found) return found;
   }
   return null;
@@ -128,14 +138,15 @@ const KIND_LABELS: Record<string, string> = {
   dmg: '安装镜像',
   exe: '安装程序',
   appimage: 'AppImage（免安装，直接运行）',
-  zip: '压缩包（自动更新用）',
+  zip: '压缩包',
 };
 
 function platformLabel(platform: string): string {
   return PLATFORM_LABELS[platform] ?? platform;
 }
 
-function kindLabel(file: ReleaseFile): string {
+function kindLabel(file: ReleaseFile, variant: DownloadVariant): string {
+  if (file.kind === 'zip') return VARIANTS[variant].zipLabel;
   return KIND_LABELS[file.kind] ?? file.kind.toUpperCase();
 }
 
@@ -146,7 +157,17 @@ function formatSize(bytes: number): string {
 
 /* ---------- panel ---------- */
 
-export function DownloadPanel({ version, files, hrefBase }: { version: string; files: ReleaseFile[]; hrefBase: string }) {
+export function DownloadPanel({
+  version,
+  files,
+  hrefBase,
+  variant = 'client',
+}: {
+  version: string;
+  files: ReleaseFile[];
+  hrefBase: string;
+  variant?: DownloadVariant;
+}) {
   const [detected, setDetected] = useState<Detected | null>(null);
 
   useEffect(() => {
@@ -162,7 +183,7 @@ export function DownloadPanel({ version, files, hrefBase }: { version: string; f
     };
   }, []);
 
-  const recommended = detected ? pickFile(files, detected) : null;
+  const recommended = detected ? pickFile(files, detected, VARIANTS[variant].kinds) : null;
   // Files arrive pre-sorted by the server component, so the spread keeps that order.
   const others = files.filter((f) => f !== recommended);
 
@@ -182,7 +203,7 @@ export function DownloadPanel({ version, files, hrefBase }: { version: string; f
               <p className="text-xs font-semibold tracking-wide text-fd-primary uppercase">已根据你的系统自动选择</p>
               <h2 className="mt-1 text-2xl font-semibold">{platformLabel(recommended.platform)}</h2>
               <p className="mt-1 text-sm text-fd-muted-foreground">
-                {kindLabel(recommended)} · {formatSize(recommended.size)}
+                {kindLabel(recommended, variant)} · {formatSize(recommended.size)}
                 <span className="mx-1.5">·</span>
                 <span className="font-mono text-xs">v{version}</span>
               </p>
@@ -191,7 +212,7 @@ export function DownloadPanel({ version, files, hrefBase }: { version: string; f
               href={`${hrefBase}/${recommended.name}`}
               className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-fd-primary px-6 py-3 text-sm font-semibold text-fd-primary-foreground shadow-[0_6px_20px_color-mix(in_oklab,var(--color-fd-primary)_25%,transparent)] transition hover:opacity-90 active:scale-[0.98]"
             >
-              <Download className="size-4" /> 下载安装包
+              <Download className="size-4" /> {VARIANTS[variant].button}
             </a>
           </div>
         </section>
@@ -219,7 +240,7 @@ export function DownloadPanel({ version, files, hrefBase }: { version: string; f
                   <Download className="size-4 shrink-0 text-fd-muted-foreground transition-colors group-hover:text-fd-primary" />
                 </div>
                 <p className="mt-1 text-sm text-fd-muted-foreground">
-                  {kindLabel(file)} · {formatSize(file.size)}
+                  {kindLabel(file, variant)} · {formatSize(file.size)}
                 </p>
                 <p className="mt-3 truncate font-mono text-xs text-fd-muted-foreground" title={file.name}>
                   {file.name}

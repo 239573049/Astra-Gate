@@ -14,6 +14,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteUrl}/`, changeFrequency: 'weekly', priority: 1 },
     { url: `${siteUrl}/en`, changeFrequency: 'weekly', priority: 0.9 },
     { url: `${siteUrl}/download`, changeFrequency: 'weekly', priority: 0.9 },
+    { url: `${siteUrl}/pet`, changeFrequency: 'weekly', priority: 0.7 },
     { url: `${siteUrl}/plugins`, changeFrequency: 'weekly', priority: 0.8 },
     { url: `${siteUrl}/en/plugins`, changeFrequency: 'weekly', priority: 0.7 },
     ...plugins.flatMap((p) => [
