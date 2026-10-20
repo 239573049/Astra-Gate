@@ -24,6 +24,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [astra-server --help starts a server](astra-server-flag-first-serves.md) — a flag-first call runs `serve` on ~/.astra and overwrites runtime.json; use ASTRA_HOME for throwaway servers
 - [Harness thinking picker needs reasoningEfforts](harness-reasoning-efforts-field.md) — `reasoning` is a route default; models without `reasoningEfforts` get no effort picker (issue #7)
 - [Client default provider is read-side](client-default-provider-read-side.md) — a client with no bindings reads as bound to the first usable provider; stored on enable or a bindings edit, never on read
+- [WorkBuddy's Anthropic route](workbuddy-anthropic-route.md) — only hy3 / hy3-x answer on /v1/messages (China build), no thinking switch there; the plugin declares them @ai-sdk/anthropic (probed 2026-10-20)
 
 ## Reference
 

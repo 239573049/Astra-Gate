@@ -467,18 +467,18 @@
         "zh": "WorkBuddy 国内版（CodeBuddy 套餐）与国际版，支持每日签到。"
       },
       "community": true,
-      "latest": "0.2.3",
+      "latest": "0.2.4",
       "description": "WorkBuddy (China, copilot.tencent.com) and WorkBuddy AI (international, www.workbuddy.ai) provider plugins for Astra and magpie, with the daily check-in (签到)",
       "license": "MIT",
       "repository": "https://github.com/astragate-community/astra-gate-plugins",
       "homepage": "https://github.com/astragate-community/astra-gate-plugins/tree/main/packages/workbuddy",
       "tarballs": [
         {
-          "version": "0.2.3",
-          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/workbuddy-v0.2.3/workbuddy-0.2.3.tgz",
-          "sha256": "7dee038fc4b6e12111ab524565f5188759f9b67abdb1a4ff559812d2aed28f26",
-          "sha512": "X3lZmfoV3COrKFcGtNsVCewUVZfjW714iCJrzQ0cBhkLfR5Ez6GM4WlciowgPl4CrbThubv3zA7Q9EpiPvki7g==",
-          "size": 17966
+          "version": "0.2.4",
+          "url": "https://github.com/astragate-community/astra-gate-plugins/releases/download/workbuddy-v0.2.4/workbuddy-0.2.4.tgz",
+          "sha256": "6aa01fa25d686c07088de66952f92d7b8e176b7ae47501fbfb18f11c2fdc97b4",
+          "sha512": "3gxERr7JR8Dum7AD3cF/m43i07yZL3uOBS7Ca0fI4KCETODeWLanaY0IzLmOPWkHiKZN+/XTbETcUe3gWlpvWw==",
+          "size": 18697
         }
       ]
     },
