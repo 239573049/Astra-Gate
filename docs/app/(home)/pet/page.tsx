@@ -93,25 +93,34 @@ export default async function PetDownloadPage() {
           <PackageOpen className="mt-0.5 size-5 shrink-0 text-fd-muted-foreground" />
           <div className="text-sm text-fd-muted-foreground">
             <p>
-              <strong>需要 ffmpeg。</strong>宠物的动画是带透明通道的 WebM（VP9），由 ffmpeg 解码，请先安装并确认带
-              <code className={code}>libvpx-vp9</code>
-              解码器。macOS：
-              <code className={code}>brew install ffmpeg</code>
-              ；Windows：下载 ffmpeg 并加入 PATH，或设置环境变量
+              <strong>已自带 ffmpeg。</strong>宠物的动画是带透明通道的 WebM（VP9），由 ffmpeg 解码。安装包里已经附带了一个精简的 LGPL 版 ffmpeg，不用另外安装。想用自己的 ffmpeg 时，设置环境变量
               <code className={code}>FFMPEG</code>
-              指向 ffmpeg.exe。
+              指向它（需要带
+              <code className={code}>libvpx-vp9</code>
+              解码器）。
             </p>
             <p className="mt-1">
-              <strong>macOS：</strong>解压得到 <code className={code}>Astra Pet.app</code>，拖进「应用程序」。应用没有经过 Apple 公证，首次打开请
-              右键 → 打开；如果提示「已损坏」，在终端运行
-              <code className={code}>xattr -dr com.apple.quarantine &quot;/Applications/Astra Pet.app&quot;</code>
-              。
+              <strong>macOS：</strong>打开 <code className={code}>.dmg</code>，把 Astra Pet 拖进「应用程序」，双击即可打开。应用已用开发者证书签名并通过了 Apple 公证（0.1.1 起；0.1.0 没有公证，首次打开需要到「系统设置 → 隐私与安全性」点「仍要打开」）。
             </p>
             <p className="mt-1">
-              <strong>Windows：</strong>解压后运行 <code className={code}>AstraPet.exe</code>。首次运行 SmartScreen 可能拦截，点「更多信息 → 仍要运行」。
+              <strong>Windows：</strong>运行 <code className={code}>.exe</code> 安装程序，装到当前用户目录，不需要管理员权限，开始菜单里有快捷方式，卸载在「设置 → 应用」里。安装程序没有代码签名，首次运行 SmartScreen 可能拦截，点「更多信息 → 仍要运行」。
             </p>
             <p className="mt-1">
-              <strong>更新：</strong>宠物启动后和每隔几小时会自动检测新版本，有更新时在宠物头顶冒出气泡提醒；回到本页下载新的压缩包，覆盖旧版本即可，设置和记忆会保留。
+              <strong>Linux：</strong>Debian / Ubuntu 下用
+              <code className={code}>sudo apt install ./AstraPet-版本-linux-x64.deb</code>
+              安装，之后在应用菜单里找 Astra Pet，或运行
+              <code className={code}>astra-pet</code>
+              。Linux 版目前是实验性的：窗口透明需要桌面环境有合成器（X11 下大多数都有），开机自启、朗读、点击穿透、听歌检测暂不支持。
+            </p>
+            <p className="mt-1">
+              <strong>开源与版权：</strong>程序源码以 MIT 协议开源，仓库在
+              <a className="mx-1 underline" href="https://github.com/239573049/Astra-Pet">github.com/239573049/Astra-Pet</a>
+              ；宠物形象和动画的版权归
+              <a className="mx-1 underline" href="https://routin.ai">RoutinAI</a>
+              所有，保留所有权利，不在 MIT 授权范围内，使用条款见仓库里的 LICENSE-ASSETS.md。
+            </p>
+            <p className="mt-1">
+              <strong>更新：</strong>宠物启动后和每隔几小时会自动检测新版本，有更新时在宠物头顶冒出气泡提醒；回到本页下载新的安装包，直接安装覆盖旧版本即可，设置和记忆会保留。
             </p>
           </div>
         </div>

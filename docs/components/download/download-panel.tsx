@@ -67,7 +67,7 @@ const OS_KIND: Record<Os, string> = { mac: 'dmg', win: 'exe', linux: 'appimage' 
 export type DownloadVariant = 'client' | 'pet';
 const VARIANTS: Record<DownloadVariant, { kinds: Record<Os, string>; zipLabel: string; button: string }> = {
   client: { kinds: OS_KIND, zipLabel: '压缩包（自动更新用）', button: '下载安装包' },
-  pet: { kinds: { mac: 'zip', win: 'zip', linux: 'zip' }, zipLabel: '压缩包（解压即用）', button: '下载桌宠' },
+  pet: { kinds: { mac: 'dmg', win: 'exe', linux: 'deb' }, zipLabel: '压缩包（解压即用）', button: '下载桌宠' },
 };
 
 function osForPlatform(platform: string): Os | null {
@@ -138,6 +138,7 @@ const KIND_LABELS: Record<string, string> = {
   dmg: '安装镜像',
   exe: '安装程序',
   appimage: 'AppImage（免安装，直接运行）',
+  deb: 'Debian / Ubuntu 安装包（.deb）',
   zip: '压缩包',
 };
 
