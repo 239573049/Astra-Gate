@@ -13,6 +13,7 @@ import { Checkbox } from './arc/checkbox/checkbox';
 import { CopyButton } from './arc/copy-button/copy-button';
 import { Tooltip } from './arc/tooltip/tooltip';
 import { ProviderIcon } from './icons';
+import { KeyAlternativeHint } from './TemplateSwitch';
 import { Badge, Button, Dot, Field, Input, NumberInput, SearchField, Segmented, Switch, TextArea } from './ui/controls';
 import { Select, Sheet } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
@@ -286,7 +287,7 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
             />
             <p className="mt-auto text-[11px] text-[var(--text-muted)]">{t('providers.testDialog.savedCredentials')}</p>
           </div>
-          <TestResultPanel run={single} onRetest={startSingle} />
+          <TestResultPanel provider={provider} run={single} onRetest={startSingle} />
         </div>
       ) : detail !== null ? (
         <div className="grid gap-4">
@@ -294,7 +295,7 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
             <Button variant="plain" icon={<ArrowLeft className="size-4" />} aria-label={t('common.back')} onClick={() => setDetail(null)} />
             <span className="font-mono text-[13px]">{detail}</span>
           </div>
-          <TestResultPanel run={batch[detail] ?? null} />
+          <TestResultPanel provider={provider} run={batch[detail] ?? null} />
         </div>
       ) : (
         <>
@@ -491,7 +492,7 @@ function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
 
 // ---------- result panel ----------
 
-function TestResultPanel({ run, onRetest }: { run: Run | null; onRetest?: () => void }) {
+function TestResultPanel({ provider, run, onRetest }: { provider: Provider; run: Run | null; onRetest?: () => void }) {
   const { t } = useI18n();
   const [view, setView] = useState<'preview' | 'raw' | 'headers'>('preview');
   const text = run?.text ?? '';
@@ -570,9 +571,12 @@ function TestResultPanel({ run, onRetest }: { run: Run | null; onRetest?: () => 
               <Placeholder run={run} />
             )
           ) : run?.error ? (
-            <Alert tone="danger" title={t('providers.testDialog.status.failed')}>
-              {run.error}
-            </Alert>
+            <div className="grid gap-3">
+              <Alert tone="danger" title={t('providers.testDialog.status.failed')}>
+                {run.error}
+              </Alert>
+              <KeyAlternativeHint provider={provider} httpStatus={run.httpStatus} />
+            </div>
           ) : text || run?.reasoning ? (
             <div className="grid gap-3">
               {run?.reasoning ? (

@@ -95,6 +95,21 @@ public class ImportApiTests
     }
 
     [Fact]
+    public async Task Templates_Sharing_A_Host_Are_Told_Apart_By_The_Exact_Address()
+    {
+        await using var host = await TestHost.StartAsync();
+        Write(host, ".config/magpie/providers.json", """
+            {"providers":[
+              {"id":"plan","name":"Routin plan","key":"sk-plan-key-000000000001","anthropic":"https://api.routin.ai/plan/v1/"},
+              {"id":"payg","name":"Routin key","key":"ak-payg-key-0000000000001","anthropic":"https://api.routin.ai/v1"}
+            ]}
+            """);
+        var items = (await SourceAsync(host, "magpie"))["items"]!.AsArray();
+        Assert.Equal("routin", items.Single(i => i!["ref"]!.GetValue<string>() == "magpie:plan")!["templateId"]!.GetValue<string>());
+        Assert.Equal("routin-ai", items.Single(i => i!["ref"]!.GetValue<string>() == "magpie:payg")!["templateId"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Second_Import_Is_Detected_As_Same_And_Skipped()
     {
         await using var host = await TestHost.StartAsync();

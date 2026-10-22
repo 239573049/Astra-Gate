@@ -174,14 +174,22 @@ public sealed class ImportService(
 
     // ------------------------------------------------------------------ helpers
 
-    /// <summary>A catalog template whose endpoint authority (host:port) is one of the candidate's; subscription templates never match.</summary>
+    /// <summary>
+    /// A catalog template whose endpoint authority (host:port) is one of the candidate's; subscription templates never match.
+    /// Of templates sharing a host (RoutinAI's pay-as-you-go <c>/v1</c> and plan <c>/plan/v1</c>), one with the candidate's
+    /// exact address wins.
+    /// </summary>
     private ProviderTemplate? MatchTemplate(ImportCandidate c)
     {
         var authorities = c.Endpoints.Select(e => Authority(e.BaseUrl)).Where(a => a is not null).ToHashSet();
         if (authorities.Count == 0) return null;
-        return catalog.All.FirstOrDefault(t => t.Category is not ("subscription" or "custom") &&
-            t.Endpoints.Any(e => authorities.Contains(Authority(e.BaseUrl))));
+        var matches = catalog.All.Where(t => t.Category is not ("subscription" or "custom") &&
+            t.Endpoints.Any(e => authorities.Contains(Authority(e.BaseUrl)))).ToList();
+        var urls = c.Endpoints.Select(e => SameUrl(e.BaseUrl)).ToHashSet(StringComparer.Ordinal);
+        return matches.FirstOrDefault(t => t.Endpoints.Any(e => urls.Contains(SameUrl(e.BaseUrl)))) ?? matches.FirstOrDefault();
     }
+
+    private static string SameUrl(string url) => url.TrimEnd('/').ToLowerInvariant();
 
     private static string? Authority(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? $"{u.Host.ToLowerInvariant()}:{u.Port}" : null;
 

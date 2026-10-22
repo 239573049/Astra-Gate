@@ -1,5 +1,5 @@
-import { Download, FlaskConical, Plus, Server } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import {
@@ -10,9 +10,10 @@ import {
   useTimeseries,
   useUpdateProvider,
 } from '../api/hooks';
-import type { ApiProtocol, AuthScheme, Provider, ProviderTemplate } from '../api/types';
+import type { ApiProtocol, AuthScheme, Provider, ProviderTemplate, TemplateEndpoint } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
 import { Card } from '../components/arc/card/card';
+import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { PasswordField } from '../components/arc/password-field/password-field';
 import { RadioCards } from '../components/arc/radio-cards/radio-cards';
 import { Sparkline } from '../components/arc/sparkline/sparkline';
@@ -22,7 +23,7 @@ import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
 import { Page } from '../components/layout/Page';
 import { ProviderQuotaLine } from '../components/ProviderQuotaSection';
 import { ProviderTestDialog } from '../components/ProviderTestDialog';
-import { Badge, Button, Dot, EmptyState, Field, Input, SearchField, Spinner, Switch } from '../components/ui/controls';
+import { Badge, Button, Disclosure, Dot, EmptyState, Field, Input, NumberInput, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
 import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
@@ -333,6 +334,103 @@ const splitPlan = (name: string): [string, string | null] => {
   return m ? [m[1], m[2]] : [name, null];
 };
 
+// Model ids typed into the wizard: one per line or comma separated, like the "Add models" sheet.
+const MODEL_SPLIT = /[\s,，]+/;
+
+/** The protocol order after the endpoints changed: removed protocols drop out, new ones join at the end. */
+function followEndpoints(preferred: ApiProtocol[], before: TemplateEndpoint[], after: TemplateEndpoint[]): ApiProtocol[] {
+  const had = new Set(before.map((e) => e.protocol));
+  const now = after.map((e) => e.protocol);
+  return [...preferred.filter((p) => now.includes(p)), ...now.filter((p) => !had.has(p) && !preferred.includes(p))];
+}
+
+/** A visible label over a group of controls (a Field would hand its label to every input inside). */
+function Labeled({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col">
+      <div className="mb-2 text-[13px] font-medium">{label}</div>
+      {children}
+      {hint && <div className="mt-2 text-[11px] text-[var(--text-muted)]">{hint}</div>}
+    </div>
+  );
+}
+
+/** One address per protocol; a protocol already used by another row is not offered again. */
+function EndpointsEditor({ value, onChange }: { value: TemplateEndpoint[]; onChange: (next: TemplateEndpoint[]) => void }) {
+  const { t } = useI18n();
+  const used = value.map((e) => e.protocol);
+  const free = PROTOCOL_OPTIONS.filter((o) => !used.includes(o.value));
+  const set = (i: number, patch: Partial<TemplateEndpoint>) => onChange(value.map((e, j) => (j === i ? { ...e, ...patch } : e)));
+  return (
+    <div className="grid gap-2">
+      {value.map((e, i) => (
+        <div key={i} className="flex flex-wrap items-center gap-2">
+          <Select
+            className="w-44"
+            ariaLabel={t('providers.protocol')}
+            value={e.protocol}
+            onChange={(protocol) => set(i, { protocol })}
+            options={PROTOCOL_OPTIONS.filter((o) => o.value === e.protocol || !used.includes(o.value))}
+          />
+          <Input
+            className="min-w-52 flex-1"
+            mono
+            aria-label={t('providers.baseUrl')}
+            placeholder="https://api.example.com/v1"
+            value={e.baseUrl}
+            onChange={(ev) => set(i, { baseUrl: ev.target.value })}
+          />
+          <label className="flex items-center gap-2 text-[12px] text-[var(--text-secondary)]" title={t('providers.fullUrlHint')}>
+            <Switch checked={Boolean(e.fullUrl)} label={t('providers.fullUrl')} onChange={(fullUrl) => set(i, { fullUrl })} />
+            {t('providers.fullUrl')}
+          </label>
+          <Button
+            size="sm"
+            variant="plain"
+            icon={<Trash2 className="size-3.5" />}
+            aria-label={t('common.delete')}
+            disabled={value.length === 1}
+            onClick={() => onChange(value.filter((_, j) => j !== i))}
+          />
+        </div>
+      ))}
+      {free.length > 0 && (
+        <div>
+          <Button
+            size="sm"
+            variant="plain"
+            icon={<Plus className="size-3.5" />}
+            onClick={() => onChange([...value, { protocol: free[0].value, baseUrl: value[0]?.baseUrl ?? '' }])}
+          >
+            {t('providers.addEndpoint')}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HeadersEditor({ value, onChange }: { value: [string, string][]; onChange: (next: [string, string][]) => void }) {
+  const { t } = useI18n();
+  const set = (i: number, h: [string, string]) => onChange(value.map((x, j) => (j === i ? h : x)));
+  return (
+    <div className="grid gap-2">
+      {value.map(([k, v], i) => (
+        <div key={i} className="flex gap-2">
+          <Input className="w-44" mono aria-label={t('providers.headerName')} placeholder="Header" value={k} onChange={(e) => set(i, [e.target.value, v])} />
+          <Input className="min-w-0 flex-1" mono aria-label={t('providers.headerValue')} placeholder="value" value={v} onChange={(e) => set(i, [k, e.target.value])} />
+          <Button size="sm" variant="plain" icon={<Trash2 className="size-3.5" />} aria-label={t('common.delete')} onClick={() => onChange(value.filter((_, j) => j !== i))} />
+        </div>
+      ))}
+      <div>
+        <Button size="sm" variant="plain" icon={<Plus className="size-3.5" />} onClick={() => onChange([...value, ['', '']])}>
+          {t('providers.addHeader')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (o: boolean) => void; onCreated: (p: Provider) => void }) {
   const { t } = useI18n();
   const { toast } = useFeedback();
@@ -359,9 +457,15 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
   const [apiKey, setApiKey] = useState('');
   const [variantId, setVariantId] = useState('');
   const [priceKey, setPriceKey] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [protocol, setProtocol] = useState<ApiProtocol>('openai-chat');
   const [authScheme, setAuthScheme] = useState<AuthScheme>('bearer');
+  // Step 2's "more options" (issue #8): start at the template's defaults, sent as the provider's own values.
+  const [endpoints, setEndpoints] = useState<TemplateEndpoint[]>([]);
+  const [preferred, setPreferred] = useState<ApiProtocol[]>([]);
+  const [headers, setHeaders] = useState<[string, string][]>([]);
+  const [proxy, setProxy] = useState('');
+  const [multiplier, setMultiplier] = useState<number>(1);
+  const [notes, setNotes] = useState('');
+  const [models, setModels] = useState('');
 
   useEffect(() => {
     if (!open) {
@@ -372,7 +476,6 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
       setApiKey('');
       setVariantId('');
       setPriceKey('');
-      setBaseUrl('');
     }
   }, [open]);
 
@@ -395,17 +498,39 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
 
   const pick = (tpl: ProviderTemplate | 'custom') => {
     setTemplate(tpl);
+    setVariantId('');
+    setProxy('');
+    setNotes('');
+    setModels('');
     if (tpl !== 'custom') {
       setName(tpl.name);
       setPriceKey(tpl.priceKey ?? tpl.id);
-      setVariantId('');
       setAuthScheme(tpl.auth.scheme);
+      setEndpoints(tpl.endpoints.map((e) => ({ ...e })));
+      setPreferred([...tpl.preferredUpstreamProtocols]);
+      setHeaders(Object.entries(tpl.defaultHeaders ?? {}));
+      setMultiplier(tpl.defaultPriceMultiplier ?? 1);
     } else {
       setName('');
       setPriceKey('');
-      setVariantId('');
+      setAuthScheme('bearer');
+      setEndpoints([{ protocol: 'openai-chat', baseUrl: '' }]);
+      setPreferred(['openai-chat']);
+      setHeaders([]);
+      setMultiplier(1);
     }
   };
+
+  const changeEndpoints = (next: TemplateEndpoint[]) => {
+    setPreferred((p) => followEndpoints(p, endpoints, next));
+    setEndpoints(next);
+  };
+
+  const tpl = template && template !== 'custom' ? template : null;
+  // Subscription templates sign in with accounts after creation; their addresses and headers are the template's.
+  const accounts = tpl?.authScheme === 'oauth-subscription';
+  const modelIds = models.split(MODEL_SPLIT).map((m) => m.trim()).filter(Boolean);
+  const alternatives = (tpl?.keyAlternatives ?? []).flatMap((id) => (templates.data ?? []).filter((x) => x.id === id));
 
   const submit = () => {
     const custom = template === 'custom';
@@ -416,7 +541,18 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
         name: name.trim() || null,
         apiKey: apiKey.trim() || null,
         priceKey,
-        ...(custom ? { endpoints: [{ protocol, baseUrl: baseUrl.trim() }], authScheme } : {}),
+        ...(accounts
+          ? {}
+          : {
+              endpoints: endpoints.map((e) => ({ ...e, baseUrl: e.baseUrl.trim() })),
+              authScheme,
+              preferredUpstreamProtocols: preferred.filter((p) => endpoints.some((e) => e.protocol === p)),
+              extraHeaders: Object.fromEntries(headers.filter(([k]) => k.trim()).map(([k, v]) => [k.trim(), v])),
+              httpProxy: proxy.trim() || null,
+              priceMultiplier: multiplier,
+              notes: notes.trim() || null,
+              ...(modelIds.length > 0 ? { models: modelIds } : {}),
+            }),
       },
       {
         onSuccess: (p) => {
@@ -429,7 +565,6 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
     );
   };
 
-  const tpl = template && template !== 'custom' ? template : null;
   const proceed = () => {
     if (choice === 'custom') pick('custom');
     else if (choice?.startsWith(PLUGIN_CHOICE)) {
@@ -444,9 +579,11 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
       if (found && !addedSubscriptionTemplateIds.has(found.id)) pick(found);
     }
   };
+  const endpointsOk = accounts || (endpoints.length > 0 && endpoints.every((e) => /^https?:\/\//.test(e.baseUrl.trim())));
   const canSubmit =
     template !== null &&
-    (template === 'custom' ? /^https?:\/\//.test(baseUrl.trim()) && name.trim() !== '' : !tpl!.requiresApiKey || apiKey.trim() !== '');
+    endpointsOk &&
+    (template === 'custom' ? name.trim() !== '' : !tpl!.requiresApiKey || authScheme === 'none' || apiKey.trim() !== '');
 
   return (
     <Sheet
@@ -584,6 +721,7 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
                   setVariantId(v);
                   const variant = tpl.variants?.find((x) => x.id === v);
                   setPriceKey(variant?.priceKey ?? tpl.priceKey ?? tpl.id);
+                  changeEndpoints((variant?.endpointsOverride ?? tpl.endpoints).map((e) => ({ ...e })));
                 }}
                 options={[{ value: '', label: t('providers.variantDefault') }, ...tpl.variants.map((v) => ({ value: v.id, label: v.name }))]}
               />
@@ -591,20 +729,15 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
           )}
           {template === 'custom' && (
             <>
-              <Field label={t('providers.baseUrl')} hint={t('providers.baseUrlHint')}>
-                <Input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" className="font-mono" />
+              <Labeled label={t('providers.section.endpoints')} hint={t('providers.baseUrlHint')}>
+                <EndpointsEditor value={endpoints} onChange={changeEndpoints} />
+              </Labeled>
+              <Field label={t('providers.authScheme')}>
+                <Select value={authScheme} onChange={setAuthScheme} options={AUTH_OPTIONS} />
               </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label={t('providers.protocol')}>
-                  <Select value={protocol} onChange={setProtocol} options={PROTOCOL_OPTIONS} />
-                </Field>
-                <Field label={t('providers.authScheme')}>
-                  <Select value={authScheme} onChange={setAuthScheme} options={AUTH_OPTIONS} />
-                </Field>
-              </div>
             </>
           )}
-          {tpl?.authScheme === 'oauth-subscription' ? (
+          {accounts ? (
             <Alert tone="info" title={t('providers.subscriptionWizardHint')}>
               {t('providers.subscriptionWizardDetail')}
             </Alert>
@@ -625,6 +758,24 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
               )}
             </div>
           )}
+          {tpl && alternatives.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+              <span>{t('providers.keyAlternative.wizard', { name: tpl.name, alt: alternatives.map((a) => a.name).join(' / ') })}</span>
+              {alternatives.map((a) => (
+                <Button
+                  key={a.id}
+                  size="sm"
+                  variant="plain"
+                  onClick={() => {
+                    setChoice(a.id);
+                    pick(a);
+                  }}
+                >
+                  {t('providers.keyAlternative.pick', { alt: a.name })}
+                </Button>
+              ))}
+            </div>
+          )}
           <Field label={t('providers.priceKey')} hint={t('providers.priceKeyHint')}>
             <Select
               value={priceKey}
@@ -635,7 +786,63 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
               ]}
             />
           </Field>
-          {tpl && tpl.models.length > 0 && <p className="text-[12px] text-[var(--text-secondary)]">{t('providers.templateModels', { count: tpl.models.length })}</p>}
+          {!accounts && (
+            <Disclosure title={t('providers.moreOptions')}>
+              <div className="grid gap-4">
+                {tpl && (
+                  <Labeled label={t('providers.section.endpoints')} hint={t('providers.endpointsFooter')}>
+                    <EndpointsEditor value={endpoints} onChange={changeEndpoints} />
+                  </Labeled>
+                )}
+                {new Set(endpoints.map((e) => e.protocol)).size > 1 && (
+                  <Labeled label={t('providers.preferred')} hint={t('providers.preferredHint')}>
+                    <ChipGroup
+                      label={t('providers.preferred')}
+                      options={PROTOCOL_OPTIONS.filter((o) => endpoints.some((e) => e.protocol === o.value)).map((o) => {
+                        const idx = preferred.indexOf(o.value);
+                        return { value: o.value, label: idx >= 0 ? `${idx + 1}. ${o.label}` : o.label };
+                      })}
+                      value={preferred}
+                      onValueChange={(next) => {
+                        // The chips report options order; keep the priority order in which protocols were picked.
+                        const kept = preferred.filter((x) => next.includes(x));
+                        const added = next.filter((x) => !kept.includes(x as ApiProtocol)) as ApiProtocol[];
+                        setPreferred([...kept, ...added]);
+                      }}
+                    />
+                  </Labeled>
+                )}
+                {tpl && (
+                  <Field label={t('providers.authScheme')}>
+                    <Select value={authScheme} onChange={setAuthScheme} options={AUTH_OPTIONS} />
+                  </Field>
+                )}
+                <Labeled label={t('providers.headers')}>
+                  <HeadersEditor value={headers} onChange={setHeaders} />
+                </Labeled>
+                <Field label={t('providers.proxy')} hint={t('providers.proxyHint')}>
+                  <Input mono placeholder="http://127.0.0.1:7890" value={proxy} onChange={(e) => setProxy(e.target.value)} />
+                </Field>
+                {/* Labeled, not Field: a Field's hint would wrap inside the narrow number box. */}
+                <Labeled label={t('providers.multiplier')} hint={t('providers.multiplierHint')}>
+                  <NumberInput className="w-28" label={t('providers.multiplier')} step={0.01} min={0} value={multiplier} onChange={(v) => setMultiplier(v ?? 1)} />
+                </Labeled>
+                <Field
+                  label={t('providers.initialModels')}
+                  hint={tpl ? t('providers.initialModelsTemplateHint', { count: tpl.models.length }) : t('providers.initialModelsCustomHint')}
+                >
+                  <TextArea rows={3} mono value={models} onChange={(e) => setModels(e.target.value)} />
+                </Field>
+                <Field label={t('providers.notes')}>
+                  <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
+                </Field>
+                <p className="text-[11px] text-[var(--text-muted)]">{t('providers.moreOptionsDetail')}</p>
+              </div>
+            </Disclosure>
+          )}
+          {tpl && tpl.models.length > 0 && modelIds.length === 0 && (
+            <p className="text-[12px] text-[var(--text-secondary)]">{t('providers.templateModels', { count: tpl.models.length })}</p>
+          )}
         </div>
       )}
     </Sheet>

@@ -642,6 +642,9 @@
     },
     "requiresApiKey": true,
     "priceKey": "routin",
+    "keyAlternatives": [
+      "routin"
+    ],
     "adapter": "openai",
     "modelListEndpoint": {
       "protocol": "openai-responses",
@@ -676,6 +679,9 @@
     },
     "requiresApiKey": true,
     "priceKey": "routin",
+    "keyAlternatives": [
+      "routin-ai"
+    ],
     "adapter": "openai",
     "modelListEndpoint": {
       "protocol": "openai-responses",

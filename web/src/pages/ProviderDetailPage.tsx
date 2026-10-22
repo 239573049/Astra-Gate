@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, CloudDownload, Copy, Ellipsis, FlaskConical, Plus, RotateCcw, Sparkles, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ArrowLeftRight, ArrowRight, CloudDownload, Copy, Ellipsis, FlaskConical, Plus, RotateCcw, Sparkles, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
@@ -35,6 +35,7 @@ import { ProviderTestDialog } from '../components/ProviderTestDialog';
 import { ProviderQuotaSection } from '../components/ProviderQuotaSection';
 import { PluginAccounts } from '../components/PluginAccounts';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
+import { canSwitchTemplate, KeyAlternativeHint, TemplateSwitchSheet } from '../components/TemplateSwitch';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, Field, Group, Input, KV, NumberInput, Row, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
@@ -116,6 +117,7 @@ function HeaderActions({ p }: { p: Provider }) {
   const duplicate = useDuplicateProvider();
   const del = useDeleteProvider();
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [switchOpen, setSwitchOpen] = useState(false);
   const [testOpen, setTestOpen] = useState(false);
 
   const remove = async () => {
@@ -148,10 +150,12 @@ function HeaderActions({ p }: { p: Provider }) {
               onSelect: () => duplicate.mutate(p.id, { onSuccess: (n) => navigate(`/providers/${n.id}`), onError: (e) => toast(errorText(e), 'error') }),
             },
             { id: 'tpl', label: t('providers.templateUpdate'), icon: <Sparkles className="size-3.5" />, disabled: !p.templateId, onSelect: () => setUpdateOpen(true) },
+            { id: 'switch', label: t('providers.templateSwitch'), icon: <ArrowLeftRight className="size-3.5" />, disabled: !canSwitchTemplate(p), onSelect: () => setSwitchOpen(true) },
             { id: 'del', label: t('common.delete'), icon: <Trash2 className="size-3.5" />, destructive: true, separatorBefore: true, onSelect: () => void remove() },
           ]}
         />
       <TemplateUpdateSheet open={updateOpen} onOpenChange={setUpdateOpen} provider={p} />
+      <TemplateSwitchSheet open={switchOpen} onOpenChange={setSwitchOpen} provider={p} />
       <ProviderTestDialog provider={p} open={testOpen} onOpenChange={setTestOpen} />
     </>
   );
@@ -485,6 +489,9 @@ function RemoteModelsSheet({ open, onOpenChange, provider }: { open: boolean; on
       <SearchField className="mb-3" value={search} onChange={setSearch} placeholder={t('providers.searchModels')} />
       {remote.isLoading && <Spinner lines={4} />}
       {remote.isError && <Alert tone="danger" title={t('common.error')}>{errorText(remote.error)}</Alert>}
+      {remote.error instanceof ApiError && (
+        <KeyAlternativeHint className="mt-3" provider={provider} httpStatus={(remote.error.details as { httpStatus?: number } | undefined)?.httpStatus} />
+      )}
       <div className="card divide-y divide-[var(--border)]">
         {list.map((m) => (
           <Row

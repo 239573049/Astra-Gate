@@ -38,7 +38,7 @@ plugin providers that mirror into the provider list (`astra-plugins`); client co
 
 | Symbol | File | Role |
 |---|---|---|
-| `ProviderTemplate` | `src/Astra.Providers/Templates/ProviderTemplateCatalog.cs:ProviderTemplate` | The template document: id/version/name/category/icon/links, endpoints, preferred protocols, `auth.scheme`, `requiresApiKey`, model list or `priceKey`/`modelVendor`, `adapter`, default headers/settings, `variants`, `modelListEndpoint`. |
+| `ProviderTemplate` | `src/Astra.Providers/Templates/ProviderTemplateCatalog.cs:ProviderTemplate` | The template document: id/version/name/category/icon/links, endpoints, preferred protocols, `auth.scheme`, `requiresApiKey`, model list or `priceKey`/`modelVendor`, `adapter`, default headers/settings, `variants`, `keyAlternatives` (same-service templates whose keys this one's endpoints refuse; must name each other — `Load` throws otherwise), `modelListEndpoint`. |
 | `ProviderTemplate.Clone` / `.WithVariant` | `src/Astra.Providers/Templates/ProviderTemplateCatalog.cs:ProviderTemplate.WithVariant` | Round-trips through `Json.Serialize`/`Json.Deserialize`; a variant may swap endpoints and the price key. |
 | `TemplateAuth` / `TemplateVariant` / `TemplateModelListEndpoint` | `src/Astra.Providers/Templates/ProviderTemplateCatalog.cs:TemplateVariant` | The nested template parts; `AuthScheme` is a computed convenience property for API consumers. |
 | `ProviderJsonContext` | `src/Astra.Providers/Templates/ProviderJsonContext.cs:ProviderJsonContext` | Source-gen metadata for templates + quota templates, self-registered into `JsonContexts` via `[ModuleInitializer]`. |

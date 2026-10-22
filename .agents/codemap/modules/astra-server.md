@@ -91,6 +91,10 @@ and Bun host (`astra-plugins`), and the CLI/web/desktop/docs/packaging side (`cl
 - GET `/api/providers/{id}/usage` (`Api/ProviderEndpoints.cs`) returns each credential's lifetime/today requests,
   input/output/total tokens and nano-USD cost. `day` and `timeZone` use `UsageTimeZone` (server local by default);
   subscription cost is its saved model-priced equivalent. This is an admin-only view.
+- POST `/api/providers/{id}/template-switch` (`Api/ProviderEndpoints.cs`) moves an API-key provider onto another service template
+  or variant (issue #9): the target's endpoints, protocol order and identity replace the provider's, the rest goes through the
+  same three-way merge as `/template-update` (`FollowDefaults`). Account providers and subscription/custom targets get 400.
+  `POST /api/providers` also takes the wizard's extra fields (preferred protocols, headers, proxy, multiplier, notes).
 - Headers/status codes: `X-Astra-Admin: 1` on every mutating `/api` call, `X-Astra-Runtime-Token` for shutdown, `astra_session` cookie, 421 for a disallowed Host, 403/401 `{ error }` envelopes, session `Secure` when Cloudflare says https (`src/Astra.Server/Security/Security.cs:46`).
 - Webhook payload (camelCase, `WebhookDispatcher.Payload`, `src/Astra.Server/Alerts/WebhookDispatcher.cs:255`): `id, event, status, repeat, occurredAt, rule{id,name}, subject{type,id,name}, condition, observed, message, astra{version,url}` with `X-Astra-Event` / `-Delivery` / `-Timestamp` / `-Signature` headers.
 - runtime.json shape (`RuntimeInfo`, `src/Astra.Server/Hosting/RuntimeFile.cs:8`) — the file CLI and desktop read to find a running server.

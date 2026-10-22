@@ -120,7 +120,13 @@ public static class ProviderEndpoints
                 ExtraHeaders = template?.DefaultHeaders ?? [], Settings = template?.Settings ?? new JsonObject(), Website = template?.Website,
                 SortOrder = (await db.Providers.ListAsync(ct)).Select(p => p.SortOrder).DefaultIfEmpty(-1).Max() + 1,
             };
+            // The wizard's "more options" (issue #8): anything set here replaces the template's default, as a later PATCH would.
             if (body["endpoints"] is not null) provider.Endpoints = Read<List<ProviderEndpoint>>(body["endpoints"]!);
+            if (body["preferredUpstreamProtocols"] is not null) provider.PreferredUpstreamProtocols = Read<List<ApiProtocol>>(body["preferredUpstreamProtocols"]!);
+            if (body["extraHeaders"] is not null) provider.ExtraHeaders = Read<Dictionary<string, string>>(body["extraHeaders"]!);
+            if (body["priceMultiplier"] is not null) provider.PriceMultiplier = Read<decimal>(body["priceMultiplier"]!);
+            provider.HttpProxy = String(body, "httpProxy");
+            provider.Notes = String(body, "notes");
             Validate(provider);
             if (provider.PreferredUpstreamProtocols.Count == 0) provider.PreferredUpstreamProtocols = provider.Endpoints.Select(e => e.Protocol).Distinct().ToList();
             var key = String(body, "apiKey");
@@ -325,22 +331,7 @@ public static class ProviderEndpoints
             if (latest is null) throw new AdminApiException(400, "Provider has no current template");
             if (latest.Version > (p.TemplateVersion ?? 0))
             {
-                // Three-way merge: a value changed by the user never gets overwritten by a new default.
-                if (old is not null)
-                {
-                    if (p.Name == old.Name) p.Name = latest.Name;
-                    if (p.Category == old.Category) p.Category = latest.Category;
-                    if (Same(p.Endpoints, old.Endpoints)) p.Endpoints = latest.Clone().Endpoints;
-                    if (Same(p.PreferredUpstreamProtocols, old.PreferredUpstreamProtocols)) p.PreferredUpstreamProtocols = latest.Clone().PreferredUpstreamProtocols;
-                    if (p.AuthScheme == old.Auth.Scheme) p.AuthScheme = latest.Auth.Scheme;
-                    if (p.PriceKey == (old.PriceKey ?? old.Id)) p.PriceKey = latest.PriceKey ?? latest.Id;
-                    if (p.PriceMultiplier == old.DefaultPriceMultiplier) p.PriceMultiplier = latest.DefaultPriceMultiplier;
-                    if (p.AdapterId == old.Adapter) p.AdapterId = latest.Adapter;
-                    if (p.Icon == old.Icon) p.Icon = latest.Icon;
-                    if (p.Website == old.Website) p.Website = latest.Website;
-                    MergeHeaders(p.ExtraHeaders, old.DefaultHeaders, latest.DefaultHeaders);
-                    MergeSettings(p.Settings, old.Settings, latest.Settings);
-                }
+                if (old is not null) FollowDefaults(p, old, latest);
                 var newIds = old is null ? [] : latest.Models.Except(old.Models, StringComparer.Ordinal).ToList();
                 var added = await PlanModelsAsync(db, p, newIds, ct);
                 p.TemplateVersion = latest.Version;
@@ -348,6 +339,42 @@ public static class ProviderEndpoints
                 Validate(p);
                 await db.Providers.UpdateWithModelsAsync(p, added, ct);
             }
+            return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
+        });
+        // Moves an API-key provider onto another template or variant: the remedy for a key the current template's
+        // endpoints refuse (issue #9: a pay-as-you-go RoutinAI key on the plan template), short of a new provider.
+        // The target's addresses, protocol order and identity replace the provider's; the rest follows the
+        // template-update merge, so the key, models and every value the user changed stay. Without a snapshot there is
+        // no telling a default from a choice, so only the addresses and identity change.
+        group.MapPost("/{id}/template-switch", async (string id, JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog,
+            ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
+        {
+            var p = await RequireAsync(db, id, ct);
+            var templateId = String(body, "templateId") ?? throw new AdminApiException(400, "templateId is required");
+            var variantId = String(body, "variantId");
+            var source = catalog.Get(templateId) ?? throw new AdminApiException(404, "Provider template not found");
+            if (variantId is not null && source.Variants?.Any(v => v.Id == variantId) != true)
+                throw new AdminApiException(400, $"Unknown variant '{variantId}' for '{templateId}'");
+            if (AuthSchemes.UsesAccounts(p.AuthScheme) || catalog.Get(p.TemplateId ?? "") is { Category: "subscription" })
+                throw new AdminApiException(400, "A provider that signs in with accounts cannot switch templates");
+            if (source.Category is "subscription" or "custom" || AuthSchemes.UsesAccounts(source.Auth.Scheme))
+                throw new AdminApiException(400, "Only a service template that uses an API key can be switched to");
+
+            var target = source.WithVariant(variantId);
+            var old = Json.Deserialize<ProviderTemplate>(p.TemplateSnapshotJson);
+            if (old is not null) FollowDefaults(p, old, target);
+            p.Endpoints = target.Endpoints;
+            p.PreferredUpstreamProtocols = target.PreferredUpstreamProtocols;
+            p.Category = target.Category;
+            p.Icon = target.Icon;
+            p.AdapterId = target.Adapter;
+            p.Website ??= target.Website;
+            p.TemplateId = target.Id;
+            p.TemplateVersion = target.Version;
+            p.TemplateSnapshotJson = Snapshot(target, variantId);
+            var added = await PlanModelsAsync(db, p, target.Models.Except(old?.Models ?? [], StringComparer.Ordinal).ToList(), ct);
+            Validate(p);
+            await db.Providers.UpdateWithModelsAsync(p, added, ct);
             return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
         // Server-sent events: the headers / first-token / delta / done events of one test run. Validation failures
@@ -536,6 +563,23 @@ public static class ProviderEndpoints
         Compare("website", old.Website, latest.Website);
         if (changes.Count == 0) changes.Add("Record the current template version; provider configuration is unchanged.");
         return changes;
+    }
+
+    /// <summary>Three-way merge: a value still at the <paramref name="old"/> template's default takes <paramref name="next"/>'s; one the user changed is kept.</summary>
+    private static void FollowDefaults(Provider p, ProviderTemplate old, ProviderTemplate next)
+    {
+        if (p.Name == old.Name) p.Name = next.Name;
+        if (p.Category == old.Category) p.Category = next.Category;
+        if (Same(p.Endpoints, old.Endpoints)) p.Endpoints = next.Clone().Endpoints;
+        if (Same(p.PreferredUpstreamProtocols, old.PreferredUpstreamProtocols)) p.PreferredUpstreamProtocols = next.Clone().PreferredUpstreamProtocols;
+        if (p.AuthScheme == old.Auth.Scheme) p.AuthScheme = next.Auth.Scheme;
+        if (p.PriceKey == (old.PriceKey ?? old.Id)) p.PriceKey = next.PriceKey ?? next.Id;
+        if (p.PriceMultiplier == old.DefaultPriceMultiplier) p.PriceMultiplier = next.DefaultPriceMultiplier;
+        if (p.AdapterId == old.Adapter) p.AdapterId = next.Adapter;
+        if (p.Icon == old.Icon) p.Icon = next.Icon;
+        if (p.Website == old.Website) p.Website = next.Website;
+        MergeHeaders(p.ExtraHeaders, old.DefaultHeaders, next.DefaultHeaders);
+        MergeSettings(p.Settings, old.Settings, next.Settings);
     }
 
     private static void MergeHeaders(Dictionary<string, string> current, Dictionary<string, string> old, Dictionary<string, string> latest)

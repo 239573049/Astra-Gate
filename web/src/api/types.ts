@@ -156,6 +156,9 @@ export interface ProviderTemplate {
   auth: { scheme: AuthScheme }; authScheme: AuthScheme; requiresApiKey: boolean; models: string[];
   priceKey?: string | null; defaultPriceMultiplier?: number | null;
   variants?: { id: string; name: string; priceKey?: string | null; endpointsOverride?: TemplateEndpoint[] | null }[] | null;
+  defaultHeaders?: Record<string, string> | null;
+  /** Templates of the same service whose API keys this one's endpoints refuse (a plan key vs a pay-as-you-go key). */
+  keyAlternatives?: string[] | null;
 }
 export type AuthScheme = "bearer" | "x-api-key" | "x-goog-api-key" | "query-key" | "none" | "oauth-subscription" | "plugin";
 // GET /api/provider-templates -> ProviderTemplate[]
@@ -252,6 +255,7 @@ export interface QuotaTemplate {
 //   Validation failures (unknown provider, bad parameter) answer with plain JSON {error} instead.
 // GET /api/providers/{id}/remote-models -> RemoteModel[]
 // GET /api/providers/{id}/template-update -> {currentVersion, latestVersion, changes: string[]} ; POST same path -> Provider
+// POST /api/providers/{id}/template-switch body {templateId, variantId?} -> Provider (API-key providers and service templates only)
 // PUT /api/providers/order body {ids: string[]}
 // priceKey: "" selects only official pricing; null/omitted inherits the template default.
 export interface ProviderCreate {
@@ -259,6 +263,9 @@ export interface ProviderCreate {
   endpoints?: TemplateEndpoint[] | null; authScheme?: AuthScheme | null; priceKey?: string | null;
   /** Model ids to add initially; defaults to the template's model list. */
   models?: string[] | null;
+  /** The wizard's "more options"; each replaces the template's default. */
+  preferredUpstreamProtocols?: ApiProtocol[] | null; extraHeaders?: Record<string, string> | null;
+  httpProxy?: string | null; priceMultiplier?: number | null; notes?: string | null;
 }
 export interface ProviderUpdate {
   name: string; apiKey: string; endpoints: TemplateEndpoint[]; preferredUpstreamProtocols: ApiProtocol[];

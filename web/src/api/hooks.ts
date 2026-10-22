@@ -570,6 +570,22 @@ export function useApplyTemplateUpdate(id: string) {
   });
 }
 
+/** Moves an API-key provider onto another template / variant; the key, models and edited settings stay. */
+export function useSwitchTemplate(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { templateId: string; variantId?: string | null }) =>
+      api<Provider>('POST', `/api/providers/${enc(id)}/template-switch`, body),
+    onSuccess: (p) => {
+      qc.setQueryData(keys.provider(id), p);
+      invalidateProviders(qc, id);
+      void qc.invalidateQueries({ queryKey: keys.providerModels(id) });
+      void qc.invalidateQueries({ queryKey: keys.remoteModels(id) });
+      void qc.invalidateQueries({ queryKey: keys.templateUpdate(id) });
+    },
+  });
+}
+
 export const useProviderModels = (id: string | undefined) =>
   useQuery({
     queryKey: keys.providerModels(id ?? ''),

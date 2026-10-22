@@ -33,6 +33,10 @@ public class ProviderApiTests
         Assert.Equal(["openai-responses", "anthropic"],
             routin["endpoints"]!.AsArray().Select(e => e!["protocol"]!.GetValue<string>()).ToList());
         Assert.All(routin["endpoints"]!.AsArray(), e => Assert.Equal("https://api.routin.ai/plan/v1", e!["baseUrl"]!.GetValue<string>()));
+        // Plan and pay-as-you-go keys are not interchangeable (issue #9): each template names the other.
+        Assert.Equal(["routin-ai"], routin["keyAlternatives"]!.AsArray().Select(a => a!.GetValue<string>()));
+        var routinAi = templates.Single(t => t!["id"]!.GetValue<string>() == "routin-ai")!;
+        Assert.Equal(["routin"], routinAi["keyAlternatives"]!.AsArray().Select(a => a!.GetValue<string>()));
         var ollama = templates.Single(t => t!["id"]!.GetValue<string>() == "ollama")!;
         Assert.False(ollama["requiresApiKey"]!.GetValue<bool>());
         var prices = (await host.GetJsonAsync("/api/price-keys")).AsArray();
@@ -61,6 +65,129 @@ public class ProviderApiTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.False(body!["hasApiKey"]!.GetValue<bool>());
         Assert.Null((await host.Db.Providers.GetAsync(id))!.ApiKeyEnc);
+    }
+
+    [Fact]
+    public async Task Create_Takes_The_Wizards_More_Options_In_Place_Of_The_Template_Defaults()
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new
+        {
+            templateId = "deepseek", apiKey = "sk-more-options-key-0001",
+            endpoints = new[] { new { protocol = "openai-chat", baseUrl = "https://mirror.example/v1", fullUrl = false } },
+            preferredUpstreamProtocols = new[] { "openai-chat" },
+            extraHeaders = new Dictionary<string, string> { ["X-Team"] = "blue" },
+            httpProxy = " http://127.0.0.1:7890 ", priceMultiplier = 1.5m, notes = "  team key  ", models = new[] { "deepseek-chat" },
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("https://mirror.example/v1", body!["endpoints"]!.AsArray().Single()!["baseUrl"]!.GetValue<string>());
+        Assert.Equal(["openai-chat"], body["preferredUpstreamProtocols"]!.AsArray().Select(p => p!.GetValue<string>()));
+        Assert.Equal("blue", body["extraHeaders"]!["X-Team"]!.GetValue<string>());
+        Assert.Equal("http://127.0.0.1:7890", body["httpProxy"]!.GetValue<string>());
+        Assert.Equal(1.5m, body["priceMultiplier"]!.GetValue<decimal>());
+        Assert.Equal("team key", body["notes"]!.GetValue<string>());
+        Assert.Equal(1, body["modelCount"]!.GetValue<int>());
+        Assert.Equal("deepseek", body["templateId"]!.GetValue<string>());
+
+        // Left out, they stay the template's (no proxy, no notes, its own addresses and multiplier).
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "deepseek", apiKey = "sk-plain-key-000000001" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Null(body!["httpProxy"]);
+        Assert.Null(body["notes"]);
+        Assert.Equal(1m, body["priceMultiplier"]!.GetValue<decimal>());
+        Assert.Equal("https://api.deepseek.com/v1", body["endpoints"]!.AsArray()[0]!["baseUrl"]!.GetValue<string>());
+
+        // The same checks as an edit: no reserved headers, no odd proxies, no negative multiplier.
+        foreach (var bad in new object[]
+        {
+            new { templateId = "deepseek", apiKey = "k", extraHeaders = new Dictionary<string, string> { ["Host"] = "evil.example" } },
+            new { templateId = "deepseek", apiKey = "k", httpProxy = "ftp://proxy.example" },
+            new { templateId = "deepseek", apiKey = "k", priceMultiplier = -1m },
+        })
+        {
+            (status, _) = await host.SendAsync(HttpMethod.Post, "/api/providers", bad);
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+        }
+        Assert.Equal(2, (await host.Db.Providers.ListAsync()).Count);
+    }
+
+    [Fact]
+    public async Task Template_Switch_Moves_A_Plan_Provider_To_Pay_As_You_Go_Keeping_Key_Models_And_Edits()
+    {
+        await using var host = await TestHost.StartAsync();
+        // Issue #9: a pay-as-you-go key on the plan template is refused upstream ("Please use plan API key").
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new
+        {
+            templateId = "routin", apiKey = "ak-pay-as-you-go-key-0991d", models = new[] { "my-model" },
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var id = body!["id"]!.GetValue<string>();
+        var keyBefore = (await host.Db.Providers.GetAsync(id))!.ApiKeyEnc;
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{id}", new
+        {
+            priceMultiplier = 1.2m, extraHeaders = new Dictionary<string, string> { ["X-Team"] = "blue" },
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/template-switch", new { templateId = "routin-ai" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("routin-ai", body!["templateId"]!.GetValue<string>());
+        Assert.False(body["templateUpdateAvailable"]!.GetValue<bool>());
+        Assert.Equal("RoutinAI", body["name"]!.GetValue<string>()); // still the plan template's default name, so it follows
+        Assert.All(body["endpoints"]!.AsArray(), e => Assert.Equal("https://api.routin.ai/v1", e!["baseUrl"]!.GetValue<string>()));
+        Assert.Equal(1.2m, body["priceMultiplier"]!.GetValue<decimal>());
+        Assert.Equal("blue", body["extraHeaders"]!["X-Team"]!.GetValue<string>());
+        Assert.Equal("routin", body["priceKey"]!.GetValue<string>());
+        Assert.True(body["hasApiKey"]!.GetValue<bool>());
+
+        var stored = (await host.Db.Providers.GetAsync(id))!;
+        Assert.Equal(keyBefore, stored.ApiKeyEnc);
+        Assert.Equal("routin-ai", Json.Deserialize<ProviderTemplate>(stored.TemplateSnapshotJson)!.Id);
+        Assert.Contains("my-model", (await host.Db.Providers.ListModelsAsync(id)).Select(m => m.ModelId));
+
+        // A renamed provider keeps its name; switching back restores the plan addresses.
+        (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{id}", new { name = "Team Routin" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/template-switch", new { templateId = "routin" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("Team Routin", body!["name"]!.GetValue<string>());
+        Assert.All(body["endpoints"]!.AsArray(), e => Assert.Equal("https://api.routin.ai/plan/v1", e!["baseUrl"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task Template_Switch_Takes_A_Variant_And_Refuses_Account_Providers_And_Non_Service_Targets()
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "openai", apiKey = "sk-switch-variant-key-01", models = new[] { "gpt-5" } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var id = body!["id"]!.GetValue<string>();
+
+        foreach (var (target, expected) in new (object Body, HttpStatusCode Status)[]
+        {
+            (new { }, HttpStatusCode.BadRequest),
+            (new { templateId = "no-such-template" }, HttpStatusCode.NotFound),
+            (new { templateId = "claude-subscription" }, HttpStatusCode.BadRequest),
+            (new { templateId = "custom-chat" }, HttpStatusCode.BadRequest),
+            (new { templateId = "moonshot", variantId = "mars" }, HttpStatusCode.BadRequest),
+        })
+        {
+            (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/template-switch", target);
+            Assert.Equal(expected, status);
+        }
+        Assert.Equal("openai", (await host.Db.Providers.GetAsync(id))!.TemplateId);
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/template-switch", new { templateId = "moonshot", variantId = "intl" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("moonshot", body!["templateId"]!.GetValue<string>());
+        Assert.Equal("kimi", body["adapterId"]!.GetValue<string>());
+        Assert.Equal("moonshotai", body["priceKey"]!.GetValue<string>());
+        Assert.All(body["endpoints"]!.AsArray(), e => Assert.Equal("https://api.moonshot.ai/v1", e!["baseUrl"]!.GetValue<string>()));
+        Assert.Equal("intl", JsonNode.Parse((await host.Db.Providers.GetAsync(id))!.TemplateSnapshotJson!)!["variant_id"]!.GetValue<string>());
+
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{body!["id"]!.GetValue<string>()}/template-switch", new { templateId = "anthropic" });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
     }
     [Fact]
     public async Task Plugin_Provider_Can_Be_Toggled_And_Edited_But_Keeps_Its_Plugin_Endpoints()

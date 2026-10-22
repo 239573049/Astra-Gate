@@ -50,6 +50,14 @@ public sealed class ProviderTemplate
     public Dictionary<string, string> DefaultHeaders { get; set; } = [];
     public JsonObject Settings { get; set; } = new();
     public List<TemplateVariant>? Variants { get; set; }
+
+    /// <summary>
+    /// Templates of the same service whose API keys this template's endpoints refuse, and the other way round — RoutinAI's
+    /// plan endpoint answers a pay-as-you-go key with 401 (issue #9). The console names them when a key is rejected and
+    /// offers to switch the provider over (<c>POST /api/providers/{id}/template-switch</c>).
+    /// </summary>
+    public List<string>? KeyAlternatives { get; set; }
+
     public TemplateModelListEndpoint? ModelListEndpoint { get; set; }
 
     /// <summary>Populate the default model IDs from the embedded system catalog (no network at startup).</summary>
@@ -104,6 +112,10 @@ public sealed class ProviderTemplateCatalog
                 result.Add(template);
             }
         }
+        foreach (var template in result)
+            foreach (var alt in template.KeyAlternatives ?? [])
+                if (alt == template.Id || result.FirstOrDefault(t => t.Id == alt) is not { } other || other.KeyAlternatives?.Contains(template.Id) != true)
+                    throw new InvalidOperationException($"Provider template '{template.Id}' names '{alt}' as a key alternative that does not name it back");
         return result;
     }
 }
