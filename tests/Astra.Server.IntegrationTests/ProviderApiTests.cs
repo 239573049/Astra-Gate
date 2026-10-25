@@ -1181,6 +1181,38 @@ public class ProviderApiTests
         Assert.Contains("invalid_flow", body!["error"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task Startup_Brings_Auto_Update_Templates_Current_And_Leaves_The_Others_Alone()
+    {
+        await using var host = await TestHost.StartAsync();
+        async Task<string> Staled(string templateId, string agent)
+        {
+            var (_, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId });
+            var id = body!["id"]!.GetValue<string>();
+            var provider = (await host.Db.Providers.GetAsync(id))!;
+            var old = Json.Deserialize<ProviderTemplate>(provider.TemplateSnapshotJson)!;
+            old.Version = 1;
+            old.DefaultHeaders["User-Agent"] = "old-agent";
+            provider.TemplateVersion = 1;
+            provider.TemplateSnapshotJson = Json.Serialize(old);
+            provider.ExtraHeaders["User-Agent"] = agent;
+            provider.ExtraHeaders["X-Custom"] = "keep-me";
+            await host.Db.Providers.UpdateAsync(provider);
+            return id;
+        }
+        var copilot = await Staled("github-copilot-subscription", "old-agent");
+        var grok = await Staled("grok-subscription", "old-agent");
+
+        var worker = host.App.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<Astra.Server.Hosting.TemplateAutoUpdate>().Single();
+        await worker.RunAsync(CancellationToken.None);
+
+        var updated = (await host.Db.Providers.GetAsync(copilot))!;
+        Assert.True(updated.TemplateVersion > 1);
+        Assert.NotEqual("old-agent", updated.ExtraHeaders["User-Agent"]);
+        Assert.Equal("keep-me", updated.ExtraHeaders["X-Custom"]);
+        Assert.Equal(1, (await host.Db.Providers.GetAsync(grok))!.TemplateVersion);
+    }
+
     [Theory]
     [InlineData("0.2.93", "1.0.13")]
     [InlineData("1.0.99", "1.0.99")]

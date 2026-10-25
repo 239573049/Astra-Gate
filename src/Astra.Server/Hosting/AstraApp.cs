@@ -79,6 +79,7 @@ public static class AstraApp
         builder.Services.AddSingleton(ClientEnvironment.Real);
         builder.Services.AddSingleton<ClientInstallService>();
         builder.Services.AddHostedService<ClientProbeWarmup>();
+        builder.Services.AddHostedService<TemplateAutoUpdate>();
         builder.Services.AddSingleton<ClientService>();
         builder.Services.AddSingleton<ClaudeDirectService>();
         builder.Services.AddSingleton<TokenService>();

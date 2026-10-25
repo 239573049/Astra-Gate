@@ -58,6 +58,12 @@ public sealed class ProviderTemplate
     /// </summary>
     public List<string>? KeyAlternatives { get; set; }
 
+    /// <summary>
+    /// Providers on this template move to a newer template version on their own at startup (the same three-way merge as
+    /// the console's "update template": defaults they still follow change, values the user edited stay).
+    /// </summary>
+    public bool AutoUpdate { get; set; }
+
     public TemplateModelListEndpoint? ModelListEndpoint { get; set; }
 
     /// <summary>Populate the default model IDs from the embedded system catalog (no network at startup).</summary>

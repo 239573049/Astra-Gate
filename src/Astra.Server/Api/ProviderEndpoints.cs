@@ -327,18 +327,7 @@ public static class ProviderEndpoints
         group.MapPost("/{id}/template-update", async (string id, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ProviderQuotaManager quota, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
-            var (old, latest, variantId) = Templates(p, catalog);
-            if (latest is null) throw new AdminApiException(400, "Provider has no current template");
-            if (latest.Version > (p.TemplateVersion ?? 0))
-            {
-                if (old is not null) FollowDefaults(p, old, latest);
-                var newIds = old is null ? [] : latest.Models.Except(old.Models, StringComparer.Ordinal).ToList();
-                var added = await PlanModelsAsync(db, p, newIds, ct);
-                p.TemplateVersion = latest.Version;
-                p.TemplateSnapshotJson = Snapshot(latest, variantId);
-                Validate(p);
-                await db.Providers.UpdateWithModelsAsync(p, added, ct);
-            }
+            await ApplyTemplateUpdateAsync(db, p, catalog, ct);
             return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
         // Moves an API-key provider onto another template or variant: the remedy for a key the current template's
@@ -519,6 +508,24 @@ public static class ProviderEndpoints
             existing[id] = m; result.Add(m);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Moves the provider to its template's current version when that is newer: defaults it still follows are replaced,
+    /// values the user changed stay, and models the template gained are added. A no-op at the current version.
+    /// </summary>
+    internal static async Task ApplyTemplateUpdateAsync(AstraDatabase db, Provider p, ProviderTemplateCatalog catalog, CancellationToken ct)
+    {
+        var (old, latest, variantId) = Templates(p, catalog);
+        if (latest is null) throw new AdminApiException(400, "Provider has no current template");
+        if (latest.Version <= (p.TemplateVersion ?? 0)) return;
+        if (old is not null) FollowDefaults(p, old, latest);
+        var newIds = old is null ? [] : latest.Models.Except(old.Models, StringComparer.Ordinal).ToList();
+        var added = await PlanModelsAsync(db, p, newIds, ct);
+        p.TemplateVersion = latest.Version;
+        p.TemplateSnapshotJson = Snapshot(latest, variantId);
+        Validate(p);
+        await db.Providers.UpdateWithModelsAsync(p, added, ct);
     }
 
     internal static string Snapshot(ProviderTemplate template, string? variantId)

@@ -934,6 +934,7 @@
   {
     "id": "github-copilot-subscription",
     "version": 2,
+    "autoUpdate": true,
     "name": "GitHub Copilot 订阅",
     "category": "subscription",
     "icon": "copilot",
