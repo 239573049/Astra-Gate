@@ -44,6 +44,7 @@ public static class GatewayEndpoints
             a.ListModelsAsync(c, c.Request.Headers.ContainsKey("anthropic-version") ? ApiProtocol.Anthropic : ApiProtocol.OpenAIChat))
             .ExcludeFromDescription();
         app.MapGet("/v1beta/models", (HttpContext c, GatewayAuxiliary a) => a.ListModelsAsync(c, ApiProtocol.Gemini)).ExcludeFromDescription();
+        app.MapGet("/v1beta/models/{*model}", (HttpContext c, string model, GatewayAuxiliary a) => a.GetGeminiModelAsync(c, model)).ExcludeFromDescription();
         // Muse Code (native CLI) fetches its model catalog from the host root, not from its --base-url: GET <origin>/muse-code/models
         // (the responses call goes to <base>/responses). The OpenAI list shape ({"data":[…]}) is what it parses.
         app.MapGet("/muse-code/models", (HttpContext c, GatewayAuxiliary a) => a.ListModelsAsync(c, ApiProtocol.OpenAIChat))
@@ -63,16 +64,54 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
     /// </summary>
     public async Task ListModelsAsync(HttpContext ctx, ApiProtocol protocol)
     {
-        GatewayRoute route;
+        List<(string Id, string Name, Provider Provider)> list;
         try
         {
-            route = await router.ResolveAsync(ctx.Request, ctx.RequestAborted);
+            list = await ModelListAsync(ctx);
         }
         catch (GatewayException e)
         {
             await WriteErrorAsync(ctx, protocol, e.Status, e.Type, e.Message);
             return;
         }
+        JsonObject body = protocol switch
+        {
+            ApiProtocol.Anthropic => new JsonObject
+            {
+                ["data"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
+                {
+                    ["type"] = "model",
+                    ["id"] = m.Id,
+                    ["display_name"] = m.Name,
+                    ["created_at"] = m.Provider.CreatedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                }).ToArray()),
+                ["has_more"] = false,
+                ["first_id"] = list.Count > 0 ? list[0].Id : null,
+                ["last_id"] = list.Count > 0 ? list[^1].Id : null,
+            },
+            ApiProtocol.Gemini => new JsonObject
+            {
+                ["models"] = new JsonArray(list.Select(m => (JsonNode)GeminiModel(m.Id, m.Name)).ToArray()),
+            },
+            _ => new JsonObject
+            {
+                ["object"] = "list",
+                ["data"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
+                {
+                    ["id"] = m.Id,
+                    ["object"] = "model",
+                    ["created"] = m.Provider.CreatedAt.ToUnixTimeSeconds(),
+                    ["owned_by"] = m.Provider.Name,
+                }).ToArray()),
+            },
+        };
+        ctx.Response.ContentType = "application/json";
+        await ctx.Response.WriteAsync(body.ToJsonString(GatewayJson.Options), ctx.RequestAborted);
+    }
+
+    private async Task<List<(string Id, string Name, Provider Provider)>> ModelListAsync(HttpContext ctx)
+    {
+        var route = await router.ResolveAsync(ctx.Request, ctx.RequestAborted);
         List<(string Id, string Name, Provider Provider)> list;
         if (route.Client is { Kind: ClientKinds.ClaudeDesktop } desktop)
         {
@@ -92,45 +131,36 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             if (smartRouter.AdvertisedModel is { } virtualModel && list.All(m => m.Id != virtualModel))
                 list.Add((virtualModel, "Astra Auto", new Provider { Id = "astra", Name = "astra", CreatedAt = route.Provider.CreatedAt }));
         }
-        JsonObject body = protocol switch
-        {
-            ApiProtocol.Anthropic => new JsonObject
-            {
-                ["data"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
-                {
-                    ["type"] = "model",
-                    ["id"] = m.Id,
-                    ["display_name"] = m.Name,
-                    ["created_at"] = m.Provider.CreatedAt.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                }).ToArray()),
-                ["has_more"] = false,
-                ["first_id"] = list.Count > 0 ? list[0].Id : null,
-                ["last_id"] = list.Count > 0 ? list[^1].Id : null,
-            },
-            ApiProtocol.Gemini => new JsonObject
-            {
-                ["models"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
-                {
-                    ["name"] = "models/" + m.Id,
-                    ["displayName"] = m.Name,
-                    ["supportedGenerationMethods"] = new JsonArray("generateContent", "streamGenerateContent", "countTokens"),
-                }).ToArray()),
-            },
-            _ => new JsonObject
-            {
-                ["object"] = "list",
-                ["data"] = new JsonArray(list.Select(m => (JsonNode)new JsonObject
-                {
-                    ["id"] = m.Id,
-                    ["object"] = "model",
-                    ["created"] = m.Provider.CreatedAt.ToUnixTimeSeconds(),
-                    ["owned_by"] = m.Provider.Name,
-                }).ToArray()),
-            },
-        };
-        ctx.Response.ContentType = "application/json";
-        await ctx.Response.WriteAsync(body.ToJsonString(GatewayJson.Options), ctx.RequestAborted);
+        return list;
     }
+
+    /// <summary>Gemini <c>GET /v1beta/models/{id}</c>: one entry of the list <see cref="ListModelsAsync"/> serves, or a 404.</summary>
+    public async Task GetGeminiModelAsync(HttpContext ctx, string model)
+    {
+        try
+        {
+            var id = model.StartsWith("models/", StringComparison.Ordinal) ? model["models/".Length..] : model;
+            var list = await ModelListAsync(ctx);
+            if (list.FirstOrDefault(m => m.Id == id) is not { Id: not null } found)
+            {
+                await WriteErrorAsync(ctx, ApiProtocol.Gemini, 404, "not_found_error", $"模型不存在：{id}");
+                return;
+            }
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsync(GeminiModel(found.Id, found.Name).ToJsonString(GatewayJson.Options), ctx.RequestAborted);
+        }
+        catch (GatewayException e)
+        {
+            await WriteErrorAsync(ctx, ApiProtocol.Gemini, e.Status, e.Type, e.Message);
+        }
+    }
+
+    private static JsonObject GeminiModel(string id, string name) => new()
+    {
+        ["name"] = "models/" + id,
+        ["displayName"] = name,
+        ["supportedGenerationMethods"] = new JsonArray("generateContent", "streamGenerateContent", "countTokens"),
+    };
 
     /// <summary>
     /// Anthropic count_tokens / Gemini countTokens: forwarded when the provider speaks that protocol, otherwise a
@@ -235,8 +265,16 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
                     await response.Content.CopyToAsync(ctx.Response.Body, ct);
                     return;
                 }
-                var estimate = Math.Max(1, Encoding.UTF8.GetCharCount(payload.Span) / 4);
-                JsonObject result = protocol == ApiProtocol.Gemini ? new JsonObject { ["totalTokens"] = estimate } : new JsonObject { ["input_tokens"] = estimate };
+                var estimate = protocol == ApiProtocol.Gemini && json is not null
+                    ? TokenEstimator.Gemini(json)
+                    : Math.Max(1, Encoding.UTF8.GetCharCount(payload.Span) / 4);
+                JsonObject result = protocol == ApiProtocol.Gemini
+                    ? new JsonObject
+                    {
+                        ["totalTokens"] = estimate,
+                        ["promptTokensDetails"] = new JsonArray(new JsonObject { ["modality"] = "TEXT", ["tokenCount"] = estimate }),
+                    }
+                    : new JsonObject { ["input_tokens"] = estimate };
                 ctx.Response.ContentType = "application/json";
                 await ctx.Response.WriteAsync(result.ToJsonString(GatewayJson.Options), ct);
             }

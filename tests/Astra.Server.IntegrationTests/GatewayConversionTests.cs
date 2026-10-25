@@ -482,6 +482,45 @@ public class GatewayConversionTests
         """],"usageMetadata":{"promptTokenCount":1200,"candidatesTokenCount":80,"totalTokenCount":1280}""";
 
     [Fact]
+    public async Task Gemini_Model_Get_Returns_One_Entry_Or_404()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.GeminiCli, ApiProtocol.OpenAIChat, _ => FakeUpstream.Sse(ChatStream));
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "gpt-5" });
+        using (var ok = new HttpRequestMessage(HttpMethod.Get, "/v1beta/models/gpt-5"))
+        {
+            ok.Headers.TryAddWithoutValidation("x-goog-api-key", gw.Key);
+            var response = await gw.Host.Client.SendAsync(ok);
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var model = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
+            Assert.Equal("models/gpt-5", model["name"]!.GetValue<string>());
+            Assert.Contains(model["supportedGenerationMethods"]!.AsArray(), m => m!.GetValue<string>() == "countTokens");
+        }
+        using var missing = new HttpRequestMessage(HttpMethod.Get, "/v1beta/models/no-such-model");
+        missing.Headers.TryAddWithoutValidation("x-goog-api-key", gw.Key);
+        var gone = await gw.Host.Client.SendAsync(missing);
+        Assert.Equal(HttpStatusCode.NotFound, gone.StatusCode);
+        Assert.Equal("NOT_FOUND", JsonNode.Parse(await gone.Content.ReadAsStringAsync())!["error"]!["status"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Gemini_CountTokens_Without_A_Gemini_Upstream_Estimates_From_Text_Not_Json()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.GeminiCli, ApiProtocol.OpenAIChat, _ => FakeUpstream.Sse(ChatStream));
+        var plain = await PostGeminiAsync(gw, "/v1beta/models/gpt-5:countTokens",
+            """{"contents":[{"role":"user","parts":[{"text":"abcdefgh"}]}]}""");
+        Assert.Equal(HttpStatusCode.OK, plain.StatusCode);
+        // 8 Latin characters = 2 tokens, plus one turn's framing.
+        Assert.Equal(6, JsonNode.Parse(await plain.Content.ReadAsStringAsync())!["totalTokens"]!.GetValue<int>());
+
+        var wrapped = await PostGeminiAsync(gw, "/v1beta/models/gpt-5:countTokens",
+            """{"generateContentRequest":{"model":"models/gpt-5","systemInstruction":{"parts":[{"text":"你好"}]},"contents":[{"role":"user","parts":[{"text":"abcdefgh"}]}]}}""");
+        var counted = JsonNode.Parse(await wrapped.Content.ReadAsStringAsync())!;
+        Assert.Equal(8, counted["totalTokens"]!.GetValue<int>());
+        Assert.Equal(8, counted["promptTokensDetails"]![0]!["tokenCount"]!.GetValue<int>());
+        Assert.Empty(gw.Upstream.Requests);
+    }
+
+    [Fact]
     public async Task Gemini_Stream_Without_Alt_Sse_Answers_With_A_Json_Array()
     {
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.GeminiCli, ApiProtocol.OpenAIChat, _ => FakeUpstream.Sse(ChatStream));
