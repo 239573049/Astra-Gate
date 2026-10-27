@@ -84,7 +84,7 @@ public interface IModelProtocolResolver
 /// that client's bindings, a bare token is a direct call to the token's own default provider or provider pool.
 /// Tokens are looked up by prefix and compared by hash in constant time.
 /// </summary>
-public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, SettingsService settings, PoolRouting pools)
+public sealed class GatewayRouter(AstraDatabase db, ClientRouting routing, SettingsService settings, PoolRouting pools) : IGatewayRouter
 {
     public async Task<GatewayRoute> ResolveAsync(HttpRequest request, CancellationToken ct)
     {

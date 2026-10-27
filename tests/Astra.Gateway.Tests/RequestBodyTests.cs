@@ -98,4 +98,66 @@ public class RequestBodyTests
         var ex = await Assert.ThrowsAsync<GatewayException>(() => ReadText(bomb, "zstd", maxBytes: 1 << 20));
         Assert.Equal(413, ex.Status);
     }
+
+    [Fact]
+    public async Task A_body_still_arriving_at_the_deadline_is_a_408()
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Body = new WaitingStream();
+        var ex = await Assert.ThrowsAsync<GatewayException>(() =>
+            RequestBody.ReadAsync(ctx.Request, 1 << 20, CancellationToken.None, TimeSpan.FromMilliseconds(50)));
+        Assert.Equal(408, ex.Status);
+    }
+
+    [Fact]
+    public async Task The_caller_leaving_cancels_a_read_with_a_deadline()
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Body = new WaitingStream();
+        using var caller = new CancellationTokenSource(TimeSpan.FromMilliseconds(20));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            RequestBody.ReadAsync(ctx.Request, 1 << 20, caller.Token, TimeSpan.FromSeconds(30)));
+    }
+
+    [Fact]
+    public async Task A_read_cancelled_inside_the_stream_is_a_408_under_a_deadline()
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Body = new CancelledStream();
+        var ex = await Assert.ThrowsAsync<GatewayException>(() =>
+            RequestBody.ReadAsync(ctx.Request, 1 << 20, CancellationToken.None, TimeSpan.FromSeconds(30)));
+        Assert.Equal(408, ex.Status);
+    }
+
+    [Theory]
+    [InlineData(413, "request_too_large")]
+    [InlineData(400, "invalid_request_error")]
+    public async Task The_servers_own_body_rejection_keeps_its_status(int status, string type)
+    {
+        var ctx = new DefaultHttpContext();
+        ctx.Request.Body = new RejectingStream(status);
+        var ex = await Assert.ThrowsAsync<GatewayException>(() => RequestBody.ReadAsync(ctx.Request, 1 << 20, CancellationToken.None));
+        Assert.Equal((status, type), (ex.Status, ex.Type));
+    }
+
+    private sealed class WaitingStream : MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return 0;
+        }
+    }
+
+    private sealed class CancelledStream : MemoryStream
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<int>(new TaskCanceledException("Synthetic stream timeout", new TimeoutException()));
+    }
+
+    private sealed class RejectingStream(int status) : MemoryStream
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            ValueTask.FromException<int>(new BadHttpRequestException("rejected by the server", status));
+    }
 }

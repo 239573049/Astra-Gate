@@ -27,33 +27,36 @@ namespace Astra.Gateway.Pipeline;
 /// <summary>
 /// The gateway request pipeline (plan §6): authenticate the local client key, pick the upstream endpoint,
 /// forward (pass-through fast path) or translate through the IR, stream the answer back, and record timing,
-/// usage and cost for every request.
+/// usage and cost for every request. What it needs from its host is a contract (PipelineContracts.cs): the server's
+/// SQLite-backed services, or the relay's per-request ones; a null optional feature is one the host does not have.
 /// </summary>
 public sealed class GatewayPipeline(
-    GatewayRouter router,
+    IGatewayRouter router,
     CodecRegistry codecs,
     GatewayHttpClients http,
-    UpstreamAuthResolver auth,
+    IUpstreamAuthResolver auth,
     AccountScheduler scheduler,
-    EffectiveModelResolver models,
+    IEffectiveModelResolver models,
     IModelProtocolResolver modelProtocols,
-    SettingsService settings,
-    PrivacyGuardService privacy,
-    BodyStore bodies,
-    UsageWriter usageWriter,
+    IGatewaySettings settings,
+    PrivacyGuardService? privacy,
+    BodyStore? bodies,
+    IRequestSink usageWriter,
     LiveRequestFeed live,
-    MiddlewareEngine middleware,
-    PluginFetchHandler pluginTransport,
-    TokenLimiter limiter,
+    MiddlewareEngine? middleware,
+    PluginFetchHandler? pluginTransport,
+    TokenLimiter? limiter,
     TraceLinker linker,
-    PoolRouting pools,
+    PoolRouting? pools,
     ProviderPoolScheduler poolScheduler,
     ProviderHealth health,
-    SmartRouter smartRouter,
-    ILogger<GatewayPipeline> logger)
+    ISmartRouter smartRouter,
+    ILogger<GatewayPipeline> logger,
+    RequestBodyLimits? bodyLimits = null)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
-    private readonly HttpClient _pluginClient = new(pluginTransport, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly HttpClient? _pluginClient = pluginTransport is null ? null : new(pluginTransport, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+    private readonly RequestBodyLimits _bodyLimits = bodyLimits ?? RequestBodyLimits.Default;
 
     internal const long MaxRequestBytes = 64L * 1024 * 1024;
     private const int MaxErrorBodyBytes = 1024 * 1024;
@@ -96,7 +99,7 @@ public sealed class GatewayPipeline(
         ctx.Response.Headers["x-astra-request-id"] = record.Id;
         // Live request log: the request shows up the moment it arrives, then follows its progress.
         live.Start(record);
-        var capture = s.DebugBodies ? new BodyCapture() : null;
+        var capture = s.DebugBodies && bodies is not null ? new BodyCapture() : null;
         // Tracing (.plan/observability.md §2): the request's spans, and where it sits in its agent's loop. The agent's
         // traceparent only names the parent; nothing of it goes upstream (GatewayHttpClients).
         var trace = new RequestTrace();
@@ -150,11 +153,11 @@ public sealed class GatewayPipeline(
             live.Update(record);
 
             // Token caps (plan: alerts-webhooks-token-limits §1.4): once per request, before anything goes upstream.
-            await limiter.CheckAsync(route.Token, ct);
+            if (limiter is not null) await limiter.CheckAsync(route.Token, ct);
             routeSpan.Set("astra.client.kind", route.ClientKind).Set("astra.token.id", route.Token.Id).Set("astra.provider.id", provider.Id).Ok().End();
             // Read once into a pooled UTF-8 buffer; from here on the body is these bytes and one tree over them.
             var bodySpan = trace.Start(TraceSpanNames.Body);
-            requestBody = await RequestBody.ReadAsync(ctx.Request, MaxRequestBytes, ct);
+            requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.MaxBytes, ct, _bodyLimits.ReadTimeout);
             bodySpan.Set("astra.body.bytes", requestBody.Utf8.Length).Ok().End();
             capture?.Set(BodyStore.ClientRequest, requestBody.Utf8);
 
@@ -162,7 +165,7 @@ public sealed class GatewayPipeline(
             // API first, before the privacy guard — which still applies to whatever they send on — and the
             // reply on its way back to the agent. A reject is answered in the agent's API's error shape.
             var middlewareStart = Stopwatch.GetTimestamp();
-            middlewareRun = await middleware.BeginAsync(() =>
+            middlewareRun = middleware is null ? null : await middleware.BeginAsync(() =>
                 GatewayMiddleware.Info(inbound, requestBody.Utf8, ctx.Request.Path,
                     route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream), ct);
             if (middlewareRun is not null)
@@ -199,9 +202,12 @@ public sealed class GatewayPipeline(
                     .Set("astra.request.system_chars", shape.SystemChars).Set("gen_ai.request.max_tokens", shape.MaxTokens);
             }
             var privacySpan = trace.Start(TraceSpanNames.Privacy);
-            var guard = parsed is (var root, var tree)
-                ? privacy.InspectJson(root, tree, route.ClientKind)
-                : privacy.Inspect(requestBody.Text(), route.ClientKind);
+            // A host without a guard passes the body on as a switched-off guard does.
+            var guard = privacy is null
+                ? PrivacyGuardResult.PassThrough with { Body = parsed is null ? requestBody.Text() : "" }
+                : parsed is (var root, var tree)
+                    ? privacy.InspectJson(root, tree, route.ClientKind)
+                    : privacy.Inspect(requestBody.Text(), route.ClientKind);
             restorable = guard.RestoreMap.Count;
             privacySpan.Set("astra.privacy.applied", guard.Applied).Set("astra.privacy.hits", guard.Hits.Sum(h => (long)h.Count))
                 .Set("astra.privacy.categories", guard.Hits.Count == 0 ? null : string.Join(",", guard.Hits.Select(h => h.Category).Distinct()))
@@ -277,7 +283,7 @@ public sealed class GatewayPipeline(
             }
             List<GatewayRoute> candidates;
             var maxAttempts = 1;
-            if (route.Pool is { } pool)
+            if (route.Pool is { } pool && pools is not null)
             {
                 poolPlan = await pools.PlanAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, stickyKey, commit: true, ct);
                 candidates = poolPlan.Order.Select(t => route with { Provider = t.Provider, AccountId = t.AccountId }).ToList();
@@ -733,7 +739,7 @@ public sealed class GatewayPipeline(
             if (capture is not null)
             {
                 record.BodyRef = BodyStore.RefFor(record.Id, record.StartedAtUtc);
-                await capture.WriteAsync(bodies, record.BodyRef);
+                await capture.WriteAsync(bodies!, record.BodyRef);
             }
             // Nothing reads the body tree past this point; a send still in flight holds its own buffer reference.
             upstreamPayload?.Release();
@@ -817,7 +823,7 @@ public sealed class GatewayPipeline(
                     .Set("astra.transport", plugin ? "plugin" : null);
 
                 // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
-                var client = plugin ? _pluginClient
+                var client = plugin ? _pluginClient ?? throw NoPluginProviders()
                     : credentials.Proxy is { Length: > 0 } accountProxy ? http.For(accountProxy) : http.For(provider);
                 var request = Build(credentials);
                 // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
@@ -846,7 +852,7 @@ public sealed class GatewayPipeline(
                         {
                             // the plugin renews its own sign-in: its loader is asked again, once
                             if (credentials.PluginKey is { } key)
-                                await pluginTransport.Providers.ReloadAsync(PluginProviderOf(provider), key, ct);
+                                await (pluginTransport ?? throw NoPluginProviders()).Providers.ReloadAsync(PluginProviderOf(provider), key, ct);
                         }
                         else
                             credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);
@@ -893,7 +899,8 @@ public sealed class GatewayPipeline(
                     }
                 }
                 // 失败时的请求日志（用户要求的排查手段）：地址 + 最终出去的请求头（凭据脱敏）。
-                if (!response.IsSuccessStatusCode && subscription)
+                // 只记已保存的账号；请求自带的凭据（relay）连脱敏后的末 4 位也不进日志。
+                if (!response.IsSuccessStatusCode && subscription && credentials.AccountId is not null)
                     logger.LogWarning("Upstream {Status} for {Provider} → {Url}; sent: {Headers}",
                         (int)response.StatusCode, provider.Name, url, DescribeRequest(request));
                 EndAttempt(attempt, response, null);
@@ -1017,7 +1024,7 @@ public sealed class GatewayPipeline(
                 request.Headers.Remove(name);
                 request.Headers.TryAddWithoutValidation(name, value);
             }
-            if (CopilotCliHeaders.Applies(provider)) CopilotCliHeaders.Apply(request, clientRequest.Headers);
+            ProviderClientHeaders.Apply(provider, request, clientRequest.Headers);
             // Non-Claude-Code callers of a Claude subscription: either the Claude Code identity
             // (subscription.mimic_claude_code — canonical headers only, nothing of the client's leaks
             // through) or just the betas OAuth tokens require.
@@ -1131,8 +1138,12 @@ public sealed class GatewayPipeline(
         // they arrive and only parsed to observe usage, first token and errors — no event is decoded to text and encoded back.
         var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && itemIds is null && !asJsonArray && capture is null;
         // Upstream bytes until the first SSE event parses: a body that never becomes SSE (a JSON object /
-        // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here.
+        // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here. Forwarded bytes
+        // of an upstream that declared SSE are not held: its comment lines (heartbeats while the model is still
+        // thinking) reach the client at once, so a proxy in between that times out idle connections keeps this one.
         PooledBuffer? rawPending = null;
+        var forwardDeclaredSse = forwardBytes
+            && response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) == true;
 
         try
         {
@@ -1142,7 +1153,7 @@ public sealed class GatewayPipeline(
                 if (read == 0) break;
                 var chunk = buffer.AsMemory(0, read);
                 var events = parser.Feed(chunk.Span);
-                if (!sawSseEvent && events.Count == 0)
+                if (!sawSseEvent && events.Count == 0 && !forwardDeclaredSse)
                 {
                     (rawPending ??= new PooledBuffer(read)).Write(chunk.Span);
                     if (upstreamCapture is not null) AppendCapped(upstreamCapture, chunk.Span);
@@ -1634,6 +1645,9 @@ public sealed class GatewayPipeline(
 
     private static JsonObject GenericError(string type, string message) =>
         new() { ["error"] = new JsonObject { ["type"] = type, ["message"] = message } };
+
+    // Only plugin sync creates plugin providers, so a host without the plugin runtime never routes to one.
+    private static InvalidOperationException NoPluginProviders() => new("This host runs no plugin providers.");
 
     private static JsonObject ParseObject(string text)
     {

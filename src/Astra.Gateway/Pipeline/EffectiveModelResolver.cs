@@ -7,7 +7,7 @@ namespace Astra.Gateway.Pipeline;
 /// Builds the effective model (system model + provider overrides + provider-specific price) for a provider's model.
 /// Shared by the gateway (billing a request) and the admin API (provider model views, billing simulator).
 /// </summary>
-public sealed class EffectiveModelResolver(AstraDatabase db)
+public sealed class EffectiveModelResolver(AstraDatabase db) : IEffectiveModelResolver
 {
     public async Task<EffectiveModel> ResolveAsync(Provider provider, ProviderModel pm, CancellationToken ct = default)
     {

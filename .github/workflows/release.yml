@@ -217,6 +217,13 @@ jobs:
         shell: bash
         run: out/publish/astra-server${{ startsWith(matrix.rid, 'win') && '.exe' || '' }} plugin-selftest
 
+      # `astra-server relay` serves the gateway pipeline without storage: its smoke test runs the binary just published
+      # against a fake upstream (per-request credentials, protocols, relayed endpoints, compression, limits, SSE).
+      - name: Smoke-test the relay
+        if: matrix.rid != 'osx-x64'
+        shell: bash
+        run: node scripts/relay-smoke.mjs out/publish/astra-server${{ startsWith(matrix.rid, 'win') && '.exe' || '' }}
+
       - name: Verify versions are in sync
         shell: bash
         run: node scripts/sync-versions.mjs --check
@@ -676,6 +683,18 @@ jobs:
           curl --fail --silent http://127.0.0.1:17321/api/auth/status | grep -q '"required":true'
           curl --fail --silent http://127.0.0.1:17321/ | grep -qi '<html'
           docker stop astra-smoke
+          # The same image as the stateless relay: no volume and no password; its health check falls back to /readyz.
+          docker run -d --name astra-relay-smoke -p 17322:17321 astra-smoke:test relay --provider openai
+          for i in $(seq 1 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' astra-relay-smoke)
+            [ "$status" = healthy ] && break
+            [ "$(docker inspect -f '{{.State.Running}}' astra-relay-smoke)" = true ] || { docker logs astra-relay-smoke; exit 1; }
+            sleep 2
+          done
+          [ "$status" = healthy ] || { echo "::error::relay container never became healthy ($status)"; docker logs astra-relay-smoke; exit 1; }
+          curl --fail --silent http://127.0.0.1:17322/readyz
+          [ "$(curl --silent -o /dev/null -w '%{http_code}' http://127.0.0.1:17322/v1/models)" = 401 ]
+          docker stop astra-relay-smoke
 
       # stable: latest, x.y.z, x.y (+ preview when newer than the last preview);
       # preview: x.y.z-preview.N and preview only — metadata-action never derives

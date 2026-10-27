@@ -87,9 +87,11 @@ public static class JsonContexts
         {
             lock (Gate)
             {
-                foreach (var part in Parts)
+                // By index: resolving a type can load an assembly whose [ModuleInitializer] registers its context on this
+                // thread, inside this (reentrant) lock — a host that touches JSON before loading everything sees that.
+                for (var i = 0; i < Parts.Count; i++)
                 {
-                    if (part.GetTypeInfo(type, options) is { } info) return info;
+                    if (Parts[i].GetTypeInfo(type, options) is { } info) return info;
                 }
                 // Not migrated yet: keep the old reflection behavior on the JIT. Under Native AOT this
                 // returns null and System.Text.Json throws NotSupportedException naming the type.

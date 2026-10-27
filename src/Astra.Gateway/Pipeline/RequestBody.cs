@@ -175,14 +175,40 @@ public sealed class RequestBody : IDisposable
 
     /// <summary>
     /// Reads the whole body, undoing its <c>Content-Encoding</c> (zstd — codex-cli's default —, gzip, br, deflate,
-    /// stacked in any order); a body over <paramref name="maxBytes"/>, compressed or decoded, is a 413.
+    /// stacked in any order); a body over <paramref name="maxBytes"/>, compressed or decoded, is a 413. With a
+    /// <paramref name="timeout"/>, a body that has not arrived in full by then is a 408 (the caller leaving still cancels).
     /// </summary>
-    public static async Task<RequestBody> ReadAsync(HttpRequest request, long maxBytes, CancellationToken ct)
+    public static async Task<RequestBody> ReadAsync(HttpRequest request, long maxBytes, CancellationToken ct, TimeSpan? timeout = null)
+    {
+        if (timeout is not { } limit) return await ReadCoreAsync(request, maxBytes, ct);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(limit);
+        try
+        {
+            return await ReadCoreAsync(request, maxBytes, deadline.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new GatewayException(408, "timeout", "读取请求体超时。");
+        }
+    }
+
+    private static async Task<RequestBody> ReadCoreAsync(HttpRequest request, long maxBytes, CancellationToken ct)
     {
         var encodings = ContentEncodings(request.Headers.ContentEncoding.ToString());
         var declared = request.ContentLength;
         if (declared > maxBytes) throw TooLarge(maxBytes);
-        var buffer = await ReadAllAsync(request.Body, declared, maxBytes, ct);
+        PooledBuffer buffer;
+        try
+        {
+            buffer = await ReadAllAsync(request.Body, declared, maxBytes, ct);
+        }
+        catch (BadHttpRequestException e)
+        {
+            // The server's own limits and framing (a body over its size limit, broken chunking): the request's fault.
+            throw new GatewayException(e.StatusCode, e.StatusCode == 413 ? "request_too_large" : "invalid_request_error",
+                e.StatusCode == 413 ? "请求体过大。" : "请求体无效。");
+        }
         try
         {
             // Codings are listed in the order they were applied: undo the last first.

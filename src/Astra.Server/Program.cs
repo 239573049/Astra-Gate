@@ -11,7 +11,10 @@ namespace Astra.Server;
 ///   restore-all [--purge]      offline restore of every client config Astra modified
 ///   migrate                    apply database migrations and exit
 ///   set-password               read a new admin password from stdin (required for non-loopback hosts)
-///   healthcheck                GET /api/health on the configured address; exit 0 when healthy (Docker HEALTHCHECK)
+///   healthcheck                GET /api/health on the configured address (a relay's /readyz when that is a 404);
+///                              exit 0 when healthy (Docker HEALTHCHECK)
+///   relay --provider id        a gateway without storage: each request's own credential, one provider template
+///                              (see RelayOptions; reads ASTRA_RELAY_*, ASTRA_HOST, ASTRA_PORT and nothing in ~/.astra)
 ///   version                    print {"version","apiVersion"}
 ///   plugin-selftest            run the in-process plugin runtime checks; exit 0 when all pass (CI runs it on
 ///                              each Native AOT binary, since AOT can break at run time what the JIT never shows)
@@ -45,10 +48,12 @@ public static class Program
                     return SetPassword(paths);
                 case "healthcheck":
                     return await HealthCheckAsync(paths, rest);
+                case "relay":
+                    return await Relay.RelayApp.RunAsync(rest);
                 case "plugin-selftest":
                     return PluginSelfTest();
                 default:
-                    Console.Error.WriteLine($"Unknown command '{command}'. Commands: serve, restore-all [--purge], migrate, set-password, healthcheck, version");
+                    Console.Error.WriteLine($"Unknown command '{command}'. Commands: serve, relay, restore-all [--purge], migrate, set-password, healthcheck, version");
                     return 64;
             }
         }
@@ -126,6 +131,12 @@ public static class Program
             // No proxy: the probe targets this machine, whatever HTTP_PROXY says.
             using var http = new HttpClient(new SocketsHttpHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(3) };
             using var response = await http.GetAsync($"{options.LocalUrl}/api/health");
+            // The same image runs `relay`, which has no /api: its readiness answers instead.
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                using var ready = await http.GetAsync($"{options.LocalUrl}/readyz");
+                return ready.IsSuccessStatusCode ? 0 : 1;
+            }
             return response.IsSuccessStatusCode ? 0 : 1;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)

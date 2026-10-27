@@ -1,0 +1,98 @@
+---
+title: 无状态中转（relay）
+description: 不存任何状态、每个请求自带上游凭据的网关：一个提供商模板，订阅的访问令牌或 API Key 都可以
+---
+
+`astra-server relay` 用同一个二进制、同一个镜像，把 Astra 的网关换成**无状态中转**：只对接一个提供商模板，每个请求自己带上游凭据——订阅的访问令牌或提供商的 API Key——原样发给该模板的接口，**不存储、不交换、不刷新、不写日志**。
+
+请求走的是和完整服务端同一条网关流水线：四种协议（OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini）、协议转换、流式输出、模板自带的请求头与模型处理都一样。没有的是：数据库、控制台、Astra 令牌、订阅账号、请求日志、插件、智能路由、隐私护栏。它不往磁盘写任何东西，请求之间也不共享状态，所以可以随意多开副本、放在负载均衡后面，或者部署到可以缩到零的 serverless 容器平台。
+
+<Callout type="warn" title="谁能访问就谁能用">
+  中转本身不鉴权：任何能访问它的人，都可以带着自己的凭据借道调用。只在受信任的网络里开放，或者在前面加一层鉴权网关 / IP 白名单，对外时务必在前面终止 TLS。
+</Callout>
+
+## 快速开始
+
+```bash
+docker run -d --name astra-relay -p 17321:17321 \
+  ghcr.io/239573049/astra-gate:latest relay --provider <模板 id>
+```
+
+不需要数据卷，也不需要管理员密码。在本机直接运行：
+
+```bash
+astra-server relay --provider <模板 id>   # 默认只监听 127.0.0.1:17321
+```
+
+客户端的地址填 `http://<主机>:17321/v1`（Anthropic 客户端填 `http://<主机>:17321`），密钥填你自己的上游凭据。
+
+## 能中转哪些模板
+
+`--provider` 是提供商模板的 id（与控制台「添加提供商」里的模板相同）：
+
+| 模板 | 请求里带什么 |
+| --- | --- |
+| 订阅模板：`claude-subscription`、`openai-subscription`、`grok-subscription`、`kimi-subscription`、`zcode-subscription`、`bigmodel-subscription`、`github-copilot-subscription` | 该订阅**可直接调用**的访问令牌。中转不会去换取或刷新令牌，过期后需要你自己换新的。 |
+| API Key 模板：`openai`、`anthropic`、`google`、`deepseek`、`openrouter` 等 | 你自己的 API Key，按模板的认证方式发给上游（`Authorization: Bearer`、`x-api-key` 或 `x-goog-api-key`）。 |
+| `custom-*` 模板 | 同上；用 `--base-url` 指定上游地址。 |
+
+`ollama`、`lm-studio` 这类不需要凭据的模板不能用于中转。订阅模板的客户端限制同样生效：`claude-subscription` 默认只服务 Claude Code。
+
+凭据从请求头中读取，优先级：`x-api-key` > `x-goog-api-key` > `Authorization: Bearer`。被选中的那个必须是一个值、只含可见 ASCII 字符、不超过 4096 个字符，否则直接返回 401，不会退而使用下一个。
+
+## 模板变体
+
+模板目录里的变体代表同一服务的另一组主机，例如 `moonshot` 的 `intl`（国际站）、`github-copilot-subscription` 的 `business` / `enterprise`。
+
+- 启动时 `--variant <id>`（或 `ASTRA_RELAY_VARIANT`）设置默认变体；
+- 单个请求可以用请求头 `x-astra-variant: <id>` 改用另一个变体，`default` 表示模板自己的地址；不认识的变体返回 400。
+
+凭据只会发往模板（或所选变体）自己的地址，或者启动时 `--base-url` 指定的地址，绝不会发往请求里给出的任何地址。
+
+## 接口
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/healthz` | 存活检查，不需要凭据 |
+| GET | `/readyz` | 就绪检查，不需要凭据；停止过程中返回 503 |
+| GET | `/models`、`/v1/models` | 用请求的凭据请求模板的模型列表接口，**原样**返回上游的响应 |
+| POST | `/chat/completions`、`/v1/chat/completions` | OpenAI Chat |
+| POST | `/responses`、`/v1/responses` | OpenAI Responses |
+| POST | `/messages`、`/v1/messages` | Anthropic Messages |
+| POST | `/messages/count_tokens`、`/v1/messages/count_tokens` | 原样转发到模板的 Anthropic 接口；模板没有该接口时在本地粗略估算 |
+| POST | `/embeddings`、`/v1/embeddings` | 原样转发到模板的 OpenAI 接口 |
+| POST | `/v1beta/models/{model}:generateContent`、`:streamGenerateContent`（支持 `?alt=sse`） | Gemini |
+
+生成类请求会先用请求的凭据获取模板的模型列表（按凭据的 SHA-256 缓存，默认 5 分钟），以列表中每个模型声明的接口决定直通还是转换协议。列表获取失败或格式不对时，请求直接失败，失败结果不会缓存。模板没有模型列表接口时，按模板的协议偏好处理。
+
+没有的接口：控制台和 `/api`、Astra 令牌的自助查询、`/v1/dashboard/billing/*`、智能路由（请求虚拟模型 `astra-auto` 会直接返回 400）。
+
+## 配置
+
+参数优先于环境变量；中转不读取 `~/.astra` 里的任何文件。
+
+| 参数 / 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `--provider` / `ASTRA_RELAY_PROVIDER` | — | 必填，提供商模板 id |
+| `--variant` / `ASTRA_RELAY_VARIANT` | 模板自己的地址 | 默认变体 |
+| `--base-url` / `ASTRA_RELAY_BASE_URL` | — | 替换模板地址的源站（各接口保留原路径）。必须是 https；http 只允许回环地址；不能带路径、查询参数或用户信息 |
+| `--host` / `ASTRA_HOST` | `127.0.0.1`（镜像内 `0.0.0.0`） | 监听地址 |
+| `--port` / `ASTRA_PORT` | `17321` | 监听端口 |
+| `ASTRA_RELAY_MAX_CONCURRENT_REQUESTS` | `64` | 同时处理的请求数，超出的立即返回 503（健康检查不计入） |
+| `ASTRA_RELAY_MAX_REQUEST_BODY_BYTES` | `67108864` | 请求体上限（压缩后与解压后都算），16 KiB 到 64 MiB |
+| `ASTRA_RELAY_REQUEST_BODY_TIMEOUT_SECONDS` | `300` | 请求体必须在这个时间内传完，否则返回 408 |
+| `ASTRA_RELAY_HEADERS_TIMEOUT_SECONDS` | `1800` | 等待上游响应头的时间，超时返回 504 |
+| `ASTRA_RELAY_UPSTREAM_IDLE_TIMEOUT_SECONDS` | `1800` | 上游连续不发数据的最长时间 |
+| `ASTRA_RELAY_DOWNSTREAM_WRITE_TIMEOUT_SECONDS` | `300` | 原样转发的响应（模型列表、embeddings、计数）写给客户端的单次超时 |
+| `ASTRA_RELAY_SHUTDOWN_TIMEOUT_SECONDS` | `600` | 收到停止信号后等待进行中请求的时间 |
+| `ASTRA_RELAY_MODEL_CACHE_SECONDS` | `300` | 模型列表的缓存时间，1 到 3600 |
+| `ASTRA_RELAY_MODEL_CACHE_ENTRIES` | `256` | 最多缓存多少份模型列表（凭据 × 变体），1 到 4096 |
+
+`HTTP_PROXY` / `HTTPS_PROXY` / `NO_PROXY` 对访问上游同样生效。
+
+## 部署要点
+
+- **健康检查**：存活用 `/healthz`，就绪用 `/readyz`。镜像自带的 `HEALTHCHECK`（`astra-server healthcheck`）在 `/api/health` 返回 404 时会改查 `/readyz`，所以中转容器同样会显示 `healthy`。
+- **长时间的流式请求**：直通的流式响应里，上游在模型思考期间发出的 SSE 心跳会立即转给客户端，中间的代理不会因为连接空闲而断开；但平台本身的请求总时长上限仍然有效，部署前确认 ingress 的超时设置。
+- **日志**：只记每个请求的摘要（状态、协议）和内部错误，不记凭据和请求体。
+- **错误**：按入站协议的格式返回；原样转发的响应写到一半出错时直接断开连接，不会补一个看起来正常的结尾。

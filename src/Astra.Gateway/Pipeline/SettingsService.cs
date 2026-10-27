@@ -7,7 +7,7 @@ using Astra.Data;
 namespace Astra.Gateway.Pipeline;
 
 /// <summary>Cached <see cref="AppSettings"/>; the gateway reads <see cref="Current"/> on every request.</summary>
-public sealed class SettingsService(AstraDatabase db, ISecretProtector secrets)
+public sealed class SettingsService(AstraDatabase db, ISecretProtector secrets) : IGatewaySettings
 {
     private volatile AppSettings? _current;
 

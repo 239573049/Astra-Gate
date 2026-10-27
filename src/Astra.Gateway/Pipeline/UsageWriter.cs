@@ -12,7 +12,7 @@ namespace Astra.Gateway.Pipeline;
 /// Queued records count toward their token's limits right away (<see cref="TokenUsageLedger"/>), before they are written.
 /// </summary>
 public sealed class UsageWriter(AstraDatabase db, LiveRequestFeed live, ILogger<UsageWriter> logger, TokenUsageLedger? ledger = null)
-    : BackgroundService
+    : BackgroundService, IRequestSink
 {
     private const int BatchSize = 50;
     private static readonly TimeSpan FlushInterval = TimeSpan.FromSeconds(1);

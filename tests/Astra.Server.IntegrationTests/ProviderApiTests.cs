@@ -646,12 +646,13 @@ public class ProviderApiTests
     [Fact]
     public async Task Copilot_Subscription_Login_Runs_The_Device_Flow_Then_Exchanges_A_Copilot_Token()
     {
-        var requests = new List<(string Path, string Body)>();
+        var requests = new List<(string Path, string Body, string? Intent)>();
         var handler = new StubHandler(async request =>
         {
             var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync();
             var path = request.RequestUri!.AbsolutePath;
-            lock (requests) requests.Add((path, body));
+            var intent = request.Headers.TryGetValues("OpenAI-Intent", out var intents) ? string.Join(",", intents) : null;
+            lock (requests) requests.Add((path, body, intent));
             return path switch
             {
                 "/login/device/code" => JsonResponse("""{"device_code":"dc-1","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}"""),
@@ -697,6 +698,8 @@ public class ProviderApiTests
         // 登录同步没有新增模型，也必须把能力回填到模板预置的模型行。
         Assert.Equal([ApiProtocol.Anthropic],
             (await host.Db.Providers.GetModelAsync(providerId, "claude-sonnet-5"))!.UpstreamProtocols);
+        // 模型列表请求带上模板 modelListEndpoint.headers 声明的头。
+        Assert.Equal("model-access", requests.Single(r => r.Path == "/models").Intent);
     }
 
     [Fact]

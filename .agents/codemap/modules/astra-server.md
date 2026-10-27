@@ -22,7 +22,8 @@ and Bun host (`astra-plugins`), and the CLI/web/desktop/docs/packaging side (`cl
 |---|---|---|
 | `Program.Main` | `src/Astra.Server/Program.cs:24` | Subcommand dispatch; first non-`-` arg is the command, default `serve`; exit 64 on unknown command/`ArgumentException`. |
 | `Program.ServeAsync` | `src/Astra.Server/Program.cs:68` | `serve`: load+apply options, refuse non-loopback without a password, resolve the port, `AstraApp.Create`, start, wait for shutdown. |
-| `Program.HealthCheckAsync` | `src/Astra.Server/Program.cs:118` | `healthcheck`: GET `options.LocalUrl + /api/health` with `UseProxy = false`, 3 s timeout; 0 healthy / 1 not. |
+| `Program.HealthCheckAsync` | `src/Astra.Server/Program.cs:118` | `healthcheck`: GET `options.LocalUrl + /api/health` with `UseProxy = false`, 3 s timeout (a 404 — the relay has no `/api` — falls back to `/readyz`); 0 healthy / 1 not. |
+| `RelayApp.RunAsync` / `RelayApp.Create` | `src/Astra.Server/Relay/RelayApp.cs` | `relay`: `RelayOptions.Load` (flags > `ASTRA_RELAY_*` / `ASTRA_HOST` / `ASTRA_PORT`, nothing from `~/.astra`), then the relay's own composition root: one template (`RelayTarget`), per-request `RelayCaller` (credential + provider), `RelayCatalog` (model list per credential hash), `RelayTransport` (origin + credential checks), `RelayRuntime` (the pipeline contracts), the concurrency gate and its routes. |
 | `Program.SetPassword` | `src/Astra.Server/Program.cs:137` | `set-password`: one line from stdin, ≥ 8 chars, PBKDF2 hash into `config.json`. |
 | `Program.PluginSelfTest` | `src/Astra.Server/Program.cs:61` | `plugin-selftest`: runs `Plugins.Diagnostics.PluginSelfTest.Run`, one line per check, 0 only when all pass. |
 | `Commands.MigrateAsync` | `src/Astra.Server/Commands.cs:14` | `migrate`: `AstraDatabase.InitializeAsync(paths)` then exit. |

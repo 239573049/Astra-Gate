@@ -22,6 +22,19 @@ public sealed class TemplateModelListEndpoint
 {
     public ApiProtocol Protocol { get; set; }
     public string Path { get; set; } = "/models";
+
+    /// <summary>Headers the model list request carries on top of the provider's own (the intent the official client declares).</summary>
+    public Dictionary<string, string>? Headers { get; set; }
+
+    /// <summary>Puts <see cref="Headers"/> on a model list request, replacing a value already there.</summary>
+    public void ApplyHeaders(HttpRequestMessage request)
+    {
+        foreach (var (name, value) in Headers ?? [])
+        {
+            request.Headers.Remove(name);
+            request.Headers.TryAddWithoutValidation(name, value);
+        }
+    }
 }
 
 /// <summary>Versioned data, not provider-specific code. The API uses camelCase; snapshots use storage JSON.</summary>

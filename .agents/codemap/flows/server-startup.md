@@ -17,8 +17,9 @@ host deletes that file after draining the request log.
 ## Steps
 
 1. `src/Astra.Server/Program.cs:Main` — the first non-`-` arg is the command (default `serve`);
-   the switch (`Program.cs:32`) dispatches `serve` / `migrate` / `restore-all` / `set-password` /
-   `healthcheck` / `version` / `plugin-selftest`, and `ArgumentException` becomes exit 64
+   the switch (`Program.cs:32`) dispatches `serve` / `relay` / `migrate` / `restore-all` / `set-password` /
+   `healthcheck` / `version` / `plugin-selftest` (`relay` skips everything below: `RelayApp.RunAsync` opens no
+   database and writes no `runtime.json`), and `ArgumentException` becomes exit 64
    (`astra-server`) — the list is documented in the file's own header comment (`Program.cs:8-21`)
 2. `src/Astra.Server/Program.cs:ServeAsync` — `paths.EnsureCreated()` then the three-layer option
    resolution, in this order: `ServerOptions.Load(paths)` (`ServerOptions.cs:61`, reads
@@ -186,6 +187,8 @@ initial delay instead of a shared scheduler:
 - `compose.yaml:5-25` — only `ASTRA_ADMIN_PASSWORD` is required; `ASTRA_PUBLIC_URL` (reverse proxy),
   `ASPNETCORE_FORWARDEDHEADERS_ENABLED`, `HTTPS_PROXY`/`NO_PROXY` are commented hints. The image
   carries no config.json, so the container is env-only by construction
+- `CMD` overridden with `relay --provider <id>` runs the stateless relay instead (`RelayApp`): no volume, no admin
+  password, and the `HEALTHCHECK` falls back to `/readyz` when `/api/health` answers 404
 - `TunnelService.Supported` is false when `DOTNET_RUNNING_IN_CONTAINER=true`
   (`Tunnel/TunnelService.cs:48-51`): the container does not spawn cloudflared
 

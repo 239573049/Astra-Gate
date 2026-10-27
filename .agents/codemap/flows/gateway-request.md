@@ -2,7 +2,7 @@
 flow: gateway-request
 modules: [astra-gateway, astra-core, astra-data, astra-providers, astra-plugins, astra-server]
 commit: 6324e30
-updated: 2026-10-20
+updated: 2026-10-28
 ---
 # Gateway request
 
@@ -10,6 +10,12 @@ updated: 2026-10-20
 `/v1/messages`, `/v1beta/models/<model>:generateContent|streamGenerateContent`).
 **Outcome:** the client got the upstream's answer (streamed or buffered) in its own protocol, with privacy redactions
 restored, and a request row, its span tree and usage counters were queued for persistence.
+**Hosts:** the server reaches the pipeline through `MapGatewayEndpoints`; `astra-server relay`
+(`src/Astra.Server/Relay/RelayApp.cs`) maps its own routes onto the same `HandleAsync` and answers the pipeline's
+contracts (`src/Astra.Gateway/Pipeline/PipelineContracts.cs`) per request — the caller's own credential, one template's
+provider, its model list fetched with that credential — with no privacy guard, capture, caps, pools, middleware or
+plugin providers (null): step 3 is `RelayRuntime.ResolveAsync`, steps 4, 6 and 7 are skipped, and nothing is
+persisted at the end.
 
 ## Steps
 
@@ -144,6 +150,9 @@ sequenceDiagram
   a new lossy mapping belongs in `Protocol/Ir.cs`'s comments and in `ir.Warnings`.
 - **Supported:** a new smart-routing judge dialect is one `IRoutingJudge` plus a `RoutingJudges.Register` entry, a
   `JudgeProtocols` constant and golden fixtures (`tests/Astra.Gateway.Tests/RoutingJudgeTests.cs`).
+- **Looks tempting but breaks:** handing `GatewayPipeline` a storage-backed service directly — the relay host has no
+  storage; a new dependency is a contract in `PipelineContracts.cs` both hosts answer, or a nullable optional feature
+  (AGENTS.md linked update 21).
 - **Looks tempting but breaks:** rewriting the request tree without setting `upstreamDirty` silently ships the
   client's original bytes — which is why smart routing changes the model through `GatewayRoute.Routed`, never through
   `body["model"]`; managing the `AccountScheduler.Lease` by hand double-disposes it (`SendAsync` already
