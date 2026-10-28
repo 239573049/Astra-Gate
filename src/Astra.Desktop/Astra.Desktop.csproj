@@ -7,6 +7,8 @@
     <IsAotCompatible>true</IsAotCompatible>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- The exe's icon on Windows; Packaging/ also holds the macOS / installer assets (scripts/package-desktop.mjs). -->
+    <ApplicationIcon>Packaging\Astra.ico</ApplicationIcon>
     <SelfContained>true</SelfContained>
     <!-- Memory over throughput, like astra-server: a desktop shell is a one-user process. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Astra.app's Info.plist. scripts/package-desktop.mjs fills @VERSION@ with x.y.z (a
+  -preview.N suffix is not a valid bundle version).
+  The identity matches the Electron app it replaces (plan avalonia-client §5.1): bundle id io.astra.desktop,
+  Astra.app, executable Astra — Squirrel.Mac in an installed Electron client only accepts an update whose
+  designated requirement (bundle id + signing team) matches its own.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>Astra</string>
+  <key>CFBundleExecutable</key>
+  <string>Astra</string>
+  <key>CFBundleIconFile</key>
+  <string>Astra.icns</string>
+  <key>CFBundleIdentifier</key>
+  <string>io.astra.desktop</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Astra</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@VERSION@</string>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.developer-tools</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>12.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSPrincipalClass</key>
+  <string>NSApplication</string>
+  <key>NSSupportsAutomaticGraphicsSwitching</key>
+  <true/>
+</dict>
+</plist>

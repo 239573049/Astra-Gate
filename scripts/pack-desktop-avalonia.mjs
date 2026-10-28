@@ -5,8 +5,9 @@
  * Usage:
  *   node scripts/pack-desktop-avalonia.mjs --rid <rid> --publish-dir <dir> [--app <Astra.app>] [--out <appDir>]
  *
- *   --publish-dir  the `dotnet publish` output (win/linux), or for macOS a dir that
- *                  contains the assembled, signed Astra.app (or pass --app directly)
+ *   --publish-dir  the app as installed: scripts/package-desktop.mjs's out/desktop/unpacked (win/linux:
+ *                  Astra.exe / astra + resources/server), or for macOS a dir that contains the assembled,
+ *                  signed Astra.app (or pass --app directly)
  *   --out          override the destination app/ dir (dry runs; default npm/<pkg>/app)
  *
  * Why the layout is constrained (.plan/avalonia-client.md §5.2): already-installed
@@ -87,7 +88,8 @@ if (isMac) {
       filter: keep,
     });
   }
-  entry = isWin ? 'astra-desktop.exe' : 'astra-desktop';
+  // The Electron app's names, so launchers and shortcuts made for it keep working.
+  entry = isWin ? 'Astra.exe' : 'astra';
   kind = 'exe';
   if (!fs.existsSync(path.join(appDir, entry))) fail(`${entry} missing from ${publishDir}`);
   if (!isWin) {

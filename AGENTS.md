@@ -329,7 +329,7 @@ runtime needed on the target).
   (Linux), `e_sqlite3.dll` (Windows) beside the executable, loaded relative to the executable's
   directory — not embedded, unlike `PublishSingleFile`. Anything that copies the binary must
   copy the companions: `scripts/pack-platform.mjs` packs them into `npm/server-*/bin/` (the
-  desktop installers pick them up via the existing `server-bundle` → `extraResources` chain),
+  desktop installers copy that whole directory in as `resources/server`, `scripts/package-desktop.mjs`),
   and `packages/update-core` (`staging.ts`/`swap.ts`/`apply.ts`) stages, commits and rolls them
   back with the same `.prev` pattern as the binary.
 - Known gap: `scripts/gen-manifest.mjs` hashes only the executable, so the companion carries no
@@ -553,6 +553,12 @@ runtime needed on the target).
     `astra-desktop.json`; on Linux only the main binary may be executable — never `chmod +x` a companion library), the
     dmg zip must keep bundle id `io.astra.desktop`, `Astra.app` and the same signing team, and the NSIS installer must
     reuse electron-builder's uninstall key and `/S` convention (plan §5).
+    `release.yml` ships this client, not the Electron one: it AOT-builds `src/Astra.Desktop`, runs `--smoke`, and
+    `scripts/package-desktop.mjs` makes the installers from `src/Astra.Desktop/Packaging/` (Info.plist, entitlements, icons,
+    `installer.nsi`, `astra.desktop`) under the Electron app's exact names — `Astra-<ver>-<arch>.dmg` / `.zip` +
+    `latest-mac.yml`, `Astra-<ver>-<arch>-setup.exe`, `Astra-<ver>-<x86_64|arm64>.AppImage` — and the executable is renamed
+    `Astra` / `Astra.exe` / `astra` (the assembly stays `astra-desktop`: `avares://astra-desktop/` URIs depend on it). Keep
+    those names: old clients, the docs site's upload and download routes and existing shortcuts all match on them.
 
 ## Conventions
 
@@ -582,10 +588,8 @@ runtime needed on the target).
   `<executable dir>/wwwroot` (`AstraApp.cs`), and `scripts/pack-platform.mjs --web-dist web/dist`
   is what puts it beside a published binary. A `pnpm --filter @aidotnet/web build` followed by a
   plain `dotnet run` therefore serves no UI.
-- `desktop/server-bundle/` — server staged for the desktop installers by `release.yml`
-  (gitignored).
 - `npm/server-*/bin/`, `npm/desktop-*/app/` — outputs of `scripts/pack-platform.mjs` /
-  `scripts/pack-desktop.mjs`.
+  `scripts/pack-desktop-avalonia.mjs` (the Electron-era `scripts/pack-desktop.mjs` is no longer run by `release.yml`).
 - `docker-bin/<amd64|arm64>/` — the unpacked Linux server package staged by the `docker` job in
   `release.yml` for the root `Dockerfile` to `COPY` (gitignored). `docker/data/.gitkeep` is the
   only tracked file under `docker/`; it seeds the image's `/data` volume.
@@ -608,9 +612,10 @@ runtime needed on the target).
   install — is stopped and replaced, so a packaged app always serves with its own bits (one it
   cannot stop is adopted, never doubled by a second server on a drifted port). Env/dev
   targets and unreadable versions adopt instead of killing. The
-  standalone installers (dmg / NSIS / AppImage) ship the server under `resources/server`:
-  `release.yml` stages `npm/server-*/bin` into `desktop/server-bundle`, which
-  `electron-builder.yml` copies via `extraResources`. `scripts/pack-desktop.mjs` drops it from
+  standalone installers (dmg / NSIS / AppImage) ship the server under `resources/server`
+  (macOS `Astra.app/Contents/Resources/server`): `scripts/package-desktop.mjs` copies `npm/server-*/bin` there.
+  This paragraph describes the Electron shell's resolver; the Avalonia client ports it (`ServerBinaryResolver`,
+  `ServiceHost.FindBundledServer`). `scripts/pack-desktop-avalonia.mjs` drops the server from
   the Windows/Linux npm desktop packages (npm rejects tarballs over ~200 MB with E413; the npm
   track uses the CLI-managed server); the signed macOS `.app` keeps it. After an
   update, the executor repoints `install.json` at the managed binary

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Astra
+Comment=Local AI gateway
+Exec=astra %U
+Icon=astra
+Terminal=false
+Categories=Development;
+StartupWMClass=Astra

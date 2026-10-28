@@ -101,8 +101,8 @@ jobs:
           # agent). Xcode 26, which ships the shims, needs macOS 15+.
           - { rid: osx-arm64, os: macos-15 }
           # macos-13 (the last Intel image) is retired; cross-build x64 on
-          # Apple silicon — dotnet publish -r osx-x64 and electron-builder
-          # --x64 both target Intel without running the binary.
+          # Apple silicon — dotnet publish -r osx-x64 targets Intel without
+          # running the binary.
           - { rid: osx-x64, os: macos-15 }
           - { rid: linux-x64, os: ubuntu-latest }
           - { rid: linux-arm64, os: ubuntu-24.04-arm }
@@ -239,64 +239,70 @@ jobs:
         shell: bash
         run: node scripts/pack-platform.mjs --rid "$RID" --publish-dir out/publish --web-dist web/dist
 
-      - name: Stage the server for the desktop installers
-        if: hashFiles('desktop/package.json') != ''
+      # The desktop app is the Avalonia client (src/Astra.Desktop, Native AOT; plan avalonia-client §7). Build first,
+      # publish --no-build: with AOT on, a bare publish skips Avalonia's XAML compile and the binary dies at start
+      # with "No precompiled XAML found".
+      - name: Linux packages for the desktop app (X server for the smoke run, fonts)
+        if: startsWith(matrix.rid, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libfontconfig1
+
+      - name: Build desktop app (Avalonia, Native AOT)
         shell: bash
-        # electron-builder ships desktop/server-bundle as resources/server
-        # (extraResources), so the standalone installers run without the CLI.
         run: |
           set -euo pipefail
-          server_dir=$(node -e "import('./scripts/rid-map.mjs').then(m => console.log(m.ridToServerDir(process.argv[1])))" "$RID")
-          rm -rf desktop/server-bundle
-          cp -R "npm/$server_dir/bin" desktop/server-bundle
-          ls -la desktop/server-bundle
+          dotnet build src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true -warnaserror
+          dotnet publish src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true --no-build \
+            -o out/desktop-publish 2>&1 | tee out/desktop-publish.log
+          # Zero tolerance: unlike astra-server there is no Jint exception to allow.
+          if grep -E "IL[0-9]{4}" out/desktop-publish.log; then
+            echo "::error::AOT/trim warnings in the desktop publish"
+            exit 1
+          fi
 
-      - name: Build desktop app
-        if: hashFiles('desktop/package.json') != ''
+      # osx-x64 is cross-built on Apple silicon and not run here.
+      - name: Smoke-test the desktop app
+        if: matrix.rid != 'osx-x64'
         shell: bash
-        # Every row builds the full target set from electron-builder.yml:
-        # dir (npm platform package) + the standalone installers — signed and
-        # notarized dmg + zip on mac, NSIS on Windows, AppImage on Linux.
+        run: |
+          set -euo pipefail
+          case "$RID" in
+            linux-*) xvfb-run -a out/desktop-publish/astra-desktop --smoke ;;
+            win-*) out/desktop-publish/astra-desktop.exe --smoke ;;
+            *) out/desktop-publish/astra-desktop --smoke ;;
+          esac
+
+      # The installers keep the Electron app's names and identity, so installed clients take them as updates:
+      # Astra-<ver>-<arch>.dmg / .zip + latest-mac.yml (signed + notarized), Astra-<ver>-<arch>-setup.exe (NSIS),
+      # Astra-<ver>-<x86_64|arm64>.AppImage. The server packed above ships inside as resources/server.
+      # GitHub's x64 Windows image ships NSIS; the arm64 one may not.
+      - name: NSIS for the Windows installer
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: |
+          if [ -x "/c/Program Files (x86)/NSIS/makensis.exe" ] || command -v makensis >/dev/null; then exit 0; fi
+          choco install nsis -y --no-progress
+
+      - name: Package desktop installers
+        shell: bash
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ startsWith(matrix.rid, 'osx') && 'true' || 'false' }}
-          # Only mac rows get the certificate: a mac p12 must not reach the
-          # Windows signing path.
           CSC_LINK: ${{ startsWith(matrix.rid, 'osx') && secrets.CSC_LINK || '' }}
           CSC_KEY_PASSWORD: ${{ startsWith(matrix.rid, 'osx') && secrets.CSC_KEY_PASSWORD || '' }}
           APPLE_ID: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_ID || '' }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ startsWith(matrix.rid, 'osx') && secrets.APPLE_TEAM_ID || '' }}
-          # Baked into app-update.yml for every updatable target; only the mac
-          # DMG track consumes it today. Defaults to the official site's feed.
-          ASTRA_FEED_URL: ${{ secrets.ASTRA_FEED_URL || 'https://astra-gate.si/api/client-releases/stable' }}
         run: |
           set -euo pipefail
-          pnpm --filter @aidotnet/desktop build
-          ARCH=$([[ "$RID" == *-arm64 ]] && echo "--arm64" || echo "--x64")
-          case "$RID" in
-            osx-*) OS=--mac ;;
-            win-*) OS=--win ;;
-            *) OS=--linux ;;
-          esac
-          # Notarizing talks to Apple twice (notarytool, then stapler's ticket
-          # lookup on CloudKit) and @electron/notarize's own staple retry gives
-          # up within ~7 s: one dropped connection (stapler error 68) failed the
-          # 0.9.5 osx-x64 row after notarization had passed. The mac rows retry
-          # the whole build — it re-extracts the app, re-signs and resubmits.
-          attempts=$([[ "$RID" == osx-* ]] && echo 3 || echo 1)
-          for i in $(seq 1 "$attempts"); do
-            if pnpm --filter @aidotnet/desktop exec electron-builder "$OS" "$ARCH" --publish never --config.directories.output=../out/desktop; then
-              break
-            fi
-            if [ "$i" -eq "$attempts" ]; then exit 1; fi
-            echo "::warning::electron-builder failed (attempt $i of $attempts) — retrying in 60 s."
-            sleep 60
-          done
+          server_dir=$(node -e "import('./scripts/rid-map.mjs').then(m => console.log(m.ridToServerDir(process.argv[1])))" "$RID")
+          ver=$(node -p "require('./cli/package.json').version")
+          signing=$([[ "$RID" == osx-* ]] && echo --require-signing || true)
+          node scripts/package-desktop.mjs --rid "$RID" --publish-dir out/desktop-publish \
+            --server-dir "npm/$server_dir/bin" --version "$ver" --out out/desktop $signing
 
       - name: Collect desktop app into platform package
-        if: hashFiles('desktop/package.json') != ''
         shell: bash
-        run: node scripts/pack-desktop.mjs --rid "$RID" --builder-dir out/desktop
+        run: node scripts/pack-desktop-avalonia.mjs --rid "$RID" --publish-dir out/desktop/unpacked
 
       - name: npm pack platform packages
         shell: bash
@@ -328,10 +334,8 @@ jobs:
           if [[ "$RID" == osx-* ]]; then
             cp out/desktop/*.dmg out/feed-upload/
             cp out/desktop/*.zip out/feed-upload/
-            # electron-builder names it after the version's prerelease tag
-            # (preview-mac.yml for x.y.z-preview.N); clients always ask for
-            # latest-mac.yml under their channel's directory.
-            cp out/desktop/*-mac.yml out/feed-upload/latest-mac.yml
+            # Clients always ask for latest-mac.yml under their channel's directory.
+            cp out/desktop/latest-mac.yml out/feed-upload/latest-mac.yml
           elif [[ "$RID" == win-* ]]; then
             cp out/desktop/Astra-*-setup.exe out/feed-upload/
           else
@@ -437,8 +441,8 @@ jobs:
           notes_b64=$(base64 -w0 out/release-notes.md)
           for f in out/artifacts/Astra-*.dmg out/artifacts/Astra-*.zip \
                    out/artifacts/Astra-*-setup.exe out/artifacts/Astra-*.AppImage; do
-            # electron-builder names: Astra-<ver>-<arch>[-setup].<ext>, where
-            # an AppImage spells x64 as x86_64.
+            # scripts/package-desktop.mjs names (electron-builder's, kept):
+            # Astra-<ver>-<arch>[-setup].<ext>, where an AppImage spells x64 as x86_64.
             case "$f" in
               *.dmg) os=darwin kind=dmg ;;
               *.zip) os=darwin kind=zip ;;
