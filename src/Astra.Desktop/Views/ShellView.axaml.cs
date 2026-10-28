@@ -30,6 +30,9 @@ public partial class ShellView : UserControl
         BuildSidebar();
         // The toolbar is the window's drag region (web Page header `.drag`); the sidebar's own header row registers itself.
         WindowChrome.AttachDragRegion(Toolbar);
+        // Windows: the caption buttons overlay the toolbar's right end, which keeps that width free (web TOOLBAR_RIGHT_RESERVE).
+        if (WindowChrome.Spec.HasAppDragRegion && WindowChrome.Spec.CaptionOverlayWidth > 0)
+            Toolbar.Margin = new Thickness(Toolbar.Margin.Left, Toolbar.Margin.Top, Toolbar.Margin.Right + WindowChrome.Spec.CaptionOverlayWidth, Toolbar.Margin.Bottom);
         Loc.LanguageChanged += OnLanguageChanged;
     }
 

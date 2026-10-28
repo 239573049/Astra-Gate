@@ -12,15 +12,16 @@ public enum DesktopOs { MacOS, Windows, Linux }
 /// <param name="ToolbarHeight">Floating toolbar / drag region / Windows title-bar overlay height (52).</param>
 /// <param name="ExtendsIntoTitleBar">Content runs under the (hidden) title bar: macOS hiddenInset, Windows hidden + overlay.</param>
 /// <param name="HidesManagedTitleBar">
-/// The AtomUI title bar is hidden (<c>Window.IsTitleBarVisible = false</c>) and the shell draws under it. True on macOS only:
-/// on Windows AtomUI draws the caption buttons inside its own title bar, and hides them together with it, so the Windows overlay
-/// cannot be built on the public API yet (plan avalonia-client §22); Windows keeps AtomUI's managed title bar.
+/// The AtomUI title bar is hidden (<c>Window.IsTitleBarVisible = false</c>) and the shell draws under it: macOS (hiddenInset, the
+/// native traffic lights stay) and Windows (hidden + overlay: AtomUI's caption buttons go with its title bar, so the shell draws
+/// Electron's <c>titleBarOverlay</c> itself — <see cref="CaptionButtons"/>, plan avalonia-client §22). Linux keeps the system
+/// title bar, as the Electron shell did.
 /// </param>
 /// <param name="NativeTrafficLights">macOS: the system traffic lights stay and sit inside the sidebar.</param>
 /// <param name="TrafficLightX">Left edge of the close button, in DIPs from the window's left edge.</param>
 /// <param name="TrafficLightY">Top edge of the traffic-light cluster, in DIPs from the window's top edge.</param>
 /// <param name="HasDragRegion">The toolbar and the sidebar's header row move the window (web <c>.drag</c>): macOS and Windows, never Linux.</param>
-/// <param name="CaptionOverlayWidth">Windows: right padding the toolbar keeps free for the caption buttons (web TOOLBAR_RIGHT_RESERVE).</param>
+/// <param name="CaptionOverlayWidth">Windows: right padding the toolbar keeps free for the caption buttons overlay (web TOOLBAR_RIGHT_RESERVE).</param>
 /// <param name="SidebarRail">Collapsed sidebar width: 78 where the traffic lights live inside it, else 68.</param>
 /// <param name="Background">Solid window background shown before the first paint (no white flash).</param>
 public sealed record ChromeSpec(
@@ -46,6 +47,8 @@ public sealed record ChromeSpec(
     public const double PanelInset = 8;
     public const double SidebarRadius = 18;
     public const double CaptionButtonsReserve = 140;
+    /// <summary>Width of one Windows caption button (the system's 46 px, like Electron's overlay); three fit in the reserve.</summary>
+    public const double CaptionButtonWidth = 46;
 
     /// <summary>The shell's own drag region (toolbar + sidebar header) exists only where the managed title bar is hidden.</summary>
     public bool HasAppDragRegion => HasDragRegion && HidesManagedTitleBar;
@@ -63,7 +66,7 @@ public sealed record ChromeSpec(
         return os switch
         {
             DesktopOs.MacOS => new(os, Toolbar, true, true, true, TrafficLightLeft, TrafficLightTop, true, 0, 78, background),
-            DesktopOs.Windows => new(os, Toolbar, true, false, false, 0, 0, true, CaptionButtonsReserve, 68, background),
+            DesktopOs.Windows => new(os, Toolbar, true, true, false, 0, 0, true, CaptionButtonsReserve, 68, background),
             // Linux keeps the system title bar; the renderer omits the drag region there.
             _ => new(os, Toolbar, false, false, false, 0, 0, false, 0, 68, background),
         };

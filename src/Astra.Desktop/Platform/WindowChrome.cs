@@ -1,6 +1,7 @@
 using Astra.Desktop.Theme;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -14,8 +15,9 @@ namespace Astra.Desktop.Platform;
 
 /// <summary>
 /// Applies the Electron window chrome (<see cref="ChromeSpec"/>; plan avalonia-client §22) to the main window: the solid first-paint
-/// background, the hidden title bar with the native traffic lights on macOS, the remembered bounds, and the drag region.
-/// The window stays an <c>AtomUI.Desktop.Controls.Window</c> (plan §11); this class only sets properties on it.
+/// background, the hidden title bar with the native traffic lights on macOS or the caption-buttons overlay on Windows, the remembered
+/// bounds, and the drag region. The window stays an <c>AtomUI.Desktop.Controls.Window</c> (plan §11); this class only sets
+/// properties on it and wraps its content (<see cref="WithOverlay"/>).
 /// </summary>
 public static class WindowChrome
 {
@@ -27,6 +29,12 @@ public static class WindowChrome
     /// puts a 14 px cluster at the Electron <c>trafficLightPosition.y</c>.
     /// </summary>
     public const double TrafficLightButtonHeight = 14;
+
+    /// <summary>
+    /// Thickness of the Windows resize frame in DIPs (SM_CYSIZEFRAME + SM_CXPADDEDBORDER, 4 + 4 at 96 DPI; Avalonia scales it with the
+    /// window). It is the title-bar height hint of the hidden-title-bar window: see <see cref="ConfigureWindowsChrome"/>.
+    /// </summary>
+    public const double WindowsFrameBorder = 8;
 
     public static bool IsDark(DesktopPrefs prefs) => prefs.Theme switch
     {
@@ -47,6 +55,7 @@ public static class WindowChrome
 
         if (Spec.HidesManagedTitleBar) window.IsTitleBarVisible = false;
         if (Spec.NativeTrafficLights && OperatingSystem.IsMacOS()) ConfigureTrafficLights(window);
+        if (Spec.Os == DesktopOs.Windows && Spec.HidesManagedTitleBar && OperatingSystem.IsWindows()) ConfigureWindowsChrome(window);
 
         RestoreBounds(window, prefs);
         TrackBounds(window, prefs);
@@ -71,6 +80,34 @@ public static class WindowChrome
         window.ExtendClientAreaTitleBarHeightHint = 2 * (Spec.TrafficLightY + TrafficLightButtonHeight / 2);
         AtomUI.Desktop.Controls.MacStandardWindowButtons.SetOffsetX(window, Spec.TrafficLightX);
         AtomUI.Desktop.Controls.MacStandardWindowButtons.SetSpacing(window, ChromeSpec.TrafficLightSpacing);
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static void ConfigureWindowsChrome(AtomWindow window)
+    {
+        // AtomUI's Windows chrome is Avalonia's extended client area (its theme sets ExtendClientAreaToDecorationsHint and
+        // WindowDecorations.Full) with its own title bar hosted in Avalonia's drawn-decorations layer. IsTitleBarVisible = false hides
+        // that bar, and AtomUI then hands the content the whole client area (its content margin subtracts the drawn title-bar height).
+        // What that leaves behind is the native caption strip: Avalonia's Win32 hit test answers HTCAPTION for the top
+        // ExtendClientAreaTitleBarHeightHint DIPs — the default caption height while the hint is -1, which it stays once the title bar
+        // never lays out — so a press on anything up there without a decoration role would drag the window instead of clicking it.
+        // The hint is therefore the resize frame's thickness: that band hit-tests as the top resize border (HTTOP and both corners)
+        // and no caption strip is left; the shell's own drag regions move the window (AttachDragRegion), and the caption buttons
+        // carry their roles (CaptionButtons). The hint also sizes the hidden drawn title bar, which AtomUI subtracts again: the
+        // content starts at the top in both the normal and the maximized state.
+        window.ExtendClientAreaTitleBarHeightHint = WindowsFrameBorder;
+    }
+
+    /// <summary>
+    /// The window content with the platform's overlay: on Windows (hidden title bar) the <see cref="CaptionButtons"/> at the top right,
+    /// over <paramref name="content"/>, which is marked a <see cref="WindowDecorationsElementRole.User"/> element so that any caption strip
+    /// the frame metrics leave (a frame thicker than <see cref="WindowsFrameBorder"/>) still answers HTCLIENT. Elsewhere the content itself.
+    /// </summary>
+    public static Control WithOverlay(AtomWindow window, Control content)
+    {
+        if (Spec.Os != DesktopOs.Windows || !Spec.HidesManagedTitleBar) return content;
+        WindowDecorationProperties.SetElementRole(content, WindowDecorationsElementRole.User);
+        return new Panel { Children = { content, new CaptionButtons(window) } };
     }
 
     // ---------------------------------------------------------------- remembered bounds (restorableBounds)

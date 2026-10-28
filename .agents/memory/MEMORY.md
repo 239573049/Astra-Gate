@@ -4,6 +4,8 @@ Index of this directory: one line per entry. Open an entry before relying on it.
 Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork/memory/` (not committed).
 
 ## Project
+- [Avalonia native menu is set once](avalonia-native-menu-set-once.md) — a second NativeMenu.SetMenu on a macOS window throws "The menu being updated does not match"; relabel in place
+- [Windows hidden title bar leaves a caption strip](windows-hidden-title-bar-caption-hint.md) — hint -1 keeps ~31 DIP of HTCAPTION over the content; set it to the frame thickness, draw the caption buttons with roles; unverified on Windows
 - [Avalonia window units](avalonia-window-units.md) — save window bounds in the screen's units (points on macOS), not render-scaled pixels; the sidebarCollapsed report was a harness leak, not a bug in real launches
 - [Desktop page lifetime](desktop-page-lifetime.md) — pages subscribe to shared queries via Subscribe/OnDispose (2026-10-27 leak + Requests redraw storm); one Arc-held instance per page type is expected
 - [Desktop tray relaunch](desktop-tray-relaunch.md) — a shown window leaves ~110–170 MB GPU memory nothing frees; after 2 min closed the app restarts `--hidden` (259 → 105 MB), hand-over rules
