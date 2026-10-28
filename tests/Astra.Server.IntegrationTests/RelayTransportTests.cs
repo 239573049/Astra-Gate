@@ -1,14 +1,60 @@
 using System.Diagnostics;
 using System.Net;
+using Astra.Core;
+using Astra.Core.Models;
 using Astra.Server.Relay;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Astra.Server.IntegrationTests;
 
 /// <summary>Where a relay request's credential may go, and how the relay treats a slow or failing upstream.</summary>
 public sealed class RelayTransportTests
 {
+    [Fact]
+    public async Task A_request_body_must_keep_a_minimum_data_rate()
+    {
+        // A request holds a concurrency slot while its body arrives: a sender that stalls is cut off within seconds.
+        await using var relay = await RelayHost.StartAsync();
+        var limits = relay.App.Services.GetRequiredService<IOptions<KestrelServerOptions>>().Value.Limits;
+        Assert.Equal(240, limits.MinRequestBodyDataRate!.BytesPerSecond);
+        Assert.Equal(TimeSpan.FromSeconds(5), limits.MinRequestBodyDataRate.GracePeriod);
+        Assert.Null(limits.MinResponseDataRate);
+    }
+
+    [Theory]
+    [InlineData("https://up.test/models", "?sample=1", "key", "https://up.test/models?sample=1")]
+    [InlineData("https://up.test/models?page=2", "?sample=1", "key", "https://up.test/models?page=2&sample=1")]
+    [InlineData("https://up.test/models", "", "key", "https://up.test/models")]
+    [InlineData("https://up.test/models", "?key=theirs&alt=sse", "key", "https://up.test/models?alt=sse")]
+    [InlineData("https://up.test/models", "?KEY=theirs", "key", "https://up.test/models")]
+    [InlineData("https://up.test/models", "?key=theirs", null, "https://up.test/models?key=theirs")]
+    public void The_callers_query_is_merged_without_the_credential_parameter(string url, string query, string? credential, string expected)
+    {
+        Assert.Equal(expected, RelayHttp.WithClientQuery(url, new QueryCollection(QueryHelpers.ParseQuery(query)), credential));
+    }
+
+    [Fact]
+    public void A_query_key_credential_goes_upstream_once_whatever_the_caller_sent()
+    {
+        var provider = new Provider
+        {
+            Id = "p",
+            Name = "p",
+            AuthScheme = AuthSchemes.QueryKey,
+            Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.Gemini, BaseUrl = "https://up.test/v1beta" }],
+        };
+        var caller = new RelayCaller("secret", RelayTarget.DefaultVariant, provider, null, null, new HeaderDictionary());
+        var query = new QueryCollection(QueryHelpers.ParseQuery("?key=theirs&alt=sse"));
+        using var request = caller.Request(HttpMethod.Post,
+            RelayHttp.WithClientQuery("https://up.test/v1beta/models/m:countTokens", query, caller.Auth.QueryName), perRequest: false);
+        Assert.Equal("?alt=sse&key=secret", request.RequestUri!.Query);
+        Assert.True(caller.Carries(request));
+    }
+
     [Fact]
     public async Task The_transport_refuses_to_send_a_credential_to_another_origin()
     {

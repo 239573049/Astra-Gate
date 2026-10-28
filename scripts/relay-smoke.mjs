@@ -1,8 +1,8 @@
 // Native AOT gate for `astra-server relay`: runs the published binary against a fake upstream on loopback and checks
 // what only a run of the binary shows (AOT can break at run time what the JIT never shows): per-request credentials,
 // the model list's per-model endpoints, pass-through and converted protocols, the relayed model list / embeddings /
-// token count, request compression and the body limit, SSE heartbeats and usage chunks, health checks, and that
-// nothing is written to the data directory or logged from a request.
+// token count, request compression, the body limit and a stalled body, SSE heartbeats and usage chunks, health checks,
+// and that nothing is written to the data directory or logged from a request.
 //
 // Usage: node scripts/relay-smoke.mjs <path to astra-server>
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { createServer } from 'node:http';
-import { createServer as createNetServer } from 'node:net';
+import { connect, createServer as createNetServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -190,6 +190,21 @@ try {
   const bad = await call('/v1/chat/completions', 'not json');
   assert.equal(bad.status, 400);
   await bad.arrayBuffer();
+  // A body that stops arriving holds a concurrency slot: the server's minimum data rate cuts it off within seconds.
+  operation = 'stalled request body';
+  const stalledAt = Date.now();
+  const stalled = await new Promise((resolve, reject) => {
+    let reply = '';
+    const socket = connect(port, '127.0.0.1', () => socket.write(['POST /v1/chat/completions HTTP/1.1', `Host: 127.0.0.1:${port}`,
+      `Authorization: Bearer ${tokens[0]}`, 'Content-Type: application/json', 'Content-Length: 1000', '', '{"model":'].join('\r\n')));
+    socket.setTimeout(30000, () => { socket.destroy(); reject(new Error('A stalled request body was never cut off')); });
+    socket.on('data', (data) => { reply += data; });
+    socket.on('close', () => resolve(reply));
+    socket.on('error', () => resolve(reply));
+  });
+  assert.match(stalled, /^HTTP\/1\.1 408/, 'A stalled request body is answered 408');
+  assert.ok(Date.now() - stalledAt < 20000, 'A stalled request body is cut off within seconds');
+  assert.equal((await call('/readyz', undefined, null)).status, 200);
   const limited = await call('/v1/embeddings', { model: 'rate-limited', input: 'Hi' });
   assert.equal(limited.status, 429);
   assert.equal(limited.headers.get('retry-after'), '23');

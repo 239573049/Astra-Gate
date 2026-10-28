@@ -205,9 +205,15 @@ public sealed class RequestBody : IDisposable
         }
         catch (BadHttpRequestException e)
         {
-            // The server's own limits and framing (a body over its size limit, broken chunking): the request's fault.
-            throw new GatewayException(e.StatusCode, e.StatusCode == 413 ? "request_too_large" : "invalid_request_error",
-                e.StatusCode == 413 ? "请求体过大。" : "请求体无效。");
+            // The server's own limits and framing (a body over its size limit, one arriving below its minimum data rate,
+            // broken chunking): the request's fault.
+            var (type, message) = e.StatusCode switch
+            {
+                413 => ("request_too_large", "请求体过大。"),
+                408 => ("timeout", "请求体传输过慢。"),
+                _ => ("invalid_request_error", "请求体无效。"),
+            };
+            throw new GatewayException(e.StatusCode, type, message);
         }
         try
         {

@@ -1138,12 +1138,14 @@ public sealed class GatewayPipeline(
         // they arrive and only parsed to observe usage, first token and errors — no event is decoded to text and encoded back.
         var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && itemIds is null && !asJsonArray && capture is null;
         // Upstream bytes until the first SSE event parses: a body that never becomes SSE (a JSON object /
-        // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here. Forwarded bytes
-        // of an upstream that declared SSE are not held: its comment lines (heartbeats while the model is still
-        // thinking) reach the client at once, so a proxy in between that times out idle connections keeps this one.
+        // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here. One exception:
+        // forwarded bytes of an upstream that declared SSE and opened with a comment line (a heartbeat while the model is
+        // still thinking) are not held — no JSON body starts with ':' — so they reach the client at once, and a proxy in
+        // between that times out idle connections keeps this one.
         PooledBuffer? rawPending = null;
         var forwardDeclaredSse = forwardBytes
             && response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) == true;
+        bool? opensWithComment = null; // decided by the stream's first non-whitespace byte
 
         try
         {
@@ -1153,7 +1155,9 @@ public sealed class GatewayPipeline(
                 if (read == 0) break;
                 var chunk = buffer.AsMemory(0, read);
                 var events = parser.Feed(chunk.Span);
-                if (!sawSseEvent && events.Count == 0 && !forwardDeclaredSse)
+                if (forwardDeclaredSse && opensWithComment is null && chunk.Span.TrimStart(" \t\r\n"u8) is { IsEmpty: false } start)
+                    opensWithComment = start[0] == (byte)':';
+                if (!sawSseEvent && events.Count == 0 && opensWithComment != true)
                 {
                     (rawPending ??= new PooledBuffer(read)).Write(chunk.Span);
                     if (upstreamCapture is not null) AppendCapped(upstreamCapture, chunk.Span);

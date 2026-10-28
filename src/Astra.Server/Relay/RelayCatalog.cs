@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -10,9 +11,10 @@ namespace Astra.Server.Relay;
 
 /// <summary>
 /// Model capabilities as the caller's own credential sees them: the template's model list, fetched with that credential
-/// and kept briefly per credential and address (keyed by its SHA-256, never by the credential). A row's per-model
-/// endpoints decide which upstream protocol the model is sent over; its limits are what a translated request's output
-/// budget defaults to. A list that fails or is malformed fails the request, and nothing is cached for it.
+/// (concurrent first requests share one fetch) and kept briefly per credential and address (keyed by its SHA-256, never by
+/// the credential). A row's per-model endpoints decide which upstream protocol the model is sent over; its limits are what
+/// a translated request's output budget defaults to. A list that fails or is malformed fails the request, and nothing is
+/// cached for it.
 /// </summary>
 internal sealed class RelayCatalog(RelayOptions options, GatewayHttpClients http) : IDisposable
 {
@@ -23,21 +25,63 @@ internal sealed class RelayCatalog(RelayOptions options, GatewayHttpClients http
 
     private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = options.ModelCacheEntries });
 
+    // One fetch per credential and address at a time: concurrent first requests share it instead of each asking.
+    private readonly ConcurrentDictionary<string, Task<IReadOnlyDictionary<string, ProviderModel>>> _fetches = new(StringComparer.Ordinal);
+
     /// <summary>The caller's models by id; empty when the template has no model list.</summary>
     /// <exception cref="GatewayException">The upstream refused or failed the list, sent too much, stalled, or sent no list.</exception>
     public async Task<IReadOnlyDictionary<string, ProviderModel>> GetAsync(RelayCaller caller, CancellationToken ct)
     {
         if (caller.ModelListUrl is not { } url) return NoModels;
         if (_cache.TryGetValue(caller.CacheKey, out IReadOnlyDictionary<string, ProviderModel>? cached) && cached is not null) return cached;
+        return await Shared(caller, url).WaitAsync(ct);
+    }
+
+    /// <summary>
+    /// The fetch of this list already running, or a new one. It runs to its own end — bounded by the upstream timeouts, not by
+    /// the request that started it, so one caller leaving does not fail the others waiting — and is forgotten before its
+    /// outcome is handed out, so a failure is never reused.
+    /// </summary>
+    private Task<IReadOnlyDictionary<string, ProviderModel>> Shared(RelayCaller caller, string url)
+    {
+        while (true)
+        {
+            if (_fetches.TryGetValue(caller.CacheKey, out var running)) return running;
+            var outcome = new TaskCompletionSource<IReadOnlyDictionary<string, ProviderModel>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (!_fetches.TryAdd(caller.CacheKey, outcome.Task)) continue;
+            _ = RunAsync();
+            return outcome.Task;
+
+            async Task RunAsync()
+            {
+                IReadOnlyDictionary<string, ProviderModel>? models = null;
+                Exception? error = null;
+                try
+                {
+                    models = await FetchAsync(caller, url);
+                }
+                catch (Exception e)
+                {
+                    error = e;
+                }
+                _fetches.TryRemove(KeyValuePair.Create(caller.CacheKey, outcome.Task));
+                if (error is null) outcome.SetResult(models!);
+                else outcome.SetException(error);
+            }
+        }
+    }
+
+    private async Task<IReadOnlyDictionary<string, ProviderModel>> FetchAsync(RelayCaller caller, string url)
+    {
         using var request = caller.Request(HttpMethod.Get, url, perRequest: false);
         caller.ModelList?.ApplyHeaders(request);
-        using var response = await http.For(caller.Provider).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        using var response = await http.For(caller.Provider).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
         if (!response.IsSuccessStatusCode)
             throw new GatewayException((int)response.StatusCode,
                 response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ? "authentication_error" : "api_error",
                 $"上游模型列表获取失败（HTTP {(int)response.StatusCode}）。");
-        var body = await RelayHttp.ReadLimitedAsync(await response.Content.ReadAsStreamAsync(ct), MaxBytes,
-            options.UpstreamIdleTimeoutSeconds, "模型列表", ct);
+        var body = await RelayHttp.ReadLimitedAsync(await response.Content.ReadAsStreamAsync(CancellationToken.None), MaxBytes,
+            options.UpstreamIdleTimeoutSeconds, "模型列表", CancellationToken.None);
         try
         {
             var models = Parse(body.Memory, caller.Provider);

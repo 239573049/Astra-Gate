@@ -131,6 +131,7 @@ public class RequestBodyTests
 
     [Theory]
     [InlineData(413, "request_too_large")]
+    [InlineData(408, "timeout")]
     [InlineData(400, "invalid_request_error")]
     public async Task The_servers_own_body_rejection_keeps_its_status(int status, string type)
     {

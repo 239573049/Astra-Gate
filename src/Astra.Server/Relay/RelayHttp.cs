@@ -1,12 +1,21 @@
 using System.Buffers;
 using System.Net.Http.Headers;
 using Astra.Gateway.Pipeline;
+using Microsoft.AspNetCore.WebUtilities;
 
 namespace Astra.Server.Relay;
 
 /// <summary>What the relay passes between the upstream and its caller, and how long it waits for each side.</summary>
 internal static class RelayHttp
 {
+    /// <summary>
+    /// <paramref name="url"/> with the caller's query parameters added to any it already has — all but the one a query-key
+    /// credential travels in (case-insensitively), which only <see cref="RelayCaller.Request"/> sets.
+    /// </summary>
+    public static string WithClientQuery(string url, IQueryCollection query, string? credentialParameter) =>
+        QueryHelpers.AddQueryString(url, query.Where(parameter =>
+            credentialParameter is null || !parameter.Key.Equals(credentialParameter, StringComparison.OrdinalIgnoreCase)));
+
     /// <summary>A hop-by-hop header (RFC 9110 §7.6.1), or one the message's <c>Connection</c> header names: never relayed.</summary>
     public static bool IsHopHeader(string name, IEnumerable<string?> connection)
     {

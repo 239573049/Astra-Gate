@@ -31,8 +31,10 @@ public static class RelayApp
         {
             k.AddServerHeader = false;
             k.Limits.MaxRequestBodySize = options.MaxRequestBodyBytes;
-            // The body deadline (RequestBodyLimits) and the stream timeouts replace the minimum data rates.
-            k.Limits.MinRequestBodyDataRate = null;
+            // A request holds a concurrency slot while its body arrives, and the credential is only checked by the upstream:
+            // the body must keep a minimum rate (240 bytes/s after a 5 s grace) and arrive within the body deadline, so a
+            // client that stalls or trickles cannot sit on slots. Responses have no minimum rate; the stream timeouts bound them.
+            k.Limits.MinRequestBodyDataRate = new Microsoft.AspNetCore.Server.Kestrel.Core.MinDataRate(240, TimeSpan.FromSeconds(5));
             k.Limits.MinResponseDataRate = null;
             if (options.Host is "localhost") k.ListenLocalhost(options.Port);
             else if (options.Host is "0.0.0.0" or "*") k.ListenAnyIP(options.Port);
@@ -244,7 +246,8 @@ public static class RelayApp
             throw new GatewayException(404, "not_found_error",
                 kind == Relayed.Models ? $"{provider.Name} 没有模型列表接口。" : $"{provider.Name} 没有 embeddings 接口。");
         }
-        using var request = caller.Request(body is null ? HttpMethod.Get : HttpMethod.Post, url + context.Request.QueryString.Value, perRequest: true);
+        using var request = caller.Request(body is null ? HttpMethod.Get : HttpMethod.Post,
+            RelayHttp.WithClientQuery(url, context.Request.Query, caller.Auth.QueryName), perRequest: true);
         if (kind == Relayed.Models) caller.ModelList?.ApplyHeaders(request);
         if (kind == Relayed.CountTokens)
         {

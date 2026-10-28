@@ -8,7 +8,7 @@ description: 不存任何状态、每个请求自带上游凭据的网关：一�
 请求走的是和完整服务端同一条网关流水线：四种协议（OpenAI Chat、OpenAI Responses、Anthropic Messages、Gemini）、协议转换、流式输出、模板自带的请求头与模型处理都一样。没有的是：数据库、控制台、Astra 令牌、订阅账号、请求日志、插件、智能路由、隐私护栏。它不往磁盘写任何东西，请求之间也不共享状态，所以可以随意多开副本、放在负载均衡后面，或者部署到可以缩到零的 serverless 容器平台。
 
 <Callout type="warn" title="谁能访问就谁能用">
-  中转本身不鉴权：任何能访问它的人，都可以带着自己的凭据借道调用。只在受信任的网络里开放，或者在前面加一层鉴权网关 / IP 白名单，对外时务必在前面终止 TLS。
+  中转本身不做访问控制：任何能访问它的人，都可以带着自己的凭据借道调用。它只检查凭据的格式，凭据是否有效由上游判断，所以无效凭据的请求同样会占用一个并发名额，直到请求体传完、上游给出答复。只在受信任的网络里开放，或者在前面加一层鉴权网关；按 IP 限流、限制连接数也放在前面的代理里做。对外时务必在前面终止 TLS。
 </Callout>
 
 ## 快速开始
@@ -38,7 +38,7 @@ astra-server relay --provider <模板 id>   # 默认只监听 127.0.0.1:17321
 
 `ollama`、`lm-studio` 这类不需要凭据的模板不能用于中转。订阅模板的客户端限制同样生效：`claude-subscription` 默认只服务 Claude Code。
 
-凭据从请求头中读取，优先级：`x-api-key` > `x-goog-api-key` > `Authorization: Bearer`。被选中的那个必须是一个值、只含可见 ASCII 字符、不超过 4096 个字符，否则直接返回 401，不会退而使用下一个。
+凭据从请求头中读取，优先级：`x-api-key` > `x-goog-api-key` > `Authorization: Bearer`，只用选中的那一个，其余的凭据头会被忽略（例如同时发了 `x-api-key` 和 `Authorization`，只看 `x-api-key`）。被选中的那个必须是一个值、只含可见 ASCII 字符、不超过 4096 个字符，否则直接返回 401，不会退而使用下一个。
 
 ## 模板变体
 
@@ -65,6 +65,8 @@ astra-server relay --provider <模板 id>   # 默认只监听 127.0.0.1:17321
 
 生成类请求会先用请求的凭据获取模板的模型列表（按凭据的 SHA-256 缓存，默认 5 分钟），以列表中每个模型声明的接口决定直通还是转换协议。列表获取失败或格式不对时，请求直接失败，失败结果不会缓存。模板没有模型列表接口时，按模板的协议偏好处理。
 
+原样转发的三个接口会带上调用方的查询参数，但不会带上调用方自己传的凭据参数（模板用查询参数认证时，凭据只由中转放入）。
+
 没有的接口：控制台和 `/api`、Astra 令牌的自助查询、`/v1/dashboard/billing/*`、智能路由（请求虚拟模型 `astra-auto` 会直接返回 400）。
 
 ## 配置
@@ -80,7 +82,7 @@ astra-server relay --provider <模板 id>   # 默认只监听 127.0.0.1:17321
 | `--port` / `ASTRA_PORT` | `17321` | 监听端口 |
 | `ASTRA_RELAY_MAX_CONCURRENT_REQUESTS` | `64` | 同时处理的请求数，超出的立即返回 503（健康检查不计入） |
 | `ASTRA_RELAY_MAX_REQUEST_BODY_BYTES` | `67108864` | 请求体上限（压缩后与解压后都算），16 KiB 到 64 MiB |
-| `ASTRA_RELAY_REQUEST_BODY_TIMEOUT_SECONDS` | `300` | 请求体必须在这个时间内传完，否则返回 408 |
+| `ASTRA_RELAY_REQUEST_BODY_TIMEOUT_SECONDS` | `300` | 请求体必须在这个时间内传完，否则返回 408；传输过程中速度也不能低于每秒 240 字节（有 5 秒宽限），停住不发的连接几秒内就会被断开 |
 | `ASTRA_RELAY_HEADERS_TIMEOUT_SECONDS` | `1800` | 等待上游响应头的时间，超时返回 504 |
 | `ASTRA_RELAY_UPSTREAM_IDLE_TIMEOUT_SECONDS` | `1800` | 上游连续不发数据的最长时间 |
 | `ASTRA_RELAY_DOWNSTREAM_WRITE_TIMEOUT_SECONDS` | `300` | 原样转发的响应（模型列表、embeddings、计数）写给客户端的单次超时 |

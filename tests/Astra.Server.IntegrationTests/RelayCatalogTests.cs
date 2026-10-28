@@ -1,10 +1,72 @@
 using System.Net;
+using System.Text;
 
 namespace Astra.Server.IntegrationTests;
 
 /// <summary>The relay's model list: fetched with each caller's credential, cached by its hash, never trusted when malformed.</summary>
 public sealed class RelayCatalogTests
 {
+    [Fact]
+    public async Task Concurrent_first_requests_with_one_credential_share_one_model_list_fetch()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var upstream = new RelayUpstream
+        {
+            Respond = async (request, _) =>
+            {
+                if (request.Uri.AbsolutePath == "/models") await release.Task;
+                return RelayUpstream.Default(request);
+            },
+        };
+        await using var relay = await RelayHost.StartAsync(upstream);
+        var calls = Enumerable.Range(0, 10).Select(_ => relay.SendAsync()).ToArray();
+        await WaitForAsync(() => upstream.Requests.Any(request => request.Uri.AbsolutePath == "/models"));
+        await Task.Delay(300); // the other requests reach the fetch that is already running
+        release.SetResult();
+        foreach (var response in await Task.WhenAll(calls))
+            using (response)
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(upstream.Requests, request => request.Uri.AbsolutePath == "/models");
+        Assert.Equal(10, upstream.Requests.Count(request => request.Uri.AbsolutePath == "/chat/completions"));
+    }
+
+    [Fact]
+    public async Task A_caller_leaving_does_not_fail_others_waiting_for_the_same_list()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var upstream = new RelayUpstream
+        {
+            Respond = async (request, _) =>
+            {
+                if (request.Uri.AbsolutePath == "/models") await release.Task;
+                return RelayUpstream.Default(request);
+            },
+        };
+        await using var relay = await RelayHost.StartAsync(upstream);
+        using var leaving = new CancellationTokenSource();
+        using var first = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
+        {
+            Content = new StringContent(RelayHost.ChatBody, Encoding.UTF8, "application/json"),
+        };
+        first.Headers.Authorization = new("Bearer", "gho_test_alice");
+        var started = relay.Client.SendAsync(first, leaving.Token);
+        await WaitForAsync(() => upstream.Requests.Any(request => request.Uri.AbsolutePath == "/models"));
+        var waiting = relay.SendAsync();
+        await Task.Delay(300);
+        leaving.Cancel(); // the request whose arrival started the fetch goes away
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => started);
+        release.SetResult();
+        using var response = await waiting;
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(upstream.Requests, request => request.Uri.AbsolutePath == "/models");
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition)
+    {
+        for (var i = 0; i < 100 && !condition(); i++) await Task.Delay(50);
+        Assert.True(condition());
+    }
+
     [Fact]
     public async Task The_model_list_is_cached_per_credential_and_variant()
     {
