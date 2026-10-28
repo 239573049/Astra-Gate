@@ -235,7 +235,7 @@ public class ProviderApiTests
         Assert.Equal("provider_price", m["pricingSource"]!.GetValue<string>());
         Assert.Equal("siliconflow", m["priceKey"]!.GetValue<string>());
         Assert.Equal(0.22m, m["effectivePricing"]!["base"]!["input"]!.GetValue<decimal>());
-        Assert.Equal(1_000_000, m["effective"]!["contextWindow"]!.GetValue<long>());
+        Assert.Equal(1_048_576, m["effective"]!["contextWindow"]!.GetValue<long>());
         Assert.Equal("{}", m["overrides"]!.ToJsonString());
     }
 
