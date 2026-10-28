@@ -13,6 +13,8 @@
 #   docker build -t astra .
 # Run:
 #   docker run -d -p 17321:17321 -v astra-data:/data -e ASTRA_ADMIN_PASSWORD=change-me-please astra
+# The same image as a stateless relay (no volume, no password: every request brings its own upstream credential):
+#   docker run -d -p 17321:17321 astra relay --provider <template id>
 #
 # glibc base on purpose: the release RIDs are linux-x64 / linux-arm64 (glibc), not linux-musl-*.
 # runtime-deps ships the libs a self-contained binary needs (OpenSSL, ICU) and a non-root `app` user (uid 1654).

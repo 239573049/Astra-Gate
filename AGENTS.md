@@ -65,7 +65,7 @@ the root `.dockerignore` belongs to `docs/Dockerfile`.
   `TreatWarningsAsErrors`; CI adds the flag too). New warnings break the build.
 - Test all: `dotnet test --no-build` (after building). Targeted: `dotnet test tests/Astra.Gateway.Tests`.
 - Run: `dotnet run --project src/Astra.Server -- serve` — subcommands are listed in the
-  `Program.cs` header comment (`serve`, `migrate`, `restore-all`, `set-password`, `healthcheck`, `version`,
+  `Program.cs` header comment (`serve`, `relay`, `migrate`, `restore-all`, `set-password`, `healthcheck`, `version`,
   `plugin-selftest`).
 - Publish (release): `dotnet publish src/Astra.Server -c Release -r <rid> --self-contained true
   -p:PublishAot=true -o out/publish` — Native AOT; never pass `-p:PublishSingleFile=true`
@@ -134,6 +134,12 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   order, and every `Map*Endpoints()` call. New services, hosted workers, and endpoint groups are
   registered there. Integration tests reuse `AstraApp.Create` via `BuildOptions`
   (`InternalsVisibleTo Astra.Server.IntegrationTests`).
+- `astra-server relay` (`src/Astra.Server/Relay/`, composition root `RelayApp.Create`) is a second host for the same
+  `GatewayPipeline`, without storage: one provider template, each request's own upstream credential (sent as it is to
+  the template's or the operator's origin only — never one a request names), no database, console, tokens, accounts,
+  plugins or request log, nothing written to disk, and no state shared between requests. The pipeline reaches its host
+  only through `src/Astra.Gateway/Pipeline/PipelineContracts.cs` (linked update 21). Tests: `Relay*Tests` in
+  `tests/Astra.Server.IntegrationTests` (`RelayHost`); docs: `docs/content/docs/guide/relay.mdx`.
 - Most admin endpoint groups live in `src/Astra.Server/Api/*Endpoints.cs` (shared DTOs in
   `Api/Dtos.cs`), with one exception: `src/Astra.Server/Alerts/AlertEndpoints.cs` sits beside the
   alert service and its contracts. Register the group's `Map*Endpoints` in `AstraApp.Create`.
@@ -269,8 +275,8 @@ runtime needed on the target).
   `Astra.Server.csproj` passes `--nowarnaserr` for those three codes to the ILC step only (Roslyn's
   analyzer gate is untouched), `release.yml` runs `scripts/check-aot-warnings.mjs` over the
   publish log and fails on any IL warning not from Jint, then runs `astra-server plugin-selftest`
-  on the binary (AOT can break at run time what the JIT never shows). Do not widen the exception
-  to other codes or assemblies.
+  and `node scripts/relay-smoke.mjs` (the relay against a fake upstream) on the binary (AOT can break
+  at run time what the JIT never shows). Do not widen the exception to other codes or assemblies.
 - JSON is source-generated: `JsonContexts` (`src/Astra.Core/JsonContexts.cs`) is the registry
   and every assembly contributes its own `JsonSerializerContext` via `[ModuleInitializer]`
   (`src/Astra.Core/JsonContext.cs`, `src/Astra.Providers/Templates/ProviderJsonContext.cs`,
@@ -362,7 +368,10 @@ runtime needed on the target).
    `ServerOptions.ApplyEnvironment` (tests: `ServerOptionsEnvironmentTests`), the `healthcheck`
    subcommand, `Dockerfile` / `compose.yaml`, the `docker` job in `release.yml`, and
    `docs/content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects
-   `/api/health`, `/api/auth/status` (`required: true`) and the SPA at `/`.
+   `/api/health`, `/api/auth/status` (`required: true`) and the SPA at `/`. The same image runs `relay`: its
+   settings are `RelayOptions` (`ASTRA_RELAY_*`, tests: `RelayCredentialTests`), `healthcheck` falls back to its
+   `/readyz` when `/api/health` is a 404, and the `docker` job's relay smoke plus `scripts/relay-smoke.mjs` (build job)
+   and `docs/content/docs/guide/relay.mdx` describe it — change those with it.
 10. **Plugin market contract**: the registry the docs site serves (`docs/lib/plugin-market/`, routes
     `docs/app/api/plugin-market/**`, document shape in `types.ts`) is parsed by `PluginMarket.Parse`
     (`src/Astra.Plugins/Market/PluginMarket.cs`) and shown by `web/src/api/types.ts` (`MarketListing`,
@@ -490,6 +499,17 @@ runtime needed on the target).
     `release.yml` with the other packages (before `@aidotnet/astra-gate`, whose presence marks a finished release) and
     versioned by `sync-versions.mjs`. Docs: `docs/content/docs/cli/connect.mdx`; the console's token row has the
     "copy join command" button (zh/en `tokens.copyJoin` / `tokens.joinCopied`).
+
+21. **The pipeline's host contracts** (`src/Astra.Gateway/Pipeline/PipelineContracts.cs`): `GatewayPipeline` has two hosts —
+    the server (`AstraApp`, SQLite-backed services registered behind the contracts) and the relay (`RelayRuntime`, per
+    request). A new dependency of the pipeline is either a contract both hosts answer (`IGatewayRouter`,
+    `IUpstreamAuthResolver`, `IEffectiveModelResolver`, `IGatewaySettings`, `IRequestSink`, `ISmartRouter`) or a nullable
+    optional feature the relay passes as null (privacy guard, debug capture, token caps, provider pools, middleware,
+    plugin providers) — never a storage-backed service taken directly. What a template's API reads from the caller is
+    template data both hosts honour: `settings.client_headers` (`ProviderClientHeaders`), `modelListEndpoint.headers`
+    (the server's `ProviderProbe` and the relay's model list), and `variants` (the relay's `x-astra-variant`). The relay
+    keeps a template's own `AuthScheme`, so subscription handling applies as on the server; a credential the request
+    brought has no `AccountId`, which is how the pipeline tells it from a stored account (never log or refresh it).
 
 ## Conventions
 

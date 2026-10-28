@@ -933,7 +933,7 @@
   },
   {
     "id": "github-copilot-subscription",
-    "version": 2,
+    "version": 3,
     "autoUpdate": true,
     "name": "GitHub Copilot 订阅",
     "category": "subscription",
@@ -979,10 +979,57 @@
       "Copilot-Integration-Id": "copilot-developer-cli",
       "X-GitHub-Api-Version": "2026-07-01"
     },
+    "settings": {
+      "client_headers": [
+        "X-Initiator",
+        "Copilot-Vision-Request"
+      ]
+    },
     "modelListEndpoint": {
       "protocol": "openai-chat",
-      "path": "/models"
-    }
+      "path": "/models",
+      "headers": {
+        "OpenAI-Intent": "model-access"
+      }
+    },
+    "variants": [
+      {
+        "id": "business",
+        "name": "Business",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.business.githubcopilot.com"
+          },
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://api.business.githubcopilot.com"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.business.githubcopilot.com"
+          }
+        ]
+      },
+      {
+        "id": "enterprise",
+        "name": "Enterprise",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.enterprise.githubcopilot.com"
+          },
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://api.enterprise.githubcopilot.com"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.enterprise.githubcopilot.com"
+          }
+        ]
+      }
+    ]
   },
   {
     "id": "custom-chat",

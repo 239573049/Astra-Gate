@@ -14,6 +14,7 @@
     <None Include="..\Astra.Gateway.Tests\Fixtures\responses\response-cache-write.json" Link="Fixtures\responses\response-cache-write.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Astra.Gateway.Tests\Fixtures\responses\response-completed.json" Link="Fixtures\responses\response-completed.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Astra.Gateway.Tests\Fixtures\responses\stream-custom-tool.sse" Link="Fixtures\responses\stream-custom-tool.sse" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Astra.Gateway.Tests\Fixtures\responses\stream-copilot-rotating-ids.sse" Link="Fixtures\responses\stream-copilot-rotating-ids.sse" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Astra.Gateway.Tests\Fixtures\responses\stream-encrypted-reasoning.sse" Link="Fixtures\responses\stream-encrypted-reasoning.sse" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>

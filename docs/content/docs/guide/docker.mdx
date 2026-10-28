@@ -25,6 +25,8 @@ ASTRA_ADMIN_PASSWORD='换成你自己的密码' docker compose up -d
 
 可用标签：`latest`、`x.y.z`、`x.y`（正式版）；`preview` 指向最新的预览版（`x.y.z-preview.N`，可能不稳定，也有各自的 `x.y.z-preview.N` 标签），正式版比它新时也会指过去。
 
+同一个镜像也能作为不存任何状态的中转运行（`relay --provider <模板 id>`，不需要数据卷和管理员密码，每个请求自带上游凭据），见[无状态中转](/docs/guide/relay)。
+
 ## 环境变量
 
 | 变量 | 默认值（镜像内） | 说明 |
@@ -76,4 +78,4 @@ docker compose pull && docker compose up -d
 
 ## 健康检查
 
-镜像内置 `HEALTHCHECK`，调用 `astra-server healthcheck`（请求 `/api/health`，不走代理）。`docker ps` 的 `STATUS` 会显示 `healthy`。
+镜像内置 `HEALTHCHECK`，调用 `astra-server healthcheck`（请求 `/api/health`，不走代理；中转模式没有 `/api`，返回 404 时改查 `/readyz`）。`docker ps` 的 `STATUS` 会显示 `healthy`。

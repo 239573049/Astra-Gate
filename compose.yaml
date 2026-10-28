@@ -24,5 +24,13 @@ services:
     # Upstreams on the Docker host (e.g. Ollama) are reachable as host.docker.internal; on Linux add:
     # extra_hosts: ["host.docker.internal:host-gateway"]
 
+  # The same image as a stateless relay for one provider template (docs: 无状态中转): no volume and no admin password —
+  # every request brings its own upstream credential, so only let callers you trust reach it.
+  # relay:
+  #   image: ghcr.io/239573049/astra-gate:latest
+  #   command: ["relay", "--provider", "openai"]
+  #   ports:
+  #     - "127.0.0.1:17322:17321"
+
 volumes:
   astra-data:

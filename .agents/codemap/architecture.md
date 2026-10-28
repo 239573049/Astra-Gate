@@ -12,6 +12,7 @@ the pnpm workspace is the surfaces around it (console, CLI, desktop shell, docs/
 | Runtime | What runs there | Started by |
 |---|---|---|
 | `astra-server` (ASP.NET Core, Native AOT single binary) | Gateway pipeline, admin API, security middleware, alert engine, background workers, plugin hosts | `astra serve`, the desktop app, Docker, autostart |
+| `astra-server relay` (same binary) | The same gateway pipeline without storage: one template, each request's own credential, nothing on disk | Docker / a container platform, by hand |
 | Bun sidecar (downloaded, pinned, sha256-verified) | magpie provider plugins (`host.js` / `pi.js`, vendored unmodified) and `bun add` package installs | `astra-server` on demand (`astra-plugins/Runtime`) |
 | Jint (in-process, no CLR access) | Plugin gateway middleware and agent plugins | `astra-server` request path |
 | Node | `astra` CLI, `docs` Next.js site, vitest suites, tsup/esbuild bundling | the user / CI |

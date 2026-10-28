@@ -119,6 +119,13 @@ public static class AstraApp
         // Smart routing (plan §5): the routing judges (one per wire dialect) and the router that asks them.
         RoutingJudges.Register(builder.Services);
         builder.Services.AddSingleton<SmartRouter>();
+        // The pipeline's host contracts (PipelineContracts.cs), answered by the SQLite-backed services above.
+        builder.Services.AddSingleton<IGatewayRouter>(sp => sp.GetRequiredService<GatewayRouter>());
+        builder.Services.AddSingleton<IUpstreamAuthResolver>(sp => sp.GetRequiredService<UpstreamAuthResolver>());
+        builder.Services.AddSingleton<IEffectiveModelResolver>(sp => sp.GetRequiredService<EffectiveModelResolver>());
+        builder.Services.AddSingleton<IGatewaySettings>(sp => sp.GetRequiredService<SettingsService>());
+        builder.Services.AddSingleton<IRequestSink>(sp => sp.GetRequiredService<UsageWriter>());
+        builder.Services.AddSingleton<ISmartRouter>(sp => sp.GetRequiredService<SmartRouter>());
         builder.Services.AddSingleton<GatewayPipeline>();
         builder.Services.AddSingleton<GatewayAuxiliary>();
         builder.Services.AddSingleton<PendingSubscriptionLogins>();

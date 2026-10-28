@@ -605,6 +605,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             for (var page = 0; page < MaxPages; page++)
             {
                 using var request = await RequestAsync(p, HttpMethod.Get, url, endpoint.Protocol, false, deadline.Token, accountId);
+                if (spec?.Protocol == endpoint.Protocol) spec.ApplyHeaders(request);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 var body = TryObject(await ReadResponseAsync(response, deadline.Token));
                 if (!response.IsSuccessStatusCode) throw new AdminApiException(502, ErrorMessage(body, response.StatusCode, p, request), new UpstreamStatusDetailsDto((int)response.StatusCode));
@@ -765,7 +766,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     /// "/responses", "ws:/responses", "/v1/messages") to Astra protocols. Null when the row does not
     /// constrain endpoints, or when nothing recognisable is listed.
     /// </summary>
-    private static List<ApiProtocol>? SupportedProtocols(JsonObject item)
+    internal static List<ApiProtocol>? SupportedProtocols(JsonObject item)
     {
         if (item["supported_endpoints"] is not JsonArray raw) return null;
         var protocols = new List<ApiProtocol>();
@@ -842,7 +843,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         }
     }
 
-    private static string AppendPath(string baseUrl, string path)
+    internal static string AppendPath(string baseUrl, string path)
     {
         var builder = new UriBuilder(baseUrl) { Path = new Uri(baseUrl).AbsolutePath.TrimEnd('/') + "/" + path.TrimStart('/') };
         return builder.Uri.AbsoluteUri;

@@ -100,7 +100,11 @@ plugin providers that mirror into the provider list (`astra-plugins`); client co
   `src/Astra.Providers/Templates/ProviderTemplateCatalog.cs:ProviderTemplate`): `id`, `version`, `name`, `category`,
   `icon`/`website`/`apiKeyUrl`/`docsUrl`, `endpoints[] {protocol, baseUrl, fullUrl}`, `preferredUpstreamProtocols[]`,
   `auth {scheme}`, `requiresApiKey`, `models[]` (or `priceKey` / `modelVendor`, filled from the seed when empty),
-  `priceKey`, `defaultPriceMultiplier`, `adapter`, `defaultHeaders`, `settings`, `variants[]`, `modelListEndpoint`.
+  `priceKey`, `defaultPriceMultiplier`, `adapter`, `defaultHeaders`, `settings`, `variants[]`,
+  `modelListEndpoint {protocol, path, headers?}` (`headers` go on every model list request — the server's
+  `ProviderProbe.ModelsAsync` and the relay's). `settings.client_headers` names the client request headers the template's
+  API reads (passed through by `ProviderClientHeaders`); `variants` are also what a relay request picks with
+  `x-astra-variant`.
   Validation on load: non-empty `id`/`name`, `version >= 1`, at least one endpoint, no duplicate id.
 - **Quota template JSON** (`src/Astra.Providers/Quota/QuotaTemplate.cs:QuotaTemplate`): `id`, `name`, `kind`,
   `appliesTo[]`, `hosts[]`, `params[] {name, secret, required}`, `request {method, url, auth, headers}` (URL uses

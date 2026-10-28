@@ -38,7 +38,7 @@ public sealed record RoutingInput(string TokenId, ApiProtocol Inbound, JsonObjec
 /// </summary>
 public sealed class SmartRouter(
     SmartRoutingService settings, RoutingJudgeRegistry judges, ISecretProtector secrets, ILogger<SmartRouter> logger,
-    TimeProvider? timeProvider = null)
+    TimeProvider? timeProvider = null) : ISmartRouter
 {
     private const int PinCapacity = 10_000;
     private const int TurnCapacity = 4_096;

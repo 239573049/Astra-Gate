@@ -192,7 +192,7 @@ public sealed record UpstreamAuth(
 /// Builds upstream credentials for a provider: static API keys are decrypted per scheme;
 /// subscription providers go through <see cref="SubscriptionTokenService"/> with refresh-on-401 support.
 /// </summary>
-public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector protector, SubscriptionTokenService tokens)
+public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector protector, SubscriptionTokenService tokens) : IUpstreamAuthResolver
 {
     /// <exception cref="SubscriptionAuthException">The subscription account is missing or unusable.</exception>
     public async Task<UpstreamAuth?> ResolveAsync(string providerId, string? accountId, CancellationToken ct = default)
@@ -260,6 +260,16 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
 
     private static UpstreamAuth? BuildStatic(Provider provider, ISecretProtector protector) =>
         provider.ApiKeyEnc is null ? UpstreamAuth.None : Build(provider.AuthScheme, protector.Unprotect(provider.ApiKeyEnc));
+
+    /// <summary>
+    /// What <paramref name="secret"/> becomes on a request to <paramref name="provider"/>, by the rules a stored key or
+    /// account follows: a key goes where the auth scheme says; a subscription's access token goes as its upstream scheme
+    /// sends it, with the fixed header its CLI adds. Used for a secret that is never stored (the relay caller's own).
+    /// </summary>
+    public static UpstreamAuth ForSecret(Provider provider, string secret) =>
+        provider.AuthScheme == AuthSchemes.OAuthSubscription
+            ? Build(SubscriptionSupport.UpstreamSchemeOf(provider), secret, ChatGptAccountHeader(secret))
+            : Build(provider.AuthScheme, secret);
 
     /// <summary>
     /// codex-cli 每个 ChatGPT 后端请求都带 <c>chatgpt-account-id</c>（取自令牌的

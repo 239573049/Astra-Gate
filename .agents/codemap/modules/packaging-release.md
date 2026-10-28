@@ -13,9 +13,9 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 | Symbol | File | Role |
 |---|---|---|
 | `version` job | `.github/workflows/release.yml:31` | Resolves the version from `cli/package.json`, derives the channel with `scripts/release-channel.mjs` (fails outside `x.y.z` / `x.y.z-preview.N`), gates tag↔version, "already on npm", and a non-empty CHANGELOG section; outputs `version`, `publish`, `channel`, `npm_tag`, `tag_preview`. |
-| `build` job (6-row matrix) | `.github/workflows/release.yml:74` | Per RID: AOT publish → AOT-warning gate → `plugin-selftest` → version check → manifest partial → server pkg → `server-bundle` → desktop build → `pack-desktop` → `npm pack`; uploads `pkg-<rid>` + `feed-<rid>`. |
+| `build` job (6-row matrix) | `.github/workflows/release.yml:74` | Per RID: AOT publish → AOT-warning gate → `plugin-selftest` → `relay-smoke.mjs` → version check → manifest partial → server pkg → `server-bundle` → desktop build → `pack-desktop` → `npm pack`; uploads `pkg-<rid>` + `feed-<rid>`. |
 | `publish` job | `.github/workflows/release.yml:341` | Merges partials into `out/feed/<channel>/latest.json`, uploads the installers to the docs site, publishes platform packages then the CLI to npm under `--tag <npm_tag>`, then uploads the manifest (after npm), creates the `v<version>` GitHub Release (`--prerelease` for a preview). |
-| `docker` job | `.github/workflows/release.yml:531` | Unpacks `pkg-linux-*` into `docker-bin/{amd64,arm64}`, smoke-tests an amd64 image, pushes multi-arch `ghcr.io/<owner>/<repo>`. |
+| `docker` job | `.github/workflows/release.yml:531` | Unpacks `pkg-linux-*` into `docker-bin/{amd64,arm64}`, smoke-tests an amd64 image (as the server, then as `relay`), pushes multi-arch `ghcr.io/<owner>/<repo>`. |
 | `dotnet` / `node` jobs | `.github/workflows/ci.yml:13`,`:35` | PR + main CI: `dotnet build -warnaserror` + `dotnet test --no-build`; `pnpm -r --if-present lint/typecheck/test/build`. |
 | `build` job | `.github/workflows/docs.yml:31` | Path-filtered build+push of the docs image to `ghcr.io/<owner>/<repo>/docs`. |
 | `pack-platform.mjs <main>` | `scripts/pack-platform.mjs:28` | `--rid --publish-dir --web-dist` → `npm/<server-*>/bin/{binary, libe_sqlite3.*, wwwroot}`. |
@@ -97,6 +97,7 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 There is no unit-test suite in this module; the gates are commands the workflows run:
 - `node scripts/check-aot-warnings.mjs out/publish.log` — fails on any non-Jint IL warning (`.github/workflows/release.yml:200`).
 - `out/publish/astra-server[.exe] plugin-selftest` — run-time AOT check on the freshly published binary, all rows except osx-x64 (`.github/workflows/release.yml:208`).
+- `node scripts/relay-smoke.mjs out/publish/astra-server[.exe]` — the relay against a fake upstream on the published binary, all rows except osx-x64.
 - `node scripts/sync-versions.mjs --check` — read-only version gate, exits 1 on any mismatch (`.github/workflows/release.yml:212`).
 - `node scripts/changelog-section.mjs <ver>` — non-empty output is required to release (`.github/workflows/release.yml:67`).
 - `docker` job smoke test: `docker run` + health polling, then `/api/health`, `/api/auth/status` must contain `"required":true`, and `/` must serve HTML (`.github/workflows/release.yml:590`–`:604`).

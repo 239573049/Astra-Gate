@@ -225,6 +225,31 @@ public class UpstreamAuthResolverTests
         Assert.Equal("ws-1", request.Headers.GetValues("chatgpt-account-id").Single());
     }
 
+    [Theory]
+    [InlineData(AuthSchemes.Bearer, "Authorization", "Bearer secret", null)]
+    [InlineData(AuthSchemes.XApiKey, "x-api-key", "secret", null)]
+    [InlineData(AuthSchemes.XGoogApiKey, "x-goog-api-key", "secret", null)]
+    [InlineData(AuthSchemes.QueryKey, null, null, "key")]
+    [InlineData(AuthSchemes.OAuthSubscription, "Authorization", "Bearer secret", null)]
+    public void A_Secret_That_Was_Never_Stored_Goes_Where_A_Stored_One_Would(string scheme, string? header, string? value, string? query)
+    {
+        var auth = UpstreamAuthResolver.ForSecret(new Provider { Id = "p", Name = "p", AuthScheme = scheme }, "secret");
+
+        Assert.Equal((header, value, query), (auth.HeaderName, auth.HeaderValue, auth.QueryName));
+        Assert.Null(auth.AccountId);
+        Assert.False(auth.CanRefresh);
+    }
+
+    [Fact]
+    public void A_Subscription_Secret_Brings_Its_Fixed_Client_Header()
+    {
+        var token = FakeJwt("""{"https://api.openai.com/auth":{"chatgpt_account_id":"ws-9"}}""");
+        var auth = UpstreamAuthResolver.ForSecret(
+            new Provider { Id = "p", Name = "p", TemplateId = "openai-subscription", AuthScheme = AuthSchemes.OAuthSubscription }, token);
+
+        Assert.Equal(("chatgpt-account-id", "ws-9"), (auth.ExtraHeaderName, auth.ExtraHeaderValue));
+    }
+
     /// <summary>A syntactically valid (unsigned) JWT; only the payload claims matter here.</summary>
     private static string FakeJwt(string payloadJson)
     {
