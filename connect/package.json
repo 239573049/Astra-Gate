@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/astra-connect",
-  "version": "0.13.0-preview.1",
+  "version": "0.13.0-preview.2",
   "description": "Point your local AI clients (Claude Code, Codex, Gemini CLI …) at your company's Astra gateway, and restore them any time.",
   "license": "MIT",
   "type": "module",
