@@ -7,4 +7,7 @@
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
     <ProjectReference Include="..\Astra.Api.Contracts\Astra.Api.Contracts.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Astra.Desktop.Tests" />
+  </ItemGroup>
 </Project>

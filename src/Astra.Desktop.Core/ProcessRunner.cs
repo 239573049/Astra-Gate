@@ -59,9 +59,9 @@ internal static class ProcessRunner
         if (OperatingSystem.IsWindows())
         {
             psi.FileName = "cmd.exe";
-            psi.ArgumentList.Add("/d");
-            psi.ArgumentList.Add("/c");
-            psi.ArgumentList.Add($"\"\"{binary}\" {string.Join(' ', args)} >> \"{logFile}\" 2>&1\"");
+            // Raw, not ArgumentList: that would escape the inner quotes as \" for the C runtime's parser, which cmd.exe
+            // does not use — the server path and the redirect came out mangled and the server never started.
+            psi.Arguments = WindowsCommandLine(binary, args, logFile);
         }
         else
         {
@@ -74,4 +74,11 @@ internal static class ProcessRunner
         }
         return Process.Start(psi) ?? throw new InvalidOperationException($"failed to launch {binary}");
     }
+
+    /// <summary>
+    /// cmd.exe's arguments for <see cref="StartDetached"/>: <c>/s /c</c> strips exactly the outer pair of quotes, so the
+    /// quoted binary and log paths (spaces included) reach cmd as written.
+    /// </summary>
+    internal static string WindowsCommandLine(string binary, string[] args, string logFile)
+        => $"/d /s /c \"\"{binary}\" {string.Join(' ', args)} >> \"{logFile}\" 2>&1\"";
 }

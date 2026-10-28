@@ -103,3 +103,9 @@ jobs:
         if: startsWith(matrix.rid, 'win')
         shell: bash
         run: ./out/publish/astra-desktop.exe --smoke
+
+      # The main CI runs the desktop tests on Linux only; the server launch goes through cmd.exe on Windows.
+      - name: Server launch tests (Windows)
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: dotnet test tests/Astra.Desktop.Tests --filter "FullyQualifiedName~ProcessRunnerTests"
