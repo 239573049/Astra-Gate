@@ -10,24 +10,12 @@ namespace Astra.Server.Api;
 /// <summary>Admin API for the privacy guard (plan §6.7): read/update policy, dry-run detection, event log.</summary>
 public static class PrivacyEndpoints
 {
-    public sealed record DryRunRequest(string? Text, string? Json, string? ClientKind);
 
-    public sealed record PrivacyEventDto(
-        string Id, DateTimeOffset StartedAtUtc, string? ClientKind, string? ProviderId, string? ProviderName,
-        string? RequestedModel, string Status, bool DryRun, bool Blocked, int Redactions, IReadOnlyList<PrivacyHit> Hits);
 
-    public sealed record PrivacyCategoryStatDto(
-        string Category, long Requests, long Hits, long WarnHits, long BlockHits, long RedactHits);
 
-    public sealed record PrivacyEventStatsDto(
-        long Events, long Blocked, long DryRun, long Redactions, IReadOnlyList<PrivacyCategoryStatDto> Categories);
 
-    public sealed record PrivacyRuleDto(string Id, string Category, string Description);
 
-    public sealed record PrivacyPolicyDto(PrivacySettings Settings, IReadOnlyList<PrivacyRuleDto> Rules);
 
-    public sealed record PrivacyDryRunResultDto(
-        bool Blocked, IReadOnlyList<PrivacyHit> Hits, int WouldRedact, IReadOnlyList<string> Categories);
 
     public static void MapPrivacyEndpoints(this IEndpointRouteBuilder app)
     {
@@ -69,7 +57,7 @@ public static class PrivacyEndpoints
                 PageSize = int.TryParse(q["pageSize"], out var size) ? Math.Clamp(size, 1, 500) : 50,
             };
             var result = await db.Requests.QueryPrivacyEventsAsync(query, ct);
-            return Results.Ok(new RequestEndpoints.PageDto<PrivacyEventDto>(
+            return Results.Ok(new PageDto<PrivacyEventDto>(
                 result.Items.Select(ToEvent).ToList(), result.Total, result.Page, result.PageSize));
         });
 

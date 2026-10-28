@@ -7,29 +7,12 @@ using Astra.Plugins.Host;
 
 namespace Astra.Server.Api;
 
-/// <summary>A way a plugin provider signs in, by its index (what the host's calls name it by).</summary>
-public sealed record PluginAuthMethodDto(int Index, string Type, string Label, string? Placeholder);
 
-/// <summary>A plugin sign-in under way: the page to open, and either a code to paste (<see cref="PasteCode"/>) or the
-/// plugin noticing on its own; <see cref="DeviceCode"/> is the code the page asks to confirm, when the instructions say one.</summary>
-/// <param name="State">waiting, done or failed.</param>
-public sealed record PluginSignInDto(
-    string Id, string State, string? Url, string? Instructions, bool PasteCode, string? DeviceCode, string? Account, string? Error);
 
-/// <summary>POST …/prompt: the method's answers so far; the next question comes back, null when none is left.</summary>
-public sealed record PluginPromptInput(int Method, JsonObject? Inputs);
 
-/// <summary>POST …/validate: one answer to check.</summary>
-public sealed record PluginValidateInput(int Method, string? Key, string? Value);
 
-/// <summary>POST …/sign-in: start a browser sign-in; <c>account</c> re-signs that account (its id) instead of adding one.</summary>
-public sealed record PluginSignInInput(int Method, JsonObject? Inputs, string? Account);
 
-/// <summary>POST …/api-key: sign in with a key.</summary>
-public sealed record PluginApiKeyInput(int Method, JsonObject? Inputs, string? Key);
 
-/// <summary>POST …/sign-in/{id}/code: the code the sign-in page showed.</summary>
-public sealed record PluginCodeInput(string? Code);
 
 /// <summary>
 /// Signing in to a plugin's provider (magpie's StartPluginSignIn / pluginsignin.go): the plugin's methods and their

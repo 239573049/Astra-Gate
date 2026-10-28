@@ -169,8 +169,7 @@ public sealed class ChatResponseEncoder : IResponseEncoder
     private static JsonObject UsageJson(NormalizedUsage usage)
     {
         var promptDetails = new JsonObject { ["cached_tokens"] = usage.Get(TokenTypes.CacheRead) };
-        var cacheWrite = usage.Get(TokenTypes.CacheWrite5m) + usage.Get(TokenTypes.CacheWrite1h);
-        if (cacheWrite > 0) promptDetails["cache_write_tokens"] = cacheWrite;
+        UsageNormalizer.WriteOpenAICacheWrite(promptDetails, usage);
         return new JsonObject
         {
             ["prompt_tokens"] = usage.TotalInput,

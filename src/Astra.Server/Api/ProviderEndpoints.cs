@@ -13,34 +13,11 @@ using Astra.Providers.Templates;
 
 namespace Astra.Server.Api;
 
-public sealed record ProviderDto(
-    string Id, string? TemplateId, int? TemplateVersion, bool TemplateUpdateAvailable, string Name, string? Icon,
-    string Category, List<ProviderEndpoint> Endpoints, List<ApiProtocol> PreferredUpstreamProtocols, string AuthScheme,
-    bool HasApiKey, string? ApiKeyMasked, Dictionary<string, string> ExtraHeaders, string? HttpProxy, decimal PriceMultiplier,
-    string? PriceKey, string? AdapterId, JsonObject Settings, bool Enabled, int SortOrder, string? Notes, string? Website,
-    int ModelCount, IReadOnlyList<string> BoundClients, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
-    ProviderQuotaConfigDto QuotaConfig, JsonObject? Quota, DateTimeOffset? QuotaCheckedAtUtc);
 
-public sealed record ModelOverridesDto(string? DisplayName, long? ContextWindow, long? MaxOutputTokens, ModelCapabilities? Capabilities, JsonNode? Pricing);
-public sealed record EffectiveModelDto(string DisplayName, long? ContextWindow, long? MaxOutputTokens, ModelCapabilities Capabilities);
 
-/// <summary>Usage priced by the request's saved model billing result; cache and reasoning are already included in the token totals.</summary>
-public sealed record ProviderUsageTotalsDto(long Requests, long InputTokens, long OutputTokens, long CostNanoUsd)
-{
-    public long Tokens => InputTokens + OutputTokens;
-}
 
-/// <summary>One account's usage; null AccountId represents a provider's own API key.</summary>
-public sealed record ProviderAccountUsageDto(string? AccountId, ProviderUsageTotalsDto Total, ProviderUsageTotalsDto Today);
 
-/// <summary>All current provider credentials, with the calendar day and time zone used for today's usage.</summary>
-public sealed record ProviderUsageDto(string Day, string TimeZone, List<ProviderAccountUsageDto> Accounts);
 
-/// <summary>Diff between the provider's snapshot template version and the shipped one.</summary>
-public sealed record TemplateUpdateDto(int CurrentVersion, int LatestVersion, List<string> Changes);
-public sealed record ProviderModelDto(long Id, string ProviderId, string ModelId, string? SystemModelId, bool Enabled, int SortOrder,
-    ModelOverridesDto Overrides, EffectiveModelDto Effective, Dictionary<string, string> Origins, string PricingSource,
-    string? PriceKey, decimal Multiplier, JsonNode? EffectivePricing);
 
 public static class ProviderEndpoints
 {
@@ -449,8 +426,14 @@ public static class ProviderEndpoints
             await db.Providers.UpdateAsync(p, ct);
             return Results.Ok(quota.Dto(p));
         });
-        app.MapGet("/api/provider-quota/templates", (QuotaTemplateCatalog catalog) => Results.Ok(catalog.All.ToList()));
+        app.MapGet("/api/provider-quota/templates", (QuotaTemplateCatalog catalog) => Results.Ok(catalog.All.Select(ToDto).ToList()));
     }
+
+    /// <summary>The Contracts mirror of a quota template (same fields, same order: the wire JSON is unchanged).</summary>
+    private static QuotaTemplateDto ToDto(QuotaTemplate t) => new(
+        t.Id, t.Name, t.Kind, [.. t.AppliesTo], [.. t.Hosts], t.Params.Select(p => new QuotaParamSpecDto(p.Name, p.Secret, p.Required)).ToList(),
+        new QuotaRequestSpecDto(t.Request.Method, t.Request.Url, t.Request.Auth, new Dictionary<string, string>(t.Request.Headers)),
+        (JsonObject)t.Extract.DeepClone());
 
     private static void RequireApiKeyProvider(Provider p)
     {

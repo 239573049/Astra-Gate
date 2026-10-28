@@ -1,0 +1,8 @@
+{
+  "supported": true,
+  "enabled": false,
+  "mechanism": "launchd",
+  "location": "~/Library/LaunchAgents/io.astra.server.plist",
+  "program": "/Users/demo/.astra/server/astra-server",
+  "canChange": true
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "priceKey": "openai",
+    "label": "OpenAI",
+    "templateIds": [
+      "openai"
+    ]
+  },
+  {
+    "priceKey": "anthropic",
+    "label": "Anthropic",
+    "templateIds": [
+      "anthropic"
+    ]
+  }
+]

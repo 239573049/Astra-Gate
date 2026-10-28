@@ -1,0 +1,78 @@
+[
+  {
+    "id": "openai",
+    "version": 1,
+    "name": "OpenAI",
+    "category": "official",
+    "icon": "openai",
+    "website": "https://platform.openai.com",
+    "apiKeyUrl": "https://platform.openai.com/api-keys",
+    "docsUrl": null,
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.openai.com/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "authScheme": "bearer",
+    "requiresApiKey": true,
+    "models": [
+      "gpt-4.1",
+      "gpt-4.1-mini",
+      "o4-mini",
+      "gpt-5"
+    ],
+    "priceKey": "openai",
+    "defaultPriceMultiplier": null,
+    "variants": null,
+    "defaultHeaders": null,
+    "keyAlternatives": null
+  },
+  {
+    "id": "anthropic",
+    "version": 1,
+    "name": "Anthropic",
+    "category": "official",
+    "icon": "anthropic",
+    "website": "https://console.anthropic.com",
+    "apiKeyUrl": "https://console.anthropic.com/settings/keys",
+    "docsUrl": null,
+    "endpoints": [
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.anthropic.com/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "x-api-key"
+    },
+    "authScheme": "x-api-key",
+    "requiresApiKey": true,
+    "models": [
+      "claude-sonnet-4-5",
+      "claude-opus-4-1",
+      "claude-haiku-4-5"
+    ],
+    "priceKey": "anthropic",
+    "defaultPriceMultiplier": null,
+    "variants": null,
+    "defaultHeaders": {
+      "anthropic-version": "2023-06-01"
+    },
+    "keyAlternatives": null
+  }
+]

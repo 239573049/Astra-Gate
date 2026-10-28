@@ -1,0 +1,41 @@
+{
+  "id": "gpt-4.1",
+  "displayName": "GPT-4.1",
+  "vendor": "openai",
+  "family": "gpt-4",
+  "aliases": [],
+  "contextWindow": 1047576,
+  "maxOutputTokens": 32768,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": false,
+    "promptCache": true,
+    "audio": false,
+    "pdf": false,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 2,
+      "output": 8,
+      "cache_read": 0.5
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [
+    "openai"
+  ],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

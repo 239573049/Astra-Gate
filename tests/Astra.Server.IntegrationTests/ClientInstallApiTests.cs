@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json.Nodes;
 using Astra.Clients.Config;
+using Astra.Core;
+using Astra.Core.Models;
 using Astra.Server.Api;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -35,7 +37,7 @@ public class ClientInstallApiTests
     /// <summary>
     /// A client environment whose PATH is a single temp directory holding a fake npm: <c>root -g</c> prints the
     /// fake global root, <c>install</c> lays out @openai/codex printing <paramref name="installedVersion"/> (or
-    /// fails with EACCES when <paramref name="failInstall"/>).
+    /// fails with EACCES when <paramref name="failInstall"/>), <c>uninstall</c> removes it again.
     /// </summary>
     [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
     private static (ClientEnvironment Env, string Bin) FakeNpm(string root, string installedVersion, bool failInstall = false)
@@ -62,6 +64,12 @@ public class ClientInstallApiTests
             if [ "$1" = "install" ]; then
             echo "npm $*"
             {install}
+            exit 0
+            fi
+            if [ "$1" = "uninstall" ]; then
+            echo "npm $*"
+            /bin/rm -rf "{package}" "{prefix}/bin/codex"
+            echo "removed 1 package"
             exit 0
             fi
             exit 1
@@ -319,6 +327,103 @@ public class ClientInstallApiTests
         }
     }
 
+    private static async Task<JsonNode> InstallCodexAsync(TestHost host)
+    {
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "install" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("succeeded", (await WaitForJobAsync(host, "codex"))["state"]!.GetValue<string>());
+        return Client(await host.GetJsonAsync("/api/clients"), "codex")["install"]!;
+    }
+
+    [Fact]
+    public async Task Uninstall_Removes_The_Npm_Package_And_Refreshes_The_Listing()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        var root = Path.Combine(Path.GetTempPath(), "astra-install-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var (env, _) = FakeNpm(root, "1.0.0");
+            await using var host = await TestHost.StartAsync(b => b.Services.AddSingleton(env));
+            Assert.Null(Client(await host.GetJsonAsync("/api/clients"), "codex")["install"]!["uninstallCommand"]); // not installed
+
+            var codex = await InstallCodexAsync(host);
+            Assert.True(codex["installed"]!.GetValue<bool>());
+            Assert.Equal("npm uninstall -g @openai/codex", codex["uninstallCommand"]!.GetValue<string>());
+
+            var (status, started) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "uninstall" });
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Equal("uninstall", started!["action"]!.GetValue<string>());
+            Assert.Equal("npm uninstall -g @openai/codex", started["command"]!.GetValue<string>());
+            var job = await WaitForJobAsync(host, "codex");
+            Assert.Equal("succeeded", job["state"]!.GetValue<string>());
+            Assert.Null(job["hint"]);
+            Assert.Contains(job["log"]!.AsArray(), l => l!.GetValue<string>() == "removed 1 package");
+            Assert.DoesNotContain(job["log"]!.AsArray(), l => l!.GetValue<string>().Contains("原始配置")); // not taken over: nothing restored
+
+            var after = Client(await host.GetJsonAsync("/api/clients"), "codex")["install"]!;
+            Assert.False(after["installed"]!.GetValue<bool>());
+            Assert.Null(after["uninstallCommand"]);
+            Assert.Equal("npm install -g @openai/codex@latest", after["installCommand"]!.GetValue<string>());
+
+            // Nothing left to remove.
+            (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "uninstall" });
+            Assert.Equal(HttpStatusCode.Conflict, status);
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); }
+            catch (IOException) { }
+        }
+    }
+
+    [Fact]
+    public async Task Uninstalling_A_Taken_Over_Client_Restores_Its_Config_First()
+    {
+        if (OperatingSystem.IsWindows()) return;
+        const string original = "# user config\nmodel = \"original-model\"\n";
+        var root = Path.Combine(Path.GetTempPath(), "astra-install-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var (env, _) = FakeNpm(root, "1.0.0");
+            var config = Path.Combine(root, "client-home", ".codex", "config.toml");
+            Directory.CreateDirectory(Path.GetDirectoryName(config)!);
+            await File.WriteAllTextAsync(config, original);
+            await using var host = await TestHost.StartAsync(b => b.Services.AddSingleton(env));
+            var provider = new Provider { Id = Ulid.NewUlid(), Name = "Mock provider", AuthScheme = AuthSchemes.None,
+                Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIResponses, BaseUrl = "https://example.invalid/v1" }],
+                PreferredUpstreamProtocols = [ApiProtocol.OpenAIResponses] };
+            await host.Db.Providers.InsertAsync(provider);
+            await host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = provider.Id, ModelId = "gpt-5", SystemModelId = "gpt-5" });
+            var (status, enabled) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = provider.Id, model = "gpt-5" });
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.True(enabled!["enabled"]!.GetValue<bool>());
+            var takenOver = await File.ReadAllTextAsync(config);
+            Assert.NotEqual(original, takenOver);
+
+            // A refused uninstall (codex is not installed yet) must not touch the config: the request is checked before
+            // anything is restored.
+            (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "uninstall" });
+            Assert.Equal(HttpStatusCode.Conflict, status);
+            Assert.True((await host.Db.Clients.GetAsync("codex"))!.Enabled);
+            Assert.Equal(takenOver, await File.ReadAllTextAsync(config));
+
+            await InstallCodexAsync(host);
+            (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "uninstall" });
+            Assert.Equal(HttpStatusCode.OK, status);
+            var job = await WaitForJobAsync(host, "codex");
+            Assert.Equal("succeeded", job["state"]!.GetValue<string>());
+            Assert.StartsWith("已恢复", job["log"]![0]!.GetValue<string>());
+            Assert.Equal(original, await File.ReadAllTextAsync(config));
+            Assert.False((await host.Db.Clients.GetAsync("codex"))!.Enabled);
+            Assert.False(Client(await host.GetJsonAsync("/api/clients"), "codex")["enabled"]!.GetValue<bool>());
+        }
+        finally
+        {
+            try { Directory.Delete(root, recursive: true); }
+            catch (IOException) { }
+        }
+    }
+
     [Fact]
     public async Task Invalid_Requests_Are_Rejected()
     {
@@ -331,5 +436,11 @@ public class ClientInstallApiTests
         Assert.Contains("claude.ai/download", body!["error"]!.GetValue<string>());
         // No npm on the test PATH.
         Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "install" })).Status);
+        // Apps and script installs are never uninstalled by Astra; a client that is not installed has nothing to remove.
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-desktop/install", new { action = "uninstall" });
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("手动卸载", body!["error"]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Post, "/api/clients/hermes-agent/install", new { action = "uninstall" })).Status);
+        Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Post, "/api/clients/codex/install", new { action = "uninstall" })).Status);
     }
 }

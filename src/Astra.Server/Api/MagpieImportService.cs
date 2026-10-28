@@ -9,15 +9,8 @@ using Astra.Plugins.Store;
 
 namespace Astra.Server.Api;
 
-/// <summary>One plugin magpie has, as the import would bring it over.</summary>
-/// <param name="Installed">Astra has it already (by spec or package): left as it is.</param>
-public sealed record MagpiePluginDto(string Spec, bool Off, bool HasOptions, bool Installed);
 
-/// <summary>What importing from magpie would bring: its plugins.json, and how many sign-ins its plugin-auth.json holds.</summary>
-public sealed record MagpieImportPreviewDto(bool Found, string Path, List<MagpiePluginDto> Plugins, int SignIns, string? Error);
 
-/// <summary>POST /api/plugins/import-magpie: <c>signIns</c> also copies magpie's plugin sign-ins (plaintext, as both keep them).</summary>
-public sealed record MagpieImportInput(bool? SignIns);
 
 /// <summary>
 /// Brings a magpie install's plugins over (its <c>${XDG_CONFIG_HOME:-~/.config}/magpie</c>, as <c>MagpieReader</c> finds

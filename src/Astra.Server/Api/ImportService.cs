@@ -13,20 +13,8 @@ using Astra.Providers.Templates;
 
 namespace Astra.Server.Api;
 
-public sealed record ImportEndpointDto(ApiProtocol Protocol, string BaseUrl);
-public sealed record ImportExistingDto(string Id, string Name);
 
-/// <summary>A candidate as the UI sees it. Never carries the API key: only a mask and a short fingerprint.</summary>
-public sealed record ImportCandidateDto(
-    string Ref, string Source, string Name, string? FromApp, List<ImportEndpointDto> Endpoints, string AuthScheme,
-    bool HasKey, string? KeyMasked, string? KeyFingerprint, List<string> Models, List<string> Headers, string? TemplateId,
-    string Status, ImportExistingDto? Existing, bool Off, string? SkipReason, List<string> IgnoredFields);
 
-public sealed record ImportSourceDto(string Id, string Name, string? Path, bool Found, string? Error, List<ImportCandidateDto> Items);
-public sealed record ImportSelectionDto(string Source, string Ref);
-public sealed record ImportedProviderDto(string Id, string Name);
-public sealed record ImportSkippedDto(string Ref, string Reason);
-public sealed record ImportResultDto(List<ImportedProviderDto> Added, List<ImportSkippedDto> Skipped);
 
 /// <summary>
 /// Provider import (read other apps' provider lists, then create providers). Two steps: <see cref="ScanAsync"/> only

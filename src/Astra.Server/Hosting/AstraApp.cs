@@ -318,7 +318,7 @@ public static class AstraApp
             if (p.StartsWithSegments("/api") || p.StartsWithSegments("/v1") || p.StartsWithSegments("/v1beta") || index is null || !File.Exists(index))
             {
                 ctx.Response.StatusCode = StatusCodes.Status404NotFound;
-                await ctx.Response.WriteAsJsonAsync(new Api.ErrorOnlyDto($"Not found: {ctx.Request.Method} {p}"), Api.ApiJson.Info<Api.ErrorOnlyDto>());
+                await ctx.Response.WriteAsJsonAsync(new ErrorOnlyDto($"Not found: {ctx.Request.Method} {p}"), Api.ApiJson.Info<ErrorOnlyDto>());
                 return;
             }
             ctx.Response.ContentType = "text/html; charset=utf-8";

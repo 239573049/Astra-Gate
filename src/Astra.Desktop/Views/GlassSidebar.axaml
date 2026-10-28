@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             xmlns:icons="using:TKCode.Arc.Icons.Lucide"
+             x:Class="Astra.Desktop.Views.GlassSidebar"
+             ClipToBounds="False">
+  <!-- The web's floating glass sidebar (AppShell.tsx Sidebar): an 18px-rounded panel inset 8px from the window, translucent tint,
+       0.5px edge, top highlight, soft drop shadow, a 52px header row that doubles as drag region, the nav, and the status footer.
+       Nav rows are built in code from NavTable. -->
+  <UserControl.Styles>
+    <Style Selector="Border.navItem">
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Margin" Value="0,1,0,0" /><!-- web my-px on block siblings: vertical margins collapse to 1px between rows -->
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Border.navItem Border.hover">
+      <Setter Property="Background" Value="{arc:ArcDesignTokenResource Foreground}" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.navItem:pointerover Border.hover">
+      <Setter Property="Opacity" Value="0.06" />
+    </Style>
+    <Style Selector="Border.navItem Border.selection">
+      <Setter Property="Background" Value="{arc:ArcDesignTokenResource Accent}" />
+      <Setter Property="CornerRadius" Value="16" />
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="Border.navItem.selected Border.selection">
+      <Setter Property="Opacity" Value="0.18" />
+    </Style>
+    <Style Selector="Border.navItem icons|LucideIcon">
+      <Setter Property="Foreground" Value="{arc:ArcDesignTokenResource TextSecondary}" />
+    </Style>
+    <Style Selector="Border.navItem.selected icons|LucideIcon">
+      <Setter Property="Foreground" Value="{arc:ArcDesignTokenResource Accent}" />
+    </Style>
+    <Style Selector="Border.navItem TextBlock.label">
+      <Setter Property="FontSize" Value="13" />
+      <Setter Property="Foreground" Value="{arc:ArcDesignTokenResource Foreground}" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.hair">
+      <Setter Property="Background" Value="{arc:ArcDesignTokenResource Border}" />
+    </Style>
+    <Style Selector="TextBlock.groupTitle">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Foreground" Value="{arc:ArcDesignTokenResource TextMuted}" />
+    </Style>
+  </UserControl.Styles>
+
+  <!-- Outer border carries the drop shadow (it must not clip); the inner one clips the content to the rounded rectangle. -->
+  <Border x:Name="ShadowHost" CornerRadius="18">
+    <Border x:Name="GlassPanel" CornerRadius="18" BorderThickness="0.5" ClipToBounds="True">
+      <Grid RowDefinitions="52,*,Auto">
+        <Grid x:Name="HeaderRow" Background="Transparent">
+          <StackPanel x:Name="Brand" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+            <!-- web: <AstraLogo className="size-6 rounded-[6px]" /> -->
+            <Border Width="24" Height="24" CornerRadius="6" ClipToBounds="True">
+              <Image x:Name="Logo" Width="24" Height="24" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            </Border>
+            <TextBlock x:Name="BrandLabel" Text="Astra" FontSize="14" FontWeight="Medium" VerticalAlignment="Center"
+                       Foreground="{arc:ArcDesignTokenResource Foreground}" />
+          </StackPanel>
+        </Grid>
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" AllowAutoHide="True">
+          <StackPanel x:Name="Groups" Margin="8,0,8,8" />
+        </ScrollViewer>
+        <ContentPresenter x:Name="FooterHost" Grid.Row="2" Margin="8" />
+      </Grid>
+    </Border>
+  </Border>
+</UserControl>

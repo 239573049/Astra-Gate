@@ -16,19 +16,6 @@ using Astra.Server.Hosting;
 
 namespace Astra.Server.Api;
 
-/// <summary>A Claude subscription account Astra already holds; never carries a token.</summary>
-public sealed record ClaudeDirectAccountDto(string Id, string Name, string? Email, string? Plan, string Status, bool Enabled, bool TelemetryEnabled);
-/// <summary>Launcher selection: which stored subscription account an Astra-started Claude Code uses.</summary>
-public sealed record ClaudeDirectStateDto(string Mode, string? AccountId, List<ClaudeDirectAccountDto> Accounts);
-/// <summary>Updates the launch selection and the statistics consent of one account.</summary>
-public sealed record ClaudeDirectSelectInput(string Mode, string? AccountId, bool? TelemetryEnabled);
-/// <summary>Asks for the launch environment of the selected (or a named) account.</summary>
-public sealed record ClaudeDirectPrepareInput(string? AccountId);
-/// <summary>
-/// What the local launcher needs to start the official client: environment variables only, handed over on
-/// loopback and never persisted. <see cref="Env"/> carries the short-lived access token (not the refresh token).
-/// </summary>
-public sealed record ClaudeDirectLaunchDto(string AccountId, string AccountName, DateTimeOffset ExpiresAtUtc, Dictionary<string, string> Env);
 
 /// <summary>
 /// Direct Claude Code mode: the official client talks to Anthropic itself with a subscription account Astra
@@ -351,7 +338,8 @@ public static class ClaudeDirectEndpoints
         group.MapGet("", async (ClaudeDirectService service, CancellationToken ct) => Results.Ok(await service.StateAsync(ct)));
         group.MapPut("", async (ClaudeDirectSelectInput input, ClaudeDirectService service, CancellationToken ct) => Results.Ok(await service.SelectAsync(input, ct)));
         group.MapPost("/prepare", async (ClaudeDirectPrepareInput input, ClaudeDirectService service, CancellationToken ct) => Results.Ok(await service.PrepareAsync(input, ct)));
-        group.MapGet("/accounts/{id}/requests", async (string id, ClaudeDirectService service, CancellationToken ct) => Results.Ok(await service.RequestsAsync(id, ct)));
+        group.MapGet("/accounts/{id}/requests", async (string id, ClaudeDirectService service, CancellationToken ct) =>
+            Results.Ok((await service.RequestsAsync(id, ct)).Select(ToDto).ToList()));
 
         app.MapPost("/telemetry/claude/{id}/v1/logs", async (string id, HttpContext ctx, ClaudeDirectService service, CancellationToken ct) =>
         {
@@ -389,6 +377,11 @@ public static class ClaudeDirectEndpoints
             return Results.Ok(new JsonObject());
         }).AddEndpointFilter<AdminApiErrorFilter>();
     }
+
+    // The stored row (Astra.Data) mapped onto its wire contract, so the desktop client can read it without Astra.Data.
+    private static ClaudeDirectRequestDto ToDto(ClaudeDirectRequest r) => new(
+        r.Id, r.ProfileId, r.SessionId, r.AccountUuid, r.Model, r.OccurredAtUtc, r.Status,
+        r.InputTokens, r.OutputTokens, r.CacheReadTokens, r.CacheCreationTokens, r.DurationMs, r.EstimatedCostNanoUsd);
 
     private static void RequireLocal(HttpContext ctx)
     {

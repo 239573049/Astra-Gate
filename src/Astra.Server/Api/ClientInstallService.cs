@@ -10,66 +10,17 @@ using Astra.Server.Hosting;
 
 namespace Astra.Server.Api;
 
-/// <summary>Install / version state of one client, embedded in <see cref="ClientInfoDto"/>.</summary>
-/// <param name="Method">"npm", "vscode-extension", "script" or "manual".</param>
-/// <param name="Installed">The client's command (or VS Code extension / desktop app) was found.</param>
-/// <param name="UpdateAvailable">The registry has a newer version than the installed one.</param>
-/// <param name="InstallCommand">What "install" would run; null when installing is not offered.</param>
-/// <param name="UpdateCommand">What "update" would run; null when updating is not offered.</param>
-/// <param name="UpdateVia">"npm" (global npm package) or "self" (the client's own updater).</param>
-/// <param name="Blocker">
-/// Why an action is unavailable: "npm-missing", "vscode-missing", "script-missing", "external-install", or "shadowed"
-/// (the latest version is already installed behind the copy that runs — another update would change nothing; see
-/// <c>OtherCopies</c>).
-/// </param>
-/// <param name="Busy">An install / update of this client is running.</param>
-/// <param name="NeedsAdmin">The npm install / update would fail for the current user: npm's global directories are not writable (typically root-owned).</param>
-/// <param name="AdminAvailable">The npm command on offer can be run with administrator rights through the system prompt (macOS, or Linux with pkexec).</param>
-/// <param name="AdminFixCommand">
-/// When admin rights are needed: the one-time terminal command that gives npm's global directories back to the
-/// user (<c>sudo chown -R "$(whoami)" …</c>), after which installs no longer need them.
-/// </param>
-/// <param name="OtherCopies">
-/// Other copies of the client's command found after the one that runs (terminal PATH order), with their versions.
-/// A newer one means an earlier install or update went where the terminal does not look first.
-/// </param>
-/// <param name="NotOnPath">The running copy was found outside the user's terminal PATH (e.g. only in ~/.npm-global/bin).</param>
-public sealed record ClientInstallDto(
-    string Method, string? Package, string HomepageUrl, bool Installed, string? Executable, string? Version,
-    string? LatestVersion, DateTimeOffset? LatestCheckedAt, string? LatestError, bool UpdateAvailable,
-    string? InstallCommand, string? UpdateCommand, string? UpdateVia, string? Blocker, bool Busy,
-    bool NeedsAdmin = false, bool AdminAvailable = false, string? AdminFixCommand = null,
-    IReadOnlyList<ClientCopyDto>? OtherCopies = null, bool NotOnPath = false);
 
-/// <summary>One copy of a client's command, the version it reports, and whether that is newer than the copy that runs.</summary>
-public sealed record ClientCopyDto(string Path, string Version, bool Newer);
 
-/// <summary>A running or finished install / update. <see cref="State"/>: "running", "succeeded", "failed", "cancelled".</summary>
-/// <param name="Hint">
-/// A known cause for the UI. Failed runs: "permission-denied" (npm -g cannot write its global directories),
-/// "admin-cancelled" (the administrator prompt was dismissed), "timeout". Succeeded runs that did not take effect:
-/// "shadowed" (the new version sits behind an older copy on PATH), "unchanged", "not-on-path".
-/// </param>
-/// <param name="Elevated">The command ran with administrator rights (its output may only arrive when it ends; it cannot be stopped).</param>
-public sealed record ClientInstallJobDto(
-    string Kind, string Action, string State, string Command, DateTimeOffset StartedAt, DateTimeOffset? FinishedAt,
-    int? ExitCode, IReadOnlyList<string> Log, string? Hint, bool Elevated = false);
+
+
 
 /// <summary>
-/// Body of POST /api/clients/{kind}/install: <c>action</c> is "install" or "update"; <c>elevated</c> runs the npm
-/// command with administrator rights (system authorization prompt).
-/// </summary>
-public sealed record ClientInstallRequest(string? Action, bool? Elevated = null);
-
-/// <summary>Body of POST /api/clients/check-updates: <c>force</c> skips the freshness window.</summary>
-public sealed record ClientUpdateCheckRequest(bool? Force);
-
-/// <summary>
-/// Client versions, update checks and installs. Installed versions come from <c>&lt;command&gt; --version</c>
+/// Client versions, update checks, installs and uninstalls. Installed versions come from <c>&lt;command&gt; --version</c>
 /// (VS Code's extensions.json, the app bundle for Claude Desktop), cached per executable fingerprint so listing
 /// clients does not spawn processes every time. Latest versions come from the npm registry the user's npm uses or
-/// the client's own feed (only on <see cref="CheckUpdatesAsync"/>, never while listing). Installs and updates run
-/// one at a time, with commands taken only from <see cref="ClientInstallCatalog"/>; output is kept in memory for
+/// the client's own feed (only on <see cref="CheckUpdatesAsync"/>, never while listing). Installs, updates and
+/// uninstalls run one at a time, with commands taken only from <see cref="ClientInstallCatalog"/>; output is kept in memory for
 /// the UI to poll.
 /// </summary>
 public sealed partial class ClientInstallService(ClientEnvironment env, IHttpClientFactory http, ILogger<ClientInstallService> logger)
@@ -128,16 +79,18 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             plan = plan with { Update = null, UpdateVia = null, Blocker = "shadowed" };
         bool busy;
         lock (_jobLock) busy = _running?.Kind == spec.Kind;
-        // Admin rights only matter for the npm command that is on offer right now.
-        var npmAction = state.Installed ? "update" : "install";
-        var npmCommand = ClientInstallPlanner.NpmCommand(spec, plan, npmAction);
+        // Admin rights only matter for the npm command that is on offer right now (an update, else an uninstall, of an
+        // installed client — both write the same directories).
+        var npmCommand = state.Installed
+            ? ClientInstallPlanner.NpmCommand(spec, plan, "update") ?? ClientInstallPlanner.NpmCommand(spec, plan, "uninstall")
+            : ClientInstallPlanner.NpmCommand(spec, plan, "install");
         var needsAdmin = npmCommand is not null && !NpmWritable(spec, state);
         return new ClientInstallDto(
             MethodName(spec.Method), spec.Package, spec.HomepageUrl, state.Installed, state.ExecutablePath, version,
             latest?.Version, latest?.CheckedAt, latest?.Error, updateAvailable,
             plan.Install?.Display, plan.Update?.Display, plan.UpdateVia, plan.Blocker, busy,
             needsAdmin, npmCommand is not null && Elevator() is not null, needsAdmin ? AdminFixCommand(spec, state) : null,
-            others, NotOnTerminalPath(state));
+            others, NotOnTerminalPath(state), plan.Uninstall?.Display);
     }
 
     /// <summary>
@@ -177,10 +130,10 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
                 var code = env.FindTool("code", VsCodeBinDirectories());
                 var extensions = Path.Combine(env.GetEnvironmentVariable("VSCODE_EXTENSIONS") is { Length: > 0 } d ? d : env.Combine(".vscode", "extensions"),
                     "extensions.json");
-                // A user-installed copy wins; otherwise recent VS Code ships Copilot Chat built in.
-                var extensionVersion = ClientVersions.VsCodeExtensionVersion(env.ReadTextOrNull(extensions), spec.Package!)
-                                       ?? (code is null ? null : BuiltInExtensionVersion(code, "copilot", spec.Package!));
-                return (new ClientToolState(extensionVersion is not null, code), extensionVersion);
+                // A user-installed copy wins; otherwise recent VS Code ships Copilot Chat built in (which cannot be uninstalled).
+                var userVersion = ClientVersions.VsCodeExtensionVersion(env.ReadTextOrNull(extensions), spec.Package!);
+                var extensionVersion = userVersion ?? (code is null ? null : BuiltInExtensionVersion(code, "copilot", spec.Package!));
+                return (new ClientToolState(extensionVersion is not null, code, BuiltIn: userVersion is null && extensionVersion is not null), extensionVersion);
             }
         }
 
@@ -492,7 +445,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
                 .Where(p => p.Item2 is { Length: > 0 }).Select(p => new KeyValuePair<string, string>(p.v, p.Item2!)));
         environment.AddRange(ProxyEnvironment());
         var name = ClientInstallCatalog.Get(kind) is { } spec ? spec.Executable ?? kind : kind;
-        return ClientElevation.Wrap(npm, env.Os, Elevator(), environment, $"Astra 需要管理员权限来安装或更新 {name}（npm 全局目录属于系统管理员）。");
+        return ClientElevation.Wrap(npm, env.Os, Elevator(), environment, $"Astra 需要管理员权限来安装、更新或卸载 {name}（npm 全局目录属于系统管理员）。");
     }
 
     // ------------------------------------------------------------------ update check
@@ -580,24 +533,65 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     // ------------------------------------------------------------------ install / update jobs
 
     /// <summary>
-    /// Starts an install or update. Only one runs at a time; the command comes from the planner. With
+    /// Starts an install, update or uninstall. Only one runs at a time; the command comes from the planner. With
     /// <paramref name="elevated"/> the npm command runs with administrator rights (system prompt); other commands
-    /// are never elevated.
+    /// are never elevated. <paramref name="prelude"/> lines open the job's log (what was done before the command,
+    /// e.g. the config restore <see cref="ClientService.UninstallAsync"/> runs first).
     /// </summary>
-    public ClientInstallJobDto Start(string kind, string? action, bool elevated = false)
+    public ClientInstallJobDto Start(string kind, string? action, bool elevated = false, IReadOnlyList<string>? prelude = null)
+    {
+        var (spec, state, previousVersion, command) = Prepare(kind, action, elevated);
+        Job job;
+        lock (_jobLock)
+        {
+            ThrowIfBusy();
+            job = new Job(kind, action!, command, elevated);
+            _jobs[kind] = job;
+            _running = job;
+        }
+        foreach (var line in prelude ?? []) job.Append(line);
+        _ = Task.Run(() => RunJobAsync(job, state, spec, previousVersion));
+        return job.ToDto();
+    }
+
+    /// <summary>
+    /// Throws the error <see cref="Start"/> would throw for this request (unknown client, nothing to run, another job
+    /// running), without starting anything — so a caller can check before doing work the job depends on.
+    /// </summary>
+    public void EnsureCanStart(string kind, string? action, bool elevated = false)
+    {
+        Prepare(kind, action, elevated);
+        lock (_jobLock) ThrowIfBusy();
+    }
+
+    private void ThrowIfBusy()
+    {
+        if (_running is { } busy)
+            throw new AdminApiException(409, $"正在{ActionLabel(busy.Action)} {busy.Kind}，请等它完成");
+    }
+
+    private static string ActionLabel(string action) => action switch
+    {
+        "install" => "安装",
+        "uninstall" => "卸载",
+        _ => "更新",
+    };
+
+    /// <summary>The planned command for a request, or the 4xx explaining why there is none.</summary>
+    private (ClientInstallSpec Spec, ClientToolState State, string? PreviousVersion, ToolCommand Command) Prepare(string kind, string? action, bool elevated)
     {
         var spec = ClientInstallCatalog.Get(kind) ?? (ClientKinds.IsKnown(kind)
             ? throw new AdminApiException(409, "该客户端暂不支持在 Astra 中安装")
             : throw new AdminApiException(404, "Unknown client kind"));
-        if (action is not ("install" or "update")) throw new AdminApiException(400, "action must be \"install\" or \"update\"");
+        if (action is not ("install" or "update" or "uninstall"))
+            throw new AdminApiException(400, "action must be \"install\", \"update\" or \"uninstall\"");
         if (spec.Method == ClientInstallMethod.Manual)
-            throw new AdminApiException(409, $"该客户端需要手动安装：{spec.HomepageUrl}");
+            throw new AdminApiException(409, action == "uninstall" ? $"该客户端需要手动卸载：{spec.HomepageUrl}" : $"该客户端需要手动安装：{spec.HomepageUrl}");
         var (state, previousVersion) = Inspect(spec);
         var plan = ClientInstallPlanner.Plan(spec, state, env.Os);
-        var command = action == "install" ? plan.Install : plan.Update;
+        var command = action switch { "install" => plan.Install, "update" => plan.Update, _ => plan.Uninstall };
         if (command is null)
-        {
-            throw new AdminApiException(409, plan.Blocker switch
+            throw new AdminApiException(409, action == "uninstall" ? UninstallUnavailable(spec, state) : plan.Blocker switch
             {
                 "npm-missing" => "没有找到 npm，请先安装 Node.js",
                 "vscode-missing" => "没有找到 VS Code 的 code 命令",
@@ -605,26 +599,25 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
                 "external-install" => $"{state.ExecutablePath} 不是通过 npm 安装的，请用原来的方式更新",
                 _ => action == "install" ? "客户端已经安装" : "客户端尚未安装",
             });
-        }
         if (elevated)
         {
             if (ClientInstallPlanner.NpmCommand(spec, plan, action) is null)
-                throw new AdminApiException(409, "只有 npm 安装和更新可以使用管理员权限运行");
+                throw new AdminApiException(409, "只有 npm 安装、更新和卸载可以使用管理员权限运行");
             command = Elevate(command, state, kind)
                       ?? throw new AdminApiException(409, $"这里无法弹出管理员授权，请在终端运行：sudo {command.Display}");
         }
+        return (spec, state, previousVersion, command);
+    }
 
-        Job job;
-        lock (_jobLock)
-        {
-            if (_running is { } busy)
-                throw new AdminApiException(409, $"正在{(busy.Action == "install" ? "安装" : "更新")} {busy.Kind}，请等它完成");
-            job = new Job(kind, action, command, elevated);
-            _jobs[kind] = job;
-            _running = job;
-        }
-        _ = Task.Run(() => RunJobAsync(job, state, spec, previousVersion));
-        return job.ToDto();
+    /// <summary>Why Astra will not uninstall this client (see <see cref="ClientInstallPlan.Uninstall"/>).</summary>
+    private static string UninstallUnavailable(ClientInstallSpec spec, ClientToolState state)
+    {
+        if (!state.Installed) return "客户端尚未安装";
+        if (spec.Method == ClientInstallMethod.Script) return $"该客户端由官方安装脚本安装，请按官方说明卸载：{spec.HomepageUrl}";
+        if (spec.Method == ClientInstallMethod.VsCodeExtension)
+            return state.BuiltIn ? "这个扩展是 VS Code 自带的，无法单独卸载" : "没有找到 VS Code 的 code 命令";
+        if (state.NpmPath is null) return "没有找到 npm，请先安装 Node.js";
+        return $"{state.ExecutablePath} 不是通过 npm 安装的，请用原来的方式卸载";
     }
 
     /// <summary>The current or last job of a client; 404 when there was none since the server started.</summary>
@@ -715,6 +708,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     /// </summary>
     private string? VerifyOutcome(Job job, ClientInstallSpec spec, string? previousVersion)
     {
+        if (job.Action == "uninstall") return VerifyUninstall(job, spec);
         if (spec.Executable is not { } name || spec.Method == ClientInstallMethod.VsCodeExtension) return null;
         _probes.Clear();
         _npm = null;
@@ -748,6 +742,23 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             return "not-on-path";
         }
         return null;
+    }
+
+    /// <summary>
+    /// After an uninstall that exited 0: "still-installed" when the client can still be found (another copy on PATH,
+    /// installed some other way — the user removes that one as they installed it); null when it is gone.
+    /// </summary>
+    private string? VerifyUninstall(Job job, ClientInstallSpec spec)
+    {
+        _probes.Clear();
+        _npm = null;
+        var (state, version) = Inspect(spec);
+        if (!state.Installed) return null;
+        job.Append("");
+        job.Append(spec.Method == ClientInstallMethod.VsCodeExtension
+            ? $"注意：命令执行成功，但 VS Code 仍然报告已安装 {spec.Package}（{version}）。"
+            : $"注意：命令执行成功，但仍然找到了 {spec.Executable}：{state.ExecutablePath}（{version}）。它不是这次卸载的 npm 包，请用安装它的方式删除。");
+        return "still-installed";
     }
 
     private static readonly Comparer<string?> VersionComparer =
@@ -835,7 +846,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         _checkMutex.Dispose();
     }
 
-    /// <summary>One install / update run; the log is bounded and every member is thread-safe.</summary>
+    /// <summary>One install / update / uninstall run; the log is bounded and every member is thread-safe.</summary>
     private sealed partial class Job(string kind, string action, ToolCommand command, bool elevated)
     {
         private readonly Lock _lock = new();

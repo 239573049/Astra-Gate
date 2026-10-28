@@ -2,7 +2,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Check, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, GripVertical, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert, X } from 'lucide-react';
+import { Archive, Check, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, GripVertical, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -594,7 +594,7 @@ function ClientPanel({ client }: { client: ClientInfo }) {
         </>
       )}
 
-      {!soon && client.install && <VersionGroup client={client} onShowLog={() => setInstallAction('log')} />}
+      {!soon && client.install && <VersionGroup client={client} onShowLog={() => setInstallAction('log')} onUninstall={() => setInstallAction('uninstall')} />}
 
       {isClaudeCode && (
         <div id={CLAUDE_DIRECT_ANCHOR_ID}>
@@ -624,6 +624,9 @@ function ClientPanel({ client }: { client: ClientInfo }) {
 }
 
 type InstallSheetMode = ClientInstallJob['action'] | 'log';
+
+const SHEET_TITLE = { install: 'clients.installTitle', update: 'clients.updateTitle', uninstall: 'clients.uninstallTitle' } as const;
+const SUCCESS_TOAST = { install: 'clients.installedToast', update: 'clients.updatedToast', uninstall: 'clients.uninstalledToast' } as const;
 
 function providerDetail(p: Provider, t: ReturnType<typeof useI18n>['t']): string {
   return [p.priceKey ?? p.templateId, t('providers.modelCount', { count: p.modelCount }), p.priceMultiplier !== 1 ? `×${p.priceMultiplier}` : null]
@@ -859,8 +862,19 @@ const CLAUDE_DIRECT_ANCHOR_ID = 'claude-direct-panel';
 /** Anchor of Claude Desktop's role map, so the "not set yet" hint under the header can scroll to it. */
 const ROLE_MAP_ANCHOR_ID = 'client-role-map';
 
-/** Installed vs latest version, how the client is installed, and why an action is unavailable. */
-function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: () => void }) {
+/**
+ * Why Astra will not uninstall an installed client (no uninstallCommand): apps and script installs follow the vendor's
+ * instructions, an npm client installed another way is removed the way it was installed, a VS Code built-in cannot be.
+ */
+function uninstallUnavailableText(inst: NonNullable<ClientInfo['install']>, t: ReturnType<typeof useI18n>['t']): string | null {
+  if (!inst.installed || inst.uninstallCommand) return null;
+  if (inst.method === 'npm') return t('clients.uninstallExternal', { path: inst.executable ?? '' });
+  if (inst.method === 'vscode-extension') return t('clients.uninstallBuiltIn');
+  return t('clients.uninstallManual');
+}
+
+/** Installed vs latest version, how the client is installed, why an action is unavailable, and uninstalling it. */
+function VersionGroup({ client, onShowLog, onUninstall }: { client: ClientInfo; onShowLog: () => void; onUninstall: () => void }) {
   const { t, locale } = useI18n();
   const inst = client.install!;
   const job = useClientInstallJob(client.kind);
@@ -924,6 +938,15 @@ function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: ()
           {t('clients.homepage')}
         </Button>
       </Row>
+      {inst.installed && (
+        <Row label={t('clients.uninstall')} detail={inst.uninstallCommand ?? uninstallUnavailableText(inst, t)}>
+          {inst.uninstallCommand && (
+            <Button size="sm" variant="destructive" icon={<Trash2 className="size-3" />} disabled={inst.busy} onClick={onUninstall}>
+              {t('clients.uninstall')}
+            </Button>
+          )}
+        </Row>
+      )}
       {job.data && (
         <Row
           icon={<ScrollText className="size-4 text-[var(--text-secondary)]" />}
@@ -938,8 +961,10 @@ function VersionGroup({ client, onShowLog }: { client: ClientInfo; onShowLog: ()
 }
 
 /**
- * Runs an install / update after showing the exact command, then streams its output (polled). With mode "log"
- * it only shows the current or last run. Closing the sheet does not stop a run; "Stop" does.
+ * Runs an install / update / uninstall after showing the exact command, then streams its output (polled). With mode
+ * "log" it only shows the current or last run. Closing the sheet does not stop a run; "Stop" does. Confirming an
+ * uninstall of a client Astra has taken over says that its original config is restored first (the server does that
+ * through the disable path before the command runs).
  */
 function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null; onClose: () => void; client: ClientInfo }) {
   const { t } = useI18n();
@@ -954,8 +979,9 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
   const lastState = useRef<string | undefined>(undefined);
   const name = clientName(client.kind, client.name);
   const inst = client.install;
-  const action = mode === 'install' || mode === 'update' ? mode : null;
-  const command = action === 'install' ? inst?.installCommand : action === 'update' ? inst?.updateCommand : null;
+  const action = mode === 'log' ? null : mode;
+  const command = action === 'install' ? inst?.installCommand : action === 'update' ? inst?.updateCommand : action === 'uninstall' ? inst?.uninstallCommand : null;
+  const uninstalling = action === 'uninstall';
   const data = job.data;
   // Confirm first unless a run is already going (or the sheet was opened just to watch the log).
   const confirming = action !== null && !started && data?.state !== 'running';
@@ -974,7 +1000,7 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
     if (lastState.current === 'running' && state && state !== 'running') {
       void qc.invalidateQueries({ queryKey: keys.clients });
       if (state === 'succeeded' && data.hint) toast(t('clients.notEffectiveToast', { name }));
-      else if (state === 'succeeded') toast(t(data.action === 'install' ? 'clients.installedToast' : 'clients.updatedToast', { name }), 'success');
+      else if (state === 'succeeded') toast(t(SUCCESS_TOAST[data.action], { name }), 'success');
     }
     lastState.current = state;
   }, [data?.state, data?.action, data?.hint, name, qc, t, toast]);
@@ -991,7 +1017,7 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
     if (await systemActions.copy(text)) toast(t('common.copied'));
   };
 
-  const title = t((action ?? data?.action) === 'update' ? 'clients.updateTitle' : 'clients.installTitle', { name });
+  const title = t(SHEET_TITLE[action ?? data?.action ?? 'install'], { name });
   const statusTone = { running: 'info', succeeded: 'success', failed: 'danger', cancelled: 'warning' } as const;
   const codeBox = 'rounded-[var(--radius-control)] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 font-mono text-[12px] break-all whitespace-pre-wrap selectable';
   // The one-time fix that makes admin rights unnecessary from then on.
@@ -1011,7 +1037,7 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
       onOpenChange={(o) => !o && onClose()}
       width={620}
       title={title}
-      description={confirming ? t('clients.installRunDetail') : undefined}
+      description={confirming ? t(uninstalling ? 'clients.uninstallRunDetail' : 'clients.installRunDetail') : undefined}
       footer={
         confirming ? (
           <>
@@ -1023,13 +1049,13 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
               </Button>
             ) : (
               <Button
-                variant="primary"
+                variant={uninstalling ? 'destructive' : 'primary'}
                 icon={needsAdmin ? <ShieldAlert className="size-3.5" /> : undefined}
                 disabled={!command}
                 loading={start.isPending}
                 onClick={() => action && run(action, needsAdmin)}
               >
-                {needsAdmin ? t('clients.admin.start') : t('clients.installStart')}
+                {needsAdmin ? t('clients.admin.start') : uninstalling ? t('clients.uninstall') : t('clients.installStart')}
               </Button>
             )}
           </>
@@ -1057,13 +1083,22 @@ function InstallSheet({ mode, onClose, client }: { mode: InstallSheetMode | null
     >
       {confirming ? (
         <div className="flex flex-col gap-3">
+          {uninstalling && client.enabled && (
+            <Alert tone="warning" title={t('clients.uninstallRestoreTitle')}>
+              {t('clients.uninstallRestoreDetail', { name })}
+            </Alert>
+          )}
           {needsAdmin && (
             <Alert tone="warning" title={t('clients.admin.title')}>
               {t(canElevate ? 'clients.admin.prompt' : 'clients.admin.manual')}
             </Alert>
           )}
           {command ? <pre className={codeBox}>{needsAdmin ? `sudo ${command}` : command}</pre> : <Alert tone="warning" title={t('clients.installUnavailable')} />}
-          {inst?.method === 'npm' && <p className="text-[11px] text-[var(--text-muted)]">{t('clients.installNpmNote')}</p>}
+          {uninstalling ? (
+            <p className="text-[11px] text-[var(--text-muted)]">{t('clients.uninstallKeepsData')}</p>
+          ) : (
+            inst?.method === 'npm' && <p className="text-[11px] text-[var(--text-muted)]">{t('clients.installNpmNote')}</p>
+          )}
           {needsAdmin && fix}
         </div>
       ) : data ? (

@@ -1,0 +1,78 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             xmlns:icons="using:TKCode.Arc.Icons.Lucide"
+             xmlns:shell="using:Astra.Desktop.Shell"
+             x:Class="Astra.Desktop.Views.ServiceStatusView"
+             x:DataType="shell:ConnectionViewModel">
+  <!-- The sidebar footer (web AppShell.tsx ServiceStatus): a status card when open; on the icon rail the community links above the status
+       dot (green up, red otherwise) and, while remote access is on, a globe next to it. -->
+  <UserControl.Styles>
+    <Style Selector="arc|Button.remote">
+      <Setter Property="Foreground" Value="{arc:ArcDesignTokenResource Accent}" />
+    </Style>
+  </UserControl.Styles>
+  <Panel>
+    <!-- Fill: the glass tint at 45% (GlassSidebar.ApplyAppearance → SetCardFill), web `bg-[color-mix(glass-tint 45%)]` -->
+    <Border x:Name="Card" CornerRadius="12" Padding="12,8">
+      <StackPanel Spacing="6">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Panel VerticalAlignment="Center">
+                <Ellipse Width="8" Height="8" IsVisible="{Binding IsConnected}" Fill="{arc:ArcDesignTokenResource Success}" />
+                <Ellipse Width="8" Height="8" IsVisible="{Binding IsDown}" Fill="{arc:ArcDesignTokenResource Danger}" />
+                <Ellipse Width="8" Height="8" IsVisible="{Binding IsConnecting}" Fill="{arc:ArcDesignTokenResource TextMuted}" />
+              </Panel>
+              <TextBlock Text="{Binding StatusText}" FontSize="{arc:ArcDesignTokenResource TypeXS}"
+                         Foreground="{arc:ArcDesignTokenResource TextSecondary}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <SelectableTextBlock Text="{Binding Address}" IsVisible="{Binding ShowAddress}" FontSize="10.5"
+                                 FontFamily="{arc:ArcDesignTokenResource MonoFontFamily}" TextTrimming="CharacterEllipsis"
+                                 Foreground="{arc:ArcDesignTokenResource TextMuted}" />
+            <!-- web: <NavLink to="/settings/remote"> with a 12px globe, accent, underline on hover -->
+            <arc:Button x:Name="RemoteLink" Classes="remote" Variant="Ghost" IsVisible="False" Margin="-4,2,0,0" Padding="4,0" MinHeight="0" Height="18"
+                        HorizontalAlignment="Left">
+              <StackPanel Orientation="Horizontal" Spacing="4">
+                <icons:LucideIcon Kind="Globe" Size="12" Foreground="{arc:ArcDesignTokenResource Accent}" VerticalAlignment="Center" />
+                <TextBlock x:Name="RemoteText" FontSize="{arc:ArcDesignTokenResource TypeXS}" TextTrimming="CharacterEllipsis"
+                           Foreground="{arc:ArcDesignTokenResource Accent}" VerticalAlignment="Center" />
+              </StackPanel>
+            </arc:Button>
+          </StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Vertical" Margin="0,-4,-4,-4">
+            <arc:Button x:Name="GitHubLink" Variant="Ghost" Width="28" Height="28" Padding="0">
+              <Path x:Name="GitHubIcon" Width="18" Height="18" Stretch="Uniform" Fill="{arc:ArcDesignTokenResource TextMuted}" />
+            </arc:Button>
+            <arc:Button x:Name="DiscordLink" Variant="Ghost" Width="28" Height="28" Padding="0">
+              <Path x:Name="DiscordIcon" Width="18" Height="18" Stretch="Uniform" Fill="{arc:ArcDesignTokenResource TextMuted}" />
+            </arc:Button>
+          </StackPanel>
+        </Grid>
+        <arc:Button x:Name="StartButton" Size="Small" Variant="Primary" HorizontalAlignment="Stretch"
+                    IsVisible="{Binding IsDown}" IsLoading="{Binding IsStarting}"
+                    Content="{Binding StartServiceText}" Command="{Binding StartServiceCommand}" />
+      </StackPanel>
+    </Border>
+    <StackPanel x:Name="Rail" IsVisible="False" HorizontalAlignment="Center">
+      <StackPanel Spacing="2" Margin="0,0,0,4" HorizontalAlignment="Center">
+        <arc:Button x:Name="RailGitHubLink" Variant="Ghost" Width="22" Height="22" MinWidth="0" MinHeight="0" Padding="0">
+          <Path x:Name="RailGitHubIcon" Width="18" Height="18" Stretch="Uniform" Fill="{arc:ArcDesignTokenResource TextMuted}" />
+        </arc:Button>
+        <arc:Button x:Name="RailDiscordLink" Variant="Ghost" Width="22" Height="22" MinWidth="0" MinHeight="0" Padding="0">
+          <Path x:Name="RailDiscordIcon" Width="18" Height="18" Stretch="Uniform" Fill="{arc:ArcDesignTokenResource TextMuted}" />
+        </arc:Button>
+      </StackPanel>
+      <StackPanel x:Name="RailStatus" Orientation="Horizontal" Height="40" Spacing="4" HorizontalAlignment="Center" Background="Transparent">
+        <Panel VerticalAlignment="Center">
+          <Ellipse Width="8" Height="8" IsVisible="{Binding IsConnected}" Fill="{arc:ArcDesignTokenResource Success}" />
+          <Ellipse Width="8" Height="8" IsVisible="{Binding !IsConnected}" Fill="{arc:ArcDesignTokenResource Danger}" />
+        </Panel>
+        <arc:Button x:Name="RailRemoteLink" Classes="remote" Variant="Ghost" IsVisible="False" Padding="0" MinHeight="0" Width="18" Height="18"
+                    VerticalAlignment="Center">
+          <icons:LucideIcon Kind="Globe" Size="12" Foreground="{arc:ArcDesignTokenResource Accent}" />
+        </arc:Button>
+      </StackPanel>
+    </StackPanel>
+  </Panel>
+</UserControl>

@@ -1,0 +1,12 @@
+{
+  "range": "today",
+  "costUsd": 6.36,
+  "requests": 50,
+  "successRate": 0.912,
+  "inputTokens": 1201000,
+  "outputTokens": 149000,
+  "cacheReadTokens": 714000,
+  "cacheWriteTokens": 71000,
+  "reasoningTokens": 17880,
+  "avgTtftMs": 1180
+}

@@ -1,0 +1,8 @@
+{
+  "host": "127.0.0.1",
+  "port": 17321,
+  "configuredHost": "127.0.0.1",
+  "hostFromEnvironment": false,
+  "passwordSet": false,
+  "networkUrls": []
+}

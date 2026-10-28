@@ -6,17 +6,7 @@ namespace Astra.Server.Api;
 /// <summary>/api/server/autostart: starting this server when the user logs in (<see cref="AutostartService"/>).</summary>
 public static class AutostartEndpoints
 {
-    /// <param name="Supported">False in a container, on Linux without systemd, or where Astra has no login entry.</param>
-    /// <param name="Enabled">An entry starts the server at login (written here or by <c>astra autostart enable</c>).</param>
-    /// <param name="Mechanism">launchd | systemd | registry | none.</param>
-    /// <param name="Unsupported">container | no-systemd | platform; null when supported.</param>
-    /// <param name="Location">Where the entry lives (plist, unit file, Run key value, or the CLI's old scheduled task).</param>
-    /// <param name="Program">The program the entry starts, when it can be read back.</param>
-    /// <param name="CanChange">The caller is on this machine: only it may add or remove the entry.</param>
-    public sealed record AutostartDto(
-        bool Supported, bool Enabled, string Mechanism, string? Unsupported, string? Location, string? Program, bool CanChange);
 
-    public sealed record AutostartRequest(bool Enabled);
 
     public static void MapAutostartEndpoints(this IEndpointRouteBuilder app)
     {

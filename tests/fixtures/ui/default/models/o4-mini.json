@@ -1,0 +1,41 @@
+{
+  "id": "o4-mini",
+  "displayName": "o4-mini",
+  "vendor": "openai",
+  "family": "o",
+  "aliases": [],
+  "contextWindow": 200000,
+  "maxOutputTokens": 100000,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "promptCache": true,
+    "audio": false,
+    "pdf": false,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 1.1,
+      "output": 4.4,
+      "cache_read": 0.275
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [
+    "openai"
+  ],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

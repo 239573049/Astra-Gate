@@ -69,6 +69,18 @@ Codex 的「选项」里有 **写入模型目录**（默认关闭）。打开后
 
 npm 分发的客户端（Codex、Claude Code、Gemini CLI、OpenCode、Grok Build、Pi、MiniMax Code、Copilot CLI、Crush、Qwen Code、Droid、Kimi Code、MiMo Code）可以在客户端页直接安装、检查并更新（`npm install -g <包>@latest`）。Hermes Agent 用它官方的安装脚本安装（macOS / Linux 为 `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`，Windows 为 `install.ps1`；Astra 会以 `--non-interactive` / `-NonInteractive` 运行，不弹交互），更新走它自带的 `hermes update`，最新版本来自 GitHub Releases。Zed、VS Code Insiders、VSCodium、omp（运行在 Bun 上）、DeepSeek Harness（桌面应用或 `npx @deepseek-ai/dsh web`）、WorkBuddy 与 WorkBuddy AI（桌面应用）和 Claude Desktop 一样只显示已安装版本和下载主页，Astra 不会替你运行安装命令。Qwen Code 需要 Node 22 及以上，Kimi Code 需要 Node 22.19 及以上；Node 太旧时 npm 会给出警告或客户端无法运行。`kimi` 命令也可能指向已归档的 Python 版 Kimi CLI，版本以 `kimi --version` 的输出为准。
 
+### 卸载
+
+已安装客户端的「版本」分组里有一行 **卸载**：
+
+| 安装方式 | 卸载 |
+| --- | --- |
+| npm 全局包 | 点 **卸载** 运行 `npm uninstall -g <包>`（装在旧的 npm 前缀下时带上 `--prefix`），输出与安装一样实时显示。只有终端里运行的那一份确实是 npm 全局安装的，才提供这个按钮；通过原生安装器、Homebrew、bun 等方式装的，Astra 会提示你用原来的方式卸载——这时 `npm uninstall` 删不掉正在用的那一份。npm 全局目录属于系统管理员时，和安装一样会弹出管理员授权 |
+| VS Code 扩展（Copilot Chat） | 运行 `code --uninstall-extension GitHub.copilot-chat`；VS Code 自带的那份无法单独卸载 |
+| 官方安装脚本（Hermes Agent）、桌面应用与手动安装的客户端 | Astra 不会自动卸载，请按官网说明操作（「主页」按钮） |
+
+如果 Astra 正在接管这个客户端的配置（已启用），卸载会**先禁用并还原**它的原始配置——和「禁用并还原」走同一条路径，你手动改过的配置项保持原样——再运行卸载命令，确认框会写明这一点。卸载只删除程序本身，客户端自己的数据与配置文件（如 `~/.codex`）不会被删除。卸载后如果仍能找到这个客户端（例如另有一份不是 npm 装的），日志会指出它的位置。
+
 ## 启用
 
 <Screenshot src="/screenshots/client-detail.png" alt="未启用的客户端标签页，展示启用按钮" title="Astra — 客户端" caption="未启用的客户端：点「启用…」由 Astra 代写配置" />

@@ -1,0 +1,43 @@
+{
+  "id": "tok_default",
+  "name": "default",
+  "isDefault": true,
+  "enabled": true,
+  "keyMasked": "sk-astra-Qx7…9fA",
+  "providerId": "prov_anthropic",
+  "accountId": null,
+  "createdAt": "2026-09-16T12:00:00Z",
+  "updatedAt": "2026-10-16T12:00:00Z",
+  "lastUsedAt": "2026-10-26T11:57:00Z",
+  "clients": [
+    "claude-code",
+    "codex"
+  ],
+  "today": {
+    "costUsd": 4.82,
+    "requests": 31,
+    "inputTokens": 912000,
+    "outputTokens": 118000,
+    "totalTokens": 1030000,
+    "cacheReadTokens": 604000,
+    "cacheWriteTokens": 71000,
+    "cacheHitRate": 0.662,
+    "tps": 62.4
+  },
+  "total": {
+    "costUsd": 318.4,
+    "requests": 2214,
+    "inputTokens": 61200000,
+    "outputTokens": 7900000,
+    "totalTokens": 69100000,
+    "cacheReadTokens": 40100000,
+    "cacheWriteTokens": 5000000,
+    "cacheHitRate": 0.655,
+    "tps": 62.4
+  },
+  "limits": null,
+  "allowedClients": null,
+  "limitUsage": [],
+  "recentRequests": 2,
+  "pool": null
+}

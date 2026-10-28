@@ -76,10 +76,12 @@ public class ResponsesRequestDecodeTests
         Assert.Equal(0.2, request.Temperature);
         Assert.Null(request.PreviousResponseId);
 
-        // store / include / prompt_cache_key land in Extensions for the same-protocol encoder.
+        Assert.Equal("codex-session-1", request.PromptCacheKey);
+
+        // store / include land in Extensions for the same-protocol encoder.
         var extensions = Assert.Single(request.Extensions).Value;
         Assert.False(extensions["store"]!.GetValue<bool>());
-        Assert.Equal("codex-session-1", extensions["prompt_cache_key"]!.GetValue<string>());
+        Assert.Null(extensions["prompt_cache_key"]);
         Assert.Equal("reasoning.encrypted_content", extensions["include"]!.AsArray()[0]!.GetValue<string>());
 
         // The web_search_call input item is not representable in the IR → dropped with a warning.

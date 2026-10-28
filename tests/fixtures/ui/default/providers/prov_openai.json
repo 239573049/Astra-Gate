@@ -1,0 +1,58 @@
+{
+  "id": "prov_openai",
+  "templateId": "openai",
+  "templateVersion": 1,
+  "templateUpdateAvailable": false,
+  "name": "OpenAI",
+  "icon": "openai",
+  "category": "official",
+  "endpoints": [
+    {
+      "protocol": "openai-chat",
+      "baseUrl": "https://api.openai.com/v1"
+    },
+    {
+      "protocol": "openai-responses",
+      "baseUrl": "https://api.openai.com/v1"
+    }
+  ],
+  "preferredUpstreamProtocols": [
+    "openai-responses",
+    "openai-chat"
+  ],
+  "authScheme": "bearer",
+  "hasApiKey": true,
+  "apiKeyMasked": "sk-…a1b2",
+  "extraHeaders": {},
+  "httpProxy": null,
+  "priceMultiplier": 1,
+  "priceKey": "openai",
+  "adapterId": "openai",
+  "settings": {},
+  "enabled": true,
+  "sortOrder": 0,
+  "notes": null,
+  "website": "https://platform.openai.com",
+  "modelCount": 4,
+  "boundClients": [
+    "codex"
+  ],
+  "createdAt": "2026-09-16T12:00:00Z",
+  "updatedAt": "2026-10-24T12:00:00Z",
+  "quotaConfig": {
+    "enabled": false,
+    "template": null,
+    "suggestedTemplate": null,
+    "effectiveTemplate": null,
+    "intervalMinutes": null,
+    "effectiveIntervalMinutes": 30,
+    "timeoutSec": 15,
+    "baseUrl": null,
+    "params": {},
+    "secrets": [],
+    "request": null,
+    "extract": null
+  },
+  "quota": null,
+  "quotaCheckedAtUtc": null
+}

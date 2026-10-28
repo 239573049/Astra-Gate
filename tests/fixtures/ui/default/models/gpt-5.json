@@ -1,0 +1,41 @@
+{
+  "id": "gpt-5",
+  "displayName": "GPT-5",
+  "vendor": "openai",
+  "family": "gpt-5",
+  "aliases": [],
+  "contextWindow": 400000,
+  "maxOutputTokens": 128000,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "promptCache": true,
+    "audio": false,
+    "pdf": true,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 1.25,
+      "output": 10,
+      "cache_read": 0.125
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [
+    "openai"
+  ],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

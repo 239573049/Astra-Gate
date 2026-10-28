@@ -1,0 +1,632 @@
+[
+  {
+    "bucket": "2026-09-27",
+    "key": "tok_default",
+    "costUsd": 5.13,
+    "requests": 21,
+    "tokens": 295134
+  },
+  {
+    "bucket": "2026-09-27",
+    "key": "tok_ci",
+    "costUsd": 1.52,
+    "requests": 16,
+    "tokens": 222800
+  },
+  {
+    "bucket": "2026-09-27",
+    "key": "tok_pool",
+    "costUsd": 0.3,
+    "requests": 6,
+    "tokens": 67866
+  },
+  {
+    "bucket": "2026-09-28",
+    "key": "tok_default",
+    "costUsd": 2.78,
+    "requests": 38,
+    "tokens": 539676
+  },
+  {
+    "bucket": "2026-09-28",
+    "key": "tok_ci",
+    "costUsd": 0.79,
+    "requests": 19,
+    "tokens": 252149
+  },
+  {
+    "bucket": "2026-09-28",
+    "key": "tok_pool",
+    "costUsd": 0.39,
+    "requests": 9,
+    "tokens": 78201
+  },
+  {
+    "bucket": "2026-09-29",
+    "key": "tok_default",
+    "costUsd": 3.02,
+    "requests": 28,
+    "tokens": 271068
+  },
+  {
+    "bucket": "2026-09-29",
+    "key": "tok_ci",
+    "costUsd": 1.64,
+    "requests": 24,
+    "tokens": 544824
+  },
+  {
+    "bucket": "2026-09-29",
+    "key": "tok_pool",
+    "costUsd": 0.34,
+    "requests": 4,
+    "tokens": 62680
+  },
+  {
+    "bucket": "2026-09-30",
+    "key": "tok_default",
+    "costUsd": 5.11,
+    "requests": 19,
+    "tokens": 335502
+  },
+  {
+    "bucket": "2026-09-30",
+    "key": "tok_ci",
+    "costUsd": 1.87,
+    "requests": 11,
+    "tokens": 108515
+  },
+  {
+    "bucket": "2026-09-30",
+    "key": "tok_pool",
+    "costUsd": 0.2,
+    "requests": 4,
+    "tokens": 44148
+  },
+  {
+    "bucket": "2026-10-01",
+    "key": "tok_default",
+    "costUsd": 4.96,
+    "requests": 35,
+    "tokens": 638715
+  },
+  {
+    "bucket": "2026-10-01",
+    "key": "tok_ci",
+    "costUsd": 0.81,
+    "requests": 19,
+    "tokens": 277799
+  },
+  {
+    "bucket": "2026-10-01",
+    "key": "tok_pool",
+    "costUsd": 0.33,
+    "requests": 4,
+    "tokens": 86284
+  },
+  {
+    "bucket": "2026-10-02",
+    "key": "tok_default",
+    "costUsd": 5.08,
+    "requests": 39,
+    "tokens": 688701
+  },
+  {
+    "bucket": "2026-10-02",
+    "key": "tok_ci",
+    "costUsd": 1.71,
+    "requests": 16,
+    "tokens": 243168
+  },
+  {
+    "bucket": "2026-10-02",
+    "key": "tok_pool",
+    "costUsd": 0.31,
+    "requests": 8,
+    "tokens": 102664
+  },
+  {
+    "bucket": "2026-10-03",
+    "key": "tok_default",
+    "costUsd": 4.68,
+    "requests": 19,
+    "tokens": 388854
+  },
+  {
+    "bucket": "2026-10-03",
+    "key": "tok_ci",
+    "costUsd": 1.85,
+    "requests": 18,
+    "tokens": 398988
+  },
+  {
+    "bucket": "2026-10-03",
+    "key": "tok_pool",
+    "costUsd": 0.36,
+    "requests": 6,
+    "tokens": 103734
+  },
+  {
+    "bucket": "2026-10-04",
+    "key": "tok_default",
+    "costUsd": 5.48,
+    "requests": 35,
+    "tokens": 711305
+  },
+  {
+    "bucket": "2026-10-04",
+    "key": "tok_ci",
+    "costUsd": 1.47,
+    "requests": 20,
+    "tokens": 239440
+  },
+  {
+    "bucket": "2026-10-04",
+    "key": "tok_pool",
+    "costUsd": 0.37,
+    "requests": 7,
+    "tokens": 141141
+  },
+  {
+    "bucket": "2026-10-05",
+    "key": "tok_default",
+    "costUsd": 3.68,
+    "requests": 22,
+    "tokens": 366344
+  },
+  {
+    "bucket": "2026-10-05",
+    "key": "tok_ci",
+    "costUsd": 0.86,
+    "requests": 26,
+    "tokens": 433212
+  },
+  {
+    "bucket": "2026-10-05",
+    "key": "tok_pool",
+    "costUsd": 0.16,
+    "requests": 6,
+    "tokens": 53904
+  },
+  {
+    "bucket": "2026-10-06",
+    "key": "tok_default",
+    "costUsd": 4.73,
+    "requests": 38,
+    "tokens": 732982
+  },
+  {
+    "bucket": "2026-10-06",
+    "key": "tok_ci",
+    "costUsd": 2.05,
+    "requests": 20,
+    "tokens": 367720
+  },
+  {
+    "bucket": "2026-10-06",
+    "key": "tok_pool",
+    "costUsd": 0.24,
+    "requests": 6,
+    "tokens": 131460
+  },
+  {
+    "bucket": "2026-10-07",
+    "key": "tok_default",
+    "costUsd": 2.22,
+    "requests": 24,
+    "tokens": 246576
+  },
+  {
+    "bucket": "2026-10-07",
+    "key": "tok_ci",
+    "costUsd": 1.17,
+    "requests": 23,
+    "tokens": 483874
+  },
+  {
+    "bucket": "2026-10-07",
+    "key": "tok_pool",
+    "costUsd": 0.38,
+    "requests": 5,
+    "tokens": 41465
+  },
+  {
+    "bucket": "2026-10-08",
+    "key": "tok_default",
+    "costUsd": 3.74,
+    "requests": 39,
+    "tokens": 878319
+  },
+  {
+    "bucket": "2026-10-08",
+    "key": "tok_ci",
+    "costUsd": 2.06,
+    "requests": 19,
+    "tokens": 280250
+  },
+  {
+    "bucket": "2026-10-08",
+    "key": "tok_pool",
+    "costUsd": 0.17,
+    "requests": 5,
+    "tokens": 67745
+  },
+  {
+    "bucket": "2026-10-09",
+    "key": "tok_default",
+    "costUsd": 5.52,
+    "requests": 28,
+    "tokens": 625296
+  },
+  {
+    "bucket": "2026-10-09",
+    "key": "tok_ci",
+    "costUsd": 1.22,
+    "requests": 10,
+    "tokens": 159460
+  },
+  {
+    "bucket": "2026-10-09",
+    "key": "tok_pool",
+    "costUsd": 0.25,
+    "requests": 7,
+    "tokens": 73766
+  },
+  {
+    "bucket": "2026-10-10",
+    "key": "tok_default",
+    "costUsd": 3.15,
+    "requests": 44,
+    "tokens": 957044
+  },
+  {
+    "bucket": "2026-10-10",
+    "key": "tok_ci",
+    "costUsd": 0.81,
+    "requests": 13,
+    "tokens": 195052
+  },
+  {
+    "bucket": "2026-10-10",
+    "key": "tok_pool",
+    "costUsd": 0.36,
+    "requests": 4,
+    "tokens": 73148
+  },
+  {
+    "bucket": "2026-10-11",
+    "key": "tok_default",
+    "costUsd": 3.37,
+    "requests": 25,
+    "tokens": 514625
+  },
+  {
+    "bucket": "2026-10-11",
+    "key": "tok_ci",
+    "costUsd": 0.9,
+    "requests": 13,
+    "tokens": 259220
+  },
+  {
+    "bucket": "2026-10-11",
+    "key": "tok_pool",
+    "costUsd": 0.32,
+    "requests": 7,
+    "tokens": 92274
+  },
+  {
+    "bucket": "2026-10-12",
+    "key": "tok_default",
+    "costUsd": 3.92,
+    "requests": 42,
+    "tokens": 828450
+  },
+  {
+    "bucket": "2026-10-12",
+    "key": "tok_ci",
+    "costUsd": 1.47,
+    "requests": 16,
+    "tokens": 239872
+  },
+  {
+    "bucket": "2026-10-12",
+    "key": "tok_pool",
+    "costUsd": 0.39,
+    "requests": 4,
+    "tokens": 45356
+  },
+  {
+    "bucket": "2026-10-13",
+    "key": "tok_default",
+    "costUsd": 3.53,
+    "requests": 42,
+    "tokens": 923958
+  },
+  {
+    "bucket": "2026-10-13",
+    "key": "tok_ci",
+    "costUsd": 1.37,
+    "requests": 10,
+    "tokens": 177000
+  },
+  {
+    "bucket": "2026-10-13",
+    "key": "tok_pool",
+    "costUsd": 0.23,
+    "requests": 4,
+    "tokens": 66188
+  },
+  {
+    "bucket": "2026-10-14",
+    "key": "tok_default",
+    "costUsd": 4.23,
+    "requests": 43,
+    "tokens": 645172
+  },
+  {
+    "bucket": "2026-10-14",
+    "key": "tok_ci",
+    "costUsd": 0.94,
+    "requests": 9,
+    "tokens": 91152
+  },
+  {
+    "bucket": "2026-10-14",
+    "key": "tok_pool",
+    "costUsd": 0.27,
+    "requests": 8,
+    "tokens": 80656
+  },
+  {
+    "bucket": "2026-10-15",
+    "key": "tok_default",
+    "costUsd": 4.38,
+    "requests": 31,
+    "tokens": 652550
+  },
+  {
+    "bucket": "2026-10-15",
+    "key": "tok_ci",
+    "costUsd": 2.04,
+    "requests": 24,
+    "tokens": 276480
+  },
+  {
+    "bucket": "2026-10-15",
+    "key": "tok_pool",
+    "costUsd": 0.21,
+    "requests": 4,
+    "tokens": 87988
+  },
+  {
+    "bucket": "2026-10-16",
+    "key": "tok_default",
+    "costUsd": 5.31,
+    "requests": 47,
+    "tokens": 647613
+  },
+  {
+    "bucket": "2026-10-16",
+    "key": "tok_ci",
+    "costUsd": 1.93,
+    "requests": 18,
+    "tokens": 289368
+  },
+  {
+    "bucket": "2026-10-16",
+    "key": "tok_pool",
+    "costUsd": 0.3,
+    "requests": 5,
+    "tokens": 98495
+  },
+  {
+    "bucket": "2026-10-17",
+    "key": "tok_default",
+    "costUsd": 5.56,
+    "requests": 41,
+    "tokens": 556124
+  },
+  {
+    "bucket": "2026-10-17",
+    "key": "tok_ci",
+    "costUsd": 1.12,
+    "requests": 20,
+    "tokens": 345000
+  },
+  {
+    "bucket": "2026-10-17",
+    "key": "tok_pool",
+    "costUsd": 0.15,
+    "requests": 6,
+    "tokens": 99666
+  },
+  {
+    "bucket": "2026-10-18",
+    "key": "tok_default",
+    "costUsd": 2.63,
+    "requests": 19,
+    "tokens": 265601
+  },
+  {
+    "bucket": "2026-10-18",
+    "key": "tok_ci",
+    "costUsd": 0.96,
+    "requests": 25,
+    "tokens": 487825
+  },
+  {
+    "bucket": "2026-10-18",
+    "key": "tok_pool",
+    "costUsd": 0.38,
+    "requests": 7,
+    "tokens": 139867
+  },
+  {
+    "bucket": "2026-10-19",
+    "key": "tok_default",
+    "costUsd": 4.02,
+    "requests": 52,
+    "tokens": 974792
+  },
+  {
+    "bucket": "2026-10-19",
+    "key": "tok_ci",
+    "costUsd": 1.35,
+    "requests": 21,
+    "tokens": 243579
+  },
+  {
+    "bucket": "2026-10-19",
+    "key": "tok_pool",
+    "costUsd": 0.23,
+    "requests": 5,
+    "tokens": 53045
+  },
+  {
+    "bucket": "2026-10-20",
+    "key": "tok_default",
+    "costUsd": 5.55,
+    "requests": 49,
+    "tokens": 1134987
+  },
+  {
+    "bucket": "2026-10-20",
+    "key": "tok_ci",
+    "costUsd": 1.68,
+    "requests": 17,
+    "tokens": 211344
+  },
+  {
+    "bucket": "2026-10-20",
+    "key": "tok_pool",
+    "costUsd": 0.34,
+    "requests": 8,
+    "tokens": 179664
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "tok_default",
+    "costUsd": 3.85,
+    "requests": 33,
+    "tokens": 317064
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "tok_ci",
+    "costUsd": 1.74,
+    "requests": 21,
+    "tokens": 211323
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "tok_pool",
+    "costUsd": 0.24,
+    "requests": 8,
+    "tokens": 78616
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "tok_default",
+    "costUsd": 5.41,
+    "requests": 44,
+    "tokens": 512248
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "tok_ci",
+    "costUsd": 1.98,
+    "requests": 14,
+    "tokens": 200998
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "tok_pool",
+    "costUsd": 0.19,
+    "requests": 5,
+    "tokens": 56065
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "tok_default",
+    "costUsd": 5.13,
+    "requests": 52,
+    "tokens": 931788
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "tok_ci",
+    "costUsd": 1.68,
+    "requests": 13,
+    "tokens": 309179
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "tok_pool",
+    "costUsd": 0.38,
+    "requests": 8,
+    "tokens": 169712
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "tok_default",
+    "costUsd": 2.47,
+    "requests": 40,
+    "tokens": 826000
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "tok_ci",
+    "costUsd": 1.99,
+    "requests": 16,
+    "tokens": 173760
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "tok_pool",
+    "costUsd": 0.27,
+    "requests": 7,
+    "tokens": 142639
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "tok_default",
+    "costUsd": 3.54,
+    "requests": 19,
+    "tokens": 370747
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "tok_ci",
+    "costUsd": 1.93,
+    "requests": 15,
+    "tokens": 315390
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "tok_pool",
+    "costUsd": 0.15,
+    "requests": 6,
+    "tokens": 115542
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "tok_default",
+    "costUsd": 3.62,
+    "requests": 43,
+    "tokens": 1002932
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "tok_ci",
+    "costUsd": 1.72,
+    "requests": 16,
+    "tokens": 214960
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "tok_pool",
+    "costUsd": 0.41,
+    "requests": 3,
+    "tokens": 29175
+  }
+]

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- AOT analyzer gate (IL2026/IL3050 are errors); does not flow through ProjectReference, so set per project. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <RootNamespace>Astra.Api.Contracts</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Wire DTOs of the admin API shared by Astra.Server and Astra.Desktop.Core. Core only, no NuGet. -->
+    <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
+  </ItemGroup>
+</Project>

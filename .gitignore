@@ -24,3 +24,6 @@ promo/
 videos/
 # Staged server artifacts for ./Dockerfile
 docker-bin/
+
+# Visual-regression captures (scripts/visual, tests/Astra.Desktop.UiTests)
+artifacts/

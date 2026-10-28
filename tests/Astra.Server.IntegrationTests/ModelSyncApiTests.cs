@@ -107,6 +107,19 @@ public class ModelSyncApiTests
         """;
 
     [Fact]
+    public void Openai_cache_write_maps_to_the_30m_write_plus_a_12h_write()
+    {
+        var cost = JsonNode.Parse("""{ "input": 2, "output": 10, "cache_read": 0.1, "cache_write": 2.5 }""")!.AsObject();
+        var openai = ModelSyncService.ToPricing(cost, "openai")!;
+        Assert.Equal(2.5m, openai.Base["cache_write_30m"]);
+        Assert.Equal(5m, openai.Base["cache_write_12h"]);
+        Assert.Null(openai.Base["cache_write_5m"]);
+        var other = ModelSyncService.ToPricing(cost, "openrouter")!;
+        Assert.Equal(2.5m, other.Base["cache_write_5m"]);
+        Assert.Null(other.Base["cache_write_30m"]);
+    }
+
+    [Fact]
     public async Task Preview_diffs_modelsdev_against_the_catalog_without_writing()
     {
         var handler = FakeCatalogHandler.Json(CatalogJson);

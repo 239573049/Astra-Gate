@@ -4,7 +4,7 @@
 // Pricing is provider-scoped: every system model gets the official vendor price as its default
 // `pricing`, and `provider_pricing[<price_key>]` for the same model at other AI providers
 // (price key = models.dev provider id = Astra provider template id / price_key).
-// Rules models.dev does not express (Anthropic 1h cache writes, DeepSeek peak windows) are added here.
+// Rules models.dev does not express (Anthropic 1h and OpenAI 12h cache writes, DeepSeek peak windows) are added here.
 //
 // Usage: node scripts/gen-seed.mjs [path-or-url-to-api.json]
 
@@ -12,7 +12,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-const SEED_VERSION = 5;
+const SEED_VERSION = 6;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const out = path.join(root, "src/Astra.Core/Seed/models.json");
 const source = process.argv[2] ?? "https://models.dev/api.json";
@@ -57,11 +57,16 @@ function normalize(id) {
 
 const round = (n) => (n == null ? undefined : Number(Number(n).toFixed(6)));
 
-function priceSet(cost, isClaude) {
+function priceSet(cost, isClaude, isOpenAI) {
   const p = {};
   if (cost.input != null) p.input = round(cost.input);
   if (cost.cache_read != null) p.cache_read = round(cost.cache_read);
-  if (cost.cache_write != null) p.cache_write_5m = round(cost.cache_write);
+  if (isOpenAI && cost.cache_write != null) {
+    // OpenAI charges cache writes on GPT-5.6+ only (the models with a cache_write): that price is the
+    // 30-minute write (1.25x input); a 12-hour write costs 2.5x input.
+    p.cache_write_30m = round(cost.cache_write);
+    if (cost.input != null) p.cache_write_12h = round(cost.input * 2.5);
+  } else if (cost.cache_write != null) p.cache_write_5m = round(cost.cache_write);
   // Anthropic 1-hour cache writes cost 2x base input.
   if (isClaude && cost.input != null && cost.cache_write != null) p.cache_write_1h = round(cost.input * 2);
   if (cost.input_audio != null && cost.input_audio !== cost.input) p.input_audio = round(cost.input_audio);
@@ -75,7 +80,8 @@ function toPricing(model, providerId) {
   const cost = model.cost;
   if (!cost || cost.input == null || cost.output == null) return null;
   const isClaude = /claude/i.test(model.id);
-  const pricing = { currency: "USD", unit: "per_1m_tokens", base: priceSet(cost, isClaude) };
+  const isOpenAI = providerId === "openai";
+  const pricing = { currency: "USD", unit: "per_1m_tokens", base: priceSet(cost, isClaude, isOpenAI) };
 
   const tiers = (cost.tiers ?? []).filter((t) => t.tier?.type === "context" && t.tier.size > 0);
   if (tiers.length) {
@@ -86,7 +92,7 @@ function toPricing(model, providerId) {
         threshold_input_tokens: t.tier.size,
         mode: "whole",
         output_policy: "highest",
-        prices: priceSet(t, isClaude),
+        prices: priceSet(t, isClaude, isOpenAI),
       }));
   }
 
@@ -95,7 +101,7 @@ function toPricing(model, providerId) {
     const tier = mode?.provider?.body?.service_tier;
     if (!tier || !mode.cost) continue;
     pricing.service_tiers ??= {};
-    pricing.service_tiers[tier] = { prices: priceSet(mode.cost, isClaude) };
+    pricing.service_tiers[tier] = { prices: priceSet(mode.cost, isClaude, isOpenAI) };
   }
 
   if (providerId === "deepseek") {
@@ -264,6 +270,7 @@ const seed = {
     "https://models.dev/api.json",
     "https://api-docs.deepseek.com/quick_start/pricing",
     "https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching (1h cache write = 2x input)",
+    "https://developers.openai.com/api/docs/guides/prompt-caching (30m cache write = 1.25x input, 12h = 2.5x)",
     "https://docs.x.ai/developers/pricing (Grok 4.7 Fast: 2x standard / 1.5x long-context; Cursor and Grok Build only)",
   ],
   models,

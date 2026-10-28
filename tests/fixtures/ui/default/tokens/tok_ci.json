@@ -1,0 +1,75 @@
+{
+  "id": "tok_ci",
+  "name": "ci-bot",
+  "isDefault": false,
+  "enabled": true,
+  "keyMasked": "sk-astra-Lm3…c1Z",
+  "providerId": "prov_openai",
+  "accountId": null,
+  "createdAt": "2026-10-05T12:00:00Z",
+  "updatedAt": "2026-10-21T12:00:00Z",
+  "lastUsedAt": "2026-10-26T11:12:00Z",
+  "clients": [],
+  "today": {
+    "costUsd": 0.63,
+    "requests": 14,
+    "inputTokens": 201000,
+    "outputTokens": 22000,
+    "totalTokens": 223000,
+    "cacheReadTokens": 90000,
+    "cacheWriteTokens": 0,
+    "cacheHitRate": 0.448,
+    "tps": 62.4
+  },
+  "total": {
+    "costUsd": 19.7,
+    "requests": 612,
+    "inputTokens": 9800000,
+    "outputTokens": 1100000,
+    "totalTokens": 10900000,
+    "cacheReadTokens": 3900000,
+    "cacheWriteTokens": 0,
+    "cacheHitRate": 0.398,
+    "tps": 62.4
+  },
+  "limits": {
+    "budgets": [
+      {
+        "metric": "cost",
+        "period": "day",
+        "limit": 5
+      },
+      {
+        "metric": "requests",
+        "period": "month",
+        "limit": 5000
+      }
+    ],
+    "rpm": 60
+  },
+  "allowedClients": [],
+  "limitUsage": [
+    {
+      "metric": "cost",
+      "period": "day",
+      "limit": 5,
+      "used": 0.63,
+      "remaining": 4.37,
+      "usedPercent": 12.6,
+      "exhausted": false,
+      "resetsAt": "2026-10-27T00:00:00Z"
+    },
+    {
+      "metric": "requests",
+      "period": "month",
+      "limit": 5000,
+      "used": 412,
+      "remaining": 4588,
+      "usedPercent": 8.24,
+      "exhausted": false,
+      "resetsAt": "2026-11-01T00:00:00Z"
+    }
+  ],
+  "recentRequests": 0,
+  "pool": null
+}

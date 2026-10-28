@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             xmlns:shell="using:Astra.Desktop.Shell"
+             x:Class="Astra.Desktop.Views.PlaceholderPageView"
+             x:DataType="shell:PlaceholderPageViewModel">
+  <!-- The empty page of a route whose real page has not landed yet: its title and the web path it stands for. -->
+  <StackPanel Margin="24,8" Spacing="4">
+    <TextBlock Text="{Binding Title}" FontSize="{arc:ArcDesignTokenResource TypeXL}"
+               Foreground="{arc:ArcDesignTokenResource Foreground}" />
+    <TextBlock Text="{Binding WebPath}" FontSize="{arc:ArcDesignTokenResource TypeSM}"
+               Foreground="{arc:ArcDesignTokenResource TextMuted}" />
+  </StackPanel>
+</UserControl>

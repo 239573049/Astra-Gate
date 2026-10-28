@@ -50,6 +50,9 @@ public sealed record ReasoningPart(
 
 public sealed record UnifiedMessage(MessageRole Role, List<ContentPart> Parts);
 
+/// <summary>An instruction that came after the conversation started: it stood before <c>Messages[Before]</c> (at the end when Before == Count).</summary>
+public sealed record LateInstruction(int Before, TextPart Text);
+
 public sealed class UnifiedTool
 {
     public string Name { get; init; } = "";
@@ -134,9 +137,20 @@ public sealed class UnifiedRequest
     /// <summary>
     /// System / developer instructions (TextPart only), in order. Instructions a client sends as messages (Chat
     /// system/developer, Anthropic role "system" inside messages) are collected here too; one that came after the
-    /// conversation started loses its position (lossy).
+    /// conversation started loses its position (lossy) unless <see cref="LateSystem"/> records it.
     /// </summary>
     public List<ContentPart> System { get; set; } = [];
+
+    /// <summary>
+    /// Parts of <see cref="System"/> (the same instances) that came after the conversation started, with where they stood.
+    /// Only the Chat decoder records them and only the Responses encoder places them (developer items in the input):
+    /// hoisted into <c>instructions</c>, a per-turn system message would change the head of every request and defeat
+    /// the upstream prompt cache. Every other encoder sends them with <see cref="System"/> as before.
+    /// </summary>
+    public List<LateInstruction> LateSystem { get; set; } = [];
+
+    /// <summary>OpenAI <c>prompt_cache_key</c> (Chat and Responses): the upstream's cache routing hint; other protocols drop it.</summary>
+    public string? PromptCacheKey { get; set; }
 
     public List<UnifiedMessage> Messages { get; set; } = [];
     public List<UnifiedTool> Tools { get; set; } = [];
@@ -225,8 +239,12 @@ public sealed record OutputActivityEvent : UnifiedStreamEvent;
 /// Usage reported by the upstream. <paramref name="Raw"/> is the cumulative usage object in the upstream's own
 /// shape (decoders merge partial reports, e.g. Anthropic message_start + message_delta); <paramref name="Usage"/> is
 /// <c>UsageNormalizer.Normalize(Protocol, Raw)</c>. The last UsageEvent of a response wins.
-/// OpenAI's <c>cache_write_tokens</c> extension has no TTL: decoders map it to 5m with a usage note;
-/// encoders sum 5m and 1h writes into that field, losing the TTL split.
+/// OpenAI's <c>cache_write_tokens</c> is split by <c>cache_write_tokens_details</c> (30m / 12h, GPT-5.6+); a bare
+/// total (OpenAI-compatible upstreams) maps to 5m with a usage note. Encoders write the total of every TTL there and
+/// the 30m/12h split when present; Anthropic's 5m/1h split has no OpenAI field (and the Anthropic encoder reports
+/// only <c>cache_creation_input_tokens</c>), so it is lost across protocols. Cache breakpoints themselves are not in
+/// the IR: Anthropic <c>cache_control</c> and Responses <c>prompt_cache_breakpoint</c> on content parts are dropped
+/// when a request is translated (top-level <c>prompt_cache_options</c> survives Responses → Responses as an extension).
 /// </summary>
 public sealed record UsageEvent(ApiProtocol Protocol, JsonObject Raw, NormalizedUsage Usage) : UnifiedStreamEvent;
 

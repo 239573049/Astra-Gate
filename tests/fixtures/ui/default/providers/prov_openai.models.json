@@ -1,0 +1,190 @@
+[
+  {
+    "id": 100,
+    "providerId": "prov_openai",
+    "modelId": "gpt-4.1",
+    "systemModelId": "gpt-4.1",
+    "enabled": true,
+    "sortOrder": 0,
+    "overrides": {},
+    "effective": {
+      "displayName": "GPT-4.1",
+      "contextWindow": 1047576,
+      "maxOutputTokens": 32768,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": false,
+        "promptCache": true,
+        "audio": false,
+        "pdf": false,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "openai",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 2,
+        "output": 8,
+        "cache_read": 0.5
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  },
+  {
+    "id": 101,
+    "providerId": "prov_openai",
+    "modelId": "gpt-4.1-mini",
+    "systemModelId": "gpt-4.1-mini",
+    "enabled": true,
+    "sortOrder": 1,
+    "overrides": {},
+    "effective": {
+      "displayName": "GPT-4.1 mini",
+      "contextWindow": 1047576,
+      "maxOutputTokens": 32768,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": false,
+        "promptCache": true,
+        "audio": false,
+        "pdf": false,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "openai",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 0.4,
+        "output": 1.6,
+        "cache_read": 0.1
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  },
+  {
+    "id": 102,
+    "providerId": "prov_openai",
+    "modelId": "o4-mini",
+    "systemModelId": "o4-mini",
+    "enabled": true,
+    "sortOrder": 2,
+    "overrides": {},
+    "effective": {
+      "displayName": "o4-mini",
+      "contextWindow": 200000,
+      "maxOutputTokens": 100000,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": true,
+        "promptCache": true,
+        "audio": false,
+        "pdf": false,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "openai",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1.1,
+        "output": 4.4,
+        "cache_read": 0.275
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  },
+  {
+    "id": 103,
+    "providerId": "prov_openai",
+    "modelId": "gpt-5",
+    "systemModelId": "gpt-5",
+    "enabled": true,
+    "sortOrder": 3,
+    "overrides": {},
+    "effective": {
+      "displayName": "GPT-5",
+      "contextWindow": 400000,
+      "maxOutputTokens": 128000,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": true,
+        "promptCache": true,
+        "audio": false,
+        "pdf": true,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "openai",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1.25,
+        "output": 10,
+        "cache_read": 0.125
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  }
+]

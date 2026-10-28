@@ -21,7 +21,7 @@ public sealed class ChatCodec : IProtocolCodec
     [
         "model", "messages", "tools", "tool_choice", "parallel_tool_calls", "temperature", "top_p", "stop",
         "max_completion_tokens", "max_tokens", "reasoning_effort", "response_format", "stream", "user",
-        "metadata", "service_tier", "verbosity",
+        "metadata", "service_tier", "verbosity", "prompt_cache_key",
     ];
 
     public UnifiedRequest DecodeRequest(JsonObject body, RequestDecodeContext ctx)
@@ -48,7 +48,13 @@ public sealed class ChatCodec : IProtocolCodec
             {
                 case "system":
                 case "developer":
-                    AddText(request.System, msg["content"]);
+                    // One that comes after the conversation started also keeps its position (LateSystem).
+                    foreach (var text in TextsOf(msg["content"]))
+                    {
+                        var part = new TextPart(text);
+                        request.System.Add(part);
+                        if (request.Messages.Count > 0) request.LateSystem.Add(new LateInstruction(request.Messages.Count, part));
+                    }
                     break;
                 case "user":
                     request.Messages.Add(new UnifiedMessage(MessageRole.User, DecodeUserContent(msg["content"], request.Warnings)));
@@ -79,6 +85,7 @@ public sealed class ChatCodec : IProtocolCodec
         request.User = body["user"] is JsonValue u && u.TryGetValue<string>(out var user) ? user : null;
         request.Metadata = body["metadata"] as JsonObject;
         request.ServiceTier = body["service_tier"] is JsonValue t && t.TryGetValue<string>(out var tier) ? tier : null;
+        request.PromptCacheKey = StringOrNull(body, "prompt_cache_key");
 
         // DecodeRequest only runs on the conversion path: everything below is dropped by the other encoders.
         if (IntOrNull(body["n"]) is { } n && n > 1)
@@ -90,12 +97,6 @@ public sealed class ChatCodec : IProtocolCodec
 
         if (extensions.Count > 0) request.Extensions[ApiProtocol.OpenAIChat] = extensions;
         return request;
-    }
-
-    /// <summary>System texts (content may be a string or a parts array with text parts only).</summary>
-    private static void AddText(List<ContentPart> target, JsonNode? content)
-    {
-        foreach (var text in TextsOf(content)) target.Add(new TextPart(text));
     }
 
     /// <summary>Collects plain text from a string content or a parts array ("text" and "refusal" parts).</summary>
@@ -381,6 +382,7 @@ public sealed class ChatCodec : IProtocolCodec
         if (request.User is { } user) body["user"] = user;
         if (request.Metadata is { Count: > 0 } metadata) body["metadata"] = metadata.DeepClone();
         if (request.ServiceTier is { } tier) body["service_tier"] = tier;
+        if (request.PromptCacheKey is { Length: > 0 } cacheKey) body["prompt_cache_key"] = cacheKey;
 
         if (request.Extensions.TryGetValue(ApiProtocol.OpenAIChat, out var extensions))
         {

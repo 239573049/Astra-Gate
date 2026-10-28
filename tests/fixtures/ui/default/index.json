@@ -1,0 +1,319 @@
+{
+  "$comment": "Route table: first matching entry wins; \"query\" params must all equal the request's (extra params ignored). See tests/fixtures/ui/README.md.",
+  "now": "2026-10-26T12:00:00Z",
+  "timeZone": "UTC",
+  "locale": "zh",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/api/providers",
+      "file": "providers.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/provider-templates",
+      "file": "provider-templates.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/prov_openai",
+      "file": "providers/prov_openai.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/prov_anthropic",
+      "file": "providers/prov_anthropic.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models",
+      "file": "models.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/price-keys",
+      "file": "price-keys.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/gpt-4.1",
+      "file": "models/gpt-4.1.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/gpt-4.1-mini",
+      "file": "models/gpt-4.1-mini.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/o4-mini",
+      "file": "models/o4-mini.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/gpt-5",
+      "file": "models/gpt-5.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/claude-sonnet-4-5",
+      "file": "models/claude-sonnet-4-5.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/claude-opus-4-1",
+      "file": "models/claude-opus-4-1.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/claude-haiku-4-5",
+      "file": "models/claude-haiku-4-5.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/models/gemini-2.5-pro",
+      "file": "models/gemini-2.5-pro.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/prov_openai/models",
+      "file": "providers/prov_openai.models.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/prov_openai/accounts",
+      "file": "providers/prov_openai.accounts.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/prov_anthropic/models",
+      "file": "providers/prov_anthropic.models.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/providers/prov_anthropic/accounts",
+      "file": "providers/prov_anthropic.accounts.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tokens",
+      "file": "tokens.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tokens/tok_default",
+      "file": "tokens/tok_default.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tokens/tok_ci",
+      "file": "tokens/tok_ci.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tokens/tok_pool",
+      "file": "tokens/tok_pool.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/clients",
+      "file": "clients.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests",
+      "file": "requests.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/req_0050",
+      "file": "requests/req_0050.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/req_0049",
+      "file": "requests/req_0049.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/requests/req_0048",
+      "file": "requests/req_0048.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/summary",
+      "query": {
+        "range": "today"
+      },
+      "file": "stats/summary.today.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/top-models",
+      "query": {
+        "range": "today"
+      },
+      "file": "stats/top-models.today.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/providers",
+      "query": {
+        "range": "today"
+      },
+      "file": "stats/providers.today.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/timeseries",
+      "query": {
+        "range": "today",
+        "by": "provider"
+      },
+      "file": "stats/timeseries.today.provider.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/timeseries",
+      "query": {
+        "range": "today",
+        "by": "token"
+      },
+      "file": "stats/timeseries.today.token.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/summary",
+      "query": {
+        "range": "7d"
+      },
+      "file": "stats/summary.7d.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/top-models",
+      "query": {
+        "range": "7d"
+      },
+      "file": "stats/top-models.7d.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/providers",
+      "query": {
+        "range": "7d"
+      },
+      "file": "stats/providers.7d.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/timeseries",
+      "query": {
+        "range": "7d",
+        "by": "provider"
+      },
+      "file": "stats/timeseries.7d.provider.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/timeseries",
+      "query": {
+        "range": "7d",
+        "by": "token"
+      },
+      "file": "stats/timeseries.7d.token.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/summary",
+      "query": {
+        "range": "30d"
+      },
+      "file": "stats/summary.30d.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/top-models",
+      "query": {
+        "range": "30d"
+      },
+      "file": "stats/top-models.30d.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/providers",
+      "query": {
+        "range": "30d"
+      },
+      "file": "stats/providers.30d.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/timeseries",
+      "query": {
+        "range": "30d",
+        "by": "provider"
+      },
+      "file": "stats/timeseries.30d.provider.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/timeseries",
+      "query": {
+        "range": "30d",
+        "by": "token"
+      },
+      "file": "stats/timeseries.30d.token.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/activity-heatmap",
+      "file": "stats/activity-heatmap.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/stats/rate",
+      "file": "stats/rate.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "file": "health.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/version",
+      "file": "version.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/status",
+      "file": "auth-status.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/settings",
+      "file": "settings.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/update/status",
+      "file": "update-status.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tunnel",
+      "file": "tunnel.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/server/listen",
+      "file": "listen.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/server/autostart",
+      "file": "autostart.json"
+    }
+  ]
+}

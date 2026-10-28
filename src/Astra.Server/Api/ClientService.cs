@@ -13,29 +13,7 @@ using Astra.Server.Hosting;
 
 namespace Astra.Server.Api;
 
-public sealed record ClientDetectionDto(bool Installed, bool ConfigExists, string? Version, IReadOnlyList<string> ConfigPaths);
-/// <summary>One provider bound to a client; the list order is the routing order (see <see cref="ClientRouting"/>).</summary>
-public sealed record ClientBindingDto(string ProviderId, string? AccountId);
-/// <summary>
-/// ProviderId / AccountId describe the primary binding (first of <see cref="Bindings"/>). Protocols: the protocols a model of
-/// this client can be configured with (<see cref="ClientProtocols.For"/>), default first; null when every model uses
-/// <see cref="Protocol"/>. The user's per-model choices are <c>extras.protocolOverrides</c>.
-/// </summary>
-public sealed record ClientInfoDto(
-    string Kind, string Name, ApiProtocol Protocol, string Availability, string? AvailabilityReason, string Mode,
-    ClientDetectionDto Detection, string Status, bool Enabled, string? ProviderId, string? AccountId, string? SelectedModel,
-    JsonObject Extras, DateTimeOffset? AppliedAt, IReadOnlyList<string> Warnings, bool RequiresRestart,
-    bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null,
-    List<ClientOptionDescriptor>? Options = null, IReadOnlyList<ConfigRepairDto>? Repairs = null, List<ApiProtocol>? Protocols = null);
-/// <summary>A config file the client cannot read as it is (problem "trailing-comma" | "comment", first at line); POST …/repair fixes it.</summary>
-public sealed record ConfigRepairDto(string File, string Problem, int Line);
-public sealed record ClientPreviewDto(IReadOnlyList<ConfigChangeDto> Changes, IReadOnlyList<FileDiff> Diffs, IReadOnlyList<string> Warnings);
-public sealed record ConfigChangeDto(string File, string Format, string KeyPath, string? Before, string? After);
-public sealed record ClientDisableDto(IReadOnlyList<string> Restored, IReadOnlyList<string> Drifted, ClientInfoDto Client);
-public sealed record ClientBackupDto(string Id, DateTimeOffset CreatedAt, IReadOnlyList<string> Files, bool FirstWrite);
 
-/// <summary>Outcome of rewriting the clients that use one token: rewritten kinds and kinds left alone (drifted / unreadable).</summary>
-public sealed record TokenRewriteResult(IReadOnlyList<string> Rewritten, IReadOnlyList<string> Skipped);
 
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
@@ -191,7 +169,8 @@ public sealed class ClientService(
             var (adapter, record, context, _, _, warnings) = await PrepareAsync(kind, input, ct);
             var plan = EnablePlan(adapter, context, input);
             return new ClientPreviewDto(plan.Changes.Select(c => new ConfigChangeDto(c.File,
-                c.Format.ToString().ToLowerInvariant(), c.KeyPath, c.Before, c.After)).ToList(), plan.Diffs, warnings);
+                c.Format.ToString().ToLowerInvariant(), c.KeyPath, c.Before, c.After)).ToList(),
+                plan.Diffs.Select(d => new FileDiffDto(d.File, d.UnifiedDiff)).ToList(), warnings);
         }, ct);
 
     public async Task<ClientInfoDto> EnableAsync(string kind, JsonObject input, CancellationToken ct) =>
@@ -309,6 +288,27 @@ public sealed class ClientService(
             }
             return new TokenRewriteResult(rewritten, skipped);
         }, ct);
+
+    /// <summary>
+    /// Uninstalls a client (an install job with action "uninstall"). A client Astra has taken over gets its original config
+    /// back first, through the regular disable path (so the restore invariants hold: drifted values are left as the user
+    /// changed them) — a removed client must not leave Astra's settings behind, and once its files are gone there may be
+    /// nothing left that would let the user restore them. The request is checked before anything is restored, so a refused
+    /// uninstall changes nothing; a failed restore stops it before the command runs.
+    /// </summary>
+    public async Task<ClientInstallJobDto> UninstallAsync(string kind, bool elevated, CancellationToken ct)
+    {
+        installs.EnsureCanStart(kind, "uninstall", elevated);
+        var prelude = new List<string>();
+        if (await IsEnabledAsync(kind, ct))
+        {
+            var report = await DisableAsync(kind, false, ct);
+            prelude.Add($"已恢复 {report.Client.Name} 的原始配置，Astra 不再接管它。");
+            if (report.Drifted.Count > 0) prelude.Add($"这些配置项已被手动修改，保持原样：{string.Join(", ", report.Drifted)}");
+            prelude.Add("");
+        }
+        return installs.Start(kind, "uninstall", elevated, prelude);
+    }
 
     /// <summary>Whether the client is enabled in Astra.</summary>
     public async Task<bool> IsEnabledAsync(string kind, CancellationToken ct) => (await db.Clients.GetAsync(kind, ct))?.Enabled == true;

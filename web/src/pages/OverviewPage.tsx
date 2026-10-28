@@ -1,6 +1,6 @@
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { Activity, ArrowRight, RefreshCw } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import { useActivityHeatmap, useClients, useRequests, useSettings, useStatsSummary, useTimeseries, useTokens, useTopModels } from '../api/hooks';
@@ -64,6 +64,19 @@ export function OverviewPage() {
   const [measure, setMeasure] = useState<Measure>('requests');
   const [token, setToken] = useState('');
   const tokens = useTokens();
+  const clients = useClients();
+  // The logo strip needs ~40px per client; when it would crowd the token select and range switch, it becomes a dropdown.
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarWidth, setToolbarWidth] = useState(Infinity);
+  useEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([e]) => e && setToolbarWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const clientCount = filterableClients(clients.data, CLIENT_ORDER, client).length + 1;
+  const compact = toolbarWidth < clientCount * 42 + 16 + 176 + 340 + 32;
   const clientKind = client === 'all' ? undefined : client;
   const tokenId = token || undefined;
   const tokenName = tokens.data?.find((tk) => tk.id === tokenId)?.name ?? tokenId;
@@ -109,9 +122,9 @@ export function OverviewPage() {
         />
       }
     >
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <div ref={toolbarRef} className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <ClientFilter value={client} onChange={setClient} />
+          <ClientFilter value={client} onChange={setClient} compact={compact} />
           <Select
             className="w-44"
             ariaLabel={t('overview.tokenFilter')}
@@ -269,9 +282,23 @@ function ActivitySection({ clientKind, tokenId }: { clientKind?: ClientKind; tok
  * client (not-installed clients are left out; the selected one stays). Logo segments carry no visible text, so the client name rides along visually hidden (accessible
  * name) and as a hover title.
  */
-function ClientFilter({ value, onChange }: { value: ClientFilterValue; onChange: (v: ClientFilterValue) => void }) {
+function ClientFilter({ value, onChange, compact }: { value: ClientFilterValue; onChange: (v: ClientFilterValue) => void; compact: boolean }) {
   const { t } = useI18n();
   const clients = useClients();
+  if (compact) {
+    return (
+      <Select
+        className="w-40"
+        ariaLabel={t('overview.clientFilter')}
+        value={value}
+        onChange={onChange}
+        options={[
+          { value: 'all' as ClientFilterValue, label: t('overview.allClients') },
+          ...filterableClients(clients.data, CLIENT_ORDER, value).map((k) => ({ value: k as ClientFilterValue, label: clientName(k) })),
+        ]}
+      />
+    );
+  }
   const items: SegmentItem<ClientFilterValue>[] = [
     { value: 'all', label: t('overview.allClients') },
     ...filterableClients(clients.data, CLIENT_ORDER, value).map((k) => ({

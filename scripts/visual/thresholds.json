@@ -1,0 +1,2429 @@
+{
+  "$comment": "Per-scene limits for scripts/visual/compare.mjs. A scene fails when a metric exceeds its limit. 'default' applies to every scene; 'scenes' overrides single keys per scene (<page>__<state>__<theme>). Metrics: mad / grid / gridMasked are 0..1, pctOver is percent of pixels, cellsOver counts of 256 grid cells. A page agent ratchets its scenes DOWN as the page converges; never raise a limit to hide a regression. missing: 'warn' lists scenes present on one side only, 'fail' fails the run.",
+  "missing": "warn",
+  "default": {
+    "pixelDelta": 24,
+    "cellDelta": 0.12,
+    "mad": 0.06,
+    "pctOver": 25,
+    "grid": 0.06,
+    "gridMasked": 0.06,
+    "cellsOver": 40
+  },
+  "scenes": {
+    "requests__body-expand__dark": {
+      "mad": 0.054,
+      "grid": 0.054,
+      "gridMasked": 0.052,
+      "pctOver": 13,
+      "cellsOver": 11
+    },
+    "requests__body-expand__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "pctOver": 7,
+      "cellsOver": 10
+    },
+    "requests__body-truncated__dark": {
+      "mad": 0.054,
+      "grid": 0.054,
+      "gridMasked": 0.052,
+      "pctOver": 13,
+      "cellsOver": 11
+    },
+    "requests__body-truncated__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "pctOver": 7,
+      "cellsOver": 10
+    },
+    "requests__data__dark": {
+      "mad": 0.056,
+      "grid": 0.056,
+      "gridMasked": 0.051,
+      "pctOver": 16,
+      "cellsOver": 7
+    },
+    "requests__data__light": {
+      "mad": 0.06,
+      "grid": 0.06,
+      "gridMasked": 0.055,
+      "pctOver": 15,
+      "cellsOver": 18
+    },
+    "requests__detail-error__dark": {
+      "mad": 0.052,
+      "grid": 0.052,
+      "gridMasked": 0.051,
+      "pctOver": 13,
+      "cellsOver": 4
+    },
+    "requests__detail-error__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "pctOver": 5,
+      "cellsOver": 3
+    },
+    "requests__detail-fallback__dark": {
+      "mad": 0.051,
+      "grid": 0.051,
+      "gridMasked": 0.048,
+      "pctOver": 7,
+      "cellsOver": 9
+    },
+    "requests__detail-fallback__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.026,
+      "pctOver": 7,
+      "cellsOver": 9
+    },
+    "requests__detail-ok__dark": {
+      "mad": 0.054,
+      "grid": 0.054,
+      "gridMasked": 0.052,
+      "pctOver": 13,
+      "cellsOver": 11
+    },
+    "requests__detail-ok__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "pctOver": 7,
+      "cellsOver": 10
+    },
+    "requests__detail-routing__dark": {
+      "mad": 0.05,
+      "grid": 0.05,
+      "gridMasked": 0.048,
+      "pctOver": 7,
+      "cellsOver": 9
+    },
+    "requests__detail-routing__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.025,
+      "pctOver": 6,
+      "cellsOver": 9
+    },
+    "requests__detail-streaming__dark": {
+      "mad": 0.046,
+      "grid": 0.046,
+      "gridMasked": 0.045,
+      "pctOver": 8,
+      "cellsOver": 4
+    },
+    "requests__detail-streaming__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "pctOver": 5,
+      "cellsOver": 3
+    },
+    "requests__empty__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.017,
+      "pctOver": 6,
+      "cellsOver": 4
+    },
+    "requests__empty__light": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "pctOver": 6,
+      "cellsOver": 4
+    },
+    "requests__error__dark": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.02,
+      "pctOver": 8,
+      "cellsOver": 5
+    },
+    "requests__error__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.019,
+      "pctOver": 8,
+      "cellsOver": 5
+    },
+    "requests__filter-active__dark": {
+      "mad": 0.056,
+      "grid": 0.056,
+      "gridMasked": 0.051,
+      "pctOver": 16,
+      "cellsOver": 7
+    },
+    "requests__filter-active__light": {
+      "mad": 0.06,
+      "grid": 0.06,
+      "gridMasked": 0.054,
+      "pctOver": 15,
+      "cellsOver": 18
+    },
+    "requests__filter-empty__dark": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "pctOver": 6,
+      "cellsOver": 5
+    },
+    "requests__filter-empty__light": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "pctOver": 6,
+      "cellsOver": 5
+    },
+    "requests__live-off__dark": {
+      "mad": 0.056,
+      "grid": 0.056,
+      "gridMasked": 0.051,
+      "pctOver": 16,
+      "cellsOver": 7
+    },
+    "requests__live-off__light": {
+      "mad": 0.06,
+      "grid": 0.06,
+      "gridMasked": 0.055,
+      "pctOver": 15,
+      "cellsOver": 18
+    },
+    "requests__live-on__dark": {
+      "mad": 0.055,
+      "grid": 0.055,
+      "gridMasked": 0.05,
+      "pctOver": 16,
+      "cellsOver": 10
+    },
+    "requests__live-on__light": {
+      "mad": 0.059,
+      "grid": 0.059,
+      "gridMasked": 0.053,
+      "pctOver": 15,
+      "cellsOver": 17
+    },
+    "requests__loading__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.021,
+      "pctOver": 9,
+      "cellsOver": 3
+    },
+    "requests__loading__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "pctOver": 6,
+      "cellsOver": 3
+    },
+    "requests__paged__dark": {
+      "mad": 0.056,
+      "grid": 0.056,
+      "gridMasked": 0.051,
+      "pctOver": 16,
+      "cellsOver": 7
+    },
+    "requests__paged__light": {
+      "mad": 0.06,
+      "grid": 0.06,
+      "gridMasked": 0.055,
+      "pctOver": 15,
+      "cellsOver": 18
+    },
+    "requests__remote__dark": {
+      "mad": 0.056,
+      "grid": 0.057,
+      "gridMasked": 0.051,
+      "pctOver": 16,
+      "cellsOver": 7
+    },
+    "requests__remote__light": {
+      "mad": 0.06,
+      "grid": 0.06,
+      "gridMasked": 0.055,
+      "pctOver": 15,
+      "cellsOver": 18
+    },
+    "traces__empty__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.017,
+      "pctOver": 6,
+      "cellsOver": 5
+    },
+    "traces__empty__light": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.015,
+      "pctOver": 5,
+      "cellsOver": 5
+    },
+    "traces__error__dark": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.019,
+      "pctOver": 8,
+      "cellsOver": 7
+    },
+    "traces__error__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "pctOver": 7,
+      "cellsOver": 7
+    },
+    "traces__loading__dark": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.022,
+      "pctOver": 10,
+      "cellsOver": 5
+    },
+    "traces__loading__light": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "pctOver": 5,
+      "cellsOver": 5
+    },
+    "traces__request-inflight__dark": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.027,
+      "pctOver": 8,
+      "cellsOver": 8
+    },
+    "traces__request-inflight__light": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.026,
+      "pctOver": 9,
+      "cellsOver": 9
+    },
+    "traces__request-inspector__dark": {
+      "mad": 0.037,
+      "grid": 0.037,
+      "gridMasked": 0.035,
+      "pctOver": 11,
+      "cellsOver": 8
+    },
+    "traces__request-inspector__light": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.033,
+      "pctOver": 10,
+      "cellsOver": 9
+    },
+    "traces__request-notfound__dark": {
+      "mad": 0.015,
+      "grid": 0.015,
+      "gridMasked": 0.014,
+      "pctOver": 5,
+      "cellsOver": 6
+    },
+    "traces__request-notfound__light": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.012,
+      "pctOver": 3,
+      "cellsOver": 5
+    },
+    "traces__request__dark": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.03,
+      "pctOver": 10,
+      "cellsOver": 9
+    },
+    "traces__request__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.028,
+      "pctOver": 9,
+      "cellsOver": 7
+    },
+    "traces__requests__dark": {
+      "mad": 0.038,
+      "grid": 0.038,
+      "gridMasked": 0.035,
+      "pctOver": 10,
+      "cellsOver": 4
+    },
+    "traces__requests__light": {
+      "mad": 0.041,
+      "grid": 0.041,
+      "gridMasked": 0.036,
+      "pctOver": 10,
+      "cellsOver": 5
+    },
+    "traces__session-canvas__dark": {
+      "mad": 0.037,
+      "grid": 0.037,
+      "gridMasked": 0.034,
+      "pctOver": 11,
+      "cellsOver": 9
+    },
+    "traces__session-canvas__light": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.031,
+      "pctOver": 10,
+      "cellsOver": 8
+    },
+    "traces__session-inspector__dark": {
+      "mad": 0.045,
+      "grid": 0.045,
+      "gridMasked": 0.041,
+      "pctOver": 13,
+      "cellsOver": 12
+    },
+    "traces__session-inspector__light": {
+      "mad": 0.044,
+      "grid": 0.044,
+      "gridMasked": 0.04,
+      "pctOver": 13,
+      "cellsOver": 13
+    },
+    "traces__session-live__dark": {
+      "mad": 0.039,
+      "grid": 0.039,
+      "gridMasked": 0.037,
+      "pctOver": 12,
+      "cellsOver": 9
+    },
+    "traces__session-live__light": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.034,
+      "pctOver": 11,
+      "cellsOver": 9
+    },
+    "traces__session-timeline__dark": {
+      "mad": 0.049,
+      "grid": 0.049,
+      "gridMasked": 0.046,
+      "pctOver": 17,
+      "cellsOver": 10
+    },
+    "traces__session-timeline__light": {
+      "mad": 0.046,
+      "grid": 0.046,
+      "gridMasked": 0.042,
+      "pctOver": 17,
+      "cellsOver": 10
+    },
+    "traces__sessions-empty__dark": {
+      "mad": 0.015,
+      "grid": 0.015,
+      "gridMasked": 0.015,
+      "pctOver": 5,
+      "cellsOver": 5
+    },
+    "traces__sessions-empty__light": {
+      "mad": 0.014,
+      "grid": 0.014,
+      "gridMasked": 0.013,
+      "pctOver": 4,
+      "cellsOver": 5
+    },
+    "traces__sessions__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "pctOver": 6,
+      "cellsOver": 6
+    },
+    "traces__sessions__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "pctOver": 6,
+      "cellsOver": 8
+    },
+    "traces__topology-idle__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.029,
+      "pctOver": 9,
+      "cellsOver": 10
+    },
+    "traces__topology-idle__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "pctOver": 8,
+      "cellsOver": 9
+    },
+    "traces__topology-inspector__dark": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.033,
+      "pctOver": 11,
+      "cellsOver": 11
+    },
+    "traces__topology-inspector__light": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.034,
+      "pctOver": 10,
+      "cellsOver": 12
+    },
+    "traces__topology__dark": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.03,
+      "pctOver": 10,
+      "cellsOver": 10
+    },
+    "traces__topology__light": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.028,
+      "pctOver": 8,
+      "cellsOver": 9
+    },
+    "traces__unsupported__dark": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.024,
+      "pctOver": 8,
+      "cellsOver": 11
+    },
+    "traces__unsupported__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "pctOver": 8,
+      "cellsOver": 11
+    },
+    "account-usage__compact__dark": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.013,
+      "pctOver": 4.2,
+      "cellsOver": 8
+    },
+    "account-usage__compact__light": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.013,
+      "pctOver": 4.2,
+      "cellsOver": 8
+    },
+    "account-usage__normal__dark": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.013,
+      "pctOver": 4.3,
+      "cellsOver": 8
+    },
+    "account-usage__normal__light": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.013,
+      "pctOver": 4.3,
+      "cellsOver": 8
+    },
+    "accounts__codex-local__dark": {
+      "mad": 0.041,
+      "grid": 0.041,
+      "gridMasked": 0.04,
+      "pctOver": 9.2,
+      "cellsOver": 9
+    },
+    "accounts__codex-local__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.028,
+      "pctOver": 8.7,
+      "cellsOver": 8
+    },
+    "accounts__detail-dead__dark": {
+      "mad": 0.047,
+      "grid": 0.047,
+      "gridMasked": 0.045,
+      "pctOver": 18.5,
+      "cellsOver": 15
+    },
+    "accounts__detail-dead__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.023,
+      "pctOver": 6.4,
+      "cellsOver": 9
+    },
+    "accounts__detail-key__dark": {
+      "mad": 0.042,
+      "grid": 0.042,
+      "gridMasked": 0.041,
+      "pctOver": 15.8,
+      "cellsOver": 8
+    },
+    "accounts__detail-key__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.023,
+      "pctOver": 6.0,
+      "cellsOver": 8
+    },
+    "accounts__detail__dark": {
+      "mad": 0.048,
+      "grid": 0.048,
+      "gridMasked": 0.047,
+      "pctOver": 20.2,
+      "cellsOver": 15
+    },
+    "accounts__detail__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.024,
+      "pctOver": 7.0,
+      "cellsOver": 8
+    },
+    "accounts__empty__dark": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.025,
+      "pctOver": 6.8,
+      "cellsOver": 12
+    },
+    "accounts__empty__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "pctOver": 6.5,
+      "cellsOver": 8
+    },
+    "accounts__error__dark": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.032,
+      "pctOver": 8,
+      "cellsOver": 15
+    },
+    "accounts__error__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.026,
+      "pctOver": 7.5,
+      "cellsOver": 12
+    },
+    "accounts__filter-cooling__dark": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.032,
+      "pctOver": 8.7,
+      "cellsOver": 14
+    },
+    "accounts__filter-cooling__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.026,
+      "pctOver": 8.2,
+      "cellsOver": 11
+    },
+    "accounts__import-apikey__dark": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.033,
+      "pctOver": 10.4,
+      "cellsOver": 10
+    },
+    "accounts__import-apikey__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.024,
+      "pctOver": 6.1,
+      "cellsOver": 9
+    },
+    "accounts__import-result__dark": {
+      "mad": 0.052,
+      "grid": 0.052,
+      "gridMasked": 0.046,
+      "pctOver": 20.3,
+      "cellsOver": 30
+    },
+    "accounts__import-result__light": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.029,
+      "pctOver": 8.5,
+      "cellsOver": 16
+    },
+    "accounts__import__dark": {
+      "mad": 0.044,
+      "grid": 0.044,
+      "gridMasked": 0.04,
+      "pctOver": 15.8,
+      "cellsOver": 19
+    },
+    "accounts__import__light": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.03,
+      "pctOver": 7.8,
+      "cellsOver": 13
+    },
+    "accounts__list__dark": {
+      "mad": 0.041,
+      "grid": 0.041,
+      "gridMasked": 0.038,
+      "pctOver": 9.2,
+      "cellsOver": 10
+    },
+    "accounts__list__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "pctOver": 8.7,
+      "cellsOver": 8
+    },
+    "accounts__loading__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.029,
+      "pctOver": 8.1,
+      "cellsOver": 13
+    },
+    "accounts__loading__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.023,
+      "pctOver": 7.0,
+      "cellsOver": 11
+    },
+    "accounts__login-cli__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "pctOver": 8.5,
+      "cellsOver": 13
+    },
+    "accounts__login-cli__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.023,
+      "pctOver": 5.7,
+      "cellsOver": 9
+    },
+    "accounts__login-device__dark": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.033,
+      "pctOver": 8,
+      "cellsOver": 16
+    },
+    "accounts__login-device__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.029,
+      "pctOver": 6.9,
+      "cellsOver": 16
+    },
+    "accounts__login-error__dark": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.034,
+      "pctOver": 9.6,
+      "cellsOver": 16
+    },
+    "accounts__login-error__light": {
+      "mad": 0.033,
+      "grid": 0.032,
+      "gridMasked": 0.032,
+      "pctOver": 7.4,
+      "cellsOver": 21
+    },
+    "accounts__login-paste__dark": {
+      "mad": 0.037,
+      "grid": 0.037,
+      "gridMasked": 0.033,
+      "pctOver": 9.6,
+      "cellsOver": 21
+    },
+    "accounts__login-paste__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "pctOver": 7.1,
+      "cellsOver": 19
+    },
+    "accounts__login-pkce__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "pctOver": 7.6,
+      "cellsOver": 15
+    },
+    "accounts__login-pkce__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.023,
+      "pctOver": 5.7,
+      "cellsOver": 10
+    },
+    "accounts__no-match__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.029,
+      "pctOver": 8.0,
+      "cellsOver": 13
+    },
+    "accounts__no-match__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.024,
+      "pctOver": 7.6,
+      "cellsOver": 11
+    },
+    "accounts__policy__dark": {
+      "mad": 0.044,
+      "grid": 0.044,
+      "gridMasked": 0.041,
+      "pctOver": 10.0,
+      "cellsOver": 22
+    },
+    "accounts__policy__light": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.03,
+      "pctOver": 9.4,
+      "cellsOver": 12
+    },
+    "accounts__proxy-login__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.028,
+      "pctOver": 6.2,
+      "cellsOver": 11
+    },
+    "accounts__proxy-login__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "pctOver": 5.4,
+      "cellsOver": 9
+    },
+    "accounts__selection__dark": {
+      "mad": 0.043,
+      "grid": 0.043,
+      "gridMasked": 0.04,
+      "pctOver": 10.0,
+      "cellsOver": 10
+    },
+    "accounts__selection__light": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.03,
+      "pctOver": 9.4,
+      "cellsOver": 8
+    },
+    "plugin-accounts__key__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.03,
+      "pctOver": 6.5,
+      "cellsOver": 12
+    },
+    "plugin-accounts__key__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.022,
+      "pctOver": 5.7,
+      "cellsOver": 8
+    },
+    "plugin-accounts__prompt__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.028,
+      "pctOver": 6.6,
+      "cellsOver": 8
+    },
+    "plugin-accounts__prompt__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "pctOver": 5.4,
+      "cellsOver": 8
+    },
+    "plugin-accounts__signed-in__dark": {
+      "mad": 0.042,
+      "grid": 0.042,
+      "gridMasked": 0.041,
+      "pctOver": 7.9,
+      "cellsOver": 11
+    },
+    "plugin-accounts__signed-in__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.027,
+      "pctOver": 7.2,
+      "cellsOver": 8
+    },
+    "plugin-accounts__signed-out__dark": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.035,
+      "pctOver": 5.8,
+      "cellsOver": 9
+    },
+    "plugin-accounts__signed-out__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.021,
+      "pctOver": 5.4,
+      "cellsOver": 8
+    },
+    "plugin-accounts__usage__dark": {
+      "mad": 0.051,
+      "grid": 0.051,
+      "gridMasked": 0.05,
+      "pctOver": 8.9,
+      "cellsOver": 12
+    },
+    "plugin-accounts__usage__light": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.034,
+      "pctOver": 7.7,
+      "cellsOver": 10
+    },
+    "plugin-accounts__waiting__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.031,
+      "pctOver": 7.8,
+      "cellsOver": 12
+    },
+    "plugin-accounts__waiting__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "pctOver": 5.8,
+      "cellsOver": 8
+    },
+    "provider-detail__404__dark": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.025,
+      "pctOver": 8.8,
+      "cellsOver": 9
+    },
+    "provider-detail__404__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.024,
+      "pctOver": 8.4,
+      "cellsOver": 10
+    },
+    "provider-detail__accounts-apikey__dark": {
+      "mad": 0.054,
+      "grid": 0.054,
+      "gridMasked": 0.054,
+      "pctOver": 12.9,
+      "cellsOver": 15
+    },
+    "provider-detail__accounts-apikey__light": {
+      "mad": 0.045,
+      "grid": 0.045,
+      "gridMasked": 0.044,
+      "pctOver": 12.4,
+      "cellsOver": 10
+    },
+    "provider-detail__accounts-plugin__dark": {
+      "mad": 0.039,
+      "grid": 0.039,
+      "gridMasked": 0.039,
+      "pctOver": 8.9,
+      "cellsOver": 11
+    },
+    "provider-detail__accounts-plugin__light": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.031,
+      "pctOver": 8.3,
+      "cellsOver": 10
+    },
+    "provider-detail__accounts-selection__dark": {
+      "mad": 0.059,
+      "grid": 0.059,
+      "gridMasked": 0.059,
+      "pctOver": 20.0,
+      "cellsOver": 13
+    },
+    "provider-detail__accounts-selection__light": {
+      "mad": 0.052,
+      "grid": 0.052,
+      "gridMasked": 0.051,
+      "pctOver": 17.4,
+      "cellsOver": 12
+    },
+    "provider-detail__accounts-subscription__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "pctOver": 8.8,
+      "cellsOver": 9
+    },
+    "provider-detail__accounts-subscription__light": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "pctOver": 8.9,
+      "cellsOver": 9
+    },
+    "provider-detail__add-endpoint__dark": {
+      "mad": 0.037,
+      "grid": 0.037,
+      "gridMasked": 0.036,
+      "pctOver": 8.8,
+      "cellsOver": 9
+    },
+    "provider-detail__add-endpoint__light": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.026,
+      "pctOver": 6.4,
+      "cellsOver": 8
+    },
+    "provider-detail__add-models__dark": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.033,
+      "pctOver": 11.5,
+      "cellsOver": 10
+    },
+    "provider-detail__add-models__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.025,
+      "pctOver": 6.9,
+      "cellsOver": 9
+    },
+    "provider-detail__loading__dark": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.022,
+      "pctOver": 8.4,
+      "cellsOver": 8
+    },
+    "provider-detail__loading__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.02,
+      "pctOver": 5.0,
+      "cellsOver": 8
+    },
+    "provider-detail__map-sheet__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.032,
+      "pctOver": 9.2,
+      "cellsOver": 10
+    },
+    "provider-detail__map-sheet__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.025,
+      "pctOver": 7.0,
+      "cellsOver": 9
+    },
+    "provider-detail__model-sheet-custom__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.03,
+      "pctOver": 9.0,
+      "cellsOver": 10
+    },
+    "provider-detail__model-sheet__dark": {
+      "mad": 0.058,
+      "grid": 0.058,
+      "gridMasked": 0.057,
+      "pctOver": 22.9,
+      "cellsOver": 16
+    },
+    "provider-detail__model-sheet__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.028,
+      "pctOver": 8.7,
+      "cellsOver": 10
+    },
+    "provider-detail__models-empty__dark": {
+      "mad": 0.043,
+      "grid": 0.043,
+      "gridMasked": 0.042,
+      "pctOver": 10.3,
+      "cellsOver": 13
+    },
+    "provider-detail__models-empty__light": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.035,
+      "pctOver": 9.5,
+      "cellsOver": 13
+    },
+    "provider-detail__models-mapping__dark": {
+      "mad": 0.046,
+      "grid": 0.046,
+      "gridMasked": 0.046,
+      "pctOver": 11.7,
+      "cellsOver": 14
+    },
+    "provider-detail__models-mapping__light": {
+      "mad": 0.04,
+      "grid": 0.04,
+      "gridMasked": 0.039,
+      "pctOver": 10.7,
+      "cellsOver": 14
+    },
+    "provider-detail__models__dark": {
+      "mad": 0.043,
+      "grid": 0.042,
+      "gridMasked": 0.042,
+      "pctOver": 11.4,
+      "cellsOver": 14
+    },
+    "provider-detail__models__light": {
+      "mad": 0.038,
+      "grid": 0.038,
+      "gridMasked": 0.038,
+      "pctOver": 10.5,
+      "cellsOver": 14
+    },
+    "provider-detail__quota-custom__dark": {
+      "mad": 0.058,
+      "grid": 0.058,
+      "gridMasked": 0.058,
+      "pctOver": 14.4,
+      "cellsOver": 12
+    },
+    "provider-detail__quota-custom__light": {
+      "mad": 0.041,
+      "grid": 0.041,
+      "gridMasked": 0.041,
+      "pctOver": 11.3,
+      "cellsOver": 9
+    },
+    "provider-detail__quota-test__dark": {
+      "mad": 0.045,
+      "grid": 0.045,
+      "gridMasked": 0.045,
+      "pctOver": 16.2,
+      "cellsOver": 14
+    },
+    "provider-detail__quota-test__light": {
+      "mad": 0.036,
+      "grid": 0.036,
+      "gridMasked": 0.036,
+      "pctOver": 8.7,
+      "cellsOver": 12
+    },
+    "provider-detail__quota__dark": {
+      "mad": 0.055,
+      "grid": 0.055,
+      "gridMasked": 0.055,
+      "pctOver": 12.8,
+      "cellsOver": 17
+    },
+    "provider-detail__quota__light": {
+      "mad": 0.045,
+      "grid": 0.045,
+      "gridMasked": 0.044,
+      "pctOver": 12.2,
+      "cellsOver": 10
+    },
+    "provider-detail__remote-models-401__dark": {
+      "mad": 0.041,
+      "grid": 0.041,
+      "gridMasked": 0.038,
+      "pctOver": 14.9,
+      "cellsOver": 21
+    },
+    "provider-detail__remote-models-401__light": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.029,
+      "pctOver": 7.9,
+      "cellsOver": 13
+    },
+    "provider-detail__remote-models__dark": {
+      "mad": 0.038,
+      "grid": 0.038,
+      "gridMasked": 0.037,
+      "pctOver": 16.4,
+      "cellsOver": 12
+    },
+    "provider-detail__remote-models__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.025,
+      "pctOver": 7.3,
+      "cellsOver": 9
+    },
+    "provider-detail__settings-dirty__dark": {
+      "mad": 0.058,
+      "grid": 0.058,
+      "gridMasked": 0.058,
+      "pctOver": 16.0,
+      "cellsOver": 21
+    },
+    "provider-detail__settings-dirty__light": {
+      "mad": 0.048,
+      "grid": 0.048,
+      "gridMasked": 0.048,
+      "pctOver": 13.2,
+      "cellsOver": 13
+    },
+    "provider-detail__settings__dark": {
+      "mad": 0.055,
+      "grid": 0.055,
+      "gridMasked": 0.055,
+      "pctOver": 14.9,
+      "cellsOver": 17
+    },
+    "provider-detail__settings__light": {
+      "mad": 0.046,
+      "grid": 0.045,
+      "gridMasked": 0.045,
+      "pctOver": 12.2,
+      "cellsOver": 9
+    },
+    "provider-detail__template-switch__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.03,
+      "pctOver": 7.7,
+      "cellsOver": 9
+    },
+    "provider-detail__template-switch__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.023,
+      "pctOver": 6.3,
+      "cellsOver": 9
+    },
+    "provider-detail__template-update__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.028,
+      "pctOver": 7.4,
+      "cellsOver": 11
+    },
+    "provider-detail__template-update__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.024,
+      "pctOver": 6.8,
+      "cellsOver": 10
+    },
+    "provider-detail__test-batch__light": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.032,
+      "pctOver": 8.2,
+      "cellsOver": 8
+    },
+    "provider-detail__test-done__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.025,
+      "pctOver": 6.8,
+      "cellsOver": 8
+    },
+    "provider-detail__test-failed__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.026,
+      "pctOver": 7.5,
+      "cellsOver": 11
+    },
+    "provider-detail__test-idle__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.022,
+      "pctOver": 6.4,
+      "cellsOver": 8
+    },
+    "provider-detail__test-running__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.024,
+      "pctOver": 6.6,
+      "cellsOver": 8
+    },
+    "providers__add-wizard-1-search__dark": {
+      "mad": 0.04,
+      "grid": 0.04,
+      "gridMasked": 0.038,
+      "pctOver": 11.7,
+      "cellsOver": 12
+    },
+    "providers__add-wizard-1-search__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.024,
+      "pctOver": 7.0,
+      "cellsOver": 9
+    },
+    "providers__add-wizard-1__dark": {
+      "mad": 0.048,
+      "grid": 0.048,
+      "gridMasked": 0.046,
+      "pctOver": 13.6,
+      "cellsOver": 19
+    },
+    "providers__add-wizard-1__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.025,
+      "pctOver": 8.1,
+      "cellsOver": 9
+    },
+    "providers__add-wizard-2-more__dark": {
+      "mad": 0.051,
+      "grid": 0.051,
+      "gridMasked": 0.05,
+      "pctOver": 12.3,
+      "cellsOver": 15
+    },
+    "providers__add-wizard-2-more__light": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "pctOver": 9.1,
+      "cellsOver": 12
+    },
+    "providers__add-wizard-2__dark": {
+      "mad": 0.044,
+      "grid": 0.044,
+      "gridMasked": 0.043,
+      "pctOver": 11.2,
+      "cellsOver": 13
+    },
+    "providers__add-wizard-2__light": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.031,
+      "pctOver": 8.4,
+      "cellsOver": 10
+    },
+    "providers__add-wizard-alternative__dark": {
+      "mad": 0.047,
+      "grid": 0.047,
+      "gridMasked": 0.047,
+      "pctOver": 13.0,
+      "cellsOver": 13
+    },
+    "providers__add-wizard-alternative__light": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.032,
+      "pctOver": 8.8,
+      "cellsOver": 9
+    },
+    "providers__add-wizard-custom__dark": {
+      "mad": 0.046,
+      "grid": 0.046,
+      "gridMasked": 0.045,
+      "pctOver": 13.5,
+      "cellsOver": 11
+    },
+    "providers__add-wizard-custom__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.028,
+      "pctOver": 7.8,
+      "cellsOver": 9
+    },
+    "providers__add-wizard-subscription__dark": {
+      "mad": 0.042,
+      "grid": 0.042,
+      "gridMasked": 0.04,
+      "pctOver": 13.7,
+      "cellsOver": 16
+    },
+    "providers__add-wizard-subscription__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.027,
+      "pctOver": 7.8,
+      "cellsOver": 9
+    },
+    "providers__data__dark": {
+      "mad": 0.037,
+      "grid": 0.037,
+      "gridMasked": 0.036,
+      "pctOver": 12.5,
+      "cellsOver": 15
+    },
+    "providers__data__light": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "pctOver": 7.8,
+      "cellsOver": 13
+    },
+    "providers__empty__dark": {
+      "mad": 0.047,
+      "grid": 0.047,
+      "gridMasked": 0.046,
+      "pctOver": 13.2,
+      "cellsOver": 17
+    },
+    "providers__empty__light": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.034,
+      "pctOver": 8.8,
+      "cellsOver": 17
+    },
+    "providers__error__dark": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.027,
+      "pctOver": 9.2,
+      "cellsOver": 12
+    },
+    "providers__error__light": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.026,
+      "pctOver": 9.1,
+      "cellsOver": 12
+    },
+    "providers__import-sheet__dark": {
+      "mad": 0.051,
+      "grid": 0.051,
+      "gridMasked": 0.048,
+      "cellsOver": 15
+    },
+    "providers__import-sheet__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.024,
+      "pctOver": 7.8,
+      "cellsOver": 8
+    },
+    "providers__loading__dark": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.027,
+      "pctOver": 10.1,
+      "cellsOver": 11
+    },
+    "providers__loading__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.024,
+      "pctOver": 6.7,
+      "cellsOver": 11
+    },
+    "providers__states__dark": {
+      "pctOver": 20.0,
+      "cellsOver": 26
+    },
+    "providers__states__light": {
+      "mad": 0.051,
+      "grid": 0.051,
+      "gridMasked": 0.05,
+      "pctOver": 13.1,
+      "cellsOver": 20
+    },
+    "clients__backups__dark": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "clients__backups__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "clients__data__dark": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "clients__data__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "clients__desktop-roles__dark": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "clients__desktop-roles__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "clients__detected__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "clients__detected__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "clients__disable__dark": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "clients__disable__light": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "clients__drifted__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "clients__drifted__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "clients__empty__dark": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.013,
+      "cellsOver": 5
+    },
+    "clients__empty__light": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.012,
+      "cellsOver": 5
+    },
+    "clients__enable-preview__dark": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "clients__enable-preview__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "clients__enabled__dark": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "clients__enabled__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "clients__error__dark": {
+      "mad": 0.014,
+      "grid": 0.014,
+      "gridMasked": 0.013,
+      "cellsOver": 5
+    },
+    "clients__error__light": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.012,
+      "cellsOver": 5
+    },
+    "clients__install-confirm__dark": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "clients__install-confirm__light": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "clients__install-running__dark": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "clients__install-running__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "clients__loading__dark": {
+      "mad": 0.015,
+      "grid": 0.015,
+      "gridMasked": 0.014,
+      "cellsOver": 5
+    },
+    "clients__loading__light": {
+      "mad": 0.014,
+      "grid": 0.014,
+      "gridMasked": 0.013,
+      "cellsOver": 5
+    },
+    "clients__needs-repair__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.026,
+      "cellsOver": 7
+    },
+    "clients__needs-repair__light": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.023,
+      "cellsOver": 8
+    },
+    "clients__not-detected__dark": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "clients__not-detected__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "clients__options__dark": {
+      "mad": 0.038,
+      "grid": 0.038,
+      "gridMasked": 0.037,
+      "cellsOver": 6
+    },
+    "clients__options__light": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.032,
+      "cellsOver": 5
+    },
+    "clients__uninstall-confirm__dark": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "clients__uninstall-confirm__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "clients__uninstall-running__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "clients__uninstall-running__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "plugins__add-sheet__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "plugins__add-sheet__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "plugins__detail-sheet__dark": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "plugins__detail-sheet__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "plugins__import-sheet__dark": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "plugins__import-sheet__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "plugins__installed-empty__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.015,
+      "cellsOver": 5
+    },
+    "plugins__installed-empty__light": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.015,
+      "cellsOver": 5
+    },
+    "plugins__installed__dark": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.025,
+      "cellsOver": 5
+    },
+    "plugins__installed__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "plugins__job-running__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "plugins__job-running__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "plugins__market-search__dark": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "plugins__market-search__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "plugins__market__dark": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.024,
+      "cellsOver": 5
+    },
+    "plugins__market__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "plugins__runtime-bun-installing__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 6
+    },
+    "plugins__runtime-bun-installing__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.017,
+      "cellsOver": 6
+    },
+    "plugins__runtime-bun-missing__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 6
+    },
+    "plugins__runtime-bun-missing__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "cellsOver": 6
+    },
+    "plugins__runtime-bun-ready__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 6
+    },
+    "plugins__runtime-bun-ready__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.018,
+      "cellsOver": 6
+    },
+    "privacy__disabled__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.031,
+      "cellsOver": 5
+    },
+    "privacy__disabled__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.024,
+      "cellsOver": 5
+    },
+    "privacy__error__dark": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "privacy__error__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 6
+    },
+    "privacy__logs-empty__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "privacy__logs-empty__light": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.015,
+      "cellsOver": 5
+    },
+    "privacy__logs-paged__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.03,
+      "cellsOver": 5
+    },
+    "privacy__logs-paged__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "privacy__logs__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.03,
+      "cellsOver": 5
+    },
+    "privacy__logs__light": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "privacy__overview-empty__dark": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "privacy__overview-empty__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "privacy__overview__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.031,
+      "cellsOver": 5
+    },
+    "privacy__overview__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.024,
+      "cellsOver": 5
+    },
+    "privacy__rules-sheet__dark": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "privacy__rules-sheet__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "privacy__rules__dark": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.022,
+      "cellsOver": 6
+    },
+    "privacy__rules__light": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "privacy__tester__dark": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.026,
+      "cellsOver": 6
+    },
+    "privacy__tester__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.024,
+      "cellsOver": 6
+    },
+    "settings__data-bottom__dark": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.035,
+      "cellsOver": 6
+    },
+    "settings__data-bottom__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.03,
+      "cellsOver": 5
+    },
+    "settings__data-lower__light": {
+      "mad": 0.037,
+      "grid": 0.037,
+      "gridMasked": 0.036,
+      "cellsOver": 6
+    },
+    "settings__data__dark": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.032,
+      "cellsOver": 8
+    },
+    "settings__data__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.027,
+      "cellsOver": 5
+    },
+    "settings__error__dark": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.034,
+      "cellsOver": 7
+    },
+    "settings__error__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.028,
+      "cellsOver": 5
+    },
+    "settings__lan-pending__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.029,
+      "cellsOver": 6
+    },
+    "settings__lan-pending__light": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.026,
+      "cellsOver": 5
+    },
+    "settings__listen-sheet__dark": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "settings__listen-sheet__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "settings__notifications-empty__dark": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "settings__notifications-empty__light": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "settings__notifications__dark": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.024,
+      "cellsOver": 7
+    },
+    "settings__notifications__light": {
+      "mad": 0.025,
+      "grid": 0.025,
+      "gridMasked": 0.022,
+      "cellsOver": 6
+    },
+    "settings__proxy-custom__light": {
+      "mad": 0.034,
+      "grid": 0.034,
+      "gridMasked": 0.033,
+      "cellsOver": 5
+    },
+    "settings__remote-admin__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.026,
+      "cellsOver": 10
+    },
+    "settings__remote-admin__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.024,
+      "cellsOver": 9
+    },
+    "settings__remote-downloading__dark": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.026,
+      "cellsOver": 5
+    },
+    "settings__remote-downloading__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.024,
+      "cellsOver": 5
+    },
+    "settings__remote-error__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.026,
+      "cellsOver": 11
+    },
+    "settings__remote-error__light": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.024,
+      "cellsOver": 11
+    },
+    "settings__remote-named__dark": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.027,
+      "cellsOver": 5
+    },
+    "settings__remote-named__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.025,
+      "cellsOver": 5
+    },
+    "settings__remote-off__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.026,
+      "cellsOver": 10
+    },
+    "settings__remote-off__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.024,
+      "cellsOver": 9
+    },
+    "settings__remote-running__dark": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.027,
+      "cellsOver": 9
+    },
+    "settings__remote-running__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.024,
+      "cellsOver": 9
+    },
+    "settings__remote-unsupported__dark": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "settings__remote-unsupported__light": {
+      "mad": 0.015,
+      "grid": 0.015,
+      "gridMasked": 0.015,
+      "cellsOver": 5
+    },
+    "settings__rule-sheet__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.032,
+      "cellsOver": 7
+    },
+    "settings__rule-sheet__light": {
+      "mad": 0.038,
+      "grid": 0.038,
+      "gridMasked": 0.038,
+      "cellsOver": 18
+    },
+    "settings__tray__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.028,
+      "cellsOver": 8
+    },
+    "settings__tray__light": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.028,
+      "cellsOver": 9
+    },
+    "settings__update-available__dark": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.022,
+      "cellsOver": 5
+    },
+    "settings__update-available__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "settings__update-downloading__dark": {
+      "mad": 0.022,
+      "grid": 0.022,
+      "gridMasked": 0.022,
+      "cellsOver": 5
+    },
+    "settings__update-downloading__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.02,
+      "cellsOver": 5
+    },
+    "settings__webhook-deliveries__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "settings__webhook-deliveries__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.022,
+      "cellsOver": 5
+    },
+    "settings__webhook-edit__dark": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.029,
+      "cellsOver": 5
+    },
+    "settings__webhook-edit__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.027,
+      "cellsOver": 5
+    },
+    "settings__webhook-sheet__dark": {
+      "mad": 0.031,
+      "grid": 0.031,
+      "gridMasked": 0.03,
+      "cellsOver": 10
+    },
+    "shell__clients-outdated__dark": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.024,
+      "cellsOver": 7
+    },
+    "shell__clients-outdated__light": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "shell__collapsed__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "shell__collapsed__light": {
+      "mad": 0.02,
+      "grid": 0.02,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "shell__down-rail__dark": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.021,
+      "cellsOver": 7
+    },
+    "shell__down-rail__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "shell__down__dark": {
+      "mad": 0.027,
+      "grid": 0.027,
+      "gridMasked": 0.024,
+      "cellsOver": 7
+    },
+    "shell__down__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.023,
+      "cellsOver": 5
+    },
+    "shell__expanded__dark": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "shell__expanded__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "shell__remote-on-rail__dark": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "shell__remote-on-rail__light": {
+      "mad": 0.021,
+      "grid": 0.021,
+      "gridMasked": 0.019,
+      "cellsOver": 5
+    },
+    "shell__remote-on__dark": {
+      "mad": 0.024,
+      "grid": 0.024,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "shell__remote-on__light": {
+      "mad": 0.023,
+      "grid": 0.023,
+      "gridMasked": 0.021,
+      "cellsOver": 5
+    },
+    "smart-routing__configured__dark": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.029,
+      "cellsOver": 13
+    },
+    "smart-routing__configured__light": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.026,
+      "cellsOver": 12
+    },
+    "smart-routing__custom-judge__dark": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.024,
+      "cellsOver": 6
+    },
+    "smart-routing__custom-judge__light": {
+      "mad": 0.026,
+      "grid": 0.026,
+      "gridMasked": 0.023,
+      "cellsOver": 6
+    },
+    "smart-routing__test-result__dark": {
+      "mad": 0.035,
+      "grid": 0.035,
+      "gridMasked": 0.029,
+      "cellsOver": 13
+    },
+    "smart-routing__test-result__light": {
+      "mad": 0.033,
+      "grid": 0.033,
+      "gridMasked": 0.026,
+      "cellsOver": 12
+    },
+    "smart-routing__unconfigured__dark": {
+      "mad": 0.029,
+      "grid": 0.029,
+      "gridMasked": 0.026,
+      "cellsOver": 6
+    },
+    "smart-routing__unconfigured__light": {
+      "mad": 0.028,
+      "grid": 0.028,
+      "gridMasked": 0.025,
+      "cellsOver": 6
+    },
+    "smart-routing__validation-error__dark": {
+      "mad": 0.032,
+      "grid": 0.032,
+      "gridMasked": 0.027,
+      "cellsOver": 13
+    },
+    "smart-routing__validation-error__light": {
+      "mad": 0.03,
+      "grid": 0.03,
+      "gridMasked": 0.025,
+      "cellsOver": 13
+    },
+    "tray__all__dark": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "tray__all__light": {
+      "mad": 0.013,
+      "grid": 0.013,
+      "gridMasked": 0.012,
+      "cellsOver": 5
+    },
+    "tray__clients-tab__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "tray__clients-tab__light": {
+      "mad": 0.01,
+      "grid": 0.01,
+      "gridMasked": 0.01,
+      "cellsOver": 5
+    },
+    "tray__default__dark": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "tray__default__light": {
+      "mad": 0.012,
+      "grid": 0.012,
+      "gridMasked": 0.012,
+      "cellsOver": 5
+    },
+    "tray__mismatch__dark": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "tray__mismatch__light": {
+      "mad": 0.012,
+      "grid": 0.012,
+      "gridMasked": 0.012,
+      "cellsOver": 5
+    },
+    "tray__overview-only__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "tray__overview-only__light": {
+      "mad": 0.01,
+      "grid": 0.01,
+      "gridMasked": 0.01,
+      "cellsOver": 5
+    },
+    "tray__quota-missing__dark": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "tray__quota-missing__light": {
+      "mad": 0.011,
+      "grid": 0.011,
+      "gridMasked": 0.011,
+      "cellsOver": 5
+    },
+    "tray__quota-tab__dark": {
+      "mad": 0.018,
+      "grid": 0.018,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "tray__quota-tab__light": {
+      "mad": 0.012,
+      "grid": 0.012,
+      "gridMasked": 0.011,
+      "cellsOver": 5
+    },
+    "tray__starting__dark": {
+      "mad": 0.016,
+      "grid": 0.016,
+      "gridMasked": 0.016,
+      "cellsOver": 5
+    },
+    "tray__starting__light": {
+      "mad": 0.009,
+      "grid": 0.009,
+      "gridMasked": 0.009,
+      "cellsOver": 5
+    },
+    "tray__stopped__dark": {
+      "mad": 0.017,
+      "grid": 0.017,
+      "gridMasked": 0.017,
+      "cellsOver": 5
+    },
+    "tray__stopped__light": {
+      "mad": 0.009,
+      "grid": 0.009,
+      "gridMasked": 0.009,
+      "cellsOver": 5
+    },
+    "tray__update-available__dark": {
+      "mad": 0.019,
+      "grid": 0.019,
+      "gridMasked": 0.018,
+      "cellsOver": 5
+    },
+    "tray__update-available__light": {
+      "mad": 0.012,
+      "grid": 0.012,
+      "gridMasked": 0.011,
+      "cellsOver": 5
+    }
+  }
+}

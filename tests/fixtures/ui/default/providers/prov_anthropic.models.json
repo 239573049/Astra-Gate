@@ -1,0 +1,143 @@
+[
+  {
+    "id": 200,
+    "providerId": "prov_anthropic",
+    "modelId": "claude-sonnet-4-5",
+    "systemModelId": "claude-sonnet-4-5",
+    "enabled": true,
+    "sortOrder": 0,
+    "overrides": {},
+    "effective": {
+      "displayName": "Claude Sonnet 4.5",
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": true,
+        "promptCache": true,
+        "audio": false,
+        "pdf": true,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "anthropic",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 3,
+        "output": 15,
+        "cache_read": 0.3
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  },
+  {
+    "id": 201,
+    "providerId": "prov_anthropic",
+    "modelId": "claude-opus-4-1",
+    "systemModelId": "claude-opus-4-1",
+    "enabled": true,
+    "sortOrder": 1,
+    "overrides": {},
+    "effective": {
+      "displayName": "Claude Opus 4.1",
+      "contextWindow": 200000,
+      "maxOutputTokens": 32000,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": true,
+        "promptCache": true,
+        "audio": false,
+        "pdf": true,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "anthropic",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 15,
+        "output": 75,
+        "cache_read": 1.5
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  },
+  {
+    "id": 202,
+    "providerId": "prov_anthropic",
+    "modelId": "claude-haiku-4-5",
+    "systemModelId": "claude-haiku-4-5",
+    "enabled": true,
+    "sortOrder": 2,
+    "overrides": {},
+    "effective": {
+      "displayName": "Claude Haiku 4.5",
+      "contextWindow": 200000,
+      "maxOutputTokens": 64000,
+      "capabilities": {
+        "vision": true,
+        "tools": true,
+        "reasoning": true,
+        "promptCache": true,
+        "audio": false,
+        "pdf": false,
+        "structuredOutput": true
+      }
+    },
+    "origins": {
+      "displayName": "inherited",
+      "contextWindow": "inherited",
+      "maxOutputTokens": "inherited",
+      "capabilities": "inherited",
+      "pricing": "inherited"
+    },
+    "pricingSource": "provider",
+    "priceKey": "anthropic",
+    "multiplier": 1,
+    "effectivePricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1,
+        "output": 5,
+        "cache_read": 0.1
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    }
+  }
+]

@@ -13,15 +13,7 @@ namespace Astra.Server.Api;
 // entry; this file validates it against the upstream and persists it.
 public static partial class SubscriptionEndpoints
 {
-    /// <summary>
-    /// Body of the account import. <c>text</c> holds one or more entries (one per line, or a JSON document);
-    /// <c>asApiKey</c> reads every entry as an API key; <c>dryRun</c> only classifies and de-duplicates (no network,
-    /// nothing written); <c>httpProxy</c> becomes each imported account's own proxy.
-    /// </summary>
-    public sealed record AccountImportRequest(string? Text, bool? AsApiKey = null, bool? DryRun = null, string? HttpProxy = null);
 
-    /// <summary>What a provider's import accepts: whether it imports at all, takes API keys, and the format ids to hint.</summary>
-    public sealed record AccountImportInfoDto(bool Supported, bool ApiKey, List<string> Formats, int MaxBatch);
 
     /// <summary>The services one import run needs (kept together so the Copilot batch endpoint can share the run).</summary>
     internal sealed record ImportServices(

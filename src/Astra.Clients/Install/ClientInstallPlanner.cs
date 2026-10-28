@@ -17,21 +17,26 @@ public sealed record ToolCommand(string FileName, IReadOnlyList<string> Argument
 /// <param name="NpmPath">The npm executable, when available.</param>
 /// <param name="NpmGlobalRoot">The output of <c>npm root -g</c> (the global node_modules directory).</param>
 /// <param name="NpmPackagePresent">The client's package directory exists under <paramref name="NpmGlobalRoot"/>.</param>
+/// <param name="BuiltIn">The installed copy ships with its host (an extension bundled with VS Code) and cannot be removed on its own.</param>
 public sealed record ClientToolState(
     bool Installed,
     string? ExecutablePath = null,
     string? ResolvedPath = null,
     string? NpmPath = null,
     string? NpmGlobalRoot = null,
-    bool NpmPackagePresent = false);
+    bool NpmPackagePresent = false,
+    bool BuiltIn = false);
 
 /// <summary>
 /// The install / update commands available for a client right now. <see cref="Blocker"/> says why an action
 /// that would otherwise be offered is not: "npm-missing" (no npm to install with), "vscode-missing" (no
 /// <c>code</c> command), "script-missing" (the catalog has no install script for this OS), "external-install"
-/// (installed some other way and the client has no updater of its own).
+/// (installed some other way and the client has no updater of its own). <see cref="Uninstall"/> removes the copy that
+/// runs, offered only when Astra can remove exactly that copy: <c>npm uninstall -g</c> for the global npm install the
+/// command resolves into, <c>code --uninstall-extension</c> for a user-installed VS Code extension. Script installs and
+/// apps never get one (their vendors' installers put files in places Astra does not track).
 /// </summary>
-public sealed record ClientInstallPlan(ToolCommand? Install, ToolCommand? Update, string? UpdateVia, string? Blocker)
+public sealed record ClientInstallPlan(ToolCommand? Install, ToolCommand? Update, string? UpdateVia, string? Blocker, ToolCommand? Uninstall = null)
 {
     public static readonly ClientInstallPlan None = new(null, null, null, null);
 }
@@ -51,11 +56,16 @@ public static class ClientInstallPlanner
     {
         var npm = state.NpmPath is null ? null : new ToolCommand(state.NpmPath, ["install", "-g", $"{spec.Package}@latest"]);
         if (!state.Installed) return new ClientInstallPlan(npm, null, null, npm is null ? "npm-missing" : null);
-        if (npm is not null && IsNpmManaged(spec, state, os)) return new ClientInstallPlan(null, npm, "npm", null);
+        if (npm is not null && IsNpmManaged(spec, state, os))
+            return new ClientInstallPlan(null, npm, "npm", null, new ToolCommand(state.NpmPath!, ["uninstall", "-g", spec.Package!]));
         // A global npm install under another prefix (npm's prefix was changed since, e.g. to ~/.npm-global): update
-        // that copy in place — installing into the new prefix would leave the old one first on PATH.
+        // that copy in place — installing into the new prefix would leave the old one first on PATH. Uninstalling
+        // names the same prefix, or npm would look for the package in its current one and remove nothing.
         if (state.NpmPath is { } npmPath && InstalledNpmPrefix(spec, state, os) is { } prefix)
-            return new ClientInstallPlan(null, new ToolCommand(npmPath, ["install", "-g", "--prefix", prefix, $"{spec.Package}@latest"]), "npm", null);
+            return new ClientInstallPlan(null, new ToolCommand(npmPath, ["install", "-g", "--prefix", prefix, $"{spec.Package}@latest"]), "npm", null,
+                new ToolCommand(npmPath, ["uninstall", "-g", "--prefix", prefix, spec.Package!]));
+        // Installed some other way (a native installer, Homebrew, bun …): an npm uninstall would not remove the copy
+        // that runs, so none is offered — not even when an unrelated npm copy of the package exists.
         if (spec.SelfUpdateArgs is { } self && state.ExecutablePath is { } exe)
             return new ClientInstallPlan(null, new ToolCommand(exe, self), "self", null);
         return new ClientInstallPlan(null, null, null, "external-install");
@@ -77,8 +87,12 @@ public static class ClientInstallPlanner
 
     private static ClientInstallPlan PlanVsCode(ClientInstallSpec spec, ClientToolState state)
     {
-        // VS Code updates its extensions itself, so only installing is offered.
-        if (state.Installed) return ClientInstallPlan.None;
+        // VS Code updates its extensions itself, so only installing is offered — and removing a user-installed copy
+        // (a built-in one ships with VS Code and cannot be uninstalled on its own).
+        if (state.Installed)
+            return !state.BuiltIn && state.ExecutablePath is { } installedCode
+                ? ClientInstallPlan.None with { Uninstall = new ToolCommand(installedCode, ["--uninstall-extension", spec.Package!]) }
+                : ClientInstallPlan.None;
         if (state.ExecutablePath is not { } code) return new ClientInstallPlan(null, null, null, "vscode-missing");
         return new ClientInstallPlan(new ToolCommand(code, ["--install-extension", spec.Package!]), null, null, null);
     }
@@ -125,6 +139,7 @@ public static class ClientInstallPlanner
     {
         "install" when spec.Method == ClientInstallMethod.Npm => plan.Install,
         "update" when plan.UpdateVia == "npm" => plan.Update,
+        "uninstall" when spec.Method == ClientInstallMethod.Npm => plan.Uninstall,
         _ => null,
     };
 

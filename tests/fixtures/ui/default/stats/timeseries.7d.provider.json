@@ -1,0 +1,100 @@
+[
+  {
+    "bucket": "2026-10-20",
+    "key": "prov_anthropic",
+    "costUsd": 2.94,
+    "requests": 23,
+    "tokens": 427800
+  },
+  {
+    "bucket": "2026-10-20",
+    "key": "prov_openai",
+    "costUsd": 1.92,
+    "requests": 10,
+    "tokens": 82250
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "prov_anthropic",
+    "costUsd": 5.27,
+    "requests": 42,
+    "tokens": 646590
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "prov_openai",
+    "costUsd": 1.11,
+    "requests": 23,
+    "tokens": 488129
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "prov_anthropic",
+    "costUsd": 5.77,
+    "requests": 51,
+    "tokens": 968388
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "prov_openai",
+    "costUsd": 1.18,
+    "requests": 24,
+    "tokens": 429600
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "prov_anthropic",
+    "costUsd": 5.2,
+    "requests": 44,
+    "tokens": 980408
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "prov_openai",
+    "costUsd": 1.35,
+    "requests": 10,
+    "tokens": 129910
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "prov_anthropic",
+    "costUsd": 4.99,
+    "requests": 21,
+    "tokens": 353703
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "prov_openai",
+    "costUsd": 1.32,
+    "requests": 17,
+    "tokens": 397749
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "prov_anthropic",
+    "costUsd": 2.15,
+    "requests": 27,
+    "tokens": 252666
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "prov_openai",
+    "costUsd": 1.6,
+    "requests": 18,
+    "tokens": 144666
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "prov_anthropic",
+    "costUsd": 5.41,
+    "requests": 33,
+    "tokens": 595452
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "prov_openai",
+    "costUsd": 1.3,
+    "requests": 10,
+    "tokens": 164050
+  }
+]

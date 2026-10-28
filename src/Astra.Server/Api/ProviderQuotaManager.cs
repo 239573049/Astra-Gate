@@ -8,23 +8,10 @@ using Astra.Providers.Quota;
 
 namespace Astra.Server.Api;
 
-/// <summary>A provider's balance / quota query settings as the admin API shows them (secrets: names only).</summary>
-public sealed record ProviderQuotaConfigDto(
-    bool Enabled, string? Template, string? SuggestedTemplate, string? EffectiveTemplate,
-    int? IntervalMinutes, int EffectiveIntervalMinutes, int TimeoutSec, string? BaseUrl,
-    Dictionary<string, string> Params, List<string> Secrets, JsonObject? Request, JsonObject? Extract);
 
-/// <summary>GET/POST <c>/api/providers/{id}/quota</c>: the settings plus the stored snapshot.</summary>
-public sealed record ProviderQuotaDto(ProviderQuotaConfigDto Config, JsonObject? Snapshot, DateTimeOffset? CheckedAtUtc);
 
-/// <summary>POST <c>/api/providers/{id}/quota/test</c>: one unsaved run (redacted URL and raw response included).</summary>
-public sealed record ProviderQuotaTestDto(
-    bool Ok, string? ErrorCode, string? Error, int? HttpStatus, string? Url, JsonNode? Raw, JsonObject? Snapshot, string? Template);
 
-/// <summary>400 for an unusable quota configuration: <c>{ error, details: { errorCode } }</c> (the admin error envelope, typed).</summary>
-public sealed record ProviderQuotaErrorDto(string Error, ProviderQuotaErrorDetailsDto Details);
 
-public sealed record ProviderQuotaErrorDetailsDto(string? ErrorCode);
 
 /// <summary>
 /// Glue between the admin API / background worker and <see cref="ProviderQuotaService"/>: decrypts the

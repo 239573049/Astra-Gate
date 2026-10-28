@@ -22,6 +22,7 @@ public sealed class ResponsesCodec : IProtocolCodec
         "model", "instructions", "input", "tools", "tool_choice", "parallel_tool_calls",
         "max_output_tokens", "reasoning", "text", "temperature", "top_p", "stream",
         "previous_response_id", "service_tier", "metadata", "user", "safety_identifier",
+        "prompt_cache_key",
     ];
 
     public ApiProtocol Protocol => ApiProtocol.OpenAIResponses;
@@ -138,6 +139,7 @@ public sealed class ResponsesCodec : IProtocolCodec
         if (body["metadata"] is JsonObject metadata)
             request.Metadata = metadata.DeepClone().AsObject();
         request.User = Str(body, "user") ?? Str(body, "safety_identifier");
+        request.PromptCacheKey = Str(body, "prompt_cache_key");
 
         foreach (var (key, value) in body)
             if (!HandledRequestKeys.Contains(key))
@@ -389,17 +391,25 @@ public sealed class ResponsesCodec : IProtocolCodec
     {
         var body = new JsonObject { ["model"] = ctx.UpstreamModel };
 
+        // Instructions that came mid-conversation stay where they were (developer items), so instructions — the head of
+        // every request — do not change from turn to turn and the upstream prompt cache keeps hitting.
+        var late = new HashSet<object>(request.LateSystem.Select(l => l.Text), ReferenceEqualityComparer.Instance);
         if (request.System is { Count: > 0 })
         {
             var instructions = string.Join("\n\n",
-                request.System.OfType<TextPart>().Select(p => p.Text).Where(t => !string.IsNullOrEmpty(t)));
+                request.System.OfType<TextPart>().Where(p => !late.Contains(p)).Select(p => p.Text).Where(t => !string.IsNullOrEmpty(t)));
             if (instructions.Length > 0)
                 body["instructions"] = instructions;
         }
 
         var input = new JsonArray();
-        foreach (var message in request.Messages)
-            EncodeMessage(message, input, request);
+        var nextLate = 0;
+        for (var i = 0; i < request.Messages.Count; i++)
+        {
+            nextLate = LateSystemItem(request, i, nextLate, input);
+            EncodeMessage(request.Messages[i], input, request);
+        }
+        LateSystemItem(request, request.Messages.Count, nextLate, input);
         body["input"] = input;
 
         WriteTools(body, request.Tools, request.Warnings);
@@ -433,6 +443,8 @@ public sealed class ResponsesCodec : IProtocolCodec
             body["user"] = user;
         if (request.PreviousResponseId is { } previous)
             body["previous_response_id"] = previous;
+        if (request.PromptCacheKey is { Length: > 0 } cacheKey)
+            body["prompt_cache_key"] = cacheKey;
 
         if (request.Extensions.TryGetValue(ApiProtocol.OpenAIResponses, out var extensions))
             DeepMerge(body, extensions);
@@ -442,6 +454,18 @@ public sealed class ResponsesCodec : IProtocolCodec
             body["store"] = false;
 
         return body;
+    }
+
+    /// <summary>One developer item for the late instructions that stood before <c>Messages[before]</c>; returns the next unplaced one.</summary>
+    private static int LateSystemItem(UnifiedRequest request, int before, int next, JsonArray input)
+    {
+        var content = new JsonArray();
+        for (; next < request.LateSystem.Count && request.LateSystem[next].Before <= before; next++)
+            if (request.LateSystem[next].Text.Text is { Length: > 0 } text)
+                content.AddNode(new JsonObject { ["type"] = "input_text", ["text"] = text });
+        if (content.Count > 0)
+            input.AddNode(new JsonObject { ["type"] = "message", ["role"] = "developer", ["content"] = content });
+        return next;
     }
 
     private static void EncodeMessage(UnifiedMessage message, JsonArray input, UnifiedRequest request)
@@ -712,13 +736,12 @@ public sealed class ResponsesCodec : IProtocolCodec
     {
         if (usage is null)
             return null;
-        var input = usage.Get(TokenTypes.Input) + usage.Get(TokenTypes.CacheRead) + usage.Get(TokenTypes.CacheWrite5m)
-                    + usage.Get(TokenTypes.CacheWrite1h) + usage.Get(TokenTypes.InputAudio) + usage.Get(TokenTypes.InputImage);
+        var input = usage.Get(TokenTypes.Input) + usage.Get(TokenTypes.CacheRead) + usage.CacheWriteTotal
+                    + usage.Get(TokenTypes.InputAudio) + usage.Get(TokenTypes.InputImage);
         var output = usage.Get(TokenTypes.Output) + usage.Get(TokenTypes.Reasoning)
                      + usage.Get(TokenTypes.OutputAudio) + usage.Get(TokenTypes.OutputImage);
         var inputDetails = new JsonObject { ["cached_tokens"] = usage.Get(TokenTypes.CacheRead) };
-        var cacheWrite = usage.Get(TokenTypes.CacheWrite5m) + usage.Get(TokenTypes.CacheWrite1h);
-        if (cacheWrite > 0) inputDetails["cache_write_tokens"] = cacheWrite;
+        UsageNormalizer.WriteOpenAICacheWrite(inputDetails, usage);
         return new JsonObject
         {
             ["input_tokens"] = input,

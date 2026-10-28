@@ -10,32 +10,10 @@ namespace Astra.Server.Api;
 /// <summary>/api/tunnel: remote access through a Cloudflare Tunnel (<see cref="TunnelService"/>).</summary>
 public static class TunnelEndpoints
 {
-    /// <param name="Supported">False inside a container (cloudflared runs as a sidecar there).</param>
-    /// <param name="Enabled">Whether remote access is switched on (and comes back after a restart).</param>
-    /// <param name="State">off | downloading | starting | connected | reconnecting.</param>
-    /// <param name="PublicUrl">The address remote clients use (the quick tunnel's once known, a named tunnel's hostname).</param>
-    /// <param name="OriginUrl">What a named tunnel's public hostname must point at in the Cloudflare dashboard.</param>
-    /// <param name="Checks">What starting needs; <see cref="TunnelChecksDto.Blocker"/> says why it cannot start now.</param>
-    public sealed record TunnelStatusDto(
-        bool Supported, bool Enabled, string State, string? PublicUrl, string? Error, DateTimeOffset? ConnectedAt,
-        string Mode, string? Hostname, bool HasToken, bool AllowAdmin, string OriginUrl,
-        CloudflaredStatus Cloudflared, TunnelDownloadDto Download, TunnelChecksDto Checks, List<string> Log);
 
-    /// <param name="PasswordSet">An admin password exists (needed only when the admin UI is opened remotely).</param>
-    /// <param name="Blocker">Why the tunnel cannot start with the current settings; null when it can.</param>
-    public sealed record TunnelChecksDto(bool PasswordSet, string? Blocker);
 
-    /// <param name="DownloadSource">auto | github | astra | custom.</param>
-    /// <param name="DownloadBaseUrl">The custom source's base ({base}/{version}/{asset}); used with DownloadSource "custom".</param>
-    /// <param name="CloudflaredPath">An installed cloudflared to run; "" goes back to the downloaded one.</param>
-    public sealed record TunnelDownloadDto(string DownloadSource, string? DownloadBaseUrl, string? CloudflaredPath);
 
-    /// <summary>Partial update; a null field is left as it is. <c>Token</c> is write-only and "" clears it.</summary>
-    public sealed record TunnelConfigRequest(string? Mode, string? Hostname, string? Token, bool? AllowAdmin,
-        string? DownloadSource = null, string? DownloadBaseUrl = null, string? CloudflaredPath = null);
 
-    /// <summary>A cloudflared found on PATH (POST /api/tunnel/cloudflared/detect); nothing is saved.</summary>
-    public sealed record DetectedCloudflaredDto(string? Path, string? Version);
 
     public static void MapTunnelEndpoints(this IEndpointRouteBuilder app)
     {

@@ -4,11 +4,7 @@ namespace Astra.Server.Api;
 
 public static class ClientEndpoints
 {
-    /// <summary>accountId semantics: omitted = keep the current pin, "" = clear it, an id = pin that account.</summary>
-    public sealed record BindingInput(string? ProviderId, string? AccountId);
 
-    /// <summary>The client's full provider list in routing order (first = primary).</summary>
-    public sealed record BindingsInput(List<ClientBindingDto>? Bindings);
 
     public static void MapClientEndpoints(this IEndpointRouteBuilder app)
     {
@@ -45,15 +41,18 @@ public static class ClientEndpoints
         group.MapGet("/{kind}/models", async (string kind, ClientService clients, CancellationToken ct) =>
             Results.Ok((await clients.ModelsAsync(kind, ct)).ToList()));
 
-        // Versions, update checks and installs (ClientInstallService). check-updates fetches the latest versions
+        // Versions, update checks, installs and uninstalls (ClientInstallService). check-updates fetches the latest versions
         // from the npm registry (cached for six hours unless forced) and returns the refreshed client list.
         group.MapPost("/check-updates", async (ClientUpdateCheckRequest? body, ClientInstallService installs, ClientService clients, CancellationToken ct) =>
         {
             await installs.CheckUpdatesAsync(body?.Force ?? false, ct);
             return Results.Ok((await clients.ListAsync(ct)).ToList());
         });
-        group.MapPost("/{kind}/install", (string kind, ClientInstallRequest body, ClientInstallService installs) =>
-            Results.Ok(installs.Start(kind, body.Action, body.Elevated ?? false)));
+        group.MapPost("/{kind}/install", async (string kind, ClientInstallRequest body, ClientInstallService installs, ClientService clients,
+                CancellationToken ct) =>
+            Results.Ok(body.Action == "uninstall"
+                ? await clients.UninstallAsync(kind, body.Elevated ?? false, ct)
+                : installs.Start(kind, body.Action, body.Elevated ?? false)));
         group.MapGet("/{kind}/install", (string kind, ClientInstallService installs) => Results.Ok(installs.Get(kind)));
         group.MapPost("/{kind}/install/cancel", (string kind, ClientInstallService installs) => Results.Ok(installs.Cancel(kind)));
     }

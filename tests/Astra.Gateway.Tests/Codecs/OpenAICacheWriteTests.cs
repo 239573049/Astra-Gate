@@ -100,5 +100,43 @@ public class OpenAICacheWriteTests
         var normalized = UsageNormalizer.Normalize(protocol, encoded)!;
         Assert.Equal(3, normalized.Get(TokenTypes.Input));
         Assert.Equal(9_290, normalized.Get(TokenTypes.CacheWrite5m));
+        Assert.Null(details["cache_write_tokens_details"]); // Anthropic TTLs have no OpenAI split
+    }
+
+    [Theory]
+    [InlineData(ApiProtocol.OpenAIResponses)]
+    [InlineData(ApiProtocol.OpenAIChat)]
+    public void Encoder_Reports_The_OpenAI_Ttl_Split(ApiProtocol protocol)
+    {
+        var usage = new NormalizedUsage();
+        usage.Add(TokenTypes.Input, 1_000);
+        usage.Add(TokenTypes.CacheRead, 4_000);
+        usage.Add(TokenTypes.CacheWrite30m, 3_000);
+        usage.Add(TokenTypes.CacheWrite12h, 4_000);
+        usage.Add(TokenTypes.Output, 10);
+        var encoder = Codec(protocol).CreateResponseEncoder(new ResponseEncodeContext
+        {
+            IncludeUsage = true, Model = "gpt-6.1-sol", ResponseId = "cache-ttl",
+        });
+        foreach (var e in new UnifiedStreamEvent[]
+                 {
+                     new MessageStartEvent("cache-ttl", "gpt-6.1-sol"),
+                     new UsageEvent(protocol, new JsonObject(), usage),
+                     new MessageStopEvent(FinishReason.Stop),
+                 })
+            encoder.OnEvent(e).ToList();
+
+        var encoded = encoder.BuildJson()["usage"]!;
+        var responses = protocol == ApiProtocol.OpenAIResponses;
+        var details = encoded[responses ? "input_tokens_details" : "prompt_tokens_details"]!;
+        Assert.Equal(12_000, encoded[responses ? "input_tokens" : "prompt_tokens"]!.GetValue<long>());
+        Assert.Equal(7_000, details["cache_write_tokens"]!.GetValue<long>());
+        Assert.Equal(3_000, details["cache_write_tokens_details"]!["ttl_30m_tokens"]!.GetValue<long>());
+        Assert.Equal(4_000, details["cache_write_tokens_details"]!["ttl_12h_tokens"]!.GetValue<long>());
+        var normalized = UsageNormalizer.Normalize(protocol, encoded)!;
+        Assert.Equal(1_000, normalized.Get(TokenTypes.Input));
+        Assert.Equal(3_000, normalized.Get(TokenTypes.CacheWrite30m));
+        Assert.Equal(4_000, normalized.Get(TokenTypes.CacheWrite12h));
+        Assert.Empty(normalized.Notes);
     }
 }

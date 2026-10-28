@@ -1,0 +1,35 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+        x:Class="Astra.Desktop.Theme.KitStyles">
+  <!-- App-wide corrections of Arc's themes toward the web (Theme/KitStyles.axaml.cs installs them into Application.Styles).
+       Styles in Application.Styles apply after a control theme's own styles, so on the same property they win over Arc's triggers —
+       which a code binding at Template priority (ArcTokens.Bind's default) cannot do. -->
+
+  <!-- Primary buttons are the accent, not Arc's foreground fill: web components/ui/controls.tsx Button adds
+       accent background and border, on-accent text to Arc's primary variant ("plan §9.1").
+       The fill is the chosen accent itself in both themes (KitAccent: the web's accent variable is not lightened for dark like Arc's Accent token);
+       the text is the web's onAccentColor (KitOnAccent, set by ThemeService), not Arc's AccentForeground, which is black on #007aff.
+       Hover (opacity .91 + resting shadow), pressed (.84) and disabled (.52) stay Arc's, which are the web's numbers. -->
+  <Style Selector="arc|Button[Variant=Primary]">
+    <Setter Property="Background" Value="{DynamicResource KitAccent}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource KitAccent}" />
+    <Setter Property="Foreground" Value="{DynamicResource KitOnAccent}" />
+  </Style>
+
+  <!-- Segmented control: the selected pill is the web's control-selected colour (#fff light, white 16 % dark), not Arc's Surface (which is the
+       translucent content material here). -->
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="KitControlSelected" Color="#FFFFFFFF" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="KitControlSelected" Color="#29FFFFFF" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Styles.Resources>
+  <!-- applied to the selection part by KitStyles.InstallSegmented (a template-set value a style cannot override) -->
+</Styles>

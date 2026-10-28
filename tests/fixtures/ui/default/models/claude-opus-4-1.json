@@ -1,0 +1,41 @@
+{
+  "id": "claude-opus-4-1",
+  "displayName": "Claude Opus 4.1",
+  "vendor": "anthropic",
+  "family": "claude-opus",
+  "aliases": [],
+  "contextWindow": 200000,
+  "maxOutputTokens": 32000,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "promptCache": true,
+    "audio": false,
+    "pdf": true,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 15,
+      "output": 75,
+      "cache_read": 1.5
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [
+    "anthropic"
+  ],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

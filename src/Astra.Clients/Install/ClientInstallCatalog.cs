@@ -2,21 +2,22 @@ using Astra.Core.Clients;
 
 namespace Astra.Clients.Install;
 
-/// <summary>How Astra can install and update a client.</summary>
+/// <summary>How Astra can install, update and uninstall a client.</summary>
 public enum ClientInstallMethod
 {
-    /// <summary>A global npm package (<c>npm install -g &lt;package&gt;@latest</c>); latest version from the npm registry.</summary>
+    /// <summary>A global npm package (<c>npm install -g &lt;package&gt;@latest</c>); latest version from the npm registry; <c>npm uninstall -g &lt;package&gt;</c> removes it.</summary>
     Npm,
 
-    /// <summary>A VS Code extension (<c>code --install-extension &lt;id&gt;</c>); VS Code keeps it updated itself.</summary>
+    /// <summary>A VS Code extension (<c>code --install-extension &lt;id&gt;</c>); VS Code keeps it updated itself; <c>code --uninstall-extension &lt;id&gt;</c> removes it.</summary>
     VsCodeExtension,
 
     /// <summary>The vendor's own install script (<see cref="ClientInstallSpec.PosixScriptUrl"/> /
     /// <see cref="ClientInstallSpec.WindowsScriptUrl"/>); run non-interactively once, then the client's own
-    /// updater (<see cref="ClientInstallSpec.SelfUpdateArgs"/>) keeps it current.</summary>
+    /// updater (<see cref="ClientInstallSpec.SelfUpdateArgs"/>) keeps it current. Never uninstalled by Astra: the script decides
+    /// where its files go, so the homepage's instructions are the only reliable way to remove them.</summary>
     Script,
 
-    /// <summary>A desktop app or a client with its own installer: Astra only links to the download page.</summary>
+    /// <summary>A desktop app or a client with its own installer: Astra only links to the download page (and never uninstalls it).</summary>
     Manual,
 }
 

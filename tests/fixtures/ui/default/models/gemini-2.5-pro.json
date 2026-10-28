@@ -1,0 +1,39 @@
+{
+  "id": "gemini-2.5-pro",
+  "displayName": "Gemini 2.5 Pro",
+  "vendor": "google",
+  "family": "gemini-2.5",
+  "aliases": [],
+  "contextWindow": 1048576,
+  "maxOutputTokens": 65536,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "promptCache": true,
+    "audio": true,
+    "pdf": true,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 1.25,
+      "output": 10,
+      "cache_read": 0.31
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

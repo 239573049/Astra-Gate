@@ -1,0 +1,149 @@
+[
+  {
+    "bucket": "2026-10-20",
+    "key": "tok_default",
+    "costUsd": 3.41,
+    "requests": 43,
+    "tokens": 764282
+  },
+  {
+    "bucket": "2026-10-20",
+    "key": "tok_ci",
+    "costUsd": 1.06,
+    "requests": 14,
+    "tokens": 140154
+  },
+  {
+    "bucket": "2026-10-20",
+    "key": "tok_pool",
+    "costUsd": 0.2,
+    "requests": 7,
+    "tokens": 76034
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "tok_default",
+    "costUsd": 3.56,
+    "requests": 25,
+    "tokens": 221175
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "tok_ci",
+    "costUsd": 1.5,
+    "requests": 10,
+    "tokens": 155580
+  },
+  {
+    "bucket": "2026-10-21",
+    "key": "tok_pool",
+    "costUsd": 0.32,
+    "requests": 7,
+    "tokens": 128345
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "tok_default",
+    "costUsd": 5.15,
+    "requests": 20,
+    "tokens": 328220
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "tok_ci",
+    "costUsd": 1.33,
+    "requests": 15,
+    "tokens": 125400
+  },
+  {
+    "bucket": "2026-10-22",
+    "key": "tok_pool",
+    "costUsd": 0.14,
+    "requests": 3,
+    "tokens": 44259
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "tok_default",
+    "costUsd": 4.48,
+    "requests": 28,
+    "tokens": 534212
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "tok_ci",
+    "costUsd": 1,
+    "requests": 12,
+    "tokens": 194076
+  },
+  {
+    "bucket": "2026-10-23",
+    "key": "tok_pool",
+    "costUsd": 0.35,
+    "requests": 3,
+    "tokens": 65508
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "tok_default",
+    "costUsd": 2.53,
+    "requests": 34,
+    "tokens": 292570
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "tok_ci",
+    "costUsd": 1.32,
+    "requests": 10,
+    "tokens": 180940
+  },
+  {
+    "bucket": "2026-10-24",
+    "key": "tok_pool",
+    "costUsd": 0.21,
+    "requests": 8,
+    "tokens": 91144
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "tok_default",
+    "costUsd": 4.6,
+    "requests": 35,
+    "tokens": 468405
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "tok_ci",
+    "costUsd": 2.06,
+    "requests": 15,
+    "tokens": 268560
+  },
+  {
+    "bucket": "2026-10-25",
+    "key": "tok_pool",
+    "costUsd": 0.15,
+    "requests": 5,
+    "tokens": 79680
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "tok_default",
+    "costUsd": 3.69,
+    "requests": 48,
+    "tokens": 829968
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "tok_ci",
+    "costUsd": 1.68,
+    "requests": 25,
+    "tokens": 312725
+  },
+  {
+    "bucket": "2026-10-26",
+    "key": "tok_pool",
+    "costUsd": 0.16,
+    "requests": 7,
+    "tokens": 135842
+  }
+]

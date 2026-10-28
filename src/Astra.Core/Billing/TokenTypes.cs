@@ -7,6 +7,10 @@ public static class TokenTypes
     public const string CacheRead = "cache_read";
     public const string CacheWrite5m = "cache_write_5m";
     public const string CacheWrite1h = "cache_write_1h";
+    /// <summary>OpenAI (GPT-5.6+) 30-minute cache write; <c>cache_write_tokens_details.ttl_30m_tokens</c>.</summary>
+    public const string CacheWrite30m = "cache_write_30m";
+    /// <summary>OpenAI (GPT-5.6+) 12-hour cache write; <c>cache_write_tokens_details.ttl_12h_tokens</c>.</summary>
+    public const string CacheWrite12h = "cache_write_12h";
     public const string Output = "output";
     public const string Reasoning = "reasoning";
     public const string InputAudio = "input_audio";
@@ -20,12 +24,15 @@ public static class TokenTypes
     /// <summary>Canonical display order.</summary>
     public static readonly IReadOnlyList<string> Ordered =
     [
-        Input, CacheRead, CacheWrite5m, CacheWrite1h, InputAudio, InputImage,
+        Input, CacheRead, CacheWrite5m, CacheWrite30m, CacheWrite1h, CacheWrite12h, InputAudio, InputImage,
         Output, Reasoning, OutputAudio, OutputImage,
     ];
 
     private static readonly HashSet<string> InputLike =
-        [Input, CacheRead, CacheWrite5m, CacheWrite1h, InputAudio, InputImage];
+        [Input, CacheRead, CacheWrite5m, CacheWrite30m, CacheWrite1h, CacheWrite12h, InputAudio, InputImage];
+
+    /// <summary>Every cache-write type, whatever its TTL.</summary>
+    public static readonly IReadOnlyList<string> CacheWrites = [CacheWrite5m, CacheWrite30m, CacheWrite1h, CacheWrite12h];
 
     /// <summary>True for token types that count toward the "total input" used to pick a context tier.</summary>
     public static bool IsInputLike(string type) =>
@@ -46,6 +53,9 @@ public static class TokenTypes
         Reasoning => Output,
         CacheWrite1h => Input,
         CacheWrite5m => Input,
+        // A 30m write is OpenAI's short write: prices synced before it existed sit under cache_write_5m.
+        CacheWrite30m => CacheWrite5m,
+        CacheWrite12h => Input,
         CacheRead => Input,
         InputAudio or InputImage => Input,
         OutputAudio or OutputImage => Output,
@@ -69,6 +79,9 @@ public sealed class NormalizedUsage
         if (count <= 0) return;
         Tokens[type] = Tokens.GetValueOrDefault(type) + count;
     }
+
+    /// <summary>Cache writes of every TTL.</summary>
+    public long CacheWriteTotal => TokenTypes.CacheWrites.Sum(Get);
 
     public long TotalInput => Tokens.Where(kv => TokenTypes.IsInputLike(kv.Key)).Sum(kv => kv.Value);
     public long TotalOutput => Tokens.Where(kv => !TokenTypes.IsInputLike(kv.Key)).Sum(kv => kv.Value);

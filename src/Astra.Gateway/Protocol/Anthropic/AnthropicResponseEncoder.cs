@@ -241,7 +241,7 @@ public sealed class AnthropicResponseEncoder : IResponseEncoder
         return new JsonObject
         {
             ["input_tokens"] = n?.Get(TokenTypes.Input) ?? 0,
-            ["cache_creation_input_tokens"] = (n?.Get(TokenTypes.CacheWrite5m) ?? 0) + (n?.Get(TokenTypes.CacheWrite1h) ?? 0),
+            ["cache_creation_input_tokens"] = n?.CacheWriteTotal ?? 0,
             ["cache_read_input_tokens"] = n?.Get(TokenTypes.CacheRead) ?? 0,
             ["output_tokens"] = n?.TotalOutput ?? 0,
         };

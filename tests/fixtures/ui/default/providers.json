@@ -1,0 +1,139 @@
+[
+  {
+    "id": "prov_openai",
+    "templateId": "openai",
+    "templateVersion": 1,
+    "templateUpdateAvailable": false,
+    "name": "OpenAI",
+    "icon": "openai",
+    "category": "official",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.openai.com/v1"
+      },
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.openai.com/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat"
+    ],
+    "authScheme": "bearer",
+    "hasApiKey": true,
+    "apiKeyMasked": "sk-…a1b2",
+    "extraHeaders": {},
+    "httpProxy": null,
+    "priceMultiplier": 1,
+    "priceKey": "openai",
+    "adapterId": "openai",
+    "settings": {},
+    "enabled": true,
+    "sortOrder": 0,
+    "notes": null,
+    "website": "https://platform.openai.com",
+    "modelCount": 4,
+    "boundClients": [
+      "codex"
+    ],
+    "createdAt": "2026-09-16T12:00:00Z",
+    "updatedAt": "2026-10-24T12:00:00Z",
+    "quotaConfig": {
+      "enabled": false,
+      "template": null,
+      "suggestedTemplate": null,
+      "effectiveTemplate": null,
+      "intervalMinutes": null,
+      "effectiveIntervalMinutes": 30,
+      "timeoutSec": 15,
+      "baseUrl": null,
+      "params": {},
+      "secrets": [],
+      "request": null,
+      "extract": null
+    },
+    "quota": null,
+    "quotaCheckedAtUtc": null
+  },
+  {
+    "id": "prov_anthropic",
+    "templateId": "anthropic",
+    "templateVersion": 1,
+    "templateUpdateAvailable": false,
+    "name": "Anthropic",
+    "icon": "anthropic",
+    "category": "official",
+    "endpoints": [
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.anthropic.com/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "anthropic"
+    ],
+    "authScheme": "x-api-key",
+    "hasApiKey": true,
+    "apiKeyMasked": "sk-ant-…c3d4",
+    "extraHeaders": {
+      "anthropic-version": "2023-06-01"
+    },
+    "httpProxy": null,
+    "priceMultiplier": 1,
+    "priceKey": "anthropic",
+    "adapterId": "anthropic",
+    "settings": {},
+    "enabled": true,
+    "sortOrder": 1,
+    "notes": null,
+    "website": "https://console.anthropic.com",
+    "modelCount": 3,
+    "boundClients": [
+      "claude-code"
+    ],
+    "createdAt": "2026-09-18T12:00:00Z",
+    "updatedAt": "2026-10-25T12:00:00Z",
+    "quotaConfig": {
+      "enabled": true,
+      "template": "anthropic",
+      "suggestedTemplate": "anthropic",
+      "effectiveTemplate": "anthropic",
+      "intervalMinutes": null,
+      "effectiveIntervalMinutes": 30,
+      "timeoutSec": 15,
+      "baseUrl": null,
+      "params": {},
+      "secrets": [],
+      "request": null,
+      "extract": null
+    },
+    "quota": {
+      "fetchedAtUtc": "2026-10-26T11:48:00Z",
+      "template": "anthropic",
+      "kind": "balance",
+      "isValid": true,
+      "invalidMessage": null,
+      "planLabel": null,
+      "plans": [
+        {
+          "name": null,
+          "unit": "USD",
+          "remaining": 42.18,
+          "total": 100,
+          "used": 57.82,
+          "usedPercent": 57.82,
+          "resetsAtUtc": null,
+          "windowMinutes": null,
+          "extra": null
+        }
+      ],
+      "error": null,
+      "errorCode": null,
+      "errorAtUtc": null,
+      "failures": 0
+    },
+    "quotaCheckedAtUtc": "2026-10-26T11:48:00Z"
+  }
+]

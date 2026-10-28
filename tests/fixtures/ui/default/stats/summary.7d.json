@@ -1,0 +1,12 @@
+{
+  "range": "7d",
+  "costUsd": 38.9,
+  "requests": 402,
+  "successRate": 0.912,
+  "inputTokens": 9800000,
+  "outputTokens": 1240000,
+  "cacheReadTokens": 5900000,
+  "cacheWriteTokens": 520000,
+  "reasoningTokens": 148800,
+  "avgTtftMs": 1180
+}

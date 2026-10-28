@@ -1,0 +1,28 @@
+[
+  {
+    "providerId": "prov_anthropic",
+    "name": "Anthropic",
+    "requests": 29,
+    "successRequests": 27,
+    "successRate": 0.93,
+    "costUsd": 4.45,
+    "inputTokens": 720600,
+    "outputTokens": 89400,
+    "avgTtftMs": 1320,
+    "failoversOut": 0,
+    "failoversIn": 1
+  },
+  {
+    "providerId": "prov_openai",
+    "name": "OpenAI",
+    "requests": 21,
+    "successRequests": 19,
+    "successRate": 0.89,
+    "costUsd": 1.91,
+    "inputTokens": 480400,
+    "outputTokens": 59600,
+    "avgTtftMs": 980,
+    "failoversOut": 1,
+    "failoversIn": 0
+  }
+]

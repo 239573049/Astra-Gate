@@ -41,7 +41,7 @@ public sealed class PrivacyHit
 
     public int Count { get; set; }
 
-    /// <summary>Masked previews of the matched values (e.g. "john••••om"); originals are never kept. Empty when sample recording is off.</summary>
+    /// <summary>Previews of the matched values: masked (e.g. "john••••om") unless full samples were enabled, in which case the capped original. Empty when sample recording is off.</summary>
     public List<string> Samples { get; set; } = [];
 }
 
@@ -82,6 +82,12 @@ public sealed class PrivacySettings
     /// <summary>Store masked samples of matched values in the per-request report. Originals are never stored either way.</summary>
     public bool RecordSamples { get; set; } = true;
 
+    /// <summary>
+    /// Store the matched values themselves (capped, not masked) as samples. Off by default: the log is a second copy of
+    /// what the guard protects, so this is an explicit opt-in for tuning rules. Only applies while <see cref="RecordSamples"/> is on.
+    /// </summary>
+    public bool RecordFullSamples { get; set; }
+
     public string DefaultAction { get; set; } = PrivacyActions.Warn;
 
     /// <summary>Category (or custom rule id) → action override.</summary>
@@ -116,6 +122,9 @@ public sealed class EffectivePrivacyPolicy
     /// <summary>Whether masked match samples are attached to hits.</summary>
     public bool RecordSamples { get; init; }
 
+    /// <summary>Whether those samples are the matched values themselves instead of masked previews.</summary>
+    public bool RecordFullSamples { get; init; }
+
     public string DefaultAction { get; init; }
     public IReadOnlyList<PrivacyRule> Rules { get; private set; } = [];
 
@@ -124,7 +133,7 @@ public sealed class EffectivePrivacyPolicy
 
     public EffectivePrivacyPolicy(
         Dictionary<string, string> categoryActions, string? clientDefault, string defaultAction,
-        bool enabled, bool dryRun, bool restore, bool recordSamples = true)
+        bool enabled, bool dryRun, bool restore, bool recordSamples = true, bool recordFullSamples = false)
     {
         _categoryActions = categoryActions;
         _clientDefault = clientDefault;
@@ -133,6 +142,7 @@ public sealed class EffectivePrivacyPolicy
         DryRun = dryRun;
         Restore = restore;
         RecordSamples = recordSamples;
+        RecordFullSamples = recordFullSamples;
     }
 
     /// <summary>Resolves the action for one rule (custom rules resolve by their own id first).</summary>
@@ -150,7 +160,7 @@ public sealed class EffectivePrivacyPolicy
         var policy = new EffectivePrivacyPolicy(
             settings.CategoryActions, clientDefault, settings.DefaultAction,
             enabledOverride ?? settings.Enabled, dryRunOverride ?? settings.DryRun, settings.RestoreResponses,
-            settings.RecordSamples);
+            settings.RecordSamples, settings.RecordFullSamples);
 
         var rules = new List<PrivacyRule>();
         foreach (var rule in PrivacyDetector.BuiltInRules)

@@ -1,0 +1,31 @@
+{
+  "locale": "zh",
+  "debugBodies": false,
+  "bodyRetentionDays": 7,
+  "requestRetentionDays": 90,
+  "effortBudgets": {
+    "low": 2048,
+    "medium": 8192,
+    "high": 24576
+  },
+  "streamIdleTimeoutSec": 120,
+  "updateChannel": "stable",
+  "updateAutoCheck": true,
+  "requestCompression": "default",
+  "requireGatewayKey": true,
+  "quotaAutoIntervalMinutes": 30,
+  "subscriptionQuotaIntervalMinutes": 30,
+  "usageTimeZone": null,
+  "effectiveUsageTimeZone": "UTC",
+  "proxyMode": "system",
+  "proxyUrl": null,
+  "proxyUsername": null,
+  "hasProxyPassword": false,
+  "proxyBypass": null,
+  "pluginMarketUrl": null,
+  "pluginMarketDefaultUrl": "https://astra-gate.si/api/plugin-market",
+  "port": 17321,
+  "host": "127.0.0.1",
+  "dataDir": "/Users/demo/.astra",
+  "gatewayBaseUrl": "http://127.0.0.1:17321"
+}

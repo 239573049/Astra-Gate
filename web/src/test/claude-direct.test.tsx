@@ -1,9 +1,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ClaudeDirectAccount, ClaudeDirectRequest, ClientInfo, Provider } from '../api/types';
+import type { ClaudeDirectAccount, ClaudeDirectRequest, ClientInfo, ClientInstall, Provider } from '../api/types';
 import { ClaudeDirectPanel, claudeDirectTotals } from '../components/ClaudeDirectPanel';
 import { FeedbackProvider } from '../components/ui/overlays';
 import { I18nProvider, translate } from '../i18n';
@@ -23,6 +23,7 @@ const hookSpies = vi.hoisted(() => ({
   repair: vi.fn(),
   /** Overrides the models the client's providers offer for one test; reset before each. */
   models: undefined as string[] | undefined,
+  startInstall: vi.fn(),
 }));
 
 const directState = (over: Record<string, unknown> = {}) => ({
@@ -77,7 +78,7 @@ vi.mock('../api/hooks', () => ({
   useEnableClient: () => ({ mutate: vi.fn(), isPending: false }),
   useRestoreBackup: () => ({ mutate: vi.fn(), isPending: false, variables: undefined }),
   useClientInstallJob: () => ({ data: undefined, isLoading: false }),
-  useStartClientInstall: () => ({ mutate: vi.fn(), isPending: false }),
+  useStartClientInstall: () => ({ mutate: hookSpies.startInstall, isPending: false }),
   useCancelClientInstall: () => ({ mutate: vi.fn(), isPending: false }),
   useCheckClientUpdates: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -255,6 +256,7 @@ beforeEach(() => {
   hookSpies.clients = undefined;
   hookSpies.repair.mockClear();
   hookSpies.models = undefined;
+  hookSpies.startInstall.mockClear();
   hookSpies.requestsEnabled.length = 0;
   hookSpies.requestsLive.length = 0;
 });
@@ -603,5 +605,79 @@ describe('Claude Desktop role map', () => {
     const scroll = vi.spyOn(Element.prototype, 'scrollIntoView');
     fireEvent.click(screen.getByRole('button', { name: t('clients.roleMapGoto') }));
     expect(scroll.mock.contexts[0]).toBe(document.getElementById('client-role-map'));
+  });
+});
+
+describe('Uninstalling a client', () => {
+  const install = (over: Partial<ClientInstall> = {}): ClientInstall => ({
+    method: 'npm',
+    package: '@openai/codex',
+    homepageUrl: 'https://developers.openai.com/codex/cli',
+    installed: true,
+    executable: '/usr/local/bin/codex',
+    version: '1.0.0',
+    updateAvailable: false,
+    busy: false,
+    uninstallCommand: 'npm uninstall -g @openai/codex',
+    ...over,
+  });
+  const showCodex = (over: Partial<ClientInfo> = {}) => {
+    hookSpies.clients = [codex(over), claudeCode()];
+    showPage('/clients/codex');
+  };
+
+  it('confirms with the exact command and says the config is restored first when Astra took it over', async () => {
+    showCodex({ enabled: true, status: 'enabled', install: install() });
+    expect(screen.getByText('npm uninstall -g @openai/codex')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: t('clients.uninstall') }));
+
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByText(t('clients.uninstallTitle', { name: 'Codex' }))).toBeInTheDocument();
+    expect(within(sheet).getByText('npm uninstall -g @openai/codex')).toBeInTheDocument();
+    expect(within(sheet).getByText(t('clients.uninstallRestoreTitle'))).toBeInTheDocument();
+    expect(within(sheet).getByText(t('clients.uninstallRestoreDetail', { name: 'Codex' }))).toBeInTheDocument();
+    expect(hookSpies.startInstall).not.toHaveBeenCalled();
+
+    fireEvent.click(within(sheet).getByRole('button', { name: t('clients.uninstall') }));
+    expect(hookSpies.startInstall).toHaveBeenCalledWith({ kind: 'codex', action: 'uninstall', elevated: false }, expect.anything());
+  });
+
+  it('does not mention a restore for a client Astra has not taken over', async () => {
+    showCodex({ install: install() });
+    fireEvent.click(screen.getByRole('button', { name: t('clients.uninstall') }));
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).queryByText(t('clients.uninstallRestoreTitle'))).toBeNull();
+    expect(within(sheet).getByText(t('clients.uninstallKeepsData'))).toBeInTheDocument();
+  });
+
+  it('asks for admin rights when npm needs them', async () => {
+    showCodex({ install: install({ needsAdmin: true, adminAvailable: true }) });
+    fireEvent.click(screen.getByRole('button', { name: t('clients.uninstall') }));
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByText('sudo npm uninstall -g @openai/codex')).toBeInTheDocument();
+    fireEvent.click(within(sheet).getByRole('button', { name: t('clients.admin.start') }));
+    expect(hookSpies.startInstall).toHaveBeenCalledWith({ kind: 'codex', action: 'uninstall', elevated: true }, expect.anything());
+  });
+
+  it('explains why there is no uninstall button when Astra will not remove the client', () => {
+    showCodex({ install: install({ uninstallCommand: null }) });
+    expect(screen.queryByRole('button', { name: t('clients.uninstall') })).toBeNull();
+    expect(screen.getByText(t('clients.uninstallExternal', { path: '/usr/local/bin/codex' }))).toBeInTheDocument();
+    cleanup();
+
+    showCodex({ install: install({ method: 'manual', package: null, uninstallCommand: null }) });
+    expect(screen.queryByRole('button', { name: t('clients.uninstall') })).toBeNull();
+    expect(screen.getByText(t('clients.uninstallManual'))).toBeInTheDocument();
+    cleanup();
+
+    // Not installed: nothing to uninstall, no row at all.
+    showCodex({ install: install({ installed: false, uninstallCommand: null, installCommand: 'npm install -g @openai/codex@latest' }) });
+    expect(screen.queryByText(t('clients.uninstallExternal', { path: '/usr/local/bin/codex' }))).toBeNull();
+    expect(screen.queryByRole('button', { name: t('clients.uninstall') })).toBeNull();
+  });
+
+  it('disables the button while another run is going', () => {
+    showCodex({ install: install({ busy: true }) });
+    expect(screen.getByRole('button', { name: t('clients.uninstall') })).toBeDisabled();
   });
 });

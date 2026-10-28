@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>astra-desktop</AssemblyName>
+    <RootNamespace>Astra.Desktop</RootNamespace>
+    <!-- AOT analyzer gate, as in the other shipped projects (plan avalonia-client §3). -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <SelfContained>true</SelfContained>
+    <!-- Memory over throughput, like astra-server: a desktop shell is a one-user process. -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+  </PropertyGroup>
+  <!-- The four Arc packages move together: pin the exact preview (its docs require it). -->
+  <PropertyGroup>
+    <ArcVersion>0.3.1-preview.2</ArcVersion>
+    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <AtomUIVersion>6.2.8</AtomUIVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="AtomUI.Desktop.Controls" Version="$(AtomUIVersion)" />
+    <PackageReference Include="AtomUI.Generator" Version="$(AtomUIVersion)" PrivateAssets="all" />
+    <PackageReference Include="TKCode.Arc" Version="$(ArcVersion)" />
+    <PackageReference Include="TKCode.Arc.Fonts" Version="$(ArcVersion)" />
+    <PackageReference Include="TKCode.Arc.AdvancedCharts" Version="$(ArcVersion)" />
+    <PackageReference Include="TKCode.Arc.Blocks" Version="$(ArcVersion)" />
+    <!-- The web nav uses Lucide icons; TKCode.Arc itself only ships a subset of them (plan avalonia-client §17). -->
+    <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="$(ArcVersion)" />
+    <!-- MVVM source generators only (AOT-safe, no reflection bindings; plan avalonia-client §3 D3). -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Astra.Desktop.Core\Astra.Desktop.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Visual tests build shells and pages with fixture services (tests/Astra.Desktop.UiTests, plan avalonia-client §24). -->
+    <InternalsVisibleTo Include="Astra.Desktop.UiTests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The web's own logo, linked rather than copied so the two clients cannot drift. -->
+    <AvaloniaResource Include="..\..\web\src\assets\logo.png" Link="Assets\logo.png" />
+    <!-- The bare mark without the dark rim (web traces/nodes.tsx hub): Kit AppAssets.LogoMark. -->
+    <AvaloniaResource Include="..\..\web\src\assets\logo-mark.png" Link="Assets\logo-mark.png" />
+  </ItemGroup>
+</Project>

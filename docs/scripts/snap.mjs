@@ -6,11 +6,10 @@
 //   3. Playwright chromium cached (pnpm dlx playwright install chromium)
 // login.png cannot be captured on loopback (no password required there); it is rendered from
 // the HTML mockup in shots/login.html via: node scripts/snap-mock.mjs login
-import { chromium } from 'playwright-core';
-import { readdirSync, mkdirSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { launchBrowser, settle, shot as shotTo } from './lib/snap-core.mjs';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const outDir = join(root, 'public', 'screenshots');
@@ -19,33 +18,10 @@ mkdirSync(outDir, { recursive: true });
 const APP = process.env.ASTRA_DEV_URL ?? 'http://localhost:5173';
 const API = process.env.ASTRA_API_URL ?? 'http://127.0.0.1:17321';
 
-function findHeadlessShell() {
-  const cache = join(homedir(), 'Library', 'Caches', 'ms-playwright');
-  const dirs = readdirSync(cache)
-    .filter((d) => d.startsWith('chromium_headless_shell-'))
-    .sort();
-  if (dirs.length === 0) throw new Error('No chromium_headless_shell-* in ~/Library/Caches/ms-playwright — run `pnpm dlx playwright install chromium`');
-  const dir = join(cache, dirs.at(-1));
-  for (const sub of readdirSync(dir, { recursive: true })) {
-    if (sub.endsWith('chrome-headless-shell')) return join(dir, sub);
-  }
-  throw new Error(`chrome-headless-shell binary not found under ${dir}`);
-}
-
-async function settle(page, ms = 1200) {
-  await page.waitForLoadState('networkidle').catch(() => {});
-  await page.waitForTimeout(ms);
-}
-
-const browser = await chromium.launch({
-  headless: true,
-  executablePath: findHeadlessShell(),
-  args: ['--force-device-scale-factor=2', '--hide-scrollbars'],
-});
+const browser = await launchBrowser(2);
 
 async function shot(page, name) {
-  await page.screenshot({ path: join(outDir, `${name}.png`) });
-  console.log(`✓ ${name}.png`);
+  await shotTo(page, outDir, name);
 }
 
 try {

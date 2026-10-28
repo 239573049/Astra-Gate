@@ -302,15 +302,3 @@ public sealed partial class CloudflaredRuntime
     }
 }
 
-/// <summary>cloudflared as the remote access page shows it.</summary>
-/// <param name="Path">The cloudflared in use, null when none is at hand yet.</param>
-/// <param name="Version">Its version: the pinned one for the downloaded copy, what an installed one reports (null if it doesn't).</param>
-/// <param name="Downloading">Whether it is being downloaded now.</param>
-/// <param name="Progress">0–1 while downloading with a known size.</param>
-/// <param name="Error">Why the last download failed (every source tried, "host: reason; …").</param>
-/// <param name="Asset">This machine's release asset; null when cloudflared has none.</param>
-/// <param name="Source">The host being downloaded from right now.</param>
-/// <param name="Installed">Whether <see cref="Path"/> is the user's own cloudflared rather than the downloaded copy.</param>
-/// <param name="FromEnvironment">Whether ASTRA_CLOUDFLARED chose it (the setting then has no effect).</param>
-public sealed record CloudflaredStatus(string? Path, string? Version, bool Downloading, double? Progress, string? Error, string? Asset,
-    string? Source, bool Installed, bool FromEnvironment);

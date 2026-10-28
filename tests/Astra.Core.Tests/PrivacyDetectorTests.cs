@@ -150,6 +150,37 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal("alice@example.com", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
     }
 
+    // Issue #10: a tool id with an 11-digit run read as a phone number was rewritten, and the upstream refused every
+    // later turn because the id it issued no longer matched.
+    [Theory]
+    [InlineData("""{"messages":[{"role":"assistant","content":[{"type":"tool_use","id":"call_01a16801111717199920954","name":"t","input":{"q":"13800138000"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_01a16801111717199920954","content":"13800138000"}]}]}""")]
+    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"call_01a16801111717199920954","type":"function","function":{"name":"t","arguments":"13800138000"}}]},{"role":"tool","tool_call_id":"call_01a16801111717199920954","content":"13800138000"}]}""")]
+    [InlineData("""{"previous_response_id":"resp_013800138000","input":[{"type":"function_call","id":"fc_013800138000","call_id":"call_013800138000","name":"t","arguments":"13800138000"},{"type":"function_call_output","call_id":"call_013800138000","output":"13800138000"}]}""")]
+    [InlineData("""{"contents":[{"parts":[{"functionCall":{"id":"013800138000","name":"t","args":{"q":"13800138000"}}}]},{"parts":[{"functionResponse":{"id":"013800138000","name":"t","response":{"r":"13800138000"}}}]}]}""")]
+    public void Tool_Call_Ids_Pass_Unchanged_While_Their_Arguments_Are_Scanned(string json)
+    {
+        var policy = Policy(custom: [new() { Id = "custom.ids", Pattern = "013800138000" }]);
+        var result = _detector.ApplyJson(json, policy)!;
+        Assert.All(result.Redactions, r => Assert.Equal("13800138000", r.Original));
+        Assert.Equal(2, result.Redactions.Count);
+        var ids = System.Text.RegularExpressions.Regex.Matches(json, "\"(?:id|tool_use_id|tool_call_id|call_id|previous_response_id)\":\"([^\"]+)\"");
+        Assert.NotEmpty(ids);
+        foreach (System.Text.RegularExpressions.Match id in ids) Assert.Contains(id.Value, result.Text);
+    }
+
+    [Theory]
+    [InlineData("call_01a16801111717cf820d7a0a", false)]
+    [InlineData("ref13800138000", false)]
+    [InlineData("13800138000x", false)]
+    [InlineData("电话13800138000", true)]
+    [InlineData("phone: 13800138000.", true)]
+    public void Phone_Rule_Ignores_Digit_Runs_Inside_Identifiers(string text, bool redacted)
+    {
+        var policy = Policy(defaultAction: PrivacyActions.Off,
+            categoryActions: new() { [PrivacyCategories.Phone] = PrivacyActions.Redact });
+        Assert.Equal(redacted, _detector.Apply(text, policy).Redactions.Count > 0);
+    }
+
     [Fact]
     public void Json_Warn_And_No_Match_Preserve_Original_Formatting()
     {
@@ -447,6 +478,22 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         var quiet = _detector.Apply("mail john@example.com", EffectivePrivacyPolicy.Build(
             new PrivacySettings { Enabled = true, DefaultAction = PrivacyActions.Warn, RecordSamples = false }, null));
         Assert.Empty(quiet.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
+    }
+
+    [Fact]
+    public void Full_Samples_Are_Opt_In_And_Keep_The_Matched_Value()
+    {
+        Assert.False(new PrivacySettings().RecordFullSamples);
+        Assert.False(Json.Deserialize<PrivacySettings>("""{"enabled":true}""")!.RecordFullSamples);
+
+        var full = _detector.Apply("mail john@example.com", EffectivePrivacyPolicy.Build(
+            new PrivacySettings { Enabled = true, DefaultAction = PrivacyActions.Warn, RecordFullSamples = true }, null));
+        Assert.Contains("john@example.com", full.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
+
+        // Recording off wins over full.
+        var off = _detector.Apply("mail john@example.com", EffectivePrivacyPolicy.Build(
+            new PrivacySettings { Enabled = true, DefaultAction = PrivacyActions.Warn, RecordSamples = false, RecordFullSamples = true }, null));
+        Assert.Empty(off.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
     }
 
     [Fact]

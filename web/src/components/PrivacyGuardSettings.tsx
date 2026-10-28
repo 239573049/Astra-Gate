@@ -49,6 +49,9 @@ export function PrivacyPolicyGroup() {
           <Row label={t('settings.privacy.recordSamples')} detail={t('settings.privacy.recordSamplesHint')}>
             <Switch checked={s.recordSamples} disabled={!s.enabled} label={t('settings.privacy.recordSamples')} onChange={(recordSamples) => patch({ recordSamples })} />
           </Row>
+          <Row label={t('settings.privacy.recordFullSamples')} detail={t('settings.privacy.recordFullSamplesHint')}>
+            <Switch checked={s.recordFullSamples} disabled={!s.enabled || !s.recordSamples} label={t('settings.privacy.recordFullSamples')} onChange={(recordFullSamples) => patch({ recordFullSamples })} />
+          </Row>
           <Row label={t('settings.privacy.defaultAction')}>
             <Select
               className="w-36"

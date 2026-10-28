@@ -4,6 +4,9 @@ Index of this directory: one line per entry. Open an entry before relying on it.
 Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork/memory/` (not committed).
 
 ## Project
+- [Avalonia window units](avalonia-window-units.md) — save window bounds in the screen's units (points on macOS), not render-scaled pixels; the sidebarCollapsed report was a harness leak, not a bug in real launches
+- [Desktop page lifetime](desktop-page-lifetime.md) — pages subscribe to shared queries via Subscribe/OnDispose (2026-10-27 leak + Requests redraw storm); one Arc-held instance per page type is expected
+- [Desktop tray relaunch](desktop-tray-relaunch.md) — a shown window leaves ~110–170 MB GPU memory nothing frees; after 2 min closed the app restarts `--hidden` (259 → 105 MB), hand-over rules
 - [Jint AOT fallback was rejected](jint-aot-fallback-rejected.md) — middleware stays in-process; the Bun middleware host was the failure plan, not a design
 - [Webhook formats were added](webhook-formats-added.md) — Feishu, DingTalk, WeCom, Slack and Discord renderers exist despite the "generic JSON only" design
 - [Plugin market has one upstream](market-upstream-single-source.md) — the community registry address is fixed, and a cache from the old one is never served

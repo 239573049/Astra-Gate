@@ -60,7 +60,8 @@ that row is what the console's interception log, stats, request detail and the p
    counter lives on the single `PrivacyApplyResult` for the whole body (`:780`), so placeholders stay unique
    across the body's strings instead of restarting at `#1` per string; each replacement records
    `PrivacyRedaction { Placeholder, Original }` **in memory only** (`:200`). Masked samples (max 3/rule,
-   `MaskSample`, `:690`) are attached to hits when `RecordSamples` (`astra-core`)
+   `MaskSample`, `:690`) are attached to hits when `RecordSamples`; with `RecordFullSamples` (opt-in, off by default) the sample is the capped
+   original (`FullSample`, 256 chars) instead of the mask (`astra-core`)
 10. `src/Astra.Core/Privacy/PrivacyDetector.cs:600` `IsOpaque` — the protocol slots that are never scanned:
     base64 media under `source.data`/`inlineData.data`/`input_audio.data` + data-URL `image_url`/`file_data`
     (decided from ≤ 512 bytes: `IsBinaryDataUrl`, `:639`), Anthropic `thinking.signature`,

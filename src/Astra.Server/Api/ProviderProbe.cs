@@ -18,14 +18,8 @@ using Microsoft.AspNetCore.WebUtilities;
 
 namespace Astra.Server.Api;
 
-public sealed record RemoteModelDto(string Id, string? DisplayName, string? LinkedSystemModelId, bool AlreadyAdded,
-    IReadOnlyList<ApiProtocol>? UpstreamProtocols = null);
 
-/// <summary>Everything one test run needs, after validation. Every field is optional on the wire.</summary>
-public sealed record ProviderTestOptions(string? ModelId, ApiProtocol? Protocol, bool Stream, string? Prompt, int MaxOutputTokens);
 
-/// <summary>One event of a provider test stream, ready to be written as SSE.</summary>
-public sealed record ProviderTestEvent(string Event, JsonNode Payload);
 
 /// <summary>
 /// State of one provider test run: the protocol and model it uses, the prompt it sends, and what the upstream

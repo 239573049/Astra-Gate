@@ -8,11 +8,6 @@ namespace Astra.Server.Api;
 /// <summary>Update feed status and manual checks (plan §P1.4). Applies take place out of process (CLI / desktop).</summary>
 public static class UpdateEndpoints
 {
-    /// <summary>Payload of /api/update/status and /api/update/check (the UI caches it under one key).</summary>
-    public sealed record UpdateStatusDto(
-        string Current, string? Available, DateTimeOffset? LastCheckAt, string? Notes, string? Error,
-        string Channel, bool AutoCheck, bool FeedConfigured);
-
     public static void MapUpdateEndpoints(this IEndpointRouteBuilder app)
     {
         // Read-only, same tier as /api/version: no secrets, safe without an admin session.

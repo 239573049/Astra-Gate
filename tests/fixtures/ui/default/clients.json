@@ -1,0 +1,143 @@
+[
+  {
+    "kind": "claude-code",
+    "name": "Claude Code",
+    "protocol": "anthropic",
+    "availability": "available",
+    "availabilityReason": null,
+    "mode": "switch",
+    "detection": {
+      "installed": true,
+      "configExists": true,
+      "version": "1.4.2",
+      "configPaths": [
+        "~/.claude-code/config.json"
+      ]
+    },
+    "status": "enabled",
+    "enabled": true,
+    "providerId": "prov_anthropic",
+    "accountId": null,
+    "selectedModel": "claude-sonnet-4-5",
+    "extras": {},
+    "bindings": [
+      {
+        "providerId": "prov_anthropic",
+        "accountId": null
+      }
+    ],
+    "appliedAt": "2026-10-23T12:00:00Z",
+    "warnings": [],
+    "requiresRestart": false,
+    "configOutdated": false,
+    "tokenId": "tok_default",
+    "install": null,
+    "options": null,
+    "repairs": null,
+    "protocols": null
+  },
+  {
+    "kind": "codex",
+    "name": "Codex",
+    "protocol": "openai-responses",
+    "availability": "available",
+    "availabilityReason": null,
+    "mode": "switch",
+    "detection": {
+      "installed": true,
+      "configExists": true,
+      "version": "1.4.2",
+      "configPaths": [
+        "~/.codex/config.json"
+      ]
+    },
+    "status": "enabled",
+    "enabled": true,
+    "providerId": "prov_openai",
+    "accountId": null,
+    "selectedModel": "gpt-5",
+    "extras": {},
+    "bindings": [
+      {
+        "providerId": "prov_openai",
+        "accountId": null
+      }
+    ],
+    "appliedAt": "2026-10-23T12:00:00Z",
+    "warnings": [],
+    "requiresRestart": false,
+    "configOutdated": false,
+    "tokenId": "tok_default",
+    "install": null,
+    "options": null,
+    "repairs": null,
+    "protocols": null
+  },
+  {
+    "kind": "opencode",
+    "name": "OpenCode",
+    "protocol": "openai-chat",
+    "availability": "available",
+    "availabilityReason": null,
+    "mode": "switch",
+    "detection": {
+      "installed": true,
+      "configExists": true,
+      "version": "1.4.2",
+      "configPaths": [
+        "~/.opencode/config.json"
+      ]
+    },
+    "status": "drifted",
+    "enabled": true,
+    "providerId": "prov_openai",
+    "accountId": null,
+    "selectedModel": null,
+    "extras": {},
+    "bindings": [
+      {
+        "providerId": "prov_openai",
+        "accountId": null
+      }
+    ],
+    "appliedAt": "2026-10-23T12:00:00Z",
+    "warnings": [],
+    "requiresRestart": false,
+    "configOutdated": false,
+    "tokenId": "tok_pool",
+    "install": null,
+    "options": null,
+    "repairs": null,
+    "protocols": null
+  },
+  {
+    "kind": "gemini-cli",
+    "name": "Gemini CLI",
+    "protocol": "gemini",
+    "availability": "available",
+    "availabilityReason": null,
+    "mode": "switch",
+    "detection": {
+      "installed": false,
+      "configExists": false,
+      "version": null,
+      "configPaths": []
+    },
+    "status": "disabled",
+    "enabled": false,
+    "providerId": null,
+    "accountId": null,
+    "selectedModel": null,
+    "extras": {},
+    "bindings": null,
+    "appliedAt": null,
+    "warnings": [],
+    "requiresRestart": false,
+    "configOutdated": false,
+    "tokenId": "tok_default",
+    "install": null,
+    "options": null,
+    "repairs": null,
+    "protocols": null
+  }
+]

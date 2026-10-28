@@ -74,7 +74,9 @@ Astra's first write. Disabling puts the recorded originals back key by key, skip
 16. Back in the UI, `useClientMutation` (`web/src/api/hooks.ts:856`) invalidates `clients`, `providers`,
     `provider` and `client-models` queries, so the card flips to *Enabled* with an `appliedAt` stamp, or the
     `drifted` badge and warnings appear (`web-ui`)
-17. **Disable (same path in reverse):** `ClientService.DisableAsync` (`:192`) plans `adapter.PlanDisable()` and runs
+17. **Disable (same path in reverse):** `ClientService.DisableAsync` (`:192`; also called by `ClientService.UninstallAsync`
+    before `POST /api/clients/{kind}/install` with action `uninstall` removes an enabled client — the request is checked
+    with `ClientInstallService.EnsureCanStart` first, so a refused uninstall restores nothing) plans `adapter.PlanDisable()` and runs
     `ClientConfigApplier.Disable` → `Restore` (`:109`, `force: false`) or, on user confirmation,
     `/force-restore` → `ForceRestore` (`:92`, `force: true`). Per key: no state row → `NotTracked`; file gone but
     originally absent → state row deleted; current value ≠ `AppliedValueJson` (or a Table key that is no longer

@@ -1,0 +1,12 @@
+{
+  "range": "30d",
+  "costUsd": 171.3,
+  "requests": 1738,
+  "successRate": 0.912,
+  "inputTokens": 41000000,
+  "outputTokens": 5300000,
+  "cacheReadTokens": 24800000,
+  "cacheWriteTokens": 2100000,
+  "reasoningTokens": 636000,
+  "avgTtftMs": 1180
+}

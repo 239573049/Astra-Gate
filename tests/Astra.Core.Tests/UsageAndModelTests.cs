@@ -84,6 +84,50 @@ public class UsageNormalizerTests
     }
 
     [Fact]
+    public void Openai_responses_splits_cache_writes_by_ttl()
+    {
+        // OpenAI's prompt-caching guide example: 12,000 input = 1,000 ordinary + 4,000 read + 3,000 30m + 4,000 12h.
+        var u = N(ApiProtocol.OpenAIResponses, """
+            {"input_tokens":12000,"input_tokens_details":{"cached_tokens":4000,"cache_write_tokens":7000,
+             "cache_write_tokens_details":{"ttl_30m_tokens":3000,"ttl_12h_tokens":4000}},"output_tokens":10}
+            """);
+        Assert.Equal(1000, u.Get("input"));
+        Assert.Equal(4000, u.Get("cache_read"));
+        Assert.Equal(3000, u.Get("cache_write_30m"));
+        Assert.Equal(4000, u.Get("cache_write_12h"));
+        Assert.Equal(0, u.Get("cache_write_5m"));
+        Assert.Equal(7000, u.CacheWriteTotal);
+        Assert.Equal(12000, u.TotalInput);
+        Assert.Empty(u.Notes);
+    }
+
+    [Fact]
+    public void Openai_chat_splits_cache_writes_by_ttl()
+    {
+        var u = N(ApiProtocol.OpenAIChat, """
+            {"prompt_tokens":12000,"prompt_tokens_details":{"cached_tokens":4000,"cache_write_tokens":7000,
+             "cache_write_tokens_details":{"ttl_30m_tokens":3000,"ttl_12h_tokens":4000}},"completion_tokens":10}
+            """);
+        Assert.Equal(1000, u.Get("input"));
+        Assert.Equal(3000, u.Get("cache_write_30m"));
+        Assert.Equal(4000, u.Get("cache_write_12h"));
+        Assert.Empty(u.Notes);
+    }
+
+    [Fact]
+    public void Openai_cache_write_total_beyond_the_split_stays_unsplit()
+    {
+        var u = N(ApiProtocol.OpenAIResponses, """
+            {"input_tokens":1000,"input_tokens_details":{"cached_tokens":0,"cache_write_tokens":900,
+             "cache_write_tokens_details":{"ttl_30m_tokens":500,"ttl_12h_tokens":0}},"output_tokens":1}
+            """);
+        Assert.Equal(100, u.Get("input"));
+        Assert.Equal(500, u.Get("cache_write_30m"));
+        Assert.Equal(400, u.Get("cache_write_5m"));
+        Assert.Contains(UsageNotes.OpenAICacheWriteUnsplit, u.Notes);
+    }
+
+    [Fact]
     public void Gemini_maps_cached_thoughts_and_tool_prompt()
     {
         var u = N(ApiProtocol.Gemini, """
@@ -205,6 +249,11 @@ public class SeedTests
         var claude = seed.Models.Where(m => m.Vendor == "anthropic").ToList();
         Assert.NotEmpty(claude);
         Assert.All(claude, m => Assert.NotNull(m.Pricing!.Base["cache_write_1h"]));
+        // OpenAI write-priced models (GPT-5.6+) carry 30m writes and a 12h write at 2.5x input, never a 5m one.
+        var openaiWrites = seed.Models.Where(m => m.Vendor == "openai" && m.Pricing?.Base["cache_write_30m"] is not null).ToList();
+        Assert.NotEmpty(openaiWrites);
+        Assert.All(openaiWrites, m => Assert.Equal(m.Pricing!.Base["input"] * 2.5m, m.Pricing.Base["cache_write_12h"]));
+        Assert.DoesNotContain(seed.Models, m => m.Vendor == "openai" && m.Pricing?.Base["cache_write_5m"] is not null);
         Assert.Contains(seed.Models, m => m.Pricing?.ContextTiers is { Count: > 0 });
         Assert.Contains(seed.Models, m => m.Pricing?.ServiceTiers?.ContainsKey("priority") == true);
     }

@@ -188,8 +188,10 @@ public sealed partial class PrivacyDetector
                 count++;
                 if (policy.RecordSamples && length > 0 && (samples ??= []).Count < MaxSamples)
                 {
-                    var masked = MaskSample(input.AsSpan(index, length));
-                    if (!samples.Contains(masked)) samples.Add(masked);
+                    var sample = policy.RecordFullSamples
+                        ? FullSample(input.AsSpan(index, length))
+                        : MaskSample(input.AsSpan(index, length));
+                    if (!samples.Contains(sample)) samples.Add(sample);
                 }
                 if (action != PrivacyActions.Redact) continue;
 
@@ -539,7 +541,7 @@ public sealed partial class PrivacyDetector
         }
     }
 
-    private enum JsonScope { Root, Content, ToolContent, Source, InlineData, ImageUrl, Audio, File, Ordinary }
+    private enum JsonScope { Root, Content, ToolContent, Call, Source, InlineData, ImageUrl, Audio, File, Ordinary }
 
     // The "type" discriminators the scope rules compare against (any other type behaves like none).
     private static readonly string[] KnownTypes =
@@ -553,7 +555,8 @@ public sealed partial class PrivacyDetector
     [
         "messages", "input", "system", "contents", "systemInstruction", "system_instruction", "content", "parts", "output",
         "source", "image_url", "input_audio", "file", "inlineData", "inline_data", "data", "url", "file_data", "signature",
-        "encrypted_content", "thoughtSignature", "thought_signature",
+        "encrypted_content", "thoughtSignature", "thought_signature", "id", "tool_use_id", "tool_call_id", "call_id",
+        "previous_response_id", "tool_calls", "functionCall", "functionResponse", "function_call", "function_response",
     ];
 
     private static readonly byte[][] KnownKeysUtf8 = KnownKeys.Select(Encoding.UTF8.GetBytes).ToArray();
@@ -584,6 +587,9 @@ public sealed partial class PrivacyDetector
         (JsonScope.Root, "messages" or "input" or "system" or "contents" or "systemInstruction" or "system_instruction") => JsonScope.Content,
         (JsonScope.Content, "content") when type == "tool_result" && child.ValueKind == JsonValueKind.Array => JsonScope.ToolContent,
         (JsonScope.Content, "content" or "parts") when child.ValueKind == JsonValueKind.Array => JsonScope.Content,
+        (JsonScope.Content, "tool_calls") when child.ValueKind == JsonValueKind.Array => JsonScope.Call,
+        (JsonScope.Content, "functionCall" or "functionResponse" or "function_call" or "function_response")
+            when child.ValueKind == JsonValueKind.Object => JsonScope.Call,
         (JsonScope.Content, "output") when type == "function_call_output" && child.ValueKind == JsonValueKind.Array => JsonScope.ToolContent,
         (JsonScope.ToolContent, "source") when type is "image" or "document" => JsonScope.Source,
         (JsonScope.ToolContent, "image_url") when type is "image_url" or "input_image" => JsonScope.ImageUrl,
@@ -616,6 +622,11 @@ public sealed partial class PrivacyDetector
             (JsonScope.Content, "data") => type == "redacted_thinking",
             (JsonScope.Content, "encrypted_content") => type == "reasoning",
             (JsonScope.Content, "thoughtSignature" or "thought_signature") => true,
+            // Tool-call / item ids are pairing keys the upstream issued and checks verbatim: rewriting one (an 11-digit run
+            // read as a phone number) breaks every later turn of the conversation (issue #10). Arguments stay inspected.
+            (JsonScope.Content, "id" or "tool_use_id" or "tool_call_id" or "call_id") => true,
+            (JsonScope.Call, "id") => true,
+            (JsonScope.Root, "previous_response_id") => true,
             _ => false,
         };
     }
@@ -673,7 +684,7 @@ public sealed partial class PrivacyDetector
         }
     }
 
-    /// <summary>Keeps at most <see cref="MaxSamples"/> distinct masked previews per rule.</summary>
+    /// <summary>Keeps at most <see cref="MaxSamples"/> distinct previews per rule.</summary>
     private static void MergeSamples(List<string> into, List<string>? samples)
     {
         if (samples is null) return;
@@ -685,6 +696,21 @@ public sealed partial class PrivacyDetector
     }
 
     private const int MaxSamples = 3;
+    private const int MaxFullSampleChars = 256;
+
+    /// <summary>The matched value as logged when full samples are on: unmasked, newlines shown as ⏎, capped in length.</summary>
+    private static string FullSample(ReadOnlySpan<char> value)
+    {
+        var text = value.Length > MaxFullSampleChars ? value[..MaxFullSampleChars] : value;
+        var sb = new StringBuilder(text.Length + 1);
+        foreach (var c in text)
+        {
+            if (c == '\r') continue;
+            sb.Append(c == '\n' ? '\u23ce' : c);
+        }
+        if (value.Length > MaxFullSampleChars) sb.Append('…');
+        return sb.ToString();
+    }
 
     /// <summary>Masks one matched value for the log: keeps a short head/tail, hides the middle, caps length.</summary>
     public static string MaskSample(string value) => MaskSample(value.AsSpan());
@@ -745,7 +771,7 @@ public sealed partial class PrivacyDetector
     [GeneratedRegex(@"(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}(?![0-9A-Z])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex AwsAccessKeyRegex();
 
-    [GeneratedRegex(@"(?:(?<!\d)1[3-9]\d{9}(?!\d)|(?<!\d)\+[0-9]{1,3}[\s\-]?[0-9]{6,14}(?!\d))", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    [GeneratedRegex(@"(?:(?<![A-Za-z_\d])1[3-9]\d{9}(?![A-Za-z_\d])|(?<!\d)\+[0-9]{1,3}[\s\-]?[0-9]{6,14}(?!\d))", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
     private static partial Regex PhoneRegex();
 
     [GeneratedRegex(@"(?:(?<![\w.])(?:10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3})(?![\w.])|(?<![\w.\-])[A-Za-z0-9][A-Za-z0-9\-]*(?:\.[A-Za-z0-9][A-Za-z0-9\-]*)*\.(?:internal|local|lan|corp)(?![\w\-]))", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]

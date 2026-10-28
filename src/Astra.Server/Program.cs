@@ -35,7 +35,7 @@ public static class Program
             switch (command)
             {
                 case "version":
-                    Console.WriteLine(Json.SerializeApi(new Api.VersionDto(ServerOptions.Version, ServerOptions.ApiVersion)));
+                    Console.WriteLine(Json.SerializeApi(new VersionDto(ServerOptions.Version, ServerOptions.ApiVersion)));
                     return 0;
                 case "serve":
                     if (OperatingSystem.IsWindows() && Autostart.WindowsConsole.StartedByAutostart(rest)) Autostart.WindowsConsole.Detach(paths);

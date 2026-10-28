@@ -434,6 +434,11 @@ public sealed class GatewayPipeline(
                         AutoCacheControl = provider.SettingFlag("auto_cache_control", true),
                     });
                     upstreamDirty = true;
+                    // Copilot's GPT models are Responses-only: a Chat client without its own key gets one per conversation,
+                    // or the upstream prompt cache rarely hits (PromptCacheKeys).
+                    if (upstreamProtocol == ApiProtocol.OpenAIResponses && CopilotModelIds.IsCopilot(provider)
+                        && upstreamTree["prompt_cache_key"] is null && PromptCacheKeys.Derive(ir!) is { } cacheKey)
+                        upstreamTree["prompt_cache_key"] = cacheKey;
                     if (ir!.Warnings.Count > 0) logger.LogInformation("Request {Id}: lossy mapping: {Warnings}", record.Id, string.Join("; ", ir.Warnings));
                 }
                 if (forceResponsesStream)

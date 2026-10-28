@@ -17,6 +17,7 @@ const overview: PrivacyOverview = {
     dryRun: false,
     restoreResponses: true,
     recordSamples: true,
+    recordFullSamples: false,
     defaultAction: 'redact',
     categoryActions: {},
     clientDefaults: {},

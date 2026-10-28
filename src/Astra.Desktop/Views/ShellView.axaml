@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:arc="https://github.com/AIDotNet/TKCode.Arc"
+             xmlns:shell="using:Astra.Desktop.Shell"
+             xmlns:glass="using:Astra.Desktop.Platform.Glass"
+             xmlns:views="using:Astra.Desktop.Views"
+             x:Class="Astra.Desktop.Views.ShellView"
+             x:DataType="shell:ShellViewModel">
+  <!-- Mirrors web AppShell: wallpaper, a floating glass sidebar inset 8px, and to its right (connection banners, page header, page).
+       The sidebar rows are built in code from NavTable so the nav stays one table shared with the router. -->
+  <Panel>
+  <glass:WallpaperView />
+  <Grid ColumnDefinitions="Auto,*">
+    <views:GlassSidebar x:Name="Nav" Grid.Column="0" Margin="8,8,0,8" />
+
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
+      <!-- ConnectionBanner -->
+      <!-- web: `px-2 pt-2 empty:hidden` — no space at all while every banner is closed; a closed Arc Alert still takes part in a
+           StackPanel's Spacing, so each open banner carries its own 8px top margin and a closed one is not visible. -->
+      <StackPanel Grid.Row="0" Margin="8,0,8,0">
+        <arc:Alert Tone="Danger" Margin="0,8,0,0" IsOpen="{Binding Connection.IsDown}" IsVisible="{Binding Connection.IsDown}" Title="{Binding Connection.DownTitle}">
+          <!-- web ConnectionBanner: the title and the start button only; why the last start failed is the banner's tooltip -->
+          <arc:Button Size="Small" Variant="Primary" HorizontalAlignment="Left" Margin="0,8,0,0"
+                      ToolTip.Tip="{Binding Connection.Failure}"
+                      IsLoading="{Binding Connection.IsStarting}" Content="{Binding Connection.StartServiceText}"
+                      Command="{Binding Connection.StartServiceCommand}" />
+        </arc:Alert>
+        <arc:Alert Tone="Warning" Margin="0,8,0,0" IsOpen="{Binding Connection.ApiVersionMismatch}" IsVisible="{Binding Connection.ApiVersionMismatch}" Title="{Binding Connection.MismatchTitle}" />
+        <arc:Alert Tone="Danger" Margin="0,8,0,0" IsOpen="{Binding Connection.LoginRequired}" IsVisible="{Binding Connection.LoginRequired}" Title="{Binding Connection.LoginRequiredTitle}" />
+        <!-- web ConnectionBanner: enabled clients still pointing at an old Astra address (plan §7.1), with the one-click update -->
+        <arc:Alert Tone="Warning" Margin="0,8,0,0" IsOpen="{Binding Status.HasOutdatedClients}" IsVisible="{Binding Status.HasOutdatedClients}" Title="{Binding Status.OutdatedTitle}">
+          <arc:Button Size="Small" Variant="Primary" HorizontalAlignment="Left" Margin="0,8,0,0"
+                      IsLoading="{Binding Status.IsUpdatingClients}" Content="{Binding Status.UpdateClientsText}"
+                      Command="{Binding Status.UpdateClientsCommand}" />
+        </arc:Alert>
+      </StackPanel>
+
+      <!-- Page header (web Page toolbar, 52px) -->
+      <Grid x:Name="Toolbar" Grid.Row="1" Height="52" Margin="8,0,16,0" ColumnDefinitions="Auto,Auto,Auto,*,Auto" Background="Transparent">
+        <arc:Button x:Name="SidebarToggle" Grid.Column="0" Variant="Ghost" Width="32" Height="32" Padding="0"
+                    Command="{Binding ToggleSidebarCommand}" />
+        <!-- web detail pages: <Button variant="glass"> (Arc secondary, a boxed 32px button) as the header's leading, gap-2 after the toggle -->
+        <arc:Button x:Name="BackButton" Grid.Column="1" Variant="Secondary" Width="32" Height="32" Padding="0" Margin="8,0,0,0"
+                    IsVisible="{Binding CanGoBack}" Command="{Binding GoBackCommand}" />
+        <ContentPresenter Grid.Column="2" Content="{Binding Navigator.Current.HeaderLeading}" VerticalAlignment="Center" />
+        <StackPanel Grid.Column="3" Margin="8,0,0,0" VerticalAlignment="Center">
+          <TextBlock Text="{Binding Navigator.Current.Title}" FontSize="{arc:ArcDesignTokenResource TypeLG}" FontWeight="Medium"
+                     TextTrimming="CharacterEllipsis" Foreground="{arc:ArcDesignTokenResource Foreground}" />
+          <TextBlock x:Name="SubtitleText" Text="{Binding Navigator.Current.Subtitle}" FontSize="{arc:ArcDesignTokenResource TypeXS}"
+                     TextTrimming="CharacterEllipsis" Foreground="{arc:ArcDesignTokenResource TextSecondary}"
+                     IsVisible="{Binding Navigator.Current.Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+        <ContentPresenter x:Name="HeaderActionsHost" Grid.Column="4" Content="{Binding Navigator.Current.HeaderActions}" VerticalAlignment="Center" HorizontalAlignment="Right" />
+      </Grid>
+
+      <!-- Page body (web Page content): scrolls under the header with the same edge fade; a page that scrolls itself opts out (HostScrolls) -->
+      <Panel Grid.Row="2">
+        <arc:ScrollArea x:Name="PageScroll" FadeLength="18" HorizontalScrollBarVisibility="Disabled" Padding="8,20,16,40">
+          <!-- Content is set in code from Navigator.Changed, not bound: a presenter showing a view model through a template takes that view
+               model as its own DataContext, so a binding on it would be evaluated against the page and stop following the navigator. -->
+          <ContentPresenter x:Name="PageHost" />
+        </arc:ScrollArea>
+        <Border x:Name="PageFixed" Padding="8,20,16,0" IsVisible="False" />
+      </Panel>
+    </Grid>
+  </Grid>
+  </Panel>
+</UserControl>

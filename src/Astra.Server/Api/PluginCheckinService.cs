@@ -5,16 +5,8 @@ using Astra.Plugins.Host;
 
 namespace Astra.Server.Api;
 
-/// <summary>One account's check-in today, as the plugin answered it.</summary>
-/// <param name="Day">The Beijing day it is for (yyyy-MM-dd).</param>
-/// <param name="Outcome">claimed, done, ineligible, inactive, captcha or failed.</param>
-public sealed record PluginCheckinDto(string AccountId, string Account, string? Day, string? Outcome, string? Message, double? Credit, int? Streak, DateTimeOffset? At);
 
-/// <summary>A provider's daily check-in: whether its plugin can, whether it is on, and each account's last result.</summary>
-public sealed record PluginCheckinStateDto(bool Supported, bool On, List<PluginCheckinDto> Accounts);
 
-/// <summary>POST …/checkin: switch the daily check-in on or off.</summary>
-public sealed record PluginCheckinSwitch(bool On);
 
 /// <summary>
 /// A plugin's daily check-in (magpie's plugin_checkin.go): a plugin whose auth hook has <c>checkin</c> presses its

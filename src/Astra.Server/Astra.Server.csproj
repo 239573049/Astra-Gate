@@ -32,11 +32,16 @@
     <PublishReadyToRun>false</PublishReadyToRun>
   </PropertyGroup>
   <ItemGroup>
+    <!-- DTOs moved to Astra.Api.Contracts keep working in Server code without a using per file. -->
+    <Using Include="Astra.Api.Contracts" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="11.0.0-rc.2.26504.105" />
     <PackageReference Include="Microsoft.OpenApi" Version="3.10.2" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />
+    <ProjectReference Include="..\Astra.Api.Contracts\Astra.Api.Contracts.csproj" />
     <ProjectReference Include="..\Astra.Data\Astra.Data.csproj" />
     <ProjectReference Include="..\Astra.Providers\Astra.Providers.csproj" />
     <ProjectReference Include="..\Astra.Gateway\Astra.Gateway.csproj" />

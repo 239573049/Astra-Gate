@@ -17,48 +17,17 @@ public static class TraceEndpoints
     /// <summary>A session whose last call is this recent counts as active.</summary>
     private static readonly TimeSpan ActiveWindow = TimeSpan.FromMinutes(2);
 
-    public sealed record SpanDto(
-        string RequestId, string SpanId, string? ParentSpanId, string Name, string Kind, long StartUs, long DurationUs,
-        string Status, string? StatusMessage, JsonNode? Attributes, JsonNode? Events);
 
-    /// <summary>One gateway call as the trace views show it: the request-log row plus its agent links.</summary>
-    public sealed record TraceCallDto(
-        string Id, DateTimeOffset StartedAtUtc, string? ClientKind, string? ProviderId, string? ProviderName, string? AccountId,
-        string? AccountName, string InboundProtocol, string? UpstreamProtocol, bool Passthrough, bool Stream, string? RequestedModel,
-        string? UpstreamModel, string? ResponseModel, string Status, int? HttpStatus, string? ErrorType, string? ErrorMessage,
-        long? TtfbMs, long? TtftMs, long? TotalMs, long? GenerationMs, double? OutputTps, long TotalInputTokens, long TotalOutputTokens,
-        long CacheReadTokens, long ReasoningTokens, long CostNanoUsd, string? UpstreamRequestId,
-        string? TraceId, string? ParentSpanId, string? SessionKey, string? ChainKey, string? TurnId, string? ParentRequestId,
-        int? Step, string? CallKind, string? LinkSource, string? FinishReason, int ToolCalls, string? ReasoningEffort, string? ReasoningMode);
 
-    public sealed record TraceRequestDto(TraceCallDto Request, bool InFlight, List<SpanDto> Spans, TraceCallDto? Parent, List<TraceCallDto> Children);
 
-    public sealed record TraceSessionDto(
-        string SessionKey, string? ClientKind, DateTimeOffset FirstAtUtc, DateTimeOffset LastAtUtc, long Requests, long Turns,
-        long Errors, long CostNanoUsd, long InputTokens, long OutputTokens, List<string> ProviderIds, bool Active);
 
-    public sealed record TraceTurnDto(string TurnId, DateTimeOffset StartedAtUtc, long Requests, long Errors, long CostNanoUsd, double DurationMs);
 
-    /// <summary>A session with its turns, and the calls and spans of one turn (the latest unless one is asked for).</summary>
-    public sealed record TraceSessionDetailDto(TraceSessionDto Session, List<TraceTurnDto> Turns, string? TurnId, List<TraceCallDto> Calls, List<SpanDto> Spans);
 
-    public sealed record TraceStageDto(string Name, long? P50Us, long? P95Us, int Samples);
 
-    public sealed record TraceGatewayDto(long Requests, long Errors, int InFlight, long? OverheadP50Us, long? OverheadP95Us, long Failovers,
-        List<TraceStageDto> Stages);
 
-    public sealed record TraceClientNodeDto(string? ClientKind, long Requests, long Errors, double PerMinute, int ActiveSessions);
 
-    public sealed record TraceAccountDto(
-        string Id, string Name, string Status, bool Enabled, DateTimeOffset? CooldownUntilUtc, DateTimeOffset? SeenAtUtc,
-        string? RemainingRequests, string? RemainingTokens, string? LimitRequests);
 
-    public sealed record TraceProviderNodeDto(
-        string ProviderId, string Name, string? Icon, string? TemplateId, long Requests, long Errors, long Attempts, long RateLimited,
-        long Failovers, double PerMinute, long? TtfbP95Ms, List<TraceAccountDto> Accounts);
 
-    public sealed record TraceTopologyDto(string Range, double WindowMinutes, TraceGatewayDto Gateway, List<TraceClientNodeDto> Clients,
-        List<TraceProviderNodeDto> Providers);
 
     public static void MapTraceEndpoints(this WebApplication app)
     {

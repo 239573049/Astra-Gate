@@ -62,5 +62,9 @@ jobs:
       - name: Test
         run: pnpm -r --if-present test
 
+      # The Avalonia client reads the web's catalog through a generated C# file (plan avalonia-client §3 D4).
+      - name: Desktop strings are current
+        run: node scripts/gen-desktop-i18n.mjs --check
+
       - name: Build
         run: pnpm -r --if-present build

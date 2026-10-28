@@ -9,7 +9,8 @@ export const API_VERSION = "1.0";
 // ---------- shared ----------
 export type ApiProtocol = "openai-chat" | "openai-responses" | "anthropic" | "gemini";
 export type TokenType =
-  | "input" | "cache_read" | "cache_write_5m" | "cache_write_1h" | "input_audio" | "input_image"
+  | "input" | "cache_read" | "cache_write_5m" | "cache_write_30m" | "cache_write_1h" | "cache_write_12h"
+  | "input_audio" | "input_image"
   | "output" | "reasoning" | "output_audio" | "output_image" | (string & {});
 export type Range = "today" | "7d" | "30d" | "90d" | "all";
 
@@ -390,20 +391,26 @@ export interface ClientInstall {
   otherCopies?: { path: string; version: string; newer: boolean }[] | null;
   /** The running copy is outside the user's terminal PATH (e.g. only in ~/.npm-global/bin). */
   notOnPath?: boolean;
+  /**
+   * What "uninstall" would run (npm uninstall -g for the npm copy that runs, code --uninstall-extension); null when
+   * Astra will not uninstall it — script installs and apps (see homepageUrl), copies npm did not install, VS Code built-ins.
+   */
+  uninstallCommand?: string | null;
 }
 /**
  * hint — failed runs: "permission-denied" (npm -g cannot write its global directories), "admin-cancelled" (the admin
  * prompt was dismissed), "timeout"; succeeded runs that did not take effect: "shadowed" (the new version sits behind
- * an older copy on PATH), "unchanged", "not-on-path". elevated: ran with admin rights (output may only arrive at the
+ * an older copy on PATH), "unchanged", "not-on-path", "still-installed" (an uninstall left another copy). elevated: ran with admin rights (output may only arrive at the
  * end; cannot be stopped).
  */
 export interface ClientInstallJob {
-  kind: ClientKind; action: "install" | "update"; state: "running" | "succeeded" | "failed" | "cancelled";
+  kind: ClientKind; action: "install" | "update" | "uninstall"; state: "running" | "succeeded" | "failed" | "cancelled";
   command: string; startedAt: string; finishedAt?: string | null; exitCode?: number | null; log: string[];
-  hint?: "permission-denied" | "admin-cancelled" | "timeout" | "shadowed" | "unchanged" | "not-on-path" | null; elevated?: boolean;
+  hint?: "permission-denied" | "admin-cancelled" | "timeout" | "shadowed" | "unchanged" | "not-on-path" | "still-installed" | null; elevated?: boolean;
 }
 // POST /api/clients/check-updates body {force?} -> ClientInfo[]
-// POST /api/clients/{kind}/install body {action: "install"|"update", elevated?} -> ClientInstallJob ; GET same path -> current/last job (404 none)
+// POST /api/clients/{kind}/install body {action: "install"|"update"|"uninstall", elevated?} -> ClientInstallJob ; GET same path -> current/last job (404 none)
+// (an uninstall of an enabled client first restores its original config, like POST …/disable)
 // POST /api/clients/{kind}/install/cancel -> ClientInstallJob
 /** tokenId: omitted keeps the client's current token (default token when it has none). */
 export interface EnableRequest { providerId?: string | null; model?: string | null; extras?: Record<string, unknown> | null; tokenId?: string | null }
@@ -670,6 +677,8 @@ export interface PrivacySettingsDto {
   enabled: boolean; dryRun: boolean; restoreResponses: boolean; defaultAction: PrivacyAction;
   /** Store masked match samples in the per-request report (originals are never stored either way). */
   recordSamples: boolean;
+  /** Store the matched values themselves instead of masked previews (off by default; only while recordSamples is on). */
+  recordFullSamples: boolean;
   /** Category (or custom rule id) → action override. */
   categoryActions: Record<string, PrivacyAction>;
   /** Client kind → default action for that client's requests. */

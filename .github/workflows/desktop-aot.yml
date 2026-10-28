@@ -1,0 +1,105 @@
+name: Desktop AOT
+
+# P0 gate for the Avalonia client (.plan/avalonia-client.md): src/Astra.Desktop must build with the AOT
+# analyzers as errors, publish as a Native AOT binary on every release RID with no IL warning, and pass its
+# own --smoke run. src/Astra.Desktop is not in Astra.sln yet, so the main CI does not build it.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src/Astra.Desktop/**'
+      - 'Directory.Build.props'
+      - 'global.json'
+      - '.github/workflows/desktop-aot.yml'
+
+concurrency:
+  group: desktop-aot-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  aot:
+    name: ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-15 + an Xcode 26 toolchain for the AOT link (see release.yml's matrix note).
+          - { rid: osx-arm64, os: macos-15 }
+          - { rid: osx-x64, os: macos-15 }
+          - { rid: linux-x64, os: ubuntu-latest }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          - { rid: win-x64, os: windows-latest }
+          - { rid: win-arm64, os: windows-11-arm }
+    env:
+      RID: ${{ matrix.rid }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same retry as release.yml: install-dotnet.ps1 sometimes dies on the windows-11-arm runner.
+      - uses: actions/setup-dotnet@v4
+        id: dotnet
+        continue-on-error: true
+        with:
+          dotnet-version: 11.0.100-rc.2.26504.105
+
+      - uses: actions/setup-dotnet@v4
+        if: steps.dotnet.outcome == 'failure'
+        with:
+          dotnet-version: 11.0.100-rc.2.26504.105
+
+      - name: Select an Xcode 26 toolchain
+        if: startsWith(matrix.rid, 'osx')
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=$(ls -d /Applications/Xcode_2*.app | sort -V | tail -1)
+          sudo xcode-select -s "$app"
+          xcodebuild -version
+
+      - name: Linux packages (X server for the smoke run, fonts)
+        if: startsWith(matrix.rid, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libfontconfig1
+
+      # Build first, publish --no-build: with AOT on, a bare publish skips Avalonia's XAML compile and the
+      # binary dies at start with "No precompiled XAML found" (plan avalonia-client §11).
+      - name: Build (warnings are errors)
+        shell: bash
+        run: dotnet build src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true -warnaserror
+
+      - name: Publish (Native AOT)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          dotnet publish src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true --no-build -o out/publish 2>&1 | tee out/publish.log
+
+      # Zero tolerance: unlike astra-server there is no Jint exception to allow.
+      - name: No IL warnings
+        shell: bash
+        run: |
+          if grep -E "IL[0-9]{4}" out/publish.log; then
+            echo "::error::AOT/trim warnings in the desktop publish"
+            exit 1
+          fi
+
+      - name: Publish size
+        shell: bash
+        run: du -sh out/publish && ls -lh out/publish | head -30
+
+      # osx-x64 is cross-built on Apple silicon and not run here.
+      - name: Smoke test (Linux)
+        if: startsWith(matrix.rid, 'linux')
+        run: xvfb-run -a ./out/publish/astra-desktop --smoke
+
+      - name: Smoke test (macOS)
+        if: matrix.rid == 'osx-arm64'
+        run: ./out/publish/astra-desktop --smoke
+
+      - name: Smoke test (Windows)
+        if: startsWith(matrix.rid, 'win')
+        shell: bash
+        run: ./out/publish/astra-desktop.exe --smoke

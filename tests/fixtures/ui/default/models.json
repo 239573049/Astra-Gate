@@ -1,0 +1,312 @@
+[
+  {
+    "id": "gpt-4.1",
+    "displayName": "GPT-4.1",
+    "vendor": "openai",
+    "family": "gpt-4",
+    "aliases": [],
+    "contextWindow": 1047576,
+    "maxOutputTokens": 32768,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": false,
+      "promptCache": true,
+      "audio": false,
+      "pdf": false,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 2,
+        "output": 8,
+        "cache_read": 0.5
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "openai"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "gpt-4.1-mini",
+    "displayName": "GPT-4.1 mini",
+    "vendor": "openai",
+    "family": "gpt-4",
+    "aliases": [],
+    "contextWindow": 1047576,
+    "maxOutputTokens": 32768,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": false,
+      "promptCache": true,
+      "audio": false,
+      "pdf": false,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 0.4,
+        "output": 1.6,
+        "cache_read": 0.1
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "openai"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "o4-mini",
+    "displayName": "o4-mini",
+    "vendor": "openai",
+    "family": "o",
+    "aliases": [],
+    "contextWindow": 200000,
+    "maxOutputTokens": 100000,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": true,
+      "promptCache": true,
+      "audio": false,
+      "pdf": false,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1.1,
+        "output": 4.4,
+        "cache_read": 0.275
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "openai"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "gpt-5",
+    "displayName": "GPT-5",
+    "vendor": "openai",
+    "family": "gpt-5",
+    "aliases": [],
+    "contextWindow": 400000,
+    "maxOutputTokens": 128000,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": true,
+      "promptCache": true,
+      "audio": false,
+      "pdf": true,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1.25,
+        "output": 10,
+        "cache_read": 0.125
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "openai"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "claude-sonnet-4-5",
+    "displayName": "Claude Sonnet 4.5",
+    "vendor": "anthropic",
+    "family": "claude-sonnet",
+    "aliases": [],
+    "contextWindow": 200000,
+    "maxOutputTokens": 64000,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": true,
+      "promptCache": true,
+      "audio": false,
+      "pdf": true,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 3,
+        "output": 15,
+        "cache_read": 0.3
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "anthropic"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "claude-opus-4-1",
+    "displayName": "Claude Opus 4.1",
+    "vendor": "anthropic",
+    "family": "claude-opus",
+    "aliases": [],
+    "contextWindow": 200000,
+    "maxOutputTokens": 32000,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": true,
+      "promptCache": true,
+      "audio": false,
+      "pdf": true,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 15,
+        "output": 75,
+        "cache_read": 1.5
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "anthropic"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "claude-haiku-4-5",
+    "displayName": "Claude Haiku 4.5",
+    "vendor": "anthropic",
+    "family": "claude-haiku",
+    "aliases": [],
+    "contextWindow": 200000,
+    "maxOutputTokens": 64000,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": true,
+      "promptCache": true,
+      "audio": false,
+      "pdf": false,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1,
+        "output": 5,
+        "cache_read": 0.1
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [
+      "anthropic"
+    ],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  },
+  {
+    "id": "gemini-2.5-pro",
+    "displayName": "Gemini 2.5 Pro",
+    "vendor": "google",
+    "family": "gemini-2.5",
+    "aliases": [],
+    "contextWindow": 1048576,
+    "maxOutputTokens": 65536,
+    "capabilities": {
+      "vision": true,
+      "tools": true,
+      "reasoning": true,
+      "promptCache": true,
+      "audio": true,
+      "pdf": true,
+      "structuredOutput": true
+    },
+    "pricing": {
+      "currency": "USD",
+      "unit": "per_1m_tokens",
+      "base": {
+        "input": 1.25,
+        "output": 10,
+        "cache_read": 0.31
+      },
+      "service_tiers": null,
+      "context_tiers": null,
+      "time_windows": null,
+      "per_request": null,
+      "notes": null
+    },
+    "source": "seed",
+    "userModifiedFields": [],
+    "enabled": true,
+    "providerPriceKeys": [],
+    "updatedAt": "2026-10-06T12:00:00Z"
+  }
+]

@@ -186,7 +186,73 @@ public class ClientInstallPlannerTests
         var missing = ClientInstallPlanner.Plan(spec, new ClientToolState(false, "/usr/local/bin/code"), "osx");
         Assert.Equal("code --install-extension GitHub.copilot-chat", missing.Install!.Display);
         Assert.Equal("vscode-missing", ClientInstallPlanner.Plan(spec, new ClientToolState(false), "osx").Blocker);
-        Assert.Equal(ClientInstallPlan.None, ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/usr/local/bin/code"), "osx"));
+        var installed = ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/usr/local/bin/code"), "osx");
+        Assert.Null(installed.Install);
+        Assert.Null(installed.Update);
+        Assert.Null(installed.Blocker);
+    }
+
+    [Fact]
+    public void Npm_Managed_Client_Uninstalls_With_Npm()
+    {
+        var resolved = Path.Combine(Root, "@openai", "codex", "bin", "codex.js");
+        var state = new ClientToolState(true, "/usr/local/bin/codex", resolved, Npm, Root, NpmPackagePresent: true);
+        var plan = ClientInstallPlanner.Plan(Codex, state, "osx");
+        Assert.Equal(Npm, plan.Uninstall!.FileName);
+        Assert.Equal(["uninstall", "-g", "@openai/codex"], plan.Uninstall.Arguments);
+        Assert.Equal("npm uninstall -g @openai/codex", plan.Uninstall.Display);
+        // npm commands are the only ones that may run elevated; the uninstall is one of them.
+        Assert.Same(plan.Uninstall, ClientInstallPlanner.NpmCommand(Codex, plan, "uninstall"));
+    }
+
+    [Fact]
+    public void Copy_Under_An_Older_Npm_Prefix_Is_Uninstalled_From_That_Prefix()
+    {
+        var oldPrefix = Path.Combine(Path.GetTempPath(), "usr-local");
+        var resolved = Path.Combine(oldPrefix, "lib", "node_modules", "@openai", "codex", "bin", "codex.js");
+        var state = new ClientToolState(true, Path.Combine(oldPrefix, "bin", "codex"), resolved, Npm, Root, NpmPackagePresent: false);
+        var plan = ClientInstallPlanner.Plan(Codex, state, "osx");
+        Assert.Equal(["uninstall", "-g", "--prefix", oldPrefix, "@openai/codex"], plan.Uninstall!.Arguments);
+    }
+
+    [Fact]
+    public void Clients_Not_Installed_By_Npm_Are_Never_Offered_An_Npm_Uninstall()
+    {
+        // Claude Code's native installer, with an unrelated npm copy of the package present: npm uninstall would not
+        // remove the copy that runs.
+        var exe = Path.Combine(Path.GetTempPath(), "home", ".local", "bin", "claude");
+        var native = new ClientToolState(true, exe, exe, Npm, Root, NpmPackagePresent: true);
+        Assert.Null(ClientInstallPlanner.Plan(ClaudeCode, native, "osx").Uninstall);
+        // bun's global layout, a package-name prefix, and no npm at all.
+        var bun = Path.Combine(Path.GetTempPath(), ".bun", "install", "global", "node_modules", "@openai", "codex", "bin", "codex.js");
+        Assert.Null(ClientInstallPlanner.Plan(Codex, new ClientToolState(true, "/x/bin/codex", bun, Npm, Root), "osx").Uninstall);
+        var other = Path.Combine(Root, "@openai", "codex-other", "bin", "codex.js");
+        Assert.Null(ClientInstallPlanner.Plan(Codex, new ClientToolState(true, "/usr/local/bin/codex", other, Npm, Root, NpmPackagePresent: true), "osx").Uninstall);
+        var managed = Path.Combine(Root, "@openai", "codex", "bin", "codex.js");
+        Assert.Null(ClientInstallPlanner.Plan(Codex, new ClientToolState(true, "/usr/local/bin/codex", managed, null, null), "osx").Uninstall);
+        // Not installed: nothing to remove.
+        Assert.Null(ClientInstallPlanner.Plan(Codex, new ClientToolState(false, NpmPath: Npm, NpmGlobalRoot: Root), "osx").Uninstall);
+    }
+
+    [Fact]
+    public void VsCode_Extension_Uninstalls_With_Code_Unless_It_Is_Built_In()
+    {
+        var spec = ClientInstallCatalog.Get(ClientKinds.VsCodeCopilot)!;
+        var user = ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/usr/local/bin/code"), "osx");
+        Assert.Equal("code --uninstall-extension GitHub.copilot-chat", user.Uninstall!.Display);
+        Assert.Null(ClientInstallPlanner.NpmCommand(spec, user, "uninstall")); // never elevated
+        Assert.Equal(ClientInstallPlan.None, ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/usr/local/bin/code", BuiltIn: true), "osx"));
+        Assert.Equal(ClientInstallPlan.None, ClientInstallPlanner.Plan(spec, new ClientToolState(true), "osx")); // no code command
+    }
+
+    [Fact]
+    public void Script_And_Manual_Clients_Are_Never_Uninstalled_By_Astra()
+    {
+        var hermes = ClientInstallCatalog.Get(ClientKinds.HermesAgent)!;
+        var exe = Path.Combine(Path.GetTempPath(), "home", ".local", "bin", "hermes");
+        Assert.Null(ClientInstallPlanner.Plan(hermes, new ClientToolState(true, exe), "osx").Uninstall);
+        Assert.All(ClientInstallCatalog.All.Where(s => s.Method == ClientInstallMethod.Manual), spec =>
+            Assert.Null(ClientInstallPlanner.Plan(spec, new ClientToolState(true, "/Applications/X.app", NpmPath: Npm, NpmGlobalRoot: Root), "osx").Uninstall));
     }
 
     [Fact]

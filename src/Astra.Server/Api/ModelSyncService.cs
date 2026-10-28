@@ -42,18 +42,9 @@ internal sealed class SyncSnapshot
 }
 
 // API contract (web/src/api/types.ts): camelCase envelopes, pricing stays raw snake_case storage JSON.
-public sealed record SyncChangeDto(
-    string Id, string ModelId, string? PriceKey, string Kind, string? Field,
-    JsonNode? Before, JsonNode? After, bool SkippedBecauseUserModified);
 
-public sealed record SyncPreviewDto(string Source, DateTimeOffset FetchedAt, List<SyncChangeDto> Changes);
 
-public sealed class SyncApplyRequest
-{
-    public List<string>? ChangeIds { get; set; }
-}
 
-public sealed record SyncApplyResult(int Applied);
 
 /// <summary>
 /// models.dev catalog sync (plan §8): <c>POST /api/models/sync/preview</c> fetches
@@ -62,7 +53,8 @@ public sealed record SyncApplyResult(int Applied);
 /// to one snapshot and writes through a single transaction after re-checking every item.
 ///
 /// Only chat text models are synced (embedding/image/audio/… excluded like scripts/gen-seed.mjs).
-/// Only the basic cost keys (input/output/cache_read/cache_write) and base model attributes are mapped;
+/// Only the basic cost keys (input/output/cache_read/cache_write; OpenAI's cache_write is its 30m write, plus a derived
+/// 12h write) and base model attributes are mapped;
 /// service_tiers/context_tiers/time_windows/per_request/notes of existing pricing are preserved — the
 /// upstream base prices never replace the whole schedule. Models with source=user, user-modified fields
 /// and user-modified prices are listed with skippedBecauseUserModified=true but never written; apply
@@ -360,14 +352,27 @@ public sealed class ModelSyncService(AstraDatabase db, IHttpClientFactory factor
     }
 
     /// <summary>Basic cost keys only: input/output/cache_read/cache_write (+ the DeepSeek peak-window rule for new models).</summary>
-    private static PricingSchedule? ToPricing(JsonObject cost, string providerId)
+    internal static PricingSchedule? ToPricing(JsonObject cost, string providerId)
     {
         var input = Dec(cost, "input");
         var output = Dec(cost, "output");
         if (input is null || output is null) return null;
         var baseSet = new PriceSet { ["input"] = Round6(input.Value), ["output"] = Round6(output.Value) };
         if (Dec(cost, "cache_read") is { } cacheRead) baseSet["cache_read"] = Round6(cacheRead);
-        if (Dec(cost, "cache_write") is { } cacheWrite) baseSet["cache_write_5m"] = Round6(cacheWrite);
+        if (Dec(cost, "cache_write") is { } cacheWrite)
+        {
+            if (providerId == "openai")
+            {
+                // OpenAI charges writes on GPT-5.6+ only (the models models.dev gives a cache_write): its price is the
+                // 30-minute write (1.25x input); a 12-hour write is 2.5x input.
+                baseSet["cache_write_30m"] = Round6(cacheWrite);
+                baseSet["cache_write_12h"] = Round6(input.Value * 2.5m);
+            }
+            else
+            {
+                baseSet["cache_write_5m"] = Round6(cacheWrite);
+            }
+        }
         var pricing = new PricingSchedule { Base = baseSet };
         if (providerId == "deepseek")
         {

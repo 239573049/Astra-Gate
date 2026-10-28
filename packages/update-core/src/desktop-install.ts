@@ -53,11 +53,45 @@ function walkDirs(dir: string, depth: number): string[] {
   return out;
 }
 
+/** Marker the Avalonia desktop package ships (scripts/pack-desktop-avalonia.mjs). */
+export const DESKTOP_MARKER = 'astra-desktop.json';
+
+function isInside(root: string, target: string): boolean {
+  const rel = path.relative(root, target);
+  return rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
+/**
+ * Entry named by app/astra-desktop.json, or null when the marker is absent or
+ * fails validation (wrong shape, wrong kind for the platform, escapes appDir,
+ * missing on disk) — the caller then falls back to the heuristic.
+ */
+function readMarkerEntry(appDir: string, platform: SupportedPlatform): DesktopEntry | null {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(appDir, DESKTOP_MARKER), 'utf8')) as unknown;
+    if (!raw || typeof raw !== 'object') return null;
+    const { entry, kind } = raw as { entry?: unknown; kind?: unknown };
+    if (typeof entry !== 'string' || entry === '' || path.isAbsolute(entry)) return null;
+    const isBundle = platform === 'darwin';
+    if (kind !== (isBundle ? 'app-bundle' : 'exe')) return null;
+    const full = path.resolve(appDir, entry);
+    if (!isInside(path.resolve(appDir), full)) return null;
+    if (!isInside(fs.realpathSync(appDir), fs.realpathSync(full))) return null;
+    const st = fs.statSync(full);
+    if (isBundle ? !st.isDirectory() || !full.endsWith('.app') : !st.isFile()) return null;
+    return { path: full, isBundle };
+  } catch {
+    return null;
+  }
+}
+
 /** Locate the launchable inside <desktopPrefix>/node_modules/<pkg>/app. */
 export function findDesktopEntry(appDir: string, platform: SupportedPlatform): DesktopEntry {
   if (!fs.existsSync(appDir)) {
     throw new Error(`The desktop package does not contain an app directory (${appDir}).`);
   }
+  const marked = readMarkerEntry(appDir, platform);
+  if (marked) return marked;
   if (platform === 'darwin') {
     const bundles = walkDirs(appDir, 4)
       .filter((d) => d.endsWith('.app'))

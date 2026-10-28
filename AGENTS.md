@@ -12,7 +12,11 @@ Astra (`astragate`) — a local AI gateway. One product, two toolchains:
 - **.NET 11** (`Astra.sln`; `global.json` pins SDK 11.0.100-rc.2, roll-forward within 11.0): `src/Astra.Server` builds
   `astra-server`, an ASP.NET Core host published as a self-contained Native AOT binary (no .NET
   runtime on the target; a JIT single-file publish still works — see Native AOT). The other
-  `src/Astra.*` projects are its libraries. Tests live in `tests/Astra.*.Tests` (xunit).
+  `src/Astra.*` projects are its libraries. Tests live in `tests/Astra.*.Tests` (xunit). The same solution
+  holds the **Avalonia desktop client** that replaces the Electron shell (`src/Astra.Desktop` →
+  `astra-desktop`, Native AOT, UI only from Avalonia + TKCode.Arc; `src/Astra.Desktop.Core`: its logic, no Avalonia;
+  `src/Astra.Api.Contracts`: the admin DTOs shared with the server). Design: `.plan/avalonia-client.md` (+
+  `.plan/avalonia-page-inventory.md`); until the Electron app is retired both shells exist (`desktop/` below).
 - **pnpm workspace** (`pnpm@9.15.0`, `pnpm-workspace.yaml`; Node >= 18 per `cli`, CI runs Node 24):
   `cli/` (npm package `astragate`, bin `astra`; `release.yml` also rebuilds and publishes it as
   `@aidotnet/astra-gate`, whose self-update targets its own baked-in name), `web/` (`@aidotnet/web`, Vite + React admin UI),
@@ -64,6 +68,12 @@ the root `.dockerignore` belongs to `docs/Dockerfile`.
 - Build: `dotnet build -warnaserror` — warnings are errors (`Directory.Build.props` sets
   `TreatWarningsAsErrors`; CI adds the flag too). New warnings break the build.
 - Test all: `dotnet test --no-build` (after building). Targeted: `dotnet test tests/Astra.Gateway.Tests`.
+- Desktop (Avalonia): AOT builds must be `dotnet build src/Astra.Desktop -c Release -r <rid> -p:PublishAot=true
+  -warnaserror` **then** `dotnet publish … -p:PublishAot=true --no-build -o <dir>` — a bare AOT publish skips Avalonia's
+  XAML compile and the binary dies at start with "No precompiled XAML found". `astra-desktop --smoke` checks the
+  published binary (`.github/workflows/desktop-aot.yml` runs both on all six RIDs).
+  A build left in `obj/` by a non-AOT restore yields a plain trimmed build with no native binary: run
+  `dotnet restore src/Astra.Desktop -r <rid> -p:PublishAot=true` first when `astra-desktop` is missing from the output.
 - Run: `dotnet run --project src/Astra.Server -- serve` — subcommands are listed in the
   `Program.cs` header comment (`serve`, `relay`, `migrate`, `restore-all`, `set-password`, `healthcheck`, `version`,
   `plugin-selftest`).
@@ -75,6 +85,12 @@ Node (run `pnpm install` first; CI uses `pnpm install --frozen-lockfile`):
 
 - All packages: `pnpm -r --if-present lint` / `typecheck` / `test` / `build`.
 - One package: `pnpm --filter astragate test`, `pnpm --filter @aidotnet/web dev`, etc.
+- Desktop strings: `node scripts/gen-desktop-i18n.mjs` regenerates `src/Astra.Desktop.Core/I18n/Messages.g.cs` from
+  `web/src/i18n/messages.ts`; `--check` (run by CI) fails when it is stale.
+- Desktop brand icons: `node scripts/gen-desktop-brand-icons.mjs` regenerates `src/Astra.Desktop/Components/Kit/Brands/*.g.cs`
+  from the web's icon set (`web/src/components/icons.tsx`); `--check` verifies. Visual regression against the web UI:
+  `node scripts/visual/capture-web.mjs`, `dotnet test tests/Astra.Desktop.UiTests`, `node scripts/visual/compare.mjs`
+  (fixtures in `tests/fixtures/ui`, regenerate with `scripts/visual/gen-fixtures.mjs`; plan avalonia-client §23).
 - Version gate: `node scripts/sync-versions.mjs --check` (read-only); write mode also rewrites
   `<Version>` in `Directory.Build.props`. Versions are `x.y.z` (stable) or `x.y.z-preview.N`
   (preview) only — `scripts/release-channel.mjs` holds the rule and derives the channel.
@@ -105,7 +121,16 @@ Known command hazards:
 Astra.Core  <-  Astra.Data, Astra.Clients, Astra.Providers, Astra.Plugins  <-  Astra.Gateway  <-  Astra.Server
 (domain, zero      (persistence / client config take-over /                 (pipeline,         (host, wires
  NuGet refs)        provider templates / plugin runtime)                     protocol IR)       everything)
+    ^
+    +-- Astra.Api.Contracts  <-  Astra.Server, Astra.Desktop.Core  <-  Astra.Desktop
+        (admin DTOs + their      (the desktop never references       (Avalonia app; Arc UI)
+         JsonSerializerContext)   Server/Data/Gateway)
 ```
+
+`Astra.Api.Contracts` holds the admin API's plain data types (namespace `Astra.Api.Contracts`, a global `Using` in
+`Astra.Server.csproj`). It moves over in batches with the pages that need them (`.plan/avalonia-client.md` §14): a DTO
+there is registered in its own `ContractsJsonContext`, never in `ServerJsonContext`, and `web/src/api/types.ts` stays
+the hand-written mirror for the browser.
 
 `Astra.Plugins` runs magpie-compatible plugins (magpie plugins must keep running unmodified — keep the
 names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_PROXY`). Design rationale:
@@ -140,8 +165,8 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   plugins or request log, nothing written to disk, and no state shared between requests. The pipeline reaches its host
   only through `src/Astra.Gateway/Pipeline/PipelineContracts.cs` (linked update 21). Tests: `Relay*Tests` in
   `tests/Astra.Server.IntegrationTests` (`RelayHost`); docs: `docs/content/docs/guide/relay.mdx`.
-- Most admin endpoint groups live in `src/Astra.Server/Api/*Endpoints.cs` (shared DTOs in
-  `Api/Dtos.cs`), with one exception: `src/Astra.Server/Alerts/AlertEndpoints.cs` sits beside the
+- Most admin endpoint groups live in `src/Astra.Server/Api/*Endpoints.cs` (their wire DTOs are in
+  `src/Astra.Api.Contracts/*Dtos.cs`, one file per area; `Api/Dtos.cs` only points there), with one exception: `src/Astra.Server/Alerts/AlertEndpoints.cs` sits beside the
   alert service and its contracts. Register the group's `Map*Endpoints` in `AstraApp.Create`.
 - The CLI (`cli/src/commands`) and the web admin UI (`web/src/api/`) are both clients of that
   public API, and `web/` is a private package with no library entry point: the desktop app consumes
@@ -196,7 +221,7 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
 
 - Admin API: throw `AdminApiException(status, message)`; `AdminApiErrorFilter`
   (`Api/AdminApiErrorFilter.cs`) turns it (and IO/format errors) into JSON `{ error }`.
-  Returning `Results.NotFound/BadRequest(new ErrorOnlyDto("…"))` (`Api/Dtos.cs`) is the older
+  Returning `Results.NotFound/BadRequest(new ErrorOnlyDto("…"))` (`Astra.Api.Contracts`, `SystemDtos.cs`) is the older
   style and still normal where a handler returns its value; both are in use, so match the group
   you are editing instead of converting one to the other.
 - `src/Astra.Server/Security/Security.cs` `SecurityMiddleware` enforces: loopback Host allowlist
@@ -328,7 +353,11 @@ runtime needed on the target).
    protocol version, and bumping its major breaks the desktop handshake
    (`desktop/src/shared/version.ts`, `EXPECTED_API_MAJOR`).
 2. **New admin endpoint**: `Astra.Server/Api/*Endpoints.cs` (`MapXxxEndpoints` + register in
-   `AstraApp.Create`) plus `web/src/api` hooks, `web/src/api/types.ts`, and i18n keys.
+   `AstraApp.Create`) plus `web/src/api` hooks, `web/src/api/types.ts`, and i18n keys. Its request/response
+   types go in `src/Astra.Api.Contracts/*Dtos.cs` (public, XML-documented, registered in `ContractsJsonContext` — not
+   `ServerJsonContext`); a type that depends on Astra.Clients / Astra.Plugins / Astra.Providers cannot move and gets a
+   mirror DTO there (`FileDiffDto`, `MiddlewareStateDto`, `BunStatusDto` are the precedent). The Avalonia client
+   (`src/Astra.Desktop.Core/Api`) consumes the same types.
 3. **Schema change**: add a new `src/Astra.Data/Migrations/NNNN_name.sql` (the numbered pattern
    is required by the embedded-resource glob in the csproj and `MigrationRunner`). Never edit an
    already-applied migration — `MigrationRunner` applies pending files in order and backs up the
@@ -336,7 +365,8 @@ runtime needed on the target).
    methods and tests (`tests/Astra.Data.Tests/TestDb.cs`).
 4. **New UI string**: add the key to **both** `zh` and `en` in `web/src/i18n/messages.ts`. `zh`
    defines the key set (`MessageKey = keyof typeof zh`) and `web/src/test/i18n.test.ts` enforces
-   key and placeholder parity, so missing translations are caught by tests — still add both.
+   key and placeholder parity, so missing translations are caught by tests — still add both, then run `node scripts/gen-desktop-i18n.mjs`: the Avalonia
+   client reads the same catalog (`Loc.T`), and CI fails on a stale `Messages.g.cs`.
 5. **Data-dir paths**: the `~/.astra` layout is defined in three places that must stay in sync:
    `src/Astra.Core/AstraPaths.cs`, `cli/src/lib/paths.ts`, `desktop/src/shared/paths.ts` (`connect/` — `ConnectDir` /
    `connectDir` — is astra-connect's own state; `connect/src/lib/profile.ts` derives it the same way).
@@ -410,9 +440,9 @@ runtime needed on the target).
     asked for. Clients follow the server's `updateChannel` setting (`UpdateChannels`, default
     stable): the server check, the desktop (manifest + DMG feed, `desktop/src/shared/updateChannel.ts`)
     and `astra update` (`--channel` overrides once; the self-update installs the manifest's exact
-    version). The version ordering is semver precedence in four places that move together:
-    `scripts/release-channel.mjs`, `UpdateCheckService.IsNewer`, `packages/update-core/src/version.ts`
-    and `docs/lib/releases.ts` `compareVersions`.
+    version). The version ordering is semver precedence in five places that move together:
+    `scripts/release-channel.mjs`, `UpdateCheckService.IsNewer`, `packages/update-core/src/version.ts`,
+    `docs/lib/releases.ts` `compareVersions` and `ReleaseVersion` (`src/Astra.Desktop.Core`).
 14. **A `docs/` page or sidebar entry**: the folder's `meta.json` carries `title`/`description`/
     `icon`/`defaultOpen` and lists its `pages` (with `---[Icon]Name---` separators between
     sub-groups); a new page is added there and, when it belongs to a module, to the root
@@ -510,6 +540,19 @@ runtime needed on the target).
     (the server's `ProviderProbe` and the relay's model list), and `variants` (the relay's `x-astra-variant`). The relay
     keeps a template's own `AuthScheme`, so subscription handling applies as on the server; a credential the request
     brought has no `AccountId`, which is how the pipeline tells it from a stored account (never log or refresh it).
+
+22. **Avalonia desktop client** (`.plan/avalonia-client.md`): `Astra.Desktop.Core` ports `desktop/src` (service manager,
+    resolver, listener lookup) and `packages/update-core` (feed, staging, swap, `update-state.json` / `install.json`) — the
+    CLI, the Electron app and the Avalonia app share `~/.astra`, so the file formats stay byte-compatible and a change to
+    one side changes the other (tests read TS-shaped files). A new admin endpoint the desktop needs also moves its DTOs
+    into `Astra.Api.Contracts` (linked update 7 applies there) besides linked update 2. The main window must be
+    `AtomUI.Desktop.Controls.Window` (popup-opening Arc controls throw on Avalonia's own `Window`). The four `TKCode.Arc*`
+    packages, AtomUI and Avalonia are pinned exactly in `src/Astra.Desktop/Astra.Desktop.csproj` and move together.
+    Updating an **installed Electron client** relies on layouts the old code still reads: the npm desktop package's
+    `app/` must satisfy the OLD `findDesktopEntry` heuristic (`scripts/pack-desktop-avalonia.mjs` asserts it and writes
+    `astra-desktop.json`; on Linux only the main binary may be executable — never `chmod +x` a companion library), the
+    dmg zip must keep bundle id `io.astra.desktop`, `Astra.app` and the same signing team, and the NSIS installer must
+    reuse electron-builder's uninstall key and `/S` convention (plan §5).
 
 ## Conventions
 

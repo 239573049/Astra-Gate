@@ -1,0 +1,41 @@
+{
+  "id": "claude-haiku-4-5",
+  "displayName": "Claude Haiku 4.5",
+  "vendor": "anthropic",
+  "family": "claude-haiku",
+  "aliases": [],
+  "contextWindow": 200000,
+  "maxOutputTokens": 64000,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "promptCache": true,
+    "audio": false,
+    "pdf": false,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 1,
+      "output": 5,
+      "cache_read": 0.1
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [
+    "anthropic"
+  ],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

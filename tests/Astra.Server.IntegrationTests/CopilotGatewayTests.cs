@@ -58,6 +58,28 @@ public class CopilotGatewayTests
             .Select(s => JsonNode.Parse(s.AttributesJson!)!.AsObject()).ToList();
     }
 
+    [Fact]
+    public async Task Chat_Request_Translated_To_Responses_Carries_One_Cache_Key_Per_Conversation()
+    {
+        await using var gw = await StartAsync("failover", false, _ => FakeUpstream.Json(Completed));
+        string Turn(string reminder) =>
+            $$"""{"model":"gpt-5","stream":false,"messages":[{"role":"system","content":"You are an agent."},{"role":"user","content":"Fix it."},{"role":"system","content":"{{reminder}}"}]}""";
+
+        using var first = await gw.PostAsync("/v1/chat/completions", Turn("10:00"));
+        using var second = await gw.PostAsync("/v1/chat/completions", Turn("10:05"));
+        using var own = await gw.PostAsync("/v1/chat/completions",
+            """{"model":"gpt-5","stream":false,"prompt_cache_key":"mine","messages":[{"role":"user","content":"hi"}]}""");
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var bodies = gw.Upstream.Requests.Where(r => r.Url.AbsolutePath == "/v1/responses").Select(r => r.Json).ToList();
+        Assert.Equal(3, bodies.Count);
+        var key = bodies[0]["prompt_cache_key"]!.GetValue<string>();
+        Assert.StartsWith("astra-", key);
+        Assert.Equal(key, bodies[1]["prompt_cache_key"]!.GetValue<string>());
+        Assert.Equal("You are an agent.", bodies[1]["instructions"]!.GetValue<string>());
+        Assert.Equal("mine", bodies[2]["prompt_cache_key"]!.GetValue<string>());
+    }
+
     [Theory]
     [InlineData("failover", 401)]
     [InlineData("failover", 403)]

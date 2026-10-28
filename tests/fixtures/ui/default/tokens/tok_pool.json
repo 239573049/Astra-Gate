@@ -1,0 +1,73 @@
+{
+  "id": "tok_pool",
+  "name": "team-shared",
+  "isDefault": false,
+  "enabled": true,
+  "keyMasked": "sk-astra-Tn8…p4W",
+  "providerId": "prov_openai",
+  "accountId": null,
+  "createdAt": "2026-10-17T12:00:00Z",
+  "updatedAt": "2026-10-25T12:00:00Z",
+  "lastUsedAt": "2026-10-26T10:00:00Z",
+  "clients": [
+    "opencode"
+  ],
+  "today": {
+    "costUsd": 0.91,
+    "requests": 5,
+    "inputTokens": 88000,
+    "outputTokens": 9000,
+    "totalTokens": 97000,
+    "cacheReadTokens": 20000,
+    "cacheWriteTokens": 0,
+    "cacheHitRate": 0.227,
+    "tps": 62.4
+  },
+  "total": {
+    "costUsd": 41.2,
+    "requests": 190,
+    "inputTokens": 4400000,
+    "outputTokens": 520000,
+    "totalTokens": 4920000,
+    "cacheReadTokens": 1100000,
+    "cacheWriteTokens": 0,
+    "cacheHitRate": 0.25,
+    "tps": 62.4
+  },
+  "limits": null,
+  "allowedClients": null,
+  "limitUsage": [],
+  "recentRequests": 0,
+  "pool": {
+    "strategy": "failover",
+    "sticky": "session",
+    "failover": true,
+    "maxAttempts": 2,
+    "members": [
+      {
+        "providerId": "prov_openai",
+        "accountId": null,
+        "weight": 1,
+        "tier": 0,
+        "missing": false,
+        "health": {
+          "state": "healthy",
+          "until": null,
+          "reason": null
+        }
+      },
+      {
+        "providerId": "prov_anthropic",
+        "accountId": null,
+        "weight": 1,
+        "tier": 1,
+        "missing": false,
+        "health": {
+          "state": "healthy",
+          "until": null,
+          "reason": null
+        }
+      }
+    ]
+  }
+}

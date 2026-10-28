@@ -1,0 +1,50 @@
+[
+  {
+    "model": "gpt-4.1",
+    "costUsd": 58.24,
+    "requests": 521,
+    "tokens": 13890000,
+    "inputTokens": 12300000,
+    "cacheReadTokens": 7440000
+  },
+  {
+    "model": "gpt-4.1-mini",
+    "costUsd": 41.11,
+    "requests": 382,
+    "tokens": 10186000,
+    "inputTokens": 9020000,
+    "cacheReadTokens": 5456000
+  },
+  {
+    "model": "o4-mini",
+    "costUsd": 27.41,
+    "requests": 295,
+    "tokens": 7871000,
+    "inputTokens": 6970000,
+    "cacheReadTokens": 4216000
+  },
+  {
+    "model": "gpt-5",
+    "costUsd": 20.56,
+    "requests": 243,
+    "tokens": 6482000,
+    "inputTokens": 5740000,
+    "cacheReadTokens": 3472000
+  },
+  {
+    "model": "claude-sonnet-4-5",
+    "costUsd": 15.42,
+    "requests": 174,
+    "tokens": 4630000,
+    "inputTokens": 4100000,
+    "cacheReadTokens": 2480000
+  },
+  {
+    "model": "claude-opus-4-1",
+    "costUsd": 8.57,
+    "requests": 122,
+    "tokens": 3241000,
+    "inputTokens": 2870000,
+    "cacheReadTokens": 1736000
+  }
+]

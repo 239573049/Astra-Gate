@@ -82,7 +82,7 @@ export function PricingRuleDialog({ kind, onClose, onAdd, serviceNames = [], lev
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            {(['input', 'cache_read', 'cache_write_5m', 'cache_write_1h', 'output', 'reasoning'] as const).map((token) => (
+            {(['input', 'cache_read', 'cache_write_5m', 'cache_write_30m', 'cache_write_1h', 'cache_write_12h', 'output', 'reasoning'] as const).map((token) => (
               <Field key={token} label={token}><NumberInput value={prices[token]} onChange={(v) => setPrices({ ...prices, [token]: v } as PriceSet)} min={0} /></Field>
             ))}
           </div>

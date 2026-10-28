@@ -30,7 +30,7 @@ public static class RequestBilling
         record.TotalInputTokens = usage.TotalInput;
         record.TotalOutputTokens = usage.TotalOutput;
         record.CacheReadTokens = usage.Get(TokenTypes.CacheRead);
-        record.CacheWriteTokens = usage.Get(TokenTypes.CacheWrite5m) + usage.Get(TokenTypes.CacheWrite1h);
+        record.CacheWriteTokens = usage.CacheWriteTotal;
         record.ReasoningTokens = usage.Get(TokenTypes.Reasoning);
         record.CostNanoUsd = bill.TotalNanos;
         record.PricingSource = pricing.Source switch

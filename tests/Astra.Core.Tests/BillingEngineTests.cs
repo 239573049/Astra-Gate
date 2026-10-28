@@ -270,6 +270,30 @@ public class BillingEngineTests
     }
 
     [Fact]
+    public void Openai_cache_writes_price_by_ttl()
+    {
+        // GPT-6.1 Sol: input $2, read $0.10, 30m write $2.50, 12h write $5 (OpenAI pricing, 2026-10-20).
+        var schedule = new PricingSchedule
+        {
+            Base = P(("input", 2m), ("cache_read", 0.1m), ("cache_write_30m", 2.5m), ("cache_write_12h", 5m), ("output", 10m)),
+        };
+        var r = BillingEngine.Calculate(U(("input", 1000), ("cache_read", 4000), ("cache_write_30m", 3000), ("cache_write_12h", 4000)),
+            schedule, Ctx());
+        Assert.Equal(2_000_000 + 400_000 + 7_500_000 + 20_000_000, r.TotalNanos);
+        Assert.All(r.Items, i => Assert.Null(i.Note));
+    }
+
+    [Fact]
+    public void Openai_30m_write_falls_back_to_the_5m_price_then_12h_to_input()
+    {
+        var r = BillingEngine.Calculate(U(("cache_write_30m", 1000), ("cache_write_12h", 1000)),
+            new PricingSchedule { Base = P(("input", 2m), ("cache_write_5m", 2.5m), ("output", 10m)) }, Ctx());
+        Assert.Equal("cache_write_5m", r.Items.Single(i => i.TokenType == "cache_write_30m").PricedAs);
+        Assert.Equal("input", r.Items.Single(i => i.TokenType == "cache_write_12h").PricedAs);
+        Assert.Equal(2_500_000 + 2_000_000, r.TotalNanos);
+    }
+
+    [Fact]
     public void Costs_round_to_nano_usd_away_from_zero()
     {
         var r1 = BillingEngine.Calculate(U(("input", 3)), new PricingSchedule { Base = P(("input", 0.1234567m)) }, Ctx());

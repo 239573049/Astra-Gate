@@ -1,0 +1,41 @@
+{
+  "id": "claude-sonnet-4-5",
+  "displayName": "Claude Sonnet 4.5",
+  "vendor": "anthropic",
+  "family": "claude-sonnet",
+  "aliases": [],
+  "contextWindow": 200000,
+  "maxOutputTokens": 64000,
+  "capabilities": {
+    "vision": true,
+    "tools": true,
+    "reasoning": true,
+    "promptCache": true,
+    "audio": false,
+    "pdf": true,
+    "structuredOutput": true
+  },
+  "pricing": {
+    "currency": "USD",
+    "unit": "per_1m_tokens",
+    "base": {
+      "input": 3,
+      "output": 15,
+      "cache_read": 0.3
+    },
+    "service_tiers": null,
+    "context_tiers": null,
+    "time_windows": null,
+    "per_request": null,
+    "notes": null
+  },
+  "source": "seed",
+  "userModifiedFields": [],
+  "enabled": true,
+  "providerPriceKeys": [
+    "anthropic"
+  ],
+  "updatedAt": "2026-10-06T12:00:00Z",
+  "providerPrices": [],
+  "providerOverrides": []
+}

@@ -17,19 +17,9 @@ public static class SystemEndpoints
 {
     public const string RuntimeTokenHeader = "X-Astra-Runtime-Token";
 
-    public sealed record LoginRequest(string Password);
 
-    public sealed record SetPasswordRequest(string Password);
 
-    /// <summary>
-    /// The listen address. <paramref name="Host"/> is what this process is bound to and <paramref name="ConfiguredHost"/>
-    /// what config.json asks for at the next start (they differ until a restart); with <paramref name="HostFromEnvironment"/>
-    /// ASTRA_HOST decides and config.json does not apply. <paramref name="NetworkUrls"/> are the base URLs other machines
-    /// can use while listening beyond loopback (one per network interface for a wildcard host).
-    /// </summary>
-    public sealed record ListenDto(string Host, int Port, string ConfiguredHost, bool HostFromEnvironment, bool PasswordSet, List<string> NetworkUrls);
 
-    public sealed record ListenRequest(string Host);
 
     /// <summary>Rate-limit policy (per client IP; tunnel visitors by Cloudflare's address) of the login endpoint.</summary>
     public const string LoginRateLimitPolicy = "astra-login";

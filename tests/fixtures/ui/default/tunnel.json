@@ -1,0 +1,34 @@
+{
+  "supported": true,
+  "enabled": false,
+  "state": "off",
+  "publicUrl": null,
+  "error": null,
+  "connectedAt": null,
+  "mode": "quick",
+  "hostname": null,
+  "hasToken": false,
+  "allowAdmin": false,
+  "originUrl": "http://127.0.0.1:17321",
+  "cloudflared": {
+    "path": null,
+    "version": null,
+    "downloading": false,
+    "progress": null,
+    "error": null,
+    "asset": null,
+    "source": null,
+    "installed": false,
+    "fromEnvironment": false
+  },
+  "download": {
+    "downloadSource": "auto",
+    "downloadBaseUrl": null,
+    "cloudflaredPath": null
+  },
+  "checks": {
+    "passwordSet": false,
+    "blocker": null
+  },
+  "log": []
+}

@@ -1,7 +1,7 @@
 namespace Astra.Clients.Install;
 
 /// <summary>
-/// Runs an npm install / update with administrator rights when npm's global directories belong to root (the usual
+/// Runs an npm install / update / uninstall with administrator rights when npm's global directories belong to root (the usual
 /// result of an earlier <c>sudo npm install -g</c>, or of Node installed by the official macOS package). The
 /// system's own authorization prompt is used — macOS: <c>osascript … with administrator privileges</c>; Linux:
 /// <c>pkexec</c> (polkit) — so Astra never sees the password. Windows is not covered (npm's global prefix is in

@@ -11,38 +11,12 @@ using Astra.Plugins.Store;
 
 namespace Astra.Server.Api;
 
-/// <summary>One installed plugin as the Plugins page shows it.</summary>
-/// <param name="ShortName">The name the community's READMEs use (word-guard for @astragate-community/middleware-word-guard).</param>
-/// <param name="Kinds">provider, middleware, agent, pi (<see cref="PluginKinds"/>).</param>
-/// <param name="Options">The options set, or null for none.</param>
-/// <param name="OptionsExample">package.json magpie.options: what the options editor starts from.</param>
-/// <param name="Error">Why it can't load, when it can't.</param>
-/// <param name="Middleware">Its gateway middleware: hooks, calls, µs per call, failures, or why it didn't load.</param>
-/// <param name="Agent">The client it adds (a magpie agent), or why that didn't load.</param>
-public sealed record PluginDto(
-    string Spec, string Name, string ShortName, string? Version, bool Enabled, List<string> Kinds, string? Source,
-    JsonObject? Options, JsonObject? OptionsExample, string? Icon, bool IsPath, string? Error, MiddlewareState? Middleware,
-    PluginAgentDto? Agent);
 
-/// <summary>The client a plugin adds: its client kind ("plugin-&lt;id&gt;") on the Clients page, or why it didn't load.</summary>
-public sealed record PluginAgentDto(string? Id, string? Kind, string? Name, string? Error);
 
-/// <summary>GET /api/plugins: the list in the user's order (the middleware chain's order) and Bun's state.</summary>
-/// <param name="Preferences">The plugin picked (spec) for each provider id more than one plugin serves.</param>
-/// <param name="Off">ASTRA_PLUGINS=off: none runs, none can be installed.</param>
-public sealed record PluginsDto(List<PluginDto> Plugins, Dictionary<string, string> Preferences, BunStatus Runtime, bool Off = false);
 
-/// <summary>POST /api/plugins: <c>spec</c> is an npm package, a git repository or a path; <c>source</c> where it came from.</summary>
-public sealed record PluginAddInput(string? Spec, string? Source);
 
-/// <summary>POST /api/plugins/update: one plugin by spec, or every one when omitted.</summary>
-public sealed record PluginUpdateInput(string? Spec);
 
-/// <summary>PUT /api/plugins/order: the specs in the order wanted (the rest keep theirs after them).</summary>
-public sealed record PluginOrderInput(List<string>? Specs);
 
-/// <summary>POST /api/plugins/prefer: have <c>spec</c> serve <c>provider</c>, which another plugin serves too.</summary>
-public sealed record PluginPreferInput(string? Spec, string? Provider);
 
 /// <summary>
 /// The plugins the admin API manages: listing, installing (as jobs the page follows), switching on and
@@ -67,9 +41,14 @@ public sealed class PluginService(
             p.Entry.Enabled, [.. p.Kinds], p.Entry.Source, ParseOptions(p.Entry.OptionsJson), p.Manifest.OptionsExample,
             SafeIcon(p.Manifest.Icon), PluginSpec.IsPath(p.Entry.Spec),
             Exists(p.Target) ? p.Manifest.NotPluginReason : $"{p.Target} is missing: install it again",
-            middlewareStates.GetValueOrDefault(p.Entry.Spec), AgentOf(p, loadedAgents))).ToList();
-        return new PluginsDto(rows, snapshot.Preferences.ToDictionary(), bun.Status, catalog.Off);
+            Dto(middlewareStates.GetValueOrDefault(p.Entry.Spec)), AgentOf(p, loadedAgents))).ToList();
+        return new PluginsDto(rows, snapshot.Preferences.ToDictionary(), Dto(bun.Status), catalog.Off);
     }
+
+    private static MiddlewareStateDto? Dto(MiddlewareState? m) =>
+        m is null ? null : new MiddlewareStateDto(m.Hooks, m.Events, m.Error, m.Calls, m.AvgMicros, m.Failures, m.LastError);
+
+    private static BunStatusDto Dto(BunStatus b) => new(b.Path, b.Version, b.Downloading, b.Error, b.Target);
 
     /// <summary>
     /// Starts installing <c>spec</c>. A plain package name (optionally <c>@version</c>) asked for by the market — or by no

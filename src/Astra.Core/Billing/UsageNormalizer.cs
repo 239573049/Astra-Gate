@@ -141,10 +141,43 @@ public static class UsageNormalizer
         return usage;
     }
 
+    /// <summary>
+    /// Writes the cache-write lines of an OpenAI usage details object (<c>prompt_tokens_details</c> /
+    /// <c>input_tokens_details</c>): the total, plus OpenAI's TTL split when the usage holds 30m or 12h writes.
+    /// Anthropic 5m/1h writes have no OpenAI TTL and appear in the total only.
+    /// </summary>
+    public static void WriteOpenAICacheWrite(JsonObject details, NormalizedUsage usage)
+    {
+        var total = usage.CacheWriteTotal;
+        if (total <= 0) return;
+        details["cache_write_tokens"] = total;
+        var w30 = usage.Get(TokenTypes.CacheWrite30m);
+        var w12 = usage.Get(TokenTypes.CacheWrite12h);
+        if (w30 > 0 || w12 > 0)
+            details["cache_write_tokens_details"] = new JsonObject { ["ttl_30m_tokens"] = w30, ["ttl_12h_tokens"] = w12 };
+    }
+
     private static long AddOpenAICacheWrite(NormalizedUsage usage, JsonObject? details)
     {
-        // The OpenAI-compatible extension is part of total input but does not report a cache TTL.
+        // Cache writes are part of total input. OpenAI (GPT-5.6+) splits them by TTL in
+        // cache_write_tokens_details (the two counts are disjoint and sum to cache_write_tokens);
+        // OpenAI-compatible upstreams that send only the total get the 5m bucket and a note.
         var written = Math.Max(0, L(details, "cache_write_tokens"));
+        if (details?["cache_write_tokens_details"] is JsonObject split)
+        {
+            var w30 = Math.Max(0, L(split, "ttl_30m_tokens"));
+            var w12 = Math.Max(0, L(split, "ttl_12h_tokens"));
+            usage.Add(TokenTypes.CacheWrite30m, w30);
+            usage.Add(TokenTypes.CacheWrite12h, w12);
+            // A total larger than the split (an unknown future TTL) keeps the rest as an unsplit write.
+            var rest = written - w30 - w12;
+            if (rest > 0)
+            {
+                usage.Add(TokenTypes.CacheWrite5m, rest);
+                usage.Notes.Add(UsageNotes.OpenAICacheWriteUnsplit);
+            }
+            return Math.Max(written, w30 + w12);
+        }
         if (written > 0)
         {
             usage.Add(TokenTypes.CacheWrite5m, written);
