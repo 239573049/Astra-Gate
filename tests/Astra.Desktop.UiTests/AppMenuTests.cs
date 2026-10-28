@@ -79,6 +79,31 @@ public class AppMenuTests
         Assert.Equal("编辑", AppMenu.Build(MenuLabels.For("zh"), _ => { }, () => { }, () => { }, actions).Items.OfType<NativeMenuItem>().ElementAt(1).Header);
     }
 
+    [AvaloniaFact]
+    public void A_language_change_relabels_the_exported_menu_in_place()
+    {
+        // Avalonia.Native exports a window menu once and throws on a second SetMenu with another instance ("The menu being updated
+        // does not match"), so AppMenu keeps the first menu and moves the new labels onto its items.
+        var sent = new List<string>();
+        var actions = new AppMenu.WindowMenuActions(() => { }, () => { }, () => { }, _ => { });
+        var menu = AppMenu.Build(MenuLabels.For("en"), sent.Add, () => { }, () => { }, actions);
+        var before = Flatten(menu).ToList();
+
+        AppMenu.Relabel(menu, AppMenu.Build(MenuLabels.For("zh"), _ => { }, () => { }, () => { }, actions));
+
+        Assert.Equal(["文件", "编辑", "显示", "窗口", "帮助"], menu.Items.OfType<NativeMenuItem>().Select(i => i.Header));
+        var view = menu.Items.OfType<NativeMenuItem>().Single(i => i.Header == "显示").Menu!.Items.OfType<NativeMenuItem>().ToList();
+        Assert.Equal("概览", view[0].Header);
+        Assert.Equal("切换全屏幕", view[^1].Header);
+        // Same item instances, same handlers: a relabelled item still sends its command.
+        Assert.Equal(before, Flatten(menu));
+        ((INativeMenuItemExporterEventsImplBridge)view[0]).RaiseClicked();
+        Assert.Equal(["nav:overview"], sent);
+
+        static IEnumerable<NativeMenuItemBase> Flatten(NativeMenu m) =>
+            m.Items.SelectMany(i => i is NativeMenuItem { Menu: { } sub } ? Flatten(sub).Prepend(i) : [i]);
+    }
+
     private sealed class HeaderPage(PageContext ctx) : PageViewModel(AppRoute.Tokens, null, ctx)
     {
         private string _title = "First";

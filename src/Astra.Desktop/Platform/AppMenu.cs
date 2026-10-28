@@ -24,10 +24,17 @@ public static class AppMenu
                 () => window.WindowState = window.WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen,
                 op => Edit(window, op));
             NativeMenuItem? settings = null, aboutItem = null;
+            NativeMenu? menu = null;
             void Apply()
             {
                 var t = MenuLabels.For(Core.I18n.Loc.Language);
-                NativeMenu.SetMenu(window, Build(t, host.RaiseMenuCommand, window.Close, () => _ = host.RevealLogsAsync(), actions));
+                var built = Build(t, host.RaiseMenuCommand, window.Close, () => _ = host.RevealLogsAsync(), actions);
+                // The window's menu is exported once: Avalonia.Native binds its NSMenu to the first NativeMenu instance and a second
+                // SetMenu with another instance throws "The menu being updated does not match" (a fatal error on the UI thread, seen
+                // when the language was switched in Settings). So the menu is built once and relabelled in place afterwards —
+                // item headers are observed by the exporter, the structure never changes.
+                if (menu is null) NativeMenu.SetMenu(window, menu = built);
+                else Relabel(menu, built);
                 if (settings is not null) settings.Header = t.Settings;
                 if (aboutItem is not null) aboutItem.Header = Extra.For(Core.I18n.Loc.Language).About;
             }
@@ -166,6 +173,20 @@ public static class AppMenu
         view.Items.Add(Act(x.FullScreen, window.ToggleFullScreen, new KeyGesture(Key.F, KeyModifiers.Meta | KeyModifiers.Control)));
         var windowMenu = new NativeMenuItem(x.Window) { Menu = [Act(x.Minimize, window.Minimize, Cmd(Key.M)), Act(x.Zoom, window.Zoom)] };
         return [file, edit, new NativeMenuItem(t.View) { Menu = view }, windowMenu, new NativeMenuItem(t.Help) { Menu = [logs] }];
+    }
+
+    /// <summary>
+    /// Copies the headers of <paramref name="source"/> onto <paramref name="target"/>, item by item and submenu by submenu: both come from
+    /// <see cref="Build"/> with the same shape, so the exported menu keeps its items (and their click handlers) and only the labels move.
+    /// </summary>
+    internal static void Relabel(NativeMenu target, NativeMenu source)
+    {
+        for (var i = 0; i < target.Items.Count && i < source.Items.Count; i++)
+        {
+            if (target.Items[i] is not NativeMenuItem to || source.Items[i] is not NativeMenuItem from) continue;
+            to.Header = from.Header;
+            if (to.Menu is { } sub && from.Menu is { } subSource) Relabel(sub, subSource);
+        }
     }
 
     private static string CloseLabel(MenuLabels t) => t.File == "文件" ? "关闭窗口" : "Close Window";
