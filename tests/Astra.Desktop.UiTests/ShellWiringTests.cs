@@ -160,7 +160,7 @@ public class ShellWiringTests
 
     // ---- the recurring "sidebarCollapsed: true / resized window after the first launch" bug (plan avalonia-client §24) ----
 
-    [Fact]
+    [AvaloniaFact]
     public void Building_a_collapsed_shell_never_leaks_into_the_process_prefs_or_the_next_shell()
     {
         var process = AppServices.Current.Prefs;

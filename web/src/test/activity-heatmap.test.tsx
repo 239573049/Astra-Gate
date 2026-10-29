@@ -46,8 +46,11 @@ describe('ActivityHeatmap', () => {
     const headers = [...container.querySelectorAll('[data-months] > span')].map((header) => header.textContent);
     const grid = activityGrid(365);
     // The first column is padded into the window's first month, so it carries that month and its year; the rest name the month whose 1st starts in them.
-    expect(headers[0]).toMatch(/^M\d+ \d{4}$/);
-    expect(headers.filter(Boolean)).toHaveLength(grid.months.length + 1);
+    // When the 1st falls inside that first column it names that month instead (without a year), so which one holds depends on today's date.
+    const opensMonth = grid.months.some((month) => month.index === 0);
+    if (opensMonth) expect(headers[0]).toMatch(/^M\d+$/);
+    else expect(headers[0]).toMatch(/^M\d+ \d{4}$/);
+    expect(headers.filter(Boolean)).toHaveLength(grid.months.length + (opensMonth ? 0 : 1));
     for (const month of grid.months) {
       expect(headers[month.index]).toBe(`M${month.label}`);
       expect(grid.weeks[month.index]!.some((at) => grid.days[at]!.slice(8) === '01')).toBe(true);
