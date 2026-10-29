@@ -2,7 +2,7 @@
 name: windows-hidden-title-bar-caption-hint
 description: Hiding AtomUI's title bar on Windows leaves Avalonia's caption hit-test strip (hint -1 → ~31 DIP of HTCAPTION) over the content; the hint is set to the frame thickness and the shell draws its own caption buttons with decoration roles
 type: project
-updated: 2026-10-28
+updated: 2026-10-29
 source: session
 evidence: ["src/Astra.Desktop/Platform/WindowChrome.cs:ConfigureWindowsChrome", "src/Astra.Desktop/Platform/WindowChrome.cs:WithOverlay", "src/Astra.Desktop/Platform/CaptionButtons.cs", "Avalonia.Win32 12.1.4 WindowImpl.HitTestNCA / UpdateExtendMargins and AtomUI 6.2.8 Window.CalculateEffectiveContentFrameMargin (decompiled)"]
 ---
@@ -23,3 +23,8 @@ maximize) is overlaid by `WindowChrome.WithOverlay`; drag regions stay `AttachDr
 decompiled sources, not yet verified on a Windows machine (2026-10-28): check top-edge resize, clicks in
 the top 31 DIP, the maximized state and Snap Layouts first when something looks off there. Linux keeps the
 system title bar on purpose (Electron parity).
+
+**Arc 0.3.2 (2026-10-29):** AtomUI is gone, so the window is Avalonia's own `Window` (`ExtendClientAreaToDecorationsHint` +
+`WindowDecorations.Full` set in `WindowChrome`, no `IsTitleBarVisible`). The analysis above was written against AtomUI's
+template; whether Arc's `WindowBaseTheme` draws its own caption buttons or title strip on Windows, and whether the macOS
+traffic lights still sit at `TrafficLightX` (the AtomUI offset API is gone), is unverified — look at both first.

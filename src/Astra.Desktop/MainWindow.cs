@@ -1,19 +1,16 @@
 using Astra.Desktop.Platform;
 using Astra.Desktop.Shell;
 using Astra.Desktop.Views;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 using Avalonia.Controls;
 
 namespace Astra.Desktop;
 
 /// <summary>
-/// Must be AtomUI's Window, not Avalonia's: Arc controls that open a popup (the data grid, selects, dialogs) throw
-/// "Unable to create IPopupImpl and no overlay layer" on a plain Avalonia window (plan avalonia-client §11).
 /// Size, minimum size, remembered bounds and the macOS / Windows chrome are the Electron window's (desktop/src/main.ts,
 /// desktop/src/shared/chrome.ts), applied by <see cref="WindowChrome"/> (plan §22); on Windows the content is wrapped with the
 /// caption-buttons overlay (<see cref="WindowChrome.WithOverlay"/>).
 /// </summary>
-public sealed class MainWindow : AtomWindow
+public sealed class MainWindow : Window
 {
     public MainWindow(ShellViewModel shell)
     {

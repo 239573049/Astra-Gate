@@ -8,7 +8,6 @@ using Astra.Desktop.Shell;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.UiTests;
 
@@ -18,14 +17,14 @@ namespace Astra.Desktop.UiTests;
 /// </summary>
 public class ProviderDetailStateTests
 {
-    private static (ProviderDetailPage Page, ProviderDetailView View, AtomWindow Window) Open(string id)
+    private static (ProviderDetailPage Page, ProviderDetailView View, Window Window) Open(string id)
     {
         var fx = Scenes.Fixtures();
         var ctx = PageContext.Create(new ApiClient("http://fixture", fx.Handler()), AvaloniaUiDispatcher.Instance, clock: new FixedClock(fx.Now));
         var page = new ProviderDetailPage(ctx, id);
         page.Activate(); // the navigator does this when the page is shown: its queries start observing
         var view = new ProviderDetailView(page);
-        var window = new AtomWindow { Content = view, Width = 1100, Height = 800 };
+        var window = new Window { Content = view, Width = 1100, Height = 800 };
         window.Show();
         SceneCapture.Await(page.WhenSettledAsync(), TimeSpan.FromSeconds(20));
         SceneCapture.Pump(2);
@@ -78,7 +77,7 @@ public class ProviderDetailStateTests
         var sticky = new StickyBottom { Offset = 8, Child = bar };
         var content = new StackPanel { Children = { new Border { Height = 1000 }, sticky, new Border { Height = 200 } } };
         var viewer = new ScrollViewer { Content = content, VerticalAlignment = VerticalAlignment.Stretch };
-        var window = new AtomWindow { Content = viewer, Width = 400, Height = 300 };
+        var window = new Window { Content = viewer, Width = 400, Height = 300 };
         window.Show();
         SceneCapture.Pump(3);
 

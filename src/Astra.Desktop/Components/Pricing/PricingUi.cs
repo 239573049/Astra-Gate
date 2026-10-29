@@ -147,12 +147,12 @@ internal static class PricingUi
     }
 
     /// <summary>
-    /// Keeps a <see cref="SortableDataTable"/> in its table layout whatever its width. The web folds a table into two-line rows only when
+    /// Keeps a <see cref="Table"/> in its table layout whatever its width. The web folds a table into two-line rows only when
     /// the VIEWPORT is at most 620 px wide (a media query, so never in a desktop window), while Arc folds by the table's own width and
     /// exposes the breakpoint only as an internal property; a narrow column (the simulator's card) must still show a table.
     /// </summary>
-    // ARC-GAP: SortableDataTable.CompactBreakpoint is internal; set through the property registry. Make it public (or width-independent) upstream.
-    public static SortableDataTable WithoutCompactLayout(this SortableDataTable table)
+    // ARC-GAP: Table.CompactBreakpoint is internal; set through the property registry. Make it public (or width-independent) upstream.
+    public static Table WithoutCompactLayout(this Table table)
     {
         if (AvaloniaPropertyRegistry.Instance.FindRegistered(table, "CompactBreakpoint") is { } property) table.SetValue(property, 0d);
         return table;

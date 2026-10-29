@@ -9,14 +9,13 @@ using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.Platform;
 
 /// <summary>
 /// Applies the Electron window chrome (<see cref="ChromeSpec"/>; plan avalonia-client §22) to the main window: the solid first-paint
 /// background, the hidden title bar with the native traffic lights on macOS or the caption-buttons overlay on Windows, the remembered
-/// bounds, and the drag region. The window stays an <c>AtomUI.Desktop.Controls.Window</c> (plan §11); this class only sets
+/// bounds, and the drag region. The window stays an <c>Window</c> (plan §11); this class only sets
 /// properties on it and wraps its content (<see cref="WithOverlay"/>).
 /// </summary>
 public static class WindowChrome
@@ -43,7 +42,7 @@ public static class WindowChrome
         _ => Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant == PlatformThemeVariant.Dark,
     };
 
-    public static void Apply(AtomWindow window, DesktopPrefs prefs)
+    public static void Apply(Window window, DesktopPrefs prefs)
     {
         var dark = IsDark(prefs);
         Spec = ChromeSpec.For(ChromeSpec.CurrentOs(), dark);
@@ -53,7 +52,6 @@ public static class WindowChrome
         window.ActualThemeVariantChanged += (_, _) =>
             SetSurface(window, ChromeSpec.ThemeBackground(window.ActualThemeVariant == ThemeVariant.Dark));
 
-        if (Spec.HidesManagedTitleBar) window.IsTitleBarVisible = false;
         if (Spec.NativeTrafficLights && OperatingSystem.IsMacOS()) ConfigureTrafficLights(window);
         if (Spec.Os == DesktopOs.Windows && Spec.HidesManagedTitleBar && OperatingSystem.IsWindows()) ConfigureWindowsChrome(window);
 
@@ -61,7 +59,7 @@ public static class WindowChrome
         TrackBounds(window, prefs);
     }
 
-    private static void SetSurface(AtomWindow window, string hex)
+    private static void SetSurface(Window window, string hex)
     {
         var brush = new SolidColorBrush(Color.Parse(hex));
         window.Background = brush;
@@ -69,32 +67,28 @@ public static class WindowChrome
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("macos")]
-    private static void ConfigureTrafficLights(AtomWindow window)
+    private static void ConfigureTrafficLights(Window window)
     {
-        // AtomUI centers the native buttons vertically in the title-bar height hint and lays the cluster out from OffsetX with
-        // Spacing between buttons (MacStandardWindowButtons; Window.ConfigureMacOsWindow). Electron's trafficLightPosition is the
-        // cluster's top-left, so the hint is chosen to center a 14 px cluster at y = 20.
+        // The plain window has no traffic-light offset API (AtomUI's MacStandardWindowButtons was it), so MacTrafficLights moves the
+        // native buttons to Electron's trafficLightPosition itself. The hint only has to make the title-bar area tall enough for them.
         window.ExtendClientAreaToDecorationsHint = true;
-        // AtomUI's theme picks BorderOnly for a hidden title bar, which also hides the native buttons; Full keeps them.
         window.WindowDecorations = WindowDecorations.Full;
-        window.ExtendClientAreaTitleBarHeightHint = 2 * (Spec.TrafficLightY + TrafficLightButtonHeight / 2);
-        AtomUI.Desktop.Controls.MacStandardWindowButtons.SetOffsetX(window, Spec.TrafficLightX);
-        AtomUI.Desktop.Controls.MacStandardWindowButtons.SetSpacing(window, ChromeSpec.TrafficLightSpacing);
+        window.ExtendClientAreaTitleBarHeightHint = Spec.TrafficLightY + TrafficLightButtonHeight + Spec.TrafficLightY;
+        MacTrafficLights.Install(window, Spec.TrafficLightX, Spec.TrafficLightY, ChromeSpec.TrafficLightSpacing);
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static void ConfigureWindowsChrome(AtomWindow window)
+    private static void ConfigureWindowsChrome(Window window)
     {
-        // AtomUI's Windows chrome is Avalonia's extended client area (its theme sets ExtendClientAreaToDecorationsHint and
-        // WindowDecorations.Full) with its own title bar hosted in Avalonia's drawn-decorations layer. IsTitleBarVisible = false hides
-        // that bar, and AtomUI then hands the content the whole client area (its content margin subtracts the drawn title-bar height).
-        // What that leaves behind is the native caption strip: Avalonia's Win32 hit test answers HTCAPTION for the top
-        // ExtendClientAreaTitleBarHeightHint DIPs — the default caption height while the hint is -1, which it stays once the title bar
-        // never lays out — so a press on anything up there without a decoration role would drag the window instead of clicking it.
+        // Avalonia's Windows chrome is the extended client area with the drawn decorations. The shell draws its own header under
+        // the (hidden) title bar, and the native caption strip is what that leaves behind: Avalonia's Win32 hit test answers HTCAPTION
+        // for the top ExtendClientAreaTitleBarHeightHint DIPs — the default caption height while the hint is -1 — so a press on
+        // anything up there without a decoration role would drag the window instead of clicking it.
         // The hint is therefore the resize frame's thickness: that band hit-tests as the top resize border (HTTOP and both corners)
         // and no caption strip is left; the shell's own drag regions move the window (AttachDragRegion), and the caption buttons
-        // carry their roles (CaptionButtons). The hint also sizes the hidden drawn title bar, which AtomUI subtracts again: the
-        // content starts at the top in both the normal and the maximized state.
+        // carry their roles (CaptionButtons).
+        window.ExtendClientAreaToDecorationsHint = true;
+        window.WindowDecorations = WindowDecorations.Full;
         window.ExtendClientAreaTitleBarHeightHint = WindowsFrameBorder;
     }
 
@@ -103,7 +97,7 @@ public static class WindowChrome
     /// over <paramref name="content"/>, which is marked a <see cref="WindowDecorationsElementRole.User"/> element so that any caption strip
     /// the frame metrics leave (a frame thicker than <see cref="WindowsFrameBorder"/>) still answers HTCLIENT. Elsewhere the content itself.
     /// </summary>
-    public static Control WithOverlay(AtomWindow window, Control content)
+    public static Control WithOverlay(Window window, Control content)
     {
         if (Spec.Os != DesktopOs.Windows || !Spec.HidesManagedTitleBar) return content;
         WindowDecorationProperties.SetElementRole(content, WindowDecorationsElementRole.User);
@@ -112,7 +106,7 @@ public static class WindowChrome
 
     // ---------------------------------------------------------------- remembered bounds (restorableBounds)
 
-    private static void RestoreBounds(AtomWindow window, DesktopPrefs prefs)
+    private static void RestoreBounds(Window window, DesktopPrefs prefs)
     {
         window.Width = WindowBounds.DefaultWidth;
         window.Height = WindowBounds.DefaultHeight;
@@ -136,7 +130,7 @@ public static class WindowChrome
         if (prefs.WindowMaximized) window.Opened += (_, _) => window.WindowState = WindowState.Maximized;
     }
 
-    private static void TrackBounds(AtomWindow window, DesktopPrefs prefs)
+    private static void TrackBounds(Window window, DesktopPrefs prefs)
     {
         // Normal bounds only (Electron's getNormalBounds): a maximized or full-screen window must not overwrite them.
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(800) };
@@ -158,7 +152,7 @@ public static class WindowChrome
         window.Closing += (_, _) => Save(window, prefs);
     }
 
-    private static void Save(AtomWindow window, DesktopPrefs prefs)
+    private static void Save(Window window, DesktopPrefs prefs)
     {
         if (!window.IsVisible || window.WindowState == WindowState.Minimized) return;
         var maximized = window.WindowState is WindowState.Maximized or WindowState.FullScreen;

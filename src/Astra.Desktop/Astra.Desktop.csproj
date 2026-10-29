@@ -12,18 +12,17 @@
     <SelfContained>true</SelfContained>
     <!-- Memory over throughput, like astra-server: a desktop shell is a one-user process. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
+    <!-- Arc 0.3.2 on the .NET 11 SDK with PublishAot: otherwise the compiled XAML is left out of the published app. -->
+    <UseOptimizedPublish>false</UseOptimizedPublish>
   </PropertyGroup>
   <!-- The four Arc packages move together: pin the exact preview (its docs require it). -->
   <PropertyGroup>
-    <ArcVersion>0.3.1-preview.2</ArcVersion>
+    <ArcVersion>0.3.2-preview.1</ArcVersion>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
-    <AtomUIVersion>6.2.8</AtomUIVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
-    <PackageReference Include="AtomUI.Desktop.Controls" Version="$(AtomUIVersion)" />
-    <PackageReference Include="AtomUI.Generator" Version="$(AtomUIVersion)" PrivateAssets="all" />
     <PackageReference Include="TKCode.Arc" Version="$(ArcVersion)" />
     <PackageReference Include="TKCode.Arc.Fonts" Version="$(ArcVersion)" />
     <PackageReference Include="TKCode.Arc.AdvancedCharts" Version="$(ArcVersion)" />

@@ -2,12 +2,12 @@ using Astra.Desktop.Core.Api;
 using Astra.Desktop.Shell;
 using Astra.Desktop.Theme;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using TKCode.Arc.Motion;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.UiTests;
 
@@ -30,12 +30,11 @@ public static class SceneCapture
         // One recording per scene (the light pass; the dark one is served the same answers).
         if (!dark) VisualRecorder.Begin(scene);
         var built = Scenes.All[scene]();
-        var window = new AtomWindow
+        var window = new Window
         {
             Content = built.View,
             Width = Width,
             Height = Height,
-            IsTitleBarVisible = false,
             CanResize = false,
         };
         // Captured values are the settled ones: no entrance animations or counters (web side: reducedMotion + a 1.8 s settle).
@@ -68,7 +67,7 @@ public static class SceneCapture
     /// timers kept posting to the UI thread for the rest of the run; with enough scenes behind it a later <see cref="Await"/> never got
     /// out of <c>RunJobs</c> and the run hung in a different scene each time.
     /// </summary>
-    private static void TearDown(AtomWindow window)
+    private static void TearDown(Window window)
     {
         var pages = new HashSet<PageViewModel>();
         var clients = new HashSet<QueryClient>();

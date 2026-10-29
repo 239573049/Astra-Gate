@@ -129,7 +129,7 @@ public sealed class PrivacyOverviewView : LiveView
 
     private static Control CategoryTable(IReadOnlyList<PrivacyCategoryStatDto> rows)
     {
-        var table = new SortableDataTable
+        var table = new Table
         {
             Caption = Loc.T("privacy.stats.byCategory"),
             ItemsSource = PrivacyStatsLogic.ByHits(rows).ToList(),

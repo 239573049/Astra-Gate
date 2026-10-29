@@ -228,7 +228,7 @@ public sealed class RequestDetailSheet : Sheet
     /// <summary>The per-token-type bill (web <c>usageColumns</c> over <c>SortableDataTable</c>).</summary>
     private static Control UsageTable(IReadOnlyList<UsageItemDto> items)
     {
-        var table = new SortableDataTable { Caption = Loc.T("requests.detail.billing"), ItemsSource = items.ToList(), RowKeySelector = o => items.ToList().IndexOf((UsageItemDto)o) };
+        var table = new Table { Caption = Loc.T("requests.detail.billing"), ItemsSource = items.ToList(), RowKeySelector = o => items.ToList().IndexOf((UsageItemDto)o) };
         DataTableColumn Col(string header, string key, Func<UsageItemDto, object?> value, Func<UsageItemDto, Control>? cell = null, bool numeric = false, double width = 0)
         {
             var column = new DataTableColumn { Header = header, Key = key, ValueSelector = o => value((UsageItemDto)o), IsNumeric = numeric ? true : null };

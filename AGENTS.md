@@ -545,9 +545,9 @@ runtime needed on the target).
     resolver, listener lookup) and `packages/update-core` (feed, staging, swap, `update-state.json` / `install.json`) — the
     CLI, the Electron app and the Avalonia app share `~/.astra`, so the file formats stay byte-compatible and a change to
     one side changes the other (tests read TS-shaped files). A new admin endpoint the desktop needs also moves its DTOs
-    into `Astra.Api.Contracts` (linked update 7 applies there) besides linked update 2. The main window must be
-    `AtomUI.Desktop.Controls.Window` (popup-opening Arc controls throw on Avalonia's own `Window`). The four `TKCode.Arc*`
-    packages, AtomUI and Avalonia are pinned exactly in `src/Astra.Desktop/Astra.Desktop.csproj` and move together.
+    into `Astra.Api.Contracts` (linked update 7 applies there) besides linked update 2. The windows are Avalonia's own `Window` (Arc 0.3.2 dropped
+    AtomUI; Arc's base theme gives them the overlay layer popups need). The four `TKCode.Arc*`
+    packages and Avalonia are pinned exactly in `src/Astra.Desktop/Astra.Desktop.csproj` and move together.
     Updating an **installed Electron client** relies on layouts the old code still reads: the npm desktop package's
     `app/` must satisfy the OLD `findDesktopEntry` heuristic (`scripts/pack-desktop-avalonia.mjs` asserts it and writes
     `astra-desktop.json`; on Linux only the main binary may be executable — never `chmod +x` a companion library), the

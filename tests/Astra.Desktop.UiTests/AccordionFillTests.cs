@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
 using TKCode.Arc;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.UiTests;
 
@@ -17,7 +16,7 @@ public class AccordionFillTests
         if (fill) item.FillWidth();
         var accordion = new Accordion { ExpandedIndex = 0 };
         accordion.Items.Add(item);
-        var window = new AtomWindow { Content = new StackPanel { Children = { accordion } }, Width = 700, Height = 500 };
+        var window = new Window { Content = new StackPanel { Children = { accordion } }, Width = 700, Height = 500 };
         window.Show();
         SceneCapture.Pump(3);
         var width = block.Bounds.Width;

@@ -135,7 +135,7 @@ public class AppMenuTests
         var shell = new ShellViewModel(Astra.Desktop.Theme.DesktopPrefs.InMemory(), new ConnectionViewModel(null, ctx.Api, ctx.Queries), ctx, [new HeaderModule(p => page = p)]);
         shell.Navigator.Navigate(AppRoute.Tokens);
         var view = new ShellView { DataContext = shell };
-        var window = new AtomUI.Desktop.Controls.Window { Content = view, Width = 1200, Height = 800 };
+        var window = new Window { Content = view, Width = 1200, Height = 800 };
         window.Show();
         try
         {

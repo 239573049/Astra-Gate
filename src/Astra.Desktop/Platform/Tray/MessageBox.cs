@@ -9,7 +9,6 @@ using Avalonia.VisualTree;
 using TKCode.Arc;
 using TKCode.Arc.DesignTokens;
 using TKCode.Arc.Icons.Lucide;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.Platform.Tray;
 
@@ -22,10 +21,10 @@ internal enum MessageBoxKind { Info, Warning, Error }
 /// the main one, because a tray app often has no visible window (login start, closed to the tray) — exactly when these appear.
 /// Centered on the primary screen, always on top, out of the taskbar; Escape / Alt+F4 pick <c>cancelIndex</c>, Enter the default.
 /// Frameless like the tray panel: no OS title bar, a transparent window whose rounded card (the tray panel's surface and border tokens, a
-/// soft shadow) is the visible surface, dragged by its header. Built from Arc buttons and the tray panel's text styles; an AtomUI window
-/// like the others (plan avalonia-client §11).
+/// soft shadow) is the visible surface, dragged by its header. Built from Arc buttons and the tray panel's text styles; a plain Avalonia
+/// window like the others (Arc's base theme gives it the overlay layer).
 /// </summary>
-internal sealed class MessageBox : AtomWindow
+internal sealed class MessageBox : Window
 {
     private const double CardWidth = 420;
     /// <summary>Transparent margin around the card, room for its shadow.</summary>
@@ -43,7 +42,6 @@ internal sealed class MessageBox : AtomWindow
         CanResize = false;
         ShowInTaskbar = false;
         Topmost = true;
-        IsTitleBarVisible = false;
         WindowDecorations = WindowDecorations.None;
         ExtendClientAreaToDecorationsHint = false;
         Background = Brushes.Transparent;

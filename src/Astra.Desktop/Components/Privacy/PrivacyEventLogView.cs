@@ -251,7 +251,7 @@ public sealed class PrivacyEventLogView : LiveView
         var rows = PrivacyEventRows.Rows(page.Items);
         var now = Context.Clock.Now;
         // web: every column sorts the shown page client-side (SortableDataTable columns are sortable unless they opt out).
-        var table = new SortableDataTable
+        var table = new Table
         {
             Caption = Loc.T("privacy.tab.logs"),
             EmptyMessage = Loc.T("privacy.logs.empty"),

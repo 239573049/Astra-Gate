@@ -38,7 +38,7 @@ public class WindowChromeTests
     [AvaloniaFact]
     public void The_windows_caption_buttons_carry_their_roles_follow_the_window_state_and_drive_it()
     {
-        var window = new AtomUI.Desktop.Controls.Window { Width = 900, Height = 600 };
+        var window = new Window { Width = 900, Height = 600 };
         var buttons = new CaptionButtons(window);
         window.Content = buttons;
         window.Show();

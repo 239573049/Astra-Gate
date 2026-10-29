@@ -25,7 +25,7 @@ public sealed class ModelsView : UserControl
     private readonly ContentControl _body = new();
     private readonly CreateModelSheet _create;
     private readonly SyncSheet _sync;
-    private SortableDataTable? _table;
+    private Table? _table;
 
     /// <summary>Builds the view for <paramref name="page"/> and keeps it in step with it.</summary>
     public ModelsView(ModelsPage page)
@@ -106,9 +106,9 @@ public sealed class ModelsView : UserControl
         }
     }
 
-    private SortableDataTable BuildTable()
+    private Table BuildTable()
     {
-        var table = new SortableDataTable { Caption = Loc.T("nav.models"), RowKeySelector = r => ((ModelRow)r).Id }.WithoutCompactLayout();
+        var table = new Table { Caption = Loc.T("nav.models"), RowKeySelector = r => ((ModelRow)r).Id }.WithoutCompactLayout();
         Astra.Desktop.Components.Tokens.Tables.WebSurface(table);
         table.Columns.Add(new DataTableColumn(Loc.T("models.col.model"), r => ((ModelRow)r).Name)
         {
@@ -137,7 +137,7 @@ public sealed class ModelsView : UserControl
 /// mono beneath; the whole cell opens the detail page (web: a <c>button</c> filling the cell). Rows are recycled, so it reads its row from
 /// the data context each time it changes.
 /// </summary>
-// ARC-GAP: SortableDataTable has no row activation event (inventory GAP-4); the web also opens the page from this cell's button, so
+// ARC-GAP: Table has no row activation event (inventory GAP-4); the web also opens the page from this cell's button, so
 // the cell itself is the click target and the rest of the row is inert.
 internal sealed class ModelNameCell : Border
 {

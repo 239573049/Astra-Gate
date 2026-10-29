@@ -12,8 +12,8 @@ public enum DesktopOs { MacOS, Windows, Linux }
 /// <param name="ToolbarHeight">Floating toolbar / drag region / Windows title-bar overlay height (52).</param>
 /// <param name="ExtendsIntoTitleBar">Content runs under the (hidden) title bar: macOS hiddenInset, Windows hidden + overlay.</param>
 /// <param name="HidesManagedTitleBar">
-/// The AtomUI title bar is hidden (<c>Window.IsTitleBarVisible = false</c>) and the shell draws under it: macOS (hiddenInset, the
-/// native traffic lights stay) and Windows (hidden + overlay: AtomUI's caption buttons go with its title bar, so the shell draws
+/// The managed title bar is hidden (the client area extends under it) and the shell draws under it: macOS (hiddenInset, the
+/// native traffic lights stay) and Windows (hidden + overlay: the shell draws its own caption buttons, so it draws
 /// Electron's <c>titleBarOverlay</c> itself — <see cref="CaptionButtons"/>, plan avalonia-client §22). Linux keeps the system
 /// title bar, as the Electron shell did.
 /// </param>

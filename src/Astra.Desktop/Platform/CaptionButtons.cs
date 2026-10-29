@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.Platform;
 
@@ -22,10 +21,10 @@ public sealed class CaptionButtons : StackPanel
     /// <summary>Which caption button.</summary>
     public enum Kind { Minimize, Maximize, Close }
 
-    private readonly AtomWindow _window;
+    private readonly Window _window;
     private readonly CaptionButton _minimize, _maximize, _close;
 
-    public CaptionButtons(AtomWindow window)
+    public CaptionButtons(Window window)
     {
         _window = window;
         Orientation = Orientation.Horizontal;

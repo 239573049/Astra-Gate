@@ -290,12 +290,12 @@ public static partial class Scenes
 /// </summary>
 public class SettingsBehaviourTests
 {
-    private static async Task<(AtomUI.Desktop.Controls.Window Window, Control View, FixtureSet Fixtures, ShellViewModel Shell)> ShowAsync(FixtureSet fixtures, string? tab = null)
+    private static async Task<(Window Window, Control View, FixtureSet Fixtures, ShellViewModel Shell)> ShowAsync(FixtureSet fixtures, string? tab = null)
     {
         var shell = Scenes.BuildShell(fixtures);
         shell.Navigator.Navigate(AppRoute.Settings, tab);
         var view = new ShellView { DataContext = shell };
-        var window = new AtomUI.Desktop.Controls.Window { Content = view, Width = 1440, Height = 900, IsTitleBarVisible = false, CanResize = false };
+        var window = new Window { Content = view, Width = 1440, Height = 900, CanResize = false };
         TKCode.Arc.Motion.ArcMotion.SetLevel(window, TKCode.Arc.Motion.ArcMotionLevel.Off);
         window.Show();
         SceneCapture.Await(shell.Context.Queries.WhenIdleAsync(), TimeSpan.FromSeconds(10));
@@ -386,7 +386,7 @@ public class SettingsBehaviourTests
         var shell = Scenes.BuildShell(Scenes.Fixtures());
         shell.Navigator.Navigate(AppRoute.Settings, "tray");
         var view = new ShellView { DataContext = shell };
-        var window = new AtomUI.Desktop.Controls.Window { Content = view, Width = 1440, Height = 900, IsTitleBarVisible = false, CanResize = false };
+        var window = new Window { Content = view, Width = 1440, Height = 900, CanResize = false };
         window.Show();
         try
         {

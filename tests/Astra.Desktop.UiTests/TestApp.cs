@@ -1,8 +1,6 @@
 using Astra.Desktop;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Theme;
-using AtomUI;
-using AtomUI.Desktop.Controls;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -40,13 +38,13 @@ public static class TestAppBuilder
             .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
             .WithInterFont()
             .WithArcFonts()
-            .UseAtomUI(builder =>
+            .UseArc(arc =>
             {
-                builder.UseDesktopControls();
-                builder.UseArc();
-                builder.UseArcAdvancedCharts();
-                builder.UseArcBlocks();
-                AppServices.Current.Theme.Configure(builder);
-            });
+                arc.UseArcControls();
+                arc.UseArcAdvancedCharts();
+                arc.UseArcBlocks();
+                AppServices.Current.Theme.Configure(arc);
+            })
+            .AfterSetup(_ => AppServices.Current.Theme.Install());
     }
 }

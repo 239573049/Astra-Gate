@@ -7,7 +7,7 @@ using TKCode.Arc;
 namespace Astra.Desktop.Components.Tokens;
 
 /// <summary>
-/// Builders for Arc's <see cref="SortableDataTable"/> in the web's <c>DataColumn</c> vocabulary (key, label, numeric, width, render):
+/// Builders for Arc's <see cref="Table"/> in the web's <c>DataColumn</c> vocabulary (key, label, numeric, width, render):
 /// typed value selectors only (no reflection bindings, AOT), text cells by default and a <c>DataCell</c> template where a column
 /// needs more than text.
 /// </summary>
@@ -41,10 +41,10 @@ public static class Tables
     /// A table of <paramref name="rows"/>. <paramref name="rowKey"/> keeps row identity across refreshes; a <paramref name="sortKey"/>
     /// sorts on load (null keeps the order given).
     /// </summary>
-    public static SortableDataTable Create<T>(string caption, IReadOnlyList<T> rows, Func<T, object> rowKey, string emptyMessage,
+    public static Table Create<T>(string caption, IReadOnlyList<T> rows, Func<T, object> rowKey, string emptyMessage,
         IEnumerable<DataTableColumn> columns, string? sortKey = null, bool descending = false) where T : class
     {
-        var table = new SortableDataTable
+        var table = new Table
         {
             Caption = caption,
             EmptyMessage = emptyMessage,
@@ -67,7 +67,7 @@ public static class Tables
     /// label at 6%), so it reads as label at ~10%. ARC-GAP: <c>ColumnTintBrush</c> is internal; it is set through the property registry
     /// (no reflection), as <c>PricingUi.WithoutCompactLayout</c> does for <c>CompactBreakpoint</c>.
     /// </summary>
-    public static SortableDataTable WebSurface(SortableDataTable table)
+    public static Table WebSurface(Table table)
     {
         void Apply()
         {

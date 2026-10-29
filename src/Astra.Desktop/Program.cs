@@ -5,8 +5,6 @@ using Astra.Desktop.Core.Tray;
 using Astra.Desktop.Platform;
 using Astra.Desktop.Platform.Tray;
 using Astra.Desktop.Shell;
-using AtomUI;
-using AtomUI.Desktop.Controls;
 using Avalonia;
 using TKCode.Arc;
 using TKCode.Arc.Fonts;
@@ -92,13 +90,14 @@ internal static class Program
         .UsePlatformDetect()
         .WithInterFont()
         .WithArcFonts()
-        .UseAtomUI(builder =>
+        .UseArc(arc =>
         {
-            builder.UseDesktopControls();
-            builder.UseArc();
-            builder.UseArcAdvancedCharts();
-            builder.UseArcBlocks();
+            arc.UseArcControls();
+            arc.UseArcAdvancedCharts();
+            arc.UseArcBlocks();
             // Last: the first window must already have the user's light / dark choice and accent (no flash).
-            AppServices.Current.Theme.Configure(builder);
-        });
+            AppServices.Current.Theme.Configure(arc);
+        })
+        // After UseArc, so the kit's styles come after Arc's.
+        .AfterSetup(_ => AppServices.Current.Theme.Install());
 }

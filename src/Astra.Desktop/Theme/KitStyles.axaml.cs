@@ -8,8 +8,8 @@ using Avalonia.Styling;
 namespace Astra.Desktop.Theme;
 
 /// <summary>
-/// App-wide corrections of Arc toward the web, applied once at startup (<see cref="ThemeService.Configure"/> registers <see cref="Install"/>
-/// as an AtomUI initializer, which runs once the <see cref="Application"/> exists, in the app and in the headless test host alike):
+/// App-wide corrections of Arc toward the web, applied once at startup (<see cref="ThemeService.Install"/> calls <see cref="Install"/>
+/// from <c>AppBuilder.AfterSetup</c>, which runs once the <see cref="Application"/> exists, in the app and in the headless test host alike):
 /// the accent primary button (KitStyles.axaml), CJK-aware wrapping of Arc's empty states (<see cref="CjkWrap"/>) and device-pixel hairlines.
 /// </summary>
 public sealed partial class KitStyles : Styles

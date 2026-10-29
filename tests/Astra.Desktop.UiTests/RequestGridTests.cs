@@ -6,7 +6,6 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.UiTests;
 
@@ -17,11 +16,11 @@ public class RequestGridTests
         => new(id, DateTimeOffset.Parse(startedAt, System.Globalization.CultureInfo.InvariantCulture), null, "prov_a", "OpenAI", "openai-chat", "openai-chat", true, model, model,
             model, model, true, "success", 200, 120, 900, 50.0, tokens, 20, 10, 0, 0, 12_000_000, "reported", effort, null, null, "tok_a", "ci-bot", null, null, false, null);
 
-    private static (RequestGrid Grid, AtomWindow Window) Open(IReadOnlyList<RequestRowViewModel> rows, double width = 1200)
+    private static (RequestGrid Grid, Window Window) Open(IReadOnlyList<RequestRowViewModel> rows, double width = 1200)
     {
         var ctx = new RequestTableContext { Clock = new FixedClock(DateTimeOffset.Parse("2026-10-26T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture)), Provider = _ => null, TimeZone = TimeZoneInfo.Utc };
         var grid = RequestTable.Create(rows, ctx);
-        var window = new AtomWindow { Content = grid, Width = width, Height = 600 };
+        var window = new Window { Content = grid, Width = width, Height = 600 };
         window.Show();
         SceneCapture.Pump(2);
         return (grid, window);

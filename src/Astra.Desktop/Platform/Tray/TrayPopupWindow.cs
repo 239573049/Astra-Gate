@@ -4,17 +4,16 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Platform;
-using AtomWindow = AtomUI.Desktop.Controls.Window;
 
 namespace Astra.Desktop.Platform.Tray;
 
 /// <summary>
 /// The tray panel's window (desktop/src/trayPanel.ts <c>TrayPanel</c>; plan inventory GAP-7 — Avalonia's <c>TrayIcon</c> has no panel): frameless,
 /// transparent (the card draws its own rounded background), always on top, out of the taskbar, positioned next to the tray icon, sized to its
-/// content and hidden again when it loses focus. It is an AtomUI window like the main one, because the Arc controls inside open popups
-/// (tooltips, the client-switch menu) that need AtomUI's overlay support (plan avalonia-client §11).
+/// content and hidden again when it loses focus. The Arc controls inside open popups (tooltips, the client-switch menu) in the window's
+/// overlay layer, which Arc's base theme provides for a plain Avalonia window.
 /// </summary>
-internal sealed class TrayPopupWindow : AtomWindow
+internal sealed class TrayPopupWindow : Window
 {
     private ScreenRect? _anchor;
     private double _contentHeight = TrayPanelLayout.DefaultHeight;
@@ -30,7 +29,6 @@ internal sealed class TrayPopupWindow : AtomWindow
         CanResize = false;
         ShowInTaskbar = false;
         Topmost = true;
-        IsTitleBarVisible = false;
         WindowDecorations = WindowDecorations.None;
         // No shadow box of our own: the window is transparent and the card is the visible surface.
         ExtendClientAreaToDecorationsHint = false;

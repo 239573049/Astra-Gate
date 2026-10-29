@@ -230,9 +230,9 @@ public static partial class Scenes
 /// </summary>
 public class ModelsUiTests
 {
-    private static AtomUI.Desktop.Controls.Window Show(Control content)
+    private static Window Show(Control content)
     {
-        var window = new AtomUI.Desktop.Controls.Window { Content = content, Width = 1000, Height = 800, IsTitleBarVisible = false };
+        var window = new Window { Content = content, Width = 1000, Height = 800 };
         window.Show();
         SceneCapture.Pump(5);
         return window;

@@ -12,8 +12,7 @@ using Astra.Desktop.Theme;
 
 namespace Astra.Desktop;
 
-// partial: AtomUI's source generator needs it (build stops with ATOMUILOC008 otherwise).
-public partial class App : Application
+public class App : Application
 {
     private readonly CancellationTokenSource _stop = new();
 

@@ -1,7 +1,3 @@
-using AtomUI;
-using AtomUI.Theme;
-using AtomUI.Theme.Algorithms;
-using AtomUI.Theme.Configuration;
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Platform;
@@ -13,9 +9,9 @@ namespace Astra.Desktop.Theme;
 public sealed record AccentPreset(string Id, string Hex);
 
 /// <summary>
-/// Light / dark / follow-system plus the accent, applied through AtomUI's theme manager (plan avalonia-client §3 D5).
-/// The choice is read from <see cref="DesktopPrefs"/> and handed to AtomUI while the app is built
-/// (<see cref="Configure"/>), so the first window already has its final colors; later changes go through
+/// Light / dark / follow-system plus the accent, applied through Arc's theme (<c>ArcTheme</c>) (plan avalonia-client §3 D5).
+/// The choice is read from <see cref="DesktopPrefs"/> and handed to Arc while the app is built
+/// (<see cref="Configure"/>, <see cref="Install"/>), so the first window already has its final colors; later changes go through
 /// <see cref="ApplyAsync"/>. The accent follows the OS ("system") unless a preset color is chosen, like the web.
 /// </summary>
 public sealed class ThemeService
@@ -81,43 +77,38 @@ public sealed class ThemeService
     /// <summary>"system" or a <c>#rrggbb</c> preset.</summary>
     public string AccentChoice => _prefs.Accent;
 
-    /// <summary>The theme algorithms and Arc accent for one appearance. Arc recomputes its whole palette from the accent seed.</summary>
-    public static ThemeConfig BuildConfig(bool dark, Color accent)
+    /// <summary>One appearance's state on Arc's theme: light / dark, the accent, and the web's tokens. Arc recomputes its whole palette from the accent seed.</summary>
+    public static void Describe(ArcThemeBuilder t, ArcAppearance appearance, Color accent)
     {
-        var builder = new ThemeConfigBuilder();
-        builder = dark
-            ? builder.WithAlgorithms(ThemeAlgorithm.Default, ThemeAlgorithm.Dark)
-            : builder.WithAlgorithms(ThemeAlgorithm.Default);
-        return builder.WithArc(arc =>
-        {
-            arc.Accent(accent);
-            // The web remaps Arc's tokens to macOS density in web/src/styles/index.css (":root[data-theme]" block): 10 / 14 / 22
-            // corner radii, 28 / 32 / 36 controls and a 11-13-14-15-18-22-26 type scale. Arc's own defaults are larger (18 / 26 / 34,
-            // 36 / 44 / 50, 12-14-16-18-22-28-36), so they are overridden by the same numbers. The Corners package would also cover
-            // the per-control radii; it is not referenced yet (open question in plan avalonia-client §17).
-            foreach (var (name, value) in WebTokens) arc.Token(name, value);
-            // The web's palette over Arc's defaults (PaletteLight / PaletteDark above).
-            foreach (var (name, value) in dark ? PaletteDark : PaletteLight) arc.Token(name, value);
-        }).Build();
+        t.Appearance(appearance).Accent(accent);
+        // The web remaps Arc's tokens to macOS density in web/src/styles/index.css (":root[data-theme]" block): 10 / 14 / 22
+        // corner radii, 28 / 32 / 36 controls and a 11-13-14-15-18-22-26 type scale. Arc's own defaults are larger (18 / 26 / 34,
+        // 36 / 44 / 50, 12-14-16-18-22-28-36), so they are overridden by the same numbers. The Corners package would also cover
+        // the per-control radii; it is not referenced yet (open question in plan avalonia-client §17).
+        foreach (var (name, value) in WebTokens) t.Token(name, value);
+        // The web's palette over Arc's defaults (PaletteLight / PaletteDark above).
+        foreach (var (name, value) in appearance == ArcAppearance.Dark ? PaletteDark : PaletteLight) t.Token(name, value);
     }
 
     /// <summary>
-    /// Startup hook (call inside <c>UseAtomUI</c>): follow-system registers a light and a dark request so AtomUI resolves the
-    /// OS appearance before the first window; an explicit choice is a single initial theme.
+    /// Startup hook (call inside <c>UseArc</c>): the user's choice is the initial theme, so the first window already has its final
+    /// colors. Follow-system starts as the light palette; <see cref="Install"/> resolves the OS appearance once the application exists.
     /// </summary>
-    public void Configure(IAtomUIBuilder builder)
+    public void Configure(ArcBuilder arc)
     {
         var accent = ParseHex(AccentHex);
-        // The kit's app-wide corrections of Arc (accent primary buttons, CJK empty states): an initializer runs once the Application exists.
-        builder.Theme.AddInitializer(_ => KitStyles.Install(Application.Current, AccentHex));
-        if (_prefs.Theme == ThemeSource.System)
-        {
-            builder.WithFollowSystemThemes(Request(false, accent), Request(true, accent));
-        }
-        else
-        {
-            builder.WithInitialTheme(IThemeManager.DEFAULT_THEME_ID, BuildConfig(_prefs.Theme == ThemeSource.Dark, accent));
-        }
+        arc.WithTheme(t => Describe(t, _prefs.Theme == ThemeSource.Dark ? ArcAppearance.Dark : ArcAppearance.Light, accent));
+    }
+
+    /// <summary>
+    /// After-setup hook (<c>AppBuilder.AfterSetup</c>, registered after <c>UseArc</c> so Arc's styles are in): the kit's app-wide
+    /// corrections of Arc (accent primary buttons, CJK empty states) and the resolved OS appearance, in the app and in the headless
+    /// test host alike.
+    /// </summary>
+    public void Install()
+    {
+        KitStyles.Install(Application.Current, AccentHex);
+        if (_prefs.Theme == ThemeSource.System) ArcTheme.Apply(t => Describe(t, Resolve() ? ArcAppearance.Dark : ArcAppearance.Light, ParseHex(AccentHex)));
     }
 
     /// <summary>
@@ -161,26 +152,25 @@ public sealed class ThemeService
         return ApplyAsync();
     }
 
-    /// <summary>Applies the current choice. Always asserts the full desired state, so it also wins over AtomUI's own follow-system listener.</summary>
+    /// <summary>Applies the current choice. Always asserts the full desired state, so it wins over whatever the theme held before.</summary>
     public async Task ApplyAsync()
     {
-        if (Application.Current?.GetThemeManager() is not { } manager) return;
-        var dark = _prefs.Theme switch
-        {
-            ThemeSource.Dark => true,
-            ThemeSource.Light => false,
-            _ => (_system ?? Application.Current.PlatformSettings?.GetColorValues())?.ThemeVariant == PlatformThemeVariant.Dark,
-        };
+        if (Application.Current is null) return;
+        var dark = Resolve();
         var systemHex = _system is { } s ? SystemHex(s) : _prefs.LastSystemAccent;
         AccentHex = ResolveAccentHex(systemHex);
         var accent = ParseHex(AccentHex);
         KitStyles.SetAccent(Application.Current, AccentHex);
-        await manager.ApplyThemeAsync(Request(dark, accent));
+        await ArcTheme.Manager.ApplyAsync(t => Describe(t, dark ? ArcAppearance.Dark : ArcAppearance.Light, accent));
         AppearanceChanged?.Invoke();
     }
 
-    private static ThemeRequest Request(bool dark, Color accent)
-        => new(IThemeManager.DEFAULT_THEME_ID, BuildConfig(dark, accent), ThemeTransitionReason.UserRequest);
+    private bool Resolve() => _prefs.Theme switch
+    {
+        ThemeSource.Dark => true,
+        ThemeSource.Light => false,
+        _ => (_system ?? Application.Current?.PlatformSettings?.GetColorValues())?.ThemeVariant == PlatformThemeVariant.Dark,
+    };
 
     private string ResolveAccentHex(string? systemHex)
         => _prefs.Accent == DesktopPrefs.SystemAccent ? systemHex ?? DefaultAccent : _prefs.Accent;

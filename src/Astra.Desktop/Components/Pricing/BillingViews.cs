@@ -89,7 +89,7 @@ public sealed class BillingResultView : UserControl
         stack.Children.Add(head);
 
         var rows = BillingSimulation.Rows(result);
-        if (rows.Count > 0) stack.Children.Add(Table(rows));
+        if (rows.Count > 0) stack.Children.Add(ItemsTable(rows));
 
         if (!string.IsNullOrEmpty(result.Description))
         {
@@ -102,9 +102,9 @@ public sealed class BillingResultView : UserControl
 
     // The web folds the table only under a 620 px VIEWPORT (a media query), never because its column is narrow: a table in a 500 px card
     // keeps its columns and scrolls sideways below 560 px. Arc folds by the table's own width, so the breakpoint is switched off.
-    private static SortableDataTable Table(List<BillingSimulation.ItemRow> rows)
+    private static Table ItemsTable(List<BillingSimulation.ItemRow> rows)
     {
-        var table = new SortableDataTable { Caption = Loc.T("billing.type"), ItemsSource = rows, MaxHeight = 360 }.WithoutCompactLayout();
+        var table = new Table { Caption = Loc.T("billing.type"), ItemsSource = rows, MaxHeight = 360 }.WithoutCompactLayout();
         Astra.Desktop.Components.Tokens.Tables.WebSurface(table);
         table.Columns.Add(new DataTableColumn(Loc.T("billing.type"), r => ((BillingSimulation.ItemRow)r).TypeText) { Key = "type", SortValueSelector = r => ((BillingSimulation.ItemRow)r).Item.TokenType });
         table.Columns.Add(new DataTableColumn(Loc.T("billing.tokens"), r => ((BillingSimulation.ItemRow)r).TokensText) { Key = "tokens", IsNumeric = true, Width = new GridLength(120), SortValueSelector = r => ((BillingSimulation.ItemRow)r).Item.Tokens });

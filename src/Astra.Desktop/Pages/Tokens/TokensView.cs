@@ -168,7 +168,8 @@ public sealed class TokensView : UserControl
         var key = new SelectableTextBlock { Text = token.KeyMasked, FontSize = KitStyle.Type12, VerticalAlignment = VerticalAlignment.Center };
         key.Token(TextBlock.FontFamilyProperty, ArcDesignTokenKind.MonoFontFamily).Token(TextBlock.ForegroundProperty, ArcDesignTokenKind.TextSecondary);
         var settings = _page.Settings.Data;
-        var keyRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 2, 0, 0) };
+        // A WrapPanel: in a narrow window the copy buttons drop to a second line instead of running over the summary columns.
+        var keyRow = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 4, LineSpacing = 2, Margin = new Thickness(0, 2, 0, 0) };
         keyRow.Children.Add(key);
         ArcButton? copyKey = null;
         copyKey = CopyButton(LucideIconKind.Copy, Loc.T("tokens.copy"), true, async () =>
