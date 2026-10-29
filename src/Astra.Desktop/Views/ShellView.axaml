@@ -50,7 +50,7 @@
                      TextTrimming="CharacterEllipsis" Foreground="{arc:ArcDesignTokenResource TextSecondary}"
                      IsVisible="{Binding Navigator.Current.Subtitle, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
         </StackPanel>
-        <ContentPresenter x:Name="HeaderActionsHost" Grid.Column="4" Content="{Binding Navigator.Current.HeaderActions}" VerticalAlignment="Center" HorizontalAlignment="Right" />
+        <ContentPresenter x:Name="HeaderActionsHost" Grid.Column="4" VerticalAlignment="Center" HorizontalAlignment="Right" />
       </Grid>
 
       <!-- Page body (web Page content): scrolls under the header with the same edge fade; a page that scrolls itself opts out (HostScrolls) -->

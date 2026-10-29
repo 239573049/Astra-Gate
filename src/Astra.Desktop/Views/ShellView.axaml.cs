@@ -17,6 +17,7 @@ public partial class ShellView : UserControl
 {
     private readonly ServiceStatusView _status = new();
     private ShellViewModel? _vm;
+    private PageViewModel? _headerPage;
     private bool _syncing;
 
     public ShellView()
@@ -78,9 +79,32 @@ public partial class ShellView : UserControl
     {
         if (_vm is null) return;
         if (!ReferenceEquals(PageHost.Content, _vm.Navigator.Current)) PageHost.Content = _vm.Navigator.Current;
+        SyncHeaderActions();
         // web: a page may pass a <code className="font-mono"> subtitle (a key); the token binding replaces the previous page's either way
         Components.Kit.KitStyle.Token(SubtitleText, TextBlock.FontFamilyProperty, _vm.Navigator.Current.SubtitleMono
             ? TKCode.Arc.DesignTokens.ArcDesignTokenKind.MonoFontFamily : TKCode.Arc.DesignTokens.ArcDesignTokenKind.BodyFontFamily);
+    }
+
+    /// <summary>
+    /// Shows the current page's header actions (set here rather than bound, like the page host: the bound presenter stayed empty). A page
+    /// sets them after it loads, so the page's own change notification is followed too.
+    /// </summary>
+    private void SyncHeaderActions()
+    {
+        if (_vm is null) return;
+        var page = _vm.Navigator.Current;
+        if (!ReferenceEquals(_headerPage, page))
+        {
+            if (_headerPage is not null) _headerPage.PropertyChanged -= OnHeaderPageChanged;
+            _headerPage = page;
+            page.PropertyChanged += OnHeaderPageChanged;
+        }
+        if (!ReferenceEquals(HeaderActionsHost.Content, page.HeaderActions)) HeaderActionsHost.Content = page.HeaderActions;
+    }
+
+    private void OnHeaderPageChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PageViewModel.HeaderActions)) SyncHeaderActions();
     }
 
     /// <summary>
