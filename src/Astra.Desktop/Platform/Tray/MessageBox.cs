@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using TKCode.Arc;
 using TKCode.Arc.DesignTokens;
 using TKCode.Arc.Icons.Lucide;
@@ -19,11 +20,17 @@ internal enum MessageBoxKind { Info, Warning, Error }
 /// A small modal message box of its own window (Electron's <c>dialog.showMessageBox</c> without a parent): the tray's update reminder, the
 /// tray's check-for-updates result, the update-failed and API-mismatch warnings and tray action errors. Its own window, not a dialog in
 /// the main one, because a tray app often has no visible window (login start, closed to the tray) — exactly when these appear.
-/// Centered on the primary screen, always on top, out of the taskbar; Escape / the close box pick <c>cancelIndex</c>, Enter the default.
-/// Built from Arc buttons and the tray panel's text styles; an AtomUI window like the others (plan avalonia-client §11).
+/// Centered on the primary screen, always on top, out of the taskbar; Escape / Alt+F4 pick <c>cancelIndex</c>, Enter the default.
+/// Frameless like the tray panel: no OS title bar, a transparent window whose rounded card (the tray panel's surface and border tokens, a
+/// soft shadow) is the visible surface, dragged by its header. Built from Arc buttons and the tray panel's text styles; an AtomUI window
+/// like the others (plan avalonia-client §11).
 /// </summary>
 internal sealed class MessageBox : AtomWindow
 {
+    private const double CardWidth = 420;
+    /// <summary>Transparent margin around the card, room for its shadow.</summary>
+    private const double ShadowRoom = 20;
+
     private readonly TaskCompletionSource<int> _result = new();
     private readonly int _cancelIndex;
 
@@ -31,11 +38,17 @@ internal sealed class MessageBox : AtomWindow
     {
         _cancelIndex = cancelIndex;
         Title = "Astra";
-        Width = 420;
+        Width = CardWidth + 2 * ShadowRoom;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
         ShowInTaskbar = false;
         Topmost = true;
+        IsTitleBarVisible = false;
+        WindowDecorations = WindowDecorations.None;
+        ExtendClientAreaToDecorationsHint = false;
+        Background = Brushes.Transparent;
+        TransparencyBackgroundFallback = Brushes.Transparent;
+        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
         var (glyph, tone) = kind switch
@@ -44,8 +57,11 @@ internal sealed class MessageBox : AtomWindow
             MessageBoxKind.Warning => (LucideIconKind.TriangleAlert, ArcDesignTokenKind.Warning),
             _ => (LucideIconKind.Info, ArcDesignTokenKind.Accent),
         };
-        var icon = TrayUi.Icon(glyph, 28, tone);
-        icon.VerticalAlignment = VerticalAlignment.Top;
+        var icon = TrayUi.Icon(glyph, 22, tone);
+        icon.HorizontalAlignment = HorizontalAlignment.Center;
+        icon.VerticalAlignment = VerticalAlignment.Center;
+        var badge = new Border { Width = 40, Height = 40, CornerRadius = new CornerRadius(12), VerticalAlignment = VerticalAlignment.Top, Child = icon };
+        badge.Token(Border.BackgroundProperty, ArcDesignTokenKind.SurfaceMuted);
         var head = TrayUi.Text(message, 14, ArcDesignTokenKind.Foreground, FontWeight.SemiBold);
         head.TextTrimming = TextTrimming.None;
         head.TextWrapping = TextWrapping.Wrap;
@@ -54,10 +70,19 @@ internal sealed class MessageBox : AtomWindow
         {
             var body = new SelectableTextBlock { Text = detail, FontSize = 12.5, TextWrapping = TextWrapping.Wrap };
             body.Token(TextBlock.ForegroundProperty, ArcDesignTokenKind.TextSecondary);
-            text.Children.Add(new ScrollViewer { MaxHeight = 320, Content = body, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto });
+            var notes = new Border
+            {
+                Margin = new Thickness(0, 4, 0, 0),
+                Padding = new Thickness(12, 10),
+                CornerRadius = new CornerRadius(10),
+                ClipToBounds = true,
+                Child = new ScrollViewer { MaxHeight = 280, Content = body, VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto },
+            };
+            notes.Token(Border.BackgroundProperty, ArcDesignTokenKind.SurfaceMuted);
+            text.Children.Add(notes);
         }
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 14 };
-        top.Children.Add(icon);
+        top.Children.Add(badge);
         Grid.SetColumn(text, 1);
         top.Children.Add(text);
 
@@ -76,8 +101,27 @@ internal sealed class MessageBox : AtomWindow
             bar.Children.Add(button);
             if (i == defaultIndex) Opened += (_, _) => button.Focus();
         }
-        var root = new StackPanel { Margin = new Thickness(20, 20, 20, 16), Children = { top, bar } };
-        Content = root;
+        var card = new Border
+        {
+            Child = new StackPanel { Children = { top, bar } },
+            Padding = new Thickness(22, 22, 22, 18),
+            Margin = new Thickness(ShadowRoom),
+            CornerRadius = new CornerRadius(16),
+            BorderThickness = new Thickness(1),
+            ClipToBounds = true,
+            BoxShadow = BoxShadows.Parse("0 10 32 0 #40000000"),
+        };
+        card.Token(Border.BackgroundProperty, ArcDesignTokenKind.SurfaceRaised).Token(Border.BorderBrushProperty, ArcDesignTokenKind.BorderStrong);
+        Content = card;
+
+        // No title bar to drag: the card moves the window, except where a press selects text or hits a button.
+        card.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(card).Properties.IsLeftButtonPressed) return;
+            for (var v = e.Source as Visual; v is not null && !ReferenceEquals(v, card); v = v.GetVisualParent())
+                if (v is TKCode.Arc.Button or SelectableTextBlock or ScrollViewer) return;
+            BeginMoveDrag(e);
+        };
 
         KeyDown += (_, e) =>
         {
