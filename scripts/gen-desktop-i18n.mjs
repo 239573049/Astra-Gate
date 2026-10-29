@@ -14,7 +14,7 @@ const check = process.argv.includes('--check');
 
 function findEsbuild() {
   const exe = process.platform === 'win32' ? 'esbuild.cmd' : 'esbuild';
-  for (const dir of ['node_modules/.bin', 'web/node_modules/.bin', 'cli/node_modules/.bin']) {
+  for (const dir of ['node_modules/.bin', 'desktop/node_modules/.bin', 'web/node_modules/.bin', 'cli/node_modules/.bin']) {
     const p = join(root, dir, exe);
     if (existsSync(p)) return p;
   }

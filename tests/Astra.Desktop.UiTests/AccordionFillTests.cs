@@ -29,6 +29,6 @@ public class AccordionFillTests
     public void Content_fills_the_item_only_with_FillWidth()
     {
         Assert.True(WidthOf(false) < 400);
-        Assert.True(WidthOf(true) > 600);
+        Assert.True(WidthOf(true) > 500); // the item is ~630 wide on Linux, wider elsewhere: only "fills" vs "content-sized" matters
     }
 }

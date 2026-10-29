@@ -18,27 +18,16 @@ public static class AccordionFill
     /// <summary>Stretches the body of <paramref name="item"/> once its template exists; returns the item.</summary>
     public static AccordionItem FillWidth(this AccordionItem item)
     {
-        item.TemplateApplied += (_, _) => Apply(item);
-        item.AttachedToVisualTree += (_, _) => Apply(item);
-        // The body frame can be created after both (the content presenter appears with the first layout on some platforms): retry until it is found.
-        void Retry(object? sender, EventArgs e)
-        {
-            if (Apply(item)) item.LayoutUpdated -= Retry;
-        }
-        item.LayoutUpdated += Retry;
+        item.TemplateApplied += (_, e) => Apply(item, e);
+        item.AttachedToVisualTree += (_, _) => Apply(item, null);
         return item;
     }
 
-    private static bool Apply(AccordionItem item)
+    private static void Apply(AccordionItem item, TemplateAppliedEventArgs? _)
     {
-        var found = false;
         // The content presenter's parent border is the body frame.
         foreach (var presenter in item.GetVisualDescendants().OfType<ContentPresenter>())
-            if (presenter.GetVisualParent() is Border frame && ReferenceEquals(presenter.Content, item.Content))
-            {
-                found = true;
-                if (frame.HorizontalAlignment == HorizontalAlignment.Left) frame.HorizontalAlignment = HorizontalAlignment.Stretch;
-            }
-        return found;
+            if (presenter.GetVisualParent() is Border { HorizontalAlignment: HorizontalAlignment.Left } frame && ReferenceEquals(presenter.Content, item.Content))
+                frame.HorizontalAlignment = HorizontalAlignment.Stretch;
     }
 }
