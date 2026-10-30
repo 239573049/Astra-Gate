@@ -30,17 +30,23 @@ public class App : Application
             services.InitializeRuntime(manager);
             var shell = services.CreateShell();
             if (TrayRelaunch.Route(args) is { } page) shell.Navigator.Navigate(page.Route, page.Param);
-            var window = new MainWindow(shell);
-            services.MainWindow = window;
+            // Built when it is first shown, not at start: a tray-only process that never shows it stays smaller (AOT Astra.app on macOS,
+            // measured 2026-10-30: 55–61 → 50–51 MB — the native window, the shell's views and a 1024 px Dock icon render).
+            MainWindow CreateWindow()
+            {
+                var window = new MainWindow(shell);
+                services.MainWindow = window;
+                AppMenu.Install(this, window, services.Host);
+                if (OperatingSystem.IsMacOS()) MacApp.SetDockIcon(() => DockIcon.Render(Components.Kit.AppAssets.Logo));
+                return window;
+            }
             // A tray app: the last window closing (to the tray) must not end the process; Quit does (plan avalonia-client WP10).
             desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
             // Launched by the login item: start in the tray / menu bar with no window (Electron: no window and no Dock icon).
             var hidden = LoginItemService.LaunchedAtLogin(desktop.Args ?? []);
-            if (!hidden) desktop.MainWindow = window;
-            AppMenu.Install(this, window, services.Host);
-            if (OperatingSystem.IsMacOS()) MacApp.SetDockIcon(DockIcon.Render(Components.Kit.AppAssets.Logo));
             TrayPreviewControl.Install();
-            var tray = new TrayRuntime(this, desktop, services, window);
+            var tray = new TrayRuntime(this, desktop, services, shell, CreateWindow);
+            if (!hidden) desktop.MainWindow = tray.MainWindow;
             tray.Start();
             if (hidden) tray.StartHidden();
             // A second launch (Dock, Start menu, launcher) brings this window forward (Electron's 'second-instance').
@@ -63,7 +69,7 @@ public class App : Application
                 _ = shell.Connection.RunAsync(_stop.Token);
             }
             if (hidden) Connect();
-            else window.Opened += (_, _) => Connect();
+            else tray.MainWindow.Opened += (_, _) => Connect();
             desktop.Exit += (_, _) =>
             {
                 tray.Dispose();

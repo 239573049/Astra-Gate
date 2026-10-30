@@ -115,14 +115,15 @@ internal static class MacApp
 
     /// <summary>
     /// Sets the Dock icon from PNG bytes. A bare executable (<c>dotnet run</c>, an unbundled AOT binary) has no Info.plist / .icns, so the Dock
-    /// shows the generic "exec" icon and <c>WindowIcon</c> does not reach it on macOS; inside Astra.app the bundle's own icon is kept.
+    /// shows the generic "exec" icon and <c>WindowIcon</c> does not reach it on macOS; inside Astra.app the bundle's own icon is kept, and
+    /// <paramref name="png"/> (a 1024 px render) is never called.
     /// </summary>
-    public static void SetDockIcon(byte[] png)
+    public static void SetDockIcon(Func<byte[]> png)
     {
         if (AppContext.BaseDirectory.Contains(".app/Contents/", StringComparison.Ordinal)) return;
         try
         {
-            var image = ObjC.Send(ObjC.Send(ObjC.Class("NSImage"), ObjC.Sel("alloc")), ObjC.Sel("initWithData:"), ObjC.Data(png));
+            var image = ObjC.Send(ObjC.Send(ObjC.Class("NSImage"), ObjC.Sel("alloc")), ObjC.Sel("initWithData:"), ObjC.Data(png()));
             if (image == IntPtr.Zero) return;
             ObjC.Send(ObjC.App, ObjC.Sel("setApplicationIconImage:"), image);
             ObjC.Release(image);

@@ -68,17 +68,21 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
 {
     private static readonly TimeSpan ProbeEvery = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan UpdateCheckEvery = TimeSpan.FromHours(12);
-    // In the tray: give memory back shortly after the window went (its render resources torn down first), then now and again, since the
-    // tray's own polling keeps allocating (MemoryRelief).
+    // In the tray: give memory back shortly after the window or the panel went (its render resources torn down first), then now and again,
+    // since the tray's own polling keeps allocating (MemoryRelief).
     private static readonly TimeSpan ReliefDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ReliefEvery = TimeSpan.FromMinutes(5);
-    // A window closed for this long is not coming straight back: restart into the tray to drop what rendering it left (TrayRelaunch).
-    private static readonly TimeSpan RelaunchAfter = TimeSpan.FromMinutes(2);
+    // Closed this long: restart into the tray to drop what rendering left (TrayRelaunch; ~250 → ~80 MB). Short, because the app mostly
+    // lives in the tray and a hidden successor shows its window at once; long enough for a close-and-reopen to keep the page as it was and
+    // for the Windows notice card (NoticeWindow.Lifetime) to be gone. Retried this often while something holds it.
+    private static readonly TimeSpan RelaunchAfter = TimeSpan.FromSeconds(15);
 
     private readonly Application _app;
     private readonly IClassicDesktopStyleApplicationLifetime _desktop;
     private readonly AppServices _services;
-    private readonly Window _main;
+    private readonly ShellViewModel _shell;
+    private readonly Func<Window> _createMain;
+    private Window? _main;
     private readonly TrayDataService _data;
     private readonly TrayPanelView _view = new();
     private readonly TrayPopupWindow _popup;
@@ -86,18 +90,19 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
     private readonly DispatcherTimer _probe;
     private readonly DispatcherTimer _updates;
     private readonly DispatcherTimer _relief;
+    private readonly DispatcherTimer _relaunch;
     private ITrayIcon? _icon;
     private IReadOnlyList<TrayMenuItem> _menu = [];
     private bool _updateAvailable;
     private bool _quitting;
-    private DateTimeOffset? _closedAt;
 
-    public TrayRuntime(Application app, IClassicDesktopStyleApplicationLifetime desktop, AppServices services, Window main)
+    public TrayRuntime(Application app, IClassicDesktopStyleApplicationLifetime desktop, AppServices services, ShellViewModel shell, Func<Window> createMain)
     {
         _app = app;
         _desktop = desktop;
         _services = services;
-        _main = main;
+        _shell = shell;
+        _createMain = createMain;
         var host = services.Host;
         Controller = new TrayController(new DesktopPrefsFile(services.Prefs), new ConnectionTrayService(services.Manager, services.Connection, services.Api), this,
             () => host.GetLoginItemAsync().GetAwaiter().GetResult() is { Supported: true } s ? s.Enabled : null,
@@ -105,6 +110,11 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         _data = new TrayDataService(services.Api, services.Queries, SystemClock.Instance);
         _popup = new TrayPopupWindow(_view);
         _popup.VisibilityChanged += Controller.OnPanelVisibility;
+        // The panel's garbage goes back like the window's (RelieveMemory waits while the window is on screen).
+        _popup.VisibilityChanged += visible =>
+        {
+            if (!visible) DispatcherTimer.RunOnce(RelieveMemory, ReliefDelay);
+        };
         _view.ContentHeightChanged += Controller.Resize;
         var feedback = new ArcFeedback(() => _popup);
         _presenter = TrayPanelPresenter.ForPopup(_view, _data, Controller, SystemClock.Instance, feedback,
@@ -118,17 +128,34 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
 
         _probe = new DispatcherTimer(ProbeEvery, DispatcherPriority.Background, (_, _) => _ = Controller.RefreshAsync());
         _updates = new DispatcherTimer(UpdateCheckEvery, DispatcherPriority.Background, (_, _) => _ = CheckQuietlyAsync());
-        _relief = new DispatcherTimer(ReliefEvery, DispatcherPriority.Background, (_, _) =>
-        {
-            RelieveMemory();
-            TryRelaunch();
-        });
+        _relief = new DispatcherTimer(ReliefEvery, DispatcherPriority.Background, (_, _) => RelieveMemory());
+        // Not the (interval, priority, callback) constructor: that one starts the timer, and a tray-only start would restart every tick.
+        _relaunch = new DispatcherTimer(DispatcherPriority.Background) { Interval = RelaunchAfter };
+        _relaunch.Tick += (_, _) => TryRelaunch();
     }
 
     /// <summary>The state machine and the pages' <see cref="ITrayHost"/>.</summary>
     public TrayController Controller { get; }
 
-    /// <summary>Creates the icon and starts polling. Call once, on the UI thread, after the main window exists.</summary>
+    /// <summary>The main window, built on first use: a tray-only start builds none until it is shown.</summary>
+    public Window MainWindow
+    {
+        get
+        {
+            if (_main is not null) return _main;
+            _main = _createMain();
+            // Close-to-tray: closing the window only hides it; the app keeps running in the tray / menu bar until Quit.
+            _main.Closing += (_, e) =>
+            {
+                if (_quitting || e.CloseReason == WindowCloseReason.ApplicationShutdown) return;
+                e.Cancel = true;
+                HideMainWindow();
+            };
+            return _main;
+        }
+    }
+
+    /// <summary>Creates the icon and starts polling. Call once, on the UI thread (the main window may not exist yet).</summary>
     public void Start()
     {
         if (OperatingSystem.IsMacOS())
@@ -141,13 +168,6 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         _services.Host.TrayHost = Controller;
         _services.Host.ContextMenu = items => ContextMenus.ShowAsync(items, ActiveOwner());
 
-        // Close-to-tray: closing the window only hides it; the app keeps running in the tray / menu bar until Quit.
-        _main.Closing += (_, e) =>
-        {
-            if (_quitting || e.CloseReason == WindowCloseReason.ApplicationShutdown) return;
-            e.Cancel = true;
-            HideMainWindow();
-        };
         // macOS: re-opening the app (Finder, Launchpad, Spotlight) while it lives in the menu bar shows the window (Electron's 'activate').
         if (_app.TryGetFeature<IActivatableLifetime>() is { } activatable)
             activatable.Activated += (_, e) =>
@@ -181,29 +201,29 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
     /// <summary>The window went to the tray: its page stops polling and the memory it used goes back to the OS.</summary>
     private void EnterTray(TimeSpan delay)
     {
-        (_main.DataContext as ShellViewModel)?.Navigator.SetSuspended(true);
+        _shell.Navigator.SetSuspended(true);
         DispatcherTimer.RunOnce(RelieveMemory, delay);
         _relief.Start();
     }
 
     private void LeaveTray()
     {
-        _closedAt = null;
+        _relaunch.Stop();
         _relief.Stop();
-        (_main.DataContext as ShellViewModel)?.Navigator.SetSuspended(false);
+        _shell.Navigator.SetSuspended(false);
     }
 
     /// <summary>
-    /// Hands over to a fresh tray-only process once the window has been closed for <see cref="RelaunchAfter"/> — unless that would cost
-    /// something: a page holds unsaved edits, an update is running, or the window / panel is on screen. Retried on every relief tick.
+    /// Hands over to a fresh tray-only process once the window has been closed for <see cref="RelaunchAfter"/> (the <c>_relaunch</c> timer,
+    /// running from the close until the window is shown again) — unless that would cost something: a page holds unsaved edits, an update
+    /// is running, or any window is on screen (the main window, the panel, a message box or notice opened from the tray). Retried on every
+    /// tick until it goes.
     /// </summary>
     private void TryRelaunch()
     {
-        if (_closedAt is not { } since || DateTimeOffset.UtcNow - since < RelaunchAfter) return;
-        if (_quitting || _main.IsVisible || _popup.IsVisible || _services.UpdateBusy) return;
-        var shell = _main.DataContext as ShellViewModel;
-        if (shell?.Navigator.HoldsUnsavedWork == true) return;
-        if (!TrayRelaunch.TryStart(TrayRelaunch.Args(Environment.ProcessId, shell?.Navigator.Current, _services.Manager?.OwnedServerPid))) return;
+        if (_quitting || _services.UpdateBusy || _desktop.Windows.Any(w => w.IsVisible)) return;
+        if (_shell.Navigator.HoldsUnsavedWork) return;
+        if (!TrayRelaunch.TryStart(TrayRelaunch.Args(Environment.ProcessId, _shell.Navigator.Current, _services.Manager?.OwnedServerPid))) return;
         _services.HandingOver = true;
         Quit();
     }
@@ -211,7 +231,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
     private void RelieveMemory()
     {
         // Only while nothing is on screen: a collection is a short pause, and the panel or the window would show it.
-        if (_main.IsVisible || _popup.IsVisible) return;
+        if (_main?.IsVisible == true || _popup.IsVisible) return;
         MemoryRelief.Release();
     }
 
@@ -276,7 +296,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         if (UpdateReminder.Decide(prefs.GetExtra(UpdateReminder.Key), version, now) is not null) return;
         prefs.SetExtra(UpdateReminder.Key, UpdateReminder.Record(prefs.GetExtra(UpdateReminder.Key), version, now));
         var t = UpdateDialogLabels.For(Loc.Language);
-        if (!_main.IsVisible)
+        if (_main?.IsVisible != true)
         {
             // The in-app notice (where it is used) opens the interactive check on click, like Electron's notification.
             DesktopNotifier.Show(t.Message(version), t.NotificationBody, () => _ = InteractiveCheckAsync());
@@ -372,9 +392,9 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         return true;
     }
 
-    private Control? ActiveOwner() => _popup.IsVisible ? _view : _main.Content as Control ?? _main;
+    private Control? ActiveOwner() => _popup.IsVisible || _main is null ? _view : _main.Content as Control ?? _main;
 
-    private TopLevel AnyTopLevel() => _popup.IsVisible ? _popup : _main;
+    private TopLevel AnyTopLevel() => _popup.IsVisible || _main is null ? _popup : _main;
 
     // ---------- ITrayShell ----------
 
@@ -398,37 +418,41 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
 
     public void ShowMainWindow(string? command)
     {
+        // Built first (it sets the Dock icon), then the Dock entry appears.
+        var main = MainWindow;
         if (OperatingSystem.IsMacOS()) MacApp.SetDockVisible(true);
-        if (_desktop.MainWindow is null) _desktop.MainWindow = _main;
+        if (_desktop.MainWindow is null) _desktop.MainWindow = main;
         LeaveTray();
-        _main.Show();
-        if (_main.WindowState == WindowState.Minimized) _main.WindowState = WindowState.Normal;
-        _main.Activate();
+        main.Show();
+        if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
+        main.Activate();
         if (OperatingSystem.IsMacOS()) MacApp.Activate();
         if (command is not null) _services.Host.RaiseMenuCommand(command);
     }
 
     private void HideMainWindow()
     {
+        var main = MainWindow;
         // macOS: hiding a full-screen window leaves an empty black Space behind; leave full screen first and hide once it has left
         // (Electron: once('leave-full-screen', hideToTray)). The exit animation takes a moment, so wait for the state change.
-        if (_main.WindowState == WindowState.FullScreen)
+        if (main.WindowState == WindowState.FullScreen)
         {
             void Left(object? s, AvaloniaPropertyChangedEventArgs e)
             {
-                if (e.Property != Window.WindowStateProperty || _main.WindowState == WindowState.FullScreen) return;
-                _main.PropertyChanged -= Left;
+                if (e.Property != Window.WindowStateProperty || main.WindowState == WindowState.FullScreen) return;
+                main.PropertyChanged -= Left;
                 // One more beat on macOS: the Space switch animation still runs when the state flips.
                 DispatcherTimer.RunOnce(HideMainWindow, TimeSpan.FromMilliseconds(OperatingSystem.IsMacOS() ? 700 : 0));
             }
-            _main.PropertyChanged += Left;
-            _main.WindowState = WindowState.Normal;
+            main.PropertyChanged += Left;
+            main.WindowState = WindowState.Normal;
             return;
         }
-        _main.Hide();
+        main.Hide();
         EnterTray(ReliefDelay);
-        _closedAt = DateTimeOffset.UtcNow;
-        DispatcherTimer.RunOnce(TryRelaunch, RelaunchAfter);
+        // Restarted, so a second close counts from now.
+        _relaunch.Stop();
+        _relaunch.Start();
         if (OperatingSystem.IsMacOS()) MacApp.SetDockVisible(false);
         // The first close explains where the app went (Electron's showCloseHintOnce): the window and its Dock / taskbar entry vanish.
         if (Controller.TakeCloseHint())
@@ -464,6 +488,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         _probe.Stop();
         _updates.Stop();
         _relief.Stop();
+        _relaunch.Stop();
         Loc.LanguageChanged -= OnLanguage;
         _presenter.Dispose();
         _data.Dispose();
