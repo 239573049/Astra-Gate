@@ -22,6 +22,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Avalonia updater was server-only](avalonia-updater-server-only.md) — packaged apps drifted behind their server; fixed 2026-10-30 with the track rule + app self-update (option B), unverified in a real release
 - [Release channels decision](release-channels-decision.md) — preview is derived from the version, the preview feed merges in stable, the manifest goes up after npm
 - [Self-service shows the requested model](key-self-service-requested-model.md) — holders see their request log and per-requested-model stats; never provider, account or upstream model
+- [Subscription tokens refresh on use](subscription-refresh-on-use.md) — no worker renews them (2026-10-30 user decision); background quota rounds skip lapsed tokens; idle cards show a past expiry
 - [Smart routing decisions](smart-routing-decisions.md) — virtual model trigger, judge is not a Provider, session pin by default, neither a fallback nor the lowest grade is pinned, a grade names its provider (limited tokens keep to theirs), the request log marks each decision, the OpenAI dialect is still a draft
 - [Smart routing's cold judge](smart-routing-cold-judge.md) — the first real use timed out on every cold connection and sent "1+1" to the fallback grade; why the judge has its own long-lived HTTP/2 client
 - [Enterprise join uses API key](enterprise-join-uses-api-key.md) — `astra join` takes gateway URL + company-issued API key; join codes rejected

@@ -67,8 +67,8 @@ plugin providers that mirror into the provider list (`astra-plugins`); client co
   (`src/Astra.Server/Hosting/AstraApp.cs:85`), `OAuthClient`/`SubscriptionTokenService`/`SubscriptionQuotaService`
   (`…:101-103`), `QuotaTemplateCatalog`/`ProviderQuotaService` (`…:117-118`), `ProviderQuotaManager` wrapping
   `ProviderQuotaService`, `SubscriptionQuotaSync.RefreshAsync` → `SubscriptionQuotaService.FetchAsync`, the
-  account/quota endpoints in `src/Astra.Server/Api/SubscriptionEndpoints.cs`, and the workers
-  `src/Astra.Server/Hosting/ProviderQuotaWorker.cs`, `…/SubscriptionRefreshWorker.cs`.
+  account/quota endpoints in `src/Astra.Server/Api/SubscriptionEndpoints.cs`, and the worker
+  `src/Astra.Server/Hosting/ProviderQuotaWorker.cs` (nothing renews tokens in the background).
 - Used by: `cli`, `web-ui`, `desktop-app` via HTTP — `/api/provider-templates`, `/api/provider-quota/templates`
   (`src/Astra.Server/Api/ProviderEndpoints.cs:36`, `:409`) and the per-provider/per-account quota routes; these
   clients never import the assembly.

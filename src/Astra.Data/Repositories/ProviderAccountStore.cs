@@ -35,18 +35,6 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
         return row?.ToAccount();
     }
 
-    public async Task<IReadOnlyList<ProviderAccount>> ListExpiringAsync(TimeSpan within, CancellationToken ct = default)
-    {
-        var horizon = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow + within);
-        await using var conn = await factory.OpenAsync(ct);
-        var rows = await conn.QueryAsync<AccountRow>($"""
-            {AccountSelect}
-            WHERE status = 'active' AND expires_at_utc IS NOT NULL AND expires_at_utc <= @horizon
-            ORDER BY expires_at_utc
-            """, new { horizon });
-        return rows.Select(r => r.ToAccount()).ToList();
-    }
-
     /// <summary>Inserts the account at the end of the provider's failover order.</summary>
     public async Task InsertAsync(ProviderAccount account, CancellationToken ct = default)
     {

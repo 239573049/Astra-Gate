@@ -104,9 +104,6 @@ public interface IProviderAccountStore
     Task<IReadOnlyList<ProviderAccount>> ListAsync(string? providerId = null, CancellationToken ct = default);
     Task<ProviderAccount?> GetAsync(string id, CancellationToken ct = default);
 
-    /// <summary>Active accounts whose access token expires within the given window (or has none).</summary>
-    Task<IReadOnlyList<ProviderAccount>> ListExpiringAsync(TimeSpan within, CancellationToken ct = default);
-
     Task InsertAsync(ProviderAccount account, CancellationToken ct = default);
 
     /// <summary>

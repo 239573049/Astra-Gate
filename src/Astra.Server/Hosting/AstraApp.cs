@@ -129,7 +129,6 @@ public static class AstraApp
         builder.Services.AddSingleton<GatewayPipeline>();
         builder.Services.AddSingleton<GatewayAuxiliary>();
         builder.Services.AddSingleton<PendingSubscriptionLogins>();
-        builder.Services.AddHostedService<SubscriptionRefreshWorker>();
         // Balance / quota queries of API-key providers: built-in templates, the query service, and its worker.
         builder.Services.AddSingleton<QuotaTemplateCatalog>();
         builder.Services.AddSingleton<ProviderQuotaService>();

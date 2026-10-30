@@ -14,6 +14,12 @@ namespace Astra.Server.Api;
 /// kept under <c>extra.quotaSync</c> (<c>{ checkedAtUtc, failures, error }</c>) next to the last good snapshot, which they
 /// never replace; a success clears them. The alert engine reads both.
 /// <para>
+/// Background rounds never renew a token: an account whose access token a call would have to refresh first
+/// (<see cref="SubscriptionTokenService.IsFresh(ProviderAccount, DateTimeOffset)"/> is false) is not due, and counts as
+/// no failure. The next request through the gateway renews it, and the round after that queries it again. A quota query
+/// the user asks for (<c>SubscriptionEndpoints</c>) still renews like any other call.
+/// </para>
+/// <para>
 /// An account cooling down after a 429 is looked at sooner: <see cref="RecheckCooledAsync"/> re-queries it every
 /// <see cref="CooledRecheck"/> and lifts the cooldown as soon as its snapshot shows room again (a reset credit was spent,
 /// the window rolled over early), instead of waiting for the reset time the 429 named.
@@ -48,6 +54,7 @@ public sealed class SubscriptionQuotaSync(
         var interval = IntervalMinutes;
         if (interval <= 0 || !provider.Enabled || provider.AuthScheme != AuthSchemes.OAuthSubscription) return false;
         if (!account.Enabled || account.Status != AccountStatus.Active || !SubscriptionQuotaService.CanProbe(provider, account)) return false;
+        if (!SubscriptionTokenService.IsFresh(account, now)) return false;
         if (Failures(account) >= ProviderQuotaManager.BackoffAfterFailures) interval *= ProviderQuotaManager.BackoffFactor;
         var last = Max(Time(account.Extra["quota"]?["fetchedAtUtc"]), Time(account.Extra[SyncKey]?["checkedAtUtc"]));
         return last is null || now - last >= TimeSpan.FromMinutes(interval);
@@ -63,6 +70,7 @@ public sealed class SubscriptionQuotaSync(
         if (IntervalMinutes <= 0 || !provider.Enabled || provider.AuthScheme != AuthSchemes.OAuthSubscription) return false;
         if (!account.Enabled || account.Status != AccountStatus.Active || !SubscriptionQuotaService.CanProbe(provider, account)) return false;
         if (!(account.CooldownUntilUtc > now) || IsAuthCooldown(account)) return false;
+        if (!SubscriptionTokenService.IsFresh(account, now)) return false;
         var wait = Failures(account) >= ProviderQuotaManager.BackoffAfterFailures ? CooledRecheck * ProviderQuotaManager.BackoffFactor : CooledRecheck;
         var last = Max(Time(account.Extra["quota"]?["fetchedAtUtc"]), Time(account.Extra[SyncKey]?["checkedAtUtc"]));
         return last is null || now - last >= wait;

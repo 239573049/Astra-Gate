@@ -424,6 +424,51 @@ public class AlertTests
     }
 
     [Fact]
+    public async Task Background_Quota_Rounds_Never_Renew_A_Token()
+    {
+        var quotaCalls = 0;
+        var refreshCalls = 0;
+        var (host, _) = await StartAsync(b =>
+        {
+            b.Services.AddHttpClient(SubscriptionQuotaService.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeUpstream(_ =>
+            {
+                Interlocked.Increment(ref quotaCalls);
+                return FakeUpstream.Json("""{"five_hour":{"utilization":10},"seven_day":{"utilization":40}}""");
+            }));
+            b.Services.AddHttpClient(OAuthClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => new FakeUpstream(_ =>
+            {
+                Interlocked.Increment(ref refreshCalls);
+                return FakeUpstream.Json("""{"access_token":"at-renewed","refresh_token":"rt-renewed","expires_in":3600}""");
+            }));
+        });
+        await using var _host = host;
+        var (_, created) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "claude-subscription" });
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        await host.Db.Accounts.InsertAsync(new ProviderAccount
+        {
+            Id = "acc-idle", ProviderId = created!["id"]!.GetValue<string>(), DisplayName = "me@example.com", Status = AccountStatus.Active,
+            AccessTokenEnc = protector.Protect("at"), RefreshTokenEnc = protector.Protect("rt"), ExpiresAtUtc = DateTimeOffset.UtcNow.AddSeconds(30),
+        });
+        await host.Db.Accounts.SetCooldownAsync("acc-idle", DateTimeOffset.UtcNow.AddHours(3), "429", CancellationToken.None);
+        var sync = host.App.Services.GetRequiredService<SubscriptionQuotaSync>();
+
+        // The access token is about to lapse: neither round renews it just to look at the quota, and skipping is no failure.
+        Assert.Equal(0, await sync.RecheckCooledAsync(10, CancellationToken.None));
+        Assert.Equal(0, await sync.RefreshDueAsync(10, CancellationToken.None));
+        var account = (await host.Db.Accounts.GetAsync("acc-idle"))!;
+        Assert.Equal((0, 0), (refreshCalls, quotaCalls));
+        Assert.Equal(AccountStatus.Active, account.Status);
+        Assert.Equal("at", protector.Unprotect(account.AccessTokenEnc!));
+        Assert.Equal(0, SubscriptionQuotaSync.Failures(account));
+
+        // A request renewed it (the gateway refreshes before it calls): the next round looks at the quota with that token.
+        await host.Db.Accounts.UpdateTokensAsync("acc-idle", protector.Protect("at-2"), account.RefreshTokenEnc, DateTimeOffset.UtcNow.AddHours(1));
+        Assert.Equal(1, await sync.RecheckCooledAsync(10, CancellationToken.None));
+        Assert.Equal(0, await sync.RefreshDueAsync(10, CancellationToken.None)); // just looked
+        Assert.Equal((0, 1), (refreshCalls, quotaCalls));
+    }
+
+    [Fact]
     public async Task Feishu_Webhooks_Get_A_Signed_Text_Message_And_Error_Codes_Fail()
     {
         var (host, receiver) = await StartAsync();

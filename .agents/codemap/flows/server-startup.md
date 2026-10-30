@@ -95,13 +95,13 @@ host deletes that file after draining the request log.
 
 Registered as hosted services in `AstraApp.Create`; `BackgroundService.StartAsync` returns at the
 first await inside `ExecuteAsync`, so each one is off the startup path, and each uses its own
-initial delay instead of a shared scheduler:
+initial delay instead of a shared scheduler. No worker renews subscription tokens: a call that needs one refreshes it
+(`SubscriptionTokenService.GetValidAccessTokenAsync`; the refresh worker was removed 2026-10-30):
 
 | Worker | First run | Cadence | Evidence |
 |---|---|---|---|
 | `ClientProbeWarmup` | immediately | once | `Hosting/ClientProbeWarmup.cs:15` (`await Task.Yield()`) |
 | `TokenMigrationWorker` | immediately | once | `Hosting/TokenMigrationWorker.cs:18` (marker `token_migration`) |
-| `SubscriptionRefreshWorker` | 15 s | 5 min | `Hosting/SubscriptionRefreshWorker.cs:17` |
 | `AlertEngine` | 20 s | 1 min sweep | `Alerts/AlertEngine.cs:37` (`SweepInterval` `:36`) |
 | `ProviderQuotaWorker` | 30 s | 1 min tick | `Hosting/ProviderQuotaWorker.cs:21`, `MaxPerRound = 10` |
 | `UpdateCheckWorker` | 30 s | 12 h, ×2 after failure up to 48 h | `Hosting/UpdateCheckWorker.cs:11-13` |
@@ -261,7 +261,7 @@ sequenceDiagram
   longer matches, and both clients treat it as stale — the CLI deletes it before starting
   (`server-lifecycle.ts:164`), the desktop falls back to `config.port` (`service.ts:119-121`).
 - **Worker failures never reach the request path**: `UpdateCheckWorker`, `ProviderQuotaWorker`,
-  `SubscriptionRefreshWorker`, `TokenMigrationWorker` and `AlertEngine` catch everything except
+  `TokenMigrationWorker` and `AlertEngine` catch everything except
   their own cancellation and log; `TokenMigrationWorker` deliberately keeps its settings marker on
   failure so the next start retries.
 

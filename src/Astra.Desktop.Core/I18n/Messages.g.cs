@@ -3658,7 +3658,7 @@ internal static class Messages
             case "providers.section.advanced": return "高级";
             case "providers.section.info": return "信息";
             case "providers.subscription": return "订阅账号";
-            case "providers.subscription.footer": return "令牌加密保存在本机；即将过期时自动刷新。";
+            case "providers.subscription.footer": return "令牌加密保存在本机；过期后在下次使用时自动续期。";
             case "providers.subscription.login": return "登录订阅";
             case "providers.subscription.loginDesc": return "按提供商的授权流程完成登录，令牌只保存在本机。";
             case "providers.subscription.logout": return "登出并删除";
@@ -6156,7 +6156,7 @@ internal static class Messages
             case "providers.section.advanced": return "Advanced";
             case "providers.section.info": return "Info";
             case "providers.subscription": return "Subscription accounts";
-            case "providers.subscription.footer": return "Tokens are stored encrypted on this machine and refreshed before they expire.";
+            case "providers.subscription.footer": return "Tokens are stored encrypted on this machine and renewed on their next use after they expire.";
             case "providers.subscription.login": return "Sign in";
             case "providers.subscription.loginDesc": return "Finish the provider's authorization flow; tokens stay on this machine.";
             case "providers.subscription.logout": return "Sign out & delete";

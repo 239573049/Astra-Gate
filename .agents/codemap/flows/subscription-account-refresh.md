@@ -2,28 +2,32 @@
 flow: subscription-account-refresh
 modules: [astra-providers, astra-server, astra-data, astra-core, astra-gateway, web-ui]
 commit: 6324e30
-updated: 2026-10-18
+updated: 2026-10-30
 ---
 # Subscription account refresh
 
-**Trigger:** the background refresh worker's interval elapses with a subscription account due, a manual refresh in the
-console, an import of a new sign-in, or an upstream 401/403 during a request.
+**Trigger:** a request (or a quota query the user asks for) needs an account's token, `ProviderQuotaWorker`'s tick finds
+a subscription account's quota due, a manual refresh in the console, an import of a new sign-in, or an upstream 401/403
+during a request. Nothing renews tokens on a timer: an idle account's access token simply lapses until its next use
+(the `SubscriptionRefreshWorker` that did so every 5 min was removed on 2026-10-30, at the user's request).
 **Outcome:** the account's OAuth token is refreshed if needed, its 5-hour/weekly/credit quota is re-fetched and stored
 as a snapshot, its status (`active` / `expired` / `revoked`) reflects reality, the gateway's account scheduler can use
 it, and the console plus the alert engine see the new state.
 
 ## Steps
 
-1. `src/Astra.Server/Hosting/SubscriptionRefreshWorker.cs:SubscriptionRefreshWorker.ExecuteAsync` — waits
-   `InitialDelay` (15 s) then loops every `Interval` (5 min); each round also gives leftover provider-quota slots to
-   subscription accounts (the provider worker queries at most `MaxPerRound` = 10 in total).
+1. `src/Astra.Server/Hosting/ProviderQuotaWorker.cs:ProviderQuotaWorker.ExecuteAsync` — waits `InitialDelay` (30 s)
+   then ticks every minute; each round gives the provider-quota slots it did not use to subscription accounts (at most
+   `MaxPerRound` = 10 queries in total).
 2. `src/Astra.Server/Api/SubscriptionQuotaSync.cs:SubscriptionQuotaSync.IsDue` — an account is due when its provider is
-   an enabled OAuth subscription, the account is enabled and `Active`, and `SubscriptionQuotaService.CanProbe` says the
-   family has a probe; the interval is multiplied by the failure backoff (`BackoffFactor` after
+   an enabled OAuth subscription, the account is enabled and `Active`, `SubscriptionQuotaService.CanProbe` says the
+   family has a probe, and its access token is usable as stored (`SubscriptionTokenService.IsFresh(account, now)`): a
+   background round never renews a token, so an account whose token lapsed waits — counting no failure — until a
+   request renews it; the interval is multiplied by the failure backoff (`BackoffFactor` after
    `ProviderQuotaManager.BackoffAfterFailures`, ×4). `RefreshDueAsync` takes the least recently checked first.
 2b. `SubscriptionQuotaSync.RecheckCooledAsync` (called by `ProviderQuotaWorker` before `RefreshDueAsync`, same 1-min tick
    and round budget) re-queries accounts that are cooling down after a 429 every `CooledRecheck` (5 min, ×4 after
-   repeated failures; off with the background refresh), and `ReleaseIfRecoveredAsync` clears `cooldown_until_utc` when
+   repeated failures; off with the background refresh; skipped like `IsDue` while the token needs renewing), and `ReleaseIfRecoveredAsync` clears `cooldown_until_utc` when
    the stored snapshot has room (`HasHeadroom`: at least one of session/weekly/credits `usedPercent`, none >= 100).
    The reset-credit consume and manual quota endpoints call `ReleaseIfRecoveredAsync` right after their fetch.
    Auth-rejection cooldowns are excluded from quota recovery (`LastError` starts with `401 ` / `403 `); headroom on a
@@ -72,7 +76,7 @@ it, and the console plus the alert engine see the new state.
 
 ```mermaid
 sequenceDiagram
-  participant W as SubscriptionRefreshWorker
+  participant W as ProviderQuotaWorker
   participant S as SubscriptionQuotaSync
   participant Q as SubscriptionQuotaService
   participant T as SubscriptionTokenService
@@ -81,10 +85,10 @@ sequenceDiagram
   participant G as AccountScheduler (gateway)
   participant A as AlertEngine
   W->>S: RefreshDueAsync(slots)
-  S->>S: IsDue(provider, account)
+  S->>S: IsDue(provider, account) — token usable as stored?
   S->>Q: FetchAsync(provider, account, config)
   Q->>T: GetValidAccessTokenAsync
-  T->>U: refresh token (if stale)
+  T->>U: refresh token (only for a call, never a background round)
   T->>DB: status / tokens
   Q->>U: GET quota endpoint
   U-->>Q: session / weekly / credits

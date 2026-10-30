@@ -34,11 +34,6 @@ public class SubscriptionQuotaServiceTests
         public Task<ProviderAccount?> GetAsync(string id, CancellationToken ct = default) =>
             Task.FromResult(Rows.TryGetValue(id, out var account) ? account : null);
 
-        public Task<IReadOnlyList<ProviderAccount>> ListExpiringAsync(TimeSpan within, CancellationToken ct = default) =>
-            Task.FromResult<IReadOnlyList<ProviderAccount>>(Rows.Values
-                .Where(a => a.Status == AccountStatus.Active && a.ExpiresAtUtc is { } exp && exp - Now <= within)
-                .ToList());
-
         public Task InsertAsync(ProviderAccount account, CancellationToken ct = default)
         {
             Rows[account.Id] = account;

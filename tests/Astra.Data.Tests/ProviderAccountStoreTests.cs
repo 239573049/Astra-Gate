@@ -108,30 +108,6 @@ public class ProviderAccountStoreTests
     }
 
     [Fact]
-    public async Task ListExpiring_Returns_Active_Accounts_Inside_The_Window()
-    {
-        var db = await TestDb.InitializeAsync();
-        await db.Providers.InsertAsync(new Provider { Id = "p1", Name = "Claude", AuthScheme = AuthSchemes.OAuthSubscription });
-
-        var soon = Sample("acc-soon", "p1");
-        soon.ExpiresAtUtc = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(5);
-        var late = Sample("acc-late", "p1");
-        late.ExpiresAtUtc = DateTimeOffset.UtcNow + TimeSpan.FromHours(5);
-        var expired = Sample("acc-expired", "p1");
-        expired.ExpiresAtUtc = DateTimeOffset.UtcNow + TimeSpan.FromMinutes(5);
-        expired.Status = AccountStatus.Expired;
-        var noExpiry = Sample("acc-noexp", "p1");
-        noExpiry.ExpiresAtUtc = null;
-        await db.Accounts.InsertAsync(soon);
-        await db.Accounts.InsertAsync(late);
-        await db.Accounts.InsertAsync(expired);
-        await db.Accounts.InsertAsync(noExpiry);
-
-        var due = await db.Accounts.ListExpiringAsync(TimeSpan.FromMinutes(30));
-        Assert.Equal(["acc-soon"], due.Select(a => a.Id).ToList());
-    }
-
-    [Fact]
     public async Task SetStatus_And_Cascade_On_Provider_Delete()
     {
         var db = await TestDb.InitializeAsync();
