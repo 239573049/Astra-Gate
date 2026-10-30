@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace Astra.Clients.Config;
@@ -89,15 +90,24 @@ public sealed class ClientEnvironment
 
     public string Combine(params string[] parts) => Path.Combine([HomeDirectory, .. parts]);
 
-    public bool FileExists(string path) => File.Exists(path);
+    public bool FileExists(string path)
+    {
+        var exists = File.Exists(path);
+        Track(path, FileProbeKind.FileExists, exists ? Present : null);
+        return exists;
+    }
 
-    public bool DirectoryExists(string path) => Directory.Exists(path);
+    public bool DirectoryExists(string path)
+    {
+        var exists = Directory.Exists(path);
+        Track(path, FileProbeKind.DirectoryExists, exists ? Present : null);
+        return exists;
+    }
 
     /// <summary>Reads a file as text (BOM stripped), or null when it does not exist.</summary>
     public (string Text, bool HadBom)? ReadTextWithBom(string path)
     {
-        if (!File.Exists(path)) return null;
-        var bytes = File.ReadAllBytes(path);
+        if (ReadAllBytesOrNull(path) is not { } bytes) return null;
         var hadBom = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF;
         var text = Encoding.UTF8.GetString(bytes, hadBom ? 3 : 0, bytes.Length - (hadBom ? 3 : 0));
         return (text, hadBom);
@@ -130,7 +140,12 @@ public sealed class ClientEnvironment
         File.WriteAllBytes(path, bytes);
     }
 
-    public byte[]? ReadAllBytesOrNull(string path) => File.Exists(path) ? File.ReadAllBytes(path) : null;
+    public byte[]? ReadAllBytesOrNull(string path)
+    {
+        var bytes = File.Exists(path) ? File.ReadAllBytes(path) : null;
+        if (t_reads is not null) Track(path, FileProbeKind.Content, bytes is null ? null : Convert.ToHexString(SHA256.HashData(bytes)));
+        return bytes;
+    }
 
     public void DeleteFile(string path)
     {
@@ -270,9 +285,98 @@ public sealed class ClientEnvironment
             foreach (var ext in extensions)
             {
                 var candidate = Path.Combine(dir, fileName + ext);
-                if (File.Exists(candidate)) return candidate;
+                if (FileExists(candidate)) return candidate;
             }
         }
         return null;
     }
+
+    // ---------------------------------------------------------------- read tracking
+
+    private const string Present = "1";
+
+    /// <summary>The probes of the innermost open <see cref="TrackReads"/> scope on this thread.</summary>
+    [ThreadStatic] private static List<FileProbe>? t_reads;
+
+    /// <summary>
+    /// Records every path the code inside the scope looks at through this class — the content hash of each file it reads,
+    /// whether each file or directory it checks exists — so a caller can later tell (<see cref="Unchanged"/>) whether
+    /// running that code again would see the same files. Scopes nest, and record the calling thread only: client plans
+    /// are built synchronously.
+    /// </summary>
+    public static ReadTracking TrackReads() => new();
+
+    /// <summary>
+    /// True when every probe would see the same thing now: the file holds the same bytes, the path still exists or is
+    /// still missing. A path that cannot be read counts as changed.
+    /// </summary>
+    public static bool Unchanged(IEnumerable<FileProbe> probes)
+    {
+        try
+        {
+            return probes.All(p => p.Seen == p.Kind switch
+            {
+                FileProbeKind.Content => ContentHash(p.Path),
+                FileProbeKind.FileExists => File.Exists(p.Path) ? Present : null,
+                _ => Directory.Exists(p.Path) ? Present : null,
+            });
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>SHA-256 of a file's bytes (hex), or null when it does not exist. Streams it, so a large file allocates nothing large.</summary>
+    public static string? ContentHash(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize: 0);
+            return Convert.ToHexString(SHA256.HashData(stream));
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    private static void Track(string path, FileProbeKind kind, string? seen) => t_reads?.Add(new FileProbe(path, kind, seen));
+
+    /// <summary>An open <see cref="TrackReads"/> scope; disposing it closes the scope and hands its probes to the enclosing one.</summary>
+    public sealed class ReadTracking : IDisposable
+    {
+        private readonly List<FileProbe>? _outer = t_reads;
+        private readonly List<FileProbe> _reads = [];
+
+        internal ReadTracking() => t_reads = _reads;
+
+        /// <summary>What the scope has looked at so far, in order (a path may appear more than once).</summary>
+        public IReadOnlyList<FileProbe> Reads => _reads;
+
+        public void Dispose()
+        {
+            t_reads = _outer;
+            _outer?.AddRange(_reads);
+        }
+    }
 }
+
+/// <summary>How <see cref="ClientEnvironment"/> looked at a path.</summary>
+public enum FileProbeKind
+{
+    /// <summary>Read its bytes.</summary>
+    Content,
+
+    /// <summary>Checked that a file exists.</summary>
+    FileExists,
+
+    /// <summary>Checked that a directory exists.</summary>
+    DirectoryExists,
+}
+
+/// <summary>
+/// One look at a path (<see cref="ClientEnvironment.TrackReads"/>): <see cref="Seen"/> is the SHA-256 of the bytes read for
+/// <see cref="FileProbeKind.Content"/>, "1" for an existing path otherwise, and null for a missing one.
+/// </summary>
+public readonly record struct FileProbe(string Path, FileProbeKind Kind, string? Seen);

@@ -328,6 +328,11 @@ export type ClientKind =
   | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo" | "zcode" | "tkcode";
 /** One provider bound to a client; the list order is the routing order (first = primary). */
 export interface ClientBinding { providerId: string; accountId?: string | null }
+/**
+ * GET /api/clients/summary -> ClientSummary[]: name, enabled flag and primary binding from the database alone (no config
+ * file, drift or install check). The desktop tray polls it; the console uses the full ClientInfo list.
+ */
+export interface ClientSummary { kind: string; name: string; enabled: boolean; providerId?: string | null; accountId?: string | null }
 export interface ClientInfo {
   kind: ClientKind; name: string; protocol: ApiProtocol;
   availability: "available" | "coming_soon"; availabilityReason?: string | null; mode: "switch" | "coexist";

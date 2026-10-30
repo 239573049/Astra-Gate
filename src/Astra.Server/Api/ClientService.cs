@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json.Nodes;
 using Astra.Clients.Adapters;
 using Astra.Clients.Config;
@@ -28,6 +29,11 @@ public sealed class ClientService(
     private readonly ClientConfigApplier _applier = new(db.ClientConfigState, env, paths.ClientBackupsDir);
     private readonly SemaphoreSlim _writes = new(1, 1);
 
+    /// <summary>The last staleness check of each client (<see cref="IsOutdatedAsync"/>); emptied by every write (<see cref="MutateAsync"/>).</summary>
+    private readonly ConcurrentDictionary<string, OutdatedCheck> _outdatedChecks = new(StringComparer.Ordinal);
+
+    private sealed record OutdatedCheck(EnableContext Context, IReadOnlyList<FileProbe> Reads, bool Outdated);
+
     public async Task<IReadOnlyList<ClientInfoDto>> ListAsync(CancellationToken ct = default)
     {
         await RefreshRegistryAsync(ct);
@@ -38,6 +44,28 @@ public sealed class ClientService(
         foreach (var adapter in _registry.All) result.Add(await InfoAsync(adapter, ct, install.GetValueOrDefault(adapter.Kind), defaultProvider));
         return result;
     }
+
+    /// <summary>
+    /// Every client's name, enabled flag and primary binding, as <see cref="ListAsync"/> reports them, from the database
+    /// alone: no config file is read and no drift, staleness or install check runs. The desktop tray polls this every 10 s;
+    /// the full list costs tens of milliseconds and megabytes on a machine with large client configs.
+    /// </summary>
+    public async Task<IReadOnlyList<ClientSummaryDto>> SummaryAsync(CancellationToken ct = default)
+    {
+        await RefreshRegistryAsync(ct);
+        var defaultProvider = DefaultProvider(ct);
+        var result = new List<ClientSummaryDto>();
+        foreach (var adapter in _registry.All)
+        {
+            var enabled = (await db.Clients.GetAsync(adapter.Kind, ct))?.Enabled ?? false;
+            var bindings = await BindingsOrDefaultAsync(adapter.Kind, enabled, defaultProvider, ct);
+            var primary = bindings.Count > 0 ? bindings[0] : null;
+            result.Add(new ClientSummaryDto(adapter.Kind, DisplayName(adapter), enabled, primary?.ProviderId, primary?.AccountId));
+        }
+        return result;
+    }
+
+    private static string DisplayName(IClientAdapter adapter) => adapter is PluginClientAdapter p ? p.Agent.Name : NameOf(adapter.Kind);
 
     /// <summary>
     /// Sets the client's primary provider (priority 0), keeping its other bindings; the provider is dropped from a lower
@@ -480,9 +508,9 @@ public sealed class ClientService(
         if (drifted) warnings.Add("Client configuration differs from the recorded Astra configuration. Review before enabling or restoring.");
         var configPaths = adapter.ConfigPaths();
         var detection = inspected?.Detection ?? adapter.Detect();
-        var outdated = enabled && !drifted && await OutdatedPlanAsync(adapter, record!, bindings, ct) is not null;
+        var outdated = enabled && !drifted && await IsOutdatedAsync(adapter, record!, bindings, ct);
         var primary = bindings.Count > 0 ? bindings[0] : null;
-        return new ClientInfoDto(adapter.Kind, adapter is PluginClientAdapter p ? p.Agent.Name : NameOf(adapter.Kind), ClientKinds.ProtocolOf(adapter.Kind),
+        return new ClientInfoDto(adapter.Kind, DisplayName(adapter), ClientKinds.ProtocolOf(adapter.Kind),
             adapter.Availability == ClientAvailability.Available ? "available" : "coming_soon", adapter.UnavailableReason,
             adapter.Mode == ClientMode.Coexist ? "coexist" : "switch",
             new ClientDetectionDto(detection.Detected, configPaths.Any(File.Exists), detection.Version ?? install?.Version, configPaths),
@@ -510,16 +538,66 @@ public sealed class ClientService(
             if (await ClientKeyAsync(record, ct) is not { } key) return null;
             var context = await ContextAsync(adapter.Kind, targets, record, key, ct);
             var plan = adapter.PlanEnable(context);
-            var stale = plan.Changes.Any(c => c.Kind == ConfigChangeKind.Table
-                ? c.Before is null && c.After is not null
-                : !ConfigValueCodec.EqualsValue(c.Format, c.Before, c.After));
-            return stale ? plan : null;
+            return IsStale(plan) ? plan : null;
         }
         catch (Exception ex) when (ex is EditorException or IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
         {
             return null;
         }
     }
+
+    /// <summary>Whether a plan would change an Astra-owned value (or create an Astra-owned table).</summary>
+    private static bool IsStale(ConfigChangePlan plan) => plan.Changes.Any(c => c.Kind == ConfigChangeKind.Table
+        ? c.Before is null && c.After is not null
+        : !ConfigValueCodec.EqualsValue(c.Format, c.Before, c.After));
+
+    /// <summary>
+    /// <see cref="OutdatedPlanAsync"/> for the status card: plans without diffs (<see cref="ClientAdapterBase.ChangesOnly"/>),
+    /// and reuses this client's last answer while its context and everything the plan looked at are unchanged (same file
+    /// bytes, same paths present). The tray polls the client list every 10 s, and planning a client with a large config —
+    /// Codex's model catalog, a 4,000-line NextCoWork file — costs tens of megabytes each time. A plugin client is always
+    /// planned: its connect hook decides what it writes.
+    /// </summary>
+    private async Task<bool> IsOutdatedAsync(IClientAdapter adapter, ClientRecord record, IReadOnlyList<ClientBinding> bindings, CancellationToken ct)
+    {
+        var targets = await routing.TargetsAsync(bindings, ct);
+        if (targets.Count == 0) return false;
+        try
+        {
+            if (await ClientKeyAsync(record, ct) is not { } key) return false;
+            var context = await ContextAsync(adapter.Kind, targets, record, key, ct);
+            var reuse = adapter is not PluginClientAdapter;
+            if (reuse && _outdatedChecks.TryGetValue(adapter.Kind, out var last) && SameContext(last.Context, context)
+                && ClientEnvironment.Unchanged(last.Reads))
+                return last.Outdated;
+            // Copied before planning: the next check compares against it, and an adapter may change the context it is given.
+            var kept = new EnableContext
+            {
+                GatewayBaseUrl = context.GatewayBaseUrl, LocalKey = context.LocalKey, Model = context.Model,
+                Extras = context.Extras?.DeepClone().AsObject(), ModelsWithoutContext1M = context.ModelsWithoutContext1M,
+            };
+            bool outdated;
+            IReadOnlyList<FileProbe> reads;
+            using (var tracking = ClientEnvironment.TrackReads())
+            {
+                outdated = IsStale(ClientAdapterBase.ChangesOnly(() => adapter.PlanEnable(context)));
+                reads = tracking.Reads.Distinct().ToList();
+            }
+            if (reuse) _outdatedChecks[adapter.Kind] = new OutdatedCheck(kept, reads, outdated);
+            return outdated;
+        }
+        catch (Exception ex) when (ex is EditorException or IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    private static bool SameContext(EnableContext a, EnableContext b) =>
+        a.GatewayBaseUrl == b.GatewayBaseUrl && a.LocalKey == b.LocalKey && a.Model == b.Model
+        && JsonNode.DeepEquals(a.Extras, b.Extras)
+        && (a.ModelsWithoutContext1M is null
+            ? b.ModelsWithoutContext1M is null
+            : b.ModelsWithoutContext1M is not null && a.ModelsWithoutContext1M.SetEquals(b.ModelsWithoutContext1M));
 
     /// <summary>
     /// Rewrites every enabled client whose Astra-owned values are stale (e.g. Astra now listens on another port).
@@ -613,7 +691,12 @@ public sealed class ClientService(
     {
         await _writes.WaitAsync(ct);
         try { return await action(); }
-        finally { _writes.Release(); }
+        finally
+        {
+            // A write can change what a plan reads besides files (the recorded state, the bindings): check afresh.
+            _outdatedChecks.Clear();
+            _writes.Release();
+        }
     }
 
     private static string KeyLabel(RestoredKey key) => $"{key.FilePath}:{key.KeyPath}";

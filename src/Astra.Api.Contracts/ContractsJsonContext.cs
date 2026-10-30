@@ -128,6 +128,8 @@ namespace Astra.Api.Contracts;
 // clients
 [JsonSerializable(typeof(ClientDetectionDto))]
 [JsonSerializable(typeof(ClientInfoDto))]
+[JsonSerializable(typeof(ClientSummaryDto))]
+[JsonSerializable(typeof(List<ClientSummaryDto>))]
 [JsonSerializable(typeof(ClientPreviewDto))]
 [JsonSerializable(typeof(FileDiffDto))]
 [JsonSerializable(typeof(ConfigChangeDto))]

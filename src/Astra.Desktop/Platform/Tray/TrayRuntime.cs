@@ -49,8 +49,21 @@ internal sealed class ConnectionTrayService(ServiceManager? manager, ConnectionV
         if (!r.Ok) throw new InvalidOperationException(r.Error ?? "failed");
     }
 
+    /// <summary>
+    /// The clients as the menu needs them, from <c>/api/clients/summary</c> (database reads only; this runs every 10 s). A
+    /// server older than that endpoint answers 404, and then the full list stands in.
+    /// </summary>
     public async Task<IReadOnlyList<TrayClient>> ClientsAsync()
-        => (await api.GetAsync<List<ClientInfoDto>>("/api/clients") ?? []).Select(c => new TrayClient(c.Kind, c.Name, c.Enabled, c.ProviderId)).ToList();
+    {
+        try
+        {
+            return (await api.GetAsync<List<ClientSummaryDto>>("/api/clients/summary") ?? []).Select(c => new TrayClient(c.Kind, c.Name, c.Enabled, c.ProviderId)).ToList();
+        }
+        catch (ApiException e) when (e.Status == 404)
+        {
+            return (await api.GetAsync<List<ClientInfoDto>>("/api/clients") ?? []).Select(c => new TrayClient(c.Kind, c.Name, c.Enabled, c.ProviderId)).ToList();
+        }
+    }
 
     public async Task<IReadOnlyList<TrayProvider>> ProvidersAsync()
         => (await api.GetAsync<List<ProviderDto>>("/api/providers") ?? []).Select(p => new TrayProvider(p.Id, p.Name, p.Enabled)).ToList();

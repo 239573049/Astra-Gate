@@ -2,7 +2,7 @@
 module: astra-clients
 sources: ["src/Astra.Clients/**"]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-30
 ---
 # astra-clients
 
@@ -41,7 +41,7 @@ options (`astra-gateway`), the plugin runtime that produces `AgentPluginDescript
 | Symbol | File | Role |
 |---|---|---|
 | `IClientAdapter` | `src/Astra.Clients/Config/IClientAdapter.cs:8` | The adapter contract: `Kind`, `Mode`, `Availability`, `Detect`, `ConfigPaths`, `PlanEnable`/`PlanDisable`/`PlanPurge`, `Inspect`. |
-| `ClientAdapterBase` | `src/Astra.Clients/Config/ClientAdapterBase.cs:7` | Shared plumbing: `PrimaryConfigPath`, `BuildPlan` (per-file unified diff by simulating), `CurrentValue`, `FormatOfPath`, `BuildStatus` (drift by comparing state to file), `StillOurs`, `ModelEntries`/`ModelHints`. |
+| `ClientAdapterBase` | `src/Astra.Clients/Config/ClientAdapterBase.cs:7` | Shared plumbing: `PrimaryConfigPath`, `BuildPlan` (per-file unified diff by simulating; none inside `ChangesOnly`), `CurrentValue`, `FormatOfPath`, `BuildStatus` (drift by comparing state to file, kept per key until the file's hash or the recorded value changes), `StillOurs`, `ModelEntries`/`ModelHints`. |
 | `ConfigEditorOps.Create` | `src/Astra.Clients/Config/ConfigEditorOps.cs:26` | Format → editor facade over `TomlEditor`/`JsoncEditor`/`DotEnvEditor`/`YamlEditor`/`ShellBlockEditor`; `Read`/`Apply`/`RestoreSource`/`Remove`. |
 | `ConfigValueCodec` | `src/Astra.Clients/Config/ApplyReports.cs:8` | JSON-vs-raw encoding of plan/state values, and structure-aware equality (JSON/YAML) vs ordinal comparison (TOML/env/shell). |
 | `ConfigChange` / `ConfigChangePlan` / `ConfigFileFormat` / `ConfigChangeKind` | `src/Astra.Clients/Config/EnableContext.cs:82` | One key or owned container edit; the reviewable plan (`Changes` + `Diffs`, `ByFile`); the five formats; `Key` vs `Table`. |
@@ -52,7 +52,7 @@ options (`astra-gateway`), the plugin runtime that produces `AgentPluginDescript
 | `TomlEditor` / `TomlValueText` | `src/Astra.Clients/Editing/TomlEditor.cs:16`, `:417` | Tomlyn-syntax-based TOML value/table editing; `ForString` renders raw TOML string text. |
 | `YamlEditor` | `src/Astra.Clients/Editing/YamlEditor.cs:26` | YAML mappings and sequence *rows* (`[id=x].config.model`), values as JSON. |
 | `DotEnvEditor` / `ShellBlockEditor` | `src/Astra.Clients/Editing/DotEnvEditor.cs:10`, `ShellBlockEditor.cs:9` | `.env` keys; one `# >>> astra <id> >>>` … `# <<< astra <id> <<<` block in a shell rc file. |
-| `DiffTool.Unified` | `src/Astra.Clients/Editing/DiffTool.cs:13` | Unified diff shown in the enable preview. |
+| `DiffTool.Unified` | `src/Astra.Clients/Editing/DiffTool.cs:13` | Unified diff shown in the enable preview. Its LCS table is O(n·m) (`int[n+1, m+1]`, ~70 MB for two 4,000-line texts): never run it on a path that is polled. |
 | `EditorException` | `src/Astra.Clients/Editing/EditorException.cs:4` | The module's failure type; the server maps it to HTTP 400. |
 | `ImportContext` / `IImportSource` | `src/Astra.Clients/Import/ImportSupport.cs:12` | Reader inputs (fake-friendly) and the read-only source contract. |
 
@@ -148,6 +148,9 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 - Adapters plan, the applier writes — a plan must not mutate files or state; `BuildPlan` simulates
   through the same `ConfigEditorOps` the applier uses so preview and result agree
   (`Config/IClientAdapter.cs:3`, `Config/ClientAdapterBase.cs:47`).
+- Adapters reach files only through `ClientEnvironment` (`FileExists`, `DirectoryExists`, `ReadTextWithBom`,
+  `ReadTextOrNull`, `ReadAllBytesOrNull`): `TrackReads` records what a plan looked at, and the server's cached staleness
+  check (`ClientService.IsOutdatedAsync`) is only as good as that record — a direct `File.*` read in an adapter would go stale.
 - Restore never overwrites a value the user changed: the current value is compared against
   `AppliedValueJson` and drifted keys come back as `Drifted` unless `force` (`Config/ClientConfigApplier.cs:152`).
 - Original values are recorded only on the first insert per `(kind, file, keyPath)`; re-applies

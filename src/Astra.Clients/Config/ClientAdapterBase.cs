@@ -45,9 +45,33 @@ public abstract class ClientAdapterBase : IClientAdapter
 
     protected (string Text, bool Bom) ReadFile(string path) => Env.ReadTextWithBom(path) ?? ("", false);
 
-    /// <summary>Builds the plan and computes a unified diff per affected file by simulating the changes.</summary>
+    /// <summary>Set while <see cref="ChangesOnly"/> runs a plan on this thread.</summary>
+    [ThreadStatic] private static bool t_changesOnly;
+
+    /// <summary>
+    /// Runs <paramref name="plan"/> (a call to an adapter's <c>Plan*</c> method) for its changes alone: <see cref="BuildPlan"/>
+    /// then returns no diffs, so nothing re-reads, simulates and diffs the files. For callers that show no preview — the
+    /// status card's staleness check runs on every <c>GET /api/clients</c>, which the tray polls, and the line diff of a
+    /// 4,000-line config is a ~70 MB LCS table. Plans are built synchronously, so the flag stays on this thread.
+    /// </summary>
+    public static ConfigChangePlan ChangesOnly(Func<ConfigChangePlan> plan)
+    {
+        var outer = t_changesOnly;
+        t_changesOnly = true;
+        try
+        {
+            return plan();
+        }
+        finally
+        {
+            t_changesOnly = outer;
+        }
+    }
+
+    /// <summary>Builds the plan and computes a unified diff per affected file by simulating the changes (no diffs inside <see cref="ChangesOnly"/>).</summary>
     protected ConfigChangePlan BuildPlan(IReadOnlyList<ConfigChange> changes)
     {
+        if (t_changesOnly) return new ConfigChangePlan(Kind, changes, []);
         var diffs = new List<FileDiff>();
         var warnings = new List<string>();
         foreach (var group in changes.GroupBy(c => c.File))
@@ -115,20 +139,44 @@ public abstract class ClientAdapterBase : IClientAdapter
             : path.Contains(".env", StringComparison.Ordinal) ? ConfigFileFormat.Env
             : ConfigFileFormat.Json;
 
+    /// <summary>
+    /// The last drift comparison of each recorded key: the file's content hash and the recorded value it was made with.
+    /// <see cref="BuildStatus"/> runs on every <c>GET /api/clients</c> (the tray polls it), and a recorded value can be
+    /// megabytes (Codex's model catalog), so a key is compared again only once either side changed.
+    /// </summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<(string File, string KeyPath), DriftCheck> _driftChecks = new();
+
+    private sealed record DriftCheck(string? FileHash, string? Applied, bool Matches);
+
     /// <summary>Builds the status card: enabled as given, drifted keys from state comparisons.</summary>
     protected ClientStatus BuildStatus(ClientDetection detection, bool enabled, IReadOnlyList<string> warnings)
     {
         var drifted = new List<string>();
         var appliedKeys = new List<string>();
+        var hashes = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var seen = new HashSet<(string File, string KeyPath)>();
         foreach (var entry in Store.List(Kind))
         {
-            var format = FormatOfPath(entry.FilePath);
-            var kind = IsTableKeyPath(entry.KeyPath) ? ConfigChangeKind.Table : ConfigChangeKind.Key;
-            var current = CurrentValue(entry.FilePath, format, entry.KeyPath, kind);
-            var matches = ValueStillOurs(entry.FilePath, entry.KeyPath, format, current, entry.AppliedValueJson);
+            if (!hashes.TryGetValue(entry.FilePath, out var hash)) hashes[entry.FilePath] = hash = ClientEnvironment.ContentHash(entry.FilePath);
+            var id = (entry.FilePath, entry.KeyPath);
+            seen.Add(id);
+            bool matches;
+            if (_driftChecks.TryGetValue(id, out var last) && last.FileHash == hash && string.Equals(last.Applied, entry.AppliedValueJson, StringComparison.Ordinal))
+            {
+                matches = last.Matches;
+            }
+            else
+            {
+                var format = FormatOfPath(entry.FilePath);
+                var kind = IsTableKeyPath(entry.KeyPath) ? ConfigChangeKind.Table : ConfigChangeKind.Key;
+                var current = CurrentValue(entry.FilePath, format, entry.KeyPath, kind);
+                matches = ValueStillOurs(entry.FilePath, entry.KeyPath, format, current, entry.AppliedValueJson);
+                _driftChecks[id] = new DriftCheck(hash, entry.AppliedValueJson, matches);
+            }
             if (matches) appliedKeys.Add(entry.KeyPath);
             else if (!IsClientManagedKey(entry.FilePath, entry.KeyPath)) drifted.Add(entry.KeyPath);
         }
+        foreach (var gone in _driftChecks.Keys.Where(k => !seen.Contains(k)).ToList()) _driftChecks.TryRemove(gone, out _);
         return new ClientStatus
         {
             ClientKind = Kind,

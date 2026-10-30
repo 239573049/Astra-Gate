@@ -2,7 +2,7 @@
 flow: client-config-takeover
 modules: [web-ui, astra-server, astra-clients, astra-data, cli]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-30
 ---
 # Client config take-over (enable / disable / restore)
 
@@ -70,7 +70,18 @@ Astra's first write. Disabling puts the recorded originals back key by key, skip
     to binding priority 0 (`astra-server`, `astra-data`)
 15. `ClientService.InfoAsync` (`:402`) — returns the `ClientInfoDto`; `adapter.Inspect()` +
     `ClientAdapterBase.BuildStatus` (`:92`) compare each state row's `AppliedValueJson` with the file
-    (`ConfigValueCodec.EqualsValue`) to report `enabled` / `drifted` / `configOutdated` (`astra-clients`)
+    (`ConfigValueCodec.EqualsValue`) to report `enabled` / `drifted` / `configOutdated` (`astra-clients`).
+    The Avalonia tray polls `GET /api/clients/summary` instead (`ClientService.SummaryAsync`: names, enabled flags and
+    primary bindings from the database alone, ~175 KB and <1 ms against ~13 MB and 30–50 ms for the full list; it falls
+    back to `/api/clients` on a 404 from an older server). `ClientInstallService` reuses PATH lookups (`Lookup`, 30 s;
+    install jobs clear them). The full list is still polled by open console pages, so each part is kept between calls:
+    `BuildStatus` redoes a key's
+    comparison only when its file's SHA-256 or the recorded value changed (`_driftChecks`); `ClientConfigStateStore.List`
+    keeps each kind's rows until their signature (keys, `applied_at`, value lengths) changes or the store writes; and
+    `configOutdated` comes from `IsOutdatedAsync`, which plans without diffs (`ClientAdapterBase.ChangesOnly`) and
+    reuses the last answer while the `EnableContext` and every path the plan read (`ClientEnvironment.TrackReads`) are
+    unchanged — never for a plugin client, and every `MutateAsync` clears it. Measured 2026-10-30: one uncached call
+    allocated ~100 MB for a 4,000-line NextCoWork file (the LCS diff) and a 2.5 MB Codex catalog.
 16. Back in the UI, `useClientMutation` (`web/src/api/hooks.ts:856`) invalidates `clients`, `providers`,
     `provider` and `client-models` queries, so the card flips to *Enabled* with an `appliedAt` stamp, or the
     `drifted` badge and warnings appear (`web-ui`)

@@ -22,6 +22,13 @@ public sealed record ClientInfoDto(
     bool ConfigOutdated = false, string? TokenId = null, ClientInstallDto? Install = null, IReadOnlyList<ClientBindingDto>? Bindings = null,
     List<ClientOptionDescriptor>? Options = null, IReadOnlyList<ConfigRepairDto>? Repairs = null, List<ApiProtocol>? Protocols = null);
 
+/// <summary>
+/// Admin API payload (<c>GET /api/clients/summary</c>): a client's name, whether Astra is enabled for it and its primary
+/// binding (as in <see cref="ClientInfoDto"/>). Read from the database alone — no config file, drift or install check — for
+/// the desktop tray, which polls it every 10 s.
+/// </summary>
+public sealed record ClientSummaryDto(string Kind, string Name, bool Enabled, string? ProviderId, string? AccountId);
+
 /// <summary>A config file the client cannot read as it is (problem "trailing-comma" | "comment", first at line); POST …/repair fixes it.</summary>
 public sealed record ConfigRepairDto(string File, string Problem, int Line);
 

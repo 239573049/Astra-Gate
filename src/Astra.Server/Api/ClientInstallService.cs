@@ -38,6 +38,14 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     private const int MaxLogLines = 2000;
 
     private readonly ConcurrentDictionary<string, (string Fingerprint, string? Version, DateTimeOffset At)> _probes = new();
+
+    /// <summary>
+    /// How long a PATH lookup (where a command's copies are, where npm is) is reused. Listing the clients looks up every
+    /// client's command in every search directory — about 2,000 stats, ~50 ms, and the desktop tray lists them every
+    /// 10 s; a command installed outside Astra shows up within this, one installed through Astra at once (jobs clear it).
+    /// </summary>
+    private static readonly TimeSpan LookupTtl = TimeSpan.FromSeconds(30);
+    private readonly ConcurrentDictionary<string, (IReadOnlyList<string> Found, DateTimeOffset At)> _lookups = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, Lock> _probeLocks = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, byte> _refreshing = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, LatestEntry> _latest = new();
@@ -157,9 +165,22 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     {
         if (spec.Executable is null) return [];
         string[] extra = NpmBinDirectory(npmRoot) is { } npmBin ? [npmBin] : [];
-        var copies = env.FindAllTools(spec.Executable, extra);
-        // Some Linux packages ship Zed's command as "zeditor".
-        return copies.Count == 0 && spec.Kind == ClientKinds.Zed ? env.FindAllTools("zeditor") : copies;
+        return Lookup($"copies|{spec.Executable}|{string.Join('|', extra)}|{spec.Kind}", () =>
+        {
+            var copies = env.FindAllTools(spec.Executable, extra);
+            // Some Linux packages ship Zed's command as "zeditor".
+            return copies.Count == 0 && spec.Kind == ClientKinds.Zed ? env.FindAllTools("zeditor") : copies;
+        });
+    }
+
+    /// <summary>A PATH lookup, reused for <see cref="LookupTtl"/>.</summary>
+    private IReadOnlyList<string> Lookup(string key, Func<IReadOnlyList<string>> find)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (_lookups.TryGetValue(key, out var hit) && now - hit.At < LookupTtl) return hit.Found;
+        var found = find();
+        _lookups[key] = (found, now);
+        return found;
     }
 
     /// <summary>
@@ -319,7 +340,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     /// </summary>
     private (string? Path, string? Root) NpmInfo()
     {
-        var npm = env.FindTool("npm");
+        var npm = Lookup("npm", () => env.FindTool("npm") is { } found ? [found] : []).FirstOrDefault();
         if (npm is null) return (null, null);
         // Listing describes every client in parallel; only one of them should spawn npm on a cold cache.
         lock (_npmLock)
@@ -683,6 +704,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         {
             _probes.Clear();
             _npm = null;
+            _lookups.Clear();
             _writable.Clear();
             lock (_jobLock) if (_running == job) _running = null;
             logger.LogInformation("客户端{Action}结束：{Kind} {State}", job.Action, job.Kind, job.State);
@@ -712,6 +734,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         if (spec.Executable is not { } name || spec.Method == ClientInstallMethod.VsCodeExtension) return null;
         _probes.Clear();
         _npm = null;
+        _lookups.Clear();
         env.RefreshLoginShellPath();
         var (state, version) = Inspect(spec);
         var newer = OtherCopies(spec, state, version).Where(c => c.Newer).MaxBy(c => c.Version, VersionComparer);
@@ -752,6 +775,7 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     {
         _probes.Clear();
         _npm = null;
+        _lookups.Clear();
         var (state, version) = Inspect(spec);
         if (!state.Installed) return null;
         job.Append("");

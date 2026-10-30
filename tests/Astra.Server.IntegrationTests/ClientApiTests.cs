@@ -566,6 +566,22 @@ public class ClientApiTests
         Assert.Equal(edited, await File.ReadAllTextAsync(codex));
     }
 
+    [Fact]
+    public async Task The_Summary_Agrees_With_The_Full_List()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        await WriteCodexConfig(host);
+        await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = provider.Id, model = "gpt-5" });
+
+        static List<(string, string, bool, string?)> Rows(JsonNode list) => list.AsArray()
+            .Select(c => (c!["kind"]!.GetValue<string>(), c["name"]!.GetValue<string>(), c["enabled"]!.GetValue<bool>(), c["providerId"]?.GetValue<string>()))
+            .ToList();
+        var summary = Rows(await host.GetJsonAsync("/api/clients/summary"));
+        Assert.Equal(Rows(await host.GetJsonAsync("/api/clients")), summary);
+        Assert.Contains(("codex", "Codex", true, (string?)provider.Id), summary);
+    }
+
     private static async Task<List<string>> OutdatedKinds(TestHost host) =>
         (await host.GetJsonAsync("/api/clients")).AsArray()
             .Where(c => c!["configOutdated"]!.GetValue<bool>())

@@ -155,6 +155,38 @@ public class ClientRepositoryTests
     }
 
     [Fact]
+    public async Task ClientConfigState_List_Is_Kept_But_Sees_Other_Writers_And_Hands_Out_Copies()
+    {
+        var db = await TestDb.InitializeAsync();
+        var store = db.ClientConfigState;
+        const string file = "/home/u/.codex/astra-models.json";
+        store.Upsert(new ClientConfigStateEntry { ClientKind = ClientKinds.Codex, FilePath = file, KeyPath = "models", AppliedValueJson = "[1]" });
+
+        var first = store.List(ClientKinds.Codex);
+        first[0].AppliedValueJson = "[changed by a caller]";
+        Assert.Equal("[1]", store.List(ClientKinds.Codex)[0].AppliedValueJson); // a copy: callers cannot touch the kept rows
+
+        // Another process (restore-all) writes behind this store's back. The applier stamps applied_at (millisecond text) on
+        // every write; later is set here so the test does not depend on the clock moving between two quick writes.
+        var other = new Astra.Data.Repositories.ClientConfigStateStore(db.Factory);
+        other.Upsert(new ClientConfigStateEntry
+        {
+            ClientKind = ClientKinds.Codex, FilePath = file, KeyPath = "models", AppliedValueJson = "[2]", AppliedAt = DateTimeOffset.UtcNow.AddSeconds(1),
+        });
+        Assert.Equal("[2]", Assert.Single(store.List(ClientKinds.Codex)).AppliedValueJson);
+        other.Delete(ClientKinds.Codex, file, "models");
+        Assert.Empty(store.List(ClientKinds.Codex));
+
+        // This store's own writes show at once, even one that keeps applied_at and the value's length.
+        var entry = new ClientConfigStateEntry { ClientKind = ClientKinds.Codex, FilePath = file, KeyPath = "models", AppliedValueJson = "[3]" };
+        store.Upsert(entry);
+        Assert.Equal("[3]", store.List(ClientKinds.Codex)[0].AppliedValueJson);
+        entry.AppliedValueJson = "[4]";
+        store.Upsert(entry);
+        Assert.Equal("[4]", store.List(ClientKinds.Codex)[0].AppliedValueJson);
+    }
+
+    [Fact]
     public async Task ClientConfigState_Upsert_Get_Delete_Round_Trip()
     {
         var db = await TestDb.InitializeAsync();

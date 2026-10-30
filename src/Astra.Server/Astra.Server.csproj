@@ -21,6 +21,13 @@
          DOTNET_gcServer=1, so switching back is a republish, not a flag. -->
     <ServerGarbageCollection>false</ServerGarbageCollection>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Same reason: compact gen2 and the large-object heap once they fragment, instead of keeping the free space. With the
+         client list's caches in place, 10 polls 10 s apart (the tray's pace) still left the heap at 110 MB, mostly dead,
+         with ~30 MB live (138 MB footprint once idle); with 5 (or 9) it settled at 36 MB (62–70 MB footprint).
+         .agents/memory/clients-endpoint-memory.md has the measurement. AOT compiles this in (ILC's runtimeknob). -->
+    <RuntimeHostConfigurationOption Include="System.GC.ConserveMemory" Value="5" />
+  </ItemGroup>
   <PropertyGroup Condition="'$(PublishAot)' != 'true'">
     <PublishSingleFile>true</PublishSingleFile>
     <PublishReadyToRun>true</PublishReadyToRun>

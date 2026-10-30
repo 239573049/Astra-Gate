@@ -12,6 +12,8 @@ public static class ClientEndpoints
         // Materialized to List<ClientInfoDto>: an interface-typed root makes the serializer probe the
         // interface graph for metadata (see ServerJsonContext).
         group.MapGet("", async (ClientService clients, CancellationToken ct) => Results.Ok((await clients.ListAsync(ct)).ToList()));
+        // Names, enabled flags and primary bindings only (database reads): what the desktop tray polls.
+        group.MapGet("/summary", async (ClientService clients, CancellationToken ct) => Results.Ok((await clients.SummaryAsync(ct)).ToList()));
         // Plan §7.1: after the gateway address changed, rewrite every enabled client that still points at the old one.
         group.MapPost("/reapply", async (ClientService clients, CancellationToken ct) =>
             Results.Ok(new ReappliedDto(await clients.ReapplyOutdatedAsync(ct))));

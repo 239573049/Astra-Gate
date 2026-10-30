@@ -27,9 +27,10 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Smart routing's cold judge](smart-routing-cold-judge.md) — the first real use timed out on every cold connection and sent "1+1" to the fallback grade; why the judge has its own long-lived HTTP/2 client
 - [Enterprise join uses API key](enterprise-join-uses-api-key.md) — `astra join` takes gateway URL + company-issued API key; join codes rejected
 - [Gateway read cache](gateway-read-cache.md) — why per-request SQLite reads go through RowCache (Generation + 2 s MaxAge), and the SQLite mutex/PRAGMA findings behind it
+- [/api/clients drove server memory](clients-endpoint-memory.md) — 400–900 MB idle = tray's 10 s poll re-parsing a 2.5 MB Codex catalog + an unused O(n·m) diff; fixed 2026-10-30 (caches, ConserveMemory 5, tray polls /api/clients/summary)
 - [Usage writer ceiling](usage-writer-ceiling.md) — 2,000-record buffering trades ~6% sustained throughput for ~39% lower RSS; 1,000 cost more throughput; ordinal binding +73% is isolated AOT; include drain
 - [Dapper.AOT sequence cast](dapper-aot-sequence-cast.md) — a List<anonymous> sequence parameter throws InvalidCastException at run time; pass IEnumerable
-- [astra-server --help starts a server](astra-server-flag-first-serves.md) — a flag-first call runs `serve` on ~/.astra and overwrites runtime.json; use ASTRA_HOME for throwaway servers
+- [astra-server --help starts a server](astra-server-flag-first-serves.md) — a flag-first call or `serve --help` runs `serve` on ~/.astra and overwrites runtime.json; use ASTRA_HOME for throwaway servers
 - [Harness thinking picker needs reasoningEfforts](harness-reasoning-efforts-field.md) — `reasoning` is a route default; models without `reasoningEfforts` get no effort picker (issue #7)
 - [Client default provider is read-side](client-default-provider-read-side.md) — a client with no bindings reads as bound to the first usable provider; stored on enable or a bindings edit, never on read
 - [WorkBuddy's Anthropic route](workbuddy-anthropic-route.md) — only hy3 / hy3-x answer on /v1/messages (China build), no thinking switch there; the plugin declares them @ai-sdk/anthropic (probed 2026-10-20)
