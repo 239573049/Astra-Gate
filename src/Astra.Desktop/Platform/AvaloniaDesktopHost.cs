@@ -4,6 +4,7 @@ using Astra.Desktop.Core.Shell;
 using Astra.Desktop.Core.Update;
 using Astra.Desktop.Shell;
 using Astra.Desktop.Theme;
+using Avalonia.Threading;
 using CoreThemeSource = Astra.Desktop.Core.Shell.ThemeSource;
 
 namespace Astra.Desktop.Platform;
@@ -12,8 +13,8 @@ namespace Astra.Desktop.Platform;
 /// The Avalonia app's <see cref="IDesktopHost"/>: what Electron's preload bridge gives the web pages (<c>window.__ASTRA__</c>,
 /// plan avalonia-client §6), over the theme service, the login item, the OS "open" verb, the server supervisor and the updater.
 /// The tray surface and the native context menu are plugged in by the tray runtime (<see cref="TrayHost"/>, <see cref="ContextMenu"/>,
-/// Platform/Tray); until then — and in the smoke run — they answer like <see cref="NullDesktopHost"/>. Not supported yet: the desktop app's own
-/// self-update and the macOS login item.
+/// Platform/Tray); until then — and in the smoke run — they answer like <see cref="NullDesktopHost"/>. Updates follow the install track
+/// (<see cref="UpdateCoordinator"/>, <see cref="SelfUpdate"/>). Not supported yet: the macOS login item.
 /// </summary>
 public sealed class AvaloniaDesktopHost : IDesktopHost
 {
@@ -109,16 +110,34 @@ public sealed class AvaloniaDesktopHost : IDesktopHost
         => _updates() is { } updates ? await updates.CheckAsync() : new UpdateSummary("Updates are not available in this run.", UpdateAction.None);
 
     /// <inheritdoc />
+    public UpdateSummary? LastUpdateCheck => _updates()?.Last;
+
+    /// <inheritdoc />
     public async Task<UpdateApplyOutcome> ApplyUpdateAsync()
     {
         var outcome = _updates() is { } updates ? await updates.ApplyAsync() : UpdateApplyOutcome.None;
         // Whoever applied it (Settings, the tray, the reminder), the tray's "update available" line and badge must not stay behind.
         if (outcome is UpdateApplyOutcome.Server or UpdateApplyOutcome.Desktop) UpdateApplied?.Invoke();
+        // This copy cannot replace itself: the installer on the download page is the update (it brings the server too).
+        if (outcome == UpdateApplyOutcome.Download) OsOpen.Open(UpdateFeed.DownloadPageUrl);
+        // The new app is staged and its hand-over waits for this process: quit (stopping the server it started) a moment after the
+        // caller has said so, and the new app starts in its place.
+        if (outcome == UpdateApplyOutcome.Desktop)
+        {
+            UpdateStaged = true;
+            DispatcherTimer.RunOnce(() => QuitForUpdate?.Invoke(), TimeSpan.FromSeconds(1));
+        }
         return outcome;
     }
 
+    /// <summary>A new app is staged and waits for this process to exit (nothing may restart it into the tray meanwhile).</summary>
+    public bool UpdateStaged { get; private set; }
+
     /// <summary>An update was installed (the tray clears its "update available" state).</summary>
     public event Action? UpdateApplied;
+
+    /// <summary>Quits the app for good (no restart into the tray); set by the tray runtime.</summary>
+    public Action? QuitForUpdate { get; set; }
 
     /// <summary>Shows a native context menu (macOS <c>NSMenu</c>, elsewhere a popup menu); set by the tray runtime.</summary>
     public Func<IReadOnlyList<ContextMenuItem>, Task<string?>>? ContextMenu { get; set; }

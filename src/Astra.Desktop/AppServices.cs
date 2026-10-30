@@ -49,8 +49,8 @@ public sealed class AppServices
     /// </summary>
     public bool HandingOver { get; set; }
 
-    /// <summary>An update check or apply is running in this process.</summary>
-    public bool UpdateBusy => _updates?.IsBusy == true;
+    /// <summary>An update check or apply is running in this process, or a staged app update waits for it to exit.</summary>
+    public bool UpdateBusy => _updates?.IsBusy == true || Host?.UpdateStaged == true;
 
     /// <summary>The main window, once it exists (toasts and dialogs are shown in it).</summary>
     public Window? MainWindow { get; set; }
@@ -105,14 +105,22 @@ public sealed class AppServices
     public ShellViewModel CreateShell() => new(Prefs, Connection, Context, AppModules.All);
 
     private UpdateCoordinator? CreateUpdates()
-        => Manager is null
-            ? null
-            : new UpdateCoordinator(new UpdateCoordinatorOptions
-            {
-                Paths = Paths,
-                Manager = Manager,
-                Http = new HttpClient(),
-                AppVersion = ServiceHost.AppVersion,
-                ApiBase = () => Connection.ApiBase,
-            });
+    {
+        if (Manager is null) return null;
+        var http = new HttpClient();
+        // A packaged app updates as a whole (its own server comes with it); the CLI's install and dev runs update the server.
+        var track = SelfUpdate.Track(Paths);
+        SelfUpdate.Log(Paths, $"update track: {track} (app {ServiceHost.AppVersion})");
+        return new UpdateCoordinator(new UpdateCoordinatorOptions
+        {
+            Paths = Paths,
+            Manager = Manager,
+            Http = http,
+            AppVersion = ServiceHost.AppVersion,
+            ApiBase = () => Connection.ApiBase,
+            Track = track,
+            Desktop = SelfUpdate.Create(track, Paths, http),
+            Log = line => SelfUpdate.Log(Paths, line),
+        });
+    }
 }

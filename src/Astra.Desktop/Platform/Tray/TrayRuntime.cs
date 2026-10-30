@@ -274,7 +274,9 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
             var summary = await _services.Host.CheckForUpdateAsync();
             _updateAvailable = summary.Action != UpdateAction.None;
             await Controller.RefreshAsync();
-            if (_updateAvailable && status?.Available is { Length: > 0 } version) await MaybeRemindAsync(version, status.Notes);
+            // The host's answer names the version per install track (a packaged app's own); the server's status is the fallback.
+            if (_updateAvailable && (summary.Version ?? status?.Available) is { Length: > 0 } version)
+                await MaybeRemindAsync(version, summary.Notes ?? status?.Notes);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or ApiException)
         {
@@ -344,6 +346,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         string? action = summary.Action switch
         {
             UpdateAction.Server or UpdateAction.DesktopNpm => t.UpdateServer,
+            UpdateAction.DesktopDmg => t.Update,
             UpdateAction.DesktopDownload => t.Download,
             _ => null,
         };
@@ -351,12 +354,9 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         buttons.Add(t.Ok);
         var choice = await MessageBox.ShowAsync(MessageBoxKind.Info, t.CheckTitle, summary.Message, buttons, 0, buttons.Count - 1);
         if (action is null || choice != 0) return;
-        if (summary.Action == UpdateAction.DesktopDownload) OpenUrl(DownloadPageUrl);
+        if (summary.Action == UpdateAction.DesktopDownload) OpenUrl(UpdateFeed.DownloadPageUrl);
         else await ApplyWithDialogsAsync(t, announce: false);
     }
-
-    /// <summary>update.ts <c>DOWNLOAD_PAGE_URL</c>.</summary>
-    private const string DownloadPageUrl = "https://astra-gate.si/download";
 
     private bool _mismatchShown;
 

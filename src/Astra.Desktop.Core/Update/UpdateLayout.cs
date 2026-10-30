@@ -17,6 +17,9 @@ public sealed record UpdateLayout(string StagingDir, string BackupsDir, string S
         Path.Combine(paths.Root, "update-state.json"),
         paths.InstallFile);
 
+    /// <summary>~/.astra/updates/desktop — the desktop app's own downloads (<see cref="IDesktopUpdater"/>), apart from the server staging.</summary>
+    public string DesktopStagingDir => Path.Combine(Path.GetDirectoryName(StagingDir)!, "desktop");
+
     /// <summary>~/.astra/server/astra-server-&lt;version&gt;[.exe] — a fresh file per version, so a running binary is never replaced.</summary>
     public string ManagedBinaryPath(string version, bool windows)
         => Path.Combine(ServerDir, $"astra-server-{version}{(windows ? ".exe" : "")}");

@@ -174,6 +174,17 @@ the `preview` feed also offers every stable. Clients follow the server's `update
     a background check *waits* for the lock and holds it for the whole apply, releasing before
     `maybeRemind()` so a dialog's Update button can apply (commit
     `c21a68995b2631bb85c8717f81e09365ecace6fd`) (`desktop-app`)
+30a. The Avalonia app (what `release.yml` ships) — `src/Astra.Desktop.Core/Update/UpdateCoordinator.cs` keeps the
+    track rule (`UpdateTracks.Resolve`, port of `updateTrack.ts`; picked in `src/Astra.Desktop/Platform/SelfUpdate.cs`):
+    dmg and installer apps check **their own** version against `<feed>/<channel>/releases.json`
+    (`DesktopReleaseFeed`: newest release with a file tagged `darwin|win32|linux-arm64|x64` + `zip|exe|appimage`,
+    the tags the upload step sends) and replace themselves (`IDesktopUpdater`: `MacAppUpdater` zip → ditto →
+    bundle id + signing team check → `/bin/sh` swap after exit; `WindowsInstallerUpdater` setup.exe
+    `/S --updated --force-run` started by PowerShell after exit; `AppImageUpdater` renames over `$APPIMAGE`);
+    the host then quits. They never swap the server alone — before 2026-10-30 they did, on every track, and a dmg
+    app stayed at 0.13.0-preview.1 while its server reached 0.13.3. The npm track and dev runs still use
+    `ServerUpdater` (the C# port of `apply.ts`). Settings shows the host's answer (`IDesktopHost.LastUpdateCheck`)
+    over the server's status and flags an app/server version mismatch on the desktop row (`desktop-app`)
 31. `packages/update-core/src/apply.ts:applyServerUpdate` — the state machine
     `downloading → swapping → restarting → idle` with a `rolling-back` leg; refusals first: the
     consecutive-failure lock (`MAX_CONSECUTIVE_FAILURES = 2`, `state.ts:30`, bypassed by `force` /
@@ -288,7 +299,9 @@ sequenceDiagram
   the `release.yml` matrix + the desktop's `serverPackage` string (`desktop/src/main.ts:113`) and
   `cli/src/lib/platform.ts:platformInfo`.
 - **A new artifact kind on the download page**: `EXT_BY_KIND` (`docs/lib/releases.ts:72`) + the
-  filename→`os/arch/kind` mapping in the upload step (`release.yml:404-419`) + the download panel.
+  filename→`os/arch/kind` mapping in the upload step (`release.yml:404-419`) + the download panel. The
+  Avalonia self-update reads the same `platform`/`kind` tags (`DesktopReleaseFeed.PlatformTag` /
+  `KindForThisOs`), so renaming a tag or an installer kind changes what installed apps can find.
 - **The install scripts** (`docs/public/install.sh` / `install.ps1`, served at `/install.sh` / `/install.ps1`):
   they read `latest.json` (version + `platforms[<rid>].server/serverSha256`) and `releases.json`
   (`versions[].files[].name/sha256`), download the server tarball straight from the npm registry and

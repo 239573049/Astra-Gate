@@ -46,6 +46,8 @@ public class App : Application
             var hidden = LoginItemService.LaunchedAtLogin(desktop.Args ?? []);
             TrayPreviewControl.Install();
             var tray = new TrayRuntime(this, desktop, services, shell, CreateWindow);
+            // A staged app update finishes once this process is gone (IDesktopUpdater): quit like the tray's Quit does.
+            services.Host.QuitForUpdate = tray.Quit;
             if (!hidden) desktop.MainWindow = tray.MainWindow;
             tray.Start();
             if (hidden) tray.StartHidden();

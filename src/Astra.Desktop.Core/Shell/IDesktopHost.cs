@@ -14,7 +14,9 @@ public sealed record LoginItemState(bool Supported, bool Enabled);
 /// <summary>What <see cref="IDesktopHost.CheckForUpdateAsync"/> found (desktop/src/update.ts <c>UpdateSummary</c>).</summary>
 /// <param name="Message">Human-readable result for dialogs.</param>
 /// <param name="Action">What the user can do right now.</param>
-public sealed record UpdateSummary(string Message, UpdateAction Action);
+/// <param name="Version">The version an update would bring (set whenever <paramref name="Action"/> is not None).</param>
+/// <param name="Notes">Its release notes, when known.</param>
+public sealed record UpdateSummary(string Message, UpdateAction Action, string? Version = null, string? Notes = null);
 
 /// <summary>What an update can do now. Electron's names; Avalonia tracks keep them (<c>DesktopDmg</c> = self-update of the .app).</summary>
 public enum UpdateAction { None, Server, DesktopDmg, DesktopNpm, DesktopDownload }
@@ -158,6 +160,9 @@ public interface IDesktopHost
 
     /// <summary>Checks for an update (server and/or app, per install track).</summary>
     Task<UpdateSummary> CheckForUpdateAsync();
+
+    /// <summary>The last check that completed (from any surface), or null before one did; a failed check leaves the previous answer.</summary>
+    UpdateSummary? LastUpdateCheck => null;
 
     /// <summary>Applies the pending update.</summary>
     Task<UpdateApplyOutcome> ApplyUpdateAsync();

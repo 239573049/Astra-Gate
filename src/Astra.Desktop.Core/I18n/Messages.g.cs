@@ -1680,6 +1680,7 @@ internal static class Messages
         "settings.about",
         "settings.serverVersion",
         "settings.desktopVersion",
+        "settings.versionMismatch",
         "settings.logs",
         "settings.logout",
         "settings.checkUpdates",
@@ -4175,6 +4176,7 @@ internal static class Messages
             case "settings.about": return "关于";
             case "settings.serverVersion": return "服务版本";
             case "settings.desktopVersion": return "桌面端版本";
+            case "settings.versionMismatch": return "与服务版本 {server} 不一致";
             case "settings.logs": return "打开日志目录";
             case "settings.logout": return "退出登录";
             case "settings.checkUpdates": return "检查更新";
@@ -6672,6 +6674,7 @@ internal static class Messages
             case "settings.about": return "About";
             case "settings.serverVersion": return "Server version";
             case "settings.desktopVersion": return "Desktop version";
+            case "settings.versionMismatch": return "differs from the server version {server}";
             case "settings.logs": return "Open logs folder";
             case "settings.logout": return "Sign out";
             case "settings.checkUpdates": return "Check for updates";

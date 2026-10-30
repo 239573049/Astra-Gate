@@ -145,6 +145,33 @@ public class UpdateLogicTests
     }
 
     [Fact]
+    public void The_hosts_check_decides_what_an_update_brings_once_it_ran()
+    {
+        // A packaged app behind a current server: the server says nothing, the app's own check finds its update.
+        var app = new UpdateSummary("", UpdateAction.DesktopDmg, "0.13.3");
+        Assert.Equal("0.13.3", UpdateLogic.AvailableVersion(Status(), app));
+        Assert.Equal("settings.updateAvailable", UpdateLogic.CheckToast(Status(), app).Message.Key);
+        // The host up to date wins over a server that would move alone; no host answer yet falls back to the server.
+        Assert.Null(UpdateLogic.AvailableVersion(Status(available: "0.13.3"), new UpdateSummary("", UpdateAction.None)));
+        Assert.Equal("0.13.3", UpdateLogic.AvailableVersion(Status(available: "0.13.3"), null));
+        // A failed server feed fetch does not hide what the host found.
+        Assert.Equal("settings.updateAvailable", UpdateLogic.CheckToast(Status(error: "offline"), app).Message.Key);
+        Assert.Contains("0.13.3", UpdateLogic.CheckDetail(Status(), null, true, "en", app));
+    }
+
+    [Fact]
+    public void Desktop_row_flags_a_server_on_another_version()
+    {
+        Loc.Language = "en";
+        Assert.Equal("0.13.3", UpdateLogic.DesktopVersionDetail("0.13.3", "0.13.3"));
+        Assert.Equal("0.13.3", UpdateLogic.DesktopVersionDetail("0.13.3", null));
+        Assert.Equal("—", UpdateLogic.DesktopVersionDetail("", "0.13.3"));
+        var mismatch = UpdateLogic.DesktopVersionDetail("0.13.0-preview.1", "0.13.3");
+        Assert.StartsWith("0.13.0-preview.1 · ", mismatch);
+        Assert.Contains("0.13.3", mismatch);
+    }
+
+    [Fact]
     public void Check_detail_prefers_failure_then_available_then_last_check()
     {
         Loc.Language = "en";

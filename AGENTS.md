@@ -561,6 +561,10 @@ runtime needed on the target).
     `latest-mac.yml`, `Astra-<ver>-<arch>-setup.exe`, `Astra-<ver>-<x86_64|arm64>.AppImage` — and the executable is renamed
     `Astra` / `Astra.exe` / `astra` (the assembly stays `astra-desktop`: `avares://astra-desktop/` URIs depend on it). Keep
     those names: old clients, the docs site's upload and download routes and existing shortcuts all match on them.
+    The Avalonia app updates itself from the same files: `DesktopReleaseFeed` (`src/Astra.Desktop.Core/Update`) picks them out
+    of `<feed>/<channel>/releases.json` by the upload step's `x-astra-platform` / `x-astra-kind` tags (`darwin|win32|linux-arm64|x64`,
+    `zip|exe|appimage`) and their sha256, so those tags, the zip's layout (one `Astra.app`) and `installer.nsi`'s
+    `/S --updated --force-run` and `Uninstall Astra.exe` are a contract with installed apps too.
 
 ## Conventions
 
@@ -643,7 +647,10 @@ runtime needed on the target).
   apply gate always was), so a current app with an old server still offers the update. The dmg and
   installer tracks ship the server inside the app, so they never update a server on its own: they check
   the app (electron-updater / the download page) and the new app's bundled server replaces the old one
-  at launch (`resolveServerBinary` drops a stale managed `install.json`).
+  at launch (`resolveServerBinary` drops a stale managed `install.json`). The Avalonia app keeps that rule
+  (`UpdateCoordinator` per `UpdateTrack`): a dmg / installer app checks and replaces itself (`IDesktopUpdater`),
+  and only the npm track and dev runs swap the server (`ServerUpdater`); a packaged app that updated the
+  server alone is how app and server drifted apart before 2026-10-30.
 
 ## Ground rules for edits
 

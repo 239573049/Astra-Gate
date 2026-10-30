@@ -85,9 +85,16 @@ public static class UpdateFeed
         return v is PreviewChannel or "beta" ? PreviewChannel : DefaultChannel;
     }
 
+    /// <summary>Where installer-track users get a newer app when it cannot replace itself (update.ts <c>DOWNLOAD_PAGE_URL</c>).</summary>
+    public const string DownloadPageUrl = "https://astra-gate.si/download";
+
+    /// <summary>The feed location without trailing slashes; the built-in one when <paramref name="feedUrl"/> is blank.</summary>
+    public static string BaseUrl(string? feedUrl)
+        => (string.IsNullOrWhiteSpace(feedUrl) ? DefaultFeedUrl : feedUrl.Trim()).TrimEnd('/');
+
     /// <summary><c>&lt;feed&gt;/&lt;channel&gt;/latest.json</c> with trailing slashes of the feed dropped.</summary>
     public static string ManifestUrl(string? feedUrl, string? channel)
-        => $"{(string.IsNullOrWhiteSpace(feedUrl) ? DefaultFeedUrl : feedUrl.Trim()).TrimEnd('/')}/{NormalizeChannel(channel)}/latest.json";
+        => $"{BaseUrl(feedUrl)}/{NormalizeChannel(channel)}/latest.json";
 
     /// <summary>
     /// GETs the manifest. <paramref name="http"/> is the injectable HTTP source (tests pass a fake handler);

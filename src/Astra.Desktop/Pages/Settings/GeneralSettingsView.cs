@@ -53,7 +53,7 @@ public sealed class GeneralSettingsView : LiveView
     private SettingsRow _serverRow = null!, _desktopRow = null!, _autoCheckRow = null!, _previewRow = null!, _checkRow = null!, _logsRow = null!, _logoutRow = null!;
     private ControlledSwitch _autoCheck = null!, _preview = null!;
     private ArcButton _checkButton = null!, _applyButton = null!;
-    private bool _checking, _applying, _savingChannel;
+    private bool _checking, _applying, _savingChannel, _hostChecked;
     private string? _checkError;
 
     /// <summary>Creates the view.</summary>
@@ -264,7 +264,7 @@ public sealed class GeneralSettingsView : LiveView
     private Control BuildAbout()
     {
         _serverRow = RowBuilder.Row(Loc.T("settings.serverVersion"));
-        _desktopRow = RowBuilder.Row(Loc.T("settings.desktopVersion"), Context.Host.Version is { Length: > 0 } v ? v : "—");
+        _desktopRow = RowBuilder.Row(Loc.T("settings.desktopVersion"), UpdateLogic.DesktopVersionDetail(Context.Host.Version, null));
 
         _autoCheck = new ControlledSwitch();
         Avalonia.Automation.AutomationProperties.SetName(_autoCheck, Loc.T("settings.autoCheck"));
@@ -286,6 +286,7 @@ public sealed class GeneralSettingsView : LiveView
         _logoutRow.Invoked += (_, _) => _ = Host.TryAsync(() => _api.LogoutAsync());
 
         _aboutGroup = RowBuilder.Group(Loc.T("settings.about"), null);
+        _ = HostCheckOnceAsync();
         return _aboutGroup;
     }
 
@@ -300,17 +301,19 @@ public sealed class GeneralSettingsView : LiveView
     {
         var version = _api.Version.Data;
         _serverRow.Detail = version is null ? "—" : $"{version.Version} · API {version.ApiVersion}";
+        _desktopRow.Detail = UpdateLogic.DesktopVersionDetail(Context.Host.Version, version?.Version);
         var settings = _api.Settings.Data;
         var status = _api.Update.Data;
+        var host = Context.Host.LastUpdateCheck;
         _autoCheckRow.Detail = UpdateLogic.AutoCheckDetail(status)?.Text;
         _autoCheck.SetValue(settings?.UpdateAutoCheck ?? status?.AutoCheck ?? true);
         var channel = UpdateLogic.Channel(settings, status);
         _preview.SetValue(channel == "preview");
         _preview.IsEnabled = channel is not null && !_savingChannel;
-        _checkRow.Detail = UpdateLogic.CheckDetail(status, _checkError, canApply: true, Loc.Language);
+        _checkRow.Detail = UpdateLogic.CheckDetail(status, _checkError, canApply: true, Loc.Language, host);
         _checkButton.IsEnabled = !_checking;
         _checkButton.IsLoading = _checking;
-        _applyButton.IsVisible = status?.Available is not null;
+        _applyButton.IsVisible = UpdateLogic.AvailableVersion(status, host) is not null;
         _applyButton.IsEnabled = !_applying;
         _applyButton.IsLoading = _applying;
 
@@ -338,7 +341,9 @@ public sealed class GeneralSettingsView : LiveView
         try
         {
             var status = await _api.CheckUpdateAsync();
-            Host.Toast(UpdateLogic.CheckToast(status));
+            // Then the host's own check: on a packaged app it is the app (with its server) that updates, not the server alone.
+            await Context.Host.CheckForUpdateAsync();
+            Host.Toast(UpdateLogic.CheckToast(status, Context.Host.LastUpdateCheck));
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
@@ -350,6 +355,15 @@ public sealed class GeneralSettingsView : LiveView
             _checking = false;
             RefreshAbout();
         }
+    }
+
+    /// <summary>The host's check, once per view, when no surface has run one yet (the tray's background check normally has).</summary>
+    private async Task HostCheckOnceAsync()
+    {
+        if (_hostChecked || Context.Host.LastUpdateCheck is not null) return;
+        _hostChecked = true;
+        await Context.Host.CheckForUpdateAsync();
+        RefreshAbout();
     }
 
     private async Task RunApplyAsync()
