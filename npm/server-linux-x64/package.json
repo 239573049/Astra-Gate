@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/server-linux-x64",
-  "version": "0.13.3",
+  "version": "0.13.4",
   "description": "Astra self-contained server binary for Linux (x64).",
   "license": "MIT",
   "os": [
