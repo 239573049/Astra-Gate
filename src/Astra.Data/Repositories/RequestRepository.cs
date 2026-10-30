@@ -690,6 +690,18 @@ public sealed class RequestRepository
             $"{RequestSelect} WHERE turn_id = @turn_id ORDER BY started_at_utc, id", new { turn_id = turnId })).ToList();
     }
 
+    /// <summary>
+    /// The most recent traced requests (newest first), for the 链路追踪 activity feed; <paramref name="clientKind"/> narrows it
+    /// to one client. Usage items are not loaded.
+    /// </summary>
+    public async Task<List<RequestRecord>> ListRecentTracedAsync(int limit, string? clientKind, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return (await conn.QueryAsync<RequestRecord>(
+            $"{RequestSelect} WHERE trace_id IS NOT NULL AND (@client_kind IS NULL OR client_kind = @client_kind) ORDER BY started_at_utc DESC, id DESC LIMIT @limit",
+            new { limit, client_kind = clientKind })).ToList();
+    }
+
     /// <summary>The calls that continue <paramref name="id"/> (its <c>parent_request_id</c> children), in start order.</summary>
     public async Task<List<RequestRecord>> ListChildrenAsync(string id, CancellationToken ct = default)
     {

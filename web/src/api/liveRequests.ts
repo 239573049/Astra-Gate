@@ -6,9 +6,16 @@ import type { RequestLiveEvent, RequestSummary } from './types';
 
 type Listener = () => void;
 
-/** Fields the request list (and a trace session) filters on; a change to any of them can move a row in or out of the filtered list. */
+/**
+ * Fields the request list (and a trace session) filters on — a change to any of them can move a row in or out of the
+ * filtered list — plus what moves it on the topology: its attempts (the account row it rides, a failure) and its stage
+ * (what its client's card says the agent is doing).
+ */
 const listKey = (r: RequestSummary) =>
-  [r.clientKind, r.tokenId, r.providerId, r.status, r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel, r.remote, r.sessionKey, r.turnId].join('\u0000');
+  [
+    r.clientKind, r.tokenId, r.providerId, r.status, r.requestedModel, r.upstreamModel, r.systemModelId, r.responseModel, r.remote, r.sessionKey, r.turnId,
+    r.stage, (r.attempts ?? []).map((a) => `${a.providerId}/${a.accountId}/${a.status ?? ''}/${a.endMs ?? ''}`).join(','),
+  ].join('\u0000');
 
 /**
  * Rows of the live request log (GET /api/requests/live), outside React state so an update re-renders only what
@@ -210,6 +217,8 @@ export function useLiveRequestFeed(enabled: boolean) {
         void qc.invalidateQueries({ queryKey: ['requests'] });
         // an open trace session shows the stored call now rather than at its next poll
         void qc.invalidateQueries({ queryKey: ['traces', 'session'] });
+        // the topology's activity feed: the stored row (with its tool calls) takes over from the live one
+        void qc.invalidateQueries({ queryKey: ['traces', 'activity'] });
         for (const id of persisted) {
           void qc.invalidateQueries({ queryKey: ['request', id] });
           void qc.invalidateQueries({ queryKey: ['traces', 'request', id] });

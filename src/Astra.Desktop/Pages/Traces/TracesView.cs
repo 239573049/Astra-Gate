@@ -220,17 +220,52 @@ public abstract class TraceViewBase : UserControl
     }
 }
 
-/// <summary>A · the topology (topology.tsx <c>TopologyView</c>): headline chips, the live legend, the range picker and the canvas.</summary>
+/// <summary>
+/// A · the topology (topology.tsx <c>TopologyView</c>): headline chips, the live legend, the 活动流 toggle, the range picker, the canvas (each
+/// provider's accounts as rows) and, beside it, the activity feed. Hovering a feed card highlights its path; while anything is in the live feed
+/// the view redraws every second so a refusal stops bouncing and a switch note leaves the hub on time.
+/// </summary>
 public sealed class TopologyView : TraceViewBase
 {
     private readonly TopologyViewModel _vm;
     private TraceCanvas? _canvas;
+    private ActivityRailView? _rail;
+    private readonly Grid _body = new() { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 12 };
+    private readonly ContentControl _main = new() { HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch };
+    private IDisposable? _tick;
 
     /// <summary>Builds the view.</summary>
-    public TopologyView(TopologyViewModel vm) : base(vm) => _vm = vm;
+    public TopologyView(TopologyViewModel vm) : base(vm)
+    {
+        _vm = vm;
+        _body.Children.Add(_main);
+    }
 
     /// <inheritdoc />
-    protected override void DropCanvas() => _canvas = null;
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _tick = TraceTicker.Second(() =>
+        {
+            if (_vm.S.Live.List.Count > 0) _vm.Tick();
+        });
+    }
+
+    /// <inheritdoc />
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _tick?.Dispose();
+        _tick = null;
+    }
+
+    /// <inheritdoc />
+    protected override void DropCanvas()
+    {
+        _canvas = null;
+        if (_rail is not null) _body.Children.Remove(_rail);
+        _rail = null;
+    }
 
     /// <inheritdoc />
     protected override void Draw()
@@ -250,12 +285,18 @@ public sealed class TopologyView : TraceViewBase
         // max-lg:hidden — the legend gives way below 1024 px of window width
         var legend = TraceUi.HideBelowWindowWidth(TraceUi.Wrap(12, 4), TopologyPageLogic.ShowsLegend);
         legend.Children.Add(TraceUi.Text(Loc.T("traces.topology.legend"), 11.5, ArcDesignTokenKind.TextSecondary));
-        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.out"), LegendMark.Dot, p.Accent));
-        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.back"), LegendMark.Dot, p.Green));
-        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.slow"), LegendMark.Dot, p.Orange));
+        legend.Children.Add(TraceUi.Legend(Loc.T("traces.cause.user"), LegendMark.Dot, TracePalette.Cyan));
+        legend.Children.Add(HollowLegend(Loc.T("traces.cause.tool_result"), p.Green));
+        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.think"), LegendMark.Dot, p.Accent2));
+        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.write"), LegendMark.Dot, p.Accent));
+        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.tool"), LegendMark.Dot, p.Green));
+        legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.retry"), LegendMark.Dot, p.Orange));
         legend.Children.Add(TraceUi.Legend(Loc.T("traces.live.legend.failed"), LegendMark.Dot, p.Red));
         chips.Children.Add(legend);
         var range = Segmented(TraceQueries.TopologyRanges.Select(r => (r, Loc.T("traces.range." + r))), _vm.Range, Loc.T("traces.range.label"), _vm.SetRange);
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        right.Children.Add(RailToggle(p));
+        right.Children.Add(range);
 
         Control body;
         if (_vm.IsLoading) body = Loading();
@@ -278,7 +319,62 @@ public sealed class TopologyView : TraceViewBase
             _canvas.SetInspector(_vm.Inspector is { } m ? TraceInspectorView.Create(m, p, s.Open, s.ClientLabel) : null);
             body = _canvas;
         }
-        Rows(1, 12, TopLine(chips, range), body);
+        if (!ReferenceEquals(_main.Content, body)) _main.Content = body;
+        if (_vm.Rail)
+        {
+            if (_rail is null)
+            {
+                _rail = new ActivityRailView(new ActivityRailActions(_vm.NameOf, s.NowMs, _vm.Hover, id => s.Open(TraceRoutes.Request(id)), _vm.SetContent, s.ClientLabel))
+                {
+                    Width = 360,
+                };
+                Grid.SetColumn(_rail, 1);
+                _body.Children.Add(_rail);
+            }
+            _rail.Update(_vm.Items, _vm.ContentOn, _vm.ContentReady, _vm.Hovered?.Id);
+        }
+        else if (_rail is not null)
+        {
+            _body.Children.Remove(_rail);
+            _rail = null;
+        }
+        Rows(1, 12, TopLine(chips, right), _body);
+    }
+
+    /// <summary>The 活动流 toggle (topology.tsx: a 28 px button, pressed while the feed shows).</summary>
+    private Border RailToggle(TracePalette p)
+    {
+        var on = _vm.Rail;
+        var button = new Border
+        {
+            Height = 28, Padding = new Thickness(10, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(p.Separator), Background = on ? new SolidColorBrush(p.SurfaceSolid) : Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand), Focusable = true, VerticalAlignment = VerticalAlignment.Center,
+            Child = TraceUi.Text(Loc.T("traces.activity.toggle"), 12, on ? ArcDesignTokenKind.Foreground : ArcDesignTokenKind.TextSecondary),
+        };
+        Avalonia.Automation.AutomationProperties.SetName(button, Loc.T("traces.activity.toggle"));
+        button.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(button).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            _vm.ToggleRail();
+        };
+        button.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Space)) return;
+            e.Handled = true;
+            _vm.ToggleRail();
+        };
+        return button;
+    }
+
+    /// <summary>The tool-result legend entry: a hollow green dot (the capsule's outline).</summary>
+    private static Control HollowLegend(string text, Color color)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        row.Children.Add(new Avalonia.Controls.Shapes.Ellipse { Width = 8, Height = 8, Stroke = new SolidColorBrush(color), StrokeThickness = 1.5, VerticalAlignment = VerticalAlignment.Center });
+        row.Children.Add(TraceUi.Text(text, 11.5, ArcDesignTokenKind.TextSecondary));
+        return row;
     }
 
     private TraceCanvas CreateCanvas()

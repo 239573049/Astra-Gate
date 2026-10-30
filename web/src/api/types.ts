@@ -582,6 +582,37 @@ export interface RequestSummary {
   phases?: string | null;
   /** Smart routing's decision, for a request to the virtual model only. */
   routing?: RequestRouting | null;
+  /** Live feed only: the upstream attempts so far (the last one may still be in flight). */
+  attempts?: RequestAttempt[] | null;
+  /** Live feed only: why the request was sent — the user's input or tool results. */
+  cause?: RequestCause | null;
+}
+/**
+ * One upstream send of a request (an upstream.attempt span): the provider and account it went to, its status, why another
+ * attempt followed (rate_limited_failover | auth_failover | auth_refresh | provider_failover | compression_rejected), and
+ * when it ran (ms from the request's arrival; no endMs while in flight).
+ */
+export interface RequestAttempt {
+  providerId?: string | null;
+  providerName?: string | null;
+  accountId?: string | null;
+  status?: number | null;
+  retry?: string | null;
+  startMs: number;
+  endMs?: number | null;
+  error?: string | null;
+}
+/** One tool result a request carries: the tool (from the call it answers), its error mark (null: the protocol has none), its size. */
+export interface ToolResultInfo {
+  name?: string | null;
+  error?: boolean | null;
+  chars: number;
+}
+/** Why a request was sent. prompt: the start of the user's message, only while the traceContent setting is on. */
+export interface RequestCause {
+  kind: 'user' | 'tool_result';
+  toolResults: ToolResultInfo[];
+  prompt?: string | null;
 }
 /**
  * How smart routing sent one request (requests.routing_json). source: judge (judged now) | pin | turn (a session's or
@@ -897,6 +928,8 @@ export interface AccountImportRequest {
 export type RequestCompression = "default" | "zstd" | "gzip" | "br" | "deflate" | "none";
 export interface Settings {
   locale: "zh" | "en"; debugBodies: boolean; bodyRetentionDays: number; requestRetentionDays: number | null;
+  /** Record conversation content in traces: tool-call arguments, the start of the prompt and of the reply (off by default). */
+  traceContent?: boolean;
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
   /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */
   updateChannel: "stable" | "preview"; updateAutoCheck: boolean;
@@ -1276,6 +1309,9 @@ export interface TraceAccount {
   remainingRequests?: string | null;
   remainingTokens?: string | null;
   limitRequests?: string | null;
+  /** Upstream attempts this account made in the window, and how many failed. */
+  attempts?: number;
+  errors?: number;
 }
 
 export interface TraceProviderNode {
@@ -1464,4 +1500,27 @@ export interface RoutingProblem {
   code: string;
   message: string;
   field?: string | null;
+}
+
+/** One tool call a response made; arguments (JSON text, cut at 4 KB) only while the traceContent setting was on. */
+export interface TraceToolCall {
+  name: string;
+  id?: string | null;
+  arguments?: string | null;
+}
+
+/** One request of the 链路追踪 activity feed (GET /api/traces/activity): why it was sent, where it went, what came back. */
+export interface TraceActivity {
+  request: RequestSummary;
+  step?: number | null;
+  finishReason?: string | null;
+  errorMessage?: string | null;
+  toolCallCount: number;
+  cause?: RequestCause | null;
+  attempts: RequestAttempt[];
+  reasoningMs?: number | null;
+  reasoningChars?: number | null;
+  textChars?: number | null;
+  reply?: string | null;
+  toolCalls: TraceToolCall[];
 }

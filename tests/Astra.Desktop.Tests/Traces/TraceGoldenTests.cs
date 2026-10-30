@@ -44,6 +44,7 @@ public sealed class TraceGoldenTests : IDisposable
         "request" => RunRequest(input),
         "session" => RunSession(input),
         "calc" => RunCalc(input),
+        "activity" => RunActivity(input),
         _ => throw new InvalidOperationException(kind),
     };
 
@@ -62,9 +63,57 @@ public sealed class TraceGoldenTests : IDisposable
 
     private static JsonNode RunTopology(JsonNode input)
     {
-        var graph = TopologyBuilder.Build(Read<TraceTopologyDto>(input["topology"]), T, Label, Brands(input["brands"]), Read<List<RequestSummaryDto>>(input["live"]));
-        return new JsonObject { ["graph"] = Project(graph) };
+        HighlightPath? highlight = input["highlight"] is JsonObject h
+            ? new HighlightPath(h["clientKind"]?.GetValue<string>(), Read<List<Astra.Core.Requests.RequestAttempt>>(h["attempts"]),
+                h["providerId"]?.GetValue<string>(), h["accountId"]?.GetValue<string>())
+            : null;
+        var options = new TopologyOptions(input["nowMs"]!.GetValue<double>(), highlight,
+            input["activity"] is JsonArray ? Read<List<TraceActivityDto>>(input["activity"]) : null);
+        var graph = TopologyBuilder.Build(Read<TraceTopologyDto>(input["topology"]), T, Label, Brands(input["brands"]), Read<List<RequestSummaryDto>>(input["live"]), options);
+        return new JsonObject { ["graph"] = Project(graph, topology: true) };
     }
+
+    private static JsonNode RunActivity(JsonNode input)
+    {
+        var stored = Read<List<TraceActivityDto>>(input["stored"]);
+        var live = Read<List<RequestSummaryDto>>(input["live"]);
+        var now = input["nowMs"]!.GetValue<double>();
+        var args = new JsonArray();
+        foreach (var a in input["args"]!.AsArray())
+        {
+            var text = a?.GetValue<string>();
+            var parsed = ActivityFeed.Arguments(text);
+            JsonNode? projected = parsed is null ? null
+                : parsed.Pairs is { } pairs ? new JsonObject { ["pairs"] = new JsonArray(pairs.Select(p => (JsonNode?)new JsonArray(p.Key, p.Value)).ToArray()) }
+                : new JsonObject { ["raw"] = parsed.Raw };
+            args.Add(new JsonArray(text, projected, ActivityFeed.Headline(text)));
+        }
+        return new JsonObject
+        {
+            ["items"] = new JsonArray(ActivityFeed.Items(stored, live, now).Select(ProjectItem).ToArray()),
+            ["limited"] = new JsonArray(ActivityFeed.Items(stored, live, now, 2).Select(i => (JsonNode?)i.Id).ToArray()),
+            ["args"] = args,
+        };
+    }
+
+    private static JsonNode? ProjectItem(ActivityItem i) => new JsonObject
+    {
+        ["id"] = i.Id, ["live"] = i.Live, ["step"] = i.Step,
+        ["cause"] = i.Cause is { } c ? new JsonObject
+        {
+            ["kind"] = c.Kind,
+            ["toolResults"] = new JsonArray(c.ToolResults.Select(r => (JsonNode?)new JsonObject { ["name"] = r.Name, ["error"] = r.Error, ["chars"] = r.Chars }).ToArray()),
+            ["prompt"] = c.Prompt,
+        } : null,
+        ["attempts"] = new JsonArray(i.Attempts.Select(a => (JsonNode?)new JsonObject
+        {
+            ["providerId"] = a.ProviderId, ["providerName"] = a.ProviderName, ["accountId"] = a.AccountId, ["status"] = a.Status, ["retry"] = a.Retry,
+            ["startMs"] = a.StartMs, ["endMs"] = a.EndMs, ["error"] = a.Error,
+        }).ToArray()),
+        ["thinkMs"] = i.ThinkMs, ["thinkChars"] = i.ThinkChars, ["textMs"] = i.TextMs, ["textChars"] = i.TextChars, ["reply"] = i.Reply,
+        ["tools"] = new JsonArray(i.Tools.Select(c => (JsonNode?)new JsonObject { ["name"] = c.Name, ["id"] = c.Id, ["arguments"] = c.Arguments }).ToArray()),
+        ["finishReason"] = i.FinishReason, ["errorMessage"] = i.ErrorMessage,
+    };
 
     private static JsonNode RunRequest(JsonNode input)
     {
@@ -211,13 +260,13 @@ public sealed class TraceGoldenTests : IDisposable
         }).ToArray()),
     };
 
-    private static JsonNode Project(TraceGraph g)
+    private static JsonNode Project(TraceGraph g, bool topology = false)
     {
         var o = new JsonObject
         {
-            ["nodes"] = new JsonArray(g.Nodes.Select(n => (JsonNode?)new JsonObject
+            ["nodes"] = new JsonArray(g.Nodes.Select(n => (JsonNode?)Topology(new JsonObject
             {
-                ["id"] = n.Id, ["kind"] = n.Kind == NodeKind.Hub ? "hub" : "card", ["x"] = n.X, ["y"] = n.Y, ["w"] = n.Width, ["h"] = n.Height,
+                ["id"] = n.Id, ["kind"] = n.Kind.ToString().ToLowerInvariant(), ["x"] = n.X, ["y"] = n.Y, ["w"] = n.Width, ["h"] = n.Height,
                 ["title"] = n.Card?.Title,
                 ["lines"] = new JsonArray((n.Card?.Lines ?? []).Select(l => (JsonNode?)l).ToArray()),
                 ["tone"] = n.Card?.Tone?.ToString().ToLowerInvariant(), ["client"] = n.Card?.Client,
@@ -225,25 +274,46 @@ public sealed class TraceGoldenTests : IDisposable
                 ["stacked"] = n.Card?.Stacked ?? false, ["pill"] = n.Card?.Pill ?? false, ["live"] = n.Card?.Live,
                 ["flag"] = n.Card?.Flag is { } f ? new JsonObject { ["text"] = f.Text, ["tone"] = f.Tone.ToString().ToLowerInvariant() } : null,
                 ["group"] = n.Card?.Group ?? false, ["pending"] = n.Card?.Pending, ["busy"] = n.Busy,
-            }).ToArray()),
-            ["edges"] = new JsonArray(g.Edges.Select(e => (JsonNode?)new JsonObject
+            }, topology, x =>
+            {
+                x["status"] = n.Card?.Status is { } st ? new JsonObject { ["text"] = st.Text, ["tone"] = st.Tone } : null;
+                x["dim"] = n.Card?.Dim ?? false;
+                x["note"] = n.Note is { } note ? new JsonObject { ["text"] = note.Text, ["tone"] = note.Tone } : null;
+                x["rows"] = n.Rows is { } rows ? new JsonArray(rows.Select(r => (JsonNode?)new JsonObject
+                {
+                    ["id"] = r.Id, ["accountId"] = r.AccountId, ["name"] = r.Name, ["status"] = r.Status, ["detail"] = r.Detail, ["attempts"] = r.Attempts,
+                    ["errors"] = r.Errors, ["live"] = r.Live, ["hit"] = r.Hit, ["dim"] = r.Dim,
+                }).ToArray()) : null;
+            })).ToArray()),
+            ["edges"] = new JsonArray(g.Edges.Select(e => (JsonNode?)Topology(new JsonObject
             {
                 ["id"] = e.Id, ["source"] = e.Source, ["target"] = e.Target, ["sh"] = e.SourceHandle.ToString().ToLowerInvariant(),
-                ["th"] = e.TargetHandle.ToString().ToLowerInvariant(), ["type"] = e.Type.ToString().ToLowerInvariant(),
+                ["th"] = e.TargetRow ?? e.TargetHandle.ToString().ToLowerInvariant(), ["type"] = e.Type.ToString().ToLowerInvariant(),
                 ["tone"] = LowerFirst(e.Tone.ToString()), ["dashed"] = e.Dashed, ["sw"] = e.StrokeWidth, ["label"] = e.Label,
                 ["animated"] = e.Animated, ["arrow"] = e.Arrow,
-                ["flow"] = e.Flow is { } fl ? new JsonObject
+                ["flow"] = e.Flow is { } fl ? Topology(new JsonObject
                 {
                     ["role"] = fl.Role, ["requests"] = new JsonArray(fl.Requests.Select(x => (JsonNode?)x).ToArray()), ["warn"] = fl.Warn,
-                } : null,
+                }, topology, x =>
+                {
+                    x["failed"] = new JsonArray(fl.Failed.Select(f => (JsonNode?)f).ToArray());
+                    x["retry"] = fl.Retry;
+                }) : null,
                 ["step"] = e.Step is { } s ? new JsonObject
                 {
                     ["label"] = s.Label, ["tools"] = s.Tools, ["gap"] = s.Gap, ["selectId"] = s.SelectId,
                     ["wrap"] = s.Wrap is { } w ? new JsonObject { ["rightX"] = w.RightX, ["gapY"] = w.GapY, ["leftX"] = w.LeftX } : null,
                 } : null,
-            }).ToArray()),
+            }, topology, x => x["opacity"] = e.Opacity)).ToArray()),
         };
         if (g is SessionGraph sg) o["anomalies"] = new JsonArray(sg.Anomalies.Select(x => (JsonNode?)x).ToArray());
+        return o;
+    }
+
+    /// <summary>The topology goldens carry the fields only the topology sets (rows, status, note, dimming, failures); the others do not.</summary>
+    private static JsonObject Topology(JsonObject o, bool topology, Action<JsonObject> add)
+    {
+        if (topology) add(o);
         return o;
     }
 

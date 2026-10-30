@@ -346,6 +346,196 @@
   }
 }
 
+/* ---- the topology's accounts, hub note and labelled live requests ---- */
+
+/* another request's path is highlighted */
+.is-dim {
+  opacity: 0.32;
+  transition: opacity 0.15s;
+}
+
+.trace-status {
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.trace-status.tone-think { color: var(--accent-2); }
+.trace-status.tone-write { color: var(--accent); }
+.trace-status.tone-tool,
+.trace-status.tone-run { color: var(--green); }
+.trace-status.tone-warn { color: var(--orange); }
+
+.trace-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trace-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  border: 1px solid transparent;
+  font-size: 12px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.trace-row.is-on {
+  background: color-mix(in oklab, var(--accent) 14%, var(--surface-muted));
+  border-color: color-mix(in oklab, var(--accent) 60%, transparent);
+}
+.trace-row.is-fail {
+  background: color-mix(in oklab, var(--red) 14%, var(--surface-muted));
+  border-color: color-mix(in oklab, var(--red) 65%, transparent);
+}
+
+/* the row's line ends on the card's border (node padding 10 px + border 1 px), level with the row */
+.astra-flow .react-flow__handle.trace-row-handle {
+  left: -11px;
+}
+
+.trace-row-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--label-3);
+}
+.trace-row-dot.tone-ok { background: var(--green); }
+.trace-row-dot.tone-warn { background: var(--orange); }
+
+.trace-row-live {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+
+.trace-hub-note {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 500;
+  background: var(--surface-solid);
+  border: 1px solid var(--separator);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.16);
+  animation: trace-note-in 0.2s ease-out;
+  pointer-events: none;
+}
+.trace-hub-note.tone-info {
+  color: var(--accent);
+  border-color: color-mix(in oklab, var(--accent) 55%, transparent);
+}
+.trace-hub-note.tone-warn {
+  color: var(--orange);
+  border-color: color-mix(in oklab, var(--orange) 65%, transparent);
+  background: color-mix(in oklab, var(--orange) 10%, var(--surface-solid));
+}
+
+@keyframes trace-note-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+}
+
+/* a retry heading down a line; a line whose attempt was just refused */
+.astra-flow .react-flow__edge-path.trace-edge-retry {
+  stroke: var(--orange) !important;
+  stroke-dasharray: 7 6;
+  animation: trace-dash 0.6s linear infinite;
+}
+.astra-flow .react-flow__edge-path.trace-edge-failed {
+  stroke: var(--red) !important;
+  stroke-dasharray: 3 5;
+}
+
+@keyframes trace-dash {
+  to {
+    stroke-dashoffset: -13;
+  }
+}
+
+/* a refused attempt's capsule runs back to the hub, then fades there */
+.trace-fail-run {
+  animation: trace-fail-fade 1.5s ease-in forwards;
+}
+
+@keyframes trace-fail-fade {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* what a live request carries out, and what streams back */
+.trace-cap rect {
+  fill: var(--accent);
+  stroke: var(--surface-solid);
+  stroke-width: 1.5;
+}
+.trace-cap text {
+  font-size: 10.5px;
+  font-weight: 600;
+  fill: #fff;
+  pointer-events: none;
+}
+/* the user's prompt going out (the rail's chip has the same cyan) */
+.trace-cap.out rect { fill: #64d2ff; }
+.trace-cap.out text { fill: #0b0b0d; }
+.trace-cap.result rect {
+  fill: var(--surface-solid);
+  stroke: var(--green);
+}
+.trace-cap.result text { fill: var(--green); }
+.trace-cap.retry rect { fill: var(--orange); }
+.trace-cap.slow rect { fill: var(--orange); }
+.trace-cap.fail rect { fill: var(--red); }
+.trace-cap.stage-think rect { fill: var(--accent-2); }
+.trace-cap.stage-write rect { fill: var(--accent); }
+.trace-cap.stage-tool rect,
+.trace-cap.stage-back rect { fill: var(--green); }
+
+.trace-live-dot.result { fill: var(--green); }
+.trace-live-dot.retry { fill: var(--orange); }
+.trace-live-dot.stage-think { fill: var(--accent-2); }
+.trace-live-dot.stage-write { fill: var(--accent); }
+.trace-live-dot.stage-tool,
+.trace-live-dot.stage-back { fill: var(--green); }
+
+@media (prefers-reduced-motion: reduce) {
+  .trace-fail-run,
+  .trace-hub-note,
+  .astra-flow .react-flow__edge-path.trace-edge-retry {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .trace-burst,
   .trace-live-pulse,

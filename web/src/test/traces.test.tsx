@@ -10,6 +10,7 @@ import {
   buildRequest,
   buildSession,
   buildTimeline,
+  activityItems,
   buildTopology,
   callPhases,
   HUB_ID,
@@ -18,6 +19,8 @@ import {
   phaseLine,
   splitRequestTime,
   splitTurnTime,
+  toolArguments,
+  toolHeadline,
   turnPhases,
   type StepData,
 } from '../components/traces/model';
@@ -125,12 +128,15 @@ describe('trace layouts', () => {
     const client = graph.nodes.find((n) => n.id === 'client:claude-code')!;
     expect(client.data).toMatchObject({ title: 'Claude Code', client: 'claude-code', tone: 'ok' });
     const provider = graph.nodes.find((n) => n.id === 'provider:copilot')!;
+    expect(provider.type).toBe('provider');
     expect(provider.data).toMatchObject({ title: 'GitHub Copilot', tone: 'warn' });
-    expect(graph.edges.map((e) => [e.source, e.target])).toEqual([
-      ['client:claude-code', HUB_ID],
-      [HUB_ID, 'provider:copilot'],
+    // one row per account, each with its own line from the hub
+    expect((provider.data as { rows: { id: string; status: string }[] }).rows).toMatchObject([{ id: 'a:gh-alice', status: 'cooldown' }]);
+    expect(graph.edges.map((e) => [e.source, e.target, e.targetHandle])).toEqual([
+      ['client:claude-code', HUB_ID, 'left'],
+      [HUB_ID, 'provider:copilot', 'a:gh-alice'],
     ]);
-    expect(graph.edges.map((e) => (e.data as { role: string }).role)).toEqual(['client', 'provider']);
+    expect(graph.edges.map((e) => (e.data as { role: string }).role)).toEqual(['client', 'account']);
     expect(graph.edges.every((e) => (e.data as { requests: string[] }).requests.length === 0)).toBe(true);
   });
 
@@ -145,7 +151,76 @@ describe('trace layouts', () => {
     // a finished request still rides its lines (its burst), but only pending ones count as in flight
     expect(graph.nodes.find((n) => n.id === 'provider:copilot')!.data).toMatchObject({ live: 1 });
     expect((graph.edges.find((e) => e.target === 'provider:copilot')!.data as { requests: string[] }).requests).toEqual(['a', 'c']);
+    // a provider without accounts is one API-key row
+    expect(graph.edges.find((e) => e.target === 'provider:deepseek')!.targetHandle).toBe('a:key');
     expect(graph.nodes.find((n) => n.id === HUB_ID)!.data).toMatchObject({ busy: true });
+  });
+
+  it('rides each request on the account its attempt is on, and bounces a refused one back', () => {
+    const two = {
+      ...topology,
+      providers: [
+        {
+          ...topology.providers[0],
+          accounts: [
+            { id: 'main', name: 'Main', status: 'ok', enabled: true, attempts: 7 },
+            { id: 'spare', name: 'Spare', status: 'ok', enabled: true, attempts: 3 },
+          ],
+        },
+      ],
+    } satisfies TraceTopology;
+    const now = Date.parse(at(10_000));
+    const r = (id: string, extra: Partial<RequestSummary>): RequestSummary =>
+      ({ id, startedAtUtc: at(9_000), clientKind: 'claude-code', status: 'pending', providerId: 'copilot', inboundProtocol: 'anthropic', passthrough: false, stream: true,
+         totalInputTokens: 0, totalOutputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, reasoningTokens: 0, costNanoUsd: 0, usageSource: 'missing', ...extra }) as RequestSummary;
+    // 429 on Main 500 ms ago, the retry now heading to Spare
+    const retried = r('x', {
+      attempts: [
+        { providerId: 'copilot', accountId: 'main', status: 429, retry: 'rate_limited_failover', startMs: 100, endMs: 500 },
+        { providerId: 'copilot', accountId: 'spare', startMs: 600 },
+      ],
+      cause: { kind: 'tool_result', toolResults: [{ name: 'Read', error: false, chars: 10 }] },
+    });
+    const graph = buildTopology(two, t, label, new Map(), [retried], { nowMs: now });
+    const edge = (row: string) => graph.edges.find((e) => e.targetHandle === row)!.data as { requests: string[]; failed: string[]; retry: boolean };
+    expect(edge('a:main')).toMatchObject({ requests: [], failed: ['x'], retry: false });
+    expect(edge('a:spare')).toMatchObject({ requests: ['x'], failed: [], retry: true });
+    const rows = (graph.nodes.find((n) => n.id === 'provider:copilot')!.data as { rows: { id: string; hit: string | null; live: number }[] }).rows;
+    expect(rows).toMatchObject([{ id: 'a:main', hit: 'fail' }, { id: 'a:spare', hit: 'on', live: 1 }]);
+    // the hub says why it moved on, and where to
+    expect(graph.nodes[0].data).toMatchObject({ note: { text: 'Rate limited, next account → Spare', tone: 'warn' } });
+    // long after, the failure no longer shows
+    const later = buildTopology(two, t, label, new Map(), [retried], { nowMs: now + 5_000 });
+    expect((later.edges.find((e) => e.targetHandle === 'a:main')!.data as { failed: string[] }).failed).toEqual([]);
+    expect(later.nodes[0].data).toMatchObject({ note: null });
+
+    // hovering a request in the feed dims what it did not touch
+    const lit = buildTopology(two, t, label, new Map(), [], { nowMs: now, highlight: { clientKind: 'claude-code', attempts: [{ providerId: 'copilot', accountId: 'spare' }] } });
+    const litRows = (lit.nodes.find((n) => n.id === 'provider:copilot')!.data as { rows: { id: string; dim?: boolean }[] }).rows;
+    expect(litRows.map((x) => [x.id, !!x.dim])).toEqual([['a:main', true], ['a:spare', false]]);
+    expect(lit.edges.find((e) => e.targetHandle === 'a:main')!.style).toMatchObject({ opacity: 0.25 });
+  });
+
+  it('merges the live feed into the stored activity and reads tool arguments', () => {
+    const stored = [
+      {
+        request: { id: 'old', startedAtUtc: at(0), status: 'success', clientKind: 'claude-code' } as RequestSummary,
+        toolCallCount: 1,
+        attempts: [],
+        toolCalls: [{ name: 'Edit', arguments: '{"file_path":"a.ts","old_string":"x"}' }],
+        finishReason: 'tool_calls',
+      },
+    ];
+    const live = [
+      { id: 'new', startedAtUtc: at(5_000), status: 'pending', phases: 'thinking@100,tool:Bash@900', totalMs: 1_000 } as RequestSummary,
+      { id: 'old', startedAtUtc: at(0), status: 'success' } as RequestSummary,
+    ];
+    const items = activityItems(stored, live, Date.parse(at(6_000)));
+    expect(items.map((i) => [i.id, i.live])).toEqual([['new', true], ['old', false]]);
+    expect(items[0]).toMatchObject({ thinkMs: 800, tools: [{ name: 'Bash' }] });
+    expect(toolArguments(items[1].tools[0].arguments)).toEqual({ pairs: [['file_path', 'a.ts'], ['old_string', 'x']] });
+    expect(toolHeadline('{"old_string":"x","file_path":"a.ts"}')).toBe('a.ts');
+    expect(toolArguments('{"cut": "abc…')).toEqual({ raw: '{"cut": "abc…' });
   });
 
   it('reads the phase of a live request from its fields', () => {
@@ -469,6 +544,9 @@ vi.mock('../api/hooks', () => ({
   useTraceSessions: () => ({ data: [], isLoading: false }),
   useTraceSession: () => ({ data: hooks.session, isLoading: false }),
   useTraceRequest: () => ({ data: hooks.request ?? undefined, isLoading: false }),
+  useTraceActivity: () => ({ data: [] }),
+  useSettings: () => ({ data: { traceContent: false } }),
+  useUpdateSettings: () => ({ mutate: () => {}, isPending: false }),
   useRequests: () => ({ data: { items: [] }, isLoading: false }),
   useRequest: () => ({ data: undefined }),
   useRequestRate: () => ({ data: undefined }),
@@ -616,7 +694,8 @@ describe('TracesPage', () => {
 
     fireEvent.click(screen.getByRole('switch', { name: t('traces.canvas.details') }));
     expect(screen.getByText(t('traces.kv.attempts'))).toBeInTheDocument();
-    expect(screen.getByText('gh-alice')).toBeInTheDocument();
+    // the account is a row of the provider's card and a line of the inspector
+    expect(screen.getAllByText('gh-alice')).toHaveLength(2);
     expect(localStorage.getItem('astra.traces.inspector')).toBe('1');
 
     // × turns the switch off again

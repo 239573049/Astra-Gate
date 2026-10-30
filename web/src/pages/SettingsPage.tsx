@@ -279,6 +279,12 @@ function GeneralSettings() {
             </Row>
           </Group>
 
+          <Group footer={t('settings.traceContentHint')}>
+            <Row label={t('settings.traceContent')}>
+              <Switch checked={s.traceContent ?? false} label={t('settings.traceContent')} onChange={(traceContent) => patch({ traceContent })} />
+            </Row>
+          </Group>
+
           <Group title={t('settings.effort')} footer={t('settings.effortHint')}>
             {(['low', 'medium', 'high'] as const).map((k) => (
               <Row key={k} label={t(`settings.effort.${k}`)}>

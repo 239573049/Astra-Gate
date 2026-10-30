@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router';
 
-import { useProviders, useTraceTopology } from '../../api/hooks';
+import { useProviders, useTraceActivity, useTraceTopology } from '../../api/hooks';
 import { useLiveRequestFeed, useLiveRequestList, useLiveRequestsConnected } from '../../api/liveRequests';
 import type { ClientKind, TraceRange, TraceTopology } from '../../api/types';
 import { useI18n, type TFunction } from '../../i18n';
@@ -12,7 +12,9 @@ import { Segmented, Spinner } from '../ui/controls';
 import { TraceCanvas } from './canvas';
 import { TraceError } from './error';
 import { Inspector } from './inspector';
-import { buildTopology, formatUs, HUB_ID, type ProviderBrand } from './model';
+import { ActivityRail, type NameOf } from './activity';
+import { useNow } from './live';
+import { activityItems, buildTopology, formatUs, HUB_ID, type ActivityItem, type HighlightPath, type ProviderBrand } from './model';
 
 /** Brand data of every provider (icon, template), by id. */
 export function useProviderBrands(): Map<string, ProviderBrand> {
@@ -22,21 +24,68 @@ export function useProviderBrands(): Map<string, ProviderBrand> {
 
 export const labelOfClient = (kind: string | null | undefined) => (kind ? clientName(kind) : '');
 
-/** A · the whole traffic picture: clients → Astra → providers, live. */
+const RAIL_KEY = 'astra.traces.activity';
+
+function readRail(): boolean {
+  try {
+    return localStorage.getItem(RAIL_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * A · the whole traffic picture: clients → Astra → each provider's accounts, live — and beside it the activity feed, one
+ * card per request (why it was sent, where it went, what came back). Hovering a card highlights its path.
+ */
 export function TopologyView() {
   const { t, locale } = useI18n();
   const [range, setRange] = useState<TraceRange>('live');
   const query = useTraceTopology(range);
   const brands = useProviderBrands();
   const [selected, setSelected] = useState<string | null>(null);
+  const [rail, setRail] = useState(readRail);
+  const [hovered, setHovered] = useState<ActivityItem | null>(null);
   // Requests in flight ride the lines (the live request feed; it only records while someone watches).
   useLiveRequestFeed(true);
   const live = useLiveRequestList();
   const liveConnected = useLiveRequestsConnected();
-  const graph = useMemo(
-    () => (query.data ? buildTopology(query.data, t, labelOfClient, brands, live) : { nodes: [], edges: [] }),
-    [query.data, t, brands, live],
+  const activity = useTraceActivity(30);
+  // A failure bounces and a switch stays written above the hub for a moment: tick while anything is in the feed.
+  const now = useNow(live.length > 0);
+  const nowMs = now || Date.now();
+  const highlight = useMemo<HighlightPath | null>(
+    () =>
+      hovered
+        ? { clientKind: hovered.request.clientKind, attempts: hovered.attempts, providerId: hovered.request.providerId, accountId: hovered.request.accountId }
+        : null,
+    [hovered],
   );
+  const graph = useMemo(
+    () => (query.data ? buildTopology(query.data, t, labelOfClient, brands, live, { nowMs, highlight, activity: activity.data }) : { nodes: [], edges: [] }),
+    [query.data, t, brands, live, nowMs, highlight, activity.data],
+  );
+  const items = useMemo(() => activityItems(activity.data ?? [], live, nowMs), [activity.data, live, nowMs]);
+  const names = useMemo<NameOf>(() => {
+    const providers = new Map((query.data?.providers ?? []).map((p) => [p.providerId, p]));
+    return (providerId, accountId) => {
+      const p = providerId ? providers.get(providerId) : undefined;
+      const provider = (providerId ? (brands.get(providerId)?.name ?? p?.name) : null) ?? providerId ?? '—';
+      const account = accountId ? (p?.accounts.find((a) => a.id === accountId)?.name ?? accountId.slice(0, 8)) : null;
+      return { provider, account };
+    };
+  }, [query.data, brands]);
+  const toggleRail = () => {
+    setRail((on) => {
+      try {
+        localStorage.setItem(RAIL_KEY, on ? '0' : '1');
+      } catch {
+        // remembered for this page only
+      }
+      return !on;
+    });
+    setHovered(null);
+  };
   const data = query.data;
   const inFlight = liveConnected ? live.filter((r) => r.status === 'pending').length : (data?.gateway.inFlight ?? 0);
 
@@ -63,43 +112,75 @@ export function TopologyView() {
         ) : null}
         <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-[var(--text-secondary)] max-lg:hidden">
           <span>{t('traces.topology.legend')}</span>
-          <LiveLegend color="var(--accent)">{t('traces.live.legend.out')}</LiveLegend>
-          <LiveLegend color="var(--green)">{t('traces.live.legend.back')}</LiveLegend>
-          <LiveLegend color="var(--orange)">{t('traces.live.legend.slow')}</LiveLegend>
+          <LiveLegend color="#64d2ff">{t('traces.cause.user')}</LiveLegend>
+          <LiveLegend color="var(--green)" hollow>
+            {t('traces.cause.tool_result')}
+          </LiveLegend>
+          <LiveLegend color="var(--accent-2)">{t('traces.live.legend.think')}</LiveLegend>
+          <LiveLegend color="var(--accent)">{t('traces.live.legend.write')}</LiveLegend>
+          <LiveLegend color="var(--green)">{t('traces.live.legend.tool')}</LiveLegend>
+          <LiveLegend color="var(--orange)">{t('traces.live.legend.retry')}</LiveLegend>
           <LiveLegend color="var(--red)">{t('traces.live.legend.failed')}</LiveLegend>
         </span>
-        <Segmented
-          className="ml-auto"
-          ariaLabel={t('traces.range.label')}
-          value={range}
-          onChange={setRange}
-          items={(['live', '1h', '24h'] as const).map((r) => ({ value: r, label: t(`traces.range.${r}`) }))}
-        />
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={rail}
+            onClick={toggleRail}
+            className={cn(
+              'h-7 rounded-[8px] px-2.5 text-[12px] ring-1 ring-[var(--separator)]',
+              rail ? 'bg-[var(--surface-solid)] text-[var(--foreground)]' : 'text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]',
+            )}
+          >
+            {t('traces.activity.toggle')}
+          </button>
+          <Segmented
+            ariaLabel={t('traces.range.label')}
+            value={range}
+            onChange={setRange}
+            items={(['live', '1h', '24h'] as const).map((r) => ({ value: r, label: t(`traces.range.${r}`) }))}
+          />
+        </div>
       </div>
-      {query.isLoading && !data ? (
-        <Spinner lines={6} />
-      ) : query.isError && !data ? (
-        <TraceError error={query.error} />
-      ) : data && data.gateway.requests === 0 && live.length === 0 ? (
-        <div className="card flex flex-1 items-center justify-center p-10 text-[13px] text-[var(--text-secondary)]">{t('traces.topology.empty')}</div>
-      ) : (
-        <TraceCanvas
-          className="min-h-0 flex-1"
-          graph={graph}
-          layoutKey="topology"
-          selected={selected}
-          onSelect={setSelected}
-          inspector={data && selected ? <TopologyInspector data={data} id={selected} t={t} locale={locale} brands={brands} /> : null}
-        />
-      )}
+      <div className="flex min-h-0 flex-1 gap-3 max-lg:flex-col">
+        {query.isLoading && !data ? (
+          <div className="min-w-0 flex-1">
+            <Spinner lines={6} />
+          </div>
+        ) : query.isError && !data ? (
+          <div className="min-w-0 flex-1">
+            <TraceError error={query.error} />
+          </div>
+        ) : data && data.gateway.requests === 0 && live.length === 0 ? (
+          <div className="card flex min-w-0 flex-1 items-center justify-center p-10 text-[13px] text-[var(--text-secondary)]">{t('traces.topology.empty')}</div>
+        ) : (
+          <TraceCanvas
+            className="min-h-0 min-w-0 flex-1"
+            graph={graph}
+            layoutKey="topology"
+            selected={selected}
+            onSelect={setSelected}
+            inspector={data && selected ? <TopologyInspector data={data} id={selected} t={t} locale={locale} brands={brands} /> : null}
+          />
+        )}
+        {rail ? (
+          <ActivityRail
+            className="w-[360px] shrink-0 max-lg:h-[460px] max-lg:w-full"
+            items={items}
+            names={names}
+            onHover={setHovered}
+            highlighted={hovered?.id ?? null}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function LiveLegend({ color, children }: { color: string; children: ReactNode }) {
+function LiveLegend({ color, hollow, children }: { color: string; hollow?: boolean; children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="inline-block size-2 rounded-full" style={{ background: color }} />
+      <span className="inline-block size-2 rounded-full" style={hollow ? { boxShadow: `inset 0 0 0 1.5px ${color}` } : { background: color }} />
       {children}
     </span>
   );

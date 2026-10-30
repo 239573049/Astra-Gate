@@ -3,7 +3,9 @@ using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Requests;
+using Astra.Gateway.Pipeline;
 using Astra.Server.Api;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Astra.Server.IntegrationTests;
 
@@ -182,6 +184,70 @@ public class GatewayTracingTests
         Assert.Equal("main", summary.CallKind);
         Assert.Equal(record.SessionKey, summary.SessionKey);
         Assert.Equal(record.ParentRequestId, summary.ParentRequestId);
+    }
+
+    [Fact]
+    public async Task Conversation_Content_Is_Kept_Only_While_Trace_Content_Is_On()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeCode, ApiProtocol.OpenAIChat,
+            seen => seen.Body.Contains("\"tool_call_id\"", StringComparison.Ordinal) ? FakeUpstream.Json(Done) : FakeUpstream.Sse(ToolCallStream));
+
+        // Off (the default): why the call was sent and which tools it called, never what they said.
+        var plain = await gw.PostAsync("/v1/messages", First, null, ("anthropic-version", "2023-06-01"));
+        await plain.Content.ReadAsStringAsync();
+        var plainSpans = await gw.Host.Db.Traces.ListSpansAsync((await gw.RecordOfAsync(plain)).Id);
+        var plainRoot = JsonNode.Parse(plainSpans[0].AttributesJson!)!;
+        Assert.Equal("user", plainRoot["astra.request.cause"]!.GetValue<string>());
+        Assert.Null(plainRoot["astra.request.prompt"]);
+        var plainResponse = plainSpans.Single(x => x.Name == TraceSpanNames.Response);
+        var plainCall = JsonNode.Parse(plainResponse.EventsJson!)!.AsArray().Single(e => e!["name"]!.GetValue<string>() == "tool_call")!["attributes"]!;
+        Assert.Equal("shell", plainCall["name"]!.GetValue<string>());
+        Assert.Equal("call_A", plainCall["id"]!.GetValue<string>());
+        Assert.Null(plainCall["arguments"]);
+        Assert.Null(JsonNode.Parse(plainResponse.AttributesJson!)!["astra.response.text"]);
+
+        // On: the prompt, each tool call's arguments and the start of the reply.
+        await gw.Host.App.Services.GetRequiredService<SettingsService>().UpdateAsync(x => x.TraceContent = true);
+        var first = await gw.PostAsync("/v1/messages", First, null, Headers);
+        await first.Content.ReadAsStringAsync();
+        var firstRecord = await gw.RecordOfAsync(first);
+        var spans = await gw.Host.Db.Traces.ListSpansAsync(firstRecord.Id);
+        Assert.Equal("fix the login", JsonNode.Parse(spans[0].AttributesJson!)!["astra.request.prompt"]!.GetValue<string>());
+        var response = spans.Single(x => x.Name == TraceSpanNames.Response);
+        var call = JsonNode.Parse(response.EventsJson!)!.AsArray().Single(e => e!["name"]!.GetValue<string>() == "tool_call")!["attributes"]!;
+        Assert.Equal("""{"cmd":"ls"}""", call["arguments"]!.GetValue<string>());
+        Assert.Equal("Let me look", JsonNode.Parse(response.AttributesJson!)!["astra.response.text"]!.GetValue<string>());
+
+        // The tool result: named after the call it answers (from the history), with its size.
+        var second = await gw.PostAsync("/v1/messages", Second, null, ("anthropic-version", "2023-06-01"), ("x-claude-code-session-id", Session));
+        var secondRecord = await gw.RecordOfAsync(second);
+        var secondRoot = (await gw.Host.Db.Traces.ListSpansAsync(secondRecord.Id))[0];
+        Assert.Equal("tool_result", JsonNode.Parse(secondRoot.AttributesJson!)!["astra.request.cause"]!.GetValue<string>());
+        var result = JsonNode.Parse(secondRoot.EventsJson!)!.AsArray().Single(e => e!["name"]!.GetValue<string>() == "tool_result")!["attributes"]!;
+        Assert.Equal("shell", result["name"]!.GetValue<string>());
+        Assert.False(result["error"]!.GetValue<bool>());
+        Assert.Equal("login.ts".Length, result["chars"]!.GetValue<long>());
+
+        // The activity feed reads it back, newest first.
+        var activity = (await gw.Host.GetJsonAsync("/api/traces/activity?limit=10"))!.AsArray();
+        Assert.Equal(3, activity.Count);
+        Assert.Equal(secondRecord.Id, activity[0]!["request"]!["id"]!.GetValue<string>());
+        Assert.Equal("tool_result", activity[0]!["cause"]!["kind"]!.GetValue<string>());
+        Assert.Equal("shell", activity[0]!["cause"]!["toolResults"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal(2, activity[0]!["step"]!.GetValue<int>());
+        Assert.Equal("stop", activity[0]!["finishReason"]!.GetValue<string>());
+        var withContent = activity[1]!;
+        Assert.Equal(firstRecord.Id, withContent["request"]!["id"]!.GetValue<string>());
+        Assert.Equal("fix the login", withContent["cause"]!["prompt"]!.GetValue<string>());
+        Assert.Equal("Let me look", withContent["reply"]!.GetValue<string>());
+        Assert.Equal("""{"cmd":"ls"}""", withContent["toolCalls"]![0]!["arguments"]!.GetValue<string>());
+        var attempt = Assert.Single(withContent["attempts"]!.AsArray())!;
+        Assert.Equal(gw.Provider.Id, attempt["providerId"]!.GetValue<string>());
+        Assert.Equal(200, attempt["status"]!.GetValue<int>());
+        Assert.Null(attempt["retry"]);
+        Assert.Null(activity[2]!["toolCalls"]![0]!["arguments"]); // recorded before the setting was turned on
+
+        Assert.True((await gw.Host.GetJsonAsync("/api/settings"))!["traceContent"]!.GetValue<bool>());
     }
 
     [Fact]

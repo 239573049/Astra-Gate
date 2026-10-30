@@ -55,6 +55,28 @@ public sealed class RequestTrace
         return result;
     }
 
+    /// <summary>
+    /// The upstream attempts recorded so far, in order — the last one may still be open (no status, no end). What the live
+    /// request feed shows while the request runs; the stored spans say the same once it is over.
+    /// </summary>
+    public List<RequestAttempt> Attempts()
+    {
+        var result = new List<RequestAttempt>();
+        foreach (var span in _spans)
+        {
+            if (span.Name != TraceSpanNames.Attempt) continue;
+            var status = span.Get("http.response.status_code") is long code ? (int)code : (int?)null;
+            result.Add(new RequestAttempt(span.Get("astra.provider.id") as string, span.Get("astra.provider.name") as string,
+                span.Get("astra.account.id") as string, status, span.Get("astra.attempt.retry") as string,
+                Millis(_t0, span.StartTimestamp), span.EndTimestamp is { } end ? Millis(_t0, end) : null,
+                span.Status == TraceSpanStatus.Error && status is null ? span.StatusMessage : null));
+        }
+        return result;
+    }
+
+    private static long Millis(long fromTimestamp, long toTimestamp) =>
+        (long)Stopwatch.GetElapsedTime(fromTimestamp, toTimestamp).TotalMilliseconds;
+
     internal static long Micros(long fromTimestamp, long toTimestamp) =>
         (long)Stopwatch.GetElapsedTime(fromTimestamp, toTimestamp).TotalMicroseconds;
 }
@@ -79,6 +101,9 @@ public sealed class TraceSpanBuilder : IDisposable
 
     public string Id { get; }
     public string Name { get; }
+
+    /// <summary>When the span began (a <see cref="Stopwatch.GetTimestamp"/> value).</summary>
+    public long StartTimestamp => _start;
     public string Kind { get; }
     public TraceSpanBuilder? Parent { get; }
     public long? EndTimestamp { get; private set; }
@@ -142,6 +167,15 @@ public sealed class TraceSpanBuilder : IDisposable
     public void EndAt(long timestamp) => EndTimestamp ??= timestamp;
 
     public void Dispose() => End();
+
+    /// <summary>The value set for <paramref name="key"/> (string, long, double or bool), or null.</summary>
+    public object? Get(string key)
+    {
+        if (_attributes is null) return null;
+        foreach (var (k, v) in _attributes)
+            if (k == key) return v;
+        return null;
+    }
 
     private void Add(string key, object value)
     {

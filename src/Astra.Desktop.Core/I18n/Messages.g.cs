@@ -1563,6 +1563,8 @@ internal static class Messages
         "settings.logging",
         "settings.debugBodies",
         "settings.debugBodiesHint",
+        "settings.traceContent",
+        "settings.traceContentHint",
         "settings.bodyRetention",
         "settings.requestRetention",
         "settings.keepForever",
@@ -2062,6 +2064,10 @@ internal static class Messages
         "traces.live.legend.back",
         "traces.live.legend.slow",
         "traces.live.legend.failed",
+        "traces.live.legend.think",
+        "traces.live.legend.write",
+        "traces.live.legend.tool",
+        "traces.live.legend.retry",
         "traces.topology.requestsIn",
         "traces.topology.perMinute",
         "traces.topology.count",
@@ -2152,6 +2158,46 @@ internal static class Messages
         "traces.account.revoked",
         "traces.account.disabled",
         "traces.account.remaining",
+        "traces.account.cooldownIn",
+        "traces.account.attempts",
+        "traces.account.ready",
+        "traces.hub.route",
+        "traces.hub.switch",
+        "traces.switch.rate_limited_failover",
+        "traces.switch.auth_failover",
+        "traces.switch.auth_refresh",
+        "traces.switch.provider_failover",
+        "traces.switch.compression_rejected",
+        "traces.cause.user",
+        "traces.cause.tool_result",
+        "traces.cause.results",
+        "traces.cause.chars",
+        "traces.cause.failed",
+        "traces.cause.retry",
+        "traces.output.think",
+        "traces.output.text",
+        "traces.output.tool",
+        "traces.output.thinkLine",
+        "traces.output.waiting",
+        "traces.output.noArgs",
+        "traces.finish.stop",
+        "traces.finish.tool_calls",
+        "traces.finish.length",
+        "traces.finish.content_filter",
+        "traces.finish.error",
+        "traces.finish.other",
+        "traces.activity.title",
+        "traces.activity.hint",
+        "traces.activity.toggle",
+        "traces.activity.empty",
+        "traces.activity.cause",
+        "traces.activity.route",
+        "traces.activity.output",
+        "traces.activity.content",
+        "traces.activity.contentHint",
+        "traces.activity.contentOff",
+        "traces.activity.tokens",
+        "traces.activity.open",
         "traces.link.new_turn",
         "traces.link.tool_call",
         "traces.link.session",
@@ -2251,6 +2297,7 @@ internal static class Messages
         "traces.agent.tools",
         "traces.agent.idle",
         "traces.agent.failed",
+        "traces.agent.retrying",
         "traces.kv.phases",
         "traces.kv.reasoning",
         "traces.kv.chars",
@@ -4011,6 +4058,8 @@ internal static class Messages
             case "settings.logging": return "记录";
             case "settings.debugBodies": return "保存请求与响应内容";
             case "settings.debugBodiesHint": return "用于排查问题；内容保存在本机数据目录，不含密钥。";
+            case "settings.traceContent": return "在链路追踪中记录对话内容";
+            case "settings.traceContentHint": return "记录每次工具调用的参数（每个最多 4 KB）、用户提问和模型回复的开头（各 300 字）。默认关闭；内容随请求日志一起保存在本机，参数不经隐私护栏处理。";
             case "settings.bodyRetention": return "内容保留";
             case "settings.requestRetention": return "自动清理请求记录";
             case "settings.keepForever": return "永久保留";
@@ -4510,6 +4559,10 @@ internal static class Messages
             case "traces.live.legend.back": return "响应回传";
             case "traces.live.legend.slow": return "等待过久";
             case "traces.live.legend.failed": return "失败";
+            case "traces.live.legend.think": return "思考";
+            case "traces.live.legend.write": return "文本";
+            case "traces.live.legend.tool": return "调用工具";
+            case "traces.live.legend.retry": return "重试 / 切换";
             case "traces.topology.requestsIn": return "个请求（{window}）";
             case "traces.topology.perMinute": return "{count}/分";
             case "traces.topology.count": return "{count} 次";
@@ -4600,6 +4653,46 @@ internal static class Messages
             case "traces.account.revoked": return "授权已失效";
             case "traces.account.disabled": return "已停用";
             case "traces.account.remaining": return "剩余 {count}";
+            case "traces.account.cooldownIn": return "冷却 {time}";
+            case "traces.account.attempts": return "{count} 次";
+            case "traces.account.ready": return "就绪";
+            case "traces.hub.route": return "→ {target}";
+            case "traces.hub.switch": return "{reason} → {target}";
+            case "traces.switch.rate_limited_failover": return "限流，换账号";
+            case "traces.switch.auth_failover": return "认证失败，换账号";
+            case "traces.switch.auth_refresh": return "刷新登录后重试";
+            case "traces.switch.provider_failover": return "切换提供商";
+            case "traces.switch.compression_rejected": return "改发未压缩的请求";
+            case "traces.cause.user": return "用户提问";
+            case "traces.cause.tool_result": return "工具结果";
+            case "traces.cause.results": return "工具结果 ×{count}";
+            case "traces.cause.chars": return "{count} 字";
+            case "traces.cause.failed": return "失败";
+            case "traces.cause.retry": return "重试";
+            case "traces.output.think": return "思考";
+            case "traces.output.text": return "文本";
+            case "traces.output.tool": return "调用工具";
+            case "traces.output.thinkLine": return "{time} · {chars} 字";
+            case "traces.output.waiting": return "等待首个输出…";
+            case "traces.output.noArgs": return "参数未记录";
+            case "traces.finish.stop": return "回复结束";
+            case "traces.finish.tool_calls": return "等待执行工具";
+            case "traces.finish.length": return "达到长度上限";
+            case "traces.finish.content_filter": return "被内容过滤";
+            case "traces.finish.error": return "出错";
+            case "traces.finish.other": return "结束";
+            case "traces.activity.title": return "实时活动";
+            case "traces.activity.hint": return "新的在上面 · 悬停高亮路径";
+            case "traces.activity.toggle": return "活动流";
+            case "traces.activity.empty": return "还没有请求。Agent 发起请求后会出现在这里。";
+            case "traces.activity.cause": return "发起";
+            case "traces.activity.route": return "路由";
+            case "traces.activity.output": return "返回";
+            case "traces.activity.content": return "记录内容";
+            case "traces.activity.contentHint": return "打开后，新请求的工具参数、提问和回复开头会被记录（默认关闭）";
+            case "traces.activity.contentOff": return "工具参数和提问内容未记录。打开「记录内容」后，新的请求才会有。";
+            case "traces.activity.tokens": return "输入 {input} · 输出 {output}";
+            case "traces.activity.open": return "查看链路";
             case "traces.link.new_turn": return "新一轮（用户输入）";
             case "traces.link.tool_call": return "工具调用 id（精确）";
             case "traces.link.session": return "按会话兜底";
@@ -4699,6 +4792,7 @@ internal static class Messages
             case "traces.agent.tools": return "运行工具 {names}";
             case "traces.agent.idle": return "等待你的输入";
             case "traces.agent.failed": return "上次调用失败";
+            case "traces.agent.retrying": return "重试中";
             case "traces.kv.phases": return "阶段";
             case "traces.kv.reasoning": return "思考设置";
             case "traces.kv.chars": return "思考 / 输出字数";
@@ -6461,6 +6555,8 @@ internal static class Messages
             case "settings.logging": return "Logging";
             case "settings.debugBodies": return "Save request & response bodies";
             case "settings.debugBodiesHint": return "For troubleshooting. Stored in the local data folder, without secrets.";
+            case "settings.traceContent": return "Record conversation content in traces";
+            case "settings.traceContentHint": return "Keeps each tool call's arguments (up to 4 KB each) and the start of the user's prompt and the model's reply (300 characters each). Off by default; stored on this machine with the request log, and the arguments are not passed through the privacy guard.";
             case "settings.bodyRetention": return "Keep bodies";
             case "settings.requestRetention": return "Auto-delete request history";
             case "settings.keepForever": return "Kept forever";
@@ -6960,6 +7056,10 @@ internal static class Messages
             case "traces.live.legend.back": return "Streaming back";
             case "traces.live.legend.slow": return "Waiting long";
             case "traces.live.legend.failed": return "Failed";
+            case "traces.live.legend.think": return "Thinking";
+            case "traces.live.legend.write": return "Text";
+            case "traces.live.legend.tool": return "Tool call";
+            case "traces.live.legend.retry": return "Retry / switch";
             case "traces.topology.requestsIn": return "requests ({window})";
             case "traces.topology.perMinute": return "{count}/min";
             case "traces.topology.count": return "{count}×";
@@ -7050,6 +7150,46 @@ internal static class Messages
             case "traces.account.revoked": return "Revoked";
             case "traces.account.disabled": return "Disabled";
             case "traces.account.remaining": return "{count} left";
+            case "traces.account.cooldownIn": return "Cooling {time}";
+            case "traces.account.attempts": return "{count}×";
+            case "traces.account.ready": return "Ready";
+            case "traces.hub.route": return "→ {target}";
+            case "traces.hub.switch": return "{reason} → {target}";
+            case "traces.switch.rate_limited_failover": return "Rate limited, next account";
+            case "traces.switch.auth_failover": return "Sign-in refused, next account";
+            case "traces.switch.auth_refresh": return "Refreshed sign-in, retrying";
+            case "traces.switch.provider_failover": return "Next provider";
+            case "traces.switch.compression_rejected": return "Resending uncompressed";
+            case "traces.cause.user": return "User prompt";
+            case "traces.cause.tool_result": return "Tool result";
+            case "traces.cause.results": return "{count} tool results";
+            case "traces.cause.chars": return "{count} chars";
+            case "traces.cause.failed": return "failed";
+            case "traces.cause.retry": return "Retry";
+            case "traces.output.think": return "Thinking";
+            case "traces.output.text": return "Text";
+            case "traces.output.tool": return "Tool call";
+            case "traces.output.thinkLine": return "{time} · {chars} chars";
+            case "traces.output.waiting": return "Waiting for the first output…";
+            case "traces.output.noArgs": return "Arguments not recorded";
+            case "traces.finish.stop": return "Reply finished";
+            case "traces.finish.tool_calls": return "Waiting for tools";
+            case "traces.finish.length": return "Hit the length limit";
+            case "traces.finish.content_filter": return "Content filtered";
+            case "traces.finish.error": return "Error";
+            case "traces.finish.other": return "Ended";
+            case "traces.activity.title": return "Live activity";
+            case "traces.activity.hint": return "Newest first · hover to highlight the path";
+            case "traces.activity.toggle": return "Activity";
+            case "traces.activity.empty": return "No requests yet. They show up here as your agents send them.";
+            case "traces.activity.cause": return "Cause";
+            case "traces.activity.route": return "Route";
+            case "traces.activity.output": return "Output";
+            case "traces.activity.content": return "Record content";
+            case "traces.activity.contentHint": return "When on, new requests keep their tool arguments and the start of the prompt and reply (off by default)";
+            case "traces.activity.contentOff": return "Tool arguments and prompts are not recorded. Turn on Record content to keep them for new requests.";
+            case "traces.activity.tokens": return "In {input} · out {output}";
+            case "traces.activity.open": return "Open trace";
             case "traces.link.new_turn": return "New turn (user input)";
             case "traces.link.tool_call": return "Tool call id (exact)";
             case "traces.link.session": return "Session fallback";
@@ -7149,6 +7289,7 @@ internal static class Messages
             case "traces.agent.tools": return "Running {names}";
             case "traces.agent.idle": return "Waiting for you";
             case "traces.agent.failed": return "Last call failed";
+            case "traces.agent.retrying": return "Retrying";
             case "traces.kv.phases": return "Phases";
             case "traces.kv.reasoning": return "Reasoning";
             case "traces.kv.chars": return "Reasoning / text chars";

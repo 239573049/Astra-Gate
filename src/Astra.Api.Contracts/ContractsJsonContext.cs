@@ -178,6 +178,7 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(TraceSessionDetailDto))]
 [JsonSerializable(typeof(TraceTopologyDto))]
 [JsonSerializable(typeof(List<TraceSessionDto>))]
+[JsonSerializable(typeof(List<TraceActivityDto>))]
 // plugins
 [JsonSerializable(typeof(PluginDto))]
 [JsonSerializable(typeof(PluginAgentDto))]

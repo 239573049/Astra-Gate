@@ -35,6 +35,17 @@ public sealed record TraceLiveContext(LiveRequestStore Store, Func<double> NowMs
 /// </summary>
 public sealed class TraceNodeView : Panel
 {
+    // A provider card's geometry is fixed so its lines can end on a row before the card is measured (flow.css .trace-provider / .trace-row):
+    // 1 px border, 8 px padding, a 34 px header, 8 px gap, then 30 px rows 4 px apart.
+    private const double ProviderTop = 1 + 8;
+    private const double ProviderHeader = 34;
+    private const double ProviderGap = 8;
+    private const double RowHeight = 30;
+    private const double RowGap = 4;
+
+    /// <summary>Where row <paramref name="index"/>'s line ends on a provider card: its vertical centre, from the card's top (the left border is the x).</summary>
+    public static double RowCenterY(int index) => ProviderTop + ProviderHeader + ProviderGap + index * (RowHeight + RowGap) + RowHeight / 2;
+
     private static Bitmap? _logo;
     private readonly Border _card;
     private readonly TracePalette _palette;
@@ -66,6 +77,26 @@ public sealed class TraceNodeView : Panel
                 },
             };
             Children.Add(_card);
+            // the switch a request just made, or where one was just sent (nodes.tsx .trace-hub-note), above the logo
+            if (node.Note is { } note)
+            {
+                var warn = note.Tone == "warn";
+                var color = warn ? palette.Orange : palette.Accent;
+                var label = TraceUi.Text(note.Text, 11.5, color, FontWeight.Medium);
+                label.TextTrimming = TextTrimming.None;
+                label.Measure(Size.Infinity);
+                // wider than the 96 px hub: an explicit width (a negative margin alone would arrange it at 0 − margins), centred over the logo
+                var width = Math.Ceiling(label.DesiredSize.Width) + 24;
+                Children.Add(new Border
+                {
+                    Width = width, Height = 22, Padding = new Thickness(10, 0), CornerRadius = new CornerRadius(11), BorderThickness = new Thickness(1),
+                    Background = new SolidColorBrush(warn ? TracePalette.Mix(palette.Orange, 0.1, palette.SurfaceSolid) : palette.SurfaceSolid),
+                    BorderBrush = new SolidColorBrush(TracePalette.Mix(color, warn ? 0.65 : 0.55, Colors.Transparent)),
+                    HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness((96 - width) / 2, -30, (96 - width) / 2, 0),
+                    BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 4, Blur = 14, Color = Color.FromArgb(41, 0, 0, 0) }),
+                    Child = label, IsHitTestVisible = false,
+                });
+            }
             Restyle(0);
             return;
         }
@@ -81,8 +112,9 @@ public sealed class TraceNodeView : Panel
             Opacity = d.Tone == TraceTone.Idle ? 0.75 : 1,
         };
         var body = new Panel();
-        body.Children.Add(Content(d, live, clientLabel));
+        body.Children.Add(node.Kind == NodeKind.Provider ? ProviderContent(d, node.Rows ?? []) : Content(d, live, clientLabel));
         _card.Child = body;
+        if (d.Dim) Opacity = 0.32;
         Children.Add(_card);
         // a tool run by the agent: a dashed pill (a Border cannot dash, so the edge is drawn over it)
         if (d.Pill) Children.Add(new DashedOutline(palette.Separator, 3) { IsHitTestVisible = false });
@@ -179,6 +211,21 @@ public sealed class TraceNodeView : Panel
         var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
         text.Children.Add(TraceUi.Text(d.Title, 12.5, ArcDesignTokenKind.Foreground, FontWeight.SemiBold));
         foreach (var line in d.Lines) text.Children.Add(TraceUi.Text(line, 11.5, ArcDesignTokenKind.TextSecondary));
+        if (d.Status is { } status)
+        {
+            // what the client's agent is doing right now (.trace-status): thinking accent-2, writing accent, tools green, retrying orange
+            var color = status.Tone switch
+            {
+                "think" => _palette.Accent2,
+                "write" => _palette.Accent,
+                "tool" or "run" => _palette.Green,
+                "warn" => _palette.Orange,
+                _ => _palette.Label2,
+            };
+            var line = TraceUi.Text(status.Text, 11.5, color, FontWeight.Medium);
+            line.TextTrimming = TextTrimming.CharacterEllipsis;
+            text.Children.Add(line);
+        }
         if (d.Pending is { } id && live is not null) text.Children.Add(new PendingLineView(live, id, _palette));
         if (icon is null) return text;
         if (d.Stacked)
@@ -194,6 +241,78 @@ public sealed class TraceNodeView : Panel
         Grid.SetColumn(text, 1);
         grid.Children.Add(text);
         return grid;
+    }
+
+    /// <summary>
+    /// A provider's card (nodes.tsx <c>ProviderNodeView</c>): brand, name and status line, then one row per account (or its API key) — status
+    /// dot, name, requests on it now, its cooldown / remaining quota — lit accent while a request is served there and red right after one was
+    /// refused there. The geometry is fixed (<see cref="RowCenterY"/>) so the hub's line to each row ends level with it.
+    /// </summary>
+    private Control ProviderContent(CardData d, IReadOnlyList<AccountRow> rows)
+    {
+        var p = _palette;
+        var header = new Grid { Height = ProviderHeader, ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
+        if (d.Provider is { } prov)
+        {
+            var icon = BrandIcon.Provider(prov.Name, prov.Icon, 26);
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            header.Children.Add(icon);
+        }
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        var title = TraceUi.Text(d.Title, 12.5, ArcDesignTokenKind.Foreground, FontWeight.SemiBold);
+        title.TextTrimming = TextTrimming.CharacterEllipsis;
+        text.Children.Add(title);
+        foreach (var line in d.Lines)
+        {
+            var l = TraceUi.Text(line, 11.5, ArcDesignTokenKind.TextSecondary);
+            l.TextTrimming = TextTrimming.CharacterEllipsis;
+            text.Children.Add(l);
+        }
+        Grid.SetColumn(text, 1);
+        header.Children.Add(text);
+
+        var list = new StackPanel { Spacing = RowGap };
+        foreach (var row in rows)
+        {
+            var tone = row.Status == "ok" ? "ok" : row.Status == "cooldown" ? "warn" : "off";
+            var bg = row.Hit == "on" ? TracePalette.Mix(p.Accent, 0.14, p.SurfaceMuted)
+                : row.Hit == "fail" ? TracePalette.Mix(p.Red, 0.14, p.SurfaceMuted)
+                : p.SurfaceMuted;
+            var edge = row.Hit == "on" ? TracePalette.WithAlpha(p.Accent, 0.6) : row.Hit == "fail" ? TracePalette.WithAlpha(p.Red, 0.65) : Colors.Transparent;
+            var cells = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 7, VerticalAlignment = VerticalAlignment.Center };
+            cells.Children.Add(TraceUi.Dot(tone == "ok" ? p.Green : tone == "warn" ? p.Orange : p.Label3));
+            var name = TraceUi.Text(row.Name, 12, ArcDesignTokenKind.Foreground);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            name.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(name, 1);
+            cells.Children.Add(name);
+            if (row.Live > 0)
+            {
+                var badge = new Border
+                {
+                    MinWidth = 16, Height = 16, Padding = new Thickness(4, 0), CornerRadius = new CornerRadius(8), Background = new SolidColorBrush(p.Accent),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Child = new TextBlock { Text = row.Live.ToString(System.Globalization.CultureInfo.InvariantCulture), FontSize = 10, FontWeight = FontWeight.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                };
+                Grid.SetColumn(badge, 2);
+                cells.Children.Add(badge);
+            }
+            var detail = TraceUi.Text(row.Detail, 11, tone == "ok" ? p.Label2 : p.Orange);
+            detail.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(detail, 3);
+            cells.Children.Add(detail);
+            var rowBorder = new Border
+            {
+                Height = RowHeight, Padding = new Thickness(8, 0), CornerRadius = new CornerRadius(8), BorderThickness = new Thickness(1),
+                Background = new SolidColorBrush(bg), BorderBrush = new SolidColorBrush(edge), Child = cells, Opacity = row.Dim && !d.Dim ? 0.32 : 1,
+            };
+            ToolTip.SetTip(rowBorder, $"{row.Name} · {row.Detail}");
+            list.Children.Add(rowBorder);
+        }
+        var stack = new StackPanel { Spacing = ProviderGap };
+        stack.Children.Add(header);
+        stack.Children.Add(list);
+        return stack;
     }
 
     /// <summary>

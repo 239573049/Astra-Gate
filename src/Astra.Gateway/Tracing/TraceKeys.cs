@@ -20,7 +20,7 @@ public readonly record struct LastMessage(IReadOnlyList<string> ToolResultIds, b
 /// translation, so the pass-through and conversion paths agree; .plan/observability.md §3): the conversation (session
 /// key), the call chain (chain key) and the tool calls the request answers. Never throws; unknown shapes give nothing.
 /// </summary>
-public static class TraceKeys
+public static partial class TraceKeys
 {
     /// <summary>Text taken into a chain fingerprint per part (system / first user message): enough to tell chains apart.</summary>
     private const int MaxFingerprintChars = 64 * 1024;

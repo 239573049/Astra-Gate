@@ -13,6 +13,77 @@ public class TraceKeysTests
     private static JsonObject Json(string text) => (JsonObject)JsonNode.Parse(text)!;
 
     [Fact]
+    public void The_Cause_Names_Each_Tool_Result_After_The_Call_It_Answers()
+    {
+        var anthropic = TraceKeys.CauseOf(ApiProtocol.Anthropic, Json("""
+            {"messages":[{"role":"user","content":"fix it"},
+                         {"role":"assistant","content":[{"type":"tool_use","id":"toolu_1","name":"Read","input":{}},
+                                                        {"type":"tool_use","id":"toolu_2","name":"Bash","input":{}}]},
+                         {"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"hello"},
+                                                   {"type":"tool_result","tool_use_id":"toolu_2","is_error":true,"content":[{"type":"text","text":"boom"}]},
+                                                   {"type":"text","text":"<system-reminder>x</system-reminder>"}]}]}
+            """), withPrompt: true)!;
+        Assert.Equal(RequestCauseKinds.ToolResult, anthropic.Kind);
+        Assert.Equal([new ToolResultInfo("Read", false, 5), new ToolResultInfo("Bash", true, 4)], anthropic.ToolResults);
+        Assert.Null(anthropic.Prompt);
+
+        var chat = TraceKeys.CauseOf(ApiProtocol.OpenAIChat, Json("""
+            {"messages":[{"role":"user","content":"go"},
+                         {"role":"assistant","tool_calls":[{"id":"c1","type":"function","function":{"name":"grep","arguments":"{}"}}]},
+                         {"role":"tool","tool_call_id":"c1","content":"3 hits"}]}
+            """), withPrompt: false)!;
+        Assert.Equal([new ToolResultInfo("grep", null, 6)], chat.ToolResults);
+
+        var responses = TraceKeys.CauseOf(ApiProtocol.OpenAIResponses, Json("""
+            {"input":[{"type":"message","role":"user","content":"go"},
+                      {"type":"function_call","call_id":"r1","name":"shell","arguments":"{}"},
+                      {"type":"function_call_output","call_id":"r1","output":"done"}]}
+            """), withPrompt: false)!;
+        Assert.Equal([new ToolResultInfo("shell", null, 4)], responses.ToolResults);
+
+        var gemini = TraceKeys.CauseOf(ApiProtocol.Gemini, Json("""
+            {"contents":[{"role":"user","parts":[{"functionResponse":{"name":"lookup","response":{"error":"nope"}}}]}]}
+            """), withPrompt: false)!;
+        Assert.Equal([new ToolResultInfo("lookup", true, 4)], gemini.ToolResults);
+    }
+
+    [Fact]
+    public void The_Prompt_Is_Kept_Only_When_Asked_And_Skips_System_Reminders()
+    {
+        var body = Json("""
+            {"messages":[{"role":"user","content":[{"type":"text","text":"<system-reminder>context</system-reminder>"},{"type":"text","text":"  rename the button  "}]}]}
+            """);
+        var withoutPrompt = TraceKeys.CauseOf(ApiProtocol.Anthropic, body, withPrompt: false)!;
+        Assert.Equal(RequestCauseKinds.User, withoutPrompt.Kind);
+        Assert.Null(withoutPrompt.Prompt);
+        Assert.Equal("rename the button", TraceKeys.CauseOf(ApiProtocol.Anthropic, body, withPrompt: true)!.Prompt);
+
+        var long_ = TraceKeys.CauseOf(ApiProtocol.OpenAIResponses, Json($$"""{"input":"{{new string('a', 500)}}"}"""), withPrompt: true)!;
+        Assert.Equal(TraceKeys.MaxPromptChars + 1, long_.Prompt!.Length); // cut, with an ellipsis
+
+        Assert.Null(TraceKeys.CauseOf(ApiProtocol.Anthropic, Json("""{"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"Sure"}]}"""), true));
+    }
+
+    [Fact]
+    public void Attempts_Report_Each_Send_With_Its_Account_Status_And_Retry()
+    {
+        var trace = new RequestTrace();
+        var first = trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client).Set("astra.provider.id", "p1").Set("astra.provider.name", "One")
+            .Set("astra.account.id", "acc1");
+        first.Set("http.response.status_code", 429).Set("astra.attempt.retry", "rate_limited_failover").Error("429").End();
+        trace.Start(TraceSpanNames.Attempt, TraceSpanKinds.Client).Set("astra.provider.id", "p1").Set("astra.account.id", "acc2");
+
+        var attempts = trace.Attempts();
+        Assert.Equal(2, attempts.Count);
+        Assert.Equal(("p1", "One", "acc1", 429, "rate_limited_failover"), (attempts[0].ProviderId, attempts[0].ProviderName, attempts[0].AccountId, attempts[0].Status, attempts[0].Retry));
+        Assert.NotNull(attempts[0].EndMs);
+        Assert.Null(attempts[0].Error); // it has a status
+        Assert.Equal("acc2", attempts[1].AccountId);
+        Assert.Null(attempts[1].Status); // still in flight
+        Assert.Null(attempts[1].EndMs);
+    }
+
+    [Fact]
     public void Anthropic_Tool_Results_Continue_And_Text_Starts_A_Turn()
     {
         var loop = TraceKeys.LastMessageOf(ApiProtocol.Anthropic, Json("""

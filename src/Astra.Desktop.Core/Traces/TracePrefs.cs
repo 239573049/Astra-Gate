@@ -18,8 +18,9 @@ public interface ITracePrefsStore
 
 /// <summary>
 /// The persisted state of the trace canvases (canvas.tsx keeps it in localStorage: <c>astra.traces.inspector</c> = "1" / "0" and
-/// <c>astra.traces.layout.&lt;key&gt;</c> = <c>{ id: { x, y } }</c>). Here both live in one prefs key, <see cref="Key"/>:
-/// <c>{ "inspector": bool, "layouts": { "&lt;key&gt;": { "&lt;node id&gt;": { "x": n, "y": n } } } }</c>.
+/// <c>astra.traces.layout.&lt;key&gt;</c> = <c>{ id: { x, y } }</c>; topology.tsx keeps <c>astra.traces.activity</c> = "0" when the activity
+/// feed is hidden). Here all of it lives in one prefs key, <see cref="Key"/>:
+/// <c>{ "inspector": bool, "activity": bool, "layouts": { "&lt;key&gt;": { "&lt;node id&gt;": { "x": n, "y": n } } } }</c>.
 /// </summary>
 public static class TracePrefs
 {
@@ -41,6 +42,7 @@ public static class TracePrefs
             _store = store;
         }
         TraceLayouts.Forget();
+        _rail = null;
         if (store?.Get(Key) is JsonObject o && o["inspector"] is JsonValue v && v.TryGetValue<bool>(out var on)) TraceInspectorSwitch.Load(on);
     }
 
@@ -67,6 +69,23 @@ public static class TracePrefs
 
     /// <summary>Stores the 详情 switch.</summary>
     internal static void WriteInspector(bool on) => Update(o => o["inspector"] = on);
+
+    /// <summary>Whether the topology shows its activity feed (default on; topology.tsx <c>readRail</c>).</summary>
+    public static bool ActivityRail
+    {
+        get => _rail ??= _store?.Get(Key) is not JsonObject o || o["activity"] is not JsonValue v || !v.TryGetValue<bool>(out var on) || on;
+        set
+        {
+            _rail = value;
+            Update(o =>
+            {
+                if (value) o.Remove("activity");
+                else o["activity"] = false;
+            });
+        }
+    }
+
+    private static bool? _rail;
 
     private static void Update(Action<JsonObject> change)
     {

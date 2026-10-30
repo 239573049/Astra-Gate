@@ -35,9 +35,13 @@ public sealed class LiveRequestStore
     /// <summary>One row changed (or left); the argument is its id.</summary>
     public event Action<string>? RowChanged;
 
-    /// <summary>Fields the request list (and a trace session) filters on; a change to any of them can move a row in or out of the filtered list (web <c>listKey</c>).</summary>
+    /// <summary>
+    /// Fields the request list (and a trace session) filters on — a change to any of them can move a row in or out of the filtered list — plus
+    /// what moves it on the topology: its attempts (the account row it rides, a failure) and its stage (web <c>listKey</c>).
+    /// </summary>
     internal static string ListKey(RequestSummaryDto r)
-        => string.Join('\0', r.ClientKind, r.TokenId, r.ProviderId, r.Status, r.RequestedModel, r.UpstreamModel, r.SystemModelId, r.ResponseModel, r.Remote, r.SessionKey, r.TurnId);
+        => string.Join('\0', r.ClientKind, r.TokenId, r.ProviderId, r.Status, r.RequestedModel, r.UpstreamModel, r.SystemModelId, r.ResponseModel, r.Remote, r.SessionKey, r.TurnId,
+            r.Stage, string.Join(',', (r.Attempts ?? []).Select(a => $"{a.ProviderId}/{a.AccountId}/{a.Status}/{a.EndMs}")));
 
     /// <summary>Adds or replaces a row.</summary>
     public void Set(RequestSummaryDto row)

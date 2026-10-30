@@ -71,13 +71,19 @@ public sealed class TraceStageSample
     public long DurationUs { get; set; }
 }
 
-/// <summary>The latest attempt an account served in a window, with its attributes (rate-limit snapshot).</summary>
+/// <summary>The latest attempt an account served in a window, with its attributes (rate-limit snapshot) and how many it served.</summary>
 public sealed class TraceAccountAttempt
 {
     public string? ProviderId { get; set; }
     public string? AccountId { get; set; }
     public DateTimeOffset AtUtc { get; set; }
     public string? AttributesJson { get; set; }
+
+    /// <summary>Upstream attempts this account made in the window.</summary>
+    public long Attempts { get; set; }
+
+    /// <summary>Of those, the ones the upstream refused or that failed.</summary>
+    public long Errors { get; set; }
 }
 
 /// <summary>Everything the topology view aggregates over one window.</summary>
@@ -121,6 +127,23 @@ public sealed class TraceRepository(SqliteConnectionFactory factory)
         return (await conn.QueryAsync<TraceSpan>(
             $"{SpanSelect} JOIN requests r ON r.id = s.request_id WHERE r.turn_id = @turn_id ORDER BY r.started_at_utc, r.id, s.start_us, s.span_id",
             new { turn_id = turnId })).ToList();
+    }
+
+    /// <summary>
+    /// The root, upstream-attempt and response spans of the <paramref name="limit"/> most recent traced requests — the ones
+    /// <see cref="RequestRepository.ListRecentTracedAsync"/> lists with the same arguments — request by request in start order:
+    /// why each was sent, where it went, what came back (the activity feed).
+    /// </summary>
+    public async Task<List<TraceSpan>> ListRecentActivitySpansAsync(int limit, string? clientKind, CancellationToken ct = default)
+    {
+        await using var conn = await factory.OpenAsync(ct);
+        return (await conn.QueryAsync<TraceSpan>($"""
+            {SpanSelect}
+            WHERE s.request_id IN (SELECT id FROM requests WHERE trace_id IS NOT NULL AND (@client_kind IS NULL OR client_kind = @client_kind)
+                                   ORDER BY started_at_utc DESC, id DESC LIMIT @limit)
+              AND s.name IN ('gateway.request', 'upstream.attempt', 'gateway.response')
+            ORDER BY s.request_id, s.start_us, s.span_id
+            """, new { limit, client_kind = clientKind })).ToList();
     }
 
     /// <summary>Sessions active since <paramref name="from"/>, most recently active first.</summary>
@@ -246,7 +269,9 @@ public sealed class TraceRepository(SqliteConnectionFactory factory)
             SELECT COALESCE(json_extract(s.attributes_json, '$."astra.provider.id"'), r.provider_id) AS ProviderId,
                    json_extract(s.attributes_json, '$."astra.account.id"') AS AccountId,
                    MAX(r.started_at_utc) AS AtUtc,
-                   s.attributes_json AS AttributesJson
+                   s.attributes_json AS AttributesJson,
+                   COUNT(*) AS Attempts,
+                   COALESCE(SUM(CASE WHEN s.status = 'error' THEN 1 ELSE 0 END), 0) AS Errors
             FROM trace_spans s JOIN requests r ON r.id = s.request_id
             WHERE s.name = 'upstream.attempt' AND r.started_at_utc >= @from
               AND json_extract(s.attributes_json, '$."astra.account.id"') IS NOT NULL

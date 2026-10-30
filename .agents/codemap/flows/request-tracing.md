@@ -2,7 +2,7 @@
 flow: request-tracing
 modules: [astra-gateway, astra-core, astra-data, astra-server, web-ui, docs-site]
 commit: 6324e30
-updated: 2026-10-14
+updated: 2026-10-30
 ---
 # Request tracing (agent → Astra → provider)
 
@@ -32,25 +32,39 @@ stage of that call. The console's 链路追踪 views and `GET /api/traces/**` re
    headers **before** the privacy guard rewrites the tree and before any codec translates it, so the pass-through and
    conversion paths agree. A session id that looks like one is kept verbatim (`cc:` / `codex:`); everything else is
    hashed. Unknown shapes give nothing — the helpers never throw.
-5. `Tracing/TraceLinker.cs:TraceLinker.Link` — places the call. A tool result whose id was seen continues that call
+5. `Tracing/TraceKeys.Cause.cs:TraceKeys.CauseOf` — after the privacy guard, from the **guarded** tree: whether the call
+   carries the user's input or tool results (each named after the call it answers, found in the history the request
+   re-sends, with its error mark and size). Root span `astra.request.cause` (+ `astra.request.prompt`, the first 300
+   characters, only while `AppSettings.TraceContent` is on) and one `tool_result` event per result; also
+   `RequestRecord.LiveCause` for the live feed.
+6. `Tracing/TraceLinker.cs:TraceLinker.Link` — places the call. A tool result whose id was seen continues that call
    (`link_source = tool_call`, `step + 1`); one that was not falls back to the chain's latest call (`session`). A user
    message opens a turn on the main chain (`new_turn`), or — on another chain of the same session — a sub-agent while
    the main chain still waits on tool calls (`sidechain`) or a side call (`aux`), both `inferred`.
-6. `GatewayPipeline.FinishTrace` — writes `FinishReason` and `ToolCalls` onto the record, closes the response span
-   (events `first_token`, `reasoning_start`/`reasoning_end`, `text_start`/`text_end`, `tool_call`), ends the root
-   span, and calls `RequestTrace.Build`. Spans still open end with the root and are marked `error`/`incomplete`.
-   `TraceLinker.Complete` remembers the tool-call ids the response asked for.
-7. `src/Astra.Data/Repositories/RequestRepository.cs:RequestRepository.InsertBatchAsync` — the span rows go into
+7. Every attempt that gets its account and every attempt that ends calls `AttemptTrace.Changed`, which puts
+   `RequestTrace.Attempts()` (a snapshot of the `upstream.attempt` spans so far) on `RequestRecord.LiveAttempts` and
+   updates the live feed — the topology draws the account a call is on and a retry as it happens.
+8. `GatewayPipeline.FinishTrace` — writes `FinishReason` and `ToolCalls` onto the record, closes the response span
+   (events `first_token`, `reasoning_start`/`reasoning_end`, `text_start`/`text_end`, `tool_call` with `name` / `id` and,
+   while `TraceContent` is on, `arguments` cut at 4 KB; `astra.response.text` = the reply's first 300 characters under the
+   same switch), ends the root span, and calls `RequestTrace.Build`. Spans still open end with the root and are marked
+   `error`/`incomplete`. `TraceLinker.Complete` remembers the tool-call ids the response asked for. `LivePhases` stays
+   on the record (never stored) so the live feed's last event keeps it until the row is written.
+9. `src/Astra.Data/Repositories/RequestRepository.cs:RequestRepository.InsertBatchAsync` — the span rows go into
    `trace_spans` in the same transaction as the request row (`ON DELETE CASCADE`, so request-log retention removes
    both). Rows logged before migration `0017_tracing.sql` simply have no trace; nothing is back-filled.
-8. ⇢ HTTP: `src/Astra.Server/Api/TraceEndpoints.cs:TraceEndpoints.MapTraceEndpoints` (registered in
-   `AstraApp.Create`) serves `GET /api/traces/requests/{id}`, `/sessions`, `/sessions/{key}` and `/topology`. A call
+10. ⇢ HTTP: `src/Astra.Server/Api/TraceEndpoints.cs:TraceEndpoints.MapTraceEndpoints` (registered in
+   `AstraApp.Create`) serves `GET /api/traces/requests/{id}`, `/sessions`, `/sessions/{key}`, `/topology` (each
+   account's attempts / errors in the window) and `/activity` (the latest requests as `TraceActivityDto`: cause, attempts,
+   thinking, reply, tool calls — built from the root / attempt / response spans by `ToActivity`). The live feed
+   (`/api/requests/live`) carries `attempts`, `cause` and `phases` on every event of a request. A call
    still in flight is answered from `LiveRequestFeed` with an empty span list — spans are written once, with the row.
    `TraceRepository` (`src/Astra.Data/Repositories/TraceRepository.cs:TraceRepository`) is the read side;
    `TraceStats.Percentile` (`src/Astra.Core/Requests/TraceStats.cs:TraceStats`) computes the P50/P95.
-9. ⇢ HTTP: `web/src/pages/TracesPage.tsx:TracesPage` renders the three views through
-   `web/src/components/traces/` (`canvas.tsx`, `topology.tsx`, `session.tsx`, `request.tsx`, `inspector.tsx`),
-   laid out by the pure builders in `model.ts`. `SPAN` there repeats `TraceSpanNames`, and the hooks are
+11. ⇢ HTTP: `web/src/pages/TracesPage.tsx:TracesPage` renders the three views through
+   `web/src/components/traces/` (`canvas.tsx`, `topology.tsx` + `activity.tsx` — the activity rail, `session.tsx`,
+   `request.tsx`, `inspector.tsx`), laid out by the pure builders in `model.ts` (the topology's provider nodes have one
+   row and one edge per account, `accountRowId`; `activityItems` merges the live feed into the stored activity). `SPAN` there repeats `TraceSpanNames`, and the hooks are
    `useTraceTopology` / `useTraceSessions` / `useTraceSession` / `useTraceRequest` (`web/src/api/hooks.ts`). The live
    particles reuse the existing `/api/requests/live` stream.
 
@@ -95,6 +109,9 @@ sequenceDiagram
   `TraceEndpoints.TopologyAsync` and the attribute keys `TraceRepository` groups by. Renaming one without the others
   makes the stage vanish from the canvas while the row is still written. `docs/content/docs/console/traces.mdx` lists
   what is recorded.
+- **Content in the trace** (anything copied from the conversation — arguments, prompt, reply) stays behind
+  `AppSettings.TraceContent` (off by default; `.agents/memory/trace-routing-visualization.md`). Names, counts, timings
+  and attempts are recorded either way.
 - **A new agent identity:** extend `TraceKeys`, not the pipeline. It has to be readable from the client's own body,
   because the pass-through path never builds an IR.
 - **Looks tempting but breaks:** forwarding the inbound `traceparent` upstream (the propagator is disabled on

@@ -1,13 +1,18 @@
 using System.Text.Json.Nodes;
 using Astra.Core.Billing;
 using Astra.Core.Privacy;
+using Astra.Core.Requests;
 using Astra.Core.Routing;
 
 namespace Astra.Api.Contracts;
 
 
 
-/// <summary>Admin API payload: request summary.</summary>
+/// <summary>
+/// Admin API payload: request summary. The live feed (<c>/api/requests/live</c>) adds what the 链路追踪 views follow while a
+/// request runs: <c>Stage</c> / <c>Phases</c> (what the model is producing), <c>Attempts</c> (the upstream sends so far, the
+/// last one possibly in flight) and <c>Cause</c> (user input or tool results); list queries leave them null.
+/// </summary>
 public sealed record RequestSummaryDto(
     string Id, DateTimeOffset StartedAtUtc, string? ClientKind, string? ProviderId, string? ProviderName,
     string InboundProtocol, string? UpstreamProtocol, bool Passthrough, string? RequestedModel, string? UpstreamModel,
@@ -17,7 +22,7 @@ public sealed record RequestSummaryDto(
     string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
     string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp,
     string? SessionKey = null, string? Stage = null, string? TurnId = null, string? CallKind = null, string? ParentRequestId = null,
-    string? Phases = null, RoutingReport? Routing = null);
+    string? Phases = null, RoutingReport? Routing = null, List<RequestAttempt>? Attempts = null, RequestCause? Cause = null);
 
 /// <summary>Admin API payload: usage item.</summary>
 public sealed record UsageItemDto(

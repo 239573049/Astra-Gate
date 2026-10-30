@@ -15,8 +15,8 @@ public enum Handle { Left, Right, Top, Bottom }
 /// <summary>How an edge is drawn: a plain curve, a topology line with live dots, or a session step with a label.</summary>
 public enum EdgeType { Default, Flow, Step }
 
-/// <summary>Node shape: a card, or the Astra hub of the topology.</summary>
-public enum NodeKind { Card, Hub }
+/// <summary>Node shape: a card, the Astra hub of the topology, or a provider card with one row per account (topology).</summary>
+public enum NodeKind { Card, Hub, Provider }
 
 /// <summary>Anomaly kinds of a turn's call (web <c>Anomaly</c>); the flag text key is <c>traces.flag.{error|retry|slow}</c>.</summary>
 public enum Anomaly { Error, Retry, Slow }
@@ -58,17 +58,54 @@ public sealed record CardData
     public bool Group { get; init; }
     /// <summary>Id of the in-flight request this card shows; the card reads what the model is doing right now.</summary>
     public string? Pending { get; init; }
+    /// <summary>What the client's agent is doing right now (topology): a coloured line under the title.</summary>
+    public CardStatus? Status { get; init; }
+    /// <summary>Another request's path is highlighted: this card fades.</summary>
+    public bool Dim { get; init; }
 }
+
+/// <summary>
+/// A client card's live line (web <c>CardData.status</c>); <paramref name="Tone"/> is think | write | tool | wait | run | warn and picks
+/// the colour (accent-2, accent, green, secondary, green, orange).
+/// </summary>
+public sealed record CardStatus(string Text, string Tone);
+
+/// <summary>The words above the hub (web <c>HubData.note</c>): a switch a request just made, or where one was just sent. Tone: info | warn.</summary>
+public sealed record HubNote(string Text, string Tone);
+
+/// <summary>
+/// One row of a provider's card on the topology (web <c>AccountRow</c>): an account, or the API key, its requests go through. <see cref="Id"/> is
+/// the row's handle (<see cref="TopologyBuilder.AccountRowId"/>); <see cref="Hit"/> is "on" while a request is served here, "fail" right
+/// after one was refused here.
+/// </summary>
+public sealed record AccountRow(string Id, string? AccountId, string Name, string Status, string Detail, long Attempts, long Errors, int Live,
+    string? Hit, bool Dim);
 
 /// <summary>
 /// A positioned node. Coordinates are the web's React Flow pixels (the UI may scale them). <see cref="Height"/> is null for
 /// content-sized cards.
 /// </summary>
 public sealed record TraceNode(string Id, NodeKind Kind, double X, double Y, double? Width = null, double? Height = null,
-    CardData? Card = null, bool Busy = false);
+    CardData? Card = null, bool Busy = false)
+{
+    /// <summary>A provider node's rows (one per account, or the API key).</summary>
+    public IReadOnlyList<AccountRow>? Rows { get; init; }
+    /// <summary>The hub's note.</summary>
+    public HubNote? Note { get; init; }
+}
 
-/// <summary>A topology line and the requests riding it (<c>FlowData</c>).</summary>
-public sealed record FlowData(string Role, IReadOnlyList<string> Requests, bool Warn);
+/// <summary>
+/// A topology line and the requests riding it (<c>FlowData</c>). Role: client (agent → Astra), provider, or account (Astra → one account row
+/// of a provider). <see cref="Failed"/> holds requests whose attempt on this line was just refused (a red capsule bounces back to the hub);
+/// <see cref="Retry"/> marks a line a retry is heading down (orange, dashed, moving).
+/// </summary>
+public sealed record FlowData(string Role, IReadOnlyList<string> Requests, bool Warn)
+{
+    /// <summary>Requests whose attempt on this line was just refused.</summary>
+    public IReadOnlyList<string> Failed { get; init; } = [];
+    /// <summary>A retry is heading down this line.</summary>
+    public bool Retry { get; init; }
+}
 
 /// <summary>The line from the end of a row back to the start of the next one (<c>StepData.wrap</c>).</summary>
 public sealed record StepWrap(double RightX, double GapY, double LeftX);
@@ -89,6 +126,10 @@ public sealed record TraceEdge
     public Handle SourceHandle { get; init; } = Handle.Right;
     /// <summary>Handle on the target.</summary>
     public Handle TargetHandle { get; init; } = Handle.Left;
+    /// <summary>A topology line into a provider card ends on this row's handle (<see cref="AccountRow.Id"/>) instead of <see cref="TargetHandle"/>.</summary>
+    public string? TargetRow { get; init; }
+    /// <summary>Stroke opacity (a line off the highlighted path fades to 0.25); null = opaque.</summary>
+    public double? Opacity { get; init; }
     /// <summary>Drawing style.</summary>
     public EdgeType Type { get; init; } = EdgeType.Default;
     /// <summary>Semantic colour.</summary>

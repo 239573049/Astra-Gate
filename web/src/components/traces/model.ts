@@ -1,6 +1,18 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
 
-import type { RequestSummary, TraceCall, TraceRequest, TraceSpan, TraceTopology } from '../../api/types';
+import type {
+  RequestAttempt,
+  RequestCause,
+  RequestSummary,
+  TraceAccount,
+  TraceActivity,
+  TraceCall,
+  TraceProviderNode,
+  TraceRequest,
+  TraceSpan,
+  TraceToolCall,
+  TraceTopology,
+} from '../../api/types';
 import type { TFunction } from '../../i18n';
 import { formatMs, formatTokens } from '../../lib/format';
 
@@ -46,23 +58,64 @@ export interface CardData extends Record<string, unknown> {
   group?: boolean;
   /** A call still in flight (its id in the live request feed): the card shows what the model is doing right now. */
   pending?: string;
+  /** What the client's agent is doing right now (topology): a coloured line under the title. */
+  status?: { text: string; tone: 'think' | 'write' | 'tool' | 'wait' | 'run' | 'warn' } | null;
+  /** Another request's path is highlighted: this card fades. */
+  dim?: boolean;
 }
 
 export interface HubData extends Record<string, unknown> {
   /** Requests are in flight: the logo breathes. */
   busy?: boolean;
+  /** A switch a request just made (why, where to) or where one was just sent, written above the logo. */
+  note?: { text: string; tone: 'info' | 'warn' } | null;
+}
+
+/** One row of a provider's card (topology): an account, or the API key, its requests go through. */
+export interface AccountRow {
+  /** The row's handle and edge suffix (accountRowId). */
+  id: string;
+  accountId: string | null;
+  name: string;
+  /** ok | cooldown | expired | revoked | disabled */
+  status: string;
+  /** Its right-hand text: cooldown, remaining quota, attempts in the window. */
+  detail: string;
+  attempts: number;
+  errors: number;
+  /** Requests in flight on it now. */
+  live: number;
+  /** A request is being served here ('on'), or one was just refused here ('fail'). */
+  hit: 'on' | 'fail' | null;
+  dim?: boolean;
+}
+
+/** A provider on the topology: its card with one row (and one line from the hub) per account. */
+export interface ProviderData extends Record<string, unknown> {
+  title: string;
+  lines: string[];
+  tone: Tone;
+  provider: ProviderBrand;
+  rows: AccountRow[];
+  live: number;
+  dim?: boolean;
 }
 
 export type CardNode = Node<CardData, 'card'>;
 export type HubNode = Node<HubData, 'hub'>;
-export type TraceNode = CardNode | HubNode;
+export type ProviderNode = Node<ProviderData, 'provider'>;
+export type TraceNode = CardNode | HubNode | ProviderNode;
 
 /** A topology line and the in-flight requests riding it (ids into the live request feed). */
 export interface FlowData extends Record<string, unknown> {
-  /** client: agent → Astra; provider: Astra → provider (the path's direction). */
-  role: 'client' | 'provider';
+  /** client: agent → Astra; provider / account: Astra → a provider (one of its account rows). The path's direction. */
+  role: 'client' | 'provider' | 'account';
   requests: string[];
+  /** Requests whose attempt on this line was just refused: a red dot bounces back to the hub. */
+  failed?: string[];
   warn?: boolean;
+  /** A retry is heading down this line: it runs orange and dashed. */
+  retry?: boolean;
 }
 
 /** Where an in-flight request is (from the live feed's fields, .plan/observability.md §5). */
@@ -203,11 +256,55 @@ const edgeBase = (id: string, source: string, target: string, color: string, ext
 
 export const HUB_ID = 'astra';
 const ROW = 100;
+/** Provider card: header, then one row per account (or the API key). */
+export const PROVIDER_HEAD = 50;
+export const ACCOUNT_ROW = 34;
+const PROVIDER_GAP = 22;
+
+/** The handle (and edge suffix) of one account row; `key` for a provider called with its API key. */
+export const accountRowId = (accountId: string | null | undefined) => (accountId ? `a:${accountId}` : 'a:key');
+
+/** How long a failed attempt keeps bouncing on its row, and a switch stays written above the hub. */
+export const FAIL_SHOW_MS = 1800;
+export const NOTE_SHOW_MS = 2600;
+
+/** The attempt a live request is on now (its last one); null for a feed without attempts (an older server). */
+export const currentAttempt = (r: Pick<RequestSummary, 'attempts'>): RequestAttempt | null => r.attempts?.at(-1) ?? null;
+
+/** Retry reasons (astra.attempt.retry) with a short traces.switch.* label; another one shows no label rather than a raw key. */
+const SWITCH_REASONS = new Set(['rate_limited_failover', 'auth_failover', 'auth_refresh', 'provider_failover', 'compression_rejected']);
+
+/** "限流，换账号" for a retry reason; null for none or one without a label. */
+export const switchReason = (retry: string | null | undefined, t: TFunction): string | null =>
+  retry && SWITCH_REASONS.has(retry) ? t(`traces.switch.${retry}` as 'traces.switch.rate_limited_failover') : null;
+
+/** An attempt that did not answer: refused by the upstream, or failed before it could. */
+export const attemptFailed = (a: RequestAttempt) => a.endMs !== null && a.endMs !== undefined && ((a.status ?? 0) >= 400 || (!a.status && !!a.error) || !!a.retry);
+
+/** The path one request took, for highlighting it on the canvas: its client and every account row an attempt went to. */
+export interface HighlightPath {
+  clientKind?: string | null;
+  attempts: Pick<RequestAttempt, 'providerId' | 'accountId'>[];
+  providerId?: string | null;
+  accountId?: string | null;
+}
+
+export interface TopologyOptions {
+  /** The time now (ms since the epoch): how long ago an attempt failed, how long a switch note stays. */
+  nowMs?: number;
+  /** Dim everything this request did not touch. */
+  highlight?: HighlightPath | null;
+  /** The latest stored requests (activity feed): what a client's agent does between calls. */
+  activity?: readonly TraceActivity[];
+}
 
 /**
- * Client and provider columns around the Astra hub; line width follows volume, orange marks rate limits / failovers.
- * <paramref>live</paramref> (the live request feed) puts every request in flight on its lines, and adds the client or
- * provider it uses when the window has no traffic of theirs yet.
+ * Client and provider columns around the Astra hub. A provider's card lists its accounts (or its API key) as rows, and
+ * each row has its own line from the hub, so a request is drawn on the account that serves it: going out while it is
+ * sent, coming back coloured by what the model produces, bouncing back red when the upstream refused it and leaving for
+ * the next row (or provider) on an orange line when the gateway retries. Line width follows volume; orange marks rate
+ * limits / failovers. <paramref>live</paramref> (the live request feed) puts every request in flight on its lines, and adds
+ * the client or provider it uses when the window has no traffic of theirs yet.
  */
 export function buildTopology(
   source: TraceTopology,
@@ -215,33 +312,83 @@ export function buildTopology(
   clientLabel: (kind: string | null | undefined) => string,
   brands: Map<string, ProviderBrand>,
   live: readonly RequestSummary[] = [],
+  options: TopologyOptions = {},
 ): Graph {
   const data = withLive(source, live, brands);
+  const now = options.nowMs ?? Date.now();
   const pending = live.filter((r) => r.status === 'pending');
-  const rows = Math.max(data.clients.length, data.providers.length, 1);
-  const hubY = ((rows - 1) * ROW) / 2 + 30 - 48;
   const max = Math.max(1, ...data.clients.map((c) => c.requests), ...data.providers.map((p) => p.requests));
-  const width = (requests: number) => 1.5 + 3.5 * Math.sqrt(requests / max);
+  const width = (requests: number) => 1.5 + 3.5 * Math.sqrt(Math.min(1, requests / max));
   const liveRange = data.range === 'live';
   const label = (perMinute: number, requests: number) =>
     liveRange ? t('traces.topology.perMinute', { count: perMinute < 10 ? perMinute.toFixed(1) : Math.round(perMinute) }) : t('traces.topology.count', { count: requests });
-  const offset = (count: number) => ((rows - count) * ROW) / 2;
 
-  const nodes: TraceNode[] = [{ id: HUB_ID, type: 'hub', position: { x: 404, y: hubY }, data: { busy: pending.length > 0 } }];
+  // Which row each live request is on, and the rows where an attempt of it just failed.
+  const startOf = (r: RequestSummary) => Date.parse(r.startedAtUtc);
+  const rowsOf = (p: TraceProviderNode) => (p.accounts.length > 0 ? p.accounts.map((a) => accountRowId(a.id)) : [accountRowId(null)]);
+  const providerById = new Map(data.providers.map((p) => [p.providerId, p]));
+  const rowFor = (providerId: string | null | undefined, accountId: string | null | undefined): string | null => {
+    const p = providerId ? providerById.get(providerId) : undefined;
+    if (!p) return null;
+    const rows = rowsOf(p);
+    const wanted = accountRowId(accountId);
+    return rows.includes(wanted) ? wanted : rows[0];
+  };
+  const on = new Map<string, string[]>(); // `${providerId}|${row}` → requests riding that row now
+  const failed = new Map<string, string[]>(); // `${providerId}|${row}` → requests that just failed there
+  const retrying = new Set<string>(); // rows a retry is heading to
+  const push = (map: Map<string, string[]>, key: string, id: string) => map.set(key, [...(map.get(key) ?? []), id]);
+  for (const r of live) {
+    const attempts = r.attempts ?? [];
+    const current = attempts.at(-1);
+    const providerId = current?.providerId ?? r.providerId;
+    const row = rowFor(providerId, current ? current.accountId : r.accountId);
+    // A finished request still rides its line (its burst); a pending one only once it has a provider.
+    if (row && providerId && (r.status !== 'pending' || !current || !attemptFailed(current))) push(on, `${providerId}|${row}`, r.id);
+    attempts.forEach((a, i) => {
+      const at = a.providerId ?? r.providerId;
+      const failedRow = rowFor(at, a.accountId);
+      if (!at || !failedRow) return;
+      if (attemptFailed(a) && now - (startOf(r) + (a.endMs ?? 0)) < FAIL_SHOW_MS) push(failed, `${at}|${failedRow}`, r.id);
+      if (i > 0 && r.status === 'pending' && (a.endMs === null || a.endMs === undefined) && !a.status) retrying.add(`${at}|${failedRow}`);
+    });
+  }
+
+  // Dimming: a highlighted request lights its client and the rows its attempts went to.
+  const hl = options.highlight;
+  const hlRows = hl
+    ? new Set(
+        (hl.attempts.length > 0 ? hl.attempts : [{ providerId: hl.providerId, accountId: hl.accountId }])
+          .map((a) => (a.providerId ? `${a.providerId}|${rowFor(a.providerId, a.accountId) ?? ''}` : ''))
+          .filter(Boolean),
+      )
+    : null;
+  const hlClient = hl ? clientNodeId(hl.clientKind) : null;
+
+  const providerHeight = (p: TraceProviderNode) => PROVIDER_HEAD + rowsOf(p).length * ACCOUNT_ROW + 10;
+  const clientsHeight = data.clients.length * ROW - (ROW - 60);
+  const providersHeight = data.providers.reduce((sum, p) => sum + providerHeight(p), 0) + Math.max(0, data.providers.length - 1) * PROVIDER_GAP;
+  const height = Math.max(clientsHeight, providersHeight, 60);
+
+  const nodes: TraceNode[] = [{ id: HUB_ID, type: 'hub', position: { x: 404, y: height / 2 - 48 }, data: { busy: pending.length > 0, note: hubNote(live, now, data, t) } }];
   const edges: Edge[] = [];
+  const clientTop = (height - clientsHeight) / 2;
   data.clients.forEach((c, i) => {
     const id = clientNodeId(c.clientKind);
+    const mine = pending.filter((r) => (r.clientKind ?? null) === (c.clientKind ?? null));
     nodes.push({
       id,
       type: 'card',
-      position: { x: 0, y: offset(data.clients.length) + i * ROW },
+      position: { x: 0, y: clientTop + i * ROW },
       style: { width: 184 },
       data: {
         title: c.clientKind ? clientLabel(c.clientKind) : t('traces.topology.direct'),
         lines: [c.activeSessions > 0 ? t('traces.topology.activeSessions', { count: c.activeSessions }) : t('traces.topology.idle')],
-        tone: c.activeSessions > 0 || pending.some((r) => (r.clientKind ?? null) === (c.clientKind ?? null)) ? 'ok' : 'idle',
+        tone: c.activeSessions > 0 || mine.length > 0 ? 'ok' : 'idle',
         client: c.clientKind ?? null,
-        live: pending.filter((r) => (r.clientKind ?? null) === (c.clientKind ?? null)).length,
+        live: mine.length,
+        status: clientStatus(c.clientKind ?? null, live, options.activity ?? [], now, t),
+        dim: hlClient !== null && hlClient !== id,
       },
     });
     edges.push({
@@ -249,45 +396,168 @@ export function buildTopology(
       type: 'flow',
       markerEnd: undefined,
       label: label(c.perMinute, c.requests),
-      style: { stroke: COLORS.flow, strokeWidth: width(c.requests) },
+      style: { stroke: COLORS.flow, strokeWidth: width(c.requests) + (hlClient === id ? 1.5 : 0), opacity: hlClient !== null && hlClient !== id ? 0.25 : undefined },
       data: { role: 'client', requests: live.filter((r) => (r.clientKind ?? null) === (c.clientKind ?? null)).map((r) => r.id) } satisfies FlowData,
     });
   });
-  data.providers.forEach((p, i) => {
+
+  let y = (height - providersHeight) / 2;
+  for (const p of data.providers) {
     const id = providerNodeId(p.providerId);
     const cooling = p.accounts.filter((a) => a.status === 'cooldown').length;
     const warn = p.rateLimited > 0 || p.failovers > 0 || cooling > 0;
     const failing = p.requests > 0 && p.errors / p.requests > 0.2;
     const brand = brands.get(p.providerId) ?? { name: p.name, icon: p.icon, templateId: p.templateId };
+    const rowIds = rowsOf(p);
+    const multi = p.accounts.length > 1;
+    const rows: AccountRow[] = rowIds.map((rowId, k) => {
+      const account = p.accounts[k];
+      const key = `${p.providerId}|${rowId}`;
+      return {
+        id: rowId,
+        accountId: account?.id ?? null,
+        name: account ? account.name : t('traces.topology.apiKey'),
+        status: account ? account.status : 'ok',
+        detail: account ? accountDetail(account, now, t) : p.attempts > 0 ? t('traces.account.attempts', { count: p.attempts }) : t('traces.account.ready'),
+        attempts: account ? (account.attempts ?? 0) : p.attempts,
+        errors: account ? (account.errors ?? 0) : p.errors,
+        live: (on.get(key) ?? []).filter((r) => pending.some((x) => x.id === r)).length,
+        hit: (failed.get(key)?.length ?? 0) > 0 ? 'fail' : (on.get(key) ?? []).some((r) => pending.some((x) => x.id === r)) ? 'on' : null,
+        dim: hlRows !== null && !hlRows.has(key),
+      };
+    });
     const lines = [
-      p.accounts.length > 0
-        ? [t('traces.topology.accounts', { count: p.accounts.length }), cooling > 0 ? t('traces.topology.cooling', { count: cooling }) : null].filter(Boolean).join(' · ')
-        : t('traces.topology.apiKey'),
+      [
+        p.accounts.length > 0 ? t('traces.topology.accounts', { count: p.accounts.length }) : t('traces.topology.apiKey'),
+        cooling > 0 ? t('traces.topology.cooling', { count: cooling }) : null,
+        multi ? label(p.perMinute, p.requests) : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
     ];
     nodes.push({
       id,
-      type: 'card',
-      position: { x: 760, y: offset(data.providers.length) + i * ROW },
-      style: { width: 224 },
+      type: 'provider',
+      position: { x: 760, y },
+      style: { width: 248 },
       data: {
         title: p.name,
         lines,
         tone: failing ? 'error' : warn ? 'warn' : 'ok',
         provider: brand,
-        live: pending.filter((r) => r.providerId === p.providerId).length,
+        rows,
+        live: pending.filter((r) => (currentAttempt(r)?.providerId ?? r.providerId) === p.providerId).length,
+        dim: hlRows !== null && !rows.some((r) => !r.dim),
       },
     });
-    const color = failing ? COLORS.error : warn ? COLORS.warn : COLORS.flow;
-    edges.push({
-      ...edgeBase(`e:${id}`, HUB_ID, id, color),
-      type: 'flow',
-      markerEnd: undefined,
-      label: label(p.perMinute, p.requests),
-      style: { stroke: color, strokeWidth: width(p.requests) },
-      data: { role: 'provider', requests: live.filter((r) => r.providerId === p.providerId).map((r) => r.id), warn } satisfies FlowData,
+    y += providerHeight(p) + PROVIDER_GAP;
+    rows.forEach((row) => {
+      const key = `${p.providerId}|${row.id}`;
+      const volume = p.accounts.length > 0 ? row.attempts : p.requests;
+      const rowWarn = row.status === 'cooldown' || row.hit === 'fail';
+      const color = failing ? COLORS.error : warn && (rowWarn || !multi) ? COLORS.warn : COLORS.flow;
+      const isHl = hlRows?.has(key) ?? false;
+      edges.push({
+        ...edgeBase(`e:${id}:${row.id}`, HUB_ID, id, color, { targetHandle: row.id }),
+        type: 'flow',
+        markerEnd: undefined,
+        label: multi ? undefined : label(p.perMinute, p.requests),
+        style: { stroke: color, strokeWidth: width(volume) + (isHl ? 1.5 : 0), opacity: hlRows !== null && !isHl ? 0.25 : undefined },
+        data: {
+          role: 'account',
+          requests: on.get(key) ?? [],
+          failed: failed.get(key) ?? [],
+          warn,
+          retry: retrying.has(key),
+        } satisfies FlowData,
+      });
     });
-  });
+  }
   return { nodes, edges };
+}
+
+/** What an account row says on its right: why it is out, or what the upstream last reported of its quota. */
+function accountDetail(a: TraceAccount, now: number, t: TFunction): string {
+  if (a.status === 'cooldown' && a.cooldownUntilUtc) {
+    const left = Date.parse(a.cooldownUntilUtc) - now;
+    return left > 0 && left < 3_600_000 ? t('traces.account.cooldownIn', { time: formatMs(Math.ceil(left / 1000) * 1000) }) : t('traces.account.cooldown', { time: formatClock(a.cooldownUntilUtc) });
+  }
+  if (a.status !== 'ok') return t(`traces.account.${a.status}` as 'traces.account.ok');
+  if (a.remainingRequests) return t('traces.account.remaining', { count: a.remainingRequests });
+  return (a.attempts ?? 0) > 0 ? t('traces.account.attempts', { count: a.attempts ?? 0 }) : t('traces.account.ready');
+}
+
+const formatClock = (iso: string) => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+/** The words above the hub: the switch a request just made (why, and where to), else where a request was just sent. */
+export function hubNote(live: readonly RequestSummary[], now: number, data: TraceTopology, t: TFunction): HubData['note'] {
+  const accountName = (providerId: string | null | undefined, accountId: string | null | undefined) => {
+    const p = data.providers.find((x) => x.providerId === providerId);
+    const a = accountId ? p?.accounts.find((x) => x.id === accountId) : undefined;
+    return { provider: p?.name ?? providerId ?? '', account: a?.name ?? null };
+  };
+  let best: { at: number; note: NonNullable<HubData['note']> } | null = null;
+  for (const r of live) {
+    const start = Date.parse(r.startedAtUtc);
+    const attempts = r.attempts ?? [];
+    attempts.forEach((a, i) => {
+      const next = attempts[i + 1];
+      if (next && attemptFailed(a)) {
+        const at = start + (a.endMs ?? next.startMs);
+        if (now - at > NOTE_SHOW_MS || (best && best.at > at)) return;
+        const to = accountName(next.providerId, next.accountId);
+        const same = (next.providerId ?? r.providerId) === (a.providerId ?? r.providerId);
+        const reason = switchReason(a.retry, t) ?? (a.status ? String(a.status) : t('traces.live.failed'));
+        best = { at, note: { text: t('traces.hub.switch', { reason, target: same && to.account ? to.account : to.provider }), tone: 'warn' } };
+      } else if (i === 0) {
+        const at = start + a.startMs;
+        if (now - at > NOTE_SHOW_MS / 2 || (best && best.at >= at)) return;
+        const to = accountName(a.providerId ?? r.providerId, a.accountId);
+        best = { at, note: { text: t('traces.hub.route', { target: to.account ? `${to.provider} · ${to.account}` : to.provider }), tone: 'info' } };
+      }
+    });
+  }
+  return (best as { note: NonNullable<HubData['note']> } | null)?.note ?? null;
+}
+
+/**
+ * What a client's agent is doing, on its card: the call in flight (what the model produces), else — for a moment after a
+ * call that asked for tools — running those tools.
+ */
+function clientStatus(kind: string | null, live: readonly RequestSummary[], activity: readonly TraceActivity[], now: number, t: TFunction): CardData['status'] {
+  const mine = live.filter((r) => (r.clientKind ?? null) === kind);
+  const running = mine.filter((r) => r.status === 'pending').sort((a, b) => (a.startedAtUtc < b.startedAtUtc ? 1 : -1))[0];
+  if (running) {
+    const stage = running.stage ?? '';
+    if (stage.startsWith('tool:')) return { text: t('traces.agent.tool', { name: stage.slice('tool:'.length) }), tone: 'tool' };
+    if (stage === 'thinking') return { text: t('traces.agent.thinking'), tone: 'think' };
+    if (stage === 'writing') return { text: t('traces.agent.writing'), tone: 'write' };
+    const current = currentAttempt(running);
+    if (current && attemptFailed(current)) return { text: t('traces.agent.retrying'), tone: 'warn' };
+    return { text: running.httpStatus ? t('traces.agent.waiting') : t('traces.agent.upstream'), tone: 'wait' };
+  }
+  // The latest finished call of this client, from the live feed (not yet stored) or the activity feed.
+  const finished = [
+    ...mine.filter((r) => r.status !== 'pending').map((r) => ({ end: Date.parse(r.startedAtUtc) + (r.totalMs ?? 0), ok: r.status === 'success', tools: liveTools(r) })),
+    ...activity
+      .filter((a) => (a.request.clientKind ?? null) === kind && a.request.callKind !== 'aux')
+      .map((a) => ({ end: Date.parse(a.request.startedAtUtc) + (a.request.totalMs ?? 0), ok: a.request.status === 'success', tools: a.finishReason === 'tool_calls' || a.toolCallCount > 0 ? a.toolCalls.map((c) => c.name) : [] })),
+  ].sort((a, b) => b.end - a.end)[0];
+  if (!finished || now - finished.end > 120_000 || !finished.ok || finished.tools.length === 0) return null;
+  return { text: t('traces.agent.tools', { names: toolSummary(finished.tools) }), tone: 'run' };
+}
+
+/** Tool names a live call produced (its `tool:<name>` phases). */
+export function liveTools(r: Pick<RequestSummary, 'phases'>): string[] {
+  return (r.phases ?? '')
+    .split(',')
+    .map((p) => p.slice(0, p.lastIndexOf('@')))
+    .filter((s) => s.startsWith('tool:'))
+    .map((s) => s.slice('tool:'.length))
+    .filter(Boolean);
 }
 
 /** The aggregates plus a zero row for every client / provider an in-flight request uses that the window has not seen. */
@@ -297,11 +567,14 @@ function withLive(data: TraceTopology, live: readonly RequestSummary[], brands: 
   for (const r of live) {
     if (!clients.some((c) => (c.clientKind ?? null) === (r.clientKind ?? null)))
       clients.push({ clientKind: r.clientKind ?? null, requests: 0, errors: 0, perMinute: 0, activeSessions: 0 });
-    if (r.providerId && !providers.some((p) => p.providerId === r.providerId)) {
-      const brand = brands.get(r.providerId);
+    const used = new Set([r.providerId, ...(r.attempts ?? []).map((a) => a.providerId)].filter((p): p is string => !!p));
+    for (const providerId of used) {
+      if (providers.some((p) => p.providerId === providerId)) continue;
+      const brand = brands.get(providerId);
+      const named = (r.attempts ?? []).find((a) => a.providerId === providerId)?.providerName;
       providers.push({
-        providerId: r.providerId,
-        name: brand?.name ?? r.providerName ?? r.providerId,
+        providerId,
+        name: brand?.name ?? named ?? (providerId === r.providerId ? r.providerName : null) ?? providerId,
         icon: brand?.icon,
         templateId: brand?.templateId,
         requests: 0,
@@ -1133,4 +1406,94 @@ export function buildTimeline(
     });
   }
   return { rows, totalMs };
+}
+
+// ------------------------------------------------------------------ the activity feed beside the topology
+
+/** One request of the activity feed: from the stored row (GET /api/traces/activity) or, while it runs, the live feed. */
+export interface ActivityItem {
+  id: string;
+  /** Still from the live feed: in flight, or finished but not stored yet. */
+  live: boolean;
+  request: RequestSummary;
+  step?: number | null;
+  cause?: RequestCause | null;
+  attempts: RequestAttempt[];
+  thinkMs?: number | null;
+  thinkChars?: number | null;
+  /** Live items: how long the model wrote text (from the phases); stored ones carry textChars / reply instead. */
+  textMs?: number | null;
+  textChars?: number | null;
+  reply?: string | null;
+  tools: TraceToolCall[];
+  finishReason?: string | null;
+  errorMessage?: string | null;
+}
+
+/**
+ * The feed's items, newest first: the stored requests, with the live feed's version of every request still running
+ * (or finished and not stored yet) in their place. A live item has its tool names from its phases; their arguments,
+ * the reply and the thinking size arrive with the stored row.
+ */
+export function activityItems(stored: readonly TraceActivity[], live: readonly RequestSummary[], nowMs: number, limit = 30): ActivityItem[] {
+  const byId = new Map<string, ActivityItem>();
+  for (const a of stored)
+    byId.set(a.request.id, {
+      id: a.request.id,
+      live: false,
+      request: a.request,
+      step: a.step,
+      cause: a.cause,
+      attempts: a.attempts,
+      thinkMs: a.reasoningMs,
+      thinkChars: a.reasoningChars,
+      textChars: a.textChars,
+      reply: a.reply,
+      tools: a.toolCalls,
+      finishReason: a.finishReason,
+      errorMessage: a.errorMessage,
+    });
+  for (const r of live) {
+    if (r.status !== 'pending' && byId.has(r.id)) continue;
+    const phases = livePhases(r, nowMs);
+    const spent = (kind: PhaseKind) => phases.filter((s) => s.kind === kind).reduce((sum, s) => sum + (s.to - s.from), 0);
+    const think = spent('think');
+    const write = spent('write');
+    byId.set(r.id, {
+      id: r.id,
+      live: true,
+      request: r,
+      cause: r.cause,
+      attempts: r.attempts ?? [],
+      thinkMs: think > 0 ? think : null,
+      textMs: write > 0 ? write : null,
+      tools: liveTools(r).map((name) => ({ name })),
+    });
+  }
+  return [...byId.values()]
+    .sort((a, b) => (a.request.startedAtUtc === b.request.startedAtUtc ? (a.id < b.id ? 1 : -1) : a.request.startedAtUtc < b.request.startedAtUtc ? 1 : -1))
+    .slice(0, limit);
+}
+
+/** A tool call's arguments for display: an object's fields as key / value pairs (strings as they are), else the raw text. */
+export function toolArguments(text: string | null | undefined): { pairs: [string, string][] } | { raw: string } | null {
+  if (!text) return null;
+  try {
+    const value: unknown = JSON.parse(text);
+    if (value && typeof value === 'object' && !Array.isArray(value))
+      return { pairs: Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v, null, 2)]) };
+  } catch {
+    // cut at 4 KB, or not JSON: shown as it is
+  }
+  return { raw: text };
+}
+
+/** The first argument worth showing next to a tool's name: a path, a command, a pattern… */
+export function toolHeadline(text: string | null | undefined): string | null {
+  const args = toolArguments(text);
+  if (!args) return null;
+  if ('raw' in args) return args.raw.slice(0, 80);
+  const preferred = ['file_path', 'path', 'command', 'cmd', 'pattern', 'query', 'url', 'description'];
+  const pair = args.pairs.find(([k]) => preferred.includes(k)) ?? args.pairs[0];
+  return pair ? pair[1].split('\n')[0].slice(0, 80) : null;
 }

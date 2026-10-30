@@ -166,18 +166,96 @@ public abstract class TraceViewModel
     public virtual void OnLiveChanged() { }
 }
 
-/// <summary>A · the whole traffic picture (topology.tsx <c>TopologyView</c>): clients → Astra → providers, live.</summary>
+/// <summary>
+/// A · the whole traffic picture (topology.tsx <c>TopologyView</c>): clients → Astra → each provider's accounts, live — and beside it the
+/// activity feed, one card per request (why it was sent, where it went, what came back). Hovering a card highlights its path.
+/// </summary>
 public sealed class TopologyViewModel : TraceViewModel
 {
     private readonly Watched<TraceTopologyDto> _query;
+    private readonly Watched<List<TraceActivityDto>> _activity;
+    private readonly Watched<SettingsDto> _settings;
     private string _range = "live";
+    private bool _savingContent;
 
     /// <summary>Creates the view model.</summary>
     public TopologyViewModel(TraceViewServices s) : base(s)
     {
         _query = Watch<TraceTopologyDto>(Raise, keepPrevious: true);
+        _activity = Watch<List<TraceActivityDto>>(Raise, keepPrevious: true);
+        _settings = Watch<SettingsDto>(Raise, keepPrevious: true);
         Load();
+        _activity.Set(S.Ctx.Queries.Query(TraceQueries.ActivityKey(ActivityFeed.Limit),
+            async ct => await S.Ctx.Api.GetAsync<List<TraceActivityDto>>(TraceQueries.ActivityPath(ActivityFeed.Limit), ct) ?? [],
+            new QueryOptions<List<TraceActivityDto>> { RefetchInterval = _ => TraceQueries.ActivityInterval }));
+        _settings.Set(S.Ctx.Settings.Settings);
     }
+
+    /// <summary>Whether the activity feed is shown (the 活动流 toggle, remembered).</summary>
+    public bool Rail { get; private set; } = TracePrefs.ActivityRail;
+
+    /// <summary>The feed card under the pointer: its path is highlighted on the canvas.</summary>
+    public ActivityItem? Hovered { get; private set; }
+
+    /// <summary>The feed: stored requests with the live feed's running ones in their place, newest first.</summary>
+    public IReadOnlyList<ActivityItem> Items => ActivityFeed.Items(_activity.Data ?? [], S.Live.List, S.NowMs());
+
+    /// <summary>Whether conversation content is recorded (the <c>traceContent</c> setting the feed's switch flips).</summary>
+    public bool ContentOn => _settings.Data?.TraceContent ?? false;
+
+    /// <summary>The content switch can be used: the settings are loaded and no change is being saved.</summary>
+    public bool ContentReady => _settings.Data is not null && !_savingContent;
+
+    /// <summary>A provider's and an account's display names, for the feed's route line.</summary>
+    public (string Provider, string? Account) NameOf(string? providerId, string? accountId)
+    {
+        var p = providerId is null ? null : Data?.Providers.FirstOrDefault(x => x.ProviderId == providerId);
+        var provider = (providerId is not null && S.Brands.TryGetValue(providerId, out var b) ? b.Name : p?.Name) ?? providerId ?? "—";
+        var account = string.IsNullOrEmpty(accountId) ? null : p?.Accounts.FirstOrDefault(a => a.Id == accountId)?.Name ?? accountId[..Math.Min(8, accountId.Length)];
+        return (provider, account);
+    }
+
+    /// <summary>Shows or hides the activity feed.</summary>
+    public void ToggleRail()
+    {
+        Rail = !Rail;
+        TracePrefs.ActivityRail = Rail;
+        Hovered = null;
+        Raise();
+    }
+
+    /// <summary>The pointer entered a feed card (null: left the feed).</summary>
+    public void Hover(ActivityItem? item)
+    {
+        if (Hovered?.Id == item?.Id) return;
+        Hovered = item;
+        Raise();
+    }
+
+    /// <summary>Turns conversation content recording on or off (PATCH /api/settings; the answer replaces the cached settings).</summary>
+    public async void SetContent(bool on)
+    {
+        if (_savingContent || _settings.Data is null || _settings.Data.TraceContent == on) return;
+        _savingContent = true;
+        Raise();
+        try
+        {
+            var saved = await S.Ctx.Api.PatchAsync<System.Text.Json.Nodes.JsonObject, SettingsDto>("/api/settings", Core.Settings.JsonPatch.Of(("traceContent", on)));
+            if (saved is not null) S.Ctx.Settings.Settings.SetData(saved);
+        }
+        catch (Exception)
+        {
+            // the switch shows the stored value again
+        }
+        finally
+        {
+            _savingContent = false;
+            Raise();
+        }
+    }
+
+    /// <summary>The clock moved on: a failure stops bouncing and a switch note leaves the hub on time.</summary>
+    public void Tick() => Raise();
 
     /// <inheritdoc />
     public override bool UsesLiveFeed => true;
@@ -204,7 +282,10 @@ public sealed class TopologyViewModel : TraceViewModel
     public bool IsEmpty => TopologyPageLogic.IsEmpty(Data, S.Live.List);
 
     /// <summary>The canvas.</summary>
-    public TraceGraph Graph => Data is { } d ? TopologyBuilder.Build(d, S.T, S.ClientLabel, S.Brands, S.Live.List) : TraceGraph.Empty;
+    public TraceGraph Graph => Data is { } d
+        ? TopologyBuilder.Build(d, S.T, S.ClientLabel, S.Brands, S.Live.List, new TopologyOptions(S.NowMs(),
+            Hovered is { } h ? new HighlightPath(h.Request.ClientKind, h.Attempts, h.Request.ProviderId, h.Request.AccountId) : null, _activity.Data))
+        : TraceGraph.Empty;
 
     /// <summary>The in-flight chip's count.</summary>
     public int InFlight => TopologyPageLogic.InFlight(S.Live.Connected, S.Live.List, Data);
@@ -228,7 +309,12 @@ public sealed class TopologyViewModel : TraceViewModel
     }
 
     /// <inheritdoc />
-    public override void SetActive(bool active) => _query.SetActive(active);
+    public override void SetActive(bool active)
+    {
+        _query.SetActive(active);
+        _activity.SetActive(active);
+        _settings.SetActive(active);
+    }
 
     /// <inheritdoc />
     public override void OnLiveChanged() => Raise();

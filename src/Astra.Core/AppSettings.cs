@@ -11,6 +11,12 @@ public sealed class AppSettings
     /// <summary>Capture client/upstream request and response bodies under bodies/.</summary>
     public bool DebugBodies { get; set; }
 
+    /// <summary>
+    /// Record conversation content in the trace (链路追踪): each tool call's arguments, the start of the user's prompt and of
+    /// the reply. Off by default; names, counts, timings and attempts are recorded either way.
+    /// </summary>
+    public bool TraceContent { get; set; }
+
     public int BodyRetentionDays { get; set; } = 7;
 
     /// <summary>Null = keep request logs forever.</summary>

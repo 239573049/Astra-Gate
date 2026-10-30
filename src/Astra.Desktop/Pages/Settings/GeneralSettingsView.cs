@@ -240,6 +240,11 @@ public sealed class GeneralSettingsView : LiveView
                 Number(Loc.T("settings.bodyRetention"), x => x.BodyRetentionDays, v => JsonPatch.Of(("bodyRetentionDays", (int?)v)), $" {Loc.T("settings.days")}")),
             _retentionRow));
 
+        // conversation content in traces (web SettingsPage: its own group after logging, the hint as footer)
+        stack.Children.Add(RowBuilder.Group(null, Loc.T("settings.traceContentHint"),
+            RowBuilder.Row(Loc.T("settings.traceContent"), null,
+                Switch(Loc.T("settings.traceContent"), x => x.TraceContent, on => PatchAsync(JsonPatch.Of(("traceContent", on)))))));
+
         // effort budgets
         var effort = RowBuilder.Group(Loc.T("settings.effort"), Loc.T("settings.effortHint"));
         foreach (var level in GeneralLogic.Efforts)

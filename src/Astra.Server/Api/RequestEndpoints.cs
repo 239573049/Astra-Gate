@@ -120,7 +120,7 @@ public static class RequestEndpoints
         {
             var sb = new StringBuilder();
             foreach (var e in batch.Events)
-                sb.Append(SseWriter.Format(new SseEvent(null, Json.SerializeApi(new RequestLiveEventDto(e.Type, ToSummary(e.Record, e.InFlight))))));
+                sb.Append(SseWriter.Format(new SseEvent(null, Json.SerializeApi(new RequestLiveEventDto(e.Type, ToSummary(e.Record, e.InFlight, live: true))))));
             return sb.ToString();
         }
 
@@ -248,6 +248,7 @@ public static class RequestEndpoints
                             break;
                         case "requireGatewayKey": s.RequireGatewayKey = value?.GetValue<bool>() ?? true; break;
                         case "debugBodies": s.DebugBodies = value?.GetValue<bool>() ?? false; break;
+                        case "traceContent": s.TraceContent = value?.GetValue<bool>() ?? false; break;
                         case "bodyRetentionDays": s.BodyRetentionDays = Math.Clamp(value?.GetValue<int>() ?? 7, 1, 3650); break;
                         case "requestRetentionDays":
                             s.RequestRetentionDays = value is null ? null : Math.Clamp(value.GetValue<int>(), 1, 36500);
@@ -349,7 +350,7 @@ public static class RequestEndpoints
         server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes, s.SubscriptionQuotaIntervalMinutes,
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
-        UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression);
+        UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:
@@ -379,14 +380,19 @@ public static class RequestEndpoints
 
     internal static RequestSummaryDto ToSummary(RequestRecord r) => ToSummary(r, inFlight: false);
 
-    private static RequestSummaryDto ToSummary(RequestRecord r, bool inFlight) => new(
+    /// <summary>
+    /// <paramref name="live"/>: a live-feed event — it carries the attempts, the cause and the phases (kept after the request
+    /// finished, until its row is written, so a view does not lose them in between); the stage only while in flight.
+    /// </summary>
+    private static RequestSummaryDto ToSummary(RequestRecord r, bool inFlight, bool live = false) => new(
         r.Id, r.StartedAtUtc, r.ClientKind, r.ProviderId, r.ProviderName, r.InboundProtocol, r.UpstreamProtocol, r.Passthrough,
         r.RequestedModel, r.UpstreamModel, r.ResponseModel, r.SystemModelId, r.Stream, inFlight ? PendingStatus : r.Status, r.HttpStatus, r.TtftMs, r.TotalMs, r.OutputTps,
         r.TotalInputTokens, r.TotalOutputTokens, r.CacheReadTokens, r.CacheWriteTokens, r.ReasoningTokens,
         r.CostNanoUsd, r.UsageSource,
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
         r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp,
-        r.SessionKey, inFlight ? r.LiveStage : null, r.TurnId, r.CallKind, r.ParentRequestId, inFlight ? r.LivePhases : null, RoutingOf(r));
+        r.SessionKey, inFlight ? r.LiveStage : null, r.TurnId, r.CallKind, r.ParentRequestId, inFlight || live ? r.LivePhases : null, RoutingOf(r),
+        live ? r.LiveAttempts : null, live ? r.LiveCause : null);
 
     private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies, bool inFlight = false)
     {

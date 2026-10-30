@@ -49,6 +49,12 @@ public sealed record TracePalette(bool Dark, Color Accent, Color Accent2, Color 
             Color.FromArgb((byte)Math.Round((dark ? 0.28 : 0.14) * 255), 120, 120, 128));
     }
 
+    /// <summary>The user's prompt going out on the topology and its chip in the activity feed (flow.css <c>.trace-cap.out</c>: <c>#64d2ff</c>, both themes).</summary>
+    public static readonly Color Cyan = Color.FromRgb(0x64, 0xd2, 0xff);
+
+    /// <summary>Text on the bright cyan / green capsules and chips (<c>#0b0b0d</c>).</summary>
+    public static readonly Color Ink = Color.FromRgb(0x0b, 0x0b, 0x0d);
+
     /// <summary><paramref name="c"/> with its alpha multiplied by <paramref name="alpha"/>.</summary>
     public static Color WithAlpha(Color c, double alpha) => Color.FromArgb((byte)Math.Round(c.A * Math.Clamp(alpha, 0, 1)), c.R, c.G, c.B);
 

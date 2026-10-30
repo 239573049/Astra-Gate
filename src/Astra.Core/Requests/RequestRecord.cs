@@ -165,6 +165,17 @@ public sealed class RequestRecord
     /// </summary>
     public string? LivePhases { get; set; }
 
+    /// <summary>
+    /// The upstream attempts so far (the last one may still be in flight), so the topology can show which account a call is
+    /// on and animate a retry as it happens. Live feed only; the stored request has them as <c>upstream.attempt</c> spans.
+    /// </summary>
+    public List<RequestAttempt>? LiveAttempts { get; set; }
+
+    /// <summary>
+    /// Why the request was sent (user input or tool results). Live feed only; stored as root-span attributes and events.
+    /// </summary>
+    public RequestCause? LiveCause { get; set; }
+
     public List<RequestUsageItem> UsageItems { get; set; } = [];
 
     /// <summary>The request's spans (root first), written with the row.</summary>

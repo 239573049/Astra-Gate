@@ -123,4 +123,4 @@ public sealed record SettingsDto(
     int Port, string Host, string DataDir, string GatewayBaseUrl, int QuotaAutoIntervalMinutes, int SubscriptionQuotaIntervalMinutes,
     string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass,
     bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl, string? UsageTimeZone,
-    string EffectiveUsageTimeZone, string RequestCompression);
+    string EffectiveUsageTimeZone, string RequestCompression, bool TraceContent = false);

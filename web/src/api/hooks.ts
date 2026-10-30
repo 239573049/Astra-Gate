@@ -94,7 +94,7 @@ import type {
 } from './types';
 import type { PrivacyEvent } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
-import type { TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
+import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 import type { RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
 
 export const keys = {
@@ -158,6 +158,7 @@ export const keys = {
   traceSessions: (range: string, client?: string) => ['traces', 'sessions', range, client ?? ''] as const,
   traceSession: (key: string, turn?: string) => ['traces', 'session', key, turn ?? ''] as const,
   traceRequest: (id: string) => ['traces', 'request', id] as const,
+  traceActivity: (limit: number) => ['traces', 'activity', limit] as const,
 };
 
 // ---------- system ----------
@@ -1495,6 +1496,16 @@ export const useTraceTopology = (range: TraceRange) =>
     queryFn: () => api<TraceTopology>('GET', `/api/traces/topology${qs({ range })}`),
     placeholderData: (prev) => prev,
     refetchInterval: range === 'live' ? 5000 : 30_000,
+  });
+
+/** The latest requests with why each was sent, where it went and what came back (the topology's activity feed). */
+export const useTraceActivity = (limit = 30) =>
+  useQuery({
+    queryKey: keys.traceActivity(limit),
+    queryFn: () => api<TraceActivity[]>('GET', `/api/traces/activity${qs({ limit })}`),
+    placeholderData: (prev) => prev,
+    // the live feed's "persisted" event refetches it at once; this only catches up when the feed is down
+    refetchInterval: 15_000,
   });
 
 export const useTraceSessions = (range: string, client?: string) =>

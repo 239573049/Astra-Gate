@@ -452,10 +452,12 @@ runtime needed on the target).
     parent call — from `TraceKeys` + `TraceLinker`) and written to `trace_spans` with the request row
     (`RequestRepository.InsertBatchAsync`, migration 0017). The names and the attribute keys the read side depends on
     (`http.response.status_code`, `astra.account.id`, `astra.provider.id`, `astra.attempt.retry`, `astra.ratelimit.*`,
-    `astra.response.*`, …) are also matched by SQL in `TraceRepository` and `RequestRepository.ProviderStatsAsync`, by
-    `/api/traces` (`TraceEndpoints`) and by the web views (`web/src/components/traces/model.ts`
+    `astra.response.*`, `astra.request.cause` / `astra.request.prompt`, the `tool_result` and `tool_call` events, …) are
+    also matched by SQL in `TraceRepository` and `RequestRepository.ProviderStatsAsync`, by `/api/traces` (`TraceEndpoints`,
+    incl. `ToActivity` behind `/api/traces/activity`) and by the web views (`web/src/components/traces/model.ts`
     `SPAN` and the inspectors): renaming one changes all of them, and `docs/content/docs/console/traces.mdx` lists what is
-    recorded. Upstream requests never carry trace context: `GatewayHttpClients` sets a no-output
+    recorded. Anything copied from the conversation (tool arguments, prompt, reply) is recorded only while
+    `AppSettings.TraceContent` is on (off by default). Upstream requests never carry trace context: `GatewayHttpClients` sets a no-output
     `ActivityHeadersPropagator`, and `UpstreamTraceHeadersTests` checks it with the real handler (the integration
     fixture swaps the handler out, so it cannot).
 

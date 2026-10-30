@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using Astra.Core.Requests;
 
 namespace Astra.Api.Contracts;
 
@@ -43,10 +44,13 @@ public sealed record TraceGatewayDto(long Requests, long Errors, int InFlight, l
 /// <summary>Admin API payload: trace client node.</summary>
 public sealed record TraceClientNodeDto(string? ClientKind, long Requests, long Errors, double PerMinute, int ActiveSessions);
 
-/// <summary>Admin API payload: trace account.</summary>
+/// <summary>
+/// Admin API payload: trace account — one row of a provider's card on the topology canvas. <c>Attempts</c> / <c>Errors</c>
+/// count the upstream attempts it made in the window and how many of them failed.
+/// </summary>
 public sealed record TraceAccountDto(
     string Id, string Name, string Status, bool Enabled, DateTimeOffset? CooldownUntilUtc, DateTimeOffset? SeenAtUtc,
-    string? RemainingRequests, string? RemainingTokens, string? LimitRequests);
+    string? RemainingRequests, string? RemainingTokens, string? LimitRequests, long Attempts = 0, long Errors = 0);
 
 /// <summary>Admin API payload: trace provider node.</summary>
 public sealed record TraceProviderNodeDto(
@@ -56,3 +60,19 @@ public sealed record TraceProviderNodeDto(
 /// <summary>Admin API payload: trace topology.</summary>
 public sealed record TraceTopologyDto(string Range, double WindowMinutes, TraceGatewayDto Gateway, List<TraceClientNodeDto> Clients,
     List<TraceProviderNodeDto> Providers);
+
+/// <summary>
+/// One tool call a response made, for the activity feed: its name and call id, and its arguments (JSON text, cut at 4 KB)
+/// when the <c>traceContent</c> setting was on.
+/// </summary>
+public sealed record TraceToolCallDto(string Name, string? Id, string? Arguments);
+
+/// <summary>
+/// One request of the 链路追踪 activity feed (<c>GET /api/traces/activity</c>): why it was sent (<c>Cause</c>), the upstream
+/// attempts it took (each account or provider it went to, failures and why it moved on) and what came back — thinking time
+/// and size, the start of the reply and each tool call. <c>Cause.Prompt</c>, <c>Reply</c> and tool arguments are recorded
+/// only while the <c>traceContent</c> setting is on.
+/// </summary>
+public sealed record TraceActivityDto(
+    RequestSummaryDto Request, int? Step, string? FinishReason, string? ErrorMessage, int ToolCallCount, RequestCause? Cause,
+    List<RequestAttempt> Attempts, long? ReasoningMs, long? ReasoningChars, long? TextChars, string? Reply, List<TraceToolCallDto> ToolCalls);

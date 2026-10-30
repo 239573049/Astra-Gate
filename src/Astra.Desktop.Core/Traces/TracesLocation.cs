@@ -114,6 +114,15 @@ public static class TraceQueries
     /// <summary>The topology's poll interval.</summary>
     public static TimeSpan TopologyInterval(string range) => range == "live" ? TimeSpan.FromSeconds(5) : TimeSpan.FromSeconds(30);
 
+    /// <summary>GET of the activity feed beside the topology (web <c>useTraceActivity(30)</c>).</summary>
+    public static string ActivityPath(int limit) => "/api/traces/activity" + ApiClient.Qs(("limit", limit.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+    /// <summary>Key <c>['traces', 'activity', limit]</c>; a persisted request invalidates it.</summary>
+    public static QueryKey ActivityKey(int limit) => QueryKey.Of("traces", "activity", limit.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    /// <summary>The activity feed's poll interval: the live feed's "persisted" event refetches it at once; this only catches up when the feed is down.</summary>
+    public static readonly TimeSpan ActivityInterval = TimeSpan.FromSeconds(15);
+
     /// <summary>GET of the session list.</summary>
     public static string SessionsPath(string range, string? client) => "/api/traces/sessions" + ApiClient.Qs(("range", range), ("client", client));
 

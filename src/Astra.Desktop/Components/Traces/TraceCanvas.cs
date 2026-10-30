@@ -371,7 +371,7 @@ public sealed class TraceCanvas : UserControl
     private void SyncAnimation()
     {
         var needed = VisualRoot is not null && TraceUi.Animates(this)
-            && (_graph.Edges.Any(e => e.Animated || e.Flow is { Requests.Count: > 0 }) || _nodes.Values.Any(n => n.Animated));
+            && (_graph.Edges.Any(e => e.Animated || e.Flow is { Requests.Count: > 0 } or { Failed.Count: > 0 } or { Retry: true }) || _nodes.Values.Any(n => n.Animated));
         if (needed && _frame is null)
             _frame = TraceTicker.Frame(() =>
             {
@@ -630,6 +630,10 @@ public sealed class TraceCanvas : UserControl
         if (!_boxes.TryGetValue(edge.Source, out var s) || !_boxes.TryGetValue(edge.Target, out var t)) return null;
         var a = EdgeGeometry.HandlePoint(s, edge.SourceHandle);
         var b = EdgeGeometry.HandlePoint(t, edge.TargetHandle);
+        // a topology line into a provider card ends on the card's left border, level with its row (nodes.tsx .trace-row-handle)
+        if (edge.TargetRow is { } row && _graph.Nodes.FirstOrDefault(n => n.Id == edge.Target)?.Rows is { } rows
+            && rows.Select((r, i) => (r, i)).FirstOrDefault(x => x.r.Id == row) is { r: not null } hit)
+            b = new Pt(t.X, t.Y + TraceNodeView.RowCenterY(hit.i));
         return edge.Type == EdgeType.Step ? EdgeGeometry.Step(a, edge.SourceHandle, b, edge.TargetHandle, edge.Step?.Wrap)
             : EdgeGeometry.Bezier(a, edge.SourceHandle, b, edge.TargetHandle);
     }
@@ -705,6 +709,7 @@ public sealed class TraceCanvas : UserControl
         private readonly List<(Point At, double R, string Id, string Title)> _dots = [];
         private readonly List<(IReadOnlyList<Point> Line, string Select)> _clickable = [];
         private readonly Dictionary<string, double> _bursts = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, double> _fails = new(StringComparer.Ordinal);
 
         public EdgeLayer(TraceCanvas canvas)
         {
@@ -779,26 +784,41 @@ public sealed class TraceCanvas : UserControl
                 var screen = shape.Flatten().Select(pt => ToPoint(v.ToScreen(pt))).ToList();
                 var geometry = PathGeometryOf(shape, v);
                 DashStyle? dash = null;
-                if (edge.Animated) dash = new DashStyle([5 / edge.StrokeWidth, 5 / edge.StrokeWidth], (10 * (1 - (seconds / 0.5 % 1))) / edge.StrokeWidth);
+                if (edge.Flow is { Retry: true })
+                {
+                    // a retry heading down this line: orange, dashed 7 6, moving (flow.css .trace-edge-retry, 0.6 s per 13 px)
+                    color = p.Orange;
+                    dash = new DashStyle([7 / edge.StrokeWidth, 6 / edge.StrokeWidth], 13 * (seconds / 0.6 % 1) / edge.StrokeWidth);
+                }
+                else if (edge.Flow is { Failed.Count: > 0 })
+                {
+                    // an attempt was just refused on this line: red, dotted 3 5 (.trace-edge-failed)
+                    color = p.Red;
+                    dash = new DashStyle([3 / edge.StrokeWidth, 5 / edge.StrokeWidth], 0);
+                }
+                else if (edge.Animated) dash = new DashStyle([5 / edge.StrokeWidth, 5 / edge.StrokeWidth], (10 * (1 - (seconds / 0.5 % 1))) / edge.StrokeWidth);
                 else if (edge.Dashed) dash = new DashStyle([5 / edge.StrokeWidth, 4 / edge.StrokeWidth], 0);
+                if (edge.Opacity is { } opacity) color = TracePalette.WithAlpha(color, opacity);
                 context.DrawGeometry(null, new Pen(new SolidColorBrush(color), width, dash, PenLineCap.Flat, PenLineJoin.Round), geometry);
                 if (edge.Arrow) DrawArrow(context, shape, color, edge.StrokeWidth, v);
                 if (edge.Step?.SelectId is { } select) _clickable.Add((screen, select));
                 if (edge.Flow is { } flow && _c._live is { } live) DrawDots(context, edge, flow, shape, live, p, v, seconds, seenBursts);
             }
             foreach (var gone in _bursts.Keys.Where(k => !seenBursts.Contains(k)).ToList()) _bursts.Remove(gone);
+            foreach (var gone in _fails.Keys.Where(k => !seenBursts.Contains(k)).ToList()) _fails.Remove(gone);
         }
 
         private void DrawDots(DrawingContext context, TraceEdge edge, FlowData flow, EdgeShape shape, TraceLiveContext live, TracePalette p,
             Viewport v, double seconds, HashSet<string> seenBursts)
         {
             var now = live.NowMs();
+            var t = TraceTexts.FromLoc;
             foreach (var id in flow.Requests)
             {
                 if (live.Get(id) is not { } r) continue;
                 var (mode, slow, dur) = TopologyPageLogic.Dot(r, flow.Role, now);
                 if (mode == TopologyPageLogic.DotMode.Hidden) continue;
-                var title = TopologyPageLogic.DotTitle(r, TraceTexts.FromLoc, now);
+                var title = TopologyPageLogic.DotTitle(r, t, now);
                 var surface = new Pen(new SolidColorBrush(p.SurfaceSolid), 1.5 * v.Zoom);
                 if (mode == TopologyPageLogic.DotMode.Burst)
                 {
@@ -817,13 +837,87 @@ public sealed class TraceCanvas : UserControl
                     continue;
                 }
                 var back = mode == TopologyPageLogic.DotMode.Back;
-                var frac = ((seconds + TopologyPageLogic.DotOffset(id) * dur) / dur) % 1;
-                var at = ToPoint(v.ToScreen(shape.PointAt(back ? 1 - frac : frac)));
-                var color = slow ? p.Orange : back ? p.Green : p.Accent;
-                var rr = 4.5 * v.Zoom;
-                context.DrawEllipse(new SolidColorBrush(color), surface, at, rr, rr);
-                _dots.Add((at, rr, id, title));
+                Point At(double lag)
+                {
+                    var frac = (((seconds - lag + TopologyPageLogic.DotOffset(id) * dur) / dur) % 1 + 1) % 1;
+                    return ToPoint(v.ToScreen(shape.PointAt(back ? 1 - frac : frac)));
+                }
+                if (back)
+                {
+                    // the answer streams back: a capsule naming what the model produces (thinking, text, a tool), two dots trailing it
+                    var (label, tone) = TopologyPageLogic.StageCapsule(r.Stage, t);
+                    var color = tone switch { "think" => p.Accent2, "write" => p.Accent, _ => p.Green };
+                    foreach (var lag in new[] { 0.32, 0.16 })
+                    {
+                        var trail = At(lag);
+                        context.DrawEllipse(new SolidColorBrush(color), surface, trail, 3 * v.Zoom, 3 * v.Zoom);
+                    }
+                    var head = At(0);
+                    if (label is not null) _dots.Add(Capsule(context, head, label, color, Colors.White, p.SurfaceSolid, v.Zoom, id, title));
+                    else
+                    {
+                        context.DrawEllipse(new SolidColorBrush(color), surface, head, 4.5 * v.Zoom, 4.5 * v.Zoom);
+                        _dots.Add((head, 4.5 * v.Zoom, id, title));
+                    }
+                    continue;
+                }
+                // going out: a capsule saying what the request carries (the user's prompt, tool results, a retry)
+                var (text, outTone) = TopologyPageLogic.OutCapsule(r, slow, t);
+                var at = At(0);
+                if (text is null)
+                {
+                    var dot = slow ? p.Orange : p.Accent;
+                    var rr = 4.5 * v.Zoom;
+                    context.DrawEllipse(new SolidColorBrush(dot), surface, at, rr, rr);
+                    _dots.Add((at, rr, id, title));
+                    continue;
+                }
+                var capsule = outTone switch
+                {
+                    "retry" or "slow" => (Fill: p.Orange, Ink: Colors.White, Edge: p.SurfaceSolid),
+                    "result" => (Fill: p.SurfaceSolid, Ink: p.Green, Edge: p.Green),
+                    _ => (Fill: TracePalette.Cyan, Ink: TracePalette.Ink, Edge: p.SurfaceSolid),
+                };
+                _dots.Add(Capsule(context, at, text, capsule.Fill, capsule.Ink, capsule.Edge, v.Zoom, id, title));
             }
+            // an attempt refused on this line: its status runs back from the account to the hub once (0.9 s), then fades there (0.6 s)
+            foreach (var id in flow.Failed)
+            {
+                if (live.Get(id) is not { } r) continue;
+                var key = edge.Id + "|fail|" + id;
+                seenBursts.Add(key);
+                if (!_fails.TryGetValue(key, out var start)) _fails[key] = start = seconds;
+                var elapsed = _c._frame is null ? 1.5 : seconds - start;
+                var k = Math.Clamp(elapsed / 0.9, 0, 1);
+                var end = ToPoint(v.ToScreen(shape.End));
+                if (k < 1)
+                {
+                    var radius = 5 * (1 + 2.2 * k) * v.Zoom;
+                    context.DrawEllipse(new SolidColorBrush(TracePalette.WithAlpha(p.Red, 0.95 * (1 - k))), null, end, radius, radius);
+                }
+                var alpha = elapsed <= 0.9 ? 1 : Math.Clamp(1 - (elapsed - 0.9) / 0.6, 0, 1);
+                if (_c._frame is null) alpha = 1;
+                if (alpha <= 0) continue;
+                var at = ToPoint(v.ToScreen(shape.PointAt(1 - k)));
+                using (context.PushOpacity(alpha))
+                    _dots.Add(Capsule(context, at, TopologyPageLogic.FailedLabel(r, TraceTexts.FromLoc), p.Red, Colors.White, p.SurfaceSolid, v.Zoom, id,
+                        TopologyPageLogic.DotTitle(r, TraceTexts.FromLoc, now)));
+            }
+        }
+
+        /// <summary>A label riding a line (live.tsx <c>Capsule</c>): 17 px high, rounded, 10.5 px semibold text, centred on the moving point.</summary>
+        private (Point At, double R, string Id, string Title) Capsule(DrawingContext context, Point at, string text, Color fill, Color ink, Color edge,
+            double zoom, string id, string title)
+        {
+            var font = new Typeface(GetValue(Avalonia.Controls.Documents.TextElement.FontFamilyProperty), FontStyle.Normal, FontWeight.SemiBold);
+            var formatted = new FormattedText(text, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, font, 10.5 * zoom,
+                new SolidColorBrush(ink));
+            var w = formatted.Width + 14 * zoom;
+            var h = 17 * zoom;
+            var rect = new Rect(at.X - w / 2, at.Y - h / 2, w, h);
+            context.DrawRectangle(new SolidColorBrush(fill), new Pen(new SolidColorBrush(edge), 1.5 * zoom), rect, h / 2, h / 2);
+            context.DrawText(formatted, new Point(at.X - formatted.Width / 2, at.Y - formatted.Height / 2));
+            return (at, Math.Max(w, h) / 2, id, title);
         }
 
         /// <summary>React Flow's <c>arrowclosed</c> marker: 16 × 16 in stroke-width units over a 20-unit box, tip at the path's end.</summary>

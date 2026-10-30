@@ -110,6 +110,8 @@ public sealed class GatewayPipeline(
         var restorable = 0;
         var observer = new ResponseObserver
         {
+            // Tool-call arguments and the start of the reply go into the trace only when the user turned that on.
+            CaptureContent = s.TraceContent,
             FirstToken = ttft =>
             {
                 record.TtftMs = ttft;
@@ -225,6 +227,16 @@ public sealed class GatewayPipeline(
             }
 
             var body = parsed?.Object ?? ParseObject(guard.Body);
+            // Why this call was sent — the user's input or tool results (.plan/observability.md §5) — read from the guarded
+            // tree, so a prompt kept for the trace (AppSettings.TraceContent) carries the guard's redactions.
+            if (TraceKeys.CauseOf(inbound, body, s.TraceContent) is { } cause)
+            {
+                record.LiveCause = cause;
+                trace.Root.Set("astra.request.cause", cause.Kind).Set("astra.request.prompt", cause.Prompt);
+                foreach (var result in cause.ToolResults)
+                    trace.Root.Event("tool_result", ToolResultAttributes(result));
+                live.Update(record);
+            }
             // Whether the client's own bytes can go upstream as they are: the tree is theirs and nothing changed it.
             var bodyIsClientBytes = parsed is not null && !guard.Rewritten;
             // Log-only metadata (plan §6.5): what the client itself set, read before any codec derives
@@ -293,7 +305,16 @@ public sealed class GatewayPipeline(
             }
             else candidates = [await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct)];
 
-            var attempts = new AttemptTrace();
+            // Every attempt that starts or ends goes to the live feed: the topology shows the account a call is on and a retry as it happens.
+            var attempts = new AttemptTrace
+            {
+                Changed = () =>
+                {
+                    if (!live.IsActive) return;
+                    record.LiveAttempts = trace.Attempts();
+                    live.Update(record);
+                },
+            };
             var sends = 0;
             var nextCandidate = 1;
             UpstreamPlan plan = null!;
@@ -826,6 +847,7 @@ public sealed class GatewayPipeline(
                 attempt.Set("astra.account.id", credentials.AccountId ?? accountId)
                     .Set("astra.credentials_us", RequestTrace.Micros(credentialsStart, Stopwatch.GetTimestamp()))
                     .Set("astra.transport", plugin ? "plugin" : null);
+                attempts.Changed?.Invoke();
 
                 // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
                 var client = plugin ? _pluginClient ?? throw NoPluginProviders()
@@ -922,7 +944,9 @@ public sealed class GatewayPipeline(
         TraceSpanBuilder Retry(TraceSpanBuilder span, HttpResponseMessage response, string reason, string? account)
         {
             EndAttempt(span, response, reason);
-            return StartAttempt().Set("astra.account.id", account).Set("astra.transport", plugin ? "plugin" : null);
+            var next = StartAttempt().Set("astra.account.id", account).Set("astra.transport", plugin ? "plugin" : null);
+            attempts.Changed?.Invoke();
+            return next;
         }
 
         // Each attempt names its provider: a pool request's attempts can go to several (.plan/observability.md §2.3).
@@ -930,7 +954,7 @@ public sealed class GatewayPipeline(
             .Set("astra.provider.id", provider.Id).Set("astra.provider.name", provider.Name);
 
         // What the attempt's response said: status, upstream request id, rate-limit state, why it was retried.
-        static void EndAttempt(TraceSpanBuilder span, HttpResponseMessage response, string? retry)
+        void EndAttempt(TraceSpanBuilder span, HttpResponseMessage response, string? retry)
         {
             var status = (int)response.StatusCode;
             span.Set("http.response.status_code", status).Set("astra.attempt.retry", retry)
@@ -944,6 +968,7 @@ public sealed class GatewayPipeline(
             if (response.IsSuccessStatusCode) span.Ok();
             else span.Error(status.ToString(System.Globalization.CultureInfo.InvariantCulture));
             span.End();
+            attempts.Changed?.Invoke();
         }
 
         async Task<string?> FailOverAsync(string from, DateTimeOffset? cooldownUntil, string reason)
@@ -1079,6 +1104,9 @@ public sealed class GatewayPipeline(
     private sealed class AttemptTrace
     {
         public TraceSpanBuilder? Last { get; set; }
+
+        /// <summary>Called when an attempt has its account (it is about to be sent) and when it ends: the live feed follows.</summary>
+        public Action? Changed { get; init; }
     }
 
     /// <summary>
@@ -1596,13 +1624,15 @@ public sealed class GatewayPipeline(
             if (observer.ReasoningEnd is { } reasoningEnd) responseSpan.EventAt("reasoning_end", reasoningEnd);
             if (observer.TextStart is { } textStart) responseSpan.EventAt("text_start", textStart);
             if (observer.TextEnd is { } textEnd) responseSpan.EventAt("text_end", textEnd);
-            foreach (var (at, name) in observer.ToolStarts) responseSpan.EventAt("tool_call", at, new KeyValuePair<string, object>("name", name));
+            foreach (var call in observer.ToolStarts) responseSpan.EventAt("tool_call", call.At, call.Attributes());
+            if (observer.Reply is { Length: > 0 } reply)
+                responseSpan.Set("astra.response.text", observer.TextChars > reply.Length ? reply + "…" : reply.ToString());
             if (observer.Error is { } error) responseSpan.Error(error.Message);
             else if (record.Status == RequestStatus.Success) responseSpan.Ok();
             responseSpan.End();
         }
+        // The phases stay on the record (never stored): the live feed's last event keeps them until the row is written.
         record.LiveStage = null;
-        record.LivePhases = null;
         var root = trace.Root;
         root.Set("gen_ai.operation.name", "chat").Set("gen_ai.request.model", record.RequestedModel)
             .Set("gen_ai.response.model", record.ResponseModel).Set("gen_ai.usage.input_tokens", record.TotalInputTokens)
@@ -1615,6 +1645,16 @@ public sealed class GatewayPipeline(
         record.TraceId ??= inboundTraceId ?? ActivityTraceId.CreateRandom().ToHexString();
         record.Spans = trace.Build(record.Id);
         if (link is not null) linker.Complete(link, observer.ToolCallIds);
+    }
+
+    /// <summary>A <c>tool_result</c> event's attributes: the tool, its error mark (when the protocol has one) and its size.</summary>
+    private static KeyValuePair<string, object>[] ToolResultAttributes(ToolResultInfo result)
+    {
+        var attributes = new List<KeyValuePair<string, object>>(3);
+        if (result.Name is { } name) attributes.Add(new("name", name));
+        if (result.Error is { } error) attributes.Add(new("error", error));
+        attributes.Add(new("chars", result.Chars));
+        return [.. attributes];
     }
 
     private static string FinishReasonId(FinishReason reason) => reason switch
@@ -1795,9 +1835,23 @@ public sealed class GatewayPipeline(
         public long? ReasoningEnd { get; private set; }
         public long? TextStart { get; private set; }
         public long? TextEnd { get; private set; }
-        public List<(long At, string Name)> ToolStarts { get; } = [];
+        public List<ObservedToolCall> ToolStarts { get; } = [];
         public long ReasoningChars { get; private set; }
         public long TextChars { get; private set; }
+
+        /// <summary>Keep each tool call's arguments and the start of the reply (<see cref="AppSettings.TraceContent"/>).</summary>
+        public bool CaptureContent { get; init; }
+
+        /// <summary>The start of the reply's text, at most <see cref="MaxReplyChars"/>; null unless <see cref="CaptureContent"/>.</summary>
+        public StringBuilder? Reply { get; private set; }
+
+        /// <summary>Most of one tool call's arguments kept in the trace.</summary>
+        public const int MaxArgumentChars = 4096;
+
+        /// <summary>Most of the reply's text kept in the trace.</summary>
+        public const int MaxReplyChars = 300;
+
+        private readonly Dictionary<int, ObservedToolCall> _toolByIndex = [];
 
         /// <summary>Called when what the model produces changes: <c>thinking</c>, <c>writing</c>, <c>tool:&lt;name&gt;</c>.</summary>
         public Action<string>? StageChanged { get; init; }
@@ -1841,9 +1895,17 @@ public sealed class GatewayPipeline(
             {
                 if (toolCall.ToolCallId is { Length: > 0 } toolCallId) ToolCallIds.Add(toolCallId);
                 if (toolCall.ToolName is { Length: > 0 } toolName && ToolNames.Count < 32) ToolNames.Add(toolName);
-                if (!wholeBody && ToolStarts.Count < 32) ToolStarts.Add((Stopwatch.GetTimestamp(), toolCall.ToolName ?? ""));
+                // A whole body's calls are kept too (their arguments matter as much); its moment is when it was read.
+                if ((!wholeBody || CaptureContent) && ToolStarts.Count < 32)
+                {
+                    var call = new ObservedToolCall(Stopwatch.GetTimestamp(), toolCall.ToolName ?? "", toolCall.ToolCallId, CaptureContent ? new StringBuilder() : null);
+                    ToolStarts.Add(call);
+                    _toolByIndex[toolCall.Index] = call;
+                }
                 if (!wholeBody) Stage("tool:" + (toolCall.ToolName ?? ""));
             }
+            else if (e is ToolArgsDeltaEvent args && CaptureContent && _toolByIndex.TryGetValue(args.Index, out var argsOf))
+                argsOf.Append(args.JsonFragment);
             else if (e is ReasoningDeltaEvent reasoning && (reasoning.Text is { Length: > 0 } || reasoning.EncryptedContent is { Length: > 0 }))
             {
                 ReasoningChars += reasoning.Text?.Length ?? 0;
@@ -1858,6 +1920,11 @@ public sealed class GatewayPipeline(
             else if (e is TextDeltaEvent { Text.Length: > 0 } text)
             {
                 TextChars += text.Text.Length;
+                if (CaptureContent && (Reply?.Length ?? 0) < MaxReplyChars)
+                {
+                    Reply ??= new StringBuilder();
+                    Reply.Append(text.Text.AsSpan(0, Math.Min(text.Text.Length, MaxReplyChars - Reply.Length)));
+                }
                 if (!wholeBody)
                 {
                     var now = Stopwatch.GetTimestamp();
@@ -1892,6 +1959,37 @@ public sealed class GatewayPipeline(
                     Error = err;
                     break;
             }
+        }
+    }
+
+    /// <summary>
+    /// A tool call the response made: when it started, its name and id, and — while content is kept — its arguments
+    /// (at most <see cref="ResponseObserver.MaxArgumentChars"/>).
+    /// </summary>
+    private sealed class ObservedToolCall(long at, string name, string? id, StringBuilder? arguments)
+    {
+        public long At { get; } = at;
+        private bool _cut;
+
+        public void Append(string fragment)
+        {
+            if (arguments is null || _cut) return;
+            var room = ResponseObserver.MaxArgumentChars - arguments.Length;
+            if (fragment.Length > room)
+            {
+                arguments.Append(fragment.AsSpan(0, Math.Max(0, room)));
+                _cut = true;
+            }
+            else arguments.Append(fragment);
+        }
+
+        /// <summary>The <c>tool_call</c> event's attributes.</summary>
+        public KeyValuePair<string, object>[] Attributes()
+        {
+            var attributes = new List<KeyValuePair<string, object>>(3) { new("name", name) };
+            if (id is { Length: > 0 }) attributes.Add(new("id", id));
+            if (arguments is { Length: > 0 }) attributes.Add(new("arguments", _cut ? arguments + "…" : arguments.ToString()));
+            return [.. attributes];
         }
     }
 

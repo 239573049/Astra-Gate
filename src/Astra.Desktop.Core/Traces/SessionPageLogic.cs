@@ -117,20 +117,64 @@ public static class TopologyPageLogic
     /// <summary>What a live dot does on a line.</summary>
     public enum DotMode { Hidden, Out, Back, Burst }
 
-    /// <summary>What to draw for one request on a line of the given role (<c>LiveDot</c>): dots go out while routed and sent, come back once the upstream answers, burst where it ended.</summary>
+    /// <summary>
+    /// What to draw for one request on a line of the given role (<c>LiveDot</c>): dots go out while routed and sent, come back once the upstream
+    /// answers, burst where it ended. A provider line and an account line are both the upstream side.
+    /// </summary>
     public static (DotMode Mode, bool Slow, double DurationSeconds) Dot(RequestSummaryDto r, string role, double nowMs)
     {
         var phase = TraceAnalysis.LivePhaseOf(r);
         var elapsed = TraceAnalysis.Elapsed(r, nowMs);
+        var upstreamSide = role != "client";
         if (phase is LivePhase.Done or LivePhase.Failed)
         {
             // The request is over: a burst at the agent, or at the provider when the upstream turned it down.
             var refused = phase == LivePhase.Failed && (r.HttpStatus ?? 0) >= 400;
-            return (role == "provider" ? !refused : refused) ? (DotMode.Hidden, false, 0) : (DotMode.Burst, false, 0);
+            return (upstreamSide ? !refused : refused) ? (DotMode.Hidden, false, 0) : (DotMode.Burst, false, 0);
         }
-        if (role == "provider" && phase == LivePhase.Arriving) return (DotMode.Hidden, false, 0);
+        if (upstreamSide && phase == LivePhase.Arriving) return (DotMode.Hidden, false, 0);
         var back = phase == LivePhase.Streaming;
         return (back ? DotMode.Back : DotMode.Out, phase == LivePhase.Upstream && elapsed > SlowMs, back ? 0.9 : 1.4);
+    }
+
+    /// <summary>What a request carries to the model, as a capsule label (<c>causeLabel</c>): the user's prompt, or which tool results; null when unknown.</summary>
+    public static string? CauseLabel(Astra.Core.Requests.RequestCause? cause, TraceText t)
+    {
+        if (cause is null) return null;
+        if (cause.Kind == "user") return t("traces.cause.user");
+        var results = cause.ToolResults;
+        if (results.Count == 1 && !string.IsNullOrEmpty(results[0].Name)) return $"{t("traces.cause.tool_result")} · {results[0].Name}";
+        return results.Count > 1 ? t("traces.cause.results", ("count", results.Count)) : t("traces.cause.tool_result");
+    }
+
+    /// <summary>
+    /// The capsule riding a line going out (<c>LiveDot</c>): what the request carries, prefixed "Retry" once a second attempt is under way, and
+    /// its tone — retry (orange), slow (orange), result (green outline), out (cyan; a dot without a label when the cause is unknown).
+    /// </summary>
+    public static (string? Text, string Tone) OutCapsule(RequestSummaryDto r, bool slow, TraceText t)
+    {
+        var cause = CauseLabel(r.Cause, t);
+        var retry = (r.Attempts?.Count ?? 0) > 1;
+        var text = retry ? t("traces.cause.retry") + (cause is not null ? " · " + cause : "") : cause;
+        var tone = retry ? "retry" : slow ? "slow" : r.Cause?.Kind == "tool_result" ? "result" : "out";
+        return (text, tone);
+    }
+
+    /// <summary>What the model produces right now, as a capsule label and a tone: think, write, tool (its name), or back (no label).</summary>
+    public static (string? Label, string Tone) StageCapsule(string? stage, TraceText t)
+    {
+        if (stage == "thinking") return (t("traces.output.think"), "think");
+        if (stage == "writing") return (t("traces.output.text"), "write");
+        if (stage is not null && stage.StartsWith("tool:", StringComparison.Ordinal))
+            return (stage.Length > "tool:".Length ? stage["tool:".Length..] : t("traces.output.tool"), "tool");
+        return (null, "back");
+    }
+
+    /// <summary>The label of the red capsule a refused attempt sends back to the hub: its status, else "failed".</summary>
+    public static string FailedLabel(RequestSummaryDto r, TraceText t)
+    {
+        var failed = (r.Attempts ?? []).LastOrDefault(TopologyBuilder.AttemptFailed);
+        return failed?.Status is { } s and not 0 ? s.ToString(System.Globalization.CultureInfo.InvariantCulture) : t("traces.cause.failed");
     }
 
     /// <summary>The hover title of a live dot: model, stage, HTTP status, elapsed (<c>title</c> in <c>LiveDot</c>).</summary>

@@ -20,7 +20,7 @@ public static partial class Scenes
 {
     static partial void AddTraces(Dictionary<string, Func<Scene>> d)
     {
-        d["traces__topology"] = () => TracesScene(TracesData(), null, live: TracesLiveFrames(), waitLive: 3);
+        d["traces__topology"] = () => TracesScene(TracesData(), null, live: TracesLiveFrames(), waitLive: 4);
         d["traces__topology-idle"] = () => TracesScene(TracesData(), null);
         d["traces__topology-inspector"] = () => TracesScene(TracesData(), null, details: true,
             act: page => ((TopologyViewModel)page.View).Select("provider:prov_anthropic"));
@@ -96,6 +96,7 @@ public static partial class Scenes
     {
         var f = Fixtures();
         f.Override("/api/traces/topology", TracesTopology(empty: false));
+        f.Override("/api/traces/activity", TracesActivity(f).ToJsonString());
         f.Override("/api/traces/sessions", TracesSessions(f).ToJsonString());
         f.Override("/api/traces/sessions/cc%3Aabc", TracesSessionDetail(f, active).ToJsonString());
         f.Override("/api/traces/requests/req_trace", TracesRequest(f, inFlight).ToJsonString());
@@ -120,6 +121,32 @@ public static partial class Scenes
                       {"providerId":"prov_openai","name":"OpenAI","icon":"openai","templateId":"openai","requests":38,"errors":1,"attempts":38,"rateLimited":0,"failovers":0,"perMinute":3.8,"ttfbP95Ms":910,"accounts":[]}]}
         """;
     }
+
+    /// <summary>The topology's activity feed: a stored call that asked for two tools (their arguments recorded) after a 429 on the cooling account.</summary>
+    private static JsonArray TracesActivity(FixtureSet f) =>
+    [
+        new JsonObject
+        {
+            ["request"] = new JsonObject
+            {
+                ["id"] = "act_1", ["startedAtUtc"] = TracesAt(f, -30_000), ["clientKind"] = "claude-code", ["providerId"] = "prov_anthropic", ["providerName"] = "Anthropic",
+                ["inboundProtocol"] = "anthropic", ["upstreamProtocol"] = "anthropic", ["passthrough"] = true, ["requestedModel"] = "claude-sonnet-4-5",
+                ["upstreamModel"] = "claude-sonnet-4-5", ["responseModel"] = null, ["systemModelId"] = "claude-sonnet-4-5", ["stream"] = true, ["status"] = "success",
+                ["httpStatus"] = 200, ["ttftMs"] = 900, ["totalMs"] = 4_100, ["outputTps"] = null, ["totalInputTokens"] = 21_700, ["totalOutputTokens"] = 236,
+                ["cacheReadTokens"] = 0, ["cacheWriteTokens"] = 0, ["reasoningTokens"] = 0, ["costNanoUsd"] = 0, ["usageSource"] = "reported",
+                ["tokenId"] = "tok_default", ["tokenName"] = "default", ["accountId"] = "acc_a", ["remote"] = false, ["sessionKey"] = "cc:abc", ["turnId"] = "t3", ["callKind"] = "main",
+            },
+            ["step"] = 2, ["finishReason"] = "tool_calls", ["errorMessage"] = null, ["toolCallCount"] = 2,
+            ["cause"] = new JsonObject { ["kind"] = "tool_result", ["toolResults"] = new JsonArray(new JsonObject { ["name"] = "Read", ["error"] = false, ["chars"] = 3_120 }), ["prompt"] = null },
+            ["attempts"] = new JsonArray(
+                new JsonObject { ["providerId"] = "prov_anthropic", ["providerName"] = "Anthropic", ["accountId"] = "acc_b", ["status"] = 429, ["retry"] = "rate_limited_failover", ["startMs"] = 4, ["endMs"] = 320 },
+                new JsonObject { ["providerId"] = "prov_anthropic", ["providerName"] = "Anthropic", ["accountId"] = "acc_a", ["status"] = 200, ["startMs"] = 330, ["endMs"] = 1_300 }),
+            ["reasoningMs"] = 900, ["reasoningChars"] = 288, ["textChars"] = null, ["reply"] = null,
+            ["toolCalls"] = new JsonArray(
+                new JsonObject { ["name"] = "Edit", ["id"] = "t1", ["arguments"] = """{"file_path":"README.md","old_string":"npm install -g astragate","new_string":"pnpm add -g astragate"}""" },
+                new JsonObject { ["name"] = "Bash", ["id"] = "t2", ["arguments"] = """{"command":"grep -rn \"npm install\" docs/content","description":"查找文档里的 npm 安装命令"}""" }),
+        },
+    ];
 
     private static JsonArray TracesSessions(FixtureSet f) =>
     [
@@ -256,7 +283,8 @@ public static partial class Scenes
         };
     }
 
-    private static string TracesLiveRow(FixtureSet f, string id, double startMs, string status, string? providerId, int? http, string? stage, string? client = "claude-code", string? session = null)
+    private static string TracesLiveRow(FixtureSet f, string id, double startMs, string status, string? providerId, int? http, string? stage, string? client = "claude-code",
+        string? session = null, JsonArray? attempts = null, JsonObject? cause = null)
         => "data: " + new JsonObject
         {
             ["type"] = "started",
@@ -269,16 +297,26 @@ public static partial class Scenes
                 ["cacheReadTokens"] = 0, ["cacheWriteTokens"] = 0, ["reasoningTokens"] = 0, ["costNanoUsd"] = 0, ["usageSource"] = "missing",
                 ["tokenId"] = "tok_default", ["tokenName"] = "default", ["remote"] = false, ["sessionKey"] = session, ["stage"] = stage, ["turnId"] = session is null ? null : "t3",
                 ["phases"] = stage is null ? null : "thinking@600",
+                ["attempts"] = attempts, ["cause"] = cause,
             },
         }.ToJsonString() + "\n\n";
 
-    /// <summary>Three requests in flight on the topology lines: one routed and waiting, one streaming back, one slow on the upstream.</summary>
+    /// <summary>
+    /// Four requests in flight on the topology lines: a user prompt routed to the work account and waiting, one streaming back on it, one slow on
+    /// the upstream, and a tool result the cooling account just refused (429) on its retry to the work account.
+    /// </summary>
     private static string TracesLiveFrames()
     {
         var f = Fixtures();
-        return TracesLiveRow(f, "live_out", -1_200, "pending", "prov_anthropic", null, null)
-            + TracesLiveRow(f, "live_back", -3_400, "pending", "prov_anthropic", 200, "writing")
-            + TracesLiveRow(f, "live_slow", -11_000, "pending", "prov_openai", null, null, client: "codex");
+        static JsonObject Attempt(string account, int? status, string? retry, int start, int? end) =>
+            new() { ["providerId"] = "prov_anthropic", ["providerName"] = "Anthropic", ["accountId"] = account, ["status"] = status, ["retry"] = retry, ["startMs"] = start, ["endMs"] = end };
+        return TracesLiveRow(f, "live_out", -1_200, "pending", "prov_anthropic", null, null,
+                   attempts: [Attempt("acc_a", null, null, 300, null)], cause: new JsonObject { ["kind"] = "user", ["toolResults"] = new JsonArray() })
+            + TracesLiveRow(f, "live_back", -3_400, "pending", "prov_anthropic", 200, "writing", attempts: [Attempt("acc_a", 200, null, 200, 900)])
+            + TracesLiveRow(f, "live_slow", -11_000, "pending", "prov_openai", null, null, client: "codex")
+            + TracesLiveRow(f, "live_retry", -1_000, "pending", "prov_anthropic", null, null,
+                attempts: [Attempt("acc_b", 429, "rate_limited_failover", 100, 400), Attempt("acc_a", null, null, 500, null)],
+                cause: new JsonObject { ["kind"] = "tool_result", ["toolResults"] = new JsonArray(new JsonObject { ["name"] = "Edit", ["error"] = false, ["chars"] = 40 }) });
     }
 
     /// <summary>The session's next call in flight (it thinks), drawn after its last step.</summary>

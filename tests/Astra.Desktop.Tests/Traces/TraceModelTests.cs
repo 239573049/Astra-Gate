@@ -25,6 +25,7 @@ public sealed class TraceModelTests : IDisposable
     private static readonly DateTimeOffset T0 = DateTimeOffset.Parse("2026-10-14T09:00:00.000Z");
     private static readonly double T0Ms = T0.ToUnixTimeMilliseconds();
     private static readonly Dictionary<string, ProviderBrand> NoBrands = [];
+    private static readonly double Now = T0.AddSeconds(10).ToUnixTimeMilliseconds();
 
     private static TraceCallDto Call(string id, long startMs, long? totalMs, string status = "success", int toolCalls = 0, string callKind = "main",
         string? parent = null, int step = 1, string linkSource = "new_turn", string? chainKey = "fp:main", string? providerId = "copilot", int? httpStatus = 200) =>
@@ -83,13 +84,17 @@ public sealed class TraceModelTests : IDisposable
     [Fact]
     public void Topology_puts_clients_and_providers_around_the_hub_with_warn_colouring()
     {
-        var graph = TopologyBuilder.Build(Topology(), T, Label, NoBrands);
+        var graph = TopologyBuilder.Build(Topology(), T, Label, NoBrands, null, new TopologyOptions(Now));
         Assert.Equal([TopologyBuilder.HubId, "client:claude-code", "provider:copilot"], graph.Nodes.Select(n => n.Id));
         Assert.Equal(NodeKind.Hub, graph.Nodes[0].Kind);
         Assert.Equal(("Claude Code", Tone.Ok, "claude-code"), (Node(graph, "client:claude-code").Card!.Title, Node(graph, "client:claude-code").Card!.Tone!.Value, Node(graph, "client:claude-code").Card!.Client));
         Assert.Equal(("GitHub Copilot", Tone.Warn), (Node(graph, "provider:copilot").Card!.Title, Node(graph, "provider:copilot").Card!.Tone!.Value));
-        Assert.Equal([("client:claude-code", TopologyBuilder.HubId), (TopologyBuilder.HubId, "provider:copilot")], graph.Edges.Select(e => (e.Source, e.Target)));
-        Assert.Equal(["client", "provider"], graph.Edges.Select(e => e.Flow!.Role));
+        // one row per account, each with its own line from the hub
+        Assert.Equal(NodeKind.Provider, Node(graph, "provider:copilot").Kind);
+        Assert.Equal([("a:gh-alice", "cooldown")], Node(graph, "provider:copilot").Rows!.Select(r => (r.Id, r.Status)));
+        Assert.Equal([("client:claude-code", TopologyBuilder.HubId, null), (TopologyBuilder.HubId, "provider:copilot", "a:gh-alice")],
+            graph.Edges.Select(e => (e.Source, e.Target, e.TargetRow)));
+        Assert.Equal(["client", "account"], graph.Edges.Select(e => e.Flow!.Role));
         Assert.All(graph.Edges, e => Assert.Empty(e.Flow!.Requests));
     }
 
@@ -97,14 +102,52 @@ public sealed class TraceModelTests : IDisposable
     public void Topology_puts_requests_in_flight_on_their_lines_and_adds_nodes_the_window_has_not_seen()
     {
         RequestSummaryDto[] live = [Live("a"), Live("b", providerId: "deepseek", clientKind: "codex"), Live("c", status: "success")];
-        var graph = TopologyBuilder.Build(Topology(), T, Label, new Dictionary<string, ProviderBrand> { ["deepseek"] = new("DeepSeek") }, live);
+        var graph = TopologyBuilder.Build(Topology(), T, Label, new Dictionary<string, ProviderBrand> { ["deepseek"] = new("DeepSeek") }, live, new TopologyOptions(Now));
         Assert.Contains(graph.Nodes, n => n.Id == "client:codex");
         var ds = Node(graph, "provider:deepseek").Card!;
         Assert.Equal(("DeepSeek", 1), (ds.Title, ds.Live));
         // a finished request still rides its lines (its burst), but only pending ones count as in flight
         Assert.Equal(1, Node(graph, "provider:copilot").Card!.Live);
-        Assert.Equal(["a", "c"], Edge(graph, "e:provider:copilot").Flow!.Requests);
+        Assert.Equal(["a", "c"], Edge(graph, "e:provider:copilot:a:gh-alice").Flow!.Requests);
+        // a provider without accounts is one API-key row
+        Assert.Equal("a:key", graph.Edges.Single(e => e.Target == "provider:deepseek").TargetRow);
         Assert.True(Node(graph, TopologyBuilder.HubId).Busy);
+    }
+
+    [Fact]
+    public void Topology_rides_each_request_on_its_account_and_bounces_a_refused_one_back()
+    {
+        var two = Topology() with
+        {
+            Providers = [Topology().Providers[0] with
+            {
+                Accounts = [new TraceAccountDto("main", "Main", "ok", true, null, null, null, null, null, 7), new TraceAccountDto("spare", "Spare", "ok", true, null, null, null, null, null, 3)],
+            }],
+        };
+        var retried = Live("x") with
+        {
+            Attempts = [new Astra.Core.Requests.RequestAttempt("copilot", null, "main", 429, "rate_limited_failover", 100, 500, null), new Astra.Core.Requests.RequestAttempt("copilot", null, "spare", null, null, 600, null, null)],
+        };
+        var graph = TopologyBuilder.Build(two, T, Label, NoBrands, [retried], new TopologyOptions(Now));
+        var main = graph.Edges.Single(e => e.TargetRow == "a:main").Flow!;
+        var spare = graph.Edges.Single(e => e.TargetRow == "a:spare").Flow!;
+        Assert.Empty(main.Requests);
+        Assert.Equal(["x"], main.Failed);
+        Assert.False(main.Retry);
+        Assert.Equal(["x"], spare.Requests);
+        Assert.Empty(spare.Failed);
+        Assert.True(spare.Retry);
+        Assert.Equal([("a:main", "fail", 0), ("a:spare", "on", 1)], Node(graph, "provider:copilot").Rows!.Select(r => (r.Id, r.Hit, r.Live)));
+        Assert.Equal(new HubNote("Rate limited, next account → Spare", "warn"), Node(graph, TopologyBuilder.HubId).Note);
+        // long after, the failure no longer shows
+        var later = TopologyBuilder.Build(two, T, Label, NoBrands, [retried], new TopologyOptions(Now + 5_000));
+        Assert.Empty(later.Edges.Single(e => e.TargetRow == "a:main").Flow!.Failed);
+        Assert.Null(Node(later, TopologyBuilder.HubId).Note);
+        // hovering a request in the feed dims what it did not touch (never the hub)
+        var lit = TopologyBuilder.Build(two, T, Label, NoBrands, [], new TopologyOptions(Now, new HighlightPath("claude-code", [new Astra.Core.Requests.RequestAttempt("copilot", null, "spare", null, null, 0, null, null)])));
+        Assert.Equal([("a:main", true), ("a:spare", false)], Node(lit, "provider:copilot").Rows!.Select(r => (r.Id, r.Dim)));
+        Assert.Equal(0.25, lit.Edges.Single(e => e.TargetRow == "a:main").Opacity);
+        Assert.Null(lit.Edges.Single(e => e.TargetRow == "a:spare").Opacity);
     }
 
     [Fact]

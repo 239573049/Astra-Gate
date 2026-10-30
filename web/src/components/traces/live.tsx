@@ -1,12 +1,12 @@
-import { useSyncExternalStore } from 'react';
+import { useLayoutEffect, useRef, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useLiveRequest } from '../../api/liveRequests';
-import type { RequestSummary } from '../../api/types';
+import type { RequestCause, RequestSummary } from '../../api/types';
 import { useI18n, type TFunction } from '../../i18n';
 import { cn } from '../../lib/cn';
 import { formatMs } from '../../lib/format';
-import { livePhase } from './model';
+import { attemptFailed, livePhase } from './model';
 
 // ------------------------------------------------------------------ a shared 1 s clock (elapsed time on hover)
 
@@ -69,19 +69,58 @@ const offsetOf = (id: string) => {
   return (h % 1000) / 1000;
 };
 
+/** Rough width of a label in the 10.5 px capsule font (CJK characters are square). */
+const labelWidth = (text: string) => {
+  let w = 0;
+  for (const ch of text) w += /[⺀-￿]/.test(ch) ? 10.5 : 6.2;
+  return Math.ceil(w) + 14;
+};
+
+/** What a request carries to the model, as a capsule label: the user's prompt, or which tool results. */
+export function causeLabel(cause: RequestCause | null | undefined, t: TFunction): string | null {
+  if (!cause) return null;
+  if (cause.kind === 'user') return t('traces.cause.user');
+  const results = cause.toolResults;
+  if (results.length === 1 && results[0].name) return `${t('traces.cause.tool_result')} · ${results[0].name}`;
+  return results.length > 1 ? t('traces.cause.results', { count: results.length }) : t('traces.cause.tool_result');
+}
+
+/** What the model produces right now, as a capsule label and a colour. */
+function stageOf(stage: string | null | undefined, t: TFunction): { label: string | null; tone: 'think' | 'write' | 'tool' | 'back' } {
+  if (stage === 'thinking') return { label: t('traces.output.think'), tone: 'think' };
+  if (stage === 'writing') return { label: t('traces.output.text'), tone: 'write' };
+  if (stage?.startsWith('tool:')) return { label: stage.slice('tool:'.length) || t('traces.output.tool'), tone: 'tool' };
+  return { label: null, tone: 'back' };
+}
+
+/** A label riding a line: a rounded capsule centred on the moving point. */
+function Capsule({ text, tone }: { text: string; tone: string }) {
+  const w = labelWidth(text);
+  return (
+    <g className={cn('trace-cap', tone)}>
+      <rect x={-w / 2} y={-8.5} width={w} height={17} rx={8.5} />
+      <text y={3.6} textAnchor="middle">
+        {text}
+      </text>
+    </g>
+  );
+}
+
 export interface LiveDotProps {
   id: string;
   /** The edge's path, source → target. */
   path: string;
-  role: 'client' | 'provider';
+  /** client: agent → Astra; provider / account: Astra → the provider (the account row its current attempt is on). */
+  role: 'client' | 'provider' | 'account';
   /** The agent's end of a client line (its source) and the provider's end of a provider line (its target). */
   end: { x: number; y: number };
 }
 
 /**
- * One in-flight request on a topology line (.plan/observability.md §5), from the live request feed: going out while
- * it is routed and sent, coming back once the upstream answers, a burst where it ended. Hover for what it is waiting
- * on; click to open its trace.
+ * One in-flight request on a topology line (.plan/observability.md §5), from the live request feed: going out as a capsule
+ * that says what it carries (the user's prompt, tool results, a retry), coming back once the upstream answers as a stream
+ * coloured by what the model produces (thinking, text, a tool call and its name), a burst where it ended. Hover for what it
+ * is waiting on; click to open its trace.
  */
 export function LiveDot({ id, path, role, end }: LiveDotProps) {
   const r = useLiveRequest(id);
@@ -95,11 +134,12 @@ export function LiveDot({ id, path, role, end }: LiveDotProps) {
   const title = [r.requestedModel, stageText(r, t), r.httpStatus ? String(r.httpStatus) : null, formatMs(elapsed)]
     .filter(Boolean)
     .join(' · ');
+  const upstreamSide = role !== 'client';
 
   if (phase === 'done' || phase === 'failed') {
     // The request is over: a burst at the agent — or at the provider, when the upstream turned it down.
     const upstreamRefused = phase === 'failed' && (r.httpStatus ?? 0) >= 400;
-    if (role === 'provider' ? !upstreamRefused : upstreamRefused) return null;
+    if (upstreamSide ? !upstreamRefused : upstreamRefused) return null;
     return (
       <g className="trace-live" onClick={open}>
         <title>{title}</title>
@@ -107,25 +147,83 @@ export function LiveDot({ id, path, role, end }: LiveDotProps) {
       </g>
     );
   }
-  if (role === 'provider' && phase === 'arriving') return null;
+  if (upstreamSide && phase === 'arriving') return null;
   const back = phase === 'streaming';
   const slow = phase === 'upstream' && elapsed > SLOW_MS;
+  const attempts = r.attempts ?? [];
+  const retry = !back && attempts.length > 1;
   const dur = back ? 0.9 : 1.4;
+  // Already under way (a negative begin) so the dots of one line do not move in lockstep; a trailing dot starts `lag` later.
+  const motion = (lag = 0) => (
+    <animateMotion
+      dur={`${dur}s`}
+      repeatCount="indefinite"
+      path={path}
+      keyPoints={back ? '1;0' : '0;1'}
+      keyTimes="0;1"
+      calcMode="linear"
+      begin={`${(lag - offsetOf(id) * dur).toFixed(2)}s`}
+    />
+  );
+  if (back) {
+    // The answer streams back: a capsule naming what the model produces, two dots trailing it.
+    const stage = stageOf(r.stage, t);
+    return (
+      <g className="trace-live" onClick={open}>
+        <title>{title}</title>
+        {[0.16, 0.32].map((k) => (
+          <circle key={`${phase}${k}`} r={3} className={cn('trace-live-dot', 'stage-' + stage.tone)}>
+            {motion(k)}
+          </circle>
+        ))}
+        <g key={`${phase}${stage.tone}`}>
+          {stage.label ? <Capsule text={stage.label} tone={'stage-' + stage.tone} /> : <circle r={4.5} className={cn('trace-live-dot', 'stage-' + stage.tone)} />}
+          {motion()}
+        </g>
+      </g>
+    );
+  }
+  const cause = causeLabel(r.cause, t);
+  const text = retry ? `${t('traces.cause.retry')}${cause ? ` · ${cause}` : ''}` : cause;
+  const tone = retry ? 'retry' : slow ? 'slow' : r.cause?.kind === 'tool_result' ? 'result' : 'out';
   return (
     <g className="trace-live" onClick={open}>
       <title>{title}</title>
       {/* keyed by phase: a new motion element when the direction changes */}
-      <circle key={phase} r={4.5} className={cn('trace-live-dot', back ? 'back' : 'out', slow && 'slow')}>
-        <animateMotion
-          dur={`${dur}s`}
-          repeatCount="indefinite"
-          path={path}
-          keyPoints={back ? '1;0' : '0;1'}
-          keyTimes="0;1"
-          calcMode="linear"
-          begin={`-${(offsetOf(id) * dur).toFixed(2)}s`}
-        />
-      </circle>
+      <g key={`${phase}${attempts.length}`}>
+        {text ? <Capsule text={text} tone={tone} /> : <circle r={4.5} className={cn('trace-live-dot', tone)} />}
+        {motion()}
+      </g>
+    </g>
+  );
+}
+
+/**
+ * An attempt the upstream just refused on this line: a red capsule with its status runs back from the account to the hub,
+ * once, and the row bursts — the next attempt then leaves on its own line.
+ */
+export function FailedDot({ id, path, end }: { id: string; path: string; end: { x: number; y: number } }) {
+  const r = useLiveRequest(id);
+  const { t } = useI18n();
+  const ref = useRef<SVGAnimateMotionElement>(null);
+  // begin="indefinite" + beginElement: the run starts when the failure shows up, not at the document's start
+  useLayoutEffect(() => {
+    try {
+      ref.current?.beginElement?.();
+    } catch {
+      // an environment without SMIL: the capsule just sits at the hub end
+    }
+  }, []);
+  const failed = [...(r?.attempts ?? [])].reverse().find(attemptFailed);
+  if (!r || !failed) return null;
+  const text = failed.status ? String(failed.status) : t('traces.cause.failed');
+  return (
+    <g className="trace-live">
+      <circle cx={end.x} cy={end.y} r={5} className="trace-burst failed" />
+      <g className="trace-fail-run">
+        <Capsule text={text} tone="fail" />
+        <animateMotion ref={ref} begin="indefinite" dur="0.9s" fill="freeze" path={path} keyPoints="1;0" keyTimes="0;1" calcMode="linear" />
+      </g>
     </g>
   );
 }

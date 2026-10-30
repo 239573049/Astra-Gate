@@ -16,7 +16,8 @@ namespace Astra.Desktop.Pages.Traces;
 /// views (a new top-level page); opening a session or a request from a view pushes it, so the back button returns to the list.
 /// <para>
 /// The page owns the live request feed (web <c>useLiveRequestFeed(true)</c> of the topology and session views): it runs while one of those
-/// views is shown and the window is visible; a persisted request refetches the open session and that request's trace (coalesced, 250 ms).
+/// views is shown and the window is visible; a persisted request refetches the open session, the topology's activity feed and that request's
+/// trace (coalesced, 250 ms).
 /// </para>
 /// </summary>
 public sealed class TracesPageViewModel : PageViewModel
@@ -161,6 +162,8 @@ public sealed class TracesPageViewModel : PageViewModel
         _refetchTimer = null;
         _ctx.Queries.Invalidate("requests");
         _ctx.Queries.Invalidate("traces", "session");
+        // the topology's activity feed: the stored row (with its tool calls) takes over from the live one
+        _ctx.Queries.Invalidate("traces", "activity");
         foreach (var id in _persisted)
         {
             _ctx.Queries.Invalidate("request", id);
