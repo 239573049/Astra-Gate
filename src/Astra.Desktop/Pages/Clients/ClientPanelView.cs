@@ -27,7 +27,9 @@ namespace Astra.Desktop.Pages.Clients;
 /// account pin, the token, Claude Desktop's role map or the default model (Claude Code: plus its tiers), the descriptor-driven options,
 /// per-model protocols, the version group, Claude Code's direct panel and the maintenance rows.
 /// <para>
-/// The panel is redrawn from its queries and the selected client's <see cref="ClientDraft"/> (which keeps unsaved choices across redraws).
+/// The panel is redrawn from its queries and the selected client's <see cref="ClientDraft"/> (which keeps unsaved choices across redraws);
+/// a query's answer redraws it only when what the panel read from it changed (<see cref="QueryWatch"/>), so polls while an install runs
+/// leave it alone (issue #16).
 /// A pick in a select only updates the draft and schedules one redraw (so the apply buttons appear); typing in an option's number field
 /// updates the draft and the apply button in place, never redrawing under the caret.
 /// </para>
@@ -131,7 +133,8 @@ public sealed class ClientPanelView : UserControl
         var bound = enabledProviders.FirstOrDefault(p => p.Id == client.ProviderId);
         var accountBinding = ClientsLogic.IsAccountBinding(bound);
         var models = client.ProviderId is not null ? _watch.Use(_vm.Api.Models(client.Kind)) : null;
-        var direct = draft.IsClaudeCode ? _watch.Use(_vm.Api.ClaudeDirect()) : null;
+        // Only the mode matters here (the direct panel draws the rest itself and redraws on its own).
+        var direct = draft.IsClaudeCode ? _watch.Use(_vm.Api.ClaudeDirect(), d => d?.Mode) : null;
         var isDirect = draft.IsClaudeCode && direct?.Data?.Mode == "direct";
         // Claude Desktop without a role map: the role rows below show a suggestion from the providers' models.
         draft.SuggestRoles(models?.Data);
@@ -566,7 +569,8 @@ public sealed class ClientPanelView : UserControl
 
     private void AddVersionGroup(ClientInfoDto client, ClientInstallDto inst)
     {
-        var job = _watch.Use(_vm.Api.InstallJob(client.Kind));
+        // The log row shows the command and the state: the output a running job adds every poll redraws nothing here (issue #16).
+        var job = _watch.Use(_vm.Api.InstallJob(client.Kind), j => (j?.Command, j?.State));
         var shadowing = InstallLogic.Shadowing(inst);
         if (shadowing is not null)
         {

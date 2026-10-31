@@ -205,6 +205,7 @@ public static class ClientSheets
     /// Runs an install / update / uninstall after showing the exact command, then follows its output (polled). <see cref="InstallSheetMode.Log"/>
     /// only shows the current or last run. Closing the sheet does not stop a run; "Stop" does. Confirming an uninstall of a client Astra has
     /// taken over says its original config is restored first (the server does it through the disable path before the command runs).
+    /// A poll that only adds output updates the log's text in place; the sheet is drawn again only when what else it shows changed.
     /// </summary>
     public static Sheet ShowInstall(Visual owner, ClientSheetContext ctx, ClientInfoDto client, InstallSheetMode mode)
     {
@@ -217,6 +218,9 @@ public static class ClientSheets
         var body = new ContentControl();
         var sheet = new Sheet { SheetWidth = 620, Content = body };
         ScrollViewer? log = null;
+        SelectableTextBlock? logText = null;
+        object? drawn = null;
+        var posted = false;
 
         async Task Run(string action, bool elevated)
         {
@@ -266,6 +270,20 @@ public static class ClientSheets
             var needsAdmin = inst?.NeedsAdmin == true;
             var canElevate = inst?.AdminAvailable == true;
             var retry = InstallLogic.RetryAsAdmin(job, inst);
+
+            // A running job's poll usually only adds output: update the log's text and follow it (issue #16 — drawing the sheet again
+            // replaced the log box, which showed its top for a frame before scrolling back to the end, and rebuilt the footer).
+            var shape = (confirming, job?.Action, job?.State, job?.Hint, job?.Elevated, retry, starting, cancelling, query.HasData, query.IsError);
+            if (job is not null && !confirming && logText is not null && shape.Equals(drawn))
+            {
+                var text = string.Join("\n", job.Log);
+                if (logText.Text == text) return;
+                logText.Text = text;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => log?.ScrollToEnd(), Avalonia.Threading.DispatcherPriority.Background);
+                return;
+            }
+            drawn = shape;
+            logText = null;
 
             sheet.Title = Loc.T(InstallLogic.TitleKey(mode, job), ("name", name));
             var uninstalling = mode == InstallSheetMode.Uninstall;
@@ -347,6 +365,7 @@ public static class ClientSheets
                 stack.Children.Add(ClientUi.Alert(tone, Loc.T(InstallLogic.StatusTitleKey(job)), InstallLogic.StatusBody(job, retry, (k, a) => Loc.T(k, a))));
                 var box = ClientUi.CodeBox(string.Join("\n", job.Log), 11, maxHeight: 340, minHeight: 160, relaxed: true);
                 log = box.Child as ScrollViewer;
+                logText = log?.Content as SelectableTextBlock;
                 stack.Children.Add(box);
                 if (job.Hint == "permission-denied" && Fix() is { } fix) stack.Children.Add(fix);
                 // Follow the output (web: scroll the log to its end whenever it grows).
@@ -357,7 +376,17 @@ public static class ClientSheets
             body.Content = stack;
         }
 
-        void OnChanged(object? s, PropertyChangedEventArgs e) => Avalonia.Threading.Dispatcher.UIThread.Post(Render);
+        // One draw per answer: a fetch reports several properties (IsFetching, Data, DataUpdatedAt…) and only these change what is shown.
+        void OnChanged(object? s, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName is not ("Data" or "Status" or "Error") || posted) return;
+            posted = true;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                posted = false;
+                Render();
+            });
+        }
         query.PropertyChanged += OnChanged;
         var token = query.Activate();
         Render();

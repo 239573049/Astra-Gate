@@ -10,6 +10,9 @@ namespace Astra.Desktop.Core.Clients;
 /// and every write invalidates what the web's <c>useClientMutation</c> does (clients, providers, provider, client-models + its own keys).
 /// The typed list lives under <c>['clients','page']</c> (prefix <c>clients</c>, so every clients invalidation reaches it) because it needs
 /// its own refetch interval (2 s while an install runs); the shared <c>ClientsStore</c> query stays raw JSON.
+/// The queries the Clients page redraws from keep an answer equal to the one they hold (<see cref="QueryOptions{T}.SameData"/>, the web's
+/// structural sharing): the list and the job poll while an install runs, and Claude Code's direct state refetches whenever its panel is
+/// shown again, so without it every poll rebuilt the whole panel (issue #16: the panel jumped every second or two during an update).
 /// </summary>
 public sealed class ClientsApi(ApiClient api, QueryClient queries)
 {
@@ -19,12 +22,16 @@ public sealed class ClientsApi(ApiClient api, QueryClient queries)
     /// <summary>The client list; polls every 2 s while an install / update runs (web <c>useClients</c>).</summary>
     public Query<List<ClientInfoDto>> Clients()
         => queries.Query(ListKey, async ct => await api.GetAsync<List<ClientInfoDto>>("/api/clients", ct) ?? [],
-            new QueryOptions<List<ClientInfoDto>> { RefetchInterval = list => list?.Any(c => c.Install?.Busy == true) == true ? TimeSpan.FromSeconds(2) : null });
+            new QueryOptions<List<ClientInfoDto>>
+            {
+                RefetchInterval = list => list?.Any(c => c.Install?.Busy == true) == true ? TimeSpan.FromSeconds(2) : null,
+                SameData = QueryData.JsonEqual,
+            });
 
     /// <summary>The models the client's bound providers serve (web <c>useClientModels</c>; no retry).</summary>
     public Query<List<string>> Models(string kind)
         => queries.Query(new QueryKey("client-models", kind), async ct => await api.GetAsync<List<string>>($"/api/clients/{ApiClient.Enc(kind)}/models", ct) ?? [],
-            new QueryOptions<List<string>> { Retries = 0 });
+            new QueryOptions<List<string>> { Retries = 0, SameData = QueryData.JsonEqual });
 
     /// <summary>The client's config backups (web <c>useBackups</c>).</summary>
     public Query<List<ClientBackupDto>> Backups(string kind)
@@ -34,12 +41,15 @@ public sealed class ClientsApi(ApiClient api, QueryClient queries)
     public Query<ClientInstallJobDto?> InstallJob(string kind)
         => queries.Query<ClientInstallJobDto?>(new QueryKey("client-install-job", kind),
             async ct => await api.GetAsync<ClientInstallJobDto>($"/api/clients/{ApiClient.Enc(kind)}/install", ct),
-            new QueryOptions<ClientInstallJobDto?> { Retries = 0, RefetchInterval = job => job?.State == "running" ? TimeSpan.FromMilliseconds(800) : null });
+            new QueryOptions<ClientInstallJobDto?>
+            {
+                Retries = 0, RefetchInterval = job => job?.State == "running" ? TimeSpan.FromMilliseconds(800) : null, SameData = QueryData.JsonEqual,
+            });
 
     /// <summary>The launcher's direct-connection state (web <c>useClaudeDirect</c>; loopback only, no retry).</summary>
     public Query<ClaudeDirectStateDto> ClaudeDirect()
         => queries.Query(new QueryKey("claude-direct"), async ct => await api.GetAsync<ClaudeDirectStateDto>(ClaudeDirectPath, ct) ?? throw new ApiException(0, "empty response"),
-            new QueryOptions<ClaudeDirectStateDto> { Retries = 0 });
+            new QueryOptions<ClaudeDirectStateDto> { Retries = 0, SameData = QueryData.JsonEqual });
 
     /// <summary>An account's reported requests; polls every 5 s while <paramref name="live"/> (web <c>useClaudeDirectRequests</c>).</summary>
     public Query<List<ClaudeDirectRequestDto>> ClaudeDirectRequests(string accountId, bool live)

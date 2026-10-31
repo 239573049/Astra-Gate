@@ -1,5 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
+using Astra.Core;
 
 namespace Astra.Desktop.Core.Api;
 
@@ -111,6 +113,30 @@ public sealed class QueryOptions<T>
     /// by an id whose answers are large — a request's detail or body — or the cache grows with every one ever opened.
     /// </summary>
     public TimeSpan? CacheTime { get; init; }
+
+    /// <summary>
+    /// react-query's structural sharing, opt-in: when this returns true for the held data and a new answer (a refetch, a poll or
+    /// <see cref="Query{T}.SetData"/>), the held instance is kept and <see cref="Query{T}.Data"/> is not raised, so a view that redraws
+    /// from it does nothing when a poll brings nothing new. <see cref="QueryData.JsonEqual{T}"/> compares API answers. Null (the
+    /// default) raises <c>Data</c> for every answer.
+    /// </summary>
+    public Func<T, T, bool>? SameData { get; init; }
+}
+
+/// <summary>Helpers for <see cref="QueryOptions{T}.SameData"/>.</summary>
+public static class QueryData
+{
+    /// <summary>
+    /// Deep equality of two API answers through the JSON they serialize to (their types are the ones <see cref="ApiClient"/> reads them
+    /// with, registered in <see cref="JsonContexts"/>); records alone compare their lists by reference, which every fetch replaces.
+    /// </summary>
+    public static bool JsonEqual<T>(T a, T b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        var info = JsonContexts.Info<T>(Json.Api);
+        return JsonSerializer.SerializeToUtf8Bytes(a, info).AsSpan().SequenceEqual(JsonSerializer.SerializeToUtf8Bytes(b, info));
+    }
 }
 
 /// <summary>Non-generic face of a cached query, so the <see cref="QueryClient"/> can invalidate by key.</summary>
@@ -148,7 +174,8 @@ public abstract class QueryBase : INotifyPropertyChanged
 /// token when hidden: polling runs only while at least one observer is active (react-query: mounted observers).
 /// </para>
 /// Differences from react-query: unobserved queries are only collected when they opt in (<see cref="QueryOptions{T}.CacheTime"/>), no
-/// window-focus / reconnect refetch (the shell can call <see cref="RefetchAsync"/>), no structural sharing of data, and
+/// window-focus / reconnect refetch (the shell can call <see cref="RefetchAsync"/>), structural sharing only where a query opts in
+/// (<see cref="QueryOptions{T}.SameData"/>; whole answers, not their parts), and
 /// <see cref="QueryClient.Query{T}"/> ignores the options of a second caller (first one wins).
 /// </summary>
 /// <typeparam name="T">The data type.</typeparam>
@@ -425,12 +452,14 @@ public sealed class Query<T> : QueryBase
     // Runs on the UI thread.
     private void ApplySuccess(T data, DateTimeOffset at)
     {
-        _data = data;
+        // Structural sharing (opt-in): an answer equal to the held data keeps the held instance and raises no Data.
+        var same = _hasData && _options.SameData is { } equal && equal(_data!, data);
+        if (!same) _data = data;
         _updatedAt = at;
         Set(ref _hasData, true, nameof(HasData), nameof(IsLoading));
         Set(ref _error, null, nameof(Error));
         Set(ref _status, QueryStatus.Success, nameof(Status), nameof(IsError));
-        Raise(nameof(Data));
+        if (!same) Raise(nameof(Data));
         Raise(nameof(DataUpdatedAt));
     }
 

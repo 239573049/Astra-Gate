@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using Astra.Api.Contracts;
 using Astra.Desktop.Core.Api;
 
 namespace Astra.Desktop.Tests.Api;
@@ -332,6 +333,44 @@ public class QueryTests
         time.Advance(TimeSpan.FromDays(1));
         Assert.Same(q, qc.Find<int>("providers"));
         Assert.True(q.HasData);
+    }
+
+    [Fact]
+    public void Same_data_keeps_the_held_instance_and_raises_no_data_change()
+    {
+        var time = new ManualTime();
+        using var qc = new QueryClient(null, time);
+        var answers = new Queue<List<int>>([[1, 2], [1, 2], [1, 2, 3]]);
+        var q = qc.Query<List<int>>("job", _ => Task.FromResult(answers.Dequeue()),
+            new QueryOptions<List<int>> { RefetchInterval = _ => TimeSpan.FromSeconds(1), SameData = (a, b) => a.SequenceEqual(b) });
+        var changed = new List<string?>();
+        ((INotifyPropertyChanged)q).PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+        using var obs = q.Activate();
+        var first = q.Data;
+        Assert.Equal(1, changed.Count(n => n == "Data"));
+
+        // A poll with the same answer: the held list stays, Data is not raised (only DataUpdatedAt).
+        changed.Clear();
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Same(first, q.Data);
+        Assert.DoesNotContain("Data", changed);
+        Assert.Contains("DataUpdatedAt", changed);
+
+        // Something new arrives: replaced and raised.
+        changed.Clear();
+        time.Advance(TimeSpan.FromSeconds(1));
+        Assert.Equal([1, 2, 3], q.Data);
+        Assert.Contains("Data", changed);
+    }
+
+    [Fact]
+    public void Json_equality_compares_api_answers_by_content()
+    {
+        ClaudeDirectStateDto State(string mode) => new(mode, null, [new ClaudeDirectAccountDto("a", "A", null, "Pro", "active", true, false)]);
+        Assert.True(QueryData.JsonEqual(State("gateway"), State("gateway")));
+        Assert.False(State("gateway").Equals(State("gateway"))); // a record compares its list by reference
+        Assert.False(QueryData.JsonEqual(State("gateway"), State("direct")));
+        Assert.False(QueryData.JsonEqual<ClaudeDirectStateDto?>(State("gateway"), null));
     }
 
     [Fact]
