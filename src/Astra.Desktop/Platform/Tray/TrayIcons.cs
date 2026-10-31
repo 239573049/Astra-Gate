@@ -66,11 +66,15 @@ internal sealed class AvaloniaTrayIcon : ITrayIcon
 {
     private readonly TrayIcon _icon;
 
-    public AvaloniaTrayIcon(Application app, Action<ScreenRect?> activate)
+    /// <param name="app">The application the icon belongs to.</param>
+    /// <param name="activate">A left click (Windows; most Linux desktops never deliver one).</param>
+    /// <param name="menuFailed">Windows: the right click's menu came up empty (<see cref="TrayMenuWatch"/>); shows something in its place.</param>
+    public AvaloniaTrayIcon(Application app, Action<ScreenRect?> activate, Action? menuFailed = null)
     {
         using var stream = new MemoryStream(TrayIconData.Color);
         _icon = new TrayIcon { Icon = new WindowIcon(new Bitmap(stream)), ToolTipText = "Astra", IsVisible = true };
         _icon.Clicked += (_, _) => activate(Anchor());
+        if (OperatingSystem.IsWindows() && menuFailed is not null) TrayMenuWatch.Install(menuFailed);
         TrayIcon.SetIcons(app, [_icon]);
     }
 
@@ -94,7 +98,8 @@ internal sealed class AvaloniaTrayIcon : ITrayIcon
         _icon.Dispose();
     }
 
-    private static NativeMenu Build(IReadOnlyList<TrayMenuItem> items, Action<TrayMenuAction> onSelect)
+    /// <summary>The menu as Avalonia's <see cref="NativeMenu"/>: on Windows Avalonia draws it itself (<see cref="TrayMenuWatch"/>).</summary>
+    internal static NativeMenu Build(IReadOnlyList<TrayMenuItem> items, Action<TrayMenuAction> onSelect)
     {
         var menu = new NativeMenu();
         foreach (var item in items)
@@ -115,6 +120,52 @@ internal sealed class AvaloniaTrayIcon : ITrayIcon
             menu.Items.Add(entry);
         }
         return menu;
+    }
+}
+
+/// <summary>
+/// Windows: Avalonia draws a tray icon's right-click menu itself, in a window of its own (Avalonia.Win32 <c>TrayIconImpl.TrayPopupRoot</c>, sized
+/// to a <see cref="MenuFlyoutPresenter"/> of the <see cref="NativeMenu"/>), so the menu shows only when Avalonia's menu controls have a theme.
+/// Arc has none for them; up to 0.13.1 the window measured 0 x 0 and a right click showed nothing, leaving no visible way to quit (issue #18).
+/// KitStyles themes them now (UiTests <c>TrayMenuWindowTests</c> checks it on Avalonia's own window). Should that window ever open without a
+/// size again, it is closed and the fallback runs in its place (the tray panel: Open and Quit, drawn by Arc's own controls).
+/// </summary>
+internal static class TrayMenuWatch
+{
+    /// <summary>The type of Avalonia's tray menu window: private to Avalonia.Win32, so matched by name (Avalonia is pinned exactly).</summary>
+    internal const string MenuWindowType = "Avalonia.Win32.TrayIconImpl+TrayPopupRoot";
+
+    private static Action? _fallback;
+
+    /// <summary>Watches every window Avalonia opens for its tray menu window; <paramref name="fallback"/> replaces an empty one. Idempotent.</summary>
+    public static void Install(Action fallback)
+    {
+        if (_fallback is null) Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) => OnOpening(window));
+        _fallback = fallback;
+    }
+
+    /// <summary>Whether <paramref name="window"/> is Avalonia's tray menu window.</summary>
+    internal static bool IsMenuWindow(Window window) => window.GetType().FullName == MenuWindowType;
+
+    /// <summary>Whether the window came up with something to show: it sizes to its menu, so an unlaid-out menu leaves it 0 x 0.</summary>
+    internal static bool HasContent(Window window) => window.ClientSize is { Width: >= 1, Height: >= 1 };
+
+    private static void OnOpening(Window window)
+    {
+        if (!IsMenuWindow(window)) return;
+        // Raised as Show begins; Opened follows once the window is laid out and on screen.
+        void Opened(object? sender, EventArgs e)
+        {
+            window.Opened -= Opened;
+            if (HasContent(window)) return;
+            // Not from inside Show.
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                window.Close();
+                _fallback?.Invoke();
+            });
+        }
+        window.Opened += Opened;
     }
 }
 

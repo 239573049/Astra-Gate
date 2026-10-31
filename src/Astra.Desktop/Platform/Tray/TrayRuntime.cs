@@ -177,7 +177,8 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
             mac.Create();
             _icon = mac;
         }
-        else _icon = new AvaloniaTrayIcon(_app, Activate);
+        // Windows: an empty right-click menu (issue #18) opens the panel instead, which has Open and Quit.
+        else _icon = new AvaloniaTrayIcon(_app, Activate, ShowPanel);
         _services.Host.TrayHost = Controller;
         _services.Host.ContextMenu = items => ContextMenus.ShowAsync(items, ActiveOwner());
 

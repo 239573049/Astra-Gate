@@ -10,6 +10,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Desktop page lifetime](desktop-page-lifetime.md) — pages subscribe to shared queries via Subscribe/OnDispose (2026-10-27 leak + Requests redraw storm); one Arc-held instance per page type is expected; polled queries a view rebuilds from use SameData + a QueryWatch select (issue #16)
 - [Desktop tray relaunch](desktop-tray-relaunch.md) — a shown window leaves GPU memory nothing frees; 15 s after a close the app restarts `--hidden` (~250 → ~50 MB, 2026-10-30), which builds no main window; what the ~50 MB floor is; guards and hand-over rules
 - [Avalonia DispatcherTimer starts itself](avalonia-dispatchertimer-autostart.md) — the (interval, priority, callback) constructor runs the timer at once; it made tray-only processes restart in a loop
+- [Windows tray menu is an Avalonia window](avalonia-win32-tray-menu-window.md) — TrayPopupRoot sized to a MenuFlyoutPresenter; without menu themes it was 0 x 0 (issue #18, fixed 0.13.2); TrayMenuWindowTests builds it headless
 - [Jint AOT fallback was rejected](jint-aot-fallback-rejected.md) — middleware stays in-process; the Bun middleware host was the failure plan, not a design
 - [Webhook formats were added](webhook-formats-added.md) — Feishu, DingTalk, WeCom, Slack and Discord renderers exist despite the "generic JSON only" design
 - [Plugin market has one upstream](market-upstream-single-source.md) — the community registry address is fixed, and a cache from the old one is never served
