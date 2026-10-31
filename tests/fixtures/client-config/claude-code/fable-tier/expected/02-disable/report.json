@@ -1,0 +1,48 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_BASE_URL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_MODEL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_DEFAULT_FABLE_MODEL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_DEFAULT_OPUS_MODEL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_DEFAULT_SONNET_MODEL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

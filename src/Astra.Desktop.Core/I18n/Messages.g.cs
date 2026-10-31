@@ -456,6 +456,7 @@ internal static class Messages
         "clients.optionChoice.medium",
         "clients.optionChoice.high",
         "clients.modelSlot.ANTHROPIC_MODEL",
+        "clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_SONNET_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_HAIKU_MODEL",
@@ -2952,6 +2953,7 @@ internal static class Messages
             case "clients.optionChoice.medium": return "中";
             case "clients.optionChoice.high": return "高";
             case "clients.modelSlot.ANTHROPIC_MODEL": return "默认模型";
+            case "clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL": return "Fable 档位";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL": return "Opus 档位";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_SONNET_MODEL": return "Sonnet 档位";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_HAIKU_MODEL": return "Haiku 档位（快速/后台）";
@@ -5450,6 +5452,7 @@ internal static class Messages
             case "clients.optionChoice.medium": return "Medium";
             case "clients.optionChoice.high": return "High";
             case "clients.modelSlot.ANTHROPIC_MODEL": return "Default model";
+            case "clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL": return "Fable tier";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL": return "Opus tier";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_SONNET_MODEL": return "Sonnet tier";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_HAIKU_MODEL": return "Haiku tier (fast/background)";

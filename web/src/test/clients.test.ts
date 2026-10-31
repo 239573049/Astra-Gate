@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { modelSlotsOf } from '../lib/modelSlots';
+import { modelSlotsKey, modelSlotsOf } from '../lib/modelSlots';
 import { rolesOf, suggestRoles } from '../lib/roleMap';
 
 describe('rolesOf (Claude Desktop role map)', () => {
@@ -51,6 +51,11 @@ describe('modelSlotsOf (Claude Code model slots)', () => {
       ANTHROPIC_MODEL: 'glm-4.6',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.5-air',
     });
+  });
+
+  it('knows the Fable tier', () => {
+    expect(modelSlotsOf({ models: { ANTHROPIC_DEFAULT_FABLE_MODEL: ' gpt-6-astra ' } })).toEqual({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra' });
+    expect(modelSlotsKey({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra' })).toBe('\ngpt-6-astra\n\n\n');
   });
 
   it('tolerates missing or malformed extras', () => {

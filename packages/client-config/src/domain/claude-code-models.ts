@@ -3,9 +3,10 @@ import type { JsonObject } from '../contracts.js';
 /** Claude Code's model selection slots (Astra.Core ClaudeCodeModels). */
 export const CLAUDE_CODE_MODELS_KEY = 'models';
 
-/** Slot env var names, in UI order: the default model, then the opus / sonnet / haiku tiers. */
+/** Slot env var names, in UI order: the default model, then the fable / opus / sonnet / haiku tiers. */
 export const CLAUDE_CODE_SLOTS: readonly string[] = [
   'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
   'ANTHROPIC_DEFAULT_SONNET_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
@@ -28,7 +29,7 @@ export const ONE_MILLION_SUFFIX = '[1m]';
 
 /**
  * The model with the `[1m]` suffix; unchanged when it already has it. The Haiku tier never gets it — Haiku has
- * no 1M variant.
+ * no 1M variant; the Fable tier gets it like Opus and Sonnet.
  */
 export const claudeCodeWith1M = (slot: string, model: string): string =>
   slot === 'ANTHROPIC_DEFAULT_HAIKU_MODEL' || model.toLowerCase().endsWith(ONE_MILLION_SUFFIX)

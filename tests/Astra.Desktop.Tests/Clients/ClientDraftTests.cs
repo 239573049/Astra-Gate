@@ -75,7 +75,7 @@ public sealed class ClientExtrasTests
         var extras = JsonNode.Parse("""{"models":{"ANTHROPIC_MODEL":" a ","ANTHROPIC_DEFAULT_HAIKU_MODEL":"","X":"y"},"roleMap":{"opus":"o","sonnet":" "}}""")!.AsObject();
         var slots = ClientExtras.SlotsOf(extras);
         Assert.Equal(new Dictionary<string, string> { ["ANTHROPIC_MODEL"] = "a" }, slots);
-        Assert.Equal("a\n\n\n", ClientExtras.SlotsKey(slots));
+        Assert.Equal("a\n\n\n\n", ClientExtras.SlotsKey(slots));
         var roles = ClientExtras.RolesOf(extras);
         Assert.Equal(new Dictionary<string, string> { ["opus"] = "o" }, roles);
         Assert.Equal("\no\n", ClientExtras.RoleKey(roles));
@@ -147,8 +147,7 @@ public sealed class ClientDraftTests
     public void Claude_code_sends_tiers_and_options()
     {
         var draft = new ClientDraft(Client("claude-code", o => o["extras"] = new JsonObject { ["models"] = new JsonObject { ["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "o" } }));
-        Assert.Equal(3, draft.TierSlots.Count);
-        Assert.DoesNotContain("ANTHROPIC_MODEL", draft.TierSlots);
+        Assert.Equal(["ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"], draft.TierSlots);
         draft.Slots = new Dictionary<string, string> { ["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "o2" };
         Assert.True(draft.ModelsChanged);
         Assert.Equal("""{"models":{"ANTHROPIC_DEFAULT_OPUS_MODEL":"o2"},"options":{}}""", draft.Extras()!.ToJsonString());

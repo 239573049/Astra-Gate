@@ -1,5 +1,11 @@
 /** Claude Code model slots the console writes into ~/.claude/settings.json (plan §7.3). */
-export const CLAUDE_CODE_MODELS = ['ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL'] as const;
+export const CLAUDE_CODE_MODELS = [
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+] as const;
 export type ClaudeCodeModel = (typeof CLAUDE_CODE_MODELS)[number];
 export type ModelSlots = Partial<Record<ClaudeCodeModel, string>>;
 

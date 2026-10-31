@@ -235,6 +235,7 @@ public sealed partial class ClientsKeysTests
     [InlineData("clients.option.context1m.hint")]
     [InlineData("clients.optionChoice.default")]
     [InlineData("clients.role.sonnet")]
+    [InlineData("clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL")]
     [InlineData("clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL")]
     [InlineData("clients.job.running")]
     [InlineData("clients.method.npm")]

@@ -12,9 +12,12 @@ public static class ClaudeCodeModels
 {
     public const string ExtrasKey = "models";
 
-    /// <summary>Slot env var names, in UI order: the default model, then the opus / sonnet / haiku tiers.</summary>
+    /// <summary>Slot env var names, in UI order: the default model, then the fable / opus / sonnet / haiku tiers.</summary>
     public static readonly IReadOnlyList<string> Slots =
-        ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"];
+    [
+        "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    ];
 
     /// <summary>The non-empty slot → model entries of an extras object, in <see cref="Slots"/> order.</summary>
     public static IReadOnlyList<KeyValuePair<string, string>> Parse(JsonObject? extras)
@@ -34,7 +37,7 @@ public static class ClaudeCodeModels
 
     /// <summary>
     /// The model with the <c>[1m]</c> suffix (Claude Code then sends the 1M-context beta header itself); unchanged when it
-    /// already has it. The Haiku tier never gets it — Haiku has no 1M variant.
+    /// already has it. The Haiku tier never gets it — Haiku has no 1M variant; the Fable tier gets it like Opus and Sonnet.
     /// </summary>
     public static string With1M(string slot, string model) =>
         slot == "ANTHROPIC_DEFAULT_HAIKU_MODEL" || model.EndsWith(OneMillionSuffix, StringComparison.OrdinalIgnoreCase)

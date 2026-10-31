@@ -1,0 +1,30 @@
+{
+  "client": "claude-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": {
+    "models": {
+      "ANTHROPIC_MODEL": "gpt-6.1-terra",
+      "ANTHROPIC_DEFAULT_FABLE_MODEL": "gpt-6-astra",
+      "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-6.1-sol",
+      "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.6",
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-6-luna"
+    },
+    "options": {
+      "context1m": true
+    }
+  },
+  "modelsWithoutContext1M": [
+    "glm-4.6"
+  ],
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

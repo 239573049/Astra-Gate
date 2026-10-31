@@ -14,7 +14,7 @@ description: 一键接管 Codex / Claude Code / Gemini CLI 等本机客户端
 - **状态行** — 「已启用」徽标 + 已写入的配置文件路径；右侧 **禁用并还原**；下方是最近一次写入配置的时间；
 - **使用的提供商** — 可添加多个并拖动排序，修改后**立即生效**，不需要修改客户端配置文件。还没选过提供商的客户端默认使用列表里第一个可用的提供商，不用先手动添加就能直接启用；之后增删或调整顺序时，这个默认值会随列表一起保存；
 - **令牌** — 写入客户端配置的[令牌](/docs/console/tokens)，默认是「默认令牌」，多个客户端可以共用一个；
-- **模型** — 启用时写入客户端配置的默认模型。Claude Code 还提供 Opus / Sonnet / Haiku 三档选择，对应 `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`（Haiku 档兼作快速/后台模型）。所有模型选项默认留空，留空就不写入，配置文件里已有的同名设置也不会被改动；修改后需要重新写入客户端配置；
+- **模型** — 启用时写入客户端配置的默认模型。Claude Code 还提供 Fable / Opus / Sonnet / Haiku 四档选择，对应 `ANTHROPIC_DEFAULT_FABLE_MODEL` / `ANTHROPIC_DEFAULT_OPUS_MODEL` / `ANTHROPIC_DEFAULT_SONNET_MODEL` / `ANTHROPIC_DEFAULT_HAIKU_MODEL`（Haiku 档兼作快速/后台模型）。所有模型选项默认留空，留空就不写入，配置文件里已有的同名设置也不会被改动；修改后需要重新写入客户端配置；
 - **维护** — 复制配置文件路径、配置备份。
 
 支持的客户端：Codex、Claude Code、Gemini CLI、OpenCode、Claude Desktop、Grok Build、Pi、Hermes Agent、MiniMax Code、GitHub Copilot CLI、VS Code 中的 GitHub Copilot，以及 Crush、Qwen Code、Droid、Kimi Code、Zed、VS Code Insiders、VSCodium、omp（oh-my-pi）、MiMo Code、DeepSeek Harness、WorkBuddy、WorkBuddy AI、Muse Code、NextCoWork、Paseo、ZCode、TKCode。

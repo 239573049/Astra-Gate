@@ -1,0 +1,58 @@
+[
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_BASE_URL",
+    "kind": "key",
+    "before": null,
+    "after": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_MODEL",
+    "kind": "key",
+    "before": null,
+    "after": "\"gpt-6.1-terra[1m]\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_FABLE_MODEL",
+    "kind": "key",
+    "before": "\"gpt-6-astra-preview[1m]\"",
+    "after": "\"gpt-6-astra[1m]\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "kind": "key",
+    "before": "\"gpt-6.1-sol[1m]\"",
+    "after": "\"gpt-6.1-sol[1m]\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "kind": "key",
+    "before": null,
+    "after": "\"glm-4.6\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "kind": "key",
+    "before": null,
+    "after": "\"gpt-6-luna\""
+  }
+]

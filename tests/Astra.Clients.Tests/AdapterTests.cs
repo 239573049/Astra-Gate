@@ -58,6 +58,7 @@ public class ClaudeCodeClientAdapterTests : IDisposable
             documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
         var env = node["env"]!;
         Assert.Null(env["ANTHROPIC_MODEL"]);
+        Assert.Null(env["ANTHROPIC_DEFAULT_FABLE_MODEL"]);
         Assert.Null(env["ANTHROPIC_DEFAULT_OPUS_MODEL"]);
         Assert.Null(env["ANTHROPIC_DEFAULT_SONNET_MODEL"]);
         Assert.Null(env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]);
@@ -71,6 +72,35 @@ public class ClaudeCodeClientAdapterTests : IDisposable
         var node = JsonNode.Parse(_home.ReadFile(_settings), nodeOptions: new JsonNodeOptions(),
             documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!;
         Assert.Equal("glm-4.5-air", node["env"]!["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void Enable_FableTier_ReplacesAHandWrittenValue_DisableRestoresIt()
+    {
+        // Issue #13: users set ANTHROPIC_DEFAULT_FABLE_MODEL by hand; the Fable tier takes it over and gives it back.
+        var original = """
+            {
+              "env": {
+                "EDITOR": "vim",
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "gpt-6-astra[1m]"
+              }
+            }
+            """;
+        _home.WriteFile(_settings, original);
+        var originalBytes = _home.ReadFileBytes(_settings);
+
+        _applier.Apply(_adapter.PlanEnable(TestGateway.Context("astra-claude-x", null, new JsonObject
+        {
+            ["models"] = new JsonObject { ["ANTHROPIC_DEFAULT_FABLE_MODEL"] = "gpt-6.1-sol" },
+        })));
+        var env = JsonNode.Parse(_home.ReadFile(_settings))!["env"]!;
+        Assert.Equal("gpt-6.1-sol", env["ANTHROPIC_DEFAULT_FABLE_MODEL"]!.GetValue<string>());
+        Assert.Null(env["ANTHROPIC_DEFAULT_OPUS_MODEL"]);
+
+        var report = _applier.Disable(_adapter.PlanDisable());
+        Assert.False(report.HasDrift);
+        Assert.Equal(originalBytes, _home.ReadFileBytes(_settings));
+        Assert.Empty(_store.List("claude-code"));
     }
 
     [Fact]

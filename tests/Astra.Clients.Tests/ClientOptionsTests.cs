@@ -32,6 +32,7 @@ public class ClientOptionsTests : IDisposable
         var models = new JsonObject
         {
             ["ANTHROPIC_MODEL"] = "claude-sonnet-4-5",
+            ["ANTHROPIC_DEFAULT_FABLE_MODEL"] = "claude-fable-5",
             ["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "glm-small[1m]",
             ["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "claude-sonnet-4-5[1m]",
             ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-haiku-4-5",
@@ -47,6 +48,7 @@ public class ClientOptionsTests : IDisposable
 
         var env = ClaudeEnv();
         Assert.Equal("claude-sonnet-4-5[1m]", env["ANTHROPIC_MODEL"]!.GetValue<string>());
+        Assert.Equal("claude-fable-5[1m]", env["ANTHROPIC_DEFAULT_FABLE_MODEL"]!.GetValue<string>()); // like Opus, not Haiku
         Assert.Equal("glm-small[1m]", env["ANTHROPIC_DEFAULT_OPUS_MODEL"]!.GetValue<string>()); // untouched, not doubled
         Assert.Equal("claude-sonnet-4-5[1m]", env["ANTHROPIC_DEFAULT_SONNET_MODEL"]!.GetValue<string>()); // already has it
         Assert.Equal("claude-haiku-4-5", env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());

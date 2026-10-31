@@ -647,6 +647,37 @@ public class ClientApiTests
         Assert.Equal("vim", env["EDITOR"]!.GetValue<string>());
     }
 
+    /// <summary>The Fable tier (issue #13) is a slot like the others: it replaces a hand-written value, gets the 1M suffix
+    /// like Opus, and clearing it puts the user's own value back.</summary>
+    [Fact]
+    public async Task Claude_Code_Fable_Tier_Is_Written_And_Clearing_It_Restores_The_Users_Value()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        var settings = Path.Combine(host.ClientHome, ".claude", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
+        await File.WriteAllTextAsync(settings, """
+            {
+              "env": {
+                "ANTHROPIC_DEFAULT_FABLE_MODEL": "gpt-6-astra[1m]"
+              }
+            }
+            """);
+
+        var body = EnableBody(provider.Id, new JsonObject { ["ANTHROPIC_DEFAULT_FABLE_MODEL"] = "gpt-6.1-sol", ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "gpt-6-luna" });
+        body["extras"]!["options"] = new JsonObject { ["context1m"] = true };
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable", body);
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("gpt-6.1-sol[1m]", EnvOf(settings)["ANTHROPIC_DEFAULT_FABLE_MODEL"]!.GetValue<string>());
+        Assert.Equal("gpt-6-luna", EnvOf(settings)["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>()); // Haiku: no [1m]
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable",
+            EnableBody(null, new JsonObject { ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "gpt-6-luna" }));
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("gpt-6-astra[1m]", EnvOf(settings)["ANTHROPIC_DEFAULT_FABLE_MODEL"]!.GetValue<string>());
+        Assert.Equal("gpt-6-luna", EnvOf(settings)["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
+    }
+
     /// <summary>An enable body; the Claude Code model slots keep their exact env-var names, so they go in as JSON.</summary>
     private static JsonObject EnableBody(string? providerId, JsonObject models)
     {
