@@ -312,8 +312,9 @@ public sealed partial class PrivacyDetector
         : RuleHint.None;
 
     /// <summary>
-    /// JSON-aware processing: inspects string values except protocol-identified opaque media and
-    /// reasoning payloads. Text, URLs, tool arguments/results and unknown fields remain inspected.
+    /// JSON-aware processing: inspects string values except protocol-identified opaque media, reasoning
+    /// payloads and the ids the upstream pairs verbatim (tool calls, items, server-side state; see IsOpaque).
+    /// Text, URLs, tool arguments/results and unknown fields remain inspected.
     /// Leaves structure and non-string values untouched. Returns null when the input is not valid JSON
     /// (callers then fall back to plain-text <see cref="Apply"/>).
     /// </summary>
@@ -557,6 +558,7 @@ public sealed partial class PrivacyDetector
         "source", "image_url", "input_audio", "file", "inlineData", "inline_data", "data", "url", "file_data", "signature",
         "encrypted_content", "thoughtSignature", "thought_signature", "id", "tool_use_id", "tool_call_id", "call_id",
         "previous_response_id", "tool_calls", "functionCall", "functionResponse", "function_call", "function_response",
+        "approval_request_id", "conversation", "container", "cachedContent", "cached_content",
     ];
 
     private static readonly byte[][] KnownKeysUtf8 = KnownKeys.Select(Encoding.UTF8.GetBytes).ToArray();
@@ -590,6 +592,8 @@ public sealed partial class PrivacyDetector
         (JsonScope.Content, "tool_calls") when child.ValueKind == JsonValueKind.Array => JsonScope.Call,
         (JsonScope.Content, "functionCall" or "functionResponse" or "function_call" or "function_response")
             when child.ValueKind == JsonValueKind.Object => JsonScope.Call,
+        // Responses' {"conversation":{"id":…}} and Anthropic's {"container":{"id":…}}: like a call, only the id is opaque.
+        (JsonScope.Root, "conversation" or "container") when child.ValueKind == JsonValueKind.Object => JsonScope.Call,
         (JsonScope.Content, "output") when type == "function_call_output" && child.ValueKind == JsonValueKind.Array => JsonScope.ToolContent,
         (JsonScope.ToolContent, "source") when type is "image" or "document" => JsonScope.Source,
         (JsonScope.ToolContent, "image_url") when type is "image_url" or "input_image" => JsonScope.ImageUrl,
@@ -623,10 +627,15 @@ public sealed partial class PrivacyDetector
             (JsonScope.Content, "encrypted_content") => type == "reasoning",
             (JsonScope.Content, "thoughtSignature" or "thought_signature") => true,
             // Tool-call / item ids are pairing keys the upstream issued and checks verbatim: rewriting one (an 11-digit run
-            // read as a phone number) breaks every later turn of the conversation (issue #10). Arguments stay inspected.
-            (JsonScope.Content, "id" or "tool_use_id" or "tool_call_id" or "call_id") => true,
+            // read as a phone number, a custom long-token rule) breaks every later turn of the conversation (issue #10):
+            // Anthropic tool_use / server_tool_use / mcp_tool_use ids and every *_tool_result's tool_use_id, Chat
+            // tool_calls[].id and tool_call_id, Responses item ids (fc_/rs_/msg_…), call_id and approval_request_id, Gemini
+            // functionCall / functionResponse ids. Arguments, tool results and text stay inspected.
+            (JsonScope.Content, "id" or "tool_use_id" or "tool_call_id" or "call_id" or "approval_request_id") => true,
             (JsonScope.Call, "id") => true,
-            (JsonScope.Root, "previous_response_id") => true,
+            // Server-side state the request continues: Responses previous_response_id / conversation, Anthropic container,
+            // Gemini cachedContent.
+            (JsonScope.Root, "previous_response_id" or "conversation" or "container" or "cachedContent" or "cached_content") => true,
             _ => false,
         };
     }

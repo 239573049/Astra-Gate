@@ -1116,6 +1116,32 @@ public class GatewayPipelineTests
         Assert.Equal("key [REDACTED:aws_key#1]", seen.Json["messages"]![0]!["content"]![0]!["text"]!.GetValue<string>());
     }
 
+    // Issue #10: the upstream pairs tool_result.tool_use_id with the tool_use.id it issued, byte for byte. An id the phone
+    // rule would match anywhere else (a dash-bounded 11-digit run) must reach it unchanged, while the tool result is redacted.
+    [Fact]
+    public async Task Privacy_Never_Rewrites_The_Tool_Ids_The_Upstream_Pairs()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Anthropic, _ => FakeUpstream.Json(AnthropicMessage));
+        await EnablePrivacyAsync(gw, PrivacyActions.Redact);
+        const string id = "toolu-13812345678-a";
+        const string template = """{"model":"claude-x","max_tokens":8,"messages":[{"role":"user","content":"who owns it?"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu-13812345678-a","name":"lookup","input":{"q":"owner"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu-13812345678-a","content":"RESULT"}]}]}""";
+
+        // Nothing but the ids would match: the client's bytes go upstream as they are.
+        var clean = template.Replace("RESULT", "alice");
+        Assert.Equal(HttpStatusCode.OK, (await gw.PostAsync("/v1/messages", clean)).StatusCode);
+        Assert.Equal(clean, gw.Upstream.Requests[0].Body);
+
+        var response = await gw.PostAsync("/v1/messages", template.Replace("RESULT", "alice, 13912345678"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var seen = gw.Upstream.Requests[1];
+        Assert.DoesNotContain("13912345678", seen.Body);
+        Assert.Equal(id, seen.Json["messages"]![1]!["content"]![0]!["id"]!.GetValue<string>());
+        Assert.Equal(id, seen.Json["messages"]![2]!["content"]![0]!["tool_use_id"]!.GetValue<string>());
+        Assert.Equal("alice, [REDACTED:phone#1]", seen.Json["messages"]![2]!["content"]![0]!["content"]!.GetValue<string>());
+        var record = await gw.RecordOfAsync(response);
+        Assert.Contains("\"redactions\":1", record.PrivacyJson);
+    }
+
     private const string AnthropicMessage =
         """{"id":"m1","type":"message","role":"assistant","model":"claude-x","content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":5,"output_tokens":1}}""";
 }

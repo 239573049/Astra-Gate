@@ -38,7 +38,7 @@ that row is what the console's interception log, stats, request detail and the p
    `ClientDefaults[clientKind]` → `DefaultAction` (`astra-core`; cached in `astra-gateway`)
 6. `src/Astra.Core/Privacy/PrivacyDetector.cs:362` `ApplyJson(source, target, policy, rewrite)` → `:374`
    `Scan` → `JsonWalk` — walks the `JsonElement` without building `JsonNode`s: object properties are skipped
-   by `IsOpaque` (`:600`), array items inherit the scope, strings are unescaped into a reused `ArrayPool<char>`
+   by `IsOpaque` (`:610`), array items inherit the scope, strings are unescaped into a reused `ArrayPool<char>`
    buffer and first tested with the allocation-free `AnyRuleMatches` (`:220`) (`astra-core`)
 7. `src/Astra.Core/Privacy/PrivacyDetector.cs:23` `BuiltInRules` — 22 ordered rules in 10 categories
    (`PrivacyTypes.cs:15`): 11 API-key shapes, AWS, PEM private key, JWT, email, phone, intranet host,
@@ -46,7 +46,9 @@ that row is what the console's interception log, stats, request detail and the p
    email candidate) use `Linear` = `RegexOptions.NonBacktracking` (`:84`); the rest are `[GeneratedRegex]`
    with a `BuiltinTimeoutMs = 5000` budget (`:80`), and each has a vectorized `SearchValues` "hint"
    (`RuleHint`, `:248`, e.g. `IntranetHints`, `CredentialKeywords`) or the digit-run fast path
-   (`DigitRunMatches`, `:271`) so most text is rejected before a regex runs (`astra-core`).
+   (`DigitRunMatches`, `:271`) so most text is rejected before a regex runs (`astra-core`). The mainland-phone
+   branch wants no letter, digit or `_` on either side (`PhoneRegex`, `:783`), so an 11-digit run inside an id
+   (`call_01a13812345678cf…`) is not a phone number (issue #10).
    Commit `094860f` (0.7.0) is where this shape came from: every built-in was `Compile(pattern)`
    (a plain `Regex` with a 500 ms budget, `src/Astra.Core/Privacy/PrivacyDetector.cs` at `dbba043`) and
    redaction ran `rule.Regex.Replace(text, evaluator)` once per rule; it introduced `Linear`/`[GeneratedRegex]`,
@@ -62,11 +64,15 @@ that row is what the console's interception log, stats, request detail and the p
    `PrivacyRedaction { Placeholder, Original }` **in memory only** (`:200`). Masked samples (max 3/rule,
    `MaskSample`, `:690`) are attached to hits when `RecordSamples`; with `RecordFullSamples` (opt-in, off by default) the sample is the capped
    original (`FullSample`, 256 chars) instead of the mask (`astra-core`)
-10. `src/Astra.Core/Privacy/PrivacyDetector.cs:600` `IsOpaque` — the protocol slots that are never scanned:
+10. `src/Astra.Core/Privacy/PrivacyDetector.cs:610` `IsOpaque` — the protocol slots that are never scanned:
     base64 media under `source.data`/`inlineData.data`/`input_audio.data` + data-URL `image_url`/`file_data`
-    (decided from ≤ 512 bytes: `IsBinaryDataUrl`, `:639`), Anthropic `thinking.signature`,
-    `redacted_thinking.data`, `reasoning.encrypted_content`, and any `thoughtSignature`; arbitrary tool JSON
-    keeps being scanned (`ChildScope`, `:582`) (`astra-core`)
+    (decided from ≤ 512 bytes: `IsBinaryDataUrl`, `:659`), Anthropic `thinking.signature`,
+    `redacted_thinking.data`, `reasoning.encrypted_content`, any `thoughtSignature`, and the ids the upstream
+    pairs verbatim (issue #10: a rewritten one fails every later turn) — in message / content-block scope any
+    `id`, `tool_use_id`, `tool_call_id`, `call_id`, `approval_request_id`; `id` of Chat `tool_calls[]` and Gemini
+    `functionCall`/`functionResponse` (`JsonScope.Call`); top-level `previous_response_id`, `conversation`,
+    `container` (string or `{id}`) and `cachedContent`. Arbitrary tool JSON (arguments, `input`, tool results)
+    keeps being scanned (`ChildScope`, `:587`) (`astra-core`)
 11. `src/Astra.Gateway/Pipeline/PrivacyGuardService.cs:170` — dry run ⇒ original body kept; `applied.Blocked`
     ⇒ `Blocked = true`; otherwise `:174` builds `RestoreMap = placeholder → original` when
     `policy.Restore && settings.RestoreResponses`, and `Rewritten` says the tree was changed. Nothing

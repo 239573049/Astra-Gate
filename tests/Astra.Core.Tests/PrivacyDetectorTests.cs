@@ -168,12 +168,63 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         foreach (System.Text.RegularExpressions.Match id in ids) Assert.Contains(id.Value, result.Text);
     }
 
+    // Every pairing id / server-state slot of the four protocols, each holding ID: a value both the built-in phone rule
+    // (a dash-bounded 11-digit run) and the console's long-token template would rewrite anywhere else. TEXT is message
+    // text, tool arguments or a tool result.
+    private const string PairingId = "call-13812345678-a1b2c3d4e5f6a1b2c3d4e5f6";
+
+    [Theory]
+    // Anthropic Messages: tool_use / server_tool_use / mcp_tool_use ids, *_tool_result tool_use_id, container.
+    [InlineData("""{"container":"ID","messages":[{"role":"user","content":"TEXT"},{"role":"assistant","content":[{"type":"tool_use","id":"ID","name":"t","input":{"q":"TEXT"}},{"type":"server_tool_use","id":"ID","name":"web_search","input":{"query":"TEXT"}},{"type":"web_search_tool_result","tool_use_id":"ID","content":[]},{"type":"mcp_tool_use","id":"ID","name":"m","server_name":"s","input":{}},{"type":"mcp_tool_result","tool_use_id":"ID","content":[{"type":"text","text":"TEXT"}]}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"ID","content":"TEXT"},{"type":"tool_result","tool_use_id":"ID","content":[{"type":"text","text":"TEXT"}]}]}]}""")]
+    [InlineData("""{"container":{"id":"ID"},"messages":[{"role":"user","content":"TEXT"}]}""")]
+    // OpenAI Chat: tool_calls[].id, tool_call_id.
+    [InlineData("""{"messages":[{"role":"user","content":"TEXT"},{"role":"assistant","content":null,"tool_calls":[{"id":"ID","type":"function","function":{"name":"t","arguments":"TEXT"}}]},{"role":"tool","tool_call_id":"ID","content":"TEXT"}]}""")]
+    // OpenAI Responses: previous_response_id, conversation, item ids, call_id, approval_request_id.
+    [InlineData("""{"previous_response_id":"ID","conversation":"ID","input":[{"type":"message","id":"ID","role":"user","content":[{"type":"input_text","text":"TEXT"}]},{"type":"reasoning","id":"ID","summary":[]},{"type":"function_call","id":"ID","call_id":"ID","name":"t","arguments":"TEXT"},{"type":"function_call_output","call_id":"ID","output":"TEXT"},{"type":"function_call_output","call_id":"ID","output":[{"type":"input_text","text":"TEXT"}]},{"type":"custom_tool_call","id":"ID","call_id":"ID","name":"c","input":"TEXT"},{"type":"custom_tool_call_output","call_id":"ID","output":"TEXT"},{"type":"item_reference","id":"ID"},{"type":"mcp_approval_response","approval_request_id":"ID","approve":true}]}""")]
+    [InlineData("""{"conversation":{"id":"ID"},"input":"TEXT"}""")]
+    // Gemini: functionCall / functionResponse ids, cachedContent.
+    [InlineData("""{"cachedContent":"ID","contents":[{"role":"user","parts":[{"text":"TEXT"}]},{"role":"model","parts":[{"functionCall":{"id":"ID","name":"t","args":{"q":"TEXT"}}}]},{"role":"user","parts":[{"functionResponse":{"id":"ID","name":"t","response":{"r":"TEXT"}}}]}]}""")]
+    [InlineData("""{"contents":[{"parts":[{"function_call":{"id":"ID","name":"t","args":{"q":"TEXT"}}},{"function_response":{"id":"ID","name":"t","response":{"r":"TEXT"}}}]}]}""")]
+    public void Pairing_Ids_Are_Never_Rewritten_While_The_Content_Around_Them_Is(string template)
+    {
+        var policy = Policy(custom:
+            [new() { Id = "custom.long-token", Pattern = """(?<![A-Za-z0-9])[A-Za-z0-9_\-]{32,}(?![A-Za-z0-9])""" }]);
+        // Anywhere else, both rules would rewrite the id.
+        var outside = _detector.Scan(PairingId, policy);
+        Assert.Contains(outside, h => h.RuleId == "builtin.phone");
+        Assert.Contains(outside, h => h.RuleId == "custom.long-token");
+        var ids = template.Split("\"ID\"").Length - 1;
+
+        // Only ids and clean text: nothing hits, and the body comes back as the very same string.
+        var clean = template.Replace("ID", PairingId).Replace("TEXT", "ok");
+        var untouched = _detector.ApplyJson(clean, policy)!;
+        Assert.Empty(untouched.Hits);
+        Assert.Same(clean, untouched.Text);
+
+        // A phone number in the text, arguments and tool results is still redacted; every id survives verbatim.
+        var withPhone = template.Replace("ID", PairingId).Replace("TEXT", "call 13912345678 now");
+        var redacted = _detector.ApplyJson(withPhone, policy)!;
+        var texts = template.Split("TEXT").Length - 1;
+        Assert.Equal(texts, redacted.Redactions.Count);
+        Assert.All(redacted.Redactions, r => Assert.Equal("13912345678", r.Original));
+        Assert.DoesNotContain("13912345678", redacted.Text);
+        Assert.Equal(ids, redacted.Text.Split($"\"{PairingId}\"").Length - 1);
+        Assert.Equal(texts, redacted.Text.Split("call [REDACTED:phone#").Length - 1);
+    }
+
     [Theory]
     [InlineData("call_01a16801111717cf820d7a0a", false)]
+    [InlineData("call_01a13812345678cf820d7a0a", false)]
     [InlineData("ref13800138000", false)]
+    [InlineData("abc13812345678", false)]
+    [InlineData("_13812345678", false)]
     [InlineData("13800138000x", false)]
+    [InlineData("13812345678_", false)]
+    [InlineData("13812345678", true)]
+    [InlineData(" 13812345678", true)]
     [InlineData("电话13800138000", true)]
     [InlineData("phone: 13800138000.", true)]
+    [InlineData("(13812345678)", true)]
     public void Phone_Rule_Ignores_Digit_Runs_Inside_Identifiers(string text, bool redacted)
     {
         var policy = Policy(defaultAction: PrivacyActions.Off,
