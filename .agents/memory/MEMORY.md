@@ -36,6 +36,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [WorkBuddy's Anthropic route](workbuddy-anthropic-route.md) — only hy3 / hy3-x answer on /v1/messages (China build), no thinking switch there; the plugin declares them @ai-sdk/anthropic (probed 2026-10-20)
 - [Provider key alternatives](provider-key-alternatives.md) — issues #8/#9: wrong-template keys are fixed by template-switch + `keyAlternatives`, not by key prefix; no endpoint speed test yet
 - [Relay decisions](relay-decisions.md) — `astra-server relay`: same pipeline behind contracts, one template per process, per-request credentials never stored/logged or sent to a request-named address, raw model list
+- [Keep-awake decisions](keep-awake-decisions.md) — issue #14 `PreventSleep`: idle sleep only, server host only, blittable DllImport, Linux `sleep` lock side effect, web server stops first on shutdown
 - [Trace routing visualization](trace-routing-visualization.md) — topology draws accounts as rows + a live activity rail (option B, 2026-10-30); tool args / prompt / reply text only when the user turns capture on
 
 ## Reference

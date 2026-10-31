@@ -213,6 +213,15 @@ public static class AstraApp
         builder.Services.AddSingleton(_ => Astra.Server.Autostart.AutostartHost.Real());
         builder.Services.AddSingleton<Astra.Server.Autostart.AutostartService>();
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Astra.Server.Autostart.AutostartService>());
+        // Keeping the machine awake while gateway requests are in flight (AppSettings.PreventSleep, issue #14): the OS's
+        // inhibitor, and the count KeepAwakeMiddleware keeps; stopping the host lets go. Tests swap the inhibitor for a fake.
+        builder.Services.AddSingleton(sp => Astra.Server.Power.SleepInhibitors.ForThisMachine(
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger("Astra.Server.Power")));
+        builder.Services.AddSingleton(sp => new Astra.Server.Power.KeepAwakeService(
+            () => sp.GetRequiredService<SettingsService>().Current.PreventSleep, sp.GetRequiredService<Astra.Server.Power.ISleepInhibitor>(),
+            TimeProvider.System, Astra.Server.Power.KeepAwakeService.DefaultGrace,
+            sp.GetRequiredService<ILogger<Astra.Server.Power.KeepAwakeService>>()));
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<Astra.Server.Power.KeepAwakeService>());
         builder.Services.AddSingleton<AdminSessions>();
         builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
         builder.Services.AddHttpClient();
@@ -277,6 +286,7 @@ public static class AstraApp
         app.UseCors();
         app.UseMiddleware<SecurityMiddleware>();
         app.UseRateLimiter();
+        app.UseMiddleware<Astra.Server.Power.KeepAwakeMiddleware>();
         if (app.Environment.WebRootPath is not null)
         {
             app.UseDefaultFiles();

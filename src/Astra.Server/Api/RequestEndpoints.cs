@@ -231,7 +231,7 @@ public static class RequestEndpoints
             Results.Ok(ToSettings(settings.Current, server, paths)));
 
         app.MapPatch("/api/settings", async (JsonObject patch, SettingsService settings, ServerOptions server, AstraPaths paths,
-            ISecretProtector secrets, CancellationToken ct) =>
+            ISecretProtector secrets, Astra.Server.Power.KeepAwakeService keepAwake, CancellationToken ct) =>
         {
             string? error = null;
             var next = await settings.UpdateAsync(s =>
@@ -257,6 +257,7 @@ public static class RequestEndpoints
                             if (value is not null) s.EffortBudgets = Json.DeserializeApi<EffortBudgets>(value) ?? s.EffortBudgets;
                             break;
                         case "streamIdleTimeoutSec": s.StreamIdleTimeoutSec = Math.Clamp(value?.GetValue<int>() ?? 300, 10, 3600); break;
+                        case "preventSleep": s.PreventSleep = value?.GetValue<bool>() ?? false; break;
                         case "updateChannel":
                             if (UpdateChannels.Parse(value?.GetValue<string>()) is { } channel) s.UpdateChannel = channel;
                             else error = "updateChannel must be stable or preview";
@@ -340,6 +341,8 @@ public static class RequestEndpoints
                     error ??= "proxyUrl is required when proxyMode is custom";
                 }
             }, ct);
+            // Off lets go of the sleep inhibitor at once; on takes it if requests are in flight.
+            if (patch.ContainsKey("preventSleep")) keepAwake.Refresh();
             return error is null ? Results.Ok(ToSettings(next, server, paths)) : ModelEndpoints.Bad(error);
         });
     }
@@ -350,7 +353,7 @@ public static class RequestEndpoints
         server.Port, server.Host, paths.Root, server.GatewayBaseUrl, s.QuotaAutoIntervalMinutes, s.SubscriptionQuotaIntervalMinutes,
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
-        UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent);
+        UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent, s.PreventSleep);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:

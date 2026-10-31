@@ -67,7 +67,8 @@ host deletes that file after draining the request log.
    inserts the default token without a key, so it is generated here before the gateway can serve
 9. `src/Astra.Server/Hosting/AstraApp.cs:257-303` — fixed middleware order: `UseCors` →
    `SecurityMiddleware` (Host allowlist, `X-Astra-Admin` on mutations, session cookie) →
-   `UseRateLimiter` → `UseDefaultFiles`/`UseStaticFiles` when `wwwroot` exists (hashed `/assets/*`
+   `UseRateLimiter` → `KeepAwakeMiddleware` (counts gateway POSTs for `KeepAwakeService`, the
+   opt-in `PreventSleep` setting's sleep inhibitor) → `UseDefaultFiles`/`UseStaticFiles` when `wwwroot` exists (hashed `/assets/*`
    immutable, everything else `no-cache`) → the `Map*Endpoints()` groups → the SPA fallback, which
    serves `wwwroot/index.html` for anything that is not `/api`, `/v1`, `/v1beta` and otherwise
    writes an `ErrorOnlyDto` 404. `WebRootPath` is `<executable dir>/wwwroot` — a `pnpm --filter

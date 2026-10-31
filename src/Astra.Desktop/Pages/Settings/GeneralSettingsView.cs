@@ -205,6 +205,11 @@ public sealed class GeneralSettingsView : LiveView
         _gatewayGroup = RowBuilder.Group(Loc.T("settings.gateway"), Loc.T("settings.gatewayFooter"));
         stack.Children.Add(_gatewayGroup);
 
+        // keeping the system awake while requests are in flight (web SettingsPage: its own group after the gateway, the hint as footer)
+        stack.Children.Add(RowBuilder.Group(null, Loc.T("settings.preventSleepHint"),
+            RowBuilder.Row(Loc.T("settings.preventSleep"), null,
+                Switch(Loc.T("settings.preventSleep"), x => x.PreventSleep, on => PatchAsync(JsonPatch.Of(("preventSleep", on)))))));
+
         _proxy = new ProxyGroup(Host, _api, s);
         stack.Children.Add(_proxy.Group);
         _market = new MarketGroup(Host, _api, s);

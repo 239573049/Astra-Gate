@@ -936,6 +936,8 @@ export interface Settings {
   /** Record conversation content in traces: tool-call arguments, the start of the prompt and of the reply (off by default). */
   traceContent?: boolean;
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
+  /** Keep the system from idle sleep while gateway requests are in flight; released ~30 s after the last one (off by default). */
+  preventSleep?: boolean;
   /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */
   updateChannel: "stable" | "preview"; updateAutoCheck: boolean;
   /** Request body coding for providers that compress (e.g. ChatGPT subscription's zstd): default = each provider's own; none = off. */

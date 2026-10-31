@@ -1561,6 +1561,8 @@ internal static class Messages
         "settings.requestCompressionHint",
         "settings.requestCompression.default",
         "settings.requestCompression.none",
+        "settings.preventSleep",
+        "settings.preventSleepHint",
         "settings.logging",
         "settings.debugBodies",
         "settings.debugBodiesHint",
@@ -4058,6 +4060,8 @@ internal static class Messages
             case "settings.requestCompressionHint": return "需要压缩请求体的提供商（如 ChatGPT 订阅默认用 zstd）使用的格式；其他提供商始终发原文";
             case "settings.requestCompression.default": return "按提供商默认";
             case "settings.requestCompression.none": return "不压缩";
+            case "settings.preventSleep": return "处理请求时阻止系统休眠";
+            case "settings.preventSleepHint": return "网关有请求在处理（包括流式输出）时，阻止系统因闲置而睡眠，最后一个请求结束约 30 秒后解除；关闭开关或退出服务立即解除。显示器照常熄灭，合盖仍会睡眠。默认关闭；Linux 需要 systemd（systemd-inhibit），容器里不起作用。";
             case "settings.logging": return "记录";
             case "settings.debugBodies": return "保存请求与响应内容";
             case "settings.debugBodiesHint": return "用于排查问题；内容保存在本机数据目录，不含密钥。";
@@ -6557,6 +6561,8 @@ internal static class Messages
             case "settings.requestCompressionHint": return "Format for providers that compress request bodies (ChatGPT subscription defaults to zstd); other providers always get plain bodies";
             case "settings.requestCompression.default": return "Provider default";
             case "settings.requestCompression.none": return "No compression";
+            case "settings.preventSleep": return "Keep the system awake while requests are in flight";
+            case "settings.preventSleepHint": return "While the gateway is handling requests (streams included), the system does not go to sleep when idle; it may again about 30 seconds after the last one finishes, or at once when you turn this off or the server stops. The display still turns off and closing the lid still sleeps. Off by default; on Linux it needs systemd (systemd-inhibit) and has no effect in containers.";
             case "settings.logging": return "Logging";
             case "settings.debugBodies": return "Save request & response bodies";
             case "settings.debugBodiesHint": return "For troubleshooting. Stored in the local data folder, without secrets.";

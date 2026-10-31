@@ -31,6 +31,12 @@ public sealed class AppSettings
     public EffortBudgets EffortBudgets { get; set; } = new();
     public int StreamIdleTimeoutSec { get; set; } = 300;
 
+    /// <summary>
+    /// Keep the machine from idle sleep while gateway requests are in flight (Astra.Server's KeepAwakeService; issue #14).
+    /// Off by default; idle sleep only — the display may still turn off and closing the lid still sleeps.
+    /// </summary>
+    public bool PreventSleep { get; set; }
+
     /// <summary>Release feed channel for update checks: "stable" (default) | "preview" (opt-in previews; see UpdateChannels).</summary>
     public string UpdateChannel { get; set; } = "stable";
 

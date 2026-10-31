@@ -221,6 +221,12 @@ function GeneralSettings() {
             </Row>
           </Group>
 
+          <Group footer={t('settings.preventSleepHint')}>
+            <Row label={t('settings.preventSleep')}>
+              <Switch checked={s.preventSleep ?? false} label={t('settings.preventSleep')} onChange={(preventSleep) => patch({ preventSleep })} />
+            </Row>
+          </Group>
+
           <ProxySettings settings={s} />
 
           <PluginMarketSettings settings={s} />
