@@ -140,6 +140,29 @@ public class UsageNormalizerTests
         Assert.Equal(40, u.Get("reasoning"));
     }
 
+    [Theory]
+    // gpt-image-1: every output token is an image token.
+    [InlineData("""{"total_tokens":4210,"input_tokens":50,"output_tokens":4160,"input_tokens_details":{"text_tokens":10,"image_tokens":40}}""",
+        10, 40, 0, 0, 4160)]
+    // A model that reports text output and cached input apart.
+    [InlineData("""{"input_tokens":300,"output_tokens":1100,"input_tokens_details":{"text_tokens":60,"image_tokens":240,"cached_tokens":100},"output_tokens_details":{"text_tokens":100,"image_tokens":1000}}""",
+        0, 200, 100, 100, 1000)]
+    // Counts that do not add up are clamped, never negative.
+    [InlineData("""{"input_tokens":20,"output_tokens":5,"input_tokens_details":{"image_tokens":90},"output_tokens_details":{"image_tokens":-3}}""",
+        0, 20, 0, 5, 0)]
+    public void Openai_images_split_text_and_image_tokens(string json, long input, long inputImage, long cacheRead, long output, long outputImage)
+    {
+        var raw = JsonNode.Parse(json)!.AsObject();
+        var u = UsageNormalizer.FromOpenAIImages(raw);
+        Assert.Equal(input, u.Get(TokenTypes.Input));
+        Assert.Equal(inputImage, u.Get(TokenTypes.InputImage));
+        Assert.Equal(cacheRead, u.Get(TokenTypes.CacheRead));
+        Assert.Equal(output, u.Get(TokenTypes.Output));
+        Assert.Equal(outputImage, u.Get(TokenTypes.OutputImage));
+        Assert.Equal(raw["input_tokens"]!.GetValue<long>(), u.TotalInput);
+        Assert.Equal(raw["output_tokens"]!.GetValue<long>(), u.TotalOutput);
+    }
+
     [Fact]
     public void MergeMax_is_idempotent_for_repeated_stream_usage()
     {

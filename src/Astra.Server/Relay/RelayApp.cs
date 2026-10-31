@@ -129,11 +129,14 @@ public static class RelayApp
             app.MapPost(prefix + "/messages/count_tokens", context => HandleAsync(context, ApiProtocol.Anthropic, Relayed.CountTokens));
             app.MapPost(prefix + "/embeddings", context => HandleAsync(context, ApiProtocol.OpenAIChat, Relayed.Embeddings));
             app.MapGet(prefix + "/models", context => HandleAsync(context, ApiProtocol.OpenAIChat, Relayed.Models));
+            // OpenAI Images API (issue #17): the pipeline's own handler, through the same contracts as a generation request.
+            app.MapPost(prefix + "/images/generations", context => HandleAsync(context, ApiProtocol.OpenAIChat, image: ImageOperation.Generations));
+            app.MapPost(prefix + "/images/edits", context => HandleAsync(context, ApiProtocol.OpenAIChat, image: ImageOperation.Edits));
         }
         app.MapPost("/v1beta/models/{**action}", context => HandleAsync(context, ApiProtocol.Gemini));
         return app;
 
-        async Task HandleAsync(HttpContext context, ApiProtocol protocol, Relayed? relayed = null)
+        async Task HandleAsync(HttpContext context, ApiProtocol protocol, Relayed? relayed = null, ImageOperation? image = null)
         {
             context.Features.Set(new Inbound(protocol));
             var caller = target.Caller(context.Request);
@@ -146,6 +149,11 @@ public static class RelayApp
                 if (relayed is { } kind)
                 {
                     await RelayAsync(context, caller, kind, options);
+                    return;
+                }
+                if (image is { } operation)
+                {
+                    await context.RequestServices.GetRequiredService<GatewayPipeline>().HandleImagesAsync(context, operation);
                     return;
                 }
                 string? pathModel = null;

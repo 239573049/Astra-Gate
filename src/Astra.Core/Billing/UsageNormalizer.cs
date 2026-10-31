@@ -99,6 +99,32 @@ public static class UsageNormalizer
         return usage;
     }
 
+    /// <summary>
+    /// OpenAI Images API usage (gpt-image-*; issue #17): <c>input_tokens</c> split by <c>input_tokens_details</c> into
+    /// image and text tokens (cached ones read from the cache), <c>output_tokens</c> are image tokens unless
+    /// <c>output_tokens_details</c> says how many of them are text. Image tokens fall back to the input / output price
+    /// when the model has no image price (<see cref="TokenTypes.FallbackOf"/>).
+    /// </summary>
+    public static NormalizedUsage FromOpenAIImages(JsonObject u)
+    {
+        var usage = new NormalizedUsage();
+        var input = Math.Max(0, L(u, "input_tokens"));
+        var output = Math.Max(0, L(u, "output_tokens"));
+        var inDetails = u["input_tokens_details"] as JsonObject;
+        var outDetails = u["output_tokens_details"] as JsonObject;
+        var cached = Math.Clamp(L(inDetails, "cached_tokens"), 0, input);
+        var inputImage = Math.Clamp(L(inDetails, "image_tokens"), 0, input - cached);
+        var outputImage = outDetails is not null && outDetails.ContainsKey("image_tokens")
+            ? Math.Clamp(L(outDetails, "image_tokens"), 0, output)
+            : output;
+        usage.Add(TokenTypes.CacheRead, cached);
+        usage.Add(TokenTypes.Input, Math.Max(0, input - cached - inputImage));
+        usage.Add(TokenTypes.InputImage, inputImage);
+        usage.Add(TokenTypes.Output, Math.Max(0, output - outputImage));
+        usage.Add(TokenTypes.OutputImage, outputImage);
+        return usage;
+    }
+
     public static NormalizedUsage FromAnthropic(JsonObject u)
     {
         var usage = new NormalizedUsage();

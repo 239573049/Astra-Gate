@@ -10,6 +10,11 @@ updated: 2026-10-28
 `/v1/messages`, `/v1beta/models/<model>:generateContent|streamGenerateContent`).
 **Outcome:** the client got the upstream's answer (streamed or buffered) in its own protocol, with privacy redactions
 restored, and a request row, its span tree and usage counters were queued for persistence.
+**Images API** (`/v1/images/generations|edits`, issue #17): `GatewayPipeline.HandleImagesAsync`
+(`Pipeline/GatewayPipeline.Images.cs`) runs steps 2–4, 7, 10 (pool: the strategy's first member, no failover), 14 and 16
+of this flow with no codec, middleware or smart routing: the body goes to the provider's OpenAI endpoint as sent (model
+mapping and redactions spliced in; a form is streamed on once its `model` field is read, `MultipartForm`, so `SendAsync`
+gets a send-once `content` and skips renewal/failover), the answer comes back as written, and only its `usage` is read.
 **Hosts:** the server reaches the pipeline through `MapGatewayEndpoints`; `astra-server relay`
 (`src/Astra.Server/Relay/RelayApp.cs`) maps its own routes onto the same `HandleAsync` and answers the pipeline's
 contracts (`src/Astra.Gateway/Pipeline/PipelineContracts.cs`) per request — the caller's own credential, one template's

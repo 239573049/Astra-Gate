@@ -37,6 +37,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Provider key alternatives](provider-key-alternatives.md) — issues #8/#9: wrong-template keys are fixed by template-switch + `keyAlternatives`, not by key prefix; no endpoint speed test yet
 - [Relay decisions](relay-decisions.md) — `astra-server relay`: same pipeline behind contracts, one template per process, per-request credentials never stored/logged or sent to a request-named address, raw model list
 - [Keep-awake decisions](keep-awake-decisions.md) — issue #14 `PreventSleep`: idle sleep only, server host only, blittable DllImport, Linux `sleep` lock side effect, web server stops first on shutdown
+- [Images API forwarding](images-api-forwarding.md) — issue #17: `/v1/images/*` forwarded untranslated on the same pipeline, logged as `openai-images` (not an ApiProtocol); forms stream after `model` unless guard/encoding/deadline; no pool failover
 - [Trace routing visualization](trace-routing-visualization.md) — topology draws accounts as rows + a live activity rail (option B, 2026-10-30); tool args / prompt / reply text only when the user turns capture on
 
 ## Reference

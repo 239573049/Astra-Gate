@@ -29,8 +29,9 @@ namespace Astra.Gateway.Pipeline;
 /// forward (pass-through fast path) or translate through the IR, stream the answer back, and record timing,
 /// usage and cost for every request. What it needs from its host is a contract (PipelineContracts.cs): the server's
 /// SQLite-backed services, or the relay's per-request ones; a null optional feature is one the host does not have.
+/// The OpenAI Images API (issue #17) is forwarded by the same pipeline: GatewayPipeline.Images.cs.
 /// </summary>
-public sealed class GatewayPipeline(
+public sealed partial class GatewayPipeline(
     IGatewayRouter router,
     CodecRegistry codecs,
     GatewayHttpClients http,
@@ -781,10 +782,15 @@ public sealed class GatewayPipeline(
     public static string PluginProviderOf(Provider provider) =>
         provider.Settings["plugin"]?["provider"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var id) ? id : provider.Id;
 
+    /// <param name="content">
+    /// A body the caller builds (an Images API form, issue #17) instead of the JSON in <paramref name="body"/>; it is sent
+    /// uncompressed. Unless <paramref name="resendable"/>, it can go out once only — a client's upload streamed straight
+    /// through — so a rejected attempt is answered as it is instead of renewed or failed over.
+    /// </param>
     private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, PooledBuffer body, JsonObject bodyTree, bool stream, bool passthrough,
         ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, RequestTrace trace,
-        AttemptTrace attempts, CancellationToken ct)
+        AttemptTrace attempts, CancellationToken ct, Func<HttpContent>? content = null, bool resendable = true)
     {
         var provider = route.Provider;
         var plugin = provider.AuthScheme == AuthSchemes.Plugin;
@@ -804,7 +810,7 @@ public sealed class GatewayPipeline(
         var claudeSessionId = clientRequest.Headers["x-claude-code-session-id"].ToString();
         // 上游请求体压缩（settings.request_compression；codex-cli 发 chatgpt.com 用 zstd）：整个请求只压一次，
         // 各次重试共用；设置里的「上游请求压缩」可以换格式或关掉；插件提供商的请求不走 HTTP，不压。
-        var compression = plugin ? null : UpstreamCompression.Of(provider, settings.Current.RequestCompression);
+        var compression = plugin || content is not null ? null : UpstreamCompression.Of(provider, settings.Current.RequestCompression);
         var compressed = compression is null ? null : UpstreamCompression.Compress(body.Span, compression);
         var accountId = route.AccountId;
         var tried = new List<string>();
@@ -867,7 +873,7 @@ public sealed class GatewayPipeline(
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 }
-                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription && credentials.CanRefresh)
+                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription && credentials.CanRefresh && resendable)
                 {
                     // Plan §5.4: renew a grant once before switching accounts. Direct tokens / API keys cannot be renewed.
                     var used = credentials.AccountId ?? accountId;
@@ -900,7 +906,7 @@ public sealed class GatewayPipeline(
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 }
-                if (failover && response.StatusCode is (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                if (failover && resendable && response.StatusCode is (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                     && credentials.AccountId is { } rejected)
                 {
                     // A new token can still be refused by this model/channel. Cool the account without revoking its grant,
@@ -914,7 +920,7 @@ public sealed class GatewayPipeline(
                         continue;
                     }
                 }
-                if (failover && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
+                if (failover && resendable && response.StatusCode == HttpStatusCode.TooManyRequests && credentials.AccountId is { } limited)
                 {
                     var until = RateLimitResetOf(response, DateTimeOffset.UtcNow);
                     if (await FailOverAsync(limited, until, $"429 限流，冷却至 {until.UtcDateTime:yyyy-MM-dd HH:mm} UTC") is { } next)
@@ -1011,7 +1017,7 @@ public sealed class GatewayPipeline(
             var target = a.QueryName is not null && a.QueryValue is not null ? UpstreamUrls.WithQuery(url, a.QueryName, a.QueryValue) : url;
             var request = new HttpRequestMessage(HttpMethod.Post, target)
             {
-                Content = compressed is null ? new PooledContent(body) : UpstreamCompression.Content(compressed, compression!),
+                Content = content?.Invoke() ?? (compressed is null ? new PooledContent(body) : UpstreamCompression.Content(compressed, compression!)),
             };
             if (plugin)
             {
@@ -1607,7 +1613,7 @@ public sealed class GatewayPipeline(
 
     /// <summary>Closes the request's spans into <see cref="RequestRecord.Spans"/> and remembers the tool calls it made.</summary>
     private void FinishTrace(RequestRecord record, RequestTrace trace, TraceLink? link, string? inboundTraceId, ResponseObserver observer,
-        TraceSpanBuilder? responseSpan, bool middlewareResponse, int restorable)
+        TraceSpanBuilder? responseSpan, bool middlewareResponse, int restorable, string operation = "chat")
     {
         record.FinishReason = observer.Finish is { } finish ? FinishReasonId(finish) : null;
         record.ToolCalls = observer.ToolCallIds.Count;
@@ -1634,7 +1640,7 @@ public sealed class GatewayPipeline(
         // The phases stay on the record (never stored): the live feed's last event keeps them until the row is written.
         record.LiveStage = null;
         var root = trace.Root;
-        root.Set("gen_ai.operation.name", "chat").Set("gen_ai.request.model", record.RequestedModel)
+        root.Set("gen_ai.operation.name", operation).Set("gen_ai.request.model", record.RequestedModel)
             .Set("gen_ai.response.model", record.ResponseModel).Set("gen_ai.usage.input_tokens", record.TotalInputTokens)
             .Set("gen_ai.usage.output_tokens", record.TotalOutputTokens).Set("astra.client.kind", record.ClientKind)
             .Set("astra.provider.id", record.ProviderId).Set("http.response.status_code", record.HttpStatus)

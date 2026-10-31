@@ -46,6 +46,23 @@ public static class UpstreamUrls
         _ => null,
     };
 
+    /// <summary>
+    /// An OpenAI Images API address (<paramref name="path"/> = <c>images/generations</c> | <c>images/edits</c>; issue #17)
+    /// beside an OpenAI endpoint. A complete address is taken apart at its <c>/chat/completions</c> or <c>/responses</c>
+    /// (an Azure deployment keeps its <c>?api-version=</c>); null when it ends in neither.
+    /// </summary>
+    public static string? Images(ProviderEndpoint endpoint, string path)
+    {
+        if (endpoint.Protocol is not (ApiProtocol.OpenAIChat or ApiProtocol.OpenAIResponses)) return null;
+        if (!endpoint.FullUrl) return Append(endpoint.BaseUrl, "/" + path);
+        var uri = new Uri(endpoint.BaseUrl);
+        var current = uri.AbsolutePath.TrimEnd('/');
+        foreach (var suffix in (string[])["/chat/completions", "/responses"])
+            if (current.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return new UriBuilder(uri) { Path = current[..^suffix.Length] + "/" + path }.Uri.AbsoluteUri;
+        return null;
+    }
+
     /// <summary>Appends <c>key=value</c> to the query string (Gemini ?key= auth).</summary>
     public static string WithQuery(string url, string key, string value)
     {

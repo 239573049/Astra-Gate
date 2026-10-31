@@ -86,6 +86,29 @@ astra status
 
 直接使用令牌的请求会发往令牌提供商池里的提供商；请求协议与提供商接口不一致时，Astra 会自动转换。池里只有一个提供商时请求都发给它；加入多个提供商后，可以选择主备、轮询、加权等分配方式，某个提供商限流或出错时自动换下一个，见[提供商池](/docs/console/tokens#提供商池)。没有设置任何提供商的令牌只能通过已启用的客户端使用。
 
+### 图像生成与编辑
+
+网关也转发 OpenAI 的 Images API，供 `gpt-image-1` 这类图像模型使用：
+
+| 方法 | 路径 | 请求体 |
+| --- | --- | --- |
+| POST | `/v1/images/generations` | JSON（`model`、`prompt` 等） |
+| POST | `/v1/images/edits` | `multipart/form-data` 表单（图片 + `model`、`prompt` 等），或引用图片的 JSON |
+
+```bash
+curl http://127.0.0.1:17321/v1/images/generations \
+  -H "Authorization: Bearer sk-astra-你的令牌" \
+  -H "Content-Type: application/json" \
+  -d '{ "model": "gpt-image-1", "prompt": "一只读报纸的水彩狐狸", "size": "1024x1024" }'
+```
+
+- **必须带 `model`**：Astra 按模型选择提供商，与对话请求相同（客户端绑定的提供商里第一个提供该模型的，或令牌提供商池按策略选出的成员）。智能路由的虚拟模型 `astra-auto` 不能用于图像接口。
+- **只发往 OpenAI 兼容的提供商**：图像地址是提供商 OpenAI 接口（openai-chat / openai-responses）的基础地址加 `/images/generations` 或 `/images/edits`；接口填的是完整地址时，取 `/chat/completions` 或 `/responses` 之前的部分（Azure 的 `?api-version=` 会保留）。没有 OpenAI 接口的提供商（例如只有 Anthropic 接口）和插件提供商会返回 501。
+- **不做协议转换**：请求体与响应原样转发（包括 `stream: true` 的事件流），只改写模型映射后的模型名和隐私护栏脱敏的文字；上游的错误也原样返回。`edits` 的表单读到 `model` 字段就开始向上游转发，`model` 在图片之前时（OpenAI 的 SDK 和文档都这样发）上传的图片不会在 Astra 里整份缓存；开启了隐私护栏时，Astra 会先读完整个表单、检查其中的文字字段（如 `prompt`）再转发。
+- **计费**：按响应里的 `usage`（文本输入、图像输入、图像输出 token）和该模型的价格计算。在模型价格里填「图像输入」「图像输出」单价，没填时按输入、输出单价计；模型没有价格或响应没有 `usage` 时费用记 0。
+- **请求日志**：协议列显示 `openai-images`。图片本身（`b64_json`、上传的文件）和提示词不会写入请求日志、链路追踪，开启调试抓包时也不会保存。
+- **暂不支持**：`/v1/images/variations`（只有 dall-e-2 支持）。令牌提供商池只把图像请求发给策略选出的第一个成员，失败时不会换下一个成员重试。
+
 ## 4. 查看结果
 
 - **概览** 页出现费用、请求数、token 统计与趋势图；

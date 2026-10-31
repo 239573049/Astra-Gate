@@ -23,6 +23,9 @@ public static class GatewayEndpoints
         app.MapPost("/v1/messages", (HttpContext c, GatewayPipeline p) => p.HandleAsync(c, ApiProtocol.Anthropic)).ExcludeFromDescription();
         app.MapPost("/v1/messages/count_tokens", (HttpContext c, GatewayAuxiliary a) => a.CountTokensAsync(c, ApiProtocol.Anthropic, null))
             .ExcludeFromDescription();
+        // OpenAI Images API (issue #17): forwarded to an OpenAI-compatible provider, not translated.
+        app.MapPost("/v1/images/generations", (HttpContext c, GatewayPipeline p) => p.HandleImagesAsync(c, ImageOperation.Generations)).ExcludeFromDescription();
+        app.MapPost("/v1/images/edits", (HttpContext c, GatewayPipeline p) => p.HandleImagesAsync(c, ImageOperation.Edits)).ExcludeFromDescription();
 
         // /v1beta/models/{model}:{generateContent|streamGenerateContent|countTokens}
         app.MapPost("/v1beta/models/{*modelAction}", (HttpContext c, string modelAction, GatewayPipeline p, GatewayAuxiliary a) =>

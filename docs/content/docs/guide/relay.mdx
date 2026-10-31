@@ -61,6 +61,7 @@ astra-server relay --provider <模板 id>   # 默认只监听 127.0.0.1:17321
 | POST | `/messages`、`/v1/messages` | Anthropic Messages |
 | POST | `/messages/count_tokens`、`/v1/messages/count_tokens` | 原样转发到模板的 Anthropic 接口；模板没有该接口时在本地粗略估算 |
 | POST | `/embeddings`、`/v1/embeddings` | 原样转发到模板的 OpenAI 接口 |
+| POST | `/images/generations`、`/v1/images/generations`、`/images/edits`、`/v1/images/edits` | OpenAI Images API：与服务端相同的处理（见[图像生成与编辑](/docs/guide/first-request#图像生成与编辑)），发往模板的 OpenAI 接口旁的图像地址；`edits` 的表单在请求体时限内读完后再转发 |
 | POST | `/v1beta/models/{model}:generateContent`、`:streamGenerateContent`（支持 `?alt=sse`） | Gemini |
 
 生成类请求会先用请求的凭据获取模板的模型列表（按凭据的 SHA-256 缓存，默认 5 分钟），以列表中每个模型声明的接口决定直通还是转换协议。列表获取失败或格式不对时，请求直接失败，失败结果不会缓存。模板没有模型列表接口时，按模板的协议偏好处理。
