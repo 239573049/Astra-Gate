@@ -10,7 +10,8 @@ namespace Astra.Desktop.Theme;
 /// <summary>
 /// App-wide corrections of Arc toward the web, applied once at startup (<see cref="ThemeService.Install"/> calls <see cref="Install"/>
 /// from <c>AppBuilder.AfterSetup</c>, which runs once the <see cref="Application"/> exists, in the app and in the headless test host alike):
-/// the accent primary button (KitStyles.axaml), CJK-aware wrapping of Arc's empty states (<see cref="CjkWrap"/>) and device-pixel hairlines.
+/// the accent primary button (KitStyles.axaml), CJK-aware wrapping of Arc's empty states (<see cref="CjkWrap"/>), select menus as wide as
+/// their options (<see cref="SelectMenuFit"/>) and device-pixel hairlines.
 /// </summary>
 public sealed partial class KitStyles : Styles
 {
@@ -30,6 +31,7 @@ public sealed partial class KitStyles : Styles
         SetAccent(app, accentHex);
         if (!app.Styles.OfType<KitStyles>().Any()) app.Styles.Add(new KitStyles());
         CjkWrap.Install();
+        SelectMenuFit.Install();
         InstallHairlines();
         InstallSegmented();
     }
