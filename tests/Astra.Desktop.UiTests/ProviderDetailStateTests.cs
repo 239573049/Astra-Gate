@@ -8,6 +8,7 @@ using Astra.Desktop.Shell;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 
 namespace Astra.Desktop.UiTests;
 
@@ -17,9 +18,9 @@ namespace Astra.Desktop.UiTests;
 /// </summary>
 public class ProviderDetailStateTests
 {
-    private static (ProviderDetailPage Page, ProviderDetailView View, Window Window) Open(string id)
+    private static (ProviderDetailPage Page, ProviderDetailView View, Window Window) Open(string id, FixtureSet? fixtures = null)
     {
-        var fx = Scenes.Fixtures();
+        var fx = fixtures ?? Scenes.Fixtures();
         var ctx = PageContext.Create(new ApiClient("http://fixture", fx.Handler()), AvaloniaUiDispatcher.Instance, clock: new FixedClock(fx.Now));
         var page = new ProviderDetailPage(ctx, id);
         page.Activate(); // the navigator does this when the page is shown: its queries start observing
@@ -66,6 +67,32 @@ public class ProviderDetailStateTests
         Assert.Same(accounts, view.AccountsView);
         Assert.NotSame(settings, view.SettingsTab);
         Assert.Equal("Renamed", view.SettingsTab!.Form.Name);
+        page.Deactivate();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void The_remote_models_sheet_opens_again_after_it_was_closed()
+    {
+        // Issue #19: the second click on "fetch from upstream" crashed the app — the sheet's list panel was still the child of the first
+        // opening's body when the second one added it to a new body ("already has a visual parent", thrown out of the click handler).
+        const string remote = """[{"id":"gpt-5","displayName":"GPT-5","linkedSystemModelId":"gpt-5","alreadyAdded":false},{"id":"o3","displayName":null,"linkedSystemModelId":"o3","alreadyAdded":false}]""";
+        var (page, view, window) = Open("prov_openai", Scenes.Fixtures().Override("/api/providers/prov_openai/remote-models", remote));
+        var sheet = view.ModelsTab!.RemoteSheet;
+        for (var i = 0; i < 3; i++)
+        {
+            sheet.Show();
+            SceneCapture.Await(page.Context!.Queries.WhenIdleAsync(), TimeSpan.FromSeconds(10));
+            SceneCapture.Pump(3);
+            Assert.True(sheet.IsOpen);
+            // every opening lists the upstream's models (a checkbox each), not a body left empty by the previous one
+            var boxes = ((Control)sheet.Content!).GetLogicalDescendants().OfType<TKCode.Arc.Checkbox>()
+                .Select(b => Avalonia.Automation.AutomationProperties.GetName(b)).ToList();
+            Assert.Equal(["gpt-5", "o3"], boxes);
+            sheet.Close();
+            SceneCapture.Pump(3);
+            Assert.False(sheet.IsOpen);
+        }
         page.Deactivate();
         window.Close();
     }

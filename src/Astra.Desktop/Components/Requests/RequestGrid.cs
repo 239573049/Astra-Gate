@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using TKCode.Arc;
 using TKCode.Arc.DesignTokens;
 using TKCode.Arc.Icons.Lucide;
@@ -47,6 +48,9 @@ public sealed class RequestGrid : Border
     public const double CellPadding = 16;
 
     private readonly GridPanel _panel;
+    private readonly TranslateTransform _barShift = new();
+    private ScrollBar? _bar;
+    private ScrollViewer? _page;
 
     /// <summary>A table of <paramref name="columns"/>; <paramref name="emptyMessage"/> shows when there are no rows.</summary>
     public RequestGrid(IReadOnlyList<RequestGridColumn> columns, string caption, string emptyMessage)
@@ -58,12 +62,22 @@ public sealed class RequestGrid : Border
         ClipToBounds = true;
         // The web's translucent --surface and --border (see WebMaterial: the theme's Surface / Border tokens are opaque greys).
         WebMaterial.Apply(this);
-        Child = new ScrollViewer
+        var scroller = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            // Issue #19: Arc's overlay bars show only while the pointer is over the viewer, and this one sits under the last row, a page
+            // or more below the window's edge, so a narrow window cut the right-hand columns off with no sign of a scroll bar. The bar
+            // stays shown while the columns overflow, and is kept on screen (StickBar).
+            AllowAutoHide = false,
             Content = _panel,
         };
+        scroller.TemplateApplied += (_, e) =>
+        {
+            _bar = e.NameScope.Find<ScrollBar>("PART_HorizontalScrollBar");
+            if (_bar is not null) _bar.RenderTransform = _barShift;
+        };
+        Child = scroller;
     }
 
     /// <summary>The rows (any order; shown in the current sort order, else in this order).</summary>
@@ -96,6 +110,56 @@ public sealed class RequestGrid : Border
         // The panel sits in a sideways ScrollViewer (unbounded width), so it is told the container's width to fill.
         _panel.Viewport = availableSize.Width - BorderThickness.Left - BorderThickness.Right;
         return base.MeasureOverride(availableSize);
+    }
+
+    /// <summary>The sideways scroll bar's current lift above its place under the last row (0 = in place; negative = held up). For tests.</summary>
+    internal double BarShift => _barShift.Y;
+
+    /// <inheritdoc />
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // The page's own scroller (the table grows to its full height inside it), not the sideways one inside the table.
+        _page = this.FindAncestorOfType<ScrollViewer>();
+        if (_page is not null) _page.ScrollChanged += OnPageScroll;
+        LayoutUpdated += OnLayout;
+    }
+
+    /// <inheritdoc />
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        if (_page is not null) _page.ScrollChanged -= OnPageScroll;
+        LayoutUpdated -= OnLayout;
+        _page = null;
+        _barShift.Y = 0;
+    }
+
+    private void OnPageScroll(object? sender, ScrollChangedEventArgs e) => StickBar();
+
+    private void OnLayout(object? sender, EventArgs e) => StickBar();
+
+    /// <summary>
+    /// Keeps the sideways scroll bar in view (web: the browser's bar under the table, plus Shift + wheel; Avalonia's Shift + wheel works here
+    /// too): while the table's bottom edge lies below the page's visible area, the bar is drawn at the bottom of that area, over the rows
+    /// there — like a sticky element — and never above the header. Scrolled down to the table's end, it is back in its own place.
+    /// </summary>
+    internal void StickBar()
+    {
+        var y = 0d;
+        if (_page is not null && _bar is { IsVisible: true } bar && this.TranslatePoint(default, _page) is { } at)
+        {
+            var inner = Bounds.Height - BorderThickness.Top - BorderThickness.Bottom;
+            // Above the page scroller's bottom fade (as long as what is left below it, at most FadeLength), where the bar would be drawn half
+            // transparent.
+            var below = Math.Max(0, _page.Extent.Height - _page.Viewport.Height - _page.Offset.Y);
+            var limit = _page.Bounds.Height - (_page is ScrollArea area ? Math.Min(area.FadeLength, below) : 0);
+            y = Math.Min(0, limit - (at.Y + BorderThickness.Top + inner));
+            y = Math.Max(y, Math.Min(0, HeaderHeight + bar.Bounds.Height - inner));
+        }
+        // Whole pixels: a fractional shift would blur the bar, and comparing them keeps LayoutUpdated from looping.
+        y = Math.Round(y);
+        if (_barShift.Y != y) _barShift.Y = y;
     }
 
     /// <summary>The header and body rows; draws the sorted column's band behind them.</summary>

@@ -3,8 +3,11 @@ using Astra.Desktop.Components.Requests;
 using Astra.Desktop.Core.Shell;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.VisualTree;
 
 namespace Astra.Desktop.UiTests;
@@ -94,6 +97,49 @@ public class RequestGridTests
         var (grid, window) = Open([new RequestRowViewModel(Row("a", "2026-10-26T11:00:00Z", 30))], width: 900);
         var row = BodyRows(grid)[0];
         Assert.Equal(1352, row.Bounds.Width, 1); // 92+320+72+110+130+104+88+92+116+136+92
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void In_a_narrow_window_the_sideways_scroll_bar_shows_at_the_bottom_of_the_visible_page_and_scrolls_the_columns()
+    {
+        // Issue #19: the bar sat under the last row (a page or more below the window) and showed only on hover, so the columns past the
+        // window's edge looked cut off. Hosted like the shell does: the page's vertical scroll area with its edge fade.
+        var ctx = new RequestTableContext { Clock = new FixedClock(DateTimeOffset.Parse("2026-10-26T12:00:00Z", System.Globalization.CultureInfo.InvariantCulture)), Provider = _ => null, TimeZone = TimeZoneInfo.Utc };
+        var rows = Enumerable.Range(0, 30).Select(i => new RequestRowViewModel(Row($"r{i}", "2026-10-26T11:00:00Z", i))).ToList();
+        var grid = RequestTable.Create(rows, ctx);
+        var page = new TKCode.Arc.ScrollArea { FadeLength = 18, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = grid };
+        var window = new Window { Content = page, Width = 900, Height = 600 };
+        window.Show();
+        SceneCapture.Pump(3);
+
+        var scroller = grid.GetVisualDescendants().OfType<ScrollViewer>().First();
+        var bar = scroller.GetVisualDescendants().OfType<ScrollBar>().First(b => b.Orientation == Orientation.Horizontal);
+        Assert.True(scroller.Extent.Width > scroller.Viewport.Width);
+        Assert.True(bar.IsEffectivelyVisible);
+        Assert.Equal(1, bar.Opacity); // shown without a pointer over the table
+        // drawn inside the visible page, above its bottom fade — not under the 30th row
+        var bottom = bar.TranslatePoint(new Point(0, bar.Bounds.Height), page)!.Value.Y;
+        Assert.InRange(bottom, page.Bounds.Height - 18 - 1, page.Bounds.Height - 18 + 1);
+        Assert.True(grid.BarShift < 0);
+
+        // dragging its thumb moves the header and the rows together
+        var header = grid.GetVisualDescendants().OfType<Control>().First(c => c.GetType().Name == "HeaderRow");
+        var thumb = bar.GetVisualDescendants().OfType<Thumb>().First();
+        var at = thumb.TranslatePoint(new Point(thumb.Bounds.Width / 2, thumb.Bounds.Height / 2), window)!.Value;
+        window.MouseMove(at);
+        window.MouseDown(at, MouseButton.Left);
+        window.MouseMove(at + new Point(100, 0));
+        window.MouseUp(at + new Point(100, 0), MouseButton.Left);
+        SceneCapture.Pump(3);
+        Assert.True(scroller.Offset.X > 50);
+        Assert.Equal(-scroller.Offset.X, header.TranslatePoint(default, scroller)!.Value.X, tolerance: 1.0); // whole pixels (layout rounding)
+        Assert.Equal(-scroller.Offset.X, BodyRows(grid)[0].TranslatePoint(default, scroller)!.Value.X, tolerance: 1.0);
+
+        // scrolled to the table's end, the bar is back in its own place under the last row
+        page.Offset = new Vector(0, page.Extent.Height);
+        SceneCapture.Pump(3);
+        Assert.Equal(0, grid.BarShift);
         window.Close();
     }
 }

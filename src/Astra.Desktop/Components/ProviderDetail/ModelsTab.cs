@@ -354,7 +354,7 @@ public sealed class RemoteModelsSheet : PdSheet
     private readonly ProviderDetailApi _api;
     private readonly ProviderDto _provider;
     private readonly HashSet<string> _checked = [];
-    private readonly StackPanel _list = new();
+    private StackPanel _list = new();
     private string _search = "";
     private ArcButton? _add;
     private ArcButton? _all;
@@ -409,6 +409,9 @@ public sealed class RemoteModelsSheet : PdSheet
         Description = Loc.T("providers.fetchRemoteDetail");
         var search = new SearchField { Placeholder = Loc.T("providers.searchModels"), IsLabelVisible = false, Text = _search, Margin = new Thickness(0, 0, 0, 12) };
         search.TextChanged += (_, _) => { _search = search.Text ?? ""; RebuildList(); };
+        // A new list panel per build: Show builds a new body each time, and the previous body still holds the old list as its child, so
+        // adding that one again threw "already has a visual parent" out of the button's click handler — the crash of issue #19.
+        _list = new StackPanel();
         Content = new StackPanel { Children = { search, _list } };
         _all = PdUi.Button(Loc.T("common.selectAll"), PdUi.Look.Plain, click: () =>
         {
