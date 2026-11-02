@@ -127,8 +127,12 @@ public sealed class ApiClient : IDisposable
         return text;
     }
 
+    // Json.Api matches property names case-insensitively, which also folds the keys of a free-form JsonObject: a client's
+    // extras.models is keyed by model id, so two providers' `glm-5.3` and `GLM-5.3` collided and threw on first access.
+    private static readonly JsonSerializerOptions ResponseJson = new(Json.Api) { PropertyNameCaseInsensitive = false };
+
     private static string? Encode<T>(T body, JsonTypeInfo<T>? info) =>
-        body is null ? null : System.Text.Json.JsonSerializer.Serialize(body, info ?? JsonContexts.Info<T>(Json.Api));
+        body is null ? null : System.Text.Json.JsonSerializer.Serialize(body, info ?? JsonContexts.Info<T>(ResponseJson));
 
     private async Task<T?> SendJsonAsync<T>(HttpMethod method, string path, string? body, JsonTypeInfo<T>? info, CancellationToken ct)
     {
@@ -136,7 +140,7 @@ public sealed class ApiClient : IDisposable
         if (status == 204 || string.IsNullOrWhiteSpace(text)) return default;
         try
         {
-            return System.Text.Json.JsonSerializer.Deserialize(text, info ?? JsonContexts.Info<T>(Json.Api));
+            return System.Text.Json.JsonSerializer.Deserialize(text, info ?? JsonContexts.Info<T>(ResponseJson));
         }
         catch (JsonException e)
         {
@@ -228,7 +232,7 @@ public sealed class ApiClient : IDisposable
     /// </summary>
     public async IAsyncEnumerable<T> StreamAsync<T>(string path, [EnumeratorCancellation] CancellationToken ct = default, Action? onOpen = null, JsonTypeInfo<T>? info = null)
     {
-        var typeInfo = info ?? JsonContexts.Info<T>(Json.Api);
+        var typeInfo = info ?? JsonContexts.Info<T>(ResponseJson);
         await foreach (var frame in StreamAsync(path, ct, onOpen).WithCancellation(ct).ConfigureAwait(false))
             if (TryDecode(frame, typeInfo, out var value)) yield return value;
     }
@@ -236,7 +240,7 @@ public sealed class ApiClient : IDisposable
     /// <summary>POST variant of <see cref="StreamAsync{T}"/>.</summary>
     public async IAsyncEnumerable<TEvent> StreamPostAsync<TReq, TEvent>(string path, TReq body, [EnumeratorCancellation] CancellationToken ct = default, Action? onOpen = null, JsonTypeInfo<TReq>? requestInfo = null, JsonTypeInfo<TEvent>? info = null)
     {
-        var typeInfo = info ?? JsonContexts.Info<TEvent>(Json.Api);
+        var typeInfo = info ?? JsonContexts.Info<TEvent>(ResponseJson);
         await foreach (var frame in StreamPostAsync(path, body, ct, onOpen, requestInfo).WithCancellation(ct).ConfigureAwait(false))
             if (TryDecode(frame, typeInfo, out var value)) yield return value;
     }
