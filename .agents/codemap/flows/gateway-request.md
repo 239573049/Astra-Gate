@@ -67,6 +67,13 @@ persisted at the end.
    model is refused with a 400. Attributes `astra.route.*` go on the `gateway.resolve` span; recent outcomes are kept in
    memory (`Routing/RoutingActivity.cs`) for the console's status. Settings: `Routing/SmartRoutingService.cs` (key
    `smart_routing`).
+    **Provider-qualified ids** (issue #21, `AppSettings.ProviderQualifiedModels`, off by default): any other model goes
+   through `Pipeline/QualifiedModelRouting.cs:ApplyAsync` — `Core/Routing/ModelQualifier.TrySplit` cuts `model@alias` at the last
+   separator whose right side is the alias (`Provider.Alias()`: `settings.alias`, else the name) of one of the caller's own
+   targets, and the route is pointed at that provider through `Routed` + `WithTarget` exactly like a smart-routing grade (the body's
+   `model` stays; a provider that does not serve the model is a 404). The same seam sits in `GatewayAuxiliary.CountTokensAsync` and
+   the images path. The lists (`ClientRouting.ListModelsAsync(targets, qualifier)`) are built with the qualifier by `/v1/models`,
+   `ClientService` (`ModelsAsync`, the enable context) and `/v1/astra/connect-context`; the smart-routing grade pickers stay bare.
 10. `Pipeline/GatewayRouter.cs:GatewayRouter.ForModelAsync` — a client bound to several providers gets the first one
    serving this model (as an enabled model or through its mapping), else its primary. A pool route instead gets an
    ordered candidate list from `Pipeline/PoolRouting.cs:PoolRouting.PlanAsync` (members serving the model, minus those

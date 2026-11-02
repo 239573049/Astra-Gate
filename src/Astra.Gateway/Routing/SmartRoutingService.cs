@@ -79,7 +79,7 @@ public sealed class SmartRoutingService(AstraDatabase db, ClientRouting routing)
         var targets = new List<RouteTarget>();
         foreach (var provider in await db.Providers.ListAsync(ct))
             if (ClientRouting.IsUsable(provider)) targets.Add(new RouteTarget(provider, null));
-        return await routing.ListModelsAsync(targets, ct);
+        return await routing.ListModelsAsync(targets, null, ct);
     }
 
     /// <summary>
@@ -90,7 +90,7 @@ public sealed class SmartRoutingService(AstraDatabase db, ClientRouting routing)
     {
         var options = new List<RoutableModel>();
         foreach (var provider in await db.Providers.ListAsync(ct))
-            if (ClientRouting.IsUsable(provider)) options.AddRange(await routing.ListModelsAsync([new RouteTarget(provider, null)], ct));
+            if (ClientRouting.IsUsable(provider)) options.AddRange(await routing.ListModelsAsync([new RouteTarget(provider, null)], null, ct));
         return options;
     }
 

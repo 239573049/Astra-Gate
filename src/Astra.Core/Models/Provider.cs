@@ -84,6 +84,20 @@ public sealed class Provider
     public bool SettingFlag(string key, bool defaultValue) =>
         Settings.TryGetPropertyValue(key, out var node) && node is JsonValue v && v.TryGetValue<bool>(out var b) ? b : defaultValue;
 
+    /// <summary>Settings key of the provider alias, see <see cref="Alias"/>.</summary>
+    public const string AliasKey = "alias";
+
+    /// <summary>
+    /// The short name that qualifies this provider's model ids (<c>glm-5.3@zcode</c>) while "provider-qualified model ids" is on
+    /// (<see cref="Routing.ModelQualifier"/>): settings <c>alias</c>, else the provider's name. Whitespace becomes "-" so the
+    /// id stays one token in a client's config.
+    /// </summary>
+    public string Alias()
+    {
+        var raw = Settings[AliasKey] is JsonValue v && v.TryGetValue<string>(out var a) && a.Trim().Length > 0 ? a : Name;
+        return string.Join('-', raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
     /// <summary>Settings key of the model mapping, see <see cref="ModelMap"/>.</summary>
     public const string ModelMapKey = "model_map";
 

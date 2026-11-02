@@ -644,6 +644,10 @@ public static class ProviderEndpoints
                 throw new AdminApiException(400, "Endpoints must be http(s) URLs without embedded credentials or fragments");
         if (!pluginOwned && !AuthSchemes.All.Contains(p.AuthScheme)) throw new AdminApiException(400, "Unknown authentication scheme");
         if (p.PriceMultiplier < 0) throw new AdminApiException(400, "Price multiplier must be non-negative");
+        // The alias that qualifies this provider's model ids (issue #21): text, no control characters; empty = use the name.
+        if (p.Settings[Provider.AliasKey] is { } alias
+            && (alias is not JsonValue av || !av.TryGetValue<string>(out var aliasText) || aliasText.Length > 64 || aliasText.Any(char.IsControl)))
+            throw new AdminApiException(400, "Provider alias must be text of at most 64 characters");
         if (p.HttpProxy is not null && (!Uri.TryCreate(p.HttpProxy, UriKind.Absolute, out var proxy) || proxy.Scheme is not ("http" or "https" or "socks5")))
             throw new AdminApiException(400, "Invalid HTTP/SOCKS proxy URL");
         if (p.ExtraHeaders.Keys.Distinct(StringComparer.OrdinalIgnoreCase).Count() != p.ExtraHeaders.Count)

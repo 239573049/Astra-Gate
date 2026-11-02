@@ -1563,6 +1563,17 @@ internal static class Messages
         "settings.requestCompression.none",
         "settings.preventSleep",
         "settings.preventSleepHint",
+        "settings.qualifiedModels",
+        "settings.qualifiedModels.footer",
+        "settings.qualifiedModels.enable",
+        "settings.qualifiedModels.enableHint",
+        "settings.qualifiedModels.separator",
+        "settings.qualifiedModels.separatorHint",
+        "providers.alias.title",
+        "providers.alias.footer",
+        "providers.alias.label",
+        "providers.alias.hint",
+        "providers.alias.saved",
         "settings.logging",
         "settings.debugBodies",
         "settings.debugBodiesHint",
@@ -4064,6 +4075,17 @@ internal static class Messages
             case "settings.preventSleepHint": return "网关有请求在处理（包括流式输出）时，阻止系统因闲置而睡眠，最后一个请求结束约 30 秒后解除；关闭开关或退出服务立即解除。显示器照常熄灭，合盖仍会睡眠。默认关闭；Linux 需要 systemd（systemd-inhibit），容器里不起作用。";
             case "settings.logging": return "记录";
             case "settings.debugBodies": return "保存请求与响应内容";
+            case "settings.qualifiedModels": return "按提供商区分同名模型";
+            case "settings.qualifiedModels.footer": return "多个提供商提供同一个模型时，客户端的模型列表里它们会分成「模型名@提供商别名」各一项，选哪一项请求就发给哪个提供商。不带别名的模型名仍按提供商优先级转发，所以已有配置不受影响。别名在提供商详情页设置，默认是提供商名称。";
+            case "settings.qualifiedModels.enable": return "在模型 ID 后附加提供商别名";
+            case "settings.qualifiedModels.enableHint": return "默认关闭，关闭时与现在完全一致。打开或修改后，已启用客户端的模型列表会自动更新。";
+            case "settings.qualifiedModels.separator": return "分隔符";
+            case "settings.qualifiedModels.separatorHint": return "模型名与提供商别名之间的符号，1–8 个字符，不含空白，默认 @。";
+            case "providers.alias.title": return "别名";
+            case "providers.alias.footer": return "开启「按提供商区分同名模型」后，这个提供商的模型 ID 会写成「模型名@别名」。别名不区分大小写，空格会换成 -；两个提供商别名相同时，列表里靠前的优先。";
+            case "providers.alias.label": return "提供商别名";
+            case "providers.alias.hint": return "留空则使用提供商名称";
+            case "providers.alias.saved": return "已保存别名";
             case "settings.debugBodiesHint": return "用于排查问题；内容保存在本机数据目录，不含密钥。";
             case "settings.traceContent": return "在链路追踪中记录对话内容";
             case "settings.traceContentHint": return "记录每次工具调用的参数（每个最多 4 KB）、用户提问和模型回复的开头（各 300 字）。默认关闭；内容随请求日志一起保存在本机，参数不经隐私护栏处理。";
@@ -6567,6 +6589,17 @@ internal static class Messages
             case "settings.debugBodies": return "Save request & response bodies";
             case "settings.debugBodiesHint": return "For troubleshooting. Stored in the local data folder, without secrets.";
             case "settings.traceContent": return "Record conversation content in traces";
+            case "settings.qualifiedModels": return "Tell providers apart by model id";
+            case "settings.qualifiedModels.footer": return "When several providers serve the same model, a client's model list shows one entry per provider, as \"model@provider alias\", and a request for an entry goes to that provider. A model name without an alias still routes by provider priority, so existing configs keep working. Set a provider's alias on its detail page; it defaults to the provider's name.";
+            case "settings.qualifiedModels.enable": return "Append the provider alias to model ids";
+            case "settings.qualifiedModels.enableHint": return "Off by default; off, nothing changes. Turning it on or changing it updates the model lists of enabled clients.";
+            case "settings.qualifiedModels.separator": return "Separator";
+            case "settings.qualifiedModels.separatorHint": return "Between the model name and the provider alias: 1–8 characters, no whitespace, \"@\" by default.";
+            case "providers.alias.title": return "Alias";
+            case "providers.alias.footer": return "With \"Tell providers apart by model id\" on, this provider's model ids read \"model@alias\". Aliases ignore case and spaces become \"-\"; when two providers share one, the earlier one in the list wins.";
+            case "providers.alias.label": return "Provider alias";
+            case "providers.alias.hint": return "Leave empty to use the provider's name";
+            case "providers.alias.saved": return "Alias saved";
             case "settings.traceContentHint": return "Keeps each tool call's arguments (up to 4 KB each) and the start of the user's prompt and the model's reply (300 characters each). Off by default; stored on this machine with the request log, and the arguments are not passed through the privacy guard.";
             case "settings.bodyRetention": return "Keep bodies";
             case "settings.requestRetention": return "Auto-delete request history";

@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Routing;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
@@ -58,7 +59,7 @@ public static class GatewayEndpoints
 
 /// <summary>Model listing and token counting (no usage record, no billing).</summary>
 public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs, GatewayHttpClients http,
-    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing, SmartRouter smartRouter)
+    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing, SmartRouter smartRouter, SettingsService settings)
 {
     /// <summary>
     /// The model ids every provider the caller can reach serves (the client's bound providers in binding order, their
@@ -127,7 +128,7 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
         {
             var targets = route.Targets.Count > 0 ? route.Targets : [new RouteTarget(route.Provider, route.AccountId)];
             // A mapped id shows under its own name; a provider model under its display name.
-            list = (await routing.ListModelsAsync(targets, ctx.RequestAborted))
+            list = (await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ctx.RequestAborted))
                 .Select(m => (m.Id, m.Id == m.Model.ModelId ? m.Model.Overrides.DisplayName ?? m.Id : m.Id, m.Target.Provider))
                 .ToList();
             // Smart routing's virtual model (plan §5.8), while it is on: clients pick it like any other model.
@@ -204,6 +205,7 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
                 if (routed.ProviderId is not null && await router.GradeTargetAsync(route, routed.ProviderId, routed.ModelId, isClaudeCode, ct) is { } target)
                     route = GatewayRouter.WithTarget(route, target);
             }
+            else route = await QualifiedModelRouting.ApplyAsync(router, route, requestedModel, settings.Current, isClaudeCode, ct);
             // Same provider choice as the generation request for this model (ClientRouting); nothing has left the machine yet.
             route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
             SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);

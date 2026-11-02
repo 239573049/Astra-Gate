@@ -94,6 +94,16 @@ public sealed class AppSettings
     /// </summary>
     public string RequestCompression { get; set; } = "default";
 
+    /// <summary>
+    /// Provider-qualified model ids (issue #21): the model lists clients see carry each provider's alias after the
+    /// <see cref="ModelProviderSeparator"/> (<c>glm-5.3@zcode</c>), so providers serving the same model id can be told apart, and a
+    /// request for such an id goes to that provider. Off = ids as they are, the first provider serving one wins.
+    /// </summary>
+    public bool ProviderQualifiedModels { get; set; }
+
+    /// <summary>Between a model id and its provider's alias while <see cref="ProviderQualifiedModels"/> is on (default "@").</summary>
+    public string ModelProviderSeparator { get; set; } = "@";
+
     /// <summary>Remote access through a Cloudflare Tunnel (Astra.Server's TunnelService).</summary>
     public TunnelSettings Tunnel { get; set; } = new();
 

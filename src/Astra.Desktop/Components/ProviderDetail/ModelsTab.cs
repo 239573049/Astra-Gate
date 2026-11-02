@@ -161,6 +161,7 @@ public sealed class ModelsTabView : UserControl
             foreach (var m in list) group.Rows.Add(ModelRow(m));
             _body.Children.Add(group);
         }
+        _body.Children.Add(AliasGroup());
         _body.Children.Add(MapGroup(models));
     }
 
@@ -176,6 +177,29 @@ public sealed class ModelsTabView : UserControl
         row.IsSelected = m.Id == _selected;
         row.Invoked += (_, _) => Select(m);
         return row;
+    }
+
+    /// <summary>
+    /// The provider's alias (settings.alias, web <c>ProviderAliasGroup</c>, issue #21): what follows the separator in this provider's model ids
+    /// while provider-qualified model ids are on. Empty = the provider's name.
+    /// </summary>
+    private Control AliasGroup()
+    {
+        var p = _api.Provider.Data ?? _provider;
+        var stored = ProviderDetailLogic.AliasOf(p.Settings);
+        var text = stored;
+        var group = new SettingsGroup { Title = Loc.T("providers.alias.title"), Footer = Loc.T("providers.alias.footer") };
+        ArcButton? save = null;
+        var input = PdUi.TextBox(stored, t => { text = t; if (save is not null) save.IsEnabled = text.Trim() != stored; }, 224, mono: true, name: Loc.T("providers.alias.label"), placeholder: p.Name);
+        input.MaxLength = 64;
+        save = PdUi.Button(Loc.T("common.save"), PdUi.Look.Glass, small: true, click: () => _ = PdRun.TryAsync(_ctx, async () =>
+        {
+            await _api.UpdateAsync(ProviderDetailLogic.AliasPatch(p.Settings, text));
+            _ctx.Feedback.Success(Loc.T("providers.alias.saved"));
+        }, save));
+        save.IsEnabled = false;
+        group.Rows.Add(PdUi.Row(Loc.T("providers.alias.label"), Loc.T("providers.alias.hint"), input, save));
+        return group;
     }
 
     /// <summary>

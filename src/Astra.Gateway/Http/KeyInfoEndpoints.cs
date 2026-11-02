@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using Astra.Core;
 using Astra.Core.Requests;
 using Astra.Core.Tokens;
+using Astra.Core.Routing;
 using Astra.Data;
 using Astra.Data.Repositories;
 using Astra.Gateway.Pipeline;
@@ -109,7 +110,7 @@ public static class KeyInfoEndpoints
     /// when <c>RequireGatewayKey</c> is off.
     /// </summary>
     private static async Task<IResult> ConnectContextAsync(HttpContext ctx, AstraDatabase db, GatewayRouter router,
-        ClientRouting routing, SmartRouter smartRouter, CancellationToken ct)
+        ClientRouting routing, SmartRouter smartRouter, SettingsService settings, CancellationToken ct)
     {
         if (await AuthenticateAsync(ctx, db, ct) is not { } token) return Unauthorized();
         GatewayRoute route;
@@ -123,7 +124,7 @@ public static class KeyInfoEndpoints
         }
         var targets = route.Targets.Count > 0 ? route.Targets : [new RouteTarget(route.Provider, route.AccountId)];
         var models = new List<JsonNode>();
-        foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ct))
+        foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct))
         {
             var entry = new JsonObject { ["id"] = id, ["name"] = id == pm.ModelId ? effective.DisplayName : id };
             if (effective.ContextWindow is { } context) entry["contextWindow"] = context;

@@ -227,6 +227,8 @@ function GeneralSettings() {
             </Row>
           </Group>
 
+          <QualifiedModelsSettings settings={s} />
+
           <ProxySettings settings={s} />
 
           <PluginMarketSettings settings={s} />
@@ -522,6 +524,49 @@ function ProxySettings({ settings: s }: { settings: Settings }) {
             </Button>
           </div>
         </>
+      )}
+    </Group>
+  );
+}
+
+/**
+ * Provider-qualified model ids (issue #21): with the switch on, the model lists clients see carry each provider's alias
+ * after the separator (`glm-5.3@zcode`), and a request for such an id goes to that provider. The separator saves on blur.
+ */
+function QualifiedModelsSettings({ settings: s }: { settings: Settings }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateSettings();
+  const on = s.providerQualifiedModels ?? false;
+  const saved = s.modelProviderSeparator ?? '@';
+  const [separator, setSeparator] = useState(saved);
+  useEffect(() => setSeparator(saved), [saved]);
+
+  const save = (patch: Partial<Settings>) =>
+    update.mutate(patch, {
+      onError: (e) => {
+        setSeparator(saved);
+        toast(errorText(e), 'error');
+      },
+    });
+
+  return (
+    <Group title={t('settings.qualifiedModels')} footer={t('settings.qualifiedModels.footer')}>
+      <Row label={t('settings.qualifiedModels.enable')} detail={t('settings.qualifiedModels.enableHint')}>
+        <Switch checked={on} label={t('settings.qualifiedModels.enable')} onChange={(providerQualifiedModels) => save({ providerQualifiedModels })} />
+      </Row>
+      {on && (
+        <Row label={t('settings.qualifiedModels.separator')} detail={t('settings.qualifiedModels.separatorHint')}>
+          <Input
+            className="w-24"
+            mono
+            maxLength={8}
+            aria-label={t('settings.qualifiedModels.separator')}
+            value={separator}
+            onChange={(e) => setSeparator(e.target.value)}
+            onBlur={() => separator !== saved && save({ modelProviderSeparator: separator })}
+          />
+        </Row>
       )}
     </Group>
   );

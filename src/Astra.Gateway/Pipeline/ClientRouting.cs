@@ -1,5 +1,6 @@
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Routing;
 using Astra.Data;
 
 namespace Astra.Gateway.Pipeline;
@@ -68,12 +69,14 @@ public sealed class ClientRouting(AstraDatabase db, EffectiveModelResolver model
     /// <summary>
     /// Model ids usable across <paramref name="targets"/>, in binding order: per provider its enabled models (in its
     /// model order), then its mapped ids whose target is one of those models. An id offered by several providers is
-    /// listed once, for the first of them — the one <see cref="MatchAsync"/> picks.
+    /// listed once, for the first of them — the one <see cref="MatchAsync"/> picks. With a <paramref name="qualifier"/> (issue
+    /// #21) every provider lists its own ids, each carrying the provider's alias, so nothing is merged and nothing is shadowed.
     /// </summary>
-    public async Task<List<RoutableModel>> ListModelsAsync(IReadOnlyList<RouteTarget> targets, CancellationToken ct = default)
+    public async Task<List<RoutableModel>> ListModelsAsync(IReadOnlyList<RouteTarget> targets, ModelQualifier? qualifier = null, CancellationToken ct = default)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var result = new List<RoutableModel>();
+        string Listed(string id, RouteTarget target) => qualifier is null ? id : qualifier.Qualify(id, target.Provider);
         foreach (var target in targets)
         {
             var map = target.Provider.ModelMap();
@@ -85,10 +88,10 @@ public sealed class ClientRouting(AstraDatabase db, EffectiveModelResolver model
             }
             // A provider model whose id is itself mapped elsewhere is reached under that id only through the mapping.
             foreach (var (id, (pm, effective)) in enabled)
-                if (!map.ContainsKey(id) && seen.Add(id)) result.Add(new RoutableModel(id, target, pm, effective));
+                if (!map.ContainsKey(id) && seen.Add(Listed(id, target))) result.Add(new RoutableModel(Listed(id, target), target, pm, effective));
             foreach (var (alias, upstream) in map)
-                if (enabled.TryGetValue(upstream, out var hit) && seen.Add(alias))
-                    result.Add(new RoutableModel(alias, target, hit.Model, hit.Effective));
+                if (enabled.TryGetValue(upstream, out var hit) && seen.Add(Listed(alias, target)))
+                    result.Add(new RoutableModel(Listed(alias, target), target, hit.Model, hit.Effective));
         }
         return result;
     }

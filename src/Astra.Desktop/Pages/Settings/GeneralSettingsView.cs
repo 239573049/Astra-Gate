@@ -210,6 +210,31 @@ public sealed class GeneralSettingsView : LiveView
             RowBuilder.Row(Loc.T("settings.preventSleep"), null,
                 Switch(Loc.T("settings.preventSleep"), x => x.PreventSleep, on => PatchAsync(JsonPatch.Of(("preventSleep", on)))))));
 
+        // provider-qualified model ids (issue #21; web SettingsPage QualifiedModelsSettings): the switch applies at once, the separator is saved with its button
+        var separator = s.ModelProviderSeparator;
+        var separatorText = separator;
+        Avalonia.Controls.Button? saveSeparator = null;
+        var separatorField = Ui.Field(Loc.T("settings.qualifiedModels.separator"), separator, t =>
+        {
+            separatorText = t;
+            if (saveSeparator is not null) saveSeparator.IsEnabled = separatorText != _lastSettings!.ModelProviderSeparator;
+        }, 96, mono: true);
+        separatorField.MaxLength = 8;
+        var saveSeparatorButton = Ui.Button(Loc.T("common.save"), () => _ = PatchAsync(JsonPatch.Of(("modelProviderSeparator", separatorText))), enabled: false);
+        saveSeparator = saveSeparatorButton;
+        _updaters.Add(x =>
+        {
+            if (separatorField.Text != x.ModelProviderSeparator) separatorField.Text = x.ModelProviderSeparator;
+            separatorText = x.ModelProviderSeparator;
+            saveSeparatorButton.IsEnabled = false;
+            separatorField.IsEnabled = x.ProviderQualifiedModels;
+        });
+        separatorField.IsEnabled = s.ProviderQualifiedModels;
+        stack.Children.Add(RowBuilder.Group(Loc.T("settings.qualifiedModels"), Loc.T("settings.qualifiedModels.footer"),
+            RowBuilder.Row(Loc.T("settings.qualifiedModels.enable"), Loc.T("settings.qualifiedModels.enableHint"),
+                Switch(Loc.T("settings.qualifiedModels.enable"), x => x.ProviderQualifiedModels, on => PatchAsync(JsonPatch.Of(("providerQualifiedModels", on))))),
+            RowBuilder.Row(Loc.T("settings.qualifiedModels.separator"), Loc.T("settings.qualifiedModels.separatorHint"), separatorField, saveSeparatorButton)));
+
         _proxy = new ProxyGroup(Host, _api, s);
         stack.Children.Add(_proxy.Group);
         _market = new MarketGroup(Host, _api, s);

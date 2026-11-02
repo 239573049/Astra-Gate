@@ -87,6 +87,19 @@ public static class ProviderDetailLogic
     public static List<string> ParseModelIds(string text)
         => text.Split([' ', '\t', '\n', '\r', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.Ordinal).ToList();
 
+    /// <summary>The provider's <c>settings.alias</c> as stored (web <c>ProviderAliasGroup</c>); empty = the provider's name is used.</summary>
+    public static string AliasOf(JsonObject? settings) =>
+        settings?["alias"] is JsonValue v && v.TryGetValue<string>(out var alias) ? alias : "";
+
+    /// <summary>The PATCH body that sets the alias (trimmed; empty removes it) and keeps the rest of the settings as they are.</summary>
+    public static JsonObject AliasPatch(JsonObject? settings, string alias)
+    {
+        var next = settings?.DeepClone() as JsonObject ?? new JsonObject();
+        if (alias.Trim() is { Length: > 0 } text) next["alias"] = text;
+        else next.Remove("alias");
+        return new JsonObject { ["settings"] = next };
+    }
+
     /// <summary>The non-empty string entries of <c>settings.model_map</c> (web <c>modelMapOf</c>), in their stored order.</summary>
     public static List<KeyValuePair<string, string>> ModelMapOf(JsonObject? settings)
     {

@@ -171,7 +171,8 @@ export interface Provider {
   hasApiKey: boolean; apiKeyMasked?: string | null; // e.g. "sk-…a1b2"
   extraHeaders: Record<string, string>; httpProxy?: string | null;
   priceMultiplier: number; priceKey?: string | null; adapterId?: string | null;
-  /** settings.model_map (requested model id → provider model id) is written only through PUT /api/providers/{id}/model-map. */
+  /** settings.model_map (requested model id → provider model id) is written only through PUT /api/providers/{id}/model-map.
+   *  settings.alias (text, at most 64 characters) is the short name that qualifies this provider's model ids; empty = the name. */
   settings: Record<string, unknown>;
   enabled: boolean; sortOrder: number; notes?: string | null; website?: string | null;
   modelCount: number; boundClients: string[]; createdAt: string; updatedAt: string;
@@ -941,6 +942,10 @@ export interface Settings {
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
   /** Keep the system from idle sleep while gateway requests are in flight; released ~30 s after the last one (off by default). */
   preventSleep?: boolean;
+  /** Provider-qualified model ids (`model@alias`): model lists tell providers apart and a qualified id goes to that provider (off by default). */
+  providerQualifiedModels?: boolean;
+  /** Between a model id and its provider's alias while providerQualifiedModels is on (1-8 characters, no whitespace; default "@"). */
+  modelProviderSeparator?: string;
   /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */
   updateChannel: "stable" | "preview"; updateAutoCheck: boolean;
   /** Request body coding for providers that compress (e.g. ChatGPT subscription's zstd): default = each provider's own; none = off. */

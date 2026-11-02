@@ -258,10 +258,54 @@ function ModelsTab({ provider, models, loading, selected, onSelect }: { provider
           ))}
         </Group>
       )}
+      <ProviderAliasGroup provider={provider} />
       {models && <ModelMapGroup provider={provider} models={models} />}
       <AddModelsSheet open={addOpen} onOpenChange={setAddOpen} provider={provider} />
       <RemoteModelsSheet open={remoteOpen} onOpenChange={setRemoteOpen} provider={provider} />
     </>
+  );
+}
+
+/**
+ * The provider's alias (settings.alias, issue #21): what follows the separator in this provider's model ids while
+ * provider-qualified model ids are on (`glm-5.3@zcode`). Empty = the provider's name.
+ */
+function ProviderAliasGroup({ provider }: { provider: Provider }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateProvider(provider.id);
+  const stored = typeof provider.settings.alias === 'string' ? provider.settings.alias : '';
+  const [alias, setAlias] = useState(stored);
+  useEffect(() => setAlias(stored), [stored]);
+
+  const save = () => {
+    const next = alias.trim();
+    const settings = { ...provider.settings };
+    if (next) settings.alias = next;
+    else delete settings.alias;
+    update.mutate(
+      { settings },
+      { onSuccess: () => toast(t('providers.alias.saved'), 'success'), onError: (e) => toast(errorText(e), 'error') },
+    );
+  };
+
+  return (
+    <Group title={t('providers.alias.title')} footer={t('providers.alias.footer')}>
+      <Row label={t('providers.alias.label')} detail={t('providers.alias.hint')}>
+        <Input
+          className="w-56"
+          mono
+          maxLength={64}
+          aria-label={t('providers.alias.label')}
+          placeholder={provider.name}
+          value={alias}
+          onChange={(e) => setAlias(e.target.value)}
+        />
+        <Button size="sm" disabled={update.isPending || alias.trim() === stored} onClick={save}>
+          {t('common.save')}
+        </Button>
+      </Row>
+    </Group>
   );
 }
 

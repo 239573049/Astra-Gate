@@ -294,6 +294,8 @@ public sealed partial class GatewayPipeline(
                 // The request log shows how this request was routed — judged, reused, fallen back or moved — at a glance.
                 record.RoutingJson = Json.Serialize(decision.Report());
             }
+            // Provider-qualified ids (issue #21): `model@alias` pins the provider and the model, still without touching the body.
+            else route = await QualifiedModelRouting.ApplyAsync(router, route, requestedModel, settings.Current, isClaudeCode, ct);
             List<GatewayRoute> candidates;
             var maxAttempts = 1;
             if (route.Pool is { } pool && pools is not null)

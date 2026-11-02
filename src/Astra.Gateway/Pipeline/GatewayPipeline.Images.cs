@@ -162,6 +162,7 @@ public sealed partial class GatewayPipeline
             // Where it goes: the provider serving the model among the client's bindings, or the member the token's pool
             // picks (its rotation advances; an image is not failed over to the next member), as for a generation request.
             var resolveSpan = trace.Start(TraceSpanNames.Resolve);
+            route = await QualifiedModelRouting.ApplyAsync(router, route, requestedModel, settings.Current, false, ct);
             var clientModel = route.ClientModelFor(requestedModel);
             if (route.Pool is not null && pools is not null)
             {

@@ -7,6 +7,7 @@ using Astra.Core;
 using Astra.Core.Clients;
 using Astra.Core.Plugins;
 using Astra.Core.Tokens;
+using Astra.Core.Routing;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Routing;
@@ -19,7 +20,7 @@ namespace Astra.Server.Api;
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
-    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents, SmartRouter smartRouter)
+    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents, SmartRouter smartRouter, SettingsService settings)
 {
     /// <summary>The key in a plugin client's extras holding its plugin's descriptor, for restoring it offline.</summary>
     public const string PluginExtrasKey = "plugin";
@@ -350,7 +351,7 @@ public sealed class ClientService(
         await RefreshRegistryAsync(ct);
         Require(kind);
         var targets = await routing.TargetsAsync(await BindingsOrDefaultAsync(kind, await IsEnabledAsync(kind, ct), DefaultProvider(ct), ct), ct);
-        var models = (await routing.ListModelsAsync(targets, ct)).Select(m => m.Id).ToList();
+        var models = (await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct)).Select(m => m.Id).ToList();
         if (smartRouter.AdvertisedModel is { } virtualModel && !models.Contains(virtualModel)) models.Add(virtualModel);
         return models;
     }
@@ -410,7 +411,7 @@ public sealed class ClientService(
             // Every bound provider's models and mapped ids, each id once (ClientRouting): the gateway routes each to its
             // provider. A mapped id carries its target model's capabilities under its own name.
             var list = new JsonObject();
-            foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ct))
+            foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct))
             {
                 var entry = new JsonObject { ["id"] = id, ["name"] = id == pm.ModelId ? effective.DisplayName : id };
                 // Capability hints for clients that declare per-model limits (VS Code Copilot); omitted when unknown.
@@ -443,7 +444,7 @@ public sealed class ClientService(
         if (kind == ClientKinds.ClaudeCode && ClientOptions.GetBool(extras, ClientOptions.Context1M))
         {
             without1M = [];
-            foreach (var (id, _, _, effective) in await routing.ListModelsAsync(targets, ct))
+            foreach (var (id, _, _, effective) in await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct))
                 if (effective.ContextWindow is { } window && window < 1_000_000) without1M.Add(id);
         }
         return new EnableContext
