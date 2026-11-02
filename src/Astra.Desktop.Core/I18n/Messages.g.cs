@@ -4073,8 +4073,6 @@ internal static class Messages
             case "settings.requestCompression.none": return "不压缩";
             case "settings.preventSleep": return "处理请求时阻止系统休眠";
             case "settings.preventSleepHint": return "网关有请求在处理（包括流式输出）时，阻止系统因闲置而睡眠，最后一个请求结束约 30 秒后解除；关闭开关或退出服务立即解除。显示器照常熄灭，合盖仍会睡眠。默认关闭；Linux 需要 systemd（systemd-inhibit），容器里不起作用。";
-            case "settings.logging": return "记录";
-            case "settings.debugBodies": return "保存请求与响应内容";
             case "settings.qualifiedModels": return "按提供商区分同名模型";
             case "settings.qualifiedModels.footer": return "多个提供商提供同一个模型时，客户端的模型列表里它们会分成「模型名@提供商别名」各一项，选哪一项请求就发给哪个提供商。不带别名的模型名仍按提供商优先级转发，所以已有配置不受影响。别名在提供商详情页设置，默认是提供商名称。";
             case "settings.qualifiedModels.enable": return "在模型 ID 后附加提供商别名";
@@ -4086,6 +4084,8 @@ internal static class Messages
             case "providers.alias.label": return "提供商别名";
             case "providers.alias.hint": return "留空则使用提供商名称";
             case "providers.alias.saved": return "已保存别名";
+            case "settings.logging": return "记录";
+            case "settings.debugBodies": return "保存请求与响应内容";
             case "settings.debugBodiesHint": return "用于排查问题；内容保存在本机数据目录，不含密钥。";
             case "settings.traceContent": return "在链路追踪中记录对话内容";
             case "settings.traceContentHint": return "记录每次工具调用的参数（每个最多 4 KB）、用户提问和模型回复的开头（各 300 字）。默认关闭；内容随请求日志一起保存在本机，参数不经隐私护栏处理。";
@@ -6585,10 +6585,6 @@ internal static class Messages
             case "settings.requestCompression.none": return "No compression";
             case "settings.preventSleep": return "Keep the system awake while requests are in flight";
             case "settings.preventSleepHint": return "While the gateway is handling requests (streams included), the system does not go to sleep when idle; it may again about 30 seconds after the last one finishes, or at once when you turn this off or the server stops. The display still turns off and closing the lid still sleeps. Off by default; on Linux it needs systemd (systemd-inhibit) and has no effect in containers.";
-            case "settings.logging": return "Logging";
-            case "settings.debugBodies": return "Save request & response bodies";
-            case "settings.debugBodiesHint": return "For troubleshooting. Stored in the local data folder, without secrets.";
-            case "settings.traceContent": return "Record conversation content in traces";
             case "settings.qualifiedModels": return "Tell providers apart by model id";
             case "settings.qualifiedModels.footer": return "When several providers serve the same model, a client's model list shows one entry per provider, as \"model@provider alias\", and a request for an entry goes to that provider. A model name without an alias still routes by provider priority, so existing configs keep working. Set a provider's alias on its detail page; it defaults to the provider's name.";
             case "settings.qualifiedModels.enable": return "Append the provider alias to model ids";
@@ -6600,6 +6596,10 @@ internal static class Messages
             case "providers.alias.label": return "Provider alias";
             case "providers.alias.hint": return "Leave empty to use the provider's name";
             case "providers.alias.saved": return "Alias saved";
+            case "settings.logging": return "Logging";
+            case "settings.debugBodies": return "Save request & response bodies";
+            case "settings.debugBodiesHint": return "For troubleshooting. Stored in the local data folder, without secrets.";
+            case "settings.traceContent": return "Record conversation content in traces";
             case "settings.traceContentHint": return "Keeps each tool call's arguments (up to 4 KB each) and the start of the user's prompt and the model's reply (300 characters each). Off by default; stored on this machine with the request log, and the arguments are not passed through the privacy guard.";
             case "settings.bodyRetention": return "Keep bodies";
             case "settings.requestRetention": return "Auto-delete request history";
