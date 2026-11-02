@@ -476,6 +476,16 @@ public sealed partial class GatewayPipeline(
                             ["content"] = new JsonArray(new JsonObject { ["type"] = "input_text", ["text"] = inputText }),
                         });
                     }
+                    // codex backend 不认 input 里的 role=system（回 400 "System messages are not allowed"），
+                    // 直通的 Responses 客户端可能发；OpenAI 对应的角色是 developer。
+                    if (upstreamTree["input"] is JsonArray inputItems)
+                        foreach (var item in inputItems)
+                            if (item is JsonObject itemObject && itemObject["role"] is JsonValue roleValue
+                                && roleValue.TryGetValue<string>(out var itemRole) && itemRole == "system")
+                                itemObject["role"] = "developer";
+                    // codex backend 要求带 instructions（缺了回 400）；客户端没给就补空串，给了的保持原样。
+                    if (upstreamTree["instructions"] is null)
+                        upstreamTree["instructions"] = "";
                     upstreamTree["store"] = false;
                     upstreamTree["stream"] = true;
                     foreach (var name in CodexUnsupportedParams) upstreamTree.Remove(name);
