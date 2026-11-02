@@ -4,6 +4,12 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.13.7] - 2026-11-02
+
+### 修复
+
+- **Codex 订阅账户的请求被上游拒绝**：用 Codex（ChatGPT）订阅登录的账户收到 Responses 请求时，如果 `input` 里带有 `role: "system"` 的消息，现在会自动改成 OpenAI 支持的 `developer` 角色再发给上游；请求没有带 `instructions` 时，会补上空的 `instructions`。此前这两种情况上游都会回 400。
+
 ## [0.13.6] - 2026-11-02
 
 ### 新增
