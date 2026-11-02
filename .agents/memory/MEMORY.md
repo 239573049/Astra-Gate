@@ -10,6 +10,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Desktop page lifetime](desktop-page-lifetime.md) — pages subscribe to shared queries via Subscribe/OnDispose (2026-10-27 leak + Requests redraw storm); one Arc-held instance per page type is expected; polled queries a view rebuilds from use SameData + a QueryWatch select (issue #16)
 - [Rebuilt bodies must not re-add kept controls](desktop-rebuild-reparent-crash.md) — a Build that wraps a field control in a new container throws "already has a visual parent" and kills the app (issue #19, 2026-10-30); three language-change cases still open
 - [Desktop tray relaunch](desktop-tray-relaunch.md) — a shown window leaves GPU memory nothing frees; 15 s after a close the app restarts `--hidden` (~250 → ~50 MB, 2026-10-30), which builds no main window; what the ~50 MB floor is; guards and hand-over rules
+- [Electron vs Avalonia memory](desktop-memory-electron-vs-avalonia.md) — measured 2026-10-30: window 316 → 214 MB, tray 157 → 53 MB, 4 → 1 processes; web-vs-Avalonia 466 scenes, 1.6% mean pixel diff; how to re-measure
 - [Avalonia DispatcherTimer starts itself](avalonia-dispatchertimer-autostart.md) — the (interval, priority, callback) constructor runs the timer at once; it made tray-only processes restart in a loop
 - [Windows tray menu is an Avalonia window](avalonia-win32-tray-menu-window.md) — TrayPopupRoot sized to a MenuFlyoutPresenter; without menu themes it was 0 x 0 (issue #18, fixed 0.13.2); TrayMenuWindowTests builds it headless
 - [Jint AOT fallback was rejected](jint-aot-fallback-rejected.md) — middleware stays in-process; the Bun middleware host was the failure plan, not a design
@@ -21,7 +22,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Client protocols left out on purpose](client-protocols-not-used.md) — Zed Anthropic, Hermes Responses, OpenCode Gemini, WorkBuddy Responses: why each stays translated
 - [Windows autostart uses the Run key](autostart-run-key-not-schtasks.md) — schtasks logon tasks need elevation; the server never loads/unloads its own entry
 - [Orphaned server after a failed update](orphaned-server-after-failed-update.md) — two servers on one data dir: UI shows the old one, the updater says up to date
-- [Avalonia updater was server-only](avalonia-updater-server-only.md) — packaged apps drifted behind their server; fixed 2026-10-30 with the track rule + app self-update (option B), unverified in a real release
+- [Avalonia updater was server-only](avalonia-updater-server-only.md) — packaged apps drifted behind their server; fixed 2026-10-30 with the track rule + app self-update (option B); 0.13.5 (stable) is the first self-update target, unverified on any OS
 - [Release channels decision](release-channels-decision.md) — preview is derived from the version, the preview feed merges in stable, the manifest goes up after npm
 - [Self-service shows the requested model](key-self-service-requested-model.md) — holders see their request log and per-requested-model stats; never provider, account or upstream model
 - [Subscription tokens refresh on use](subscription-refresh-on-use.md) — no worker renews them (2026-10-30 user decision); background quota rounds skip lapsed tokens; idle cards show a past expiry

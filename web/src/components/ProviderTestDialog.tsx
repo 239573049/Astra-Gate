@@ -76,7 +76,7 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
   const protocols = provider.endpoints.map((e) => e.protocol);
 
   const [mode, setMode] = useState<'single' | 'batch'>('single');
-  const [protocol, setProtocol] = useState<ApiProtocol>(() => preferredProtocol(provider));
+  const [protocol, setProtocol] = useState<TestProtocol>(() => preferredProtocol(provider));
   const [stream, setStream] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [maxTokens, setMaxTokens] = useState<number | null>(DEFAULT_MAX_TOKENS);
@@ -449,10 +449,13 @@ function ModelPicker({ value, models, onChange }: { value: string; models: strin
   );
 }
 
+/** What the protocol box offers: a provider's endpoints, plus the Images API beside an OpenAI one (not an `ApiProtocol`). */
+type TestProtocol = ApiProtocol | 'openai-images';
+
 interface ConfigFieldProps {
   protocols: ApiProtocol[];
-  protocol: ApiProtocol;
-  onProtocol: (value: ApiProtocol) => void;
+  protocol: TestProtocol;
+  onProtocol: (value: TestProtocol) => void;
   stream: boolean;
   onStream: (value: boolean) => void;
   maxTokens: number | null;
@@ -464,7 +467,11 @@ interface ConfigFieldProps {
 /** The configuration shared by both modes; the batch mode shows it in its own small dialog. */
 function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
   const { t } = useI18n();
-  const options = protocols.map((p) => ({ value: p, label: PROTOCOL_OPTIONS.find((o) => o.value === p)?.label ?? p }));
+  const options: { value: TestProtocol; label: string }[] = protocols.map((p) => ({
+    value: p,
+    label: PROTOCOL_OPTIONS.find((o) => o.value === p)?.label ?? p,
+  }));
+  if (protocols.some((p) => p === 'openai-chat' || p === 'openai-responses')) options.push({ value: 'openai-images', label: 'OpenAI Images' });
   return (
     <>
       <Field label={t('providers.testDialog.protocol')}>

@@ -69,6 +69,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
 
     /// <summary>Used when the caller sends no prompt.</summary>
     public const string DefaultTestPrompt = "Reply with OK.";
+    /// <summary>The prompt of an image test (the cheapest picture to ask for) when the caller sends none.</summary>
+    public const string DefaultImageTestPrompt = "A small red circle on a white background.";
     public const int DefaultMaxOutputTokens = 256;
     public const int MaxTestPromptChars = 4000;
 
@@ -76,6 +78,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     private const int ModelListTimeoutSec = 30;
     private const int StreamReadTimeoutSec = 30;
     private const int MaxResponseBytes = 4 * 1024 * 1024;
+    /// <summary>An image test's answer carries the picture as base64 (issue #17): a larger cap, and it is never kept or shown.</summary>
+    private const int MaxImageResponseBytes = 32 * 1024 * 1024;
     private const int MaxErrorBytes = 1024 * 1024;
     private const int MaxModels = 2000;
     private const int MaxPages = 20;
@@ -87,6 +91,39 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     /// <summary>Response headers echoed in the result; values longer than this are cut.</summary>
     private const int MaxHeaderValueChars = 1024;
     private const int MaxHeaderCount = 100;
+
+    /// <summary>
+    /// Whether a test of <paramref name="modelId"/> goes to the OpenAI Images API instead of a chat endpoint: the
+    /// <c>gpt-image-*</c> / <c>chatgpt-image-*</c> / <c>dall-e-*</c> families (a model id carries no other signal; there is
+    /// no image <see cref="ApiProtocol"/>, see images-api-forwarding).
+    /// </summary>
+    internal static bool IsImageModel(string modelId)
+    {
+        var id = modelId.Contains('/') ? modelId[(modelId.LastIndexOf('/') + 1)..] : modelId;
+        return id.StartsWith("gpt-image", StringComparison.OrdinalIgnoreCase)
+               || id.StartsWith("chatgpt-image", StringComparison.OrdinalIgnoreCase)
+               || id.StartsWith("dall-e", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>The smallest Images API request there is: just the model and the prompt (no size, quality, n or format).</summary>
+    internal static JsonObject TestImageBody(string model, string prompt) => new() { ["model"] = model, ["prompt"] = prompt };
+
+    /// <summary>
+    /// A copy of an Images API answer with each picture's base64 replaced by its size, so neither the "raw" view, the
+    /// debug capture nor the request log carries it.
+    /// </summary>
+    internal static string StripImages(string body, out int images)
+    {
+        images = 0;
+        if (TryObject(body) is not { } root || root["data"] is not JsonArray data) return body;
+        foreach (var item in data)
+        {
+            if (item is not JsonObject row || row["b64_json"] is not JsonValue v || !v.TryGetValue<string>(out var b64)) continue;
+            images++;
+            row["b64_json"] = $"[{b64.Length} base64 chars omitted]";
+        }
+        return root.ToJsonString(GatewayJson.Options);
+    }
 
     /// <summary>The upstream protocols this provider can be tested with (one endpoint each).</summary>
     public static IReadOnlyList<ApiProtocol> ProtocolsFor(Provider p) =>
@@ -105,7 +142,11 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         if (string.IsNullOrWhiteSpace(modelId)) throw new AdminApiException(400, "Add a model or provide modelId first");
         modelId = modelId.Trim();
         if (modelId.Length > 512 || modelId.Any(char.IsControl)) throw new AdminApiException(400, "Invalid model ID");
-        var protocol = options.Protocol ?? PreferredEndpoint(p).Protocol;
+        var protocol = options.Protocol
+                       ?? (options.Image
+                           ? (p.EndpointFor(ApiProtocol.OpenAIChat) ?? p.EndpointFor(ApiProtocol.OpenAIResponses))?.Protocol
+                             ?? throw new AdminApiException(400, "The Images API needs an OpenAI endpoint (openai-chat or openai-responses)")
+                           : PreferredEndpoint(p).Protocol);
         if (p.EndpointFor(protocol) is null) throw new AdminApiException(400, $"Provider has no endpoint for protocol {protocol.ToId()}");
         var prompt = options.Prompt?.Trim();
         if (prompt is { Length: > MaxTestPromptChars }) throw new AdminApiException(400, $"Test prompt must be at most {MaxTestPromptChars} characters");
@@ -123,16 +164,20 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         var p = await ProviderEndpoints.RequireAsync(db, providerId, ct);
         var protocol = p.EndpointFor(run.Protocol) is { } endpoint ? run.Protocol : PreferredEndpoint(p).Protocol;
         endpoint = p.EndpointFor(protocol)!;
-        var prompt = string.IsNullOrWhiteSpace(run.Prompt) ? DefaultTestPrompt : run.Prompt;
+        // An image model is tested on the Images API through the endpoint's OpenAI protocols, never streamed.
+        var image = (options.Image || IsImageModel(run.ModelId)) && protocol is ApiProtocol.OpenAIChat or ApiProtocol.OpenAIResponses;
+        var stream = options.Stream && !image;
+        var prompt = string.IsNullOrWhiteSpace(run.Prompt) ? (image ? DefaultImageTestPrompt : DefaultTestPrompt) : run.Prompt;
         var (_, effective) = await models.ResolveByModelIdAsync(p, run.ModelId, ct);
         run.Emit = emit;
 
         var record = new RequestRecord
         {
             Id = Ulid.NewUlid(), StartedAtUtc = DateTimeOffset.UtcNow, ProviderId = p.Id, ProviderName = p.Name,
-            InboundProtocol = protocol.ToId(), UpstreamProtocol = protocol.ToId(), Passthrough = true,
+            InboundProtocol = image ? GatewayPipeline.ImagesProtocol : protocol.ToId(),
+            UpstreamProtocol = image ? GatewayPipeline.ImagesProtocol : protocol.ToId(), Passthrough = true,
             RequestedModel = run.ModelId, UpstreamModel = run.ModelId, SystemModelId = effective.SystemModelId,
-            Stream = options.Stream, UserAgent = "Astra connection test", Status = RequestStatus.GatewayError,
+            Stream = stream, UserAgent = "Astra connection test", Status = RequestStatus.GatewayError,
         };
         var capture = settings.Current.DebugBodies ? new Dictionary<string, string>(StringComparer.Ordinal) : null;
         var sw = Stopwatch.StartNew();
@@ -152,7 +197,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
 
         try
         {
-            var bodyText = TestBody(run.ModelId, prompt, options.MaxOutputTokens, options.Stream, protocol)
+            var bodyText = (image ? TestImageBody(run.ModelId, prompt) : TestBody(run.ModelId, prompt, options.MaxOutputTokens, stream, protocol))
                 .ToJsonString(GatewayJson.Options);
             // Privacy guard (plan §6.7): a test prompt is client content, so the same policy and the same request-log
             // report apply as for a gateway request.
@@ -171,8 +216,11 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             else
             {
                 using var client = CreateClient(p);
-                using var request = await RequestAsync(p, HttpMethod.Post, UpstreamUrls.For(endpoint, run.ModelId, options.Stream),
-                    protocol, options.Stream, deadline.Token);
+                var url = image
+                    ? UpstreamUrls.Images(endpoint, "images/generations")
+                      ?? throw new AdminApiException(400, "The provider's OpenAI endpoint is a complete address; the Images API address cannot be derived from it")
+                    : UpstreamUrls.For(endpoint, run.ModelId, stream);
+                using var request = await RequestAsync(p, HttpMethod.Post, url, protocol, stream, deadline.Token);
                 // 模拟 Claude Code（subscription.mimic_claude_code）：测试请求和网关请求同形，
                 // 否则"测试配置"对非 Haiku 模型的结论和真实请求不一致。
                 var outbound = protocol == ApiProtocol.Anthropic && SubscriptionSupport.MimicClaudeCodeOf(p)
@@ -202,6 +250,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                     return safe;
                 }
 
+                var events = new List<ProviderTestEvent>();
+                var sink = new EventSink(guard, text, events);
+
                 // No retry on 401/403, not even for subscription accounts: plan §5.4 covers the gateway path only.
                 if (!response.IsSuccessStatusCode)
                 {
@@ -212,13 +263,30 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                     record.ErrorType = "upstream_error";
                     record.ErrorMessage = error;
                 }
+                else if (image)
+                {
+                    var answer = await ReadImageAsync(response, Redacted, sw, sink, deadline.Token);
+                    decodedBody = answer;
+                    ok = sink.Ok && answer is not null;
+                    error = sink.Error;
+                    if (!ok)
+                    {
+                        record.Status = RequestStatus.UpstreamError;
+                        record.ErrorType = "upstream_error";
+                        record.ErrorMessage = error.Length > 0 ? error : "Upstream returned an unusable response";
+                    }
+                    run.HasEvents = sink.HasEvents;
+                    run.Usage = (JsonObject)sink.Usage.DeepClone();
+                    foreach (var e in events) await run.EmitAsync(e.Event, e.Payload);
+                    usageRaw = run.Usage;
+                    if (usageRaw.Count > 0) usage = UsageNormalizer.FromOpenAIImages(usageRaw);
+                    if (capture is not null) capture[BodyStore.UpstreamResponse] = rawView.ToString();
+                }
                 else
                 {
                     var decoder = codecs.Require(protocol)
-                        .CreateResponseDecoder(new ResponseDecodeContext { Stream = options.Stream, Model = run.ModelId });
-                    var events = new List<ProviderTestEvent>();
-                    var sink = new EventSink(guard, text, events);
-                    decodedBody = options.Stream
+                        .CreateResponseDecoder(new ResponseDecodeContext { Stream = stream, Model = run.ModelId });
+                    decodedBody = stream
                         ? await ReadStreamAsync(response, decoder, sw, sink, Redacted, deadline.Token)
                         : await ReadBodyAsync(response, decoder, sw, sink, Redacted, deadline.Token);
                     ok = sink.Ok && decodedBody is not null;
@@ -387,6 +455,46 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         }
         await FeedAsync(sink, decoder.DecodeJson(body), sw, wholeBody: true);
         await FeedAsync(sink, decoder.Complete(), sw, wholeBody: true);
+        return body;
+    }
+
+    /// <summary>
+    /// An Images API answer: one JSON body whose pictures are replaced by a summary line before anything is kept or
+    /// shown; <c>usage</c> is read from it as reported. No picture, or an <c>error</c> object, fails the test.
+    /// </summary>
+    private static async Task<JsonObject?> ReadImageAsync(HttpResponseMessage response, Func<string, string> collect,
+        Stopwatch sw, EventSink sink, CancellationToken ct)
+    {
+        var text = await ReadResponseAsync(response, ct, MaxImageResponseBytes);
+        var body = TryObject(text);
+        if (body is null)
+        {
+            collect(text.Length > 1024 ? text[..1024] : text);
+            sink.Failed("Upstream returned invalid JSON");
+            return null;
+        }
+        var safe = StripImages(text, out var images);
+        collect(safe);
+        if (body["error"] is JsonObject err)
+        {
+            sink.Failed(Text(err["message"]) ?? "Upstream returned an error");
+            return null;
+        }
+        var data = body["data"] as JsonArray;
+        var format = Text(body["output_format"]);
+        var size = Text(body["size"]);
+        if (images == 0 && data is { Count: > 0 })
+            images = data.Count(d => d is JsonObject o && o["url"] is not null); // url answers carry no base64
+        if (images == 0)
+        {
+            sink.Failed("Upstream returned no image");
+            return null;
+        }
+        if (body["usage"] is JsonObject usage) sink.Usage = usage;
+        sink.SawUsage();
+        await sink.TextAsync($"Generated {images} image{(images == 1 ? "" : "s")}"
+                             + string.Concat(new[] { format, size }.Where(v => v is not null).Select(v => $", {v}"))
+                             + $" in {sw.ElapsedMilliseconds} ms");
         return body;
     }
 
@@ -887,16 +995,17 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         catch (System.Text.Json.JsonException) { return null; }
     }
 
-    private static async Task<string> ReadResponseAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<string> ReadResponseAsync(HttpResponseMessage response, CancellationToken ct, int limit = MaxResponseBytes)
     {
-        if (response.Content.Headers.ContentLength > MaxResponseBytes) throw new AdminApiException(502, "Upstream response exceeds 4 MiB");
+        var limitText = $"{limit / (1024 * 1024)} MiB";
+        if (response.Content.Headers.ContentLength > limit) throw new AdminApiException(502, $"Upstream response exceeds {limitText}");
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var buffer = new MemoryStream();
         var chunk = new byte[8192];
         int read;
         while ((read = await stream.ReadAsync(chunk, ct)) > 0)
         {
-            if (buffer.Length + read > MaxResponseBytes) throw new AdminApiException(502, "Upstream response exceeds 4 MiB");
+            if (buffer.Length + read > limit) throw new AdminApiException(502, $"Upstream response exceeds {limitText}");
             buffer.Write(chunk, 0, read);
         }
         return Encoding.UTF8.GetString(buffer.ToArray());

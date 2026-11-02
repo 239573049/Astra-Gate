@@ -2302,6 +2302,108 @@ public class ProviderApiTests
         Assert.Equal("gpt-5-2026-05-01", result.Done["responseModel"]!.GetValue<string>());
     }
 
+    private static string ImageAnswer(string b64) =>
+        "{\"created\":1,\"data\":[{\"b64_json\":\"" + b64 + "\"}],\"output_format\":\"png\",\"size\":\"1024x1024\","
+        + "\"usage\":{\"input_tokens\":20,\"output_tokens\":400,\"input_tokens_details\":{\"text_tokens\":20,\"image_tokens\":0}}}";
+
+    [Fact]
+    public async Task Connection_Test_Of_An_Image_Model_Posts_The_Minimal_Images_Request_And_Never_Keeps_The_Picture()
+    {
+        var b64 = string.Concat(Enumerable.Repeat("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ", 2500));
+        string? sent = null;
+        Uri? url = null;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(async request =>
+            {
+                url = request.RequestUri;
+                sent = await request.Content!.ReadAsStringAsync();
+                return JsonResponse(ImageAnswer(b64));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", "sk-image-key-1");
+        await host.App.Services.GetRequiredService<SettingsService>().UpdateAsync(s => s.DebugBodies = true);
+
+        // stream = true is ignored: an image is never streamed.
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1", stream = true, maxOutputTokens = 99 });
+
+        Assert.Equal("https://example.invalid/v1/images/generations", url!.ToString());
+        var body = JsonNode.Parse(sent!)!.AsObject();
+        Assert.Equal(["model", "prompt"], body.Select(p => p.Key).Order().ToArray());
+        Assert.Equal("gpt-image-1", body["model"]!.GetValue<string>());
+        var done = result.Done!;
+        Assert.True(done["ok"]!.GetValue<bool>());
+        Assert.StartsWith("Generated 1 image, png, 1024x1024", done["text"]!.GetValue<string>());
+        Assert.DoesNotContain("iVBORw0KGgo", done["raw"]!.GetValue<string>());
+        Assert.Contains("base64 chars omitted", done["raw"]!.GetValue<string>());
+        Assert.Equal(20, done["usage"]!["inputTokens"]!.GetValue<long>());
+        Assert.Equal(400, done["usage"]!["outputTokens"]!.GetValue<long>());
+
+        await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
+        var record = (await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id })).Items.Single();
+        Assert.Equal("success", record.Status);
+        Assert.Equal("openai-images", record.UpstreamProtocol);
+        Assert.False(record.Stream);
+        Assert.Equal("reported", record.UsageSource);
+        Assert.Equal(20, record.TotalInputTokens);
+        Assert.Equal(400, record.TotalOutputTokens);
+        Assert.DoesNotContain("iVBORw0KGgo", record.UsageRawJson ?? "");
+        Assert.DoesNotContain("iVBORw0KGgo", await host.Client.GetStringAsync($"/api/requests/{record.Id}"));
+    }
+
+    [Fact]
+    public async Task Connection_Test_With_The_Images_Protocol_Tests_Any_Model_On_The_Images_Api()
+    {
+        Uri? url = null;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(request =>
+            {
+                url = request.RequestUri;
+                return Task.FromResult(JsonResponse(ImageAnswer("QUJD")));
+            })));
+        var id = await CreateCustomAsync(host, "openai-responses", "https://example.invalid/v1", "none");
+
+        // "protocol": "openai-images" is the dialog's Images choice; the model id alone would not say image.
+        var result = await host.TestAsync(id, new { modelId = "my-picture-model", protocol = "openai-images" });
+
+        Assert.Equal("https://example.invalid/v1/images/generations", url!.ToString());
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Connection_Test_With_The_Images_Protocol_Needs_An_OpenAI_Endpoint()
+    {
+        await using var host = await TestHost.StartAsync();
+        var id = await CreateCustomAsync(host, "anthropic", "https://example.invalid", "none");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1", protocol = "openai-images" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+    }
+
+    [Theory]
+    [InlineData("""{"created":1,"data":[]}""", "no image")]
+    [InlineData("""{"error":{"message":"model_not_found"}}""", "model_not_found")]
+    public async Task Connection_Test_Of_An_Image_Model_Fails_Without_A_Picture_Or_With_An_Error(string answer, string expected)
+    {
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ => Task.FromResult(JsonResponse(answer)))));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1" });
+
+        Assert.False(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Contains(expected, result.Done["error"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("gpt-image-1", true)]
+    [InlineData("gpt-image-2.5-sunburst", true)]
+    [InlineData("openai/chatgpt-image-latest", true)]
+    [InlineData("dall-e-3", true)]
+    [InlineData("gpt-5", false)]
+    [InlineData("claude-sonnet-5", false)]
+    public void Image_models_are_recognised_by_id(string model, bool image) =>
+        Assert.Equal(image, ProviderProbe.IsImageModel(model));
+
     [Fact]
     public async Task Connection_Test_Truncates_A_Huge_Raw_Body()
     {

@@ -178,8 +178,19 @@ public sealed class ProviderTestSession
     /// <summary>The provider's models as loaded.</summary>
     public IReadOnlyList<ProviderModelDto> Models { get; private set; } = [];
 
-    /// <summary>The protocols the provider has endpoints for.</summary>
-    public List<string> Protocols => Provider.Endpoints.Select(e => e.Protocol.ToId()).ToList();
+    /// <summary>The wire id of the Images API test: not an <c>ApiProtocol</c>, the id the request log uses for image calls.</summary>
+    public const string ImagesProtocol = "openai-images";
+
+    /// <summary>The protocols the provider has endpoints for, plus the Images API when it has an OpenAI one.</summary>
+    public List<string> Protocols
+    {
+        get
+        {
+            var list = Provider.Endpoints.Select(e => e.Protocol.ToId()).ToList();
+            if (list.Contains("openai-chat") || list.Contains("openai-responses")) list.Add(ImagesProtocol);
+            return list;
+        }
+    }
 
     /// <summary>The protocol a provider prefers, restricted to the endpoints it has (web <c>preferredProtocol</c>).</summary>
     public static string PreferredProtocol(ProviderDto p)

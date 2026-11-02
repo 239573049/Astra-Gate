@@ -89,8 +89,12 @@ public sealed record ImportResultDto(List<ImportedProviderDto> Added, List<Impor
 public sealed record RemoteModelDto(string Id, string? DisplayName, string? LinkedSystemModelId, bool AlreadyAdded,
     IReadOnlyList<ApiProtocol>? UpstreamProtocols = null);
 
-/// <summary>Everything one test run needs, after validation. Every field is optional on the wire.</summary>
-public sealed record ProviderTestOptions(string? ModelId, ApiProtocol? Protocol, bool Stream, string? Prompt, int MaxOutputTokens);
+/// <summary>
+/// Everything one test run needs, after validation. Every field is optional on the wire. <see cref="Image"/> tests the model
+/// on the OpenAI Images API (the wire protocol is the id <c>openai-images</c>, not an <see cref="ApiProtocol"/>).
+/// </summary>
+public sealed record ProviderTestOptions(string? ModelId, ApiProtocol? Protocol, bool Stream, string? Prompt, int MaxOutputTokens,
+    bool Image = false);
 
 /// <summary>One event of a provider test stream, ready to be written as SSE.</summary>
 public sealed record ProviderTestEvent(string Event, JsonNode Payload);

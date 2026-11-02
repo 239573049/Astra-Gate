@@ -675,12 +675,14 @@ public static class ProviderEndpoints
         var prompt = String(body, "prompt");
         if (prompt is { Length: > ProviderProbe.MaxTestPromptChars })
             throw new AdminApiException(400, $"prompt must be at most {ProviderProbe.MaxTestPromptChars} characters");
-        var protocol = body["protocol"] is null ? (ApiProtocol?)null : Read<ApiProtocol>(body["protocol"]);
-        // The body carries the protocol as an id ("openai-responses"), which the ApiProtocol converter accepts.
+        // The body carries the protocol as an id ("openai-responses"), which the ApiProtocol converter accepts;
+        // "openai-images" (the request log's name for the Images API) selects the image test instead.
+        var image = body["protocol"] is JsonValue p && p.TryGetValue<string>(out var id) && id == GatewayPipeline.ImagesProtocol;
+        var protocol = body["protocol"] is null || image ? (ApiProtocol?)null : Read<ApiProtocol>(body["protocol"]);
         return new ProviderTestOptions(
             String(body, "modelId"), protocol,
             body["stream"] is null || Read<bool>(body["stream"]),
-            prompt, maxOutputTokens);
+            prompt, maxOutputTokens, image);
     }
 
     private static T Read<T>(JsonNode? value)

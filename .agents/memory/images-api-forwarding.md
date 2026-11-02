@@ -27,3 +27,8 @@ change that keeps one pipeline; base64 images and uploads must never be buffered
 
 **How to apply:** a future `/v1/images/variations` or audio endpoint follows the same shape (string protocol id, no codec).
 If image calls ever need translation (e.g. to Gemini image models), that is when an IR/`ApiProtocol` becomes worth it.
+
+**Provider test (2026-11-02):** `ProviderProbe.RunTestAsync` tests a `gpt-image*` / `chatgpt-image*` / `dall-e*` model
+(`IsImageModel`, by id — there is no image protocol) on `images/generations` through the provider's OpenAI endpoint, with the
+minimal body `{model, prompt}` (never streamed, no size/quality/n). The picture's base64 is replaced by its length before the
+raw view, debug capture or log (`StripImages`); the result text is a one-line summary, usage is billed via `FromOpenAIImages`.

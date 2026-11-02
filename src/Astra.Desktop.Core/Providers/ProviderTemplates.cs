@@ -43,7 +43,8 @@ public static class ProviderProtocols
     ];
 
     /// <summary>Full name of a protocol id (the id itself when unknown).</summary>
-    public static string Name(string protocol) => Options.FirstOrDefault(o => o.Value == protocol).Label ?? protocol;
+    public static string Name(string protocol) =>
+        Options.FirstOrDefault(o => o.Value == protocol).Label ?? (protocol == "openai-images" ? "OpenAI Images" : protocol);
 
     /// <summary>Short name on template tiles: Chat / Responses / Anthropic / Gemini.</summary>
     public static string Short(string protocol) => protocol switch

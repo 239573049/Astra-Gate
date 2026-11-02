@@ -1,6 +1,6 @@
 ---
 name: avalonia-updater-server-only
-description: the Avalonia app's in-app update used to replace only the server on every track, so dmg/installer apps fell behind their server; fixed 2026-10-30 by the track rule + app self-update (option B), still unverified in a real release
+description: the Avalonia app's in-app update used to replace only the server on every track, so dmg/installer apps fell behind their server; fixed 2026-10-30 by the track rule + app self-update (option B); 0.13.5 (stable) is the first self-update target, unverified on any OS
 type: project
 updated: 2026-10-30
 source: session
@@ -23,9 +23,12 @@ to run `astra update --desktop`.
 
 **Why:** a release ships app and server at one version (`sync-versions.mjs`); only a one-sided update makes
 them differ, and a packaged app must update as a whole.
-**How to apply:** no release has exercised the self-update yet. The first one that can (an installed app with
-this code updating to a newer release) should be a preview, checked on each OS: the swap log is
-`~/.astra/logs/desktop-update.log`. When "desktop and server versions differ" comes back, check the update
+**How to apply:** 0.13.4 (released 2026-10-30, run 41112417927) is the first release that contains this code; apps on
+0.13.0–0.13.3 still need one manual install (the 0.13.4 notes say so). 0.13.5 (commit 875f7ed, released 2026-10-30 by run
+41161943553) is the first an installed app can update itself to, and the user chose to ship it as **stable**, not the
+preview recommended here — so the first real self-update runs for every stable user. Until one has been seen to work on
+each OS (0.13.4 app → 0.13.5; the swap log is `~/.astra/logs/desktop-update.log`), treat the self-updaters as
+unverified. When "desktop and server versions differ" comes back, check the update
 track in that log first, then the server lifecycle ([[orphaned-server-after-failed-update]]). Never let a
 packaged app swap the server alone, and never downgrade a managed server to the bundled one (a newer
 server may already have migrated the database).

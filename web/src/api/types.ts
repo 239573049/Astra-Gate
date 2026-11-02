@@ -276,8 +276,11 @@ export interface ProviderUpdate {
 /** Body of one provider connection test; every field is optional (the server fills in the defaults). */
 export interface ProviderTestRequest {
   modelId?: string | null;
-  /** Upstream protocol; defaults to the provider's preferred one. */
-  protocol?: ApiProtocol | null;
+  /**
+   * Upstream protocol; defaults to the provider's preferred one. `openai-images` tests the model on the OpenAI Images API
+   * (model + prompt only; needs an openai-chat / openai-responses endpoint) — it is not an `ApiProtocol`.
+   */
+  protocol?: ApiProtocol | 'openai-images' | null;
   stream?: boolean;
   prompt?: string | null;
   maxOutputTokens?: number;
