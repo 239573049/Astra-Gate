@@ -3,6 +3,7 @@ using Astra.Api.Contracts;
 using Astra.Desktop.Components.Clients;
 using Astra.Desktop.Components.Kit;
 using Astra.Desktop.Core.Clients;
+using Astra.Desktop.Core.Connect;
 using Astra.Desktop.Core.I18n;
 using Avalonia;
 using Avalonia.Controls;
@@ -24,6 +25,7 @@ public sealed class ClientsView : UserControl
     private readonly ClientsPageViewModel _vm;
     private readonly ClientListView _list = new();
     private readonly ContentControl _status = new();
+    private readonly ContentControl _connect = new();
     private readonly ClientPanelView _panel;
     private bool _wired;
     private ScrollViewer? _scroller;
@@ -34,7 +36,7 @@ public sealed class ClientsView : UserControl
         _vm = vm;
         _panel = new ClientPanelView(vm);
         vm.Panel = _panel;
-        var right = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, Children = { _status, _panel } };
+        var right = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, Children = { _connect, _status, _panel } };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 20, MaxWidth = 1200, HorizontalAlignment = HorizontalAlignment.Stretch };
         grid.Children.Add(_list);
         Grid.SetColumn(right, 1);
@@ -57,9 +59,13 @@ public sealed class ClientsView : UserControl
         _vm.EnableRequested += OnEnable;
         _vm.BackupsRequested += OnBackups;
         _vm.InstallRequested += OnInstall;
+        _vm.ConnectRequested += OnConnectRequested;
+        _vm.Connect.Status.PropertyChanged += OnClients;
+        JoinLinkInbox.Arrived += OnInbox;
         _scroller = this.FindAncestorOfType<ScrollViewer>();
         if (_scroller is not null) _offset = _scroller.GetObservable(ScrollViewer.OffsetProperty).Subscribe(new Avalonia.Reactive.AnonymousObserver<Vector>(_ => Stick()));
         Render();
+        TakeInbox();
     }
 
     private IDisposable? _offset;
@@ -84,6 +90,9 @@ public sealed class ClientsView : UserControl
         _vm.EnableRequested -= OnEnable;
         _vm.BackupsRequested -= OnBackups;
         _vm.InstallRequested -= OnInstall;
+        _vm.ConnectRequested -= OnConnectRequested;
+        _vm.Connect.Status.PropertyChanged -= OnClients;
+        JoinLinkInbox.Arrived -= OnInbox;
         _offset?.Dispose();
         _offset = null;
         _scroller = null;
@@ -108,6 +117,7 @@ public sealed class ClientsView : UserControl
     {
         var q = _vm.Clients;
         var loading = !q.HasData && !q.IsError;
+        _connect.Content = ConnectBanner.Create(_vm.Connect.Status.Data, () => _vm.RequestConnect(null), () => _ = _vm.LeaveConnectAsync());
         _list.Show(q.Data, loading, _vm.SelectedKind, _vm.Select);
         if (loading) _status.Content = new LoadingState(4);
         else if (q.IsError && !q.HasData) _status.Content = ClientUi.Alert(AlertTone.Danger, Loc.T("common.error"), q.Error?.Message);
@@ -130,6 +140,17 @@ public sealed class ClientsView : UserControl
             return false;
         }
     }
+
+    // A join link the operating system handed to the app opens the connect sheet here (the app shows this page for it).
+    private void OnInbox() => Dispatcher.UIThread.Post(TakeInbox);
+
+    private void TakeInbox()
+    {
+        if (JoinLinkInbox.Take() is { } link) _vm.RequestConnect(link);
+    }
+
+    private void OnConnectRequested(JoinLink? link) =>
+        _vm.OpenSheet = ConnectSheets.Show(this, new ConnectSheetContext(_vm.Connect, _vm.Api, _vm.Context!.Feedback), link);
 
     private void OnEnable(ClientInfoDto client, ClientDraft draft) => _vm.OpenSheet = ClientSheets.ShowEnable(this, SheetContext(), client, draft.EnableRequest());
 

@@ -2369,6 +2369,44 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Connection_Test_With_The_Images_Protocol_Sends_The_Image_Parameters()
+    {
+        string? sent = null;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(async request =>
+            {
+                sent = await request.Content!.ReadAsStringAsync();
+                return JsonResponse(ImageAnswer("QUJD"));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1", protocol = "openai-images", imageSize = "1536x1024", imageQuality = "high", imageCount = 2 });
+
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+        var body = System.Text.Json.Nodes.JsonNode.Parse(sent!)!;
+        Assert.Equal("1536x1024", body["size"]!.GetValue<string>());
+        Assert.Equal("high", body["quality"]!.GetValue<string>());
+        Assert.Equal(2, body["n"]!.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData("""{"imageSize":"huge"}""")]
+    [InlineData("""{"imageQuality":"ultra"}""")]
+    [InlineData("""{"imageCount":9}""")]
+    public async Task Connection_Test_Refuses_Invalid_Image_Parameters(string extra)
+    {
+        await using var host = await TestHost.StartAsync();
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+        var body = System.Text.Json.Nodes.JsonNode.Parse(extra)!.AsObject();
+        body["modelId"] = "gpt-image-1";
+        body["protocol"] = "openai-images";
+
+        var result = await host.TestAsync(id, body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+    }
+
+    [Fact]
     public async Task Connection_Test_With_The_Images_Protocol_Needs_An_OpenAI_Endpoint()
     {
         await using var host = await TestHost.StartAsync();

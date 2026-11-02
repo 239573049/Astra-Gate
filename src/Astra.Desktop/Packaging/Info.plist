@@ -29,6 +29,17 @@
   <string>@VERSION@</string>
   <key>CFBundleVersion</key>
   <string>@VERSION@</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>Astra join link</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>astra</string>
+      </array>
+    </dict>
+  </array>
   <key>LSApplicationCategoryType</key>
   <string>public.app-category.developer-tools</string>
   <key>LSMinimumSystemVersion</key>

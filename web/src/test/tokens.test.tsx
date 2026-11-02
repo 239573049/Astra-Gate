@@ -9,7 +9,7 @@ import { I18nProvider, translate } from '../i18n';
 import { TokensPage } from '../pages/TokensPage';
 import { systemActions } from '../shell/systemActions';
 
-const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[], tunnel: undefined as unknown, providers: [] as unknown[] }));
+const spies = vi.hoisted(() => ({ update: vi.fn(), tokens: [] as unknown[], tunnel: undefined as unknown, providers: [] as unknown[], invite: vi.fn() }));
 
 vi.mock('../api/hooks', () => {
   const idle = { mutate: vi.fn(), isPending: false };
@@ -24,6 +24,9 @@ vi.mock('../api/hooks', () => {
     useDeleteToken: () => idle,
     useResetToken: () => idle,
     useRevealToken: () => idle,
+    useTokenInvites: () => ({ data: [] }),
+    useCreateTokenInvite: () => ({ mutate: spies.invite, isPending: false }),
+    useRevokeTokenInvite: () => idle,
   };
 });
 
@@ -96,6 +99,23 @@ describe('employee join command', () => {
     await waitFor(() => expect(copy).toHaveBeenCalledWith('npx @aidotnet/astra-connect join http://astra.test:8787'));
     expect(copy.mock.calls[0]![0]).not.toContain('sk-astra');
     copy.mockRestore();
+  });
+});
+
+describe('employee join link', () => {
+  it('asks for a lifetime and makes a one-time link, never copying the key', async () => {
+    spies.tokens = [token({ isDefault: false, id: 't1', name: 'Zhang' })];
+    show();
+    fireEvent.click(screen.getByRole('button', { name: t('tokens.invite.open') }));
+    fireEvent.click(await screen.findByRole('button', { name: t('tokens.invite.generate') }));
+    expect(spies.invite).toHaveBeenCalledWith(15, expect.anything());
+    expect(screen.getByText(t('tokens.invite.none'))).toBeInTheDocument();
+  });
+
+  it('cannot be made for a disabled token', () => {
+    spies.tokens = [token({ isDefault: false, id: 't1', name: 'Zhang', enabled: false })];
+    show();
+    expect(screen.getByRole('button', { name: t('tokens.invite.open') })).toBeDisabled();
   });
 });
 

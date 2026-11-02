@@ -1,7 +1,7 @@
-import { RefreshCw, ShieldOff } from 'lucide-react';
+import { RefreshCw, ShieldOff, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
-import { useClients, usePrivacy, usePrivacyEvents, type PrivacyEventQuery } from '../api/hooks';
+import { useClearPrivacyEvents, useClients, usePrivacy, usePrivacyEvents, type PrivacyEventQuery } from '../api/hooks';
 import type { ClientKind, PrivacyEvent } from '../api/types';
 import { Alert } from './arc/alert/alert';
 import { FilterToolbar, type FilterChip, type FilterField } from './arc/filter-toolbar/filter-toolbar';
@@ -9,7 +9,7 @@ import { Pagination } from './arc/pagination/pagination';
 import { SortableDataTable, type DataColumn } from './arc/sortable-data-table/sortable-data-table';
 import { CLIENT_META } from './icons';
 import { Badge, Button, EmptyState, SearchField, Spinner } from './ui/controls';
-import { errorText } from './ui/overlays';
+import { errorText, useFeedback } from './ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
 import { useDebounced } from '../lib/hooks';
@@ -43,6 +43,8 @@ export function PrivacyEventLogs() {
   const debouncedModel = useDebounced(model);
   const clients = useClients();
   const privacy = usePrivacy();
+  const { toast, confirm } = useFeedback();
+  const clear = useClearPrivacyEvents();
 
   const query: PrivacyEventQuery = {
     model: debouncedModel,
@@ -142,6 +144,24 @@ export function PrivacyEventLogs() {
           aria-label={t('common.refresh')}
           onClick={() => void events.refetch()}
         />
+        <Button
+          variant="plain"
+          className="ml-auto"
+          icon={<Trash2 className="size-4" />}
+          disabled={clear.isPending || !data || data.total === 0}
+          onClick={async () => {
+            if (!(await confirm({ title: t('privacy.logs.clearConfirm'), detail: t('privacy.logs.clearDetail'), confirmLabel: t('privacy.logs.clear'), destructive: true }))) return;
+            clear.mutate(undefined, {
+              onSuccess: (r) => {
+                setPage(1);
+                toast(t('privacy.logs.cleared', { count: formatTokens(r.cleared) }), 'success');
+              },
+              onError: (e) => toast(errorText(e), 'error'),
+            });
+          }}
+        >
+          {t('privacy.logs.clear')}
+        </Button>
       </div>
 
       <div className="mb-3">

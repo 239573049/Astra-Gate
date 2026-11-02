@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Astra.Core;
 
 namespace Astra.Api.Contracts;
@@ -124,4 +125,40 @@ public sealed record SettingsDto(
     string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass,
     bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl, string? UsageTimeZone,
     string EffectiveUsageTimeZone, string RequestCompression, bool TraceContent = false, bool PreventSleep = false,
-    bool ProviderQualifiedModels = false, string ModelProviderSeparator = "@");
+    bool ProviderQualifiedModels = false, string ModelProviderSeparator = "@", List<string>? HiddenNav = null);
+
+/// <summary>
+/// <c>POST /api/connect/join</c> body: connect this machine to a unified gateway (a company's Astra server) as a provider. Either a
+/// one-time <paramref name="Token"/> from a join link or the employee's own <paramref name="Key"/>; the key never leaves the server.
+/// </summary>
+/// <param name="GatewayUrl">The gateway's address.</param>
+/// <param name="Token">The link's one-time code, exchanged for the key by this server.</param>
+/// <param name="Key">The employee's API key, when there is no link.</param>
+public sealed record ConnectJoinRequest(string GatewayUrl, string? Token = null, string? Key = null);
+
+/// <summary>Result of joining a unified gateway: the provider that now holds its key, and what the key can call.</summary>
+/// <param name="ProviderId">The local provider "unified gateway".</param>
+/// <param name="TokenName">The employee token's name on the gateway.</param>
+/// <param name="GatewayUrl">The normalised gateway address.</param>
+/// <param name="Models">Model ids the key can call.</param>
+/// <param name="Insecure">The address is plain http to a non-loopback host.</param>
+public sealed record ConnectJoinResultDto(string ProviderId, string TokenName, string GatewayUrl, List<string> Models, bool Insecure);
+
+/// <summary><c>GET /api/connect/status</c>: whether a unified gateway is connected, which clients use it, and the key's limits.</summary>
+/// <param name="Clients">Client kinds whose bindings include the gateway provider.</param>
+/// <param name="KeyInfo">The gateway's <c>/v1/astra/key</c> answer (limits and usage); null when it cannot be reached.</param>
+/// <param name="Error">Why <paramref name="KeyInfo"/> is missing.</param>
+public sealed record ConnectStatusDto(bool Connected, string? ProviderId, string? GatewayUrl, string? TokenName, List<string> Clients,
+    JsonObject? KeyInfo, string? Error);
+
+/// <summary><c>POST /api/connect/apply</c> body: client kinds to send through the unified gateway.</summary>
+public sealed record ConnectApplyRequest(List<string> Clients);
+
+/// <summary>One client's outcome of <c>POST /api/connect/apply</c>.</summary>
+public sealed record ConnectClientResultDto(string Kind, bool Ok, string? Error);
+
+/// <summary>Result of <c>POST /api/connect/apply</c>.</summary>
+public sealed record ConnectApplyResultDto(List<ConnectClientResultDto> Results);
+
+/// <summary>Result of <c>POST /api/connect/leave</c>: clients that stopped using the gateway, and those that had nothing else and were disabled.</summary>
+public sealed record ConnectLeaveResultDto(List<string> Unbound, List<string> Disabled);

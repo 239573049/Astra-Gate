@@ -146,6 +146,37 @@ public sealed class ProviderTestSession
     /// <summary>The prompt ("" = the server's default "Reply with OK.").</summary>
     public string Prompt { get; set; } = "";
 
+    /// <summary>The Images API test's sizes on offer (<see cref="DefaultChoice"/> = leave it to the upstream).</summary>
+    public static readonly string[] ImageSizes = ["auto", "1024x1024", "1536x1024", "1024x1536", "512x512", "256x256"];
+
+    /// <summary>The Images API test's qualities on offer.</summary>
+    public static readonly string[] ImageQualities = ["auto", "low", "medium", "high", "standard", "hd"];
+
+    /// <summary>Most pictures one Images API test may ask for.</summary>
+    public const int MaxImages = 4;
+
+    /// <summary>The "not sent" choice of the image size / quality boxes.</summary>
+    public const string DefaultChoice = "default";
+
+    /// <summary>Images API test: the size, or <see cref="DefaultChoice"/>.</summary>
+    public string ImageSize { get; set; } = DefaultChoice;
+
+    /// <summary>Images API test: the quality, or <see cref="DefaultChoice"/>.</summary>
+    public string ImageQuality { get; set; } = DefaultChoice;
+
+    /// <summary>Images API test: how many pictures (1 to <see cref="MaxImages"/>).</summary>
+    public int ImageCount { get; private set; } = 1;
+
+    /// <summary>Sets the picture count (clamped to 1..<see cref="MaxImages"/>; null = 1).</summary>
+    public void SetImageCount(decimal? value)
+    {
+        ImageCount = value is { } v ? (int)Math.Min(MaxImages, Math.Max(1, Math.Round(v, MidpointRounding.ToEven))) : 1;
+        Raise();
+    }
+
+    /// <summary>The protocol is the Images API: stream and max tokens do not apply, the image parameters do.</summary>
+    public bool IsImages => Protocol == ImagesProtocol;
+
     /// <summary>Max output tokens; null = the default.</summary>
     public int? MaxTokens { get; private set; } = DefaultMaxTokens;
 
@@ -314,14 +345,24 @@ public sealed class ProviderTestSession
     public int Failed { get { lock (_gate) return Order.Count(id => _batch.TryGetValue(id, out var r) && r.Status == RunStatus.Failed); } }
 
     /// <summary>The request body of one test (web <c>request</c>).</summary>
-    public JsonObject RequestFor(string modelId) => new()
+    public JsonObject RequestFor(string modelId)
     {
-        ["modelId"] = modelId,
-        ["protocol"] = Protocol,
-        ["stream"] = Stream,
-        ["prompt"] = Prompt.Trim() is { Length: > 0 } p ? p : null,
-        ["maxOutputTokens"] = MaxTokens ?? DefaultMaxTokens,
-    };
+        var body = new JsonObject
+        {
+            ["modelId"] = modelId,
+            ["protocol"] = Protocol,
+            ["stream"] = Stream,
+            ["prompt"] = Prompt.Trim() is { Length: > 0 } p ? p : null,
+            ["maxOutputTokens"] = MaxTokens ?? DefaultMaxTokens,
+        };
+        if (IsImages)
+        {
+            body["imageSize"] = ImageSize == DefaultChoice ? null : ImageSize;
+            body["imageQuality"] = ImageQuality == DefaultChoice ? null : ImageQuality;
+            body["imageCount"] = ImageCount;
+        }
+        return body;
+    }
 
     /// <summary>Starts (or restarts) the single test of <see cref="Model"/>. The returned task ends with the run.</summary>
     public Task StartSingleAsync()

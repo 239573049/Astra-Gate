@@ -100,6 +100,12 @@ Section "Install"
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKCU "${UNINSTALL_REGISTRY_KEY}" EstimatedSize "$0"
 
+  ; astra://join?… (the employee join links of a unified gateway) opens this app. Per user, like the rest of the install.
+  WriteRegStr HKCU "Software\Classes\astra" "" "URL:Astra join link"
+  WriteRegStr HKCU "Software\Classes\astra" "URL Protocol" ""
+  WriteRegStr HKCU "Software\Classes\astra\DefaultIcon" "" "$INSTDIR\${APP_EXE},0"
+  WriteRegStr HKCU "Software\Classes\astra\shell\open\command" "" '"$INSTDIR\${APP_EXE}" "%1"'
+
   ; electron-updater's silent update asks for the app to be started again.
   ${GetParameters} $R0
   ClearErrors
@@ -115,4 +121,5 @@ Section "Uninstall"
   RMDir /r "$INSTDIR"
   DeleteRegKey HKCU "${UNINSTALL_REGISTRY_KEY}"
   DeleteRegKey HKCU "${INSTALL_REGISTRY_KEY}"
+  DeleteRegKey HKCU "Software\Classes\astra"
 SectionEnd

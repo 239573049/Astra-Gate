@@ -29,3 +29,7 @@ public sealed record PrivacyPolicyDto(PrivacySettings Settings, IReadOnlyList<Pr
 /// <summary>Admin API payload: privacy dry run result.</summary>
 public sealed record PrivacyDryRunResultDto(
     bool Blocked, IReadOnlyList<PrivacyHit> Hits, int WouldRedact, IReadOnlyList<string> Categories);
+
+/// <summary>Admin API payload: <c>DELETE /api/privacy/events</c>, how many guard events were cleared from the request log.</summary>
+/// <param name="Cleared">Events cleared.</param>
+public sealed record PrivacyEventsClearedDto(int Cleared);

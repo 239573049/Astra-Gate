@@ -104,6 +104,12 @@ public sealed class AppSettings
     /// <summary>Between a model id and its provider's alias while <see cref="ProviderQualifiedModels"/> is on (default "@").</summary>
     public string ModelProviderSeparator { get; set; } = "@";
 
+    /// <summary>
+    /// Sidebar entries of the web console the user hid (ids from <see cref="NavItems.Hideable"/>). Only the menu changes: a hidden
+    /// page still opens by its address. Empty = every entry shown.
+    /// </summary>
+    public List<string> HiddenNav { get; set; } = [];
+
     /// <summary>Remote access through a Cloudflare Tunnel (Astra.Server's TunnelService).</summary>
     public TunnelSettings Tunnel { get; set; } = new();
 
@@ -160,4 +166,12 @@ public sealed class EffortBudgets
     public int Low { get; set; } = 1024;
     public int Medium { get; set; } = 4096;
     public int High { get; set; } = 16384;
+}
+
+/// <summary>The web console's sidebar entries (the ids of the web's <c>NavTarget</c>).</summary>
+public static class NavItems
+{
+    /// <summary>Entries the user may hide; Settings is not one of them, it is where they come back.</summary>
+    public static readonly IReadOnlyList<string> Hideable =
+        ["overview", "requests", "traces", "tokens", "clients", "providers", "models", "plugins", "privacy", "smartRouting"];
 }

@@ -205,6 +205,8 @@ function Sidebar({ rail }: { rail: boolean }) {
   const t = useT();
   // Traffic lights live inside the sidebar on macOS desktop; elsewhere this row shows the logo.
   const trafficLights = isDesktop && isMac;
+  const hidden = useSettings().data?.hiddenNav ?? [];
+  const groups = NAV_GROUPS.map((g) => ({ ...g, items: g.items.filter((item) => !hidden.includes(item.id)) })).filter((g) => g.items.length > 0);
   return (
     <motion.nav
       aria-label="Astra"
@@ -225,7 +227,7 @@ function Sidebar({ rail }: { rail: boolean }) {
         )}
       </div>
       <div className="scroll min-h-0 flex-1 overflow-x-hidden px-2 pb-2">
-        {NAV_GROUPS.map((g, gi) => (
+        {groups.map((g, gi) => (
           <div key={gi}>
             {g.title && (
               <div className="relative mt-2 h-6">

@@ -301,6 +301,8 @@ internal static class Messages
         "clients.group.installed",
         "clients.group.notInstalled",
         "clients.group.comingSoon",
+        "clients.group.expand",
+        "clients.group.collapse",
         "clients.checkUpdates",
         "clients.updatesFound",
         "clients.allUpToDate",
@@ -533,6 +535,64 @@ internal static class Messages
         "tokens.copyUrl",
         "tokens.urlCopied",
         "tokens.copyJoin",
+        "connect.open",
+        "connect.title",
+        "connect.cta.title",
+        "connect.cta.detail",
+        "connect.link.title",
+        "connect.link.detail",
+        "connect.link.trust",
+        "connect.link.continue",
+        "connect.manual.detail",
+        "connect.gateway",
+        "connect.key",
+        "connect.keyHint",
+        "connect.useKey",
+        "connect.verify",
+        "connect.insecure",
+        "connect.joined",
+        "connect.pick.title",
+        "connect.pick.detail",
+        "connect.pick.none",
+        "connect.pick.apply",
+        "connect.pick.skip",
+        "connect.done.title",
+        "connect.done.ok",
+        "connect.done.failed",
+        "connect.done.restart",
+        "connect.problem.dead",
+        "connect.problem.unknown",
+        "connect.problem.key",
+        "connect.problem.disabled",
+        "connect.problem.unreachable",
+        "connect.problem.other",
+        "connect.banner.title",
+        "connect.banner.clients",
+        "connect.banner.none",
+        "connect.banner.manage",
+        "connect.banner.error",
+        "connect.leave",
+        "connect.leave.confirm",
+        "connect.leave.detail",
+        "connect.leave.done",
+        "tokens.invite.open",
+        "tokens.invite.title",
+        "tokens.invite.description",
+        "tokens.invite.lifetime",
+        "tokens.invite.minutes",
+        "tokens.invite.hours",
+        "tokens.invite.generate",
+        "tokens.invite.copied",
+        "tokens.invite.linkOnce",
+        "tokens.invite.recent",
+        "tokens.invite.none",
+        "tokens.invite.status.pending",
+        "tokens.invite.status.used",
+        "tokens.invite.status.expired",
+        "tokens.invite.status.revoked",
+        "tokens.invite.usedAt",
+        "tokens.invite.expires",
+        "tokens.invite.revoke",
         "tokens.copyUrlShort",
         "tokens.copyJoinShort",
         "tokens.joinCopied",
@@ -1059,6 +1119,11 @@ internal static class Messages
         "providers.testDialog.protocol",
         "providers.testDialog.stream",
         "providers.testDialog.maxTokens",
+        "providers.testDialog.imageSize",
+        "providers.testDialog.imageSizeHint",
+        "providers.testDialog.imageQuality",
+        "providers.testDialog.imageDefault",
+        "providers.testDialog.imageCount",
         "providers.testDialog.prompt",
         "providers.testDialog.promptHint",
         "providers.testDialog.realRequest",
@@ -1563,6 +1628,8 @@ internal static class Messages
         "settings.requestCompression.none",
         "settings.preventSleep",
         "settings.preventSleepHint",
+        "settings.sidebar",
+        "settings.sidebar.footer",
         "settings.qualifiedModels",
         "settings.qualifiedModels.footer",
         "settings.qualifiedModels.enable",
@@ -1677,6 +1744,10 @@ internal static class Messages
         "privacy.stats.col.redact",
         "privacy.logs.total",
         "privacy.logs.empty",
+        "privacy.logs.clear",
+        "privacy.logs.clearConfirm",
+        "privacy.logs.clearDetail",
+        "privacy.logs.cleared",
         "privacy.logs.empty.detail",
         "privacy.logs.col.outcome",
         "privacy.logs.col.action",
@@ -2811,6 +2882,8 @@ internal static class Messages
             case "clients.group.installed": return "已安装";
             case "clients.group.notInstalled": return "未检测到";
             case "clients.group.comingSoon": return "即将支持";
+            case "clients.group.expand": return "展开{group}";
+            case "clients.group.collapse": return "收起{group}";
             case "clients.checkUpdates": return "检查更新";
             case "clients.updatesFound": return "{count} 个客户端有新版本";
             case "clients.allUpToDate": return "所有客户端都是最新版本";
@@ -3043,6 +3116,64 @@ internal static class Messages
             case "tokens.copyUrl": return "复制网关地址";
             case "tokens.urlCopied": return "已复制网关地址";
             case "tokens.copyJoin": return "复制员工接入命令";
+            case "connect.open": return "连接统一网关";
+            case "connect.title": return "连接统一网关";
+            case "connect.cta.title": return "有管理员发的接入链接或 API Key？";
+            case "connect.cta.detail": return "一键把本机的 AI 客户端接到统一网关：请求先到本机，再转发过去。";
+            case "connect.link.title": return "接入这个统一网关？";
+            case "connect.link.detail": return "你点开了一个接入链接。";
+            case "connect.link.trust": return "只接入你信任的地址。接入后，选中的客户端的请求会经过本机转发到这个网关。";
+            case "connect.link.continue": return "继续";
+            case "connect.manual.detail": return "输入管理员给你的网关地址和你自己的 Key。";
+            case "connect.gateway": return "网关地址";
+            case "connect.key": return "API Key";
+            case "connect.keyHint": return "加密保存在本机，不会写进客户端配置。";
+            case "connect.useKey": return "改用 Key 接入";
+            case "connect.verify": return "验证并继续";
+            case "connect.insecure": return "这个地址是 http，Key 会以明文经过网络。";
+            case "connect.joined": return "已验证 · 令牌「{name}」· 可用 {count} 个模型";
+            case "connect.pick.title": return "选择要接入的客户端";
+            case "connect.pick.detail": return "只改变客户端绑定的提供商。原来的提供商留在后面，统一网关不支持的模型仍用它们。";
+            case "connect.pick.none": return "本机没有可接入的客户端。";
+            case "connect.pick.apply": return "接入 {n} 个客户端";
+            case "connect.pick.skip": return "先不接入";
+            case "connect.done.title": return "接入完成";
+            case "connect.done.ok": return "{name} 已接入";
+            case "connect.done.failed": return "{name} 没有接入：{error}";
+            case "connect.done.restart": return "重启这些客户端后生效。";
+            case "connect.problem.dead": return "这个链接已失效：已被使用、已过期或已被撤销。请让管理员重新生成，或改用 Key 接入。";
+            case "connect.problem.unknown": return "接入链接无效。";
+            case "connect.problem.key": return "这个 Key 无效。";
+            case "connect.problem.disabled": return "这个令牌已被停用，请联系管理员。";
+            case "connect.problem.unreachable": return "连不上统一网关，请检查地址和网络。";
+            case "connect.problem.other": return "接入失败。";
+            case "connect.banner.title": return "已接入统一网关";
+            case "connect.banner.clients": return "{n} 个客户端在用";
+            case "connect.banner.none": return "还没有客户端使用它";
+            case "connect.banner.manage": return "接入更多客户端";
+            case "connect.banner.error": return "暂时读不到用量：{error}";
+            case "connect.leave": return "退出";
+            case "connect.leave.confirm": return "退出统一网关？";
+            case "connect.leave.detail": return "会移除本机的提供商「统一网关」和它保存的 Key，不影响你在统一网关上的令牌。还有其他提供商的客户端继续用它们，只用统一网关的客户端会被停用并还原配置。";
+            case "connect.leave.done": return "已退出统一网关";
+            case "tokens.invite.open": return "生成员工接入链接";
+            case "tokens.invite.title": return "员工接入链接 · {name}";
+            case "tokens.invite.description": return "链接只能用一次，不含 Key。员工在桌面端点开它，由本机向这个网关换取 Key。";
+            case "tokens.invite.lifetime": return "有效期";
+            case "tokens.invite.minutes": return "{n} 分钟";
+            case "tokens.invite.hours": return "{n} 小时";
+            case "tokens.invite.generate": return "生成并复制";
+            case "tokens.invite.copied": return "已复制接入链接：只能用一次，请直接发给员工";
+            case "tokens.invite.linkOnce": return "刚生成的链接（只显示这一次）";
+            case "tokens.invite.recent": return "最近的链接";
+            case "tokens.invite.none": return "还没有生成过链接";
+            case "tokens.invite.status.pending": return "待使用";
+            case "tokens.invite.status.used": return "已使用";
+            case "tokens.invite.status.expired": return "已过期";
+            case "tokens.invite.status.revoked": return "已撤销";
+            case "tokens.invite.usedAt": return "{time} 使用，来自 {ip}";
+            case "tokens.invite.expires": return "{time} 到期";
+            case "tokens.invite.revoke": return "撤销";
             case "tokens.copyUrlShort": return "网关地址";
             case "tokens.copyJoinShort": return "接入命令";
             case "tokens.joinCopied": return "已复制接入命令（不含 Key）：发给员工，让他们在终端运行并输入各自的 Key";
@@ -3569,6 +3700,11 @@ internal static class Messages
             case "providers.testDialog.protocol": return "测试协议";
             case "providers.testDialog.stream": return "流式响应";
             case "providers.testDialog.maxTokens": return "最大输出 tokens";
+            case "providers.testDialog.imageSize": return "图片尺寸";
+            case "providers.testDialog.imageSizeHint": return "留空由上游决定；可填 auto 或 宽x高，如 1024x1024。";
+            case "providers.testDialog.imageQuality": return "图片质量";
+            case "providers.testDialog.imageDefault": return "默认（不传）";
+            case "providers.testDialog.imageCount": return "生成数量";
             case "providers.testDialog.prompt": return "测试提示词（可选）";
             case "providers.testDialog.promptHint": return "留空时使用默认提示词。";
             case "providers.testDialog.realRequest": return "真实请求，可能消耗额度";
@@ -4073,6 +4209,8 @@ internal static class Messages
             case "settings.requestCompression.none": return "不压缩";
             case "settings.preventSleep": return "处理请求时阻止系统休眠";
             case "settings.preventSleepHint": return "网关有请求在处理（包括流式输出）时，阻止系统因闲置而睡眠，最后一个请求结束约 30 秒后解除；关闭开关或退出服务立即解除。显示器照常熄灭，合盖仍会睡眠。默认关闭；Linux 需要 systemd（systemd-inhibit），容器里不起作用。";
+            case "settings.sidebar": return "侧边栏菜单";
+            case "settings.sidebar.footer": return "关闭后该项从左侧菜单隐藏，页面仍可通过地址或命令面板打开。设置不可隐藏。";
             case "settings.qualifiedModels": return "按提供商区分同名模型";
             case "settings.qualifiedModels.footer": return "多个提供商提供同一个模型时，客户端的模型列表里它们会分成「模型名@提供商别名」各一项，选哪一项请求就发给哪个提供商。不带别名的模型名仍按提供商优先级转发，所以已有配置不受影响。别名在提供商详情页设置，默认是提供商名称。";
             case "settings.qualifiedModels.enable": return "在模型 ID 后附加提供商别名";
@@ -4187,6 +4325,10 @@ internal static class Messages
             case "privacy.stats.col.redact": return "脱敏";
             case "privacy.logs.total": return "共 {count} 条事件";
             case "privacy.logs.empty": return "还没有隐私事件";
+            case "privacy.logs.clear": return "清空日志";
+            case "privacy.logs.clearConfirm": return "清空全部拦截日志？";
+            case "privacy.logs.clearDetail": return "只清除隐私护栏的命中记录，请求日志本身保留；此操作无法撤销。";
+            case "privacy.logs.cleared": return "已清除 {count} 条拦截事件";
             case "privacy.logs.empty.detail": return "护栏检测到敏感内容后，对应的请求会出现在这里";
             case "privacy.logs.col.outcome": return "处置结果";
             case "privacy.logs.col.action": return "命中动作";
@@ -5323,6 +5465,8 @@ internal static class Messages
             case "clients.group.installed": return "Installed";
             case "clients.group.notInstalled": return "Not detected";
             case "clients.group.comingSoon": return "Coming soon";
+            case "clients.group.expand": return "Expand {group}";
+            case "clients.group.collapse": return "Collapse {group}";
             case "clients.checkUpdates": return "Check for updates";
             case "clients.updatesFound": return "{count} client update(s) available";
             case "clients.allUpToDate": return "All clients are up to date";
@@ -5555,6 +5699,64 @@ internal static class Messages
             case "tokens.copyUrl": return "Copy gateway URL";
             case "tokens.urlCopied": return "Gateway URL copied";
             case "tokens.copyJoin": return "Copy employee join command";
+            case "connect.open": return "Connect to a unified gateway";
+            case "connect.title": return "Connect to a unified gateway";
+            case "connect.cta.title": return "Got a join link or an API key from your admin?";
+            case "connect.cta.detail": return "Point this machine's AI clients at the unified gateway in one go: requests go to this machine first, then on to the gateway.";
+            case "connect.link.title": return "Join this unified gateway?";
+            case "connect.link.detail": return "You opened a join link.";
+            case "connect.link.trust": return "Only join an address you trust. Afterwards the chosen clients' requests pass through this machine to this gateway.";
+            case "connect.link.continue": return "Continue";
+            case "connect.manual.detail": return "Enter the gateway address your admin gave you and your own key.";
+            case "connect.gateway": return "Gateway address";
+            case "connect.key": return "API key";
+            case "connect.keyHint": return "Kept encrypted on this machine; it is never written into a client's config.";
+            case "connect.useKey": return "Use a key instead";
+            case "connect.verify": return "Verify and continue";
+            case "connect.insecure": return "This address is plain http, so the key would cross the network in the clear.";
+            case "connect.joined": return "Verified · token \"{name}\" · {count} models available";
+            case "connect.pick.title": return "Choose the clients to connect";
+            case "connect.pick.detail": return "Only the provider a client is bound to changes. Its old providers stay behind the gateway and still serve what it does not.";
+            case "connect.pick.none": return "No clients on this machine can be connected.";
+            case "connect.pick.apply": return "Connect {n} clients";
+            case "connect.pick.skip": return "Not now";
+            case "connect.done.title": return "Connected";
+            case "connect.done.ok": return "{name} is connected";
+            case "connect.done.failed": return "{name} was not connected: {error}";
+            case "connect.done.restart": return "Restart these clients for it to take effect.";
+            case "connect.problem.dead": return "This link is no longer valid: it was used, expired or revoked. Ask your admin for a new one, or use a key instead.";
+            case "connect.problem.unknown": return "This join link is not valid.";
+            case "connect.problem.key": return "This key is not valid.";
+            case "connect.problem.disabled": return "This token has been disabled. Contact your admin.";
+            case "connect.problem.unreachable": return "Cannot reach the unified gateway. Check the address and your network.";
+            case "connect.problem.other": return "Could not connect.";
+            case "connect.banner.title": return "Connected to a unified gateway";
+            case "connect.banner.clients": return "{n} clients use it";
+            case "connect.banner.none": return "No client uses it yet";
+            case "connect.banner.manage": return "Connect more clients";
+            case "connect.banner.error": return "Usage is unavailable right now: {error}";
+            case "connect.leave": return "Disconnect";
+            case "connect.leave.confirm": return "Disconnect from the unified gateway?";
+            case "connect.leave.detail": return "This removes the \"Unified gateway\" provider on this machine and the key it holds. Your token on the gateway is not affected. Clients that have other providers keep using them; clients that only used the gateway are disabled and their config restored.";
+            case "connect.leave.done": return "Disconnected from the unified gateway";
+            case "tokens.invite.open": return "Make an employee join link";
+            case "tokens.invite.title": return "Employee join link · {name}";
+            case "tokens.invite.description": return "The link works once and holds no key. When the employee opens it in the desktop app, their machine exchanges it for the key with this gateway.";
+            case "tokens.invite.lifetime": return "Valid for";
+            case "tokens.invite.minutes": return "{n} minutes";
+            case "tokens.invite.hours": return "{n} hours";
+            case "tokens.invite.generate": return "Generate and copy";
+            case "tokens.invite.copied": return "Join link copied: it works once, send it straight to the employee";
+            case "tokens.invite.linkOnce": return "The link you just made (shown only now)";
+            case "tokens.invite.recent": return "Recent links";
+            case "tokens.invite.none": return "No links made yet";
+            case "tokens.invite.status.pending": return "Waiting";
+            case "tokens.invite.status.used": return "Used";
+            case "tokens.invite.status.expired": return "Expired";
+            case "tokens.invite.status.revoked": return "Revoked";
+            case "tokens.invite.usedAt": return "Used {time} from {ip}";
+            case "tokens.invite.expires": return "Expires {time}";
+            case "tokens.invite.revoke": return "Revoke";
             case "tokens.copyUrlShort": return "Gateway URL";
             case "tokens.copyJoinShort": return "Join command";
             case "tokens.joinCopied": return "Join command copied (it has no key): send it to your people, who run it in a terminal and enter their own key";
@@ -6081,6 +6283,11 @@ internal static class Messages
             case "providers.testDialog.protocol": return "Test protocol";
             case "providers.testDialog.stream": return "Streamed response";
             case "providers.testDialog.maxTokens": return "Max output tokens";
+            case "providers.testDialog.imageSize": return "Image size";
+            case "providers.testDialog.imageSizeHint": return "Left to the upstream when empty; use auto or WIDTHxHEIGHT, e.g. 1024x1024.";
+            case "providers.testDialog.imageQuality": return "Image quality";
+            case "providers.testDialog.imageDefault": return "Default (not sent)";
+            case "providers.testDialog.imageCount": return "Number of images";
             case "providers.testDialog.prompt": return "Test prompt (optional)";
             case "providers.testDialog.promptHint": return "The default prompt is used when left empty.";
             case "providers.testDialog.realRequest": return "A real request; it may consume quota";
@@ -6585,6 +6792,8 @@ internal static class Messages
             case "settings.requestCompression.none": return "No compression";
             case "settings.preventSleep": return "Keep the system awake while requests are in flight";
             case "settings.preventSleepHint": return "While the gateway is handling requests (streams included), the system does not go to sleep when idle; it may again about 30 seconds after the last one finishes, or at once when you turn this off or the server stops. The display still turns off and closing the lid still sleeps. Off by default; on Linux it needs systemd (systemd-inhibit) and has no effect in containers.";
+            case "settings.sidebar": return "Sidebar menu";
+            case "settings.sidebar.footer": return "A hidden entry leaves the left menu; its page still opens by address or from the command palette. Settings cannot be hidden.";
             case "settings.qualifiedModels": return "Tell providers apart by model id";
             case "settings.qualifiedModels.footer": return "When several providers serve the same model, a client's model list shows one entry per provider, as \"model@provider alias\", and a request for an entry goes to that provider. A model name without an alias still routes by provider priority, so existing configs keep working. Set a provider's alias on its detail page; it defaults to the provider's name.";
             case "settings.qualifiedModels.enable": return "Append the provider alias to model ids";
@@ -6699,6 +6908,10 @@ internal static class Messages
             case "privacy.stats.col.redact": return "Redact";
             case "privacy.logs.total": return "{count} events";
             case "privacy.logs.empty": return "No privacy events yet";
+            case "privacy.logs.clear": return "Clear log";
+            case "privacy.logs.clearConfirm": return "Clear the whole interception log?";
+            case "privacy.logs.clearDetail": return "Only the privacy guard's hit records are removed; the request log itself stays. This cannot be undone.";
+            case "privacy.logs.cleared": return "Cleared {count} interception events";
             case "privacy.logs.empty.detail": return "Requests where the guard detected sensitive content show up here";
             case "privacy.logs.col.outcome": return "Outcome";
             case "privacy.logs.col.action": return "Hit action";

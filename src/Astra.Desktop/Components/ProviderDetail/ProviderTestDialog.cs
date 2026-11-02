@@ -212,20 +212,49 @@ public sealed class ProviderTestDialog : PdSheet
     /// <summary>The configuration shared by both modes (web <c>ConfigFields</c>).</summary>
     internal static IEnumerable<Control> ConfigFields(ProviderTestSession s)
     {
-        var protocol = PdUi.Choice(s.Protocols.Select(p => (p, ProviderProtocols.Name(p))), s.Protocol, v => s.Protocol = v, name: Loc.T("providers.testDialog.protocol"));
+        // Everything below the protocol box depends on it (the Images API has its own parameters), so it is rebuilt on a change.
+        var rest = new StackPanel { Spacing = 16 };
+        void FillRest()
+        {
+            rest.Children.Clear();
+            foreach (var c in ProtocolFields(s)) rest.Children.Add(c);
+        }
+        var protocol = PdUi.Choice(s.Protocols.Select(p => (p, ProviderProtocols.Name(p))), s.Protocol, v => { s.Protocol = v; FillRest(); }, name: Loc.T("providers.testDialog.protocol"));
         protocol.HorizontalAlignment = HorizontalAlignment.Stretch;
         yield return PdUi.Field(Loc.T("providers.testDialog.protocol"), protocol);
-        var stream = new DockPanel();
-        var sw = PdUi.Toggle(s.Stream, on => s.Stream = on, Loc.T("providers.testDialog.stream"));
-        DockPanel.SetDock(sw, Dock.Right);
-        stream.Children.Add(sw);
-        stream.Children.Add(PdUi.Text(Loc.T("providers.testDialog.stream"), 12, ArcDesignTokenKind.TextSecondary));
-        yield return stream;
-        var max = PdUi.Number(s.MaxTokens, v => s.SetMaxTokens(v), null, Loc.T("providers.testDialog.maxTokens"), integer: true, minimum: 1,
-            placeholder: ProviderTestSession.DefaultMaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        max.HorizontalAlignment = HorizontalAlignment.Stretch;
-        yield return PdUi.Field(Loc.T("providers.testDialog.maxTokens"), max);
-        var prompt = PdUi.Area(s.Prompt, v => s.Prompt = v, null, 4 * 20 + 16, placeholder: "Reply with OK.");
+        FillRest();
+        yield return rest;
+    }
+
+    private static IEnumerable<Control> ProtocolFields(ProviderTestSession s)
+    {
+        if (s.IsImages)
+        {
+            var useDefault = (ProviderTestSession.DefaultChoice, Loc.T("providers.testDialog.imageDefault"));
+            var size = PdUi.Choice(new[] { useDefault }.Concat(ProviderTestSession.ImageSizes.Select(x => (x, x))), s.ImageSize, v => s.ImageSize = v, name: Loc.T("providers.testDialog.imageSize"));
+            size.HorizontalAlignment = HorizontalAlignment.Stretch;
+            yield return PdUi.Field(Loc.T("providers.testDialog.imageSize"), size);
+            var quality = PdUi.Choice(new[] { useDefault }.Concat(ProviderTestSession.ImageQualities.Select(x => (x, x))), s.ImageQuality, v => s.ImageQuality = v, name: Loc.T("providers.testDialog.imageQuality"));
+            quality.HorizontalAlignment = HorizontalAlignment.Stretch;
+            yield return PdUi.Field(Loc.T("providers.testDialog.imageQuality"), quality);
+            var count = PdUi.Number(s.ImageCount, v => s.SetImageCount(v), null, Loc.T("providers.testDialog.imageCount"), integer: true, minimum: 1, placeholder: "1");
+            count.HorizontalAlignment = HorizontalAlignment.Stretch;
+            yield return PdUi.Field(Loc.T("providers.testDialog.imageCount"), count);
+        }
+        else
+        {
+            var stream = new DockPanel();
+            var sw = PdUi.Toggle(s.Stream, on => s.Stream = on, Loc.T("providers.testDialog.stream"));
+            DockPanel.SetDock(sw, Dock.Right);
+            stream.Children.Add(sw);
+            stream.Children.Add(PdUi.Text(Loc.T("providers.testDialog.stream"), 12, ArcDesignTokenKind.TextSecondary));
+            yield return stream;
+            var max = PdUi.Number(s.MaxTokens, v => s.SetMaxTokens(v), null, Loc.T("providers.testDialog.maxTokens"), integer: true, minimum: 1,
+                placeholder: ProviderTestSession.DefaultMaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            max.HorizontalAlignment = HorizontalAlignment.Stretch;
+            yield return PdUi.Field(Loc.T("providers.testDialog.maxTokens"), max);
+        }
+        var prompt = PdUi.Area(s.Prompt, v => s.Prompt = v, null, 4 * 20 + 16, placeholder: s.IsImages ? "A small red circle on a white background." : "Reply with OK.");
         Avalonia.Automation.AutomationProperties.SetName(prompt, Loc.T("providers.testDialog.prompt"));
         yield return PdUi.Field(Loc.T("providers.testDialog.prompt"), prompt, Loc.T("providers.testDialog.promptHint"));
     }
