@@ -61,6 +61,10 @@ public static class PrivacyEndpoints
                 result.Items.Select(ToEvent).ToList(), result.Total, result.Page, result.PageSize));
         });
 
+        // One-click clean-up of the interception log: the guard outcomes go, the request log stays.
+        app.MapDelete("/api/privacy/events", async (AstraDatabase db, CancellationToken ct) =>
+            Results.Ok(new PrivacyEventsClearedDto(await db.Requests.ClearPrivacyEventsAsync(ct))));
+
         // Aggregate counters for the same filters; range=today|7d|30d|90d|all.
         app.MapGet("/api/privacy/events/stats", async (string? range, string? client, string? provider, string? category, string? action, AstraDatabase db, CancellationToken ct) =>
         {

@@ -1,6 +1,7 @@
 using Astra.Core;
 using Astra.Desktop.Components.Tray;
 using Astra.Desktop.Core.Shell;
+using Astra.Desktop.Core.Connect;
 using Astra.Desktop.Core.Tray;
 using Astra.Desktop.Platform;
 using Astra.Desktop.Platform.Tray;
@@ -24,7 +25,8 @@ internal static class Program
         var instance = SingleInstance.TryClaim(root);
         if (instance is null)
         {
-            SingleInstance.SignalRunning(root, TimeSpan.FromSeconds(3));
+            // A join link (astra://join?…) the operating system opened this launch with goes to the running app, which asks to confirm it.
+            SingleInstance.SignalRunning(root, TimeSpan.FromSeconds(3), args.FirstOrDefault(a => JoinLink.TryParse(a) is not null));
             return 0;
         }
         Instance = instance;

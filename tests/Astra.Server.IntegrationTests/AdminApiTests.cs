@@ -400,6 +400,40 @@ public class AdminApiTests
     }
 
     [Fact]
+    public async Task Clearing_the_privacy_events_keeps_the_requests()
+    {
+        await using var host = await TestHost.StartAsync();
+        var id = Ulid.NewUlid();
+        await host.Db.Requests.InsertBatchAsync([new RequestRecord
+        {
+            Id = id, StartedAtUtc = DateTimeOffset.UtcNow, ClientKind = "claude-code", InboundProtocol = "anthropic",
+            RequestedModel = "claude-sonnet-4-6", Status = RequestStatus.Blocked,
+            PrivacyJson = """{"dry_run":false,"blocked":true,"redactions":0,"hits":[{"rule_id":"builtin.aws-access-key","category":"aws_key","action":"block","count":1}]}""",
+        }]);
+
+        var (status, body) = await host.SendAsync(HttpMethod.Delete, "/api/privacy/events");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body!["cleared"]!.GetValue<int>());
+        Assert.Equal(0, (await host.GetJsonAsync("/api/privacy/events"))["total"]!.GetValue<long>());
+        Assert.Equal(id, (await host.GetJsonAsync($"/api/requests/{id}"))["id"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Hidden_sidebar_entries_are_saved_and_settings_cannot_be_hidden()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        var (ok, saved) = await host.SendAsync(HttpMethod.Patch, "/api/settings", new { hiddenNav = new[] { "clients", "traces" } });
+        Assert.Equal(HttpStatusCode.OK, ok);
+        Assert.Equal(["traces", "clients"], saved!["hiddenNav"]!.AsArray().Select(n => n!.GetValue<string>()));
+
+        var (refused, _) = await host.SendAsync(HttpMethod.Patch, "/api/settings", new { hiddenNav = new[] { "settings" } });
+        Assert.Equal(HttpStatusCode.BadRequest, refused);
+        Assert.Equal(2, (await host.GetJsonAsync("/api/settings"))["hiddenNav"]!.AsArray().Count);
+    }
+
+    [Fact]
     public async Task Bindings_pin_and_clear_subscription_accounts()
     {
         await using var host = await TestHost.StartAsync();

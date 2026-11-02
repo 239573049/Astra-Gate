@@ -4,6 +4,7 @@ using Astra.Desktop.Components.Clients;
 using Astra.Desktop.Components.Layout;
 using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.Clients;
+using Astra.Desktop.Core.Connect;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.Overview;
 using Astra.Desktop.Core.Shell;
@@ -38,15 +39,18 @@ public sealed class ClientsPageViewModel : PageViewModel
         _ctx = context;
         Api = new ClientsApi(context.Api, context.Queries);
         Clients = Api.Clients();
+        Connect = new ConnectApi(context.Api, context.Queries);
         Providers = new ListQueries(context.Api, context.Queries).Providers();
         _selected = param;
         Observe(Clients);
+        Observe(Connect.Status);
         Observe(Providers);
         Observe(context.Tokens.Tokens);
         Subscribe(Clients, OnClients);
 
         _checkButton = ClientUi.Button(Loc.T("clients.checkUpdates"), () => _ = CheckNowAsync(), icon: ClientUi.Icon(LucideIconKind.RefreshCw));
-        SetHeaderActions(new ActionGroup(8, _checkButton));
+        var connectButton = ClientUi.Button(Loc.T("connect.open"), () => RequestConnect(null), icon: ClientUi.Icon(LucideIconKind.Link));
+        SetHeaderActions(new ActionGroup(8, connectButton, _checkButton));
     }
 
     /// <summary>The shown view's panel (the visual tests drive it).</summary>
@@ -57,6 +61,30 @@ public sealed class ClientsPageViewModel : PageViewModel
 
     /// <summary>The page's queries and writes.</summary>
     public ClientsApi Api { get; }
+
+    /// <summary>Connecting to a unified gateway (the company's Astra server): status and the join / apply / leave writes.</summary>
+    public ConnectApi Connect { get; }
+
+    /// <summary>Raised when the connect sheet should open: with the join link the person opened, or null for the manual entry.</summary>
+    public event Action<JoinLink?>? ConnectRequested;
+
+    /// <summary>Asks the view to open the connect sheet.</summary>
+    public void RequestConnect(JoinLink? link) => ConnectRequested?.Invoke(link);
+
+    /// <summary>Disconnects from the unified gateway after a confirmation; clients with other providers keep them, the rest are disabled.</summary>
+    public async Task LeaveConnectAsync()
+    {
+        if (!await _ctx.Feedback.ConfirmAsync(new ConfirmRequest(Loc.T("connect.leave.confirm"), Loc.T("connect.leave.detail"), Loc.T("connect.leave"), Destructive: true))) return;
+        try
+        {
+            await Connect.LeaveAsync();
+            _ctx.Feedback.Success(Loc.T("connect.leave.done"));
+        }
+        catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            _ctx.Feedback.Error(e.Message);
+        }
+    }
 
     /// <summary>The client list (polls while an install runs).</summary>
     public Query<List<ClientInfoDto>> Clients { get; }

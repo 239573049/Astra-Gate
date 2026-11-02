@@ -21,6 +21,9 @@ public sealed class SingleInstance : IDisposable
     private const string ActivateMessage = "activate";
     private const string AckMessage = "ok";
 
+    /// <summary>The prefix of a message that carries something to open (a join link), after the activation.</summary>
+    private const string OpenPrefix = "open ";
+
     private readonly FileStream? _lock;
     private readonly string _pipeName;
     private readonly CancellationTokenSource _stop = new();
@@ -69,7 +72,7 @@ public sealed class SingleInstance : IDisposable
     /// The second launch's side: tells the running instance to activate its window. True when it acknowledged within
     /// <paramref name="timeout"/> (it may still be starting up and not listening yet, so connecting is retried until then).
     /// </summary>
-    public static bool SignalRunning(string root, TimeSpan timeout)
+    public static bool SignalRunning(string root, TimeSpan timeout, string? open = null)
     {
         var deadline = DateTime.UtcNow + timeout;
         while (true)
@@ -81,7 +84,8 @@ public sealed class SingleInstance : IDisposable
                 pipe.Connect((int)Math.Clamp(left.TotalMilliseconds, 1, 1000));
                 using var writer = new StreamWriter(pipe, new UTF8Encoding(false), leaveOpen: true) { AutoFlush = true };
                 using var reader = new StreamReader(pipe, Encoding.UTF8, false, 64, leaveOpen: true);
-                writer.WriteLine(ActivateMessage);
+                // One line: "activate", or "open <text>" (a join link from the operating system) which also brings the window up.
+                writer.WriteLine(open is { Length: > 0 } && !open.Contains('\n') && !open.Contains('\r') ? OpenPrefix + open : ActivateMessage);
                 var readTask = reader.ReadLineAsync();
                 if (readTask.Wait(Math.Max(1, (int)(deadline - DateTime.UtcNow).TotalMilliseconds)) && readTask.Result == AckMessage) return true;
                 // Hung up without an answer: on Unix a connection that reached the listener just as it was recycled between two
@@ -98,13 +102,13 @@ public sealed class SingleInstance : IDisposable
     }
 
     /// <summary>Starts answering later launches; <paramref name="onActivate"/> runs on a background thread (marshal to the UI thread).</summary>
-    public void Listen(Action onActivate)
+    public void Listen(Action onActivate, Action<string>? onOpen = null)
     {
         if (_loop is not null) throw new InvalidOperationException("already listening");
-        _loop = Task.Run(() => LoopAsync(onActivate, _stop.Token));
+        _loop = Task.Run(() => LoopAsync(onActivate, onOpen, _stop.Token));
     }
 
-    private async Task LoopAsync(Action onActivate, CancellationToken ct)
+    private async Task LoopAsync(Action onActivate, Action<string>? onOpen, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -118,9 +122,11 @@ public sealed class SingleInstance : IDisposable
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(2));
                 var line = await reader.ReadLineAsync(timeout.Token).ConfigureAwait(false);
-                if (line != ActivateMessage) continue;
+                var open = line is not null && line.StartsWith(OpenPrefix, StringComparison.Ordinal) ? line[OpenPrefix.Length..] : null;
+                if (line != ActivateMessage && open is null) continue;
                 await writer.WriteLineAsync(AckMessage.AsMemory(), ct).ConfigureAwait(false);
                 onActivate();
+                if (open is not null) onOpen?.Invoke(open);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {

@@ -557,6 +557,16 @@ public sealed class RequestRepository
         return new PrivacyEventPage { Items = items, Total = total, Page = page, PageSize = pageSize };
     }
 
+    /// <summary>
+    /// Clears the interception log: drops the guard outcome from every request that has one, leaving the requests themselves
+    /// (the request log) untouched. Returns how many events were cleared.
+    /// </summary>
+    public async Task<int> ClearPrivacyEventsAsync(CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        return await conn.ExecuteAsync("UPDATE requests SET privacy_json = NULL WHERE privacy_json IS NOT NULL");
+    }
+
     /// <summary>Aggregated guard outcome counts plus a per-category hit breakdown for the same filters.</summary>
     public async Task<PrivacyEventStats> PrivacyEventStatsAsync(PrivacyEventQuery query, CancellationToken ct = default)
     {

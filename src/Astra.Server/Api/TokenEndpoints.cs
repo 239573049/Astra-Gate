@@ -21,6 +21,20 @@ public static class TokenEndpoints
         // POST (not GET) so revealing the plaintext requires the X-Astra-Admin header like every mutation.
         group.MapPost("/{id}/reveal", async (string id, TokenService tokens, CancellationToken ct) =>
             Results.Ok(await tokens.RevealAsync(id, ct)));
+        // One-time join links (the desktop's "connect to a unified gateway"): the link is returned once and holds no key.
+        group.MapPost("/{id}/invites", async (string id, HttpRequest request, TokenInviteService invites, CancellationToken ct) =>
+        {
+            // The body is optional ({"ttlMinutes": n}); no body = the default lifetime.
+            var body = request.ContentLength != 0 && request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true ? await JsonNode.ParseAsync(request.Body, cancellationToken: ct) as JsonObject : null;
+            return Results.Ok(await invites.CreateAsync(id, body?["ttlMinutes"] is JsonValue v && v.TryGetValue<int>(out var ttl) ? ttl : null, ct));
+        });
+        group.MapGet("/{id}/invites", async (string id, TokenInviteService invites, CancellationToken ct) =>
+            Results.Ok(await invites.ListAsync(id, ct)));
+        group.MapDelete("/{id}/invites/{inviteId}", async (string id, string inviteId, TokenInviteService invites, CancellationToken ct) =>
+        {
+            await invites.RevokeAsync(id, inviteId, ct);
+            return Results.NoContent();
+        });
         group.MapDelete("/{id}", async (string id, TokenService tokens, CancellationToken ct) =>
             Results.Ok(await tokens.DeleteAsync(id, ct)));
     }

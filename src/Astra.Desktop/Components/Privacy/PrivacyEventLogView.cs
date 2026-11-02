@@ -81,7 +81,8 @@ public sealed class PrivacyEventLogView : LiveView
             _debounce.Start();
         };
         _refresh = Ui.Button(null, () => _ = _events?.RefetchAsync(), ButtonVariant.Ghost, LucideIconKind.RefreshCw, tip: Loc.T("common.refresh"), size: ControlSize.Medium);
-        var top = Ui.Inline(8, _search, _refresh);
+        var clear = Ui.Button(Loc.T("privacy.logs.clear"), () => _ = ClearAsync(), ButtonVariant.Ghost, LucideIconKind.Trash2, size: ControlSize.Medium);
+        var top = Ui.Inline(8, _search, _refresh, clear);
         top.Margin = new Thickness(0, 0, 0, 12);
 
         _toolbar = new FilterToolbar { Label = Loc.T("requests.filters"), AddFilterLabel = Loc.T("requests.addFilter"), EmptyText = Loc.T("requests.noFilters"), ClearAllLabel = Loc.T("requests.clearFilters"), IsSearchVisible = false };
@@ -113,6 +114,16 @@ public sealed class PrivacyEventLogView : LiveView
     {
         _debounce.Stop();
         Unwatch();
+    }
+
+    private async Task ClearAsync()
+    {
+        if (!await Host.ConfirmAsync(Loc.T("privacy.logs.clearConfirm"), Loc.T("privacy.logs.clearDetail"), Loc.T("privacy.logs.clear"), true)) return;
+        var n = 0;
+        if (!await Host.TryAsync(async () => n = await _api.ClearEventsAsync())) return;
+        _filters.GoTo(1);
+        Host.Toast(new Astra.Desktop.Core.Settings.ToastMsg(Astra.Desktop.Core.Settings.Msg.Of("privacy.logs.cleared", ("count", n.ToString("N0", System.Globalization.CultureInfo.CurrentCulture)))));
+        Swap();
     }
 
     private void Unwatch()

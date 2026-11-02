@@ -264,6 +264,13 @@ public static class RequestEndpoints
                             if (ModelQualifier.IsValidSeparator(separator)) s.ModelProviderSeparator = separator!;
                             else error = "modelProviderSeparator must be 1-8 characters without whitespace";
                             break;
+                        case "hiddenNav":
+                            // Sidebar entries to hide: known ids only (Settings stays), each once, in the menu's order.
+                            var hidden = value is JsonArray ids ? ids.Select(id => id?.GetValue<string>()).ToList() : null;
+                            if (hidden is not null && hidden.All(id => id is not null && NavItems.Hideable.Contains(id)))
+                                s.HiddenNav = NavItems.Hideable.Where(hidden.Contains).ToList();
+                            else error = "hiddenNav must be a list of sidebar entry ids: " + string.Join(", ", NavItems.Hideable);
+                            break;
                         case "preventSleep": s.PreventSleep = value?.GetValue<bool>() ?? false; break;
                         case "updateChannel":
                             if (UpdateChannels.Parse(value?.GetValue<string>()) is { } channel) s.UpdateChannel = channel;
@@ -364,7 +371,7 @@ public static class RequestEndpoints
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
         UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent, s.PreventSleep,
-        s.ProviderQualifiedModels, s.ModelProviderSeparator);
+        s.ProviderQualifiedModels, s.ModelProviderSeparator, s.HiddenNav.ToList());
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:

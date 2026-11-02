@@ -576,6 +576,22 @@ runtime needed on the target).
     zh/en `settings.qualifiedModels.*` / `providers.alias.*` keys (+ `gen-desktop-i18n`), the Avalonia `GeneralSettingsView` and
     `ModelsTab`, and `docs/content/docs/console/settings.mdx` / `providers.mdx`.
 
+24. **Join links / unified gateway** (the desktop's "connect to a unified gateway"): the server issues one-time codes for a token
+    (`token_invites`, migration 0021; `TokenInviteService`, admin `POST|GET /api/tokens/{id}/invites`, `DELETE …/{inviteId}`) and
+    `POST /v1/astra/join/exchange` (public, per-IP rate limited, `JoinEndpoints`) hands a live code's token key over exactly once.
+    Only the code's SHA-256 is stored, a code is dead once used, expired or revoked, and a disabled token consumes nothing. The link is
+    `astra://join?gateway=…&token=…` and never holds a key. On the employee's machine `ConnectService` (`/api/connect/{status,join,apply,leave}`)
+    exchanges the code (or checks a typed key), keeps the gateway as a provider marked `settings.unified_gateway` (all four protocols,
+    bearer, models from `/v1/astra/connect-context`) and binds clients through the normal enable flow, so a client config holds only a
+    local token and the gateway key stays encrypted in the local database. `ConnectService.ApplyAsync` puts the gateway first and the
+    client's previous providers behind it; `LeaveAsync` removes it from every client (a client with nothing else is disabled). Mirrors:
+    `Astra.Api.Contracts` (`TokenInvite*Dto`, `JoinExchangeDto`, `Connect*Dto`), `web/src/api` (`useTokenInvites` …) and
+    `web/src/components/JoinLinkSheet.tsx`, `Astra.Desktop.Core/Connect` (`JoinLink`, `JoinLinkInbox`, `ConnectApi`), the Clients page
+    (`ConnectSheets`, `ConnectBanner`), `SingleInstance`'s `open` message (a second launch forwards the link) and the OS registration of the
+    `astra` scheme in `src/Astra.Desktop/Packaging/` (`Info.plist`, `installer.nsi`, `astra.desktop`) — that registration is a contract
+    with installed apps, like the other packaging names (linked update 22). `astra-connect` (npx) is separate and unchanged: it still writes
+    the bare key into clients (linked update 20); the two paths must not manage the same client at once.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

@@ -52,3 +52,18 @@ public sealed record TokenSecretDto(string Token);
 
 /// <summary>Result of a change that rewrote client configs (reset / delete): the kinds rewritten and the kinds skipped.</summary>
 public sealed record TokenMutationResultDto(TokenDto? Token, IReadOnlyList<string> Rewritten, IReadOnlyList<string> Skipped);
+
+/// <summary>
+/// Admin API payload: a join link just made. <paramref name="Link"/> carries the one-time code and is shown once; it holds no key.
+/// </summary>
+/// <param name="Id">The invite's id (for revoking it).</param>
+/// <param name="Link">The <c>astra://join</c> address with the gateway address and the code.</param>
+/// <param name="ExpiresAt">After this the code is dead.</param>
+public sealed record TokenInviteCreatedDto(string Id, string Link, DateTimeOffset ExpiresAt);
+
+/// <summary>Admin API payload: a join code of a token without the code itself (<c>pending</c>, <c>used</c>, <c>expired</c> or <c>revoked</c>).</summary>
+/// <param name="UsedIp">Where it was redeemed from, once used.</param>
+public sealed record TokenInviteDto(string Id, string Status, DateTimeOffset CreatedAt, DateTimeOffset ExpiresAt, DateTimeOffset? UsedAt, string? UsedIp);
+
+/// <summary><c>POST /v1/astra/join/exchange</c> answer: the token's own key, handed over once, and its name.</summary>
+public sealed record JoinExchangeDto(string Key, string Name);

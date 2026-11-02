@@ -47,6 +47,16 @@ public sealed class PrivacyApi
             new QueryOptions<PageDto<PrivacyEventDto>> { RefetchInterval = _ => live ? TimeSpan.FromSeconds(5) : null });
     }
 
+    /// <summary>DELETE /api/privacy/events: clears the interception log (the request log stays); returns how many events went.</summary>
+    public async Task<int> ClearEventsAsync(CancellationToken ct = default)
+    {
+        var r = await _api.DeleteAsync<PrivacyEventsClearedDto>("/api/privacy/events", ct) ?? throw new ApiException(0, "empty response");
+        _queries.Invalidate("privacy-events");
+        _queries.Invalidate("privacy-event-stats");
+        _queries.Invalidate("requests");
+        return r.Cleared;
+    }
+
     /// <summary>PUT /api/privacy with the whole policy; the saved settings replace the cached ones (the rules stay).</summary>
     public async Task<PrivacySettings> UpdateAsync(PrivacySettings settings, CancellationToken ct = default)
     {

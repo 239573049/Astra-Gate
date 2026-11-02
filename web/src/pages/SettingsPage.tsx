@@ -9,6 +9,7 @@ import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
 import { StartupSettings } from '../components/StartupSettings';
+import { NAV_GROUPS } from '../components/layout/nav';
 import { Page } from '../components/layout/Page';
 import { NumberField } from '../components/arc/number-field/number-field';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
@@ -228,6 +229,8 @@ function GeneralSettings() {
           </Group>
 
           <QualifiedModelsSettings settings={s} />
+
+          <SidebarSettings settings={s} />
 
           <ProxySettings settings={s} />
 
@@ -568,6 +571,26 @@ function QualifiedModelsSettings({ settings: s }: { settings: Settings }) {
           />
         </Row>
       )}
+    </Group>
+  );
+}
+
+/** Which sidebar entries the console shows: any but Settings can be hidden; the page still opens by its address. */
+function SidebarSettings({ settings: s }: { settings: Settings }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateSettings();
+  const hidden = s.hiddenNav ?? [];
+  const items = NAV_GROUPS.flatMap((g) => g.items).filter((item) => item.id !== 'settings');
+  const toggle = (id: string, show: boolean) =>
+    update.mutate({ hiddenNav: show ? hidden.filter((h) => h !== id) : [...hidden, id] }, { onError: (e) => toast(errorText(e), 'error') });
+  return (
+    <Group title={t('settings.sidebar')} footer={t('settings.sidebar.footer')}>
+      {items.map((item) => (
+        <Row key={item.id} label={t(item.label)}>
+          <Switch checked={!hidden.includes(item.id)} label={t(item.label)} onChange={(show) => toggle(item.id, show)} />
+        </Row>
+      ))}
     </Group>
   );
 }

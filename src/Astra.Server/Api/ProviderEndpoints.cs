@@ -683,10 +683,18 @@ public static class ProviderEndpoints
         // "openai-images" (the request log's name for the Images API) selects the image test instead.
         var image = body["protocol"] is JsonValue p && p.TryGetValue<string>(out var id) && id == GatewayPipeline.ImagesProtocol;
         var protocol = body["protocol"] is null || image ? (ApiProtocol?)null : Read<ApiProtocol>(body["protocol"]);
+        var size = String(body, "imageSize");
+        if (size is not null && size != "auto" && !System.Text.RegularExpressions.Regex.IsMatch(size, @"^[1-9]\d{2,4}x[1-9]\d{2,4}$"))
+            throw new AdminApiException(400, "imageSize must be \"auto\" or WIDTHxHEIGHT, e.g. 1024x1024");
+        var quality = String(body, "imageQuality");
+        if (quality is not null && !ProviderProbe.ImageQualities.Contains(quality))
+            throw new AdminApiException(400, $"imageQuality must be one of: {string.Join(", ", ProviderProbe.ImageQualities)}");
+        var count = body["imageCount"] is null ? 1 : Read<int>(body["imageCount"]);
+        if (count is < 1 or > ProviderProbe.MaxTestImages) throw new AdminApiException(400, $"imageCount must be between 1 and {ProviderProbe.MaxTestImages}");
         return new ProviderTestOptions(
             String(body, "modelId"), protocol,
             body["stream"] is null || Read<bool>(body["stream"]),
-            prompt, maxOutputTokens, image);
+            prompt, maxOutputTokens, image, image ? size : null, image ? quality : null, image ? count : 1);
     }
 
     private static T Read<T>(JsonNode? value)

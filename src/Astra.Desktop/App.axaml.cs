@@ -1,3 +1,4 @@
+using Astra.Desktop.Core.Connect;
 using Astra.Desktop.Core.Settings;
 using Astra.Desktop.Core.Shell;
 using Astra.Desktop.Components.Tray;
@@ -52,7 +53,26 @@ public class App : Application
             tray.Start();
             if (hidden) tray.StartHidden();
             // A second launch (Dock, Start menu, launcher) brings this window forward (Electron's 'second-instance').
-            Program.Instance?.Listen(() => Dispatcher.UIThread.Post(() => tray.ShowMainWindow(null)));
+            // An astra://join link from the system opens the Clients page, which asks the person to confirm it (nothing is exchanged before).
+            void OpenJoinLink(JoinLink link)
+            {
+                JoinLinkInbox.Post(link);
+                shell.Navigator.Navigate(AppRoute.Clients, null);
+                tray.ShowMainWindow(null);
+            }
+            Program.Instance?.Listen(
+                () => Dispatcher.UIThread.Post(() => tray.ShowMainWindow(null)),
+                text => { if (JoinLink.TryParse(text) is { } link) Dispatcher.UIThread.Post(() => OpenJoinLink(link)); });
+            // The app was started by the link (Windows / Linux pass it as an argument).
+            if (JoinLink.FromArgs(args) is { } startLink) Dispatcher.UIThread.Post(() => OpenJoinLink(startLink));
+            // macOS hands a link to the running app as an open-URL event instead of an argument.
+            if (this.TryGetFeature<Avalonia.Controls.ApplicationLifetimes.IActivatableLifetime>() is { } activatable)
+                activatable.Activated += (_, e) =>
+                {
+                    if (e is Avalonia.Controls.ApplicationLifetimes.ProtocolActivatedEventArgs { Kind: Avalonia.Controls.ApplicationLifetimes.ActivationKind.OpenUri } uri
+                        && JoinLink.TryParse(uri.Uri.ToString()) is { } link)
+                        Dispatcher.UIThread.Post(() => OpenJoinLink(link));
+                };
             // The remote-access acknowledgement survives restarts, like the web's localStorage flag.
             RemoteAckStore.Shared.Bind(
                 () => services.Prefs.GetExtra(DesktopPrefs.RemoteAckKey) is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<bool>(out var ack) && ack,

@@ -1,4 +1,4 @@
-import { BarChart3, ChevronRight, Copy, Link2, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, SquareTerminal, Trash2 } from 'lucide-react';
+import { BarChart3, ChevronRight, Copy, Link2, Ellipsis, KeyRound, Pencil, Plus, Power, RotateCcw, ScrollText, SquareTerminal, Trash2, UserPlus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
@@ -17,6 +17,7 @@ import type { ClientKind, Token, TokenBudget, TokenBudgetUsage, TokenLimitMetric
 import { Alert } from '../components/arc/alert/alert';
 import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { CLIENT_META, ClientGlyph } from '../components/icons';
+import { JoinLinkSheet } from '../components/JoinLinkSheet';
 import { Page } from '../components/layout/Page';
 import { healthTone, poolDraftOf, poolInputOf, TokenPoolEditor, useHealthLabel, type PoolDraft } from '../components/TokenPoolEditor';
 import { Badge, Button, Dot, EmptyState, Field, Input, NumberInput, Segmented, Spinner } from '../components/ui/controls';
@@ -104,6 +105,8 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
       onError: (e) => toast(errorText(e), 'error'),
     });
 
+  const [inviteOpen, setInviteOpen] = useState(false);
+
   const copyUrl = async () => {
     const base = settings.data?.gatewayBaseUrl;
     if (!base) return;
@@ -186,6 +189,8 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               <Button size="sm" variant="plain" icon={<Copy className="size-3.5" />} aria-label={t('tokens.copy')} title={t('tokens.copy')} loading={reveal.isPending} onClick={copy} />
               <Button size="sm" variant="plain" icon={<Link2 className="size-3.5" />} aria-label={t('tokens.copyUrl')} title={t('tokens.copyUrl')} disabled={!settings.data} onClick={() => void copyUrl()} />
               <Button size="sm" variant="plain" icon={<SquareTerminal className="size-3.5" />} aria-label={t('tokens.copyJoin')} title={t('tokens.copyJoin')} disabled={!settings.data} onClick={() => void copyJoin()} />
+              <Button size="sm" variant="plain" icon={<UserPlus className="size-3.5" />} aria-label={t('tokens.invite.open')} title={t('tokens.invite.open')} disabled={!token.enabled} onClick={() => setInviteOpen(true)} />
+              <JoinLinkSheet token={token} open={inviteOpen} onOpenChange={setInviteOpen} />
             </div>
           </div>
         </div>

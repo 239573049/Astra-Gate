@@ -6,4 +6,5 @@ Exec=astra %U
 Icon=astra
 Terminal=false
 Categories=Development;
+MimeType=x-scheme-handler/astra;
 StartupWMClass=Astra

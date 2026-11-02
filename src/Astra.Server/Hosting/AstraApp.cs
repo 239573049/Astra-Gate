@@ -83,6 +83,8 @@ public static class AstraApp
         builder.Services.AddSingleton<ClientService>();
         builder.Services.AddSingleton<ClaudeDirectService>();
         builder.Services.AddSingleton<TokenService>();
+        builder.Services.AddSingleton<TokenInviteService>();
+        builder.Services.AddSingleton<ConnectService>();
         builder.Services.AddHostedService<TokenMigrationWorker>();
         builder.Services.AddSingleton<ProviderTemplateCatalog>();
         builder.Services.AddSingleton<ProviderProbe>();
@@ -268,6 +270,8 @@ public static class AstraApp
         builder.Services.AddRateLimiter(KeyInfoEndpoints.AddKeyInfoRateLimit);
         // Per-IP limit of password attempts (remote visitors are told apart by Cloudflare's address).
         builder.Services.AddRateLimiter(SystemEndpoints.AddLoginRateLimit);
+        // Per-IP limit of join-link exchanges: a code is a 256-bit secret, so this only caps noise.
+        builder.Services.AddRateLimiter(JoinEndpoints.AddJoinRateLimit);
         builder.Services.AddCors(c => c.AddDefaultPolicy(p => p
             .WithOrigins(SecurityMiddleware.DesktopOrigin)
             .AllowAnyMethod()
@@ -307,6 +311,8 @@ public static class AstraApp
         app.MapClientEndpoints();
         app.MapClaudeDirectEndpoints();
         app.MapTokenEndpoints();
+        app.MapJoinEndpoints();
+        app.MapConnectEndpoints();
         app.MapProviderEndpoints();
         app.MapPrivacyEndpoints();
         app.MapSmartRoutingEndpoints();

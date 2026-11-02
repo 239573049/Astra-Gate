@@ -105,8 +105,21 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                || id.StartsWith("dall-e", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The smallest Images API request there is: just the model and the prompt (no size, quality, n or format).</summary>
-    internal static JsonObject TestImageBody(string model, string prompt) => new() { ["model"] = model, ["prompt"] = prompt };
+    /// <summary>The Images API test request: the model and the prompt, plus whichever of size, quality and n the person set.</summary>
+    internal static JsonObject TestImageBody(string model, string prompt, string? size = null, string? quality = null, int count = 1)
+    {
+        var body = new JsonObject { ["model"] = model, ["prompt"] = prompt };
+        if (size is { Length: > 0 }) body["size"] = size;
+        if (quality is { Length: > 0 }) body["quality"] = quality;
+        if (count > 1) body["n"] = count;
+        return body;
+    }
+
+    /// <summary>The <c>quality</c> values the Images API families accept (gpt-image: low/medium/high/auto; dall-e-3: standard/hd).</summary>
+    internal static readonly string[] ImageQualities = ["auto", "low", "medium", "high", "standard", "hd"];
+
+    /// <summary>Most pictures one test may ask for (every picture is billed).</summary>
+    internal const int MaxTestImages = 4;
 
     /// <summary>
     /// A copy of an Images API answer with each picture's base64 replaced by its size, so neither the "raw" view, the
@@ -197,7 +210,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
 
         try
         {
-            var bodyText = (image ? TestImageBody(run.ModelId, prompt) : TestBody(run.ModelId, prompt, options.MaxOutputTokens, stream, protocol))
+            var bodyText = (image ? TestImageBody(run.ModelId, prompt, options.ImageSize, options.ImageQuality, options.ImageCount) : TestBody(run.ModelId, prompt, options.MaxOutputTokens, stream, protocol))
                 .ToJsonString(GatewayJson.Options);
             // Privacy guard (plan §6.7): a test prompt is client content, so the same policy and the same request-log
             // report apply as for a gateway request.

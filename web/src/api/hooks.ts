@@ -81,6 +81,8 @@ import type {
   TimeseriesPoint,
   Token,
   TokenLimits,
+  TokenInvite,
+  TokenInviteCreated,
   TokenMutationResult,
   TokenPoolInput,
   TopModel,
@@ -678,6 +680,19 @@ export const usePrivacyEventStats = (range: Range) =>
     placeholderData: (prev) => prev,
   });
 
+/** One-click clean-up of the interception log; the request log itself stays. */
+export function useClearPrivacyEvents() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<{ cleared: number }>('DELETE', '/api/privacy/events'),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['privacy-events'] });
+      void qc.invalidateQueries({ queryKey: ['privacy-event-stats'] });
+      void qc.invalidateQueries({ queryKey: ['requests'] });
+    },
+  });
+}
+
 // ---------- subscription accounts ----------
 
 export const useProviderAccounts = (id: string | undefined, enabled = true) =>
@@ -1120,6 +1135,30 @@ export const useResetToken = () =>
 
 export const useDeleteToken = () =>
   useTokenMutation((id: string) => api<TokenMutationResult>('DELETE', `/api/tokens/${enc(id)}`));
+
+/** One-time join links of a token (the desktop's "connect to a unified gateway"). */
+export const useTokenInvites = (id: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: ['token-invites', id ?? ''],
+    queryFn: () => api<TokenInvite[]>('GET', `/api/tokens/${enc(id!)}/invites`),
+    enabled: Boolean(id) && enabled,
+  });
+
+export const useCreateTokenInvite = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ttlMinutes: number) => api<TokenInviteCreated>('POST', `/api/tokens/${enc(id)}/invites`, { ttlMinutes }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['token-invites', id] }),
+  });
+};
+
+export const useRevokeTokenInvite = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (inviteId: string) => api<void>('DELETE', `/api/tokens/${enc(id)}/invites/${enc(inviteId)}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['token-invites', id] }),
+  });
+};
 
 /** The plaintext token, fetched only when the user copies it. */
 export const useRevealToken = () =>

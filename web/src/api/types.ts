@@ -285,6 +285,12 @@ export interface ProviderTestRequest {
   stream?: boolean;
   prompt?: string | null;
   maxOutputTokens?: number;
+  /** `openai-images` only: `auto` or WIDTHxHEIGHT; null leaves it to the upstream. */
+  imageSize?: string | null;
+  /** `openai-images` only: auto | low | medium | high | standard | hd; null leaves it to the upstream. */
+  imageQuality?: string | null;
+  /** `openai-images` only: pictures to ask for, 1 to 4. */
+  imageCount?: number;
 }
 /** The "done" event of a test stream: whether it worked, what it cost in time, and what came back. */
 export interface ProviderTestDone {
@@ -478,6 +484,13 @@ export interface TokenStats {
   cacheHitRate?: number | null;
   /** Weighted output speed: output tokens / generation seconds of successful requests; null without data. */
   tps?: number | null;
+}
+/** A one-time join link just made (`POST /api/tokens/{id}/invites`): `link` carries the code, is shown once and holds no key. */
+export interface TokenInviteCreated { id: string; link: string; expiresAt: string }
+/** A join code of a token without the code itself. */
+export interface TokenInvite {
+  id: string; status: 'pending' | 'used' | 'expired' | 'revoked'; createdAt: string; expiresAt: string;
+  usedAt: string | null; usedIp: string | null;
 }
 export interface Token {
   id: string; name: string; isDefault: boolean; enabled: boolean;
@@ -944,6 +957,8 @@ export interface Settings {
   preventSleep?: boolean;
   /** Provider-qualified model ids (`model@alias`): model lists tell providers apart and a qualified id goes to that provider (off by default). */
   providerQualifiedModels?: boolean;
+  /** Sidebar entries hidden from the menu (the pages still open by address); Settings cannot be hidden. */
+  hiddenNav?: string[];
   /** Between a model id and its provider's alias while providerQualifiedModels is on (1-8 characters, no whitespace; default "@"). */
   modelProviderSeparator?: string;
   /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */

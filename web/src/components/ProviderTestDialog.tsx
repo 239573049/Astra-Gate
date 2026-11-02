@@ -25,6 +25,8 @@ import { PROTOCOL_OPTIONS } from '../pages/ProvidersPage';
 const BATCH_CONCURRENCY = 3;
 const DEFAULT_MAX_TOKENS = 256;
 const MAX_TOKENS = 4096;
+/** What the server sends when an Images API test has no prompt (`ProviderProbe.DefaultImageTestPrompt`). */
+const DEFAULT_IMAGE_PROMPT = 'A small red circle on a white background.';
 
 // ---------- run state ----------
 
@@ -80,6 +82,7 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
   const [stream, setStream] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [maxTokens, setMaxTokens] = useState<number | null>(DEFAULT_MAX_TOKENS);
+  const [image, setImage] = useState<ImageParams>({ size: '', quality: '', count: 1 });
 
   const [model, setModel] = useState('');
   const [single, setSingle] = useState<Run | null>(null);
@@ -128,8 +131,11 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
       stream,
       prompt: prompt.trim() || null,
       maxOutputTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+      ...(protocol === 'openai-images'
+        ? { imageSize: image.size.trim() || null, imageQuality: image.quality || null, imageCount: image.count }
+        : {}),
     }),
-    [protocol, stream, prompt, maxTokens],
+    [protocol, stream, prompt, maxTokens, image],
   );
 
   const test = useCallback(
@@ -284,6 +290,8 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
               onMaxTokens={setMaxTokens}
               prompt={prompt}
               onPrompt={setPrompt}
+              image={image}
+              onImage={setImage}
             />
             <p className="mt-auto text-[11px] text-[var(--text-muted)]">{t('providers.testDialog.savedCredentials')}</p>
           </div>
@@ -323,6 +331,8 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
             onMaxTokens={setMaxTokens}
             prompt={prompt}
             onPrompt={setPrompt}
+            image={image}
+            onImage={setImage}
           />
           {order.length > 0 ? (
             <div className="mt-4 grid gap-2">
@@ -462,7 +472,20 @@ interface ConfigFieldProps {
   onMaxTokens: (value: number | null) => void;
   prompt: string;
   onPrompt: (value: string) => void;
+  image: ImageParams;
+  onImage: (value: ImageParams) => void;
 }
+
+/** The Images API test's optional parameters; empty = left out of the request. */
+interface ImageParams {
+  size: string;
+  quality: string;
+  count: number;
+}
+
+const IMAGE_SIZES = ['auto', '1024x1024', '1536x1024', '1024x1536', '512x512', '256x256'];
+const IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high', 'standard', 'hd'];
+const MAX_IMAGES = 4;
 
 /** The configuration shared by both modes; the batch mode shows it in its own small dialog. */
 function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
@@ -472,11 +495,52 @@ function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
     label: PROTOCOL_OPTIONS.find((o) => o.value === p)?.label ?? p,
   }));
   if (protocols.some((p) => p === 'openai-chat' || p === 'openai-responses')) options.push({ value: 'openai-images', label: 'OpenAI Images' });
+  const images = rest.protocol === 'openai-images';
+  const setImage = (patch: Partial<ImageParams>) => rest.onImage({ ...rest.image, ...patch });
   return (
     <>
       <Field label={t('providers.testDialog.protocol')}>
         <Select value={rest.protocol} onChange={rest.onProtocol} options={options} />
       </Field>
+      {images ? (
+        <>
+          <Field label={t('providers.testDialog.imageSize')} hint={t('providers.testDialog.imageSizeHint')}>
+            <Input
+              className="font-mono"
+              list="provider-test-image-sizes"
+              value={rest.image.size}
+              placeholder="1024x1024"
+              aria-label={t('providers.testDialog.imageSize')}
+              onChange={(e) => setImage({ size: e.target.value })}
+            />
+            <datalist id="provider-test-image-sizes">
+              {IMAGE_SIZES.map((size) => (
+                <option key={size} value={size} />
+              ))}
+            </datalist>
+          </Field>
+          <Field label={t('providers.testDialog.imageQuality')}>
+            <Select
+              value={rest.image.quality}
+              onChange={(quality) => setImage({ quality })}
+              options={[
+                { value: '', label: t('providers.testDialog.imageDefault') },
+                ...IMAGE_QUALITIES.map((q) => ({ value: q, label: q })),
+              ]}
+            />
+          </Field>
+          <Field label={t('providers.testDialog.imageCount')}>
+            <NumberInput
+              value={rest.image.count}
+              min={1}
+              placeholder="1"
+              label={t('providers.testDialog.imageCount')}
+              onChange={(value) => setImage({ count: value === null ? 1 : Math.min(MAX_IMAGES, Math.max(1, Math.round(value))) })}
+            />
+          </Field>
+        </>
+      ) : (
+      <>
       <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] text-[var(--text-secondary)]">{t('providers.testDialog.stream')}</span>
         <Switch checked={rest.stream} label={t('providers.testDialog.stream')} onChange={rest.onStream} />
@@ -490,8 +554,10 @@ function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
           onChange={(value) => rest.onMaxTokens(value === null ? null : Math.min(MAX_TOKENS, Math.max(1, Math.round(value))))}
         />
       </Field>
+      </>
+      )}
       <Field label={t('providers.testDialog.prompt')} hint={t('providers.testDialog.promptHint')}>
-        <TextArea rows={4} value={rest.prompt} placeholder="Reply with OK." onChange={(e) => rest.onPrompt(e.target.value)} />
+        <TextArea rows={4} value={rest.prompt} placeholder={images ? DEFAULT_IMAGE_PROMPT : 'Reply with OK.'} onChange={(e) => rest.onPrompt(e.target.value)} />
       </Field>
     </>
   );

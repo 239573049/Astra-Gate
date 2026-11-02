@@ -2,7 +2,7 @@
 name: enterprise-join-uses-api-key
 description: Enterprise employee onboarding (astra join) takes the gateway URL + the API key the company hands out; no join/enrollment codes
 type: project
-updated: 2026-10-18
+updated: 2026-11-03
 source: session
 evidence: .plan/enterprise-connect.md; connect/src/commands/join.ts; KeyInfoEndpoints.ConnectContextAsync
 ---
@@ -20,3 +20,5 @@ argv (masked prompt, `ASTRA_API_KEY` env or `--key-stdin`), validate it against 
 
 What it writes into a client is the bare token (not the client-suffixed key): the suffixed form routes through a client
 enabled and bound on the server, which an enterprise gateway does not have for employees' machines.
+
+**2026-11-03:** the desktop path now has one-time join links, see [[join-links-temp-token]]. This entry still governs `astra-connect`.
