@@ -142,6 +142,17 @@ public class ImagesTests
     public void The_images_address_sits_beside_the_openai_endpoint(ApiProtocol protocol, string baseUrl, bool fullUrl, string? expected) =>
         Assert.Equal(expected, UpstreamUrls.Images(new ProviderEndpoint { Protocol = protocol, BaseUrl = baseUrl, FullUrl = fullUrl }, "images/generations"));
 
+    [Theory]
+    [InlineData("github-copilot-subscription", ImageOperation.Edits, "https://api.githubcopilot.com/v1/images/edits")]
+    [InlineData("github-copilot-subscription", ImageOperation.Generations, "https://api.githubcopilot.com/v1/images/generations")]
+    [InlineData("openai", ImageOperation.Edits, "https://api.githubcopilot.com/images/edits")]
+    public void Copilot_images_go_under_v1_because_its_base_address_has_none(string template, ImageOperation operation, string expected)
+    {
+        var provider = new Provider { Id = "p", Name = "p", TemplateId = template };
+        var endpoint = new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://api.githubcopilot.com" };
+        Assert.Equal(expected, UpstreamUrls.Images(endpoint, GatewayPipeline.ImagesPath(provider, operation)));
+    }
+
     [Fact]
     public void Usage_is_read_past_megabytes_of_image_without_parsing_them()
     {

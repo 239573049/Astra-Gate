@@ -44,6 +44,7 @@ public sealed class SubscriptionAccountsView : LiveView
     private TextBlock _modeDetail = null!;
     private WrapPanel _chips = null!;
     private Control _batchImport = null!;
+    private Control _export = null!;
     private ContentControl _addMenu = null!;
     private TextBlock _localNote = null!;
     private ContentControl _body = null!;
@@ -111,14 +112,17 @@ public sealed class SubscriptionAccountsView : LiveView
         _chips = new WrapPanel { ItemSpacing = 4, LineSpacing = 4, VerticalAlignment = VerticalAlignment.Center };
         Avalonia.Automation.AutomationProperties.SetName(_chips, Loc.T("providers.accounts.filterLabel"));
         _batchImport = AccountsUi.Button(Loc.T("providers.accounts.batchImport"), () => OpenImport(ImportMode.Batch), icon: LucideIconKind.ListPlus);
+        _export = AccountsUi.Button(Loc.T("providers.accounts.export"), () => _ = ExportAsync(), icon: LucideIconKind.Upload);
         _addMenu = new ContentControl { VerticalAlignment = VerticalAlignment.Center };
-        var toolbar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
+        var toolbar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto,Auto"), ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 8) };
         toolbar.Children.Add(_search);
         Grid.SetColumn(_chips, 1);
         toolbar.Children.Add(_chips);
         Grid.SetColumn(_batchImport, 2);
         toolbar.Children.Add(_batchImport);
-        Grid.SetColumn(_addMenu, 3);
+        Grid.SetColumn(_export, 3);
+        toolbar.Children.Add(_export);
+        Grid.SetColumn(_addMenu, 4);
         toolbar.Children.Add(_addMenu);
 
         _localNote = AccountsUi.Note("");
@@ -200,6 +204,7 @@ public sealed class SubscriptionAccountsView : LiveView
         foreach (var (filter, label, count) in AccountCards.Chips(list, now)) _chips.Children.Add(Chip(filter, label, count));
         var info = _model.ImportInfo.Data;
         _batchImport.IsVisible = info?.Supported == true;
+        _export.IsVisible = info?.Supported == true && list.Count > 0;
         _addMenu.Content = AddMenu();
 
         var note = _model.LocalNote;
@@ -248,6 +253,18 @@ public sealed class SubscriptionAccountsView : LiveView
     }
 
     private void OpenImport(ImportMode mode) => _model.ImportMode = mode;
+
+    private async Task ExportAsync()
+    {
+        if (await _model.ExportAsync() is not { } exported) return;
+        if (!await SystemActions.CopyAsync(this, exported.Text))
+        {
+            _model.Feedback.Error(Loc.T("providers.accounts.exportCopyFailed"));
+            return;
+        }
+        _model.Feedback.Success(Loc.T("providers.accounts.exportDone", ("n", exported.Count)) +
+            (exported.Skipped > 0 ? Loc.T("providers.accounts.exportSkipped", ("n", exported.Skipped)) : ""));
+    }
 
     private void FillGrid(IReadOnlyList<AccountCardModel> cards)
     {

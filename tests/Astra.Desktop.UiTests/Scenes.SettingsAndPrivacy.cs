@@ -23,17 +23,21 @@ public static partial class Scenes
     {
         // The web capture runs in UTC (index.timeZone); the machine's zone would shift every time text.
         Astra.Desktop.Core.Settings.SettingsFormat.DisplayZone = TimeZoneInfo.Utc;
-        // ---- Settings › General
+        // ---- Settings › General and the categories split out of the web's General tab
         d["settings__data"] = () => Page(AppRoute.Settings, Fixtures());
-        d["settings__data-lower"] = () => Scrolled(Page(AppRoute.Settings, Fixtures()), 1100);
-        d["settings__data-bottom"] = () => Scrolled(Page(AppRoute.Settings, Fixtures()), 100000);
-        d["settings__error"] = () => Page(AppRoute.Settings, Fixtures().Override("/api/settings", """{"error":"settings unavailable"}""", 500));
-        d["settings__update-available"] = () => Scrolled(Page(AppRoute.Settings, Fixtures().Override("/api/update/status", UpdateAvailable)), 100000);
-        d["settings__update-downloading"] = () => Scrolled(Downloading(), 100000);
-        d["settings__proxy-custom"] = () => Scrolled(Page(AppRoute.Settings, Fixtures().Override("/api/settings", SettingsWith(("proxyMode", "\"custom\""), ("proxyUrl", "\"http://127.0.0.1:7890\""),
-            ("proxyUsername", "\"dev\""), ("hasProxyPassword", "true"), ("proxyBypass", "\"example.com, *.lan\"")))), 560);
-        d["settings__lan-pending"] = () => Page(AppRoute.Settings, Fixtures().Override("/api/server/listen", ListenLan).Override("/api/auth/status", """{"required":false,"signedIn":false,"remote":false,"adminBlocked":false}"""));
-        d["settings__listen-sheet"] = () => After(Page(AppRoute.Settings, Fixtures()), root => root.GetVisualDescendants().OfType<GeneralSettingsView>().First().Listen.ShowPasswordSheetAsync());
+        d["settings__gateway"] = () => Page(AppRoute.Settings, Fixtures(), param: "gateway");
+        d["settings__models"] = () => Page(AppRoute.Settings, Fixtures(), param: "models");
+        d["settings__network"] = () => Page(AppRoute.Settings, Fixtures(), param: "network");
+        d["settings__usage"] = () => Page(AppRoute.Settings, Fixtures(), param: "usage");
+        d["settings__logging"] = () => Page(AppRoute.Settings, Fixtures(), param: "logging");
+        d["settings__about"] = () => Page(AppRoute.Settings, Fixtures(), param: "about");
+        d["settings__error"] = () => Page(AppRoute.Settings, Fixtures().Override("/api/settings", """{"error":"settings unavailable"}""", 500), param: "gateway");
+        d["settings__update-available"] = () => Page(AppRoute.Settings, Fixtures().Override("/api/update/status", UpdateAvailable), param: "about");
+        d["settings__update-downloading"] = () => Downloading();
+        d["settings__proxy-custom"] = () => Page(AppRoute.Settings, Fixtures().Override("/api/settings", SettingsWith(("proxyMode", "\"custom\""), ("proxyUrl", "\"http://127.0.0.1:7890\""),
+            ("proxyUsername", "\"dev\""), ("hasProxyPassword", "true"), ("proxyBypass", "\"example.com, *.lan\""))), param: "network");
+        d["settings__lan-pending"] = () => Page(AppRoute.Settings, Fixtures().Override("/api/server/listen", ListenLan).Override("/api/auth/status", """{"required":false,"signedIn":false,"remote":false,"adminBlocked":false}"""), param: "gateway");
+        d["settings__listen-sheet"] = () => After(Page(AppRoute.Settings, Fixtures(), param: "gateway"), root => root.GetVisualDescendants().OfType<GatewaySettingsView>().First().Listen.ShowPasswordSheetAsync());
 
         // ---- Settings › Notifications
         d["settings__notifications"] = () => Page(AppRoute.Settings, Alerts(Fixtures()), param: "notifications");
@@ -154,7 +158,7 @@ public static partial class Scenes
         var connection = new ConnectionViewModel(null, api, context.Queries);
         connection.AssumeConnected("http://127.0.0.1:17321");
         var shell = new ShellViewModel(DesktopPrefs.InMemory(), connection, context, AppModules.All);
-        shell.Navigator.Navigate(AppRoute.Settings);
+        shell.Navigator.Navigate(AppRoute.Settings, "about");
         var view = new ShellView { DataContext = shell };
         return new Scene(view, async () =>
         {
@@ -312,7 +316,7 @@ public class SettingsBehaviourTests
     [AvaloniaFact]
     public async Task Typing_in_the_proxy_form_survives_a_settings_refresh()
     {
-        var (window, view, _, shell) = await ShowAsync(Scenes.Fixtures().Override("/api/settings", Scenes.SettingsJsonWith(("proxyMode", "\"custom\""), ("proxyUrl", "\"http://127.0.0.1:7890\""))));
+        var (window, view, _, shell) = await ShowAsync(Scenes.Fixtures().Override("/api/settings", Scenes.SettingsJsonWith(("proxyMode", "\"custom\""), ("proxyUrl", "\"http://127.0.0.1:7890\""))), "network");
         try
         {
             var url = Find<TKCode.Arc.Input>(view, i => Name(i) == Astra.Desktop.Core.I18n.Loc.T("settings.proxy.url"));
@@ -352,7 +356,7 @@ public class SettingsBehaviourTests
     public async Task Choosing_the_LAN_without_an_admin_password_saves_nothing_it_asks_for_a_password()
     {
         var fixtures = Scenes.Fixtures();
-        var (window, view, _, _) = await ShowAsync(fixtures);
+        var (window, view, _, _) = await ShowAsync(fixtures, "gateway");
         try
         {
             var scope = Find<Astra.Desktop.Components.Settings.ControlledSegmented>(view, s => Name(s) == Astra.Desktop.Core.I18n.Loc.T("settings.listen"));
@@ -368,7 +372,7 @@ public class SettingsBehaviourTests
     public async Task Choosing_the_LAN_with_a_password_confirms_then_saves_the_wildcard_address()
     {
         var fixtures = Scenes.Fixtures().Override("/api/server/listen", """{"host":"127.0.0.1","port":17321,"configuredHost":"127.0.0.1","hostFromEnvironment":false,"passwordSet":true,"networkUrls":[]}""");
-        var (window, view, _, _) = await ShowAsync(fixtures);
+        var (window, view, _, _) = await ShowAsync(fixtures, "gateway");
         try
         {
             var scope = Find<Astra.Desktop.Components.Settings.ControlledSegmented>(view, s => Name(s) == Astra.Desktop.Core.I18n.Loc.T("settings.listen"));

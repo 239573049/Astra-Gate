@@ -5,6 +5,7 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Metadata;
 using Avalonia.Layout;
 using TKCode.Arc.DesignTokens;
+using TKCode.Arc.Icons.Lucide;
 
 namespace Astra.Desktop.Components.Kit;
 
@@ -22,10 +23,19 @@ public sealed class SettingsGroup : UserControl
     /// <summary>Footnote under the card (web <c>footer</c>).</summary>
     public static readonly StyledProperty<string?> FooterProperty = AvaloniaProperty.Register<SettingsGroup, string?>(nameof(Footer));
 
+    /// <summary>An explanation of the whole group, shown as a tooltip on an ⓘ after the title (the compact layout's footer; needs a title).</summary>
+    public static readonly StyledProperty<string?> HintProperty = AvaloniaProperty.Register<SettingsGroup, string?>(nameof(Hint));
+
     private readonly Controls _rows = new();
     private readonly StackPanel _stack = new();
     private readonly TextBlock _title;
     private readonly TextBlock _footer;
+    private readonly StackPanel _heading;
+    private readonly LucideIcon _hintIcon;
+    private readonly StackPanel _body;
+
+    /// <inheritdoc cref="HintProperty"/>
+    public string? Hint { get => GetValue(HintProperty); set => SetValue(HintProperty, value); }
 
     /// <inheritdoc cref="TitleProperty"/>
     public string? Title { get => GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
@@ -42,8 +52,14 @@ public sealed class SettingsGroup : UserControl
     {
         _title = KitStyle.Text(null, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, Avalonia.Media.FontWeight.Medium);
         _title.FontSize = KitStyle.Type12;
-        _title.Margin = new Thickness(4, 0, 4, 8);
-        _title.IsVisible = false;
+        _title.VerticalAlignment = VerticalAlignment.Center;
+        _hintIcon = new LucideIcon { Kind = LucideIconKind.Info, Size = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0), IsVisible = false };
+        _hintIcon.Token(Avalonia.Controls.Primitives.TemplatedControl.ForegroundProperty, ArcDesignTokenKind.TextMuted);
+        _heading = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Background = Avalonia.Media.Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(4, 0, 4, 8), IsVisible = false, Children = { _title, _hintIcon },
+        };
         _footer = KitStyle.Text(null, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextMuted);
         _footer.TextTrimming = Avalonia.Media.TextTrimming.None;
         _footer.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
@@ -56,7 +72,8 @@ public sealed class SettingsGroup : UserControl
             .Token(Border.BorderBrushProperty, ArcDesignTokenKind.Border)
             .Token(Border.CornerRadiusProperty, ArcDesignTokenKind.RadiusPanel);
 
-        Content = new StackPanel { Margin = new Thickness(0, 0, 0, 20), Children = { _title, card, _footer } };
+        _body = new StackPanel { Margin = new Thickness(0, 0, 0, 20), Children = { _heading, card, _footer } };
+        Content = _body;
         _rows.CollectionChanged += (_, _) => Rebuild();
     }
 
@@ -67,7 +84,19 @@ public sealed class SettingsGroup : UserControl
         if (change.Property == TitleProperty)
         {
             _title.Text = Title;
-            _title.IsVisible = KitStyle.HasText(Title);
+            _heading.IsVisible = KitStyle.HasText(Title);
+        }
+        else if (change.Property == HintProperty)
+        {
+            _hintIcon.IsVisible = KitStyle.HasText(Hint);
+            ToolTip.SetTip(_heading, KitStyle.HasText(Hint) ? SettingsRow.HintTip(Hint!) : null);
+        }
+        else if (change.Property == SettingsRow.DenseProperty)
+        {
+            var dense = change.GetNewValue<bool>();
+            _body.Margin = new Thickness(0, 0, 0, dense ? 16 : 20);
+            _heading.Margin = new Thickness(4, 0, 4, dense ? 6 : 8);
+            _footer.Margin = new Thickness(4, dense ? 6 : 8, 4, 0);
         }
         else if (change.Property == FooterProperty)
         {

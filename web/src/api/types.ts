@@ -289,6 +289,12 @@ export interface ProviderTestRequest {
   imageSize?: string | null;
   /** `openai-images` only: auto | low | medium | high | standard | hd; null leaves it to the upstream. */
   imageQuality?: string | null;
+  /** `openai-images` only: `generate` (default) tests images/generations; `edit` uploads a small built-in picture to images/edits. */
+  imageOperation?: 'generate' | 'edit' | null;
+  /** `imageOperation: 'edit'` only: the picture to upload, base64 (PNG / JPEG / WebP, at most 4 MB); null uploads the built-in red circle. */
+  imageInput?: string | null;
+  /** Image tests only: also return the resulting pictures in the `done` event (`images`) — for one test looked at, not a batch. */
+  imagePreview?: boolean;
   /** `openai-images` only: pictures to ask for, 1 to 4. */
   imageCount?: number;
 }
@@ -305,6 +311,8 @@ export interface ProviderTestDone {
   raw: string; rawTruncated: boolean; contentType?: string | null;
   /** The upstream response headers, credentials redacted. */
   headers?: Record<string, string> | null;
+  /** Image tests asked with `imagePreview`: the resulting pictures, base64 (never in `raw`, the request log or a capture). */
+  images?: { mime: string; data: string }[] | null;
   responseModel?: string | null; requestId: string;
   usage?: { inputTokens: number; outputTokens: number; raw?: unknown } | null;
 }
@@ -945,8 +953,12 @@ export interface AccountImportRequest {
 // POST /api/providers/{id}/accounts/import body AccountImportRequest -> BatchImportResult
 //   (dry run: `imported` counts the entries that would be imported)
 //   (400 {error} when empty, over 200 tokens, or the provider is not GitHub Copilot)
+// POST /api/providers/{id}/accounts/export -> AccountExport (plaintext credentials, one per line, each after a `# name` comment;
+//   the text is what the import above reads back; `skipped` = accounts with nothing exportable, e.g. plugin sign-ins)
+export interface AccountExport { text: string; count: number; skipped: number }
 
 // ---------- settings ----------
+export type QualifyScope = "all" | "shared";
 export type RequestCompression = "default" | "zstd" | "gzip" | "br" | "deflate" | "none";
 export interface Settings {
   locale: "zh" | "en"; debugBodies: boolean; bodyRetentionDays: number; requestRetentionDays: number | null;
@@ -961,6 +973,8 @@ export interface Settings {
   hiddenNav?: string[];
   /** Between a model id and its provider's alias while providerQualifiedModels is on (1-8 characters, no whitespace; default "@"). */
   modelProviderSeparator?: string;
+  /** Which ids carry the alias while providerQualifiedModels is on: only those several providers serve ("shared", default) or every one ("all"). */
+  modelQualifyScope?: QualifyScope;
   /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */
   updateChannel: "stable" | "preview"; updateAutoCheck: boolean;
   /** Request body coding for providers that compress (e.g. ChatGPT subscription's zstd): default = each provider's own; none = off. */

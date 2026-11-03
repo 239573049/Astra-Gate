@@ -1,4 +1,4 @@
-import { Download, KeyRound, ListPlus, LogIn, Plus, Power, Trash2 } from 'lucide-react';
+import { Download, KeyRound, ListPlus, LogIn, Plus, Power, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -9,6 +9,7 @@ import {
   useActivateProviderAccount,
   useCompleteProviderLogin,
   useDeleteProviderAccount,
+  useExportAccounts,
   useFetchProviderAccountQuota,
   useImportCodexAccount,
   useImportCopilotAccount,
@@ -33,6 +34,7 @@ import { accountState, SubscriptionAccountCard, type AccountActions, type Accoun
 import { SubscriptionAccountDetail } from './SubscriptionAccountDetail';
 import { SubscriptionPolicy } from './SubscriptionPolicy';
 import { errorText, Menu, type MenuItem, Sheet, useFeedback } from './ui/overlays';
+import { systemActions } from '../shell/systemActions';
 import { useI18n, type MessageKey } from '../i18n';
 import { cn } from '../lib/cn';
 
@@ -70,6 +72,7 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   const quota = useFetchProviderAccountQuota(provider.id);
   const refresh = useRefreshProviderAccount(provider.id);
   const remove = useDeleteProviderAccount(provider.id);
+  const exportAccounts = useExportAccounts(provider.id);
   const activate = useActivateProviderAccount(provider.id);
   const update = useUpdateProviderAccount(provider.id);
   const reorder = useReorderProviderAccounts(provider.id);
@@ -284,6 +287,27 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
     reorder.mutate(ids, { onError: (e) => toast(errorText(e), 'error') });
   };
 
+  // Plaintext credentials leave Astra here: confirm first, then put them on the clipboard (never in a file or the log).
+  const runExport = async () => {
+    if (!(await confirm({ title: t('providers.accounts.exportConfirm'), detail: t('providers.accounts.exportDetail'), confirmLabel: t('providers.accounts.export') })))
+      return;
+    try {
+      const r = await exportAccounts.mutateAsync();
+      if (r.count === 0) {
+        toast(t('providers.accounts.exportNone'), 'info');
+        return;
+      }
+      const copied = await systemActions.copy(r.text);
+      if (!copied) {
+        toast(t('providers.accounts.exportCopyFailed'), 'error');
+        return;
+      }
+      toast(t('providers.accounts.exportDone', { n: r.count }) + (r.skipped > 0 ? t('providers.accounts.exportSkipped', { n: r.skipped }) : ''), 'success');
+    } catch (e) {
+      toast(errorText(e), 'error');
+    }
+  };
+
   const removeOne = async (a: ProviderAccount) => {
     const name = nameOf(a);
     if (!(await confirm({ title: t('providers.subscription.logoutConfirm', { name }), destructive: true, confirmLabel: t('providers.subscription.logout') })))
@@ -434,6 +458,11 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
         {info?.supported && (
           <Button size="sm" icon={<ListPlus className="size-3.5" />} onClick={() => setImportMode('batch')}>
             {t('providers.accounts.batchImport')}
+          </Button>
+        )}
+        {info?.supported && list.length > 0 && (
+          <Button size="sm" icon={<Upload className="size-3.5" />} disabled={exportAccounts.isPending} onClick={() => void runExport()}>
+            {t('providers.accounts.export')}
           </Button>
         )}
         <Menu label={t('providers.accounts.add')} icon={<Plus className="size-3.5" />} items={addItems} />

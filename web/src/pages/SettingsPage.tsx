@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useTunnel, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
-import type { ProxyMode, RequestCompression, Settings } from '../api/types';
+import type { ProxyMode, QualifyScope, RequestCompression, Settings } from '../api/types';
 import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
@@ -533,14 +533,17 @@ function ProxySettings({ settings: s }: { settings: Settings }) {
 }
 
 /**
- * Provider-qualified model ids (issue #21): with the switch on, the model lists clients see carry each provider's alias
- * after the separator (`glm-5.3@zcode`), and a request for such an id goes to that provider. The separator saves on blur.
+ * Provider-qualified model ids (issue #21): off, or the model lists clients see carry each provider's alias after the
+ * separator (`glm-5.3@zcode`) — on every id, or only on ids several providers serve — and a request for such an id goes to
+ * that provider. The mode applies at once; the separator saves on blur.
  */
+type QualifyMode = 'off' | QualifyScope;
 function QualifiedModelsSettings({ settings: s }: { settings: Settings }) {
   const { t } = useI18n();
   const { toast } = useFeedback();
   const update = useUpdateSettings();
   const on = s.providerQualifiedModels ?? false;
+  const mode: QualifyMode = on ? (s.modelQualifyScope ?? 'shared') : 'off';
   const saved = s.modelProviderSeparator ?? '@';
   const [separator, setSeparator] = useState(saved);
   useEffect(() => setSeparator(saved), [saved]);
@@ -552,11 +555,23 @@ function QualifiedModelsSettings({ settings: s }: { settings: Settings }) {
         toast(errorText(e), 'error');
       },
     });
+  const choose = (next: QualifyMode) =>
+    save(next === 'off' ? { providerQualifiedModels: false } : { providerQualifiedModels: true, modelQualifyScope: next });
 
   return (
     <Group title={t('settings.qualifiedModels')} footer={t('settings.qualifiedModels.footer')}>
-      <Row label={t('settings.qualifiedModels.enable')} detail={t('settings.qualifiedModels.enableHint')}>
-        <Switch checked={on} label={t('settings.qualifiedModels.enable')} onChange={(providerQualifiedModels) => save({ providerQualifiedModels })} />
+      <Row label={t('settings.qualifiedModels.mode')} detail={t('settings.qualifiedModels.modeHint')}>
+        <Select
+          className="w-56"
+          ariaLabel={t('settings.qualifiedModels.mode')}
+          value={mode}
+          onChange={choose}
+          options={[
+            { value: 'off', label: t('settings.qualifiedModels.mode.off') },
+            { value: 'shared', label: t('settings.qualifiedModels.mode.shared') },
+            { value: 'all', label: t('settings.qualifiedModels.mode.all') },
+          ]}
+        />
       </Row>
       {on && (
         <Row label={t('settings.qualifiedModels.separator')} detail={t('settings.qualifiedModels.separatorHint')}>

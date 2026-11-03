@@ -1,3 +1,4 @@
+using Astra.Desktop.Components.Settings;
 using System.ComponentModel;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Kit;
@@ -10,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using TKCode.Arc;
 using SettingsGroup = Astra.Desktop.Components.Kit.SettingsGroup;
@@ -161,11 +163,13 @@ public sealed class ProviderTestDialog : PdSheet
         if (!s.BatchMode)
         {
             _picker = new ModelPicker { Models = s.Known, Value = s.Model };
-            _picker.ValueChanged += v => { s.Model = v; UpdateFooter(); };
+            _picker.ValueChanged += v => { s.PickModel(v); RefreshConfig(); UpdateFooter(); };
             var left = PdUi.Stack(16,
                 PdUi.Text(Loc.T("providers.testDialog.config"), 13, ArcDesignTokenKind.Foreground, FontWeight.Medium),
                 PdUi.Field(Loc.T("providers.testDialog.model"), _picker));
-            foreach (var c in ConfigFields(s)) left.Children.Add(c);
+            _config = new StackPanel { Spacing = 16 };
+            FillConfig();
+            left.Children.Add(_config);
             var note = PdUi.Hint(Loc.T("providers.testDialog.savedCredentials"));
             var column = new DockPanel();
             DockPanel.SetDock(note, Dock.Bottom);
@@ -209,54 +213,155 @@ public sealed class ProviderTestDialog : PdSheet
         }
     }
 
-    /// <summary>The configuration shared by both modes (web <c>ConfigFields</c>).</summary>
-    internal static IEnumerable<Control> ConfigFields(ProviderTestSession s)
+    private StackPanel? _config;
+
+    private void FillConfig()
+    {
+        if (_config is null) return;
+        _config.Children.Clear();
+        foreach (var c in ConfigFields(Session)) _config.Children.Add(c);
+    }
+
+    /// <summary>A picked model can change the protocol and the fields below it (an image model switches the test to the Images API).</summary>
+    private void RefreshConfig() => FillConfig();
+
+    /// <summary>
+    /// The configuration shared by both modes (web <c>ConfigFields</c>). In the batch (<paramref name="batch"/>) every model picks its own
+    /// interface, so "OpenAI Images" is not a protocol to choose there; the image settings show when the list holds an image model.
+    /// </summary>
+    internal static IEnumerable<Control> ConfigFields(ProviderTestSession s, bool batch = false)
     {
         // Everything below the protocol box depends on it (the Images API has its own parameters), so it is rebuilt on a change.
         var rest = new StackPanel { Spacing = 16 };
         void FillRest()
         {
             rest.Children.Clear();
-            foreach (var c in ProtocolFields(s)) rest.Children.Add(c);
+            foreach (var c in ProtocolFields(s, batch, FillRest)) rest.Children.Add(c);
         }
-        var protocol = PdUi.Choice(s.Protocols.Select(p => (p, ProviderProtocols.Name(p))), s.Protocol, v => { s.Protocol = v; FillRest(); }, name: Loc.T("providers.testDialog.protocol"));
+        var protocols = s.Protocols.Where(p => !batch || p != ProviderTestSession.ImagesProtocol);
+        var protocol = PdUi.Choice(protocols.Select(p => (p, ProviderProtocols.Name(p))), batch && s.IsImages ? ProviderTestSession.PreferredProtocol(s.Provider) : s.Protocol,
+            v => { s.Protocol = v; FillRest(); }, name: Loc.T("providers.testDialog.protocol"));
         protocol.HorizontalAlignment = HorizontalAlignment.Stretch;
-        yield return PdUi.Field(Loc.T("providers.testDialog.protocol"), protocol);
+        yield return PdUi.Field(Loc.T("providers.testDialog.protocol"), protocol, batch && s.HasImageModels ? Loc.T("providers.testDialog.batchAutoHint") : null);
         FillRest();
         yield return rest;
     }
 
-    private static IEnumerable<Control> ProtocolFields(ProviderTestSession s)
+    private static IEnumerable<Control> ProtocolFields(ProviderTestSession s, bool batch, Action rebuild)
     {
-        if (s.IsImages)
+        var images = !batch && s.IsImages;
+        if (batch)
         {
-            var useDefault = (ProviderTestSession.DefaultChoice, Loc.T("providers.testDialog.imageDefault"));
-            var size = PdUi.Choice(new[] { useDefault }.Concat(ProviderTestSession.ImageSizes.Select(x => (x, x))), s.ImageSize, v => s.ImageSize = v, name: Loc.T("providers.testDialog.imageSize"));
-            size.HorizontalAlignment = HorizontalAlignment.Stretch;
-            yield return PdUi.Field(Loc.T("providers.testDialog.imageSize"), size);
-            var quality = PdUi.Choice(new[] { useDefault }.Concat(ProviderTestSession.ImageQualities.Select(x => (x, x))), s.ImageQuality, v => s.ImageQuality = v, name: Loc.T("providers.testDialog.imageQuality"));
-            quality.HorizontalAlignment = HorizontalAlignment.Stretch;
-            yield return PdUi.Field(Loc.T("providers.testDialog.imageQuality"), quality);
-            var count = PdUi.Number(s.ImageCount, v => s.SetImageCount(v), null, Loc.T("providers.testDialog.imageCount"), integer: true, minimum: 1, placeholder: "1");
-            count.HorizontalAlignment = HorizontalAlignment.Stretch;
-            yield return PdUi.Field(Loc.T("providers.testDialog.imageCount"), count);
+            foreach (var c in ChatFields(s)) yield return c;
+            if (s.HasImageModels)
+            {
+                yield return PdUi.Text(Loc.T("providers.testDialog.imageSection"), 12, ArcDesignTokenKind.Foreground, FontWeight.Medium);
+                foreach (var c in ImageFields(s, rebuild)) yield return c;
+            }
+        }
+        else if (images)
+        {
+            foreach (var c in ImageFields(s, rebuild)) yield return c;
         }
         else
         {
-            var stream = new DockPanel();
-            var sw = PdUi.Toggle(s.Stream, on => s.Stream = on, Loc.T("providers.testDialog.stream"));
-            DockPanel.SetDock(sw, Dock.Right);
-            stream.Children.Add(sw);
-            stream.Children.Add(PdUi.Text(Loc.T("providers.testDialog.stream"), 12, ArcDesignTokenKind.TextSecondary));
-            yield return stream;
-            var max = PdUi.Number(s.MaxTokens, v => s.SetMaxTokens(v), null, Loc.T("providers.testDialog.maxTokens"), integer: true, minimum: 1,
-                placeholder: ProviderTestSession.DefaultMaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            max.HorizontalAlignment = HorizontalAlignment.Stretch;
-            yield return PdUi.Field(Loc.T("providers.testDialog.maxTokens"), max);
+            foreach (var c in ChatFields(s)) yield return c;
         }
-        var prompt = PdUi.Area(s.Prompt, v => s.Prompt = v, null, 4 * 20 + 16, placeholder: s.IsImages ? "A small red circle on a white background." : "Reply with OK.");
+        var placeholder = images ? (s.ImageOperation == ProviderTestSession.Edit ? ImageEditPrompt : ImagePrompt) : "Reply with OK.";
+        var prompt = PdUi.Area(s.Prompt, v => s.Prompt = v, null, 4 * 20 + 16, placeholder: placeholder);
         Avalonia.Automation.AutomationProperties.SetName(prompt, Loc.T("providers.testDialog.prompt"));
         yield return PdUi.Field(Loc.T("providers.testDialog.prompt"), prompt, Loc.T("providers.testDialog.promptHint"));
+    }
+
+    /// <summary>What the server sends when an Images API test has no prompt (<c>ProviderProbe.DefaultImageTestPrompt</c>).</summary>
+    private const string ImagePrompt = "A small red circle on a white background.";
+
+    /// <summary>What an image-edit test asks for (<c>ProviderProbe.DefaultImageEditPrompt</c>); the server uploads a small red-circle picture with it.</summary>
+    private const string ImageEditPrompt = "Change the red circle to blue. Keep everything else the same.";
+
+    private static IEnumerable<Control> ImageFields(ProviderTestSession s, Action rebuild)
+    {
+        var operation = new ControlledSegmented(
+            [(ProviderTestSession.Generate, Loc.T("providers.testDialog.imageGenerate")), (ProviderTestSession.Edit, Loc.T("providers.testDialog.imageEdit"))], s.ImageOperation);
+        Avalonia.Automation.AutomationProperties.SetName(operation, Loc.T("providers.testDialog.imageOperation"));
+        operation.Chose += v => { s.ImageOperation = v; rebuild(); };
+        yield return PdUi.Field(Loc.T("providers.testDialog.imageOperation"), operation,
+            s.ImageOperation == ProviderTestSession.Edit ? Loc.T("providers.testDialog.imageEditHint") : null);
+        if (s.ImageOperation == ProviderTestSession.Edit) yield return PicturePicker(s, rebuild);
+        var useDefault = (ProviderTestSession.DefaultChoice, Loc.T("providers.testDialog.imageDefault"));
+        var size = PdUi.Choice(new[] { useDefault }.Concat(ProviderTestSession.ImageSizes.Select(x => (x, x))), s.ImageSize, v => s.ImageSize = v, name: Loc.T("providers.testDialog.imageSize"));
+        size.HorizontalAlignment = HorizontalAlignment.Stretch;
+        yield return PdUi.Field(Loc.T("providers.testDialog.imageSize"), size);
+        var quality = PdUi.Choice(new[] { useDefault }.Concat(ProviderTestSession.ImageQualities.Select(x => (x, x))), s.ImageQuality, v => s.ImageQuality = v, name: Loc.T("providers.testDialog.imageQuality"));
+        quality.HorizontalAlignment = HorizontalAlignment.Stretch;
+        yield return PdUi.Field(Loc.T("providers.testDialog.imageQuality"), quality);
+        var count = PdUi.Number(s.ImageCount, v => s.SetImageCount(v), null, Loc.T("providers.testDialog.imageCount"), integer: true, minimum: 1, placeholder: "1");
+        count.HorizontalAlignment = HorizontalAlignment.Stretch;
+        yield return PdUi.Field(Loc.T("providers.testDialog.imageCount"), count);
+    }
+
+    /// <summary>The picture an edit test uploads: the built-in red circle until one is picked from disk (PNG / JPEG / WebP, up to 4 MB).</summary>
+    private static Control PicturePicker(ProviderTestSession s, Action rebuild)
+    {
+        var error = PdUi.Text("", 11, ArcDesignTokenKind.Danger, wrap: true);
+        error.IsVisible = false;
+        var picked = s.ImageInput;
+        var name = PdUi.Text(picked?.Name ?? Loc.T("providers.testDialog.imageInputDefault"), 12, ArcDesignTokenKind.Foreground);
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
+        var detail = PdUi.Text(picked is { } p ? $"{(p.Bytes.Length / 1024.0).ToString(p.Bytes.Length < 10 * 1024 ? "0.0" : "0", System.Globalization.CultureInfo.InvariantCulture)} KB" : Loc.T("providers.testDialog.imageInputLimits"),
+            11, ArcDesignTokenKind.TextMuted);
+        ArcButton? pick = null;
+        pick = PdUi.Button(Loc.T("providers.testDialog.imageInputPick"), PdUi.Look.Glass, LucideIconKind.Upload, small: true, click: () => _ = PickAsync());
+        var row = PdUi.Inline(12, PdUi.Stack(2, name, detail), pick);
+        if (picked is not null) row.Children.Add(PdUi.Button(Loc.T("providers.testDialog.imageInputReset"), PdUi.Look.Plain, small: true, click: () => { s.ClearImageInput(); rebuild(); }));
+        return PdUi.Field(Loc.T("providers.testDialog.imageInput"), PdUi.Stack(6, row, error));
+
+        async Task PickAsync()
+        {
+            if (TopLevel.GetTopLevel(pick)?.StorageProvider is not { CanOpen: true } storage) return;
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                AllowMultiple = false,
+                Title = Loc.T("providers.testDialog.imageInput"),
+                FileTypeFilter = [new FilePickerFileType("PNG, JPEG, WebP") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"] }],
+            });
+            if (files.Count == 0) return;
+            try
+            {
+                await using var stream = await files[0].OpenReadAsync();
+                // One byte past the limit is enough to tell it is too large without reading the whole file.
+                var buffer = new byte[ProviderTestSession.MaxInputBytes + 1];
+                var read = 0;
+                int n;
+                while (read < buffer.Length && (n = await stream.ReadAsync(buffer.AsMemory(read))) > 0) read += n;
+                var why = s.SetImageInput(files[0].Name, buffer[..read]);
+                if (why is null) rebuild();
+                else
+                {
+                    error.Text = Loc.T(why);
+                    error.IsVisible = true;
+                }
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                error.Text = Loc.T("providers.testDialog.imageInputUnreadable");
+                error.IsVisible = true;
+            }
+        }
+    }
+
+    private static IEnumerable<Control> ChatFields(ProviderTestSession s)
+    {
+        var stream = new DockPanel();
+        var sw = PdUi.Toggle(s.Stream, on => s.Stream = on, Loc.T("providers.testDialog.stream"));
+        DockPanel.SetDock(sw, Dock.Right);
+        stream.Children.Add(sw);
+        stream.Children.Add(PdUi.Text(Loc.T("providers.testDialog.stream"), 12, ArcDesignTokenKind.TextSecondary));
+        yield return stream;
+        var max = PdUi.Number(s.MaxTokens, v => s.SetMaxTokens(v), null, Loc.T("providers.testDialog.maxTokens"), integer: true, minimum: 1,
+            placeholder: ProviderTestSession.DefaultMaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        max.HorizontalAlignment = HorizontalAlignment.Stretch;
+        yield return PdUi.Field(Loc.T("providers.testDialog.maxTokens"), max);
     }
 
     /// <summary>Redraws what depends on the run state: the result panel, the batch progress and table, the footer.</summary>
@@ -378,7 +483,7 @@ public sealed class ProviderTestDialog : PdSheet
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions(columns) };
             Control[] cells =
             [
-                PdUi.Text(id, 12, ArcDesignTokenKind.Foreground, mono: true),
+                ModelCell(id, run),
                 TestResultPanel.Status(run),
                 PdUi.Text(ProviderTestSession.FormatMs(run?.TtftMs), 12, ArcDesignTokenKind.Foreground, mono: true),
                 PdUi.Text(ProviderTestSession.FormatMs(run?.TotalMs), 12, ArcDesignTokenKind.Foreground, mono: true),
@@ -395,6 +500,14 @@ public sealed class ProviderTestDialog : PdSheet
             rows.Add(row);
         }
         return PdUi.Card(PdUi.Divided(rows));
+    }
+
+    /// <summary>The model id, with the Images API ability beside it when the run is an image test.</summary>
+    private static Control ModelCell(string id, TestRun? run)
+    {
+        var name = PdUi.Text(id, 12, ArcDesignTokenKind.Foreground, mono: true);
+        if (run?.ImageOperation is not { } op) return name;
+        return PdUi.Inline(8, name, PdUi.Text(Loc.T(op == ProviderTestSession.Edit ? "providers.testDialog.imageEdit" : "providers.testDialog.imageGenerate"), 11, ArcDesignTokenKind.TextMuted));
     }
 
     private Control ViewLink(string id, bool enabled)
@@ -460,7 +573,7 @@ public sealed class BatchConfigSheet : PdSheet
         Title = Loc.T("providers.testDialog.config");
         Description = Loc.T("providers.testDialog.savedCredentials");
         var stack = new StackPanel { Spacing = 16 };
-        foreach (var c in ProviderTestDialog.ConfigFields(_session)) stack.Children.Add(c);
+        foreach (var c in ProviderTestDialog.ConfigFields(_session, batch: true)) stack.Children.Add(c);
         Content = stack;
         Footer = null;
     }
@@ -592,7 +705,7 @@ public sealed class TestResultPanel : UserControl
         }
         else if (run?.Error is { Length: > 0 } error)
             content = PdUi.Stack(12, PdUi.Alert(AlertTone.Danger, Loc.T("providers.testDialog.status.failed"), error), _hint(run.HttpStatus));
-        else if (run is not null && (run.Text.Length > 0 || run.Reasoning.Length > 0))
+        else if (run is not null && (run.Text.Length > 0 || run.Reasoning.Length > 0 || run.Images is { Count: > 0 }))
         {
             var stack = new StackPanel { Spacing = 12 };
             if (run.Reasoning.Length > 0)
@@ -603,11 +716,44 @@ public sealed class TestResultPanel : UserControl
                 stack.Children.Add(box);
             }
             if (run.Text.Length > 0) stack.Children.Add(Pre(run.Text, 12));
+            if (run.Images is { Count: > 0 } pictures)
+                for (var i = 0; i < pictures.Count; i++) stack.Children.Add(PictureView(pictures[i], i + 1));
             content = stack;
         }
         else if (run?.Status == RunStatus.Success) content = PdUi.Text(Loc.T("providers.testDialog.noText"), 12, ArcDesignTokenKind.TextMuted);
         else content = Placeholder(run);
         _view.Content = content;
+    }
+
+    /// <summary>One picture of an image test, with a link to save it (a picture the platform cannot decode is only offered for saving).</summary>
+    private static Control PictureView(TestPicture picture, int number)
+    {
+        var stack = new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Left };
+        try
+        {
+            using var stream = new MemoryStream(picture.Bytes);
+            var image = new Avalonia.Controls.Image { Source = new Avalonia.Media.Imaging.Bitmap(stream), Stretch = Stretch.Uniform, MaxHeight = 420, HorizontalAlignment = HorizontalAlignment.Left };
+            Avalonia.Automation.AutomationProperties.SetName(image, Loc.T("providers.testDialog.imageAlt", ("n", number)));
+            var frame = new Border { BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(6), ClipToBounds = true, HorizontalAlignment = HorizontalAlignment.Left, Child = image };
+            frame.Token(Border.BorderBrushProperty, ArcDesignTokenKind.Border);
+            stack.Children.Add(frame);
+        }
+        catch (Exception e) when (e is ArgumentException or InvalidOperationException or NotSupportedException)
+        {
+            stack.Children.Add(PdUi.Text(Loc.T("providers.testDialog.imageAlt", ("n", number)), 11, ArcDesignTokenKind.TextMuted));
+        }
+        var extension = picture.Mime == "image/jpeg" ? "jpg" : picture.Mime == "image/webp" ? "webp" : "png";
+        var save = new Avalonia.Controls.Button { Background = Brushes.Transparent, BorderThickness = default, Padding = default, HorizontalAlignment = HorizontalAlignment.Left, Content = PdUi.Text(Loc.T("providers.testDialog.imageSave"), 11, ArcDesignTokenKind.Accent) };
+        save.Click += async (_, _) =>
+        {
+            if (TopLevel.GetTopLevel(save)?.StorageProvider is not { CanSave: true } storage) return;
+            var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions { SuggestedFileName = $"astra-test-{number}.{extension}", DefaultExtension = extension });
+            if (file is null) return;
+            await using var output = await file.OpenWriteAsync();
+            await output.WriteAsync(picture.Bytes);
+        };
+        stack.Children.Add(save);
+        return stack;
     }
 
     private static SelectableTextBlock Pre(string text, double size)

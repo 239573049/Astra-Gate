@@ -2,7 +2,7 @@
 name: astra-server-flag-first-serves
 description: astra-server has no --help; any flag-first call (`--help`, `--port 1`) and `serve --help` run `serve` on ~/.astra and overwrite runtime.json
 type: project
-updated: 2026-10-30
+updated: 2026-11-03
 source: session
 evidence: ["src/Astra.Server/Program.cs:Program.Main (args[0] starting with '-' → \"serve\")", "src/Astra.Server/Hosting/RuntimeFile.cs:RuntimeFile.Write/Delete", "src/Astra.Server/Hosting/ServerOptions.cs (serve ignores flags it does not know)"]
 ---
@@ -14,6 +14,10 @@ exited it deleted that file (`RuntimeFile.Delete` removes the entry that names i
 desktop's server kept running on 17321 with no `runtime.json` at all until its next restart.
 It happened again on 2026-10-30 with `astra-server serve --help`: `serve` ignores flags it does not
 know (`--help`, `--strict-port`), so naming the subcommand does not make it safe either.
+On 2026-11-03 `dotnet run --project src/Astra.Server -- --help` did the same from source — and a source
+build also applies its not-yet-released migrations to the real database (0021 `token_invites` landed in
+a 0.13.5 user's `astra.db`, backup `backups/db/astra-20261103-023641-v20.db`). An older binary ignores the
+extra version, but editing that migration before release would then never reach this database.
 
 **Why:** A second server shares the SQLite database and background workers with the running one, and
 the lost `runtime.json` takes the runtime token (`/api/admin/shutdown`) with it. Related:

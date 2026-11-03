@@ -691,10 +691,32 @@ public static class ProviderEndpoints
             throw new AdminApiException(400, $"imageQuality must be one of: {string.Join(", ", ProviderProbe.ImageQualities)}");
         var count = body["imageCount"] is null ? 1 : Read<int>(body["imageCount"]);
         if (count is < 1 or > ProviderProbe.MaxTestImages) throw new AdminApiException(400, $"imageCount must be between 1 and {ProviderProbe.MaxTestImages}");
+        var operation = String(body, "imageOperation");
+        if (operation is not null && operation is not ("generate" or "edit"))
+            throw new AdminApiException(400, "imageOperation must be \"generate\" or \"edit\"");
+        // The picture an edit test uploads, base64 in the request: checked here (size, and the format by its bytes) so a bad one is a plain 400.
+        byte[]? input = null;
+        string? inputType = null;
+        if (String(body, "imageInput") is { } encoded)
+        {
+            try
+            {
+                input = Convert.FromBase64String(encoded);
+            }
+            catch (FormatException)
+            {
+                throw new AdminApiException(400, "imageInput must be base64");
+            }
+            if (input.Length > TestImages.MaxUploadBytes)
+                throw new AdminApiException(400, $"imageInput must be at most {TestImages.MaxUploadBytes / (1024 * 1024)} MB");
+            inputType = TestImages.MediaTypeOf(input) ?? throw new AdminApiException(400, "imageInput must be a PNG, JPEG or WebP picture");
+        }
         return new ProviderTestOptions(
             String(body, "modelId"), protocol,
             body["stream"] is null || Read<bool>(body["stream"]),
-            prompt, maxOutputTokens, image, image ? size : null, image ? quality : null, image ? count : 1);
+            prompt, maxOutputTokens, image, image ? size : null, image ? quality : null, image ? count : 1, image && operation == "edit",
+            image && operation == "edit" ? input : null, image && operation == "edit" ? inputType : null,
+            body["imagePreview"] is not null && Read<bool>(body["imagePreview"]));
     }
 
     private static T Read<T>(JsonNode? value)

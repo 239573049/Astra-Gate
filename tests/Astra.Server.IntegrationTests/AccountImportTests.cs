@@ -40,6 +40,59 @@ public class AccountImportTests
     }
 
     [Fact]
+    public async Task Export_Returns_Credentials_In_The_Shape_The_Import_Reads_Back()
+    {
+        const string key = "sk-kimi-good-0123456789abcdef";
+        const string refresh = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJrIn0.refresh";
+        var upstream = new Upstream(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/oauth/token" => Json("""{"access_token":"at-kimi","refresh_token":"rt-kimi-2-0123456789abcdef","expires_in":3600}"""),
+            // Only the login has an identity, so the key and the login stay two accounts.
+            "/coding/v1/me" when request.Headers.Authorization?.Parameter == "at-kimi" => Json("""{"email":"k@example.com","user_level_name":"Allegretto"}"""),
+            "/coding/v1/usages" => Json("""{"usage":{"limit":"100","used":"10","remaining":"90"}}"""),
+            _ => Json("{}", HttpStatusCode.NotFound),
+        });
+        await using var host = await StartAsync(upstream);
+        var providerId = await CreateAsync(host, "kimi-subscription");
+        var url = $"/api/providers/{providerId}/accounts";
+
+        // Nothing to export yet.
+        var (status, empty) = await host.SendAsync(HttpMethod.Post, $"{url}/export", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(0, empty!["count"]!.GetValue<int>());
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, $"{url}/import", new { text = $"{key}\n{refresh}" });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        (status, var exported) = await host.SendAsync(HttpMethod.Post, $"{url}/export", new { });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, exported!["count"]!.GetValue<int>());
+        Assert.Equal(0, exported["skipped"]!.GetValue<int>());
+        var text = exported["text"]!.GetValue<string>();
+        // The API key as it is; the login as its (rotated) refresh token, each after a comment line naming the account.
+        Assert.Contains(key, text);
+        Assert.Contains("rt-kimi-2-0123456789abcdef", text);
+        Assert.DoesNotContain("at-kimi", text);
+        Assert.All(text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => l.StartsWith('#')), l => Assert.Equal("# ", l[..2]));
+
+        // What it exports, the import takes back: with the accounts gone they become the same two again.
+        foreach (var account in await host.Db.Accounts.ListAsync(providerId)) await host.Db.Accounts.DeleteAsync(account.Id);
+        (status, var back) = await host.SendAsync(HttpMethod.Post, $"{url}/import", new { text });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, back!["imported"]!.GetValue<int>());
+
+        // A provider that is not a subscription has no accounts to export.
+        (status, var created) = await host.SendAsync(HttpMethod.Post, "/api/providers",
+            new { templateId = "deepseek", apiKey = "sk-export-plain-0001", models = new[] { "deepseek-chat" } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var plain = created!["id"]!.GetValue<string>();
+        (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{plain}/accounts/export", new { });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/providers/nope/accounts/export", new { });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+    }
+
+    [Fact]
     public async Task Kimi_Imports_Api_Keys_And_Refresh_Tokens_Side_By_Side()
     {
         const string goodKey = "sk-kimi-good-0123456789abcdef";

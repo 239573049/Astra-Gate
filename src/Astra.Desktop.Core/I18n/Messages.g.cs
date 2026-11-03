@@ -1124,6 +1124,22 @@ internal static class Messages
         "providers.testDialog.imageQuality",
         "providers.testDialog.imageDefault",
         "providers.testDialog.imageCount",
+        "providers.testDialog.imageOperation",
+        "providers.testDialog.imageGenerate",
+        "providers.testDialog.imageEdit",
+        "providers.testDialog.imageEditHint",
+        "providers.testDialog.imageInput",
+        "providers.testDialog.imageInputDefault",
+        "providers.testDialog.imageInputLimits",
+        "providers.testDialog.imageInputPick",
+        "providers.testDialog.imageInputReset",
+        "providers.testDialog.imageInputType",
+        "providers.testDialog.imageInputTooLarge",
+        "providers.testDialog.imageInputUnreadable",
+        "providers.testDialog.imageAlt",
+        "providers.testDialog.imageSave",
+        "providers.testDialog.imageSection",
+        "providers.testDialog.batchAutoHint",
         "providers.testDialog.prompt",
         "providers.testDialog.promptHint",
         "providers.testDialog.realRequest",
@@ -1297,6 +1313,13 @@ internal static class Messages
         "providers.accounts.addToken",
         "providers.accounts.addApiKey",
         "providers.accounts.batchImport",
+        "providers.accounts.export",
+        "providers.accounts.exportConfirm",
+        "providers.accounts.exportDetail",
+        "providers.accounts.exportDone",
+        "providers.accounts.exportSkipped",
+        "providers.accounts.exportNone",
+        "providers.accounts.exportCopyFailed",
         "providers.accounts.noMatch",
         "providers.accounts.select",
         "providers.accounts.selected",
@@ -1581,6 +1604,7 @@ internal static class Messages
         "settings.requireKeyOffConfirm",
         "settings.requireKeyOffDetail",
         "settings.requireKeyOff",
+        "settings.requireKeyOffNote",
         "settings.gatewayFooter",
         "settings.gatewayUrl",
         "settings.listen",
@@ -1632,8 +1656,11 @@ internal static class Messages
         "settings.sidebar.footer",
         "settings.qualifiedModels",
         "settings.qualifiedModels.footer",
-        "settings.qualifiedModels.enable",
-        "settings.qualifiedModels.enableHint",
+        "settings.qualifiedModels.mode",
+        "settings.qualifiedModels.modeHint",
+        "settings.qualifiedModels.mode.off",
+        "settings.qualifiedModels.mode.shared",
+        "settings.qualifiedModels.mode.all",
         "settings.qualifiedModels.separator",
         "settings.qualifiedModels.separatorHint",
         "providers.alias.title",
@@ -1784,6 +1811,9 @@ internal static class Messages
         "settings.previewUpdatesHint",
         "settings.tab.general",
         "settings.tab.tray",
+        "settings.tab.models",
+        "settings.tab.network",
+        "settings.tab.usage",
         "settings.tray.titleHeading",
         "settings.tray.titleHint",
         "settings.tray.title.none",
@@ -3705,6 +3735,22 @@ internal static class Messages
             case "providers.testDialog.imageQuality": return "图片质量";
             case "providers.testDialog.imageDefault": return "默认（不传）";
             case "providers.testDialog.imageCount": return "生成数量";
+            case "providers.testDialog.imageOperation": return "图片能力";
+            case "providers.testDialog.imageGenerate": return "生成图片";
+            case "providers.testDialog.imageEdit": return "编辑图片";
+            case "providers.testDialog.imageEditHint": return "编辑测试默认把一张内置的 128×128 红色圆形图片上传到 images/edits，默认提示词让它把红色改成蓝色；也可以选自己的图片。";
+            case "providers.testDialog.imageInput": return "测试图片";
+            case "providers.testDialog.imageInputDefault": return "内置红色圆形（默认）";
+            case "providers.testDialog.imageInputLimits": return "128×128 PNG，几百字节";
+            case "providers.testDialog.imageInputPick": return "选择图片…";
+            case "providers.testDialog.imageInputReset": return "恢复默认";
+            case "providers.testDialog.imageInputType": return "只支持 PNG、JPEG、WebP 图片";
+            case "providers.testDialog.imageInputTooLarge": return "图片不能超过 4 MB";
+            case "providers.testDialog.imageInputUnreadable": return "读不了这张图片";
+            case "providers.testDialog.imageAlt": return "第 {n} 张结果图片";
+            case "providers.testDialog.imageSave": return "保存图片";
+            case "providers.testDialog.imageSection": return "图片模型";
+            case "providers.testDialog.batchAutoHint": return "图片模型自动走图片接口，其余模型按这里的协议请求。";
             case "providers.testDialog.prompt": return "测试提示词（可选）";
             case "providers.testDialog.promptHint": return "留空时使用默认提示词。";
             case "providers.testDialog.realRequest": return "真实请求，可能消耗额度";
@@ -3878,6 +3924,13 @@ internal static class Messages
             case "providers.accounts.addToken": return "粘贴令牌…";
             case "providers.accounts.addApiKey": return "添加 API Key…";
             case "providers.accounts.batchImport": return "批量导入";
+            case "providers.accounts.export": return "导出";
+            case "providers.accounts.exportConfirm": return "导出这个提供商的全部账户凭据？";
+            case "providers.accounts.exportDetail": return "会把令牌 / API Key 以明文复制到剪贴板，每行一条，可直接粘贴回「批量导入」。拿到它的人可以使用这些账户，请妥善保管，用完清空剪贴板。";
+            case "providers.accounts.exportDone": return "已复制 {n} 个账户的凭据到剪贴板";
+            case "providers.accounts.exportSkipped": return "（另有 {n} 个账户没有可导出的凭据）";
+            case "providers.accounts.exportNone": return "没有可导出的凭据";
+            case "providers.accounts.exportCopyFailed": return "无法写入剪贴板，请换用本机访问或 https 地址";
             case "providers.accounts.noMatch": return "没有符合条件的账户";
             case "providers.accounts.select": return "选择 {name}";
             case "providers.accounts.selected": return "已选 {n} 个账户";
@@ -4162,6 +4215,7 @@ internal static class Messages
             case "settings.requireKeyOffConfirm": return "关闭访问密钥验证？";
             case "settings.requireKeyOffDetail": return "关闭后，本机上的任何程序都可以直接使用你的提供商额度，无需密钥（局域网和远程请求仍需令牌）。仅建议在可信环境中关闭。";
             case "settings.requireKeyOff": return "仍然关闭";
+            case "settings.requireKeyOffNote": return "已关闭：本机程序无需密钥即可使用网关";
             case "settings.gatewayFooter": return "端口通过终端修改：astra start --port <端口>";
             case "settings.gatewayUrl": return "网关地址";
             case "settings.listen": return "监听";
@@ -4213,8 +4267,11 @@ internal static class Messages
             case "settings.sidebar.footer": return "关闭后该项从左侧菜单隐藏，页面仍可通过地址或命令面板打开。设置不可隐藏。";
             case "settings.qualifiedModels": return "按提供商区分同名模型";
             case "settings.qualifiedModels.footer": return "多个提供商提供同一个模型时，客户端的模型列表里它们会分成「模型名@提供商别名」各一项，选哪一项请求就发给哪个提供商。不带别名的模型名仍按提供商优先级转发，所以已有配置不受影响。别名在提供商详情页设置，默认是提供商名称。";
-            case "settings.qualifiedModels.enable": return "在模型 ID 后附加提供商别名";
-            case "settings.qualifiedModels.enableHint": return "默认关闭，关闭时与现在完全一致。打开或修改后，已启用客户端的模型列表会自动更新。";
+            case "settings.qualifiedModels.mode": return "在模型 ID 后附加提供商别名";
+            case "settings.qualifiedModels.modeHint": return "默认关闭，关闭时与现在完全一致。「仅多个提供商的模型」只给多个提供商都提供的模型加别名，其余保持原名；「所有模型」每一项都加。修改后，已启用客户端的模型列表会自动更新。";
+            case "settings.qualifiedModels.mode.off": return "关闭";
+            case "settings.qualifiedModels.mode.shared": return "仅多个提供商的模型";
+            case "settings.qualifiedModels.mode.all": return "所有模型";
             case "settings.qualifiedModels.separator": return "分隔符";
             case "settings.qualifiedModels.separatorHint": return "模型名与提供商别名之间的符号，1–8 个字符，不含空白，默认 @。";
             case "providers.alias.title": return "别名";
@@ -4365,6 +4422,9 @@ internal static class Messages
             case "settings.previewUpdatesHint": return "提前获得下一个正式版的新功能，可能不稳定。关闭后不会降级，停在当前版本直到更新的正式版发布";
             case "settings.tab.general": return "常规";
             case "settings.tab.tray": return "托盘面板";
+            case "settings.tab.models": return "模型";
+            case "settings.tab.network": return "网络";
+            case "settings.tab.usage": return "用量";
             case "settings.tray.titleHeading": return "菜单栏常驻文字";
             case "settings.tray.titleHint": return "显示在菜单栏图标旁，不用点开就能看到。Windows 与 Linux 显示在图标提示中。";
             case "settings.tray.title.none": return "不显示";
@@ -6288,6 +6348,22 @@ internal static class Messages
             case "providers.testDialog.imageQuality": return "Image quality";
             case "providers.testDialog.imageDefault": return "Default (not sent)";
             case "providers.testDialog.imageCount": return "Number of images";
+            case "providers.testDialog.imageOperation": return "Image ability";
+            case "providers.testDialog.imageGenerate": return "Generate";
+            case "providers.testDialog.imageEdit": return "Edit";
+            case "providers.testDialog.imageEditHint": return "An edit test uploads a built-in 128×128 red circle to images/edits by default (the default prompt turns the red blue); you can pick your own picture instead.";
+            case "providers.testDialog.imageInput": return "Test picture";
+            case "providers.testDialog.imageInputDefault": return "Built-in red circle (default)";
+            case "providers.testDialog.imageInputLimits": return "128×128 PNG, a few hundred bytes";
+            case "providers.testDialog.imageInputPick": return "Choose picture…";
+            case "providers.testDialog.imageInputReset": return "Use default";
+            case "providers.testDialog.imageInputType": return "Only PNG, JPEG and WebP pictures are supported";
+            case "providers.testDialog.imageInputTooLarge": return "The picture must be at most 4 MB";
+            case "providers.testDialog.imageInputUnreadable": return "Could not read this picture";
+            case "providers.testDialog.imageAlt": return "Result picture {n}";
+            case "providers.testDialog.imageSave": return "Save picture";
+            case "providers.testDialog.imageSection": return "Image models";
+            case "providers.testDialog.batchAutoHint": return "Image models go to the Images API on their own; every other model uses the protocol chosen here.";
             case "providers.testDialog.prompt": return "Test prompt (optional)";
             case "providers.testDialog.promptHint": return "The default prompt is used when left empty.";
             case "providers.testDialog.realRequest": return "A real request; it may consume quota";
@@ -6461,6 +6537,13 @@ internal static class Messages
             case "providers.accounts.addToken": return "Paste a token…";
             case "providers.accounts.addApiKey": return "Add API key…";
             case "providers.accounts.batchImport": return "Batch import";
+            case "providers.accounts.export": return "Export";
+            case "providers.accounts.exportConfirm": return "Export every account credential of this provider?";
+            case "providers.accounts.exportDetail": return "Tokens / API keys are copied to the clipboard as plain text, one per line, ready to paste back into Batch import. Anyone holding them can use these accounts: keep them safe and clear the clipboard afterwards.";
+            case "providers.accounts.exportDone": return "Copied the credentials of {n} accounts to the clipboard";
+            case "providers.accounts.exportSkipped": return " ({n} more had nothing to export)";
+            case "providers.accounts.exportNone": return "Nothing to export";
+            case "providers.accounts.exportCopyFailed": return "Could not write to the clipboard; use this machine or an https address";
             case "providers.accounts.noMatch": return "No accounts match";
             case "providers.accounts.select": return "Select {name}";
             case "providers.accounts.selected": return "{n} selected";
@@ -6745,6 +6828,7 @@ internal static class Messages
             case "settings.requireKeyOffConfirm": return "Turn off access key verification?";
             case "settings.requireKeyOffDetail": return "Once off, any program on this machine can use your provider quota without a key (LAN and remote requests still need a token). Only do this in a trusted environment.";
             case "settings.requireKeyOff": return "Turn off anyway";
+            case "settings.requireKeyOffNote": return "Off: programs on this machine can use the gateway without a key";
             case "settings.gatewayFooter": return "Change the port from a terminal: astra start --port <port>";
             case "settings.gatewayUrl": return "Gateway URL";
             case "settings.listen": return "Listening on";
@@ -6796,8 +6880,11 @@ internal static class Messages
             case "settings.sidebar.footer": return "A hidden entry leaves the left menu; its page still opens by address or from the command palette. Settings cannot be hidden.";
             case "settings.qualifiedModels": return "Tell providers apart by model id";
             case "settings.qualifiedModels.footer": return "When several providers serve the same model, a client's model list shows one entry per provider, as \"model@provider alias\", and a request for an entry goes to that provider. A model name without an alias still routes by provider priority, so existing configs keep working. Set a provider's alias on its detail page; it defaults to the provider's name.";
-            case "settings.qualifiedModels.enable": return "Append the provider alias to model ids";
-            case "settings.qualifiedModels.enableHint": return "Off by default; off, nothing changes. Turning it on or changing it updates the model lists of enabled clients.";
+            case "settings.qualifiedModels.mode": return "Append the provider alias to model ids";
+            case "settings.qualifiedModels.modeHint": return "Off by default; off, nothing changes. \"Shared models only\" tags just the models several providers serve and leaves the rest as they are; \"All models\" tags every entry. Changing it updates the model lists of enabled clients.";
+            case "settings.qualifiedModels.mode.off": return "Off";
+            case "settings.qualifiedModels.mode.shared": return "Shared models only";
+            case "settings.qualifiedModels.mode.all": return "All models";
             case "settings.qualifiedModels.separator": return "Separator";
             case "settings.qualifiedModels.separatorHint": return "Between the model name and the provider alias: 1–8 characters, no whitespace, \"@\" by default.";
             case "providers.alias.title": return "Alias";
@@ -6948,6 +7035,9 @@ internal static class Messages
             case "settings.previewUpdatesHint": return "Get the next release's features early; previews may be unstable. Turning this off never downgrades: you stay on your version until a newer stable release";
             case "settings.tab.general": return "General";
             case "settings.tab.tray": return "Tray panel";
+            case "settings.tab.models": return "Models";
+            case "settings.tab.network": return "Network";
+            case "settings.tab.usage": return "Usage";
             case "settings.tray.titleHeading": return "Menu bar text";
             case "settings.tray.titleHint": return "Shown next to the menu bar icon, visible without opening anything. On Windows and Linux it appears in the icon tooltip.";
             case "settings.tray.title.none": return "Nothing";

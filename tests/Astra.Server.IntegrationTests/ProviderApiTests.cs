@@ -2389,6 +2389,153 @@ public class ProviderApiTests
         Assert.Equal(2, body["n"]!.GetValue<int>());
     }
 
+    [Fact]
+    public async Task Connection_Test_Of_An_Image_Edit_Uploads_The_Built_In_Picture_To_Images_Edits()
+    {
+        Uri? url = null;
+        string? contentType = null;
+        byte[]? sent = null;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(async request =>
+            {
+                url = request.RequestUri;
+                contentType = request.Content!.Headers.ContentType!.ToString();
+                sent = await request.Content.ReadAsByteArrayAsync();
+                return JsonResponse(ImageAnswer("QUJD"));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "bearer", "sk-image-key-2");
+        await host.App.Services.GetRequiredService<SettingsService>().UpdateAsync(s => s.DebugBodies = true);
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1", protocol = "openai-images", imageOperation = "edit", imageQuality = "low" });
+
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal("https://example.invalid/v1/images/edits", url!.ToString());
+        Assert.StartsWith("multipart/form-data", contentType);
+        var text = System.Text.Encoding.Latin1.GetString(sent!);
+        Assert.Contains("name=model", text);
+        Assert.Contains("gpt-image-1", text);
+        Assert.Contains("name=quality", text);
+        Assert.Contains("name=\"image[]\"", text);
+        Assert.Contains("image/png", text);
+        Assert.Contains("\u0089PNG", text); // the built-in picture travelled with it
+        Assert.Contains(ProviderProbe.DefaultImageEditPrompt, text);
+
+        // The debug capture notes the picture instead of keeping its bytes.
+        await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
+        var record = (await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id })).Items.Single();
+        Assert.Equal("openai-images", record.UpstreamProtocol);
+        var captured = host.App.Services.GetRequiredService<BodyStore>().ReadPreview(record.BodyRef!, BodyStore.UpstreamRequest, 100_000)!.Value.Text;
+        Assert.Contains("test.png", captured);
+        Assert.DoesNotContain("PNG", captured.Replace("test.png", ""));
+    }
+
+    [Fact]
+    public async Task Connection_Test_Of_An_Image_Edit_Uploads_The_Picture_The_Person_Picked()
+    {
+        byte[]? sent = null;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(async request =>
+            {
+                sent = await request.Content!.ReadAsByteArrayAsync();
+                return JsonResponse(ImageAnswer("QUJD"));
+            })));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+        // A JPEG by its first bytes (the server reads the format from them, not from what the client says).
+        byte[] picture = [0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46, 0x00, 0x42, 0x42, 0x42];
+
+        var result = await host.TestAsync(id, new
+        {
+            modelId = "gpt-image-1", protocol = "openai-images", imageOperation = "edit",
+            imageInput = Convert.ToBase64String(picture), imageInputType = "image/png",
+        });
+
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+        var text = System.Text.Encoding.Latin1.GetString(sent!);
+        Assert.Contains("filename=test.jpg", text);
+        Assert.Contains("image/jpeg", text);
+        Assert.Contains(System.Text.Encoding.Latin1.GetString(picture), text);
+        Assert.DoesNotContain("\u0089PNG", text); // not the built-in picture
+    }
+
+    [Theory]
+    [InlineData("not base64 !!")]
+    [InlineData("aGVsbG8gd29ybGQ=")] // "hello world": not a picture
+    public async Task Connection_Test_Refuses_An_Edit_Picture_That_Is_Not_A_Supported_Image(string input)
+    {
+        await using var host = await TestHost.StartAsync();
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1", protocol = "openai-images", imageOperation = "edit", imageInput = input });
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+    }
+
+    [Fact]
+    public async Task Connection_Test_Refuses_An_Edit_Picture_Over_The_Size_Limit()
+    {
+        await using var host = await TestHost.StartAsync();
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+        var big = new byte[4 * 1024 * 1024 + 1];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }.CopyTo(big, 0);
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1", protocol = "openai-images", imageOperation = "edit", imageInput = Convert.ToBase64String(big) });
+
+        Assert.Equal(HttpStatusCode.BadRequest, result.Status);
+    }
+
+    [Fact]
+    public async Task Connection_Test_Returns_The_Pictures_Only_When_Asked_And_Keeps_Them_Out_Of_The_Raw_View()
+    {
+        var b64 = Convert.ToBase64String(Enumerable.Range(0, 3000).Select(i => (byte)(i % 251)).ToArray());
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(_ => Task.FromResult(JsonResponse(ImageAnswer(b64))))));
+        var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
+
+        // A batch run (no imagePreview) gets the summary only.
+        var plain = await host.TestAsync(id, new { modelId = "gpt-image-1" });
+        Assert.True(plain.Done!["ok"]!.GetValue<bool>());
+        Assert.Null(plain.Done["images"]);
+
+        var shown = await host.TestAsync(id, new { modelId = "gpt-image-1", imagePreview = true });
+        var images = shown.Done!["images"]!.AsArray();
+        Assert.Single(images);
+        Assert.Equal("image/png", images[0]!["mime"]!.GetValue<string>());
+        Assert.Equal(b64, images[0]!["data"]!.GetValue<string>());
+        // The picture is for the caller's eyes: the raw view and the request log still carry only its size.
+        Assert.DoesNotContain(b64, shown.Done["raw"]!.GetValue<string>());
+        await host.App.Services.GetRequiredService<UsageWriter>().FlushAsync();
+        var record = (await host.Db.Requests.QueryAsync(new Astra.Data.Repositories.RequestQuery { ProviderId = id })).Items.First();
+        Assert.DoesNotContain(b64, record.ErrorMessage ?? "");
+    }
+
+    [Fact]
+    public async Task An_Image_Model_Is_Tested_On_The_Images_Api_Even_When_The_Provider_Prefers_Another_Protocol()
+    {
+        Uri? url = null;
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(request =>
+            {
+                url = request.RequestUri;
+                return Task.FromResult(JsonResponse(ImageAnswer("QUJD")));
+            })));
+        // Anthropic is the preferred (first) endpoint; the OpenAI one beside it is what the Images API needs.
+        var id = await CreateCustomAsync(host, "anthropic", "https://example.invalid", "none");
+        var (status, _) = await host.SendAsync(HttpMethod.Patch, $"/api/providers/{id}", new
+        {
+            endpoints = new object[]
+            {
+                new { protocol = "anthropic", baseUrl = "https://example.invalid" },
+                new { protocol = "openai-chat", baseUrl = "https://example.invalid/v1" },
+            },
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        var result = await host.TestAsync(id, new { modelId = "gpt-image-1" });
+
+        Assert.True(result.Done!["ok"]!.GetValue<bool>());
+        Assert.Equal("https://example.invalid/v1/images/generations", url!.ToString());
+    }
+
     [Theory]
     [InlineData("""{"imageSize":"huge"}""")]
     [InlineData("""{"imageQuality":"ultra"}""")]

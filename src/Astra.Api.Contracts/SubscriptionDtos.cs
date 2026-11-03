@@ -135,5 +135,12 @@ public sealed record ResetCreditResultDto(ProviderAccountDto Account, JsonNode? 
 /// </summary>
 public sealed record AccountImportRequest(string? Text, bool? AsApiKey = null, bool? DryRun = null, string? HttpProxy = null);
 
+/// <summary>
+/// The credentials of a provider's accounts as plain text, in the shape the account import takes back (one entry per
+/// line, each preceded by a <c>#</c> comment line naming the account). <c>skipped</c> counts the accounts left out
+/// because they hold nothing exportable (plugin sign-ins, credentials that cannot be decrypted).
+/// </summary>
+public sealed record AccountExportDto(string Text, int Count, int Skipped);
+
 /// <summary>What a provider's import accepts: whether it imports at all, takes API keys, and the format ids to hint.</summary>
 public sealed record AccountImportInfoDto(bool Supported, bool ApiKey, List<string> Formats, int MaxBatch);

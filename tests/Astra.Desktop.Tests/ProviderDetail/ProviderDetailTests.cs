@@ -386,6 +386,129 @@ public sealed class ProviderTestSessionTests
         Assert.Equal("{\"modelId\":\"m\",\"protocol\":\"openai-responses\",\"stream\":false,\"prompt\":null,\"maxOutputTokens\":256}", body.ToJsonString());
     }
 
+    [Theory]
+    [InlineData("gpt-image-2.5-flare", true)]
+    [InlineData("openai/gpt-image-1", true)]
+    [InlineData("dall-e-3", true)]
+    [InlineData("chatgpt-image-latest", true)]
+    [InlineData("gpt-5", false)]
+    [InlineData("image-viewer", false)]
+    public void Image_models_are_recognised_like_the_server_does(string id, bool expected) => Assert.Equal(expected, ProviderTestSession.IsImageModel(id));
+
+    [Fact]
+    public void Picking_an_image_model_switches_to_the_images_api_and_back()
+    {
+        var s = new ProviderTestSession(PdData.Provider(), (r, ct) => Answer(r, ct));
+        s.PickModel("gpt-image-2.5-flare");
+        Assert.True(s.IsImages);
+        s.ImageOperation = ProviderTestSession.Edit;
+        var body = s.RequestFor("gpt-image-2.5-flare");
+        Assert.Equal("openai-images", body["protocol"]!.GetValue<string>());
+        Assert.Equal("edit", body["imageOperation"]!.GetValue<string>());
+        Assert.Null(body["stream"]);
+        s.PickModel("gpt-5");
+        Assert.False(s.IsImages);
+        Assert.Equal("openai-responses", s.Protocol);
+        Assert.Equal("openai-responses", s.RequestFor("gpt-5")["protocol"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void A_batch_sends_each_model_to_the_interface_it_needs()
+    {
+        var s = new ProviderTestSession(PdData.Provider(), (r, ct) => Answer(r, ct)) { ImageOperation = ProviderTestSession.Edit };
+        // Even with "OpenAI Images" chosen, a batch never makes a chat model an image request.
+        s.Protocol = ProviderTestSession.ImagesProtocol;
+        var chat = s.RequestFor("gpt-5", batchRun: true);
+        Assert.Equal("openai-responses", chat["protocol"]!.GetValue<string>());
+        Assert.Null(chat["imageOperation"]);
+        var image = s.RequestFor("dall-e-3", batchRun: true);
+        Assert.Equal("openai-images", image["protocol"]!.GetValue<string>());
+        Assert.Equal("edit", image["imageOperation"]!.GetValue<string>());
+        Assert.Null(s.ImageOperationOf("gpt-5", batchRun: true));
+        Assert.Equal("edit", s.ImageOperationOf("dall-e-3", batchRun: true));
+    }
+
+    [Fact]
+    public void An_edit_test_uploads_the_picked_picture_and_only_then()
+    {
+        var s = new ProviderTestSession(PdData.Provider(), (r, ct) => Answer(r, ct)) { ImageOperation = ProviderTestSession.Edit };
+        // Nothing picked: the server uses its built-in picture, so the request carries none.
+        Assert.Null(s.RequestFor("gpt-image-1")["imageInput"]);
+
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2];
+        Assert.Null(s.SetImageInput("mine.png", png));
+        Assert.Equal(Convert.ToBase64String(png), s.RequestFor("gpt-image-1")["imageInput"]!.GetValue<string>());
+        // Switching to generation leaves the picture out; going back to edit sends it again.
+        s.ImageOperation = ProviderTestSession.Generate;
+        Assert.Null(s.RequestFor("gpt-image-1")["imageInput"]);
+        s.ImageOperation = ProviderTestSession.Edit;
+        Assert.NotNull(s.RequestFor("gpt-image-1", batchRun: true)["imageInput"]);
+        s.ClearImageInput();
+        Assert.Null(s.ImageInput);
+        Assert.Null(s.RequestFor("gpt-image-1")["imageInput"]);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0, 1 }, null)]
+    [InlineData(new byte[] { 0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50 }, null)]
+    [InlineData(new byte[] { 0x47, 0x49, 0x46, 0x38, 0x39, 0x61 }, "providers.testDialog.imageInputType")]
+    [InlineData(new byte[] { 1, 2, 3 }, "providers.testDialog.imageInputType")]
+    public void A_picture_is_checked_by_its_bytes(byte[] bytes, string? why)
+    {
+        var s = new ProviderTestSession(PdData.Provider(), (r, ct) => Answer(r, ct));
+        Assert.Equal(why, s.SetImageInput("p", bytes));
+        Assert.Equal(why is null, s.ImageInput is not null);
+    }
+
+    [Fact]
+    public void A_picture_over_the_limit_is_refused()
+    {
+        var s = new ProviderTestSession(PdData.Provider(), (r, ct) => Answer(r, ct));
+        var big = new byte[ProviderTestSession.MaxInputBytes + 1];
+        new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }.CopyTo(big, 0);
+        Assert.Equal("providers.testDialog.imageInputTooLarge", s.SetImageInput("big.png", big));
+        Assert.Null(s.ImageInput);
+    }
+
+    [Fact]
+    public void A_done_event_carries_the_pictures_of_an_image_test()
+    {
+        byte[] png = [0x89, 0x50, 0x4E, 0x47, 1, 2, 3];
+        var data = "{\"ok\":true,\"text\":\"Generated 1 image\",\"images\":[{\"mime\":\"image/png\",\"data\":\"" + Convert.ToBase64String(png) + "\"},{\"mime\":\"image/png\",\"data\":\"!!not base64\"}]}";
+        var done = new TestRun("m", RunStatus.Running).Apply(M("done", data));
+        var picture = Assert.Single(done.Images!);
+        Assert.Equal("image/png", picture.Mime);
+        Assert.Equal(png, picture.Bytes);
+        // A chat test's done event has none.
+        Assert.Empty(new TestRun("m", RunStatus.Running).Apply(M("done", "{\"ok\":true}")).Images!);
+    }
+
+    [Fact]
+    public void Only_a_single_image_test_asks_for_its_pictures()
+    {
+        var s = new ProviderTestSession(PdData.Provider(), (r, ct) => Answer(r, ct));
+        Assert.True(s.RequestFor("gpt-image-1")["imagePreview"]!.GetValue<bool>());
+        Assert.False(s.RequestFor("gpt-image-1", batchRun: true)["imagePreview"]!.GetValue<bool>());
+        Assert.Null(s.RequestFor("gpt-5")["imagePreview"]);
+    }
+
+    [Fact]
+    public async Task A_batch_marks_the_image_runs_with_their_ability()
+    {
+        var sent = new List<JsonObject>();
+        async IAsyncEnumerable<SseMessage> Record(JsonObject r, [EnumeratorCancellation] CancellationToken ct)
+        {
+            lock (sent) sent.Add(r);
+            await Task.Yield();
+            yield return M("done", "{\"ok\":true,\"text\":\"x\"}");
+        }
+        var s = new ProviderTestSession(PdData.Provider(), Record);
+        await s.StartBatchAsync(["gpt-5", "gpt-image-1"]);
+        Assert.Null(s.Batch["gpt-5"].ImageOperation);
+        Assert.Equal("generate", s.Batch["gpt-image-1"].ImageOperation);
+        Assert.Equal(["openai-images", "openai-responses"], sent.Select(r => r["protocol"]!.GetValue<string>()).Order());
+    }
+
     [Fact]
     public async Task A_batch_runs_three_at_a_time_and_stop_cancels_the_rest()
     {

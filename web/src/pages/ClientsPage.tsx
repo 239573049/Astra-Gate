@@ -2,7 +2,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
-import { Archive, Check, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, GripVertical, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert, Trash2, X } from 'lucide-react';
+import { Archive, Check, ChevronRight, CircleArrowUp, Copy, Download, ExternalLink, FolderOpen, GripVertical, KeyRound, LoaderCircle, Plus, RefreshCw, RotateCcw, ScrollText, ShieldAlert, Trash2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
@@ -112,6 +112,8 @@ function orderOf(clients: ClientInfo[] | undefined): ClientKind[] {
 
 type ClientGroup = 'installed' | 'notInstalled' | 'comingSoon';
 const GROUP_ORDER: ClientGroup[] = ['installed', 'notInstalled', 'comingSoon'];
+/** Groups the list keeps folded until the user opens them (issue #20); the selected client's group stays open. */
+const COLLAPSIBLE_GROUPS: ReadonlySet<ClientGroup> = new Set<ClientGroup>(['notInstalled']);
 
 function groupOf(c: ClientInfo): ClientGroup {
   if (c.availability === 'coming_soon') return 'comingSoon';
@@ -140,6 +142,7 @@ function ClientList({
   onSelect: (k: ClientKind) => void;
 }) {
   const { t } = useI18n();
+  const [open, setOpen] = useState<ReadonlySet<ClientGroup>>(new Set());
   const byKind = new Map((clients ?? []).map((c) => [c.kind, c]));
   const groups = GROUP_ORDER.map((g) => ({
     group: g,
@@ -153,16 +156,30 @@ function ClientList({
     <nav aria-label={t('nav.clients')} className="card shrink-0 p-1.5 @3xl:sticky @3xl:top-0 @3xl:w-[232px]">
       {loading && <Spinner lines={6} className="p-2" />}
       <div className="flex gap-1 overflow-x-auto @3xl:flex-col @3xl:gap-0 @3xl:overflow-visible">
-        {groups.map(({ group, items }) => (
-          <div key={group} className="contents @3xl:block">
-            <h3 className="hidden px-2.5 pt-2 pb-1 text-[11px] font-medium text-[var(--text-muted)] @3xl:block">
-              {t(`clients.group.${group}` as 'clients.group.installed')} · {items.length}
-            </h3>
-            {items.map((c) => (
-              <ClientListItem key={c.kind} client={c} active={c.kind === selected} onSelect={() => onSelect(c.kind)} />
-            ))}
-          </div>
-        ))}
+        {groups.map(({ group, items }) => {
+          const collapsible = COLLAPSIBLE_GROUPS.has(group);
+          const expanded = !collapsible || open.has(group) || items.some((c) => c.kind === selected);
+          const title = `${t(`clients.group.${group}` as 'clients.group.installed')} · ${items.length}`;
+          return (
+            <div key={group} className="contents @3xl:block">
+              {collapsible ? (
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  aria-label={t(expanded ? 'clients.group.collapse' : 'clients.group.expand', { group: title })}
+                  onClick={() => setOpen((cur) => { const next = new Set(cur); if (!next.delete(group)) next.add(group); return next; })}
+                  className="flex shrink-0 items-center gap-1 rounded-[var(--radius-control)] px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap text-[var(--text-muted)] hover:bg-[var(--surface-muted)] @3xl:w-full @3xl:pt-2 @3xl:pb-1"
+                >
+                  <ChevronRight size={12} className={cn('transition-transform', expanded && 'rotate-90')} />
+                  {title}
+                </button>
+              ) : (
+                <h3 className="hidden px-2.5 pt-2 pb-1 text-[11px] font-medium text-[var(--text-muted)] @3xl:block">{title}</h3>
+              )}
+              {expanded && items.map((c) => <ClientListItem key={c.kind} client={c} active={c.kind === selected} onSelect={() => onSelect(c.kind)} />)}
+            </div>
+          );
+        })}
       </div>
     </nav>
   );

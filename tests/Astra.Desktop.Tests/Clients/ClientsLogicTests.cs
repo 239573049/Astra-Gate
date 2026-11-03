@@ -39,6 +39,18 @@ public sealed class ClientsLogicTests
     }
 
     [Fact]
+    public void Not_detected_group_folds_unless_opened_or_selected()
+    {
+        var clients = new[] { Client("codex"), Client("gemini-cli", o => o["detection"]!["installed"] = false) };
+        var groups = ClientsLogic.Groups(clients);
+        var none = new HashSet<ClientGroup>();
+        Assert.True(ClientsLogic.IsExpanded(groups[0], "codex", none));
+        Assert.False(ClientsLogic.IsExpanded(groups[1], "codex", none));
+        Assert.True(ClientsLogic.IsExpanded(groups[1], "gemini-cli", none));
+        Assert.True(ClientsLogic.IsExpanded(groups[1], "codex", new HashSet<ClientGroup> { ClientGroup.NotInstalled }));
+    }
+
+    [Fact]
     public void Selected_kind_falls_back_to_codex()
     {
         var clients = new[] { Client("codex"), Client("zed") };

@@ -105,6 +105,12 @@ public sealed class AppSettings
     public string ModelProviderSeparator { get; set; } = "@";
 
     /// <summary>
+    /// Which ids carry the alias while <see cref="ProviderQualifiedModels"/> is on (<see cref="Routing.ModelQualifier"/> scopes):
+    /// "shared" (the default) = only ids two or more of the caller's providers serve, the rest stay bare; "all" = every id.
+    /// </summary>
+    public string ModelQualifyScope { get; set; } = "shared";
+
+    /// <summary>
     /// Sidebar entries of the web console the user hid (ids from <see cref="NavItems.Hideable"/>). Only the menu changes: a hidden
     /// page still opens by its address. Empty = every entry shown.
     /// </summary>

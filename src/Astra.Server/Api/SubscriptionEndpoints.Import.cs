@@ -34,6 +34,34 @@ public static partial class SubscriptionEndpoints
             return Results.Ok(new AccountImportInfoDto(formats.Formats.Count > 0, formats.ApiKey, [.. formats.Formats], MaxBatchImport));
         });
 
+        // 导出：把该提供商全部账号的凭据按导入能读回的格式（每行一条，前一行 # 注释写账号名）明文交给调用方。
+        // 这是唯一会把订阅凭据明文交出去的端点：用 POST（和令牌 reveal 一样要 X-Astra-Admin），响应不缓存，
+        // 令牌不进日志。刷新令牌优先（能续期），没有就取访问令牌 / API Key。
+        app.MapPost("/api/providers/{providerId}/accounts/export", async (
+            string providerId, AstraDatabase db, ISecretProtector protector, HttpContext http, CancellationToken ct) =>
+        {
+            var provider = await db.Providers.GetAsync(providerId, ct);
+            if (provider is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
+            if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
+                return Results.BadRequest(new ErrorOnlyDto("该提供商不是订阅类型（auth_scheme ≠ oauth-subscription）"));
+
+            var text = new System.Text.StringBuilder();
+            int count = 0, skipped = 0;
+            foreach (var account in await db.Accounts.ListAsync(providerId, ct))
+            {
+                var credential = ExportableCredential(account, protector);
+                if (credential is null)
+                {
+                    skipped++;
+                    continue;
+                }
+                text.Append("# ").Append(account.DisplayName.ReplaceLineEndings(" ")).Append('\n').Append(credential).Append('\n');
+                count++;
+            }
+            http.Response.Headers.CacheControl = "no-store";
+            return Results.Ok(new AccountExportDto(text.ToString(), count, skipped));
+        });
+
         // 统一导入：逐条识别 → 去重 → 实际换取 / 校验 → 落库；单条失败不影响其它。顺序执行（上游有速率限制）。
         // 响应里只有脱敏片段，绝不回显令牌本身。
         app.MapPost("/api/providers/{providerId}/accounts/import", async (
@@ -69,6 +97,31 @@ public static partial class SubscriptionEndpoints
                 provider, config, entries, asApiKey, body?.DryRun == true, accountProxy,
                 entries.Count == 1 ? AccountSources.Token : AccountSources.Batch, ct));
         });
+    }
+
+    /// <summary>
+    /// What an account is exported as: its refresh token (the import re-exchanges it), else its access token / API key.
+    /// Null for a plugin sign-in (its credential is not ours) and for a credential that cannot be decrypted.
+    /// </summary>
+    internal static string? ExportableCredential(ProviderAccount account, ISecretProtector protector)
+    {
+        if (account.Kind == AccountKinds.Plugin) return null;
+        foreach (var enc in account.Kind == AccountKinds.ApiKey
+                     ? new[] { account.AccessTokenEnc }
+                     : [account.RefreshTokenEnc, account.AccessTokenEnc])
+        {
+            if (string.IsNullOrEmpty(enc)) continue;
+            try
+            {
+                var value = protector.Unprotect(enc);
+                if (value.Length > 0) return value;
+            }
+            catch (Exception)
+            {
+                // 密文无法解密：按没有可导出的凭据处理
+            }
+        }
+        return null;
     }
 
     /// <summary>

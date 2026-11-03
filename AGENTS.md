@@ -566,14 +566,14 @@ runtime needed on the target).
     `zip|exe|appimage`) and their sha256, so those tags, the zip's layout (one `Astra.app`) and `installer.nsi`'s
     `/S --updated --force-run` and `Uninstall Astra.exe` are a contract with installed apps too.
 
-23. **Provider-qualified model ids** (GitHub issue #21): `AppSettings.ProviderQualifiedModels` / `ModelProviderSeparator` (default off,
-    `@`) and the provider's `settings.alias` (no migration; `ProviderEndpoints.Validate` checks it) make a model id `model@alias`
+23. **Provider-qualified model ids** (GitHub issue #21): `AppSettings.ProviderQualifiedModels` / `ModelProviderSeparator` / `ModelQualifyScope`
+    (default off, `@`, `shared` = only ids two or more of the caller's providers serve carry the alias; `all` = every id) and the provider's `settings.alias` (no migration; `ProviderEndpoints.Validate` checks it) make a model id `model@alias`
     (`ModelQualifier`, `Astra.Core/Routing`). The split happens at the routing seam (`QualifiedModelRouting.ApplyAsync`, through
     `GatewayRoute.Routed`, never `body["model"]`) and only among the caller's own targets; every list a client sees must pass the same
     qualifier (`ClientRouting.ListModelsAsync`, `GatewayAuxiliary`, `ClientService`, `KeyInfoEndpoints.ConnectContextAsync`), and
     turning the setting on or off re-syncs enabled clients' model lists (`PATCH /api/settings` in `RequestEndpoints.cs` → `ClientService.SyncModelListsAsync`).
     Mirrors: `SettingsDto`, `web/src/api/types.ts` (`Settings`, `Provider.settings.alias`), the web settings/provider pages and
-    zh/en `settings.qualifiedModels.*` / `providers.alias.*` keys (+ `gen-desktop-i18n`), the Avalonia `GeneralSettingsView` and
+    zh/en `settings.qualifiedModels.*` / `providers.alias.*` keys (+ `gen-desktop-i18n`), the Avalonia `ModelSettingsView` and
     `ModelsTab`, and `docs/content/docs/console/settings.mdx` / `providers.mdx`.
 
 24. **Join links / unified gateway** (the desktop's "connect to a unified gateway"): the server issues one-time codes for a token

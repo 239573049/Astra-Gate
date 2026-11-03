@@ -264,6 +264,12 @@ public static class RequestEndpoints
                             if (ModelQualifier.IsValidSeparator(separator)) s.ModelProviderSeparator = separator!;
                             else error = "modelProviderSeparator must be 1-8 characters without whitespace";
                             break;
+                        case "modelQualifyScope":
+                            // Which ids carry the alias: every one, or only those several providers serve.
+                            var scope = value?.GetValue<string>();
+                            if (ModelQualifier.IsValidScope(scope)) s.ModelQualifyScope = scope!;
+                            else error = "modelQualifyScope must be all or shared";
+                            break;
                         case "hiddenNav":
                             // Sidebar entries to hide: known ids only (Settings stays), each once, in the menu's order.
                             var hidden = value is JsonArray ids ? ids.Select(id => id?.GetValue<string>()).ToList() : null;
@@ -358,7 +364,8 @@ public static class RequestEndpoints
             // Off lets go of the sleep inhibitor at once; on takes it if requests are in flight.
             if (patch.ContainsKey("preventSleep")) keepAwake.Refresh();
             // The ids clients list (and write into their configs) change with this switch: bring those lists up to date.
-            if (error is null && (patch.ContainsKey("providerQualifiedModels") || patch.ContainsKey("modelProviderSeparator")))
+            if (error is null && (patch.ContainsKey("providerQualifiedModels") || patch.ContainsKey("modelProviderSeparator")
+                                    || patch.ContainsKey("modelQualifyScope")))
                 await clients.SyncModelListsAsync(null, ct);
             return error is null ? Results.Ok(ToSettings(next, server, paths)) : ModelEndpoints.Bad(error);
         });
@@ -371,7 +378,7 @@ public static class RequestEndpoints
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
         UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent, s.PreventSleep,
-        s.ProviderQualifiedModels, s.ModelProviderSeparator, s.HiddenNav.ToList());
+        s.ProviderQualifiedModels, s.ModelProviderSeparator, s.HiddenNav.ToList(), s.ModelQualifyScope);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:

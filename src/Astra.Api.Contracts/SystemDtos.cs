@@ -125,7 +125,8 @@ public sealed record SettingsDto(
     string ProxyMode, string? ProxyUrl, string? ProxyUsername, bool HasProxyPassword, string? ProxyBypass,
     bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl, string? UsageTimeZone,
     string EffectiveUsageTimeZone, string RequestCompression, bool TraceContent = false, bool PreventSleep = false,
-    bool ProviderQualifiedModels = false, string ModelProviderSeparator = "@", List<string>? HiddenNav = null);
+    bool ProviderQualifiedModels = false, string ModelProviderSeparator = "@", List<string>? HiddenNav = null,
+    string ModelQualifyScope = "shared");
 
 /// <summary>
 /// <c>POST /api/connect/join</c> body: connect this machine to a unified gateway (a company's Astra server) as a provider. Either a

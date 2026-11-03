@@ -25,11 +25,18 @@ public enum RunStatus
     Cancelled,
 }
 
-/// <summary>One model's test (web <c>Run</c>); immutable, every streamed event makes a copy.</summary>
+/// <summary>One picture an image test produced (single tests only): its media type and decoded bytes.</summary>
+public sealed record TestPicture(string Mime, byte[] Bytes);
+
+/// <summary>
+/// One model's test (web <c>Run</c>); immutable, every streamed event makes a copy. <c>ImageOperation</c> is the Images API ability the run
+/// tests (<see cref="ProviderTestSession.Generate"/> | <see cref="ProviderTestSession.Edit"/>); null for a chat request.
+/// </summary>
 public sealed record TestRun(
     string ModelId, RunStatus Status, string Text = "", string Reasoning = "", int? HttpStatus = null, double? HttpMs = null, double? TtftMs = null,
     double? TotalMs = null, string? Raw = null, bool RawTruncated = false, string? ContentType = null,
-    IReadOnlyList<KeyValuePair<string, string>>? Headers = null, string? Error = null)
+    IReadOnlyList<KeyValuePair<string, string>>? Headers = null, string? Error = null, string? ImageOperation = null,
+    IReadOnlyList<TestPicture>? Images = null)
 {
     /// <summary>Time from the response headers to the first token (web <c>firstWait</c>); null when either is missing.</summary>
     public double? FirstWait => TtftMs is { } t && HttpMs is { } h ? Math.Max(0, t - h) : null;
@@ -66,7 +73,7 @@ public sealed record TestRun(
                     Status = ok ? RunStatus.Success : RunStatus.Failed, Error = Str(data["error"]), HttpStatus = Int(data["httpStatus"]), HttpMs = Num(data["httpMs"]),
                     TtftMs = Num(data["ttftMs"]), TotalMs = Num(data["totalMs"]), Text = Str(data["text"]) ?? "", Reasoning = Str(data["reasoning"]) ?? "",
                     Raw = Str(data["raw"]) ?? "", RawTruncated = data["rawTruncated"] is JsonValue r && r.TryGetValue<bool>(out var rt) && rt,
-                    ContentType = Str(data["contentType"]), Headers = HeadersOf(data["headers"]),
+                    ContentType = Str(data["contentType"]), Headers = HeadersOf(data["headers"]), Images = PicturesOf(data["images"]),
                 };
             default:
                 return this;
@@ -78,6 +85,26 @@ public sealed record TestRun(
     private static double? Num(JsonNode? n) => n is JsonValue v && v.GetValueKind() == JsonValueKind.Number ? v.GetValue<double>() : null;
 
     private static int? Int(JsonNode? n) => Num(n) is { } d ? (int)d : null;
+
+    /// <summary>The pictures of a <c>done</c> event (<c>images</c>: <c>{mime, data}</c>, base64); entries that do not decode are dropped.</summary>
+    public static List<TestPicture> PicturesOf(JsonNode? node)
+    {
+        var list = new List<TestPicture>();
+        if (node is not JsonArray array) return list;
+        foreach (var item in array)
+        {
+            if (item is not JsonObject o || Str(o["data"]) is not { Length: > 0 } data) continue;
+            try
+            {
+                list.Add(new TestPicture(Str(o["mime"]) ?? "image/png", Convert.FromBase64String(data)));
+            }
+            catch (FormatException)
+            {
+                // a picture that is not base64 is not shown
+            }
+        }
+        return list;
+    }
 
     /// <summary>web <c>headersOf</c>: string values kept, other non-null values as text, anything else an empty list.</summary>
     public static List<KeyValuePair<string, string>> HeadersOf(JsonNode? node)
@@ -174,8 +201,78 @@ public sealed class ProviderTestSession
         Raise();
     }
 
+    /// <summary>The Images API abilities a test can try (the request's <c>imageOperation</c>).</summary>
+    public const string Generate = "generate", Edit = "edit";
+
+    /// <summary>Images API test: <see cref="Generate"/> (images/generations) or <see cref="Edit"/> (images/edits with a small built-in picture).</summary>
+    public string ImageOperation { get; set; } = Generate;
+
+    /// <summary>The largest picture an edit test uploads (the server checks it again).</summary>
+    public const int MaxInputBytes = 4 * 1024 * 1024;
+
+    /// <summary>The picture picked for an edit test (file name and bytes); null = the server's built-in red circle.</summary>
+    public (string Name, byte[] Bytes)? ImageInput { get; private set; }
+
+    /// <summary>
+    /// Takes the picture picked for an edit test. Returns null when accepted, else the i18n key of why not: only PNG, JPEG and WebP (read from the
+    /// first bytes, as the server does) up to <see cref="MaxInputBytes"/> are sent.
+    /// </summary>
+    public string? SetImageInput(string name, byte[] bytes)
+    {
+        if (bytes.Length > MaxInputBytes) return "providers.testDialog.imageInputTooLarge";
+        if (!IsSupportedPicture(bytes)) return "providers.testDialog.imageInputType";
+        ImageInput = (name, bytes);
+        Raise();
+        return null;
+    }
+
+    /// <summary>Back to the built-in picture.</summary>
+    public void ClearImageInput()
+    {
+        ImageInput = null;
+        Raise();
+    }
+
+    /// <summary>The first bytes say PNG, JPEG or WebP (the formats the Images API edits accept).</summary>
+    public static bool IsSupportedPicture(ReadOnlySpan<byte> b) =>
+        (b.Length >= 8 && b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 && b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A)
+        || (b.Length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF)
+        || (b.Length >= 12 && b[0] == 'R' && b[1] == 'I' && b[2] == 'F' && b[3] == 'F' && b[8] == 'W' && b[9] == 'E' && b[10] == 'B' && b[11] == 'P');
+
     /// <summary>The protocol is the Images API: stream and max tokens do not apply, the image parameters do.</summary>
     public bool IsImages => Protocol == ImagesProtocol;
+
+    /// <summary>The model list holds an image model (the batch configuration shows the image settings only then).</summary>
+    public bool HasImageModels => Known.Any(IsImageModel);
+
+    /// <summary>
+    /// Whether a model id belongs to an image family the Images API serves (mirrors <c>ProviderProbe.IsImageModel</c>: a model id carries no
+    /// other signal). Such a model is tested on the Images API, every other model on a chat endpoint.
+    /// </summary>
+    public static bool IsImageModel(string modelId)
+    {
+        var id = modelId[(modelId.LastIndexOf('/') + 1)..];
+        return id.StartsWith("gpt-image", StringComparison.OrdinalIgnoreCase)
+               || id.StartsWith("chatgpt-image", StringComparison.OrdinalIgnoreCase)
+               || id.StartsWith("dall-e", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The model the single test uses, chosen in the picker (web <c>pickModel</c>): an image model switches the test to the Images API, any other
+    /// model switches back from it to a chat protocol.
+    /// </summary>
+    public void PickModel(string id)
+    {
+        Model = id;
+        if (IsImageModel(id)) Protocol = ImagesProtocol;
+        else if (IsImages) Protocol = PreferredProtocol(Provider);
+    }
+
+    /// <summary>Whether a test of <paramref name="modelId"/> goes to the Images API: an image model always, any model when "OpenAI Images" is chosen (single mode only).</summary>
+    public bool UsesImagesApi(string modelId, bool batchRun = false) => IsImageModel(modelId) || (!batchRun && IsImages);
+
+    /// <summary>The Images API ability a test of <paramref name="modelId"/> runs, or null when it is a chat request.</summary>
+    public string? ImageOperationOf(string modelId, bool batchRun = false) => UsesImagesApi(modelId, batchRun) ? ImageOperation : null;
 
     /// <summary>Max output tokens; null = the default.</summary>
     public int? MaxTokens { get; private set; } = DefaultMaxTokens;
@@ -344,24 +441,37 @@ public sealed class ProviderTestSession
     /// <summary>Failed batch runs.</summary>
     public int Failed { get { lock (_gate) return Order.Count(id => _batch.TryGetValue(id, out var r) && r.Status == RunStatus.Failed); } }
 
-    /// <summary>The request body of one test (web <c>request</c>).</summary>
-    public JsonObject RequestFor(string modelId)
+    /// <summary>
+    /// The request body of one test (web <c>request</c>). An image model always goes to the Images API (generate or edit, as chosen); any other
+    /// model to a chat endpoint — in a batch the protocol box never turns a chat model into an image request.
+    /// </summary>
+    public JsonObject RequestFor(string modelId, bool batchRun = false)
     {
-        var body = new JsonObject
+        if (UsesImagesApi(modelId, batchRun))
+        {
+            var images = new JsonObject
+            {
+                ["modelId"] = modelId,
+                ["protocol"] = ImagesProtocol,
+                ["prompt"] = Prompt.Trim() is { Length: > 0 } ip ? ip : null,
+                ["imageOperation"] = ImageOperation,
+                ["imageSize"] = ImageSize == DefaultChoice ? null : ImageSize,
+                ["imageQuality"] = ImageQuality == DefaultChoice ? null : ImageQuality,
+                ["imageCount"] = ImageCount,
+                // Only one test looked at shows its pictures; a batch of many keeps to the summary line.
+                ["imagePreview"] = !batchRun,
+            };
+            if (ImageOperation == Edit && ImageInput is { } picked) images["imageInput"] = Convert.ToBase64String(picked.Bytes);
+            return images;
+        }
+        return new JsonObject
         {
             ["modelId"] = modelId,
-            ["protocol"] = Protocol,
+            ["protocol"] = IsImages ? PreferredProtocol(Provider) : Protocol,
             ["stream"] = Stream,
             ["prompt"] = Prompt.Trim() is { Length: > 0 } p ? p : null,
             ["maxOutputTokens"] = MaxTokens ?? DefaultMaxTokens,
         };
-        if (IsImages)
-        {
-            body["imageSize"] = ImageSize == DefaultChoice ? null : ImageSize;
-            body["imageQuality"] = ImageQuality == DefaultChoice ? null : ImageQuality;
-            body["imageCount"] = ImageCount;
-        }
-        return body;
     }
 
     /// <summary>Starts (or restarts) the single test of <see cref="Model"/>. The returned task ends with the run.</summary>
@@ -379,9 +489,9 @@ public sealed class ProviderTestSession
             gen = _generation;
         }
         Detail = null;
-        Single = new TestRun(modelId, RunStatus.Running);
+        Single = new TestRun(modelId, RunStatus.Running, ImageOperation: ImageOperationOf(modelId));
         Raise();
-        return RunAsync(modelId, cts.Token, run =>
+        return RunAsync(modelId, false, cts.Token, run =>
         {
             lock (_gate) if (gen != _generation) return;
             if (run.IsDone) _afterRun();
@@ -407,7 +517,7 @@ public sealed class ProviderTestSession
             _stopping = false;
             gen = _generation;
             Order = ids.ToList();
-            _batch = ids.ToDictionary(id => id, id => new TestRun(id, RunStatus.Queued));
+            _batch = ids.ToDictionary(id => id, id => new TestRun(id, RunStatus.Queued, ImageOperation: ImageOperationOf(id, true)));
         }
         Detail = null;
         Raise();
@@ -438,7 +548,7 @@ public sealed class ProviderTestSession
                     Raise();
                     continue;
                 }
-                await RunAsync(modelId, cts.Token, run =>
+                await RunAsync(modelId, true, cts.Token, run =>
                 {
                     lock (_gate)
                     {
@@ -491,13 +601,13 @@ public sealed class ProviderTestSession
     }
 
     /// <summary>Runs one test and reports every step (web <c>runTest</c>).</summary>
-    private async Task RunAsync(string modelId, CancellationToken ct, Action<TestRun> report)
+    private async Task RunAsync(string modelId, bool batchRun, CancellationToken ct, Action<TestRun> report)
     {
-        var state = new TestRun(modelId, RunStatus.Running);
+        var state = new TestRun(modelId, RunStatus.Running, ImageOperation: ImageOperationOf(modelId, batchRun));
         report(state);
         try
         {
-            await foreach (var message in _stream(RequestFor(modelId), ct).WithCancellation(ct).ConfigureAwait(false))
+            await foreach (var message in _stream(RequestFor(modelId, batchRun), ct).WithCancellation(ct).ConfigureAwait(false))
             {
                 var next = state.Apply(message);
                 if (!ReferenceEquals(next, state))

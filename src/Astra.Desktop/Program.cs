@@ -7,6 +7,9 @@ using Astra.Desktop.Platform;
 using Astra.Desktop.Platform.Tray;
 using Astra.Desktop.Shell;
 using Avalonia;
+#if DEBUG
+using Spyglass.Agent;
+#endif
 using TKCode.Arc;
 using TKCode.Arc.Fonts;
 
@@ -90,6 +93,9 @@ internal static class Program
 
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
         .UsePlatformDetect()
+        #if DEBUG
+            .UseSpyglass()
+        #endif
         .WithInterFont()
         .WithArcFonts()
         .UseArc(arc =>
