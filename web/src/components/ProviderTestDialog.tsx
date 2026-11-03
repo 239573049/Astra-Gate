@@ -1,7 +1,7 @@
 // The provider connection test dialog: one model at a time, or a batch with live per-model results.
 // Every test is a real request: it applies the privacy guard, is logged and billed, and is never retried.
 
-import { Activity, ArrowLeft, ChevronDown, FlaskConical, HelpCircle, Plus, Square, X } from 'lucide-react';
+import { Activity, ArrowLeft, ChevronDown, FlaskConical, HelpCircle, ImagePlus, Plus, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -27,6 +27,17 @@ const DEFAULT_MAX_TOKENS = 256;
 const MAX_TOKENS = 4096;
 /** What the server sends when an Images API test has no prompt (`ProviderProbe.DefaultImageTestPrompt`). */
 const DEFAULT_IMAGE_PROMPT = 'A small red circle on a white background.';
+/** What an image-edit test asks for (`ProviderProbe.DefaultImageEditPrompt`); the server uploads a small red-circle picture with it. */
+const DEFAULT_IMAGE_EDIT_PROMPT = 'Change the red circle to blue. Keep everything else the same.';
+
+/**
+ * Whether a model id belongs to an image family the Images API serves (mirrors `ProviderProbe.IsImageModel`: a model id carries
+ * no other signal). Such a model is tested on the Images API, every other model on a chat endpoint.
+ */
+export function isImageModelId(modelId: string): boolean {
+  const id = modelId.slice(modelId.lastIndexOf('/') + 1).toLowerCase();
+  return id.startsWith('gpt-image') || id.startsWith('chatgpt-image') || id.startsWith('dall-e');
+}
 
 // ---------- run state ----------
 
@@ -46,6 +57,10 @@ interface Run {
   raw?: string;
   rawTruncated?: boolean;
   contentType?: string | null;
+  /** The pictures an image test produced (single tests only), as base64 with their media type. */
+  images?: { mime: string; data: string }[];
+  /** Which image ability the run tested (undefined = a chat request). */
+  imageOperation?: 'generate' | 'edit';
   /** The upstream response headers, credentials redacted (empty until the response arrives). */
   headers?: Record<string, string>;
   error?: string | null;
@@ -82,9 +97,12 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
   const [stream, setStream] = useState(true);
   const [prompt, setPrompt] = useState('');
   const [maxTokens, setMaxTokens] = useState<number | null>(DEFAULT_MAX_TOKENS);
-  const [image, setImage] = useState<ImageParams>({ size: '', quality: '', count: 1 });
+  const [image, setImage] = useState<ImageParams>({ size: '', quality: '', count: 1, operation: 'generate', input: null });
 
   const [model, setModel] = useState('');
+  // The effect below fills an empty model on open without re-running (and refilling a field the person emptied) as they type.
+  const modelRef = useRef(model);
+  modelRef.current = model;
   const [single, setSingle] = useState<Run | null>(null);
   const [batch, setBatch] = useState<Record<string, Run>>({});
   const [order, setOrder] = useState<string[]>([]);
@@ -108,7 +126,10 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
   // Leaving the dialog cancels everything in flight; the server logs those runs as client-cancelled.
   useEffect(() => {
     if (open) {
-      setModel((current) => current || (models.data ?? []).find((m) => m.enabled)?.modelId || (models.data ?? [])[0]?.modelId || '');
+      const initial = modelRef.current || (models.data ?? []).find((m) => m.enabled)?.modelId || (models.data ?? [])[0]?.modelId || '';
+      // The model the dialog opens on counts as picked: an image model starts on the Images API.
+      if (!modelRef.current && initial && isImageModelId(initial)) setProtocol('openai-images');
+      setModel(initial);
       return;
     }
     running.current = false;
@@ -124,24 +145,51 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
     setDetail(null);
   }, [open, models.data]);
 
+  /**
+   * The request for one model. An image model always goes to the Images API (generate or edit, as chosen); any other model
+   * to a chat endpoint — in a batch the protocol box never turns a chat model into an image request. Choosing "OpenAI Images"
+   * by hand in the single test still sends that model to the Images API.
+   */
   const request = useCallback(
-    (modelId: string): ProviderTestRequest => ({
-      modelId,
-      protocol,
-      stream,
-      prompt: prompt.trim() || null,
-      maxOutputTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
-      ...(protocol === 'openai-images'
-        ? { imageSize: image.size.trim() || null, imageQuality: image.quality || null, imageCount: image.count }
-        : {}),
-    }),
-    [protocol, stream, prompt, maxTokens, image],
+    (modelId: string, batchRun = false): ProviderTestRequest => {
+      const images = isImageModelId(modelId) || (!batchRun && protocol === 'openai-images');
+      if (images) {
+        return {
+          modelId,
+          protocol: 'openai-images',
+          prompt: prompt.trim() || null,
+          imageOperation: image.operation,
+          ...(image.operation === 'edit' && image.input ? { imageInput: image.input.data } : {}),
+          imageSize: image.size.trim() || null,
+          imageQuality: image.quality || null,
+          imageCount: image.count,
+          // Only one test looked at shows its pictures; a batch of many keeps to the summary line.
+          imagePreview: !batchRun,
+        };
+      }
+      return {
+        modelId,
+        protocol: protocol === 'openai-images' ? preferredProtocol(provider) : protocol,
+        stream,
+        prompt: prompt.trim() || null,
+        maxOutputTokens: maxTokens ?? DEFAULT_MAX_TOKENS,
+      };
+    },
+    [protocol, stream, prompt, maxTokens, image, provider],
   );
 
   const test = useCallback(
-    (modelId: string, signal: AbortSignal, report: (state: Run) => void) => runTest(provider.id, modelId, request(modelId), signal, report),
+    (modelId: string, signal: AbortSignal, report: (state: Run) => void, batchRun = false) =>
+      runTest(provider.id, modelId, request(modelId, batchRun), signal, report),
     [provider.id, request],
   );
+
+  /** Picking an image model switches the test to the Images API; picking another model switches back to a chat protocol. */
+  const pickModel = (id: string) => {
+    setModel(id);
+    if (isImageModelId(id)) setProtocol('openai-images');
+    else if (protocol === 'openai-images') setProtocol(preferredProtocol(provider));
+  };
 
   const startSingle = () => {
     const modelId = model.trim();
@@ -177,7 +225,7 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
         }
         const controller = new AbortController();
         controllers.current.set(modelId, controller);
-        await test(modelId, controller.signal, (state) => setBatch((current) => ({ ...current, [modelId]: state })));
+        await test(modelId, controller.signal, (state) => setBatch((current) => ({ ...current, [modelId]: state })), true);
         controllers.current.delete(modelId);
         afterRun();
       }
@@ -278,7 +326,7 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
           <div className="flex flex-col gap-4 border-r border-[var(--border)] pr-6">
             <h3 className="text-[13px] font-medium">{t('providers.testDialog.config')}</h3>
             <Field label={t('providers.testDialog.model')}>
-              <ModelPicker value={model} models={known} onChange={setModel} />
+              <ModelPicker value={model} models={known} onChange={pickModel} />
             </Field>
             <ConfigFields
               protocols={protocols}
@@ -333,6 +381,8 @@ export function ProviderTestDialog({ provider, open, onOpenChange }: { provider:
             onPrompt={setPrompt}
             image={image}
             onImage={setImage}
+            batch
+            hasImageModels={known.some(isImageModelId)}
           />
           {order.length > 0 ? (
             <div className="mt-4 grid gap-2">
@@ -474,73 +524,102 @@ interface ConfigFieldProps {
   onPrompt: (value: string) => void;
   image: ImageParams;
   onImage: (value: ImageParams) => void;
+  /** The batch's own configuration: every model picks its interface, so "OpenAI Images" is not a protocol to choose. */
+  batch?: boolean;
+  /** Batch only: whether the model list holds an image model (the image settings are shown only then). */
+  hasImageModels?: boolean;
 }
 
 /** The Images API test's optional parameters; empty = left out of the request. */
 interface ImageParams {
+  /** Which ability to test: images/generations, or images/edits with a small built-in picture. */
+  operation: 'generate' | 'edit';
+  /** Edit only: the picture the person picked to upload (null = the server's built-in red circle). */
+  input: ImageInput | null;
   size: string;
   quality: string;
   count: number;
 }
+
+/** A picture picked for an edit test: its base64 (what is sent), a data URL for the thumbnail, and what the box shows. */
+interface ImageInput {
+  name: string;
+  bytes: number;
+  data: string;
+  preview: string;
+}
+
+/** The largest picture an edit test uploads, and the formats the Images API edits accept (the server checks both again). */
+const MAX_INPUT_BYTES = 4 * 1024 * 1024;
+const INPUT_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 const IMAGE_SIZES = ['auto', '1024x1024', '1536x1024', '1024x1536', '512x512', '256x256'];
 const IMAGE_QUALITIES = ['auto', 'low', 'medium', 'high', 'standard', 'hd'];
 const MAX_IMAGES = 4;
 
 /** The configuration shared by both modes; the batch mode shows it in its own small dialog. */
-function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
+function ConfigFields({ protocols, batch = false, hasImageModels = false, ...rest }: ConfigFieldProps) {
   const { t } = useI18n();
   const options: { value: TestProtocol; label: string }[] = protocols.map((p) => ({
     value: p,
     label: PROTOCOL_OPTIONS.find((o) => o.value === p)?.label ?? p,
   }));
-  if (protocols.some((p) => p === 'openai-chat' || p === 'openai-responses')) options.push({ value: 'openai-images', label: 'OpenAI Images' });
-  const images = rest.protocol === 'openai-images';
+  if (!batch && protocols.some((p) => p === 'openai-chat' || p === 'openai-responses')) options.push({ value: 'openai-images', label: 'OpenAI Images' });
+  const images = !batch && rest.protocol === 'openai-images';
   const setImage = (patch: Partial<ImageParams>) => rest.onImage({ ...rest.image, ...patch });
-  return (
+  const edit = rest.image.operation === 'edit';
+  const imageFields = (
     <>
-      <Field label={t('providers.testDialog.protocol')}>
-        <Select value={rest.protocol} onChange={rest.onProtocol} options={options} />
+      <Field label={t('providers.testDialog.imageOperation')} hint={edit ? t('providers.testDialog.imageEditHint') : undefined}>
+        <Segmented
+          items={[
+            { value: 'generate', label: t('providers.testDialog.imageGenerate') },
+            { value: 'edit', label: t('providers.testDialog.imageEdit') },
+          ]}
+          value={rest.image.operation}
+          onChange={(operation) => setImage({ operation: operation as ImageParams['operation'] })}
+          ariaLabel={t('providers.testDialog.imageOperation')}
+        />
       </Field>
-      {images ? (
-        <>
-          <Field label={t('providers.testDialog.imageSize')} hint={t('providers.testDialog.imageSizeHint')}>
-            <Input
-              className="font-mono"
-              list="provider-test-image-sizes"
-              value={rest.image.size}
-              placeholder="1024x1024"
-              aria-label={t('providers.testDialog.imageSize')}
-              onChange={(e) => setImage({ size: e.target.value })}
-            />
-            <datalist id="provider-test-image-sizes">
-              {IMAGE_SIZES.map((size) => (
-                <option key={size} value={size} />
-              ))}
-            </datalist>
-          </Field>
-          <Field label={t('providers.testDialog.imageQuality')}>
-            <Select
-              value={rest.image.quality}
-              onChange={(quality) => setImage({ quality })}
-              options={[
-                { value: '', label: t('providers.testDialog.imageDefault') },
-                ...IMAGE_QUALITIES.map((q) => ({ value: q, label: q })),
-              ]}
-            />
-          </Field>
-          <Field label={t('providers.testDialog.imageCount')}>
-            <NumberInput
-              value={rest.image.count}
-              min={1}
-              placeholder="1"
-              label={t('providers.testDialog.imageCount')}
-              onChange={(value) => setImage({ count: value === null ? 1 : Math.min(MAX_IMAGES, Math.max(1, Math.round(value))) })}
-            />
-          </Field>
-        </>
-      ) : (
-      <>
+      {edit ? <EditPicturePicker value={rest.image.input} onChange={(input) => setImage({ input })} /> : null}
+      <Field label={t('providers.testDialog.imageSize')} hint={t('providers.testDialog.imageSizeHint')}>
+        <Input
+          className="font-mono"
+          list="provider-test-image-sizes"
+          value={rest.image.size}
+          placeholder="1024x1024"
+          aria-label={t('providers.testDialog.imageSize')}
+          onChange={(e) => setImage({ size: e.target.value })}
+        />
+        <datalist id="provider-test-image-sizes">
+          {IMAGE_SIZES.map((size) => (
+            <option key={size} value={size} />
+          ))}
+        </datalist>
+      </Field>
+      <Field label={t('providers.testDialog.imageQuality')}>
+        <Select
+          value={rest.image.quality}
+          onChange={(quality) => setImage({ quality })}
+          options={[
+            { value: '', label: t('providers.testDialog.imageDefault') },
+            ...IMAGE_QUALITIES.map((q) => ({ value: q, label: q })),
+          ]}
+        />
+      </Field>
+      <Field label={t('providers.testDialog.imageCount')}>
+        <NumberInput
+          value={rest.image.count}
+          min={1}
+          placeholder="1"
+          label={t('providers.testDialog.imageCount')}
+          onChange={(value) => setImage({ count: value === null ? 1 : Math.min(MAX_IMAGES, Math.max(1, Math.round(value))) })}
+        />
+      </Field>
+    </>
+  );
+  const chatFields = (
+    <>
       <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] text-[var(--text-secondary)]">{t('providers.testDialog.stream')}</span>
         <Switch checked={rest.stream} label={t('providers.testDialog.stream')} onChange={rest.onStream} />
@@ -554,12 +633,100 @@ function ConfigFields({ protocols, ...rest }: ConfigFieldProps) {
           onChange={(value) => rest.onMaxTokens(value === null ? null : Math.min(MAX_TOKENS, Math.max(1, Math.round(value))))}
         />
       </Field>
-      </>
+    </>
+  );
+  return (
+    <>
+      <Field label={t('providers.testDialog.protocol')} hint={batch && hasImageModels ? t('providers.testDialog.batchAutoHint') : undefined}>
+        <Select value={rest.protocol} onChange={rest.onProtocol} options={options} />
+      </Field>
+      {batch ? (
+        <>
+          {chatFields}
+          {hasImageModels ? (
+            <>
+              <h4 className="pt-1 text-[12px] font-medium">{t('providers.testDialog.imageSection')}</h4>
+              {imageFields}
+            </>
+          ) : null}
+        </>
+      ) : images ? (
+        imageFields
+      ) : (
+        chatFields
       )}
       <Field label={t('providers.testDialog.prompt')} hint={t('providers.testDialog.promptHint')}>
-        <TextArea rows={4} value={rest.prompt} placeholder={images ? DEFAULT_IMAGE_PROMPT : 'Reply with OK.'} onChange={(e) => rest.onPrompt(e.target.value)} />
+        <TextArea
+          rows={4}
+          value={rest.prompt}
+          placeholder={images ? (edit ? DEFAULT_IMAGE_EDIT_PROMPT : DEFAULT_IMAGE_PROMPT) : 'Reply with OK.'}
+          onChange={(e) => rest.onPrompt(e.target.value)}
+        />
       </Field>
     </>
+  );
+}
+
+/** The picture an edit test uploads: the built-in red circle until one is picked from disk (PNG / JPEG / WebP, up to 4 MB). */
+function EditPicturePicker({ value, onChange }: { value: ImageInput | null; onChange: (value: ImageInput | null) => void }) {
+  const { t } = useI18n();
+  const file = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = (picked: File | undefined) => {
+    if (!picked) return;
+    if (!INPUT_TYPES.includes(picked.type)) return setError(t('providers.testDialog.imageInputType'));
+    if (picked.size > MAX_INPUT_BYTES) return setError(t('providers.testDialog.imageInputTooLarge'));
+    const reader = new FileReader();
+    reader.onerror = () => setError(t('providers.testDialog.imageInputUnreadable'));
+    reader.onload = () => {
+      const url = String(reader.result);
+      setError(null);
+      onChange({ name: picked.name, bytes: picked.size, data: url.slice(url.indexOf(',') + 1), preview: url });
+    };
+    reader.readAsDataURL(picked);
+  };
+
+  return (
+    <Field label={t('providers.testDialog.imageInput')} hint={error ?? undefined}>
+      <div className="flex items-center gap-3">
+        {value ? (
+          <img src={value.preview} alt="" className="size-12 shrink-0 rounded-md border border-[var(--border)] object-cover" />
+        ) : (
+          <span className="grid size-12 shrink-0 place-items-center rounded-md border border-[var(--border)] bg-white">
+            <span className="size-7 rounded-full bg-[#ff2020]" />
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[12px]" title={value?.name}>
+            {value ? value.name : t('providers.testDialog.imageInputDefault')}
+          </div>
+          <div className="text-[11px] text-[var(--text-muted)]">
+            {value ? `${(value.bytes / 1024).toFixed(value.bytes < 10 * 1024 ? 1 : 0)} KB` : t('providers.testDialog.imageInputLimits')}
+          </div>
+        </div>
+        <input
+          ref={file}
+          type="file"
+          hidden
+          accept={INPUT_TYPES.join(',')}
+          aria-label={t('providers.testDialog.imageInput')}
+          onChange={(e) => {
+            pick(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <Button size="sm" icon={<ImagePlus className="size-3.5" />} onClick={() => file.current?.click()}>
+          {t('providers.testDialog.imageInputPick')}
+        </Button>
+        {value ? (
+          <Button size="sm" variant="plain" onClick={() => (setError(null), onChange(null))}>
+            {t('providers.testDialog.imageInputReset')}
+          </Button>
+        ) : null}
+      </div>
+      {error ? <p className="mt-1 text-[11px] text-[var(--danger)]">{error}</p> : null}
+    </Field>
   );
 }
 
@@ -650,7 +817,7 @@ function TestResultPanel({ provider, run, onRetest }: { provider: Provider; run:
               </Alert>
               <KeyAlternativeHint provider={provider} httpStatus={run.httpStatus} />
             </div>
-          ) : text || run?.reasoning ? (
+          ) : text || run?.reasoning || run?.images?.length ? (
             <div className="grid gap-3">
               {run?.reasoning ? (
                 <div className="rounded-md border border-[var(--border)] bg-[var(--surface-strong)] p-3">
@@ -659,6 +826,25 @@ function TestResultPanel({ provider, run, onRetest }: { provider: Provider; run:
                 </div>
               ) : null}
               {text ? <pre className="font-mono text-[12px] leading-[1.7] break-words whitespace-pre-wrap selectable">{text}</pre> : null}
+              {run?.images?.length ? (
+                <div className="grid gap-3">
+                  {run.images.map((picture, index) => {
+                    const src = `data:${picture.mime};base64,${picture.data}`;
+                    return (
+                      <figure key={index} className="grid gap-1.5">
+                        <img src={src} alt={t('providers.testDialog.imageAlt', { n: index + 1 })} className="max-h-[420px] max-w-full self-start rounded-md border border-[var(--border)] object-contain" />
+                        <a
+                          className="self-start text-[11px] text-[var(--accent)]"
+                          href={src}
+                          download={`astra-test-${index + 1}.${picture.mime === 'image/jpeg' ? 'jpg' : picture.mime === 'image/webp' ? 'webp' : 'png'}`}
+                        >
+                          {t('providers.testDialog.imageSave')}
+                        </a>
+                      </figure>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           ) : run?.status === 'success' ? (
             <p className="text-[12px] text-[var(--text-muted)]">{t('providers.testDialog.noText')}</p>
@@ -821,7 +1007,14 @@ function TestTable({ order, runs, onView }: { order: string[]; runs: Record<stri
             const run = runs[id];
             return (
               <tr key={id} className="border-b border-[var(--border)] last:border-0">
-                <td className="px-4 py-2 font-mono">{id}</td>
+                <td className="px-4 py-2 font-mono">
+                  {id}
+                  {run?.imageOperation ? (
+                    <Badge tone="neutral" className="ml-2 align-middle">
+                      {t(run.imageOperation === 'edit' ? 'providers.testDialog.imageEdit' : 'providers.testDialog.imageGenerate')}
+                    </Badge>
+                  ) : null}
+                </td>
                 <td className="px-4 py-2">
                   <StatusBadge run={run ?? null} />
                 </td>
@@ -851,7 +1044,13 @@ async function runTest(
   signal: AbortSignal,
   report: (state: Run) => void,
 ): Promise<void> {
-  let state: Run = { modelId, status: 'running', text: '', reasoning: '' };
+  let state: Run = {
+    modelId,
+    status: 'running',
+    text: '',
+    reasoning: '',
+    ...(request.protocol === 'openai-images' ? { imageOperation: request.imageOperation === 'edit' ? ('edit' as const) : ('generate' as const) } : {}),
+  };
   report(state);
   const patch = (next: Partial<Run>) => {
     state = { ...state, ...next };
@@ -891,6 +1090,7 @@ async function runTest(
               reasoning: done.reasoning ?? '',
               raw: done.raw ?? '',
               rawTruncated: done.rawTruncated ?? false,
+              images: done.images ?? [],
               contentType: done.contentType ?? null,
               headers: headersOf(done.headers),
             });

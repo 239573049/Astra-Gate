@@ -6,16 +6,28 @@ namespace Astra.Core.Routing;
 /// Provider-qualified model ids (issue #21): <c>&lt;model&gt;&lt;separator&gt;&lt;provider alias&gt;</c>. Two providers serving the same model
 /// id are two ids a client can pick between. The id is only ever a name the client uses — the gateway splits it while
 /// routing and never writes it into the request body, so the upstream model, billing and the log's requested model stay as
-/// they were. Null (<see cref="From"/>) = the feature is off.
+/// they were. Null (<see cref="From"/>) = the feature is off. With <paramref name="SharedOnly"/> the lists qualify only ids
+/// that more than one provider serves; requests for a qualified id are split the same way either way.
 /// </summary>
-public sealed record ModelQualifier(string Separator)
+public sealed record ModelQualifier(string Separator, bool SharedOnly = false)
 {
     public const string DefaultSeparator = "@";
     public const int MaxSeparatorLength = 8;
 
+    /// <summary><see cref="AppSettings.ModelQualifyScope"/>: every id carries its provider's alias.</summary>
+    public const string ScopeAll = "all";
+
+    /// <summary><see cref="AppSettings.ModelQualifyScope"/>: only ids served by two or more providers carry it.</summary>
+    public const string ScopeShared = "shared";
+
     /// <summary>The qualifier the settings ask for, or null while the feature is off.</summary>
     public static ModelQualifier? From(AppSettings settings) =>
-        settings.ProviderQualifiedModels ? new ModelQualifier(Clean(settings.ModelProviderSeparator)) : null;
+        settings.ProviderQualifiedModels
+            ? new ModelQualifier(Clean(settings.ModelProviderSeparator), settings.ModelQualifyScope == ScopeShared)
+            : null;
+
+    /// <summary>Whether <paramref name="scope"/> is one of the scopes (what the settings endpoint validates).</summary>
+    public static bool IsValidScope(string? scope) => scope is ScopeAll or ScopeShared;
 
     /// <summary>A separator the model id can be split on: 1–8 characters without whitespace, else the default.</summary>
     public static string Clean(string? separator) =>

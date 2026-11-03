@@ -28,6 +28,7 @@ const spies = vi.hoisted(() => ({
   reorder: vi.fn(),
   updatePolicy: vi.fn(),
   importAccounts: vi.fn(),
+  exportAccounts: vi.fn(),
   policy: { clientPolicy: 'claude-code-only', switchMode: 'manual', claudeSubscription: true, mimicClaudeCode: false } as {
     clientPolicy: 'claude-code-only' | 'any'; switchMode: 'manual' | 'failover' | 'balanced'; claudeSubscription: boolean; mimicClaudeCode: boolean;
   },
@@ -56,6 +57,7 @@ vi.mock('../api/hooks', () => ({
   useImportCopilotAccount: () => ({ mutate: spies.importCopilot, isPending: false }),
   useAccountImportInfo: () => ({ data: spies.importInfo }),
   useImportAccounts: () => ({ mutate: spies.importAccounts, isPending: false, variables: undefined }),
+  useExportAccounts: () => ({ mutateAsync: spies.exportAccounts, isPending: false }),
   useActivateProviderAccount: () => ({ mutate: spies.activate, isPending: false }),
   useUpdateProviderAccount: () => ({ mutate: spies.update, mutateAsync: spies.updateAsync, isPending: false, variables: undefined }),
   useReorderProviderAccounts: () => ({ mutate: spies.reorder, isPending: false }),
@@ -419,6 +421,22 @@ describe('SubscriptionAccounts', () => {
     expect(spies.updateAsync).toHaveBeenCalledWith({ id: 'acc-1', enabled: false });
     expect(spies.updateAsync).toHaveBeenCalledWith({ id: 'acc-2', enabled: false });
     await waitFor(() => expect(screen.queryByText(/selected$/)).toBeNull());
+  });
+
+  it('exports the credentials to the clipboard after a confirmation', async () => {
+    const writeText = vi.fn(async () => {});
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true });
+    spies.exportAccounts.mockResolvedValue({ text: '# me@example.com\nsk-ant-ort01-abc\n', count: 1, skipped: 0 });
+    show(<SubscriptionAccounts provider={subscriptionProvider} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }));
+    // Plain-text credentials leave Astra only after the person confirms.
+    expect(await screen.findByText('Export every account credential of this provider?')).toBeInTheDocument();
+    expect(spies.exportAccounts).not.toHaveBeenCalled();
+    const buttons = screen.getAllByRole('button', { name: 'Export' });
+    fireEvent.click(buttons[buttons.length - 1]!);
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('# me@example.com\nsk-ant-ort01-abc\n'));
+    expect(await screen.findByText(/Copied the credentials of 1 accounts/)).toBeInTheDocument();
   });
 
   it('opens the details of an account and saves its own proxy', async () => {

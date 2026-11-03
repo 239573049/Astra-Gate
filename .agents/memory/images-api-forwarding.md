@@ -32,3 +32,11 @@ If image calls ever need translation (e.g. to Gemini image models), that is when
 (`IsImageModel`, by id — there is no image protocol) on `images/generations` through the provider's OpenAI endpoint, with the
 minimal body `{model, prompt}` (never streamed, no size/quality/n). The picture's base64 is replaced by its length before the
 raw view, debug capture or log (`StripImages`); the result text is a one-line summary, usage is billed via `FromOpenAIImages`.
+
+**GitHub Copilot (2026-11-03):** its base address `https://api.githubcopilot.com` has no `/v1`, and `/images/edits` is a bare
+`404 page not found` there — edits exist only at `/v1/images/edits` (JSON `images:[{image_url}]` or multipart `image[]` both read the
+picture: `image_tokens` > 0). `/images/generations` works at both paths but ignores any reference-image field (`image`, `images`,
+`input_images`). So `GatewayPipeline.ImagesPath` sends Copilot's images to `/v1/images/*`. Found in the Copilot app's runtime
+(`copilot-runtime`: strings `/v1/images/edits`, `/v1/images/generations`, `multipart/form-data; boundary=`; its `image_generation` is a
+client-side function tool with `input_images`, not a server tool — `/responses` over HTTP or WebSocket answers "tool image_generation
+is not supported"). Official docs (docs.github.com, changelog 2026-10-28) say Copilot generates and edits images but name no endpoint.

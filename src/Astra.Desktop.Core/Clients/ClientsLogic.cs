@@ -102,6 +102,16 @@ public static class ClientsLogic
         return result;
     }
 
+    /// <summary>Groups the list keeps folded until the user opens them (web <c>COLLAPSIBLE_GROUPS</c>, issue #20).</summary>
+    public static bool IsCollapsible(ClientGroup group) => group == ClientGroup.NotInstalled;
+
+    /// <summary>
+    /// Whether <paramref name="group"/> shows its rows: always for a group that does not fold, else when the user opened it
+    /// (<paramref name="open"/>) or it holds the selected client.
+    /// </summary>
+    public static bool IsExpanded(ClientListGroup group, string selected, IReadOnlySet<ClientGroup> open)
+        => !IsCollapsible(group.Group) || open.Contains(group.Group) || group.Items.Any(c => c.Kind == selected);
+
     /// <summary>The kind the page shows for the route parameter: the parameter when the list holds it, else <see cref="DefaultKind"/>.</summary>
     public static string SelectedKind(string? param, IEnumerable<ClientInfoDto>? clients)
         => param is not null && OrderOf(clients).Contains(param) ? param : DefaultKind;

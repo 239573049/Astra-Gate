@@ -167,6 +167,10 @@ public sealed class AccountsApi(ApiClient api, QueryClient queries)
         return r;
     }
 
+    /// <summary><c>POST …/accounts/export</c>: every account's credential in plain text, in the shape the import reads back.</summary>
+    public async Task<AccountExportDto> ExportAsync(string providerId) =>
+        await api.PostAsync<JsonObject, AccountExportDto>(P(providerId) + "/accounts/export", []) ?? new AccountExportDto("", 0, 0);
+
     /// <summary><c>POST /api/provider-accounts/{id}/reset-credits/{credit}/consume</c>; the answer carries the refreshed quota.</summary>
     public async Task ConsumeResetCreditAsync(string providerId, string accountId, string creditId)
     {

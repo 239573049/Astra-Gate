@@ -180,10 +180,10 @@ public sealed class RemoteAccessView : LiveView
             _tokenRow = RowBuilder.Row(Loc.T("settings.remote.token"), null, _token);
             _hostname = Ui.Field(Loc.T("settings.remote.hostname"), s.Hostname ?? "", t => Typed(() => _hostText = t), 256, mono: true, placeholder: "astra.example.com");
             _hostText = s.Hostname ?? "";
-            _hostRow = RowBuilder.Row(Loc.T("settings.remote.hostname"), Loc.T("settings.remote.hostnameHint"), _hostname);
+            _hostRow = RowBuilder.Hinted(Loc.T("settings.remote.hostname"), Loc.T("settings.remote.hostnameHint"), _hostname);
             _origin = new TextBlock { VerticalAlignment = VerticalAlignment.Center };
             _origin.Token(TextBlock.FontSizeProperty, ArcDesignTokenKind.TypeXS).Token(TextBlock.FontFamilyProperty, ArcDesignTokenKind.MonoFontFamily);
-            _originRow = RowBuilder.Row(Loc.T("settings.remote.origin"), Loc.T("settings.remote.originHint"), _origin,
+            _originRow = RowBuilder.Hinted(Loc.T("settings.remote.origin"), Loc.T("settings.remote.originHint"), _origin,
                 Ui.IconButton(LucideIconKind.Copy, Loc.T("common.copy"), () => _ = _v.Host.CopyAsync(_s.OriginUrl)));
             _saveNamed = Ui.Button(Loc.T("common.save"), () => _ = SaveNamedAsync());
             var guide = Ui.Button(Loc.T("settings.remote.guide"), () => _ = SystemActions.OpenUrlAsync(_v, TunnelLogic.GuideUrl), ButtonVariant.Ghost, LucideIconKind.BookOpen);
@@ -219,7 +219,7 @@ public sealed class RemoteAccessView : LiveView
                 placeholder: "https://…/cloudflare/cloudflared/releases/download");
             _baseText = s.Download.DownloadBaseUrl ?? "";
             _saveBase = Ui.Button(Loc.T("common.save"), () => _ = SaveCfAsync(new TunnelConfigRequest(null, null, null, null, DownloadSource: "custom", DownloadBaseUrl: _baseText.Trim())));
-            _baseRow = RowBuilder.Row(Loc.T("settings.remote.cf.baseUrl"), Loc.T("settings.remote.cf.baseUrlHint"), _baseUrl, _saveBase);
+            _baseRow = RowBuilder.Hinted(Loc.T("settings.remote.cf.baseUrl"), Loc.T("settings.remote.cf.baseUrlHint"), _baseUrl, _saveBase);
             _useDownloaded = Ui.Button(Loc.T("settings.remote.cf.useDownloaded"), () => _ = SaveCfAsync(new TunnelConfigRequest(null, null, null, null, CloudflaredPath: "")));
             _choose = Ui.Button(Loc.T("settings.remote.cf.choose"), () =>
             {
@@ -432,7 +432,7 @@ public sealed class RemoteAccessView : LiveView
 
         private void Assemble()
         {
-            _gatewayRow ??= RowBuilder.Row(Loc.T("settings.remote.scope.gateway"), Loc.T("settings.remote.scope.gatewayHint"), Ui.Badge(Loc.T("settings.remote.scope.gatewayBadge"), "green"));
+            _gatewayRow ??= RowBuilder.Hinted(Loc.T("settings.remote.scope.gateway"), Loc.T("settings.remote.scope.gatewayHint"), Ui.Badge(Loc.T("settings.remote.scope.gatewayBadge"), "green"));
             RowAssembly.Sync(_scope, RowAssembly.Flatten(_gatewayRow, _adminRow, _password));
         }
 

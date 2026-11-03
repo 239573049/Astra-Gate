@@ -176,7 +176,7 @@ public sealed partial class GatewayPipeline
             live.Update(record);
             SubscriptionSupport.EnforceClientPolicy(provider, false);
             var endpoint = ImagesEndpoint(provider);
-            var url = UpstreamUrls.Images(endpoint, operation == ImageOperation.Generations ? "images/generations" : "images/edits")
+            var url = UpstreamUrls.Images(endpoint, ImagesPath(provider, operation))
                       ?? throw new GatewayException(501, "api_error",
                           $"提供商 {provider.Name} 的 OpenAI 接口填的是完整地址，无法由它得出图像接口的地址。请改填基础地址（例如 https://api.openai.com/v1）。");
             var upstreamModel = route.UpstreamModelFor(requestedModel);
@@ -354,6 +354,17 @@ public sealed partial class GatewayPipeline
     }
 
     /// <summary>The OpenAI endpoint an Images API call goes beside; a provider without one cannot serve it.</summary>
+    /// <summary>
+    /// The Images API path beside the endpoint's address. GitHub Copilot's base address carries no <c>/v1</c> and serves
+    /// edits only under <c>/v1/images/edits</c> (<c>/images/edits</c> is a bare 404; measured 2026-11-03, and it is the
+    /// path the Copilot app itself calls), so its images go to <c>/v1/images/*</c>.
+    /// </summary>
+    public static string ImagesPath(Provider provider, ImageOperation operation)
+    {
+        var path = operation == ImageOperation.Generations ? "images/generations" : "images/edits";
+        return CopilotCliHeaders.Applies(provider) ? "v1/" + path : path;
+    }
+
     private static ProviderEndpoint ImagesEndpoint(Provider provider)
     {
         if (provider.AuthScheme == AuthSchemes.Plugin)

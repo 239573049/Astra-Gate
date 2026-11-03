@@ -122,6 +122,29 @@ public sealed class QualifiedModelTests
     }
 
     [Fact]
+    public async Task Shared_scope_tags_only_ids_several_providers_serve()
+    {
+        Assert.True(ModelQualifier.From(new AppSettings { ProviderQualifiedModels = true })!.SharedOnly);
+        Assert.False(ModelQualifier.From(new AppSettings { ProviderQualifiedModels = true, ModelQualifyScope = "all" })!.SharedOnly);
+        Assert.False(ModelQualifier.IsValidScope("some"));
+
+        var store = await RoutingStore.StartAsync("glm-5.3", "only-first");
+        var second = await store.AddProviderAsync("Second", "glm-5.3", "only-second");
+        var routing = new ClientRouting(store.Db, new EffectiveModelResolver(store.Db));
+        RouteTarget[] targets = [new(store.Provider, null), new(second, null)];
+
+        var listed = await routing.ListModelsAsync(targets, new ModelQualifier("@", SharedOnly: true));
+        Assert.Equal(
+            ["glm-5.3@Models", "glm-5.3@Second", "only-first", "only-second"],
+            listed.Select(m => m.Id).Order().ToList());
+        Assert.Equal(second.Id, listed.Single(m => m.Id == "only-second").Target.Provider.Id);
+
+        // A lone provider has nothing to tell apart: its ids stay bare.
+        var alone = await routing.ListModelsAsync([new RouteTarget(store.Provider, null)], new ModelQualifier("@", SharedOnly: true));
+        Assert.Equal(["glm-5.3", "only-first"], alone.Select(m => m.Id).Order().ToList());
+    }
+
+    [Fact]
     public async Task A_mapped_id_is_qualified_too()
     {
         var store = await RoutingStore.StartAsync("glm-5.3");

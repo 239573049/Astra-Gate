@@ -114,6 +114,7 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(BatchImportResultDto))]
 [JsonSerializable(typeof(AccountImportRequest))]
 [JsonSerializable(typeof(AccountImportInfoDto))]
+[JsonSerializable(typeof(AccountExportDto))]
 [JsonSerializable(typeof(BatchImportItemDto))]
 [JsonSerializable(typeof(List<BatchImportItemDto>))]
 // models, billing, sync

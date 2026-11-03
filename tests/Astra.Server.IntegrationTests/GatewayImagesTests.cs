@@ -326,9 +326,10 @@ public sealed class GatewayImagesTests
     [Fact]
     public async Task The_relay_forwards_images_with_the_callers_own_credential()
     {
+        // The relay runs the Copilot template, whose images live under /v1 (GatewayPipeline.ImagesPath).
         var upstream = new RelayUpstream
         {
-            Respond = (sent, _) => Task.FromResult(sent.Uri.AbsolutePath.StartsWith("/images/", StringComparison.Ordinal)
+            Respond = (sent, _) => Task.FromResult(sent.Uri.AbsolutePath.StartsWith("/v1/images/", StringComparison.Ordinal)
                 ? RelayUpstream.Json(ImagesResponse())
                 : RelayUpstream.Default(sent)),
         };
@@ -339,7 +340,7 @@ public sealed class GatewayImagesTests
 
         Assert.Equal(HttpStatusCode.OK, generation.StatusCode);
         Assert.Equal(ImagesResponse(), await generation.Content.ReadAsStringAsync());
-        var post = Assert.Single(relay.Upstream.Requests, r => r.Uri.AbsolutePath == "/images/generations");
+        var post = Assert.Single(relay.Upstream.Requests, r => r.Uri.AbsolutePath == "/v1/images/generations");
         Assert.Equal("Bearer gho_test_alice", post.Authorization);
         Assert.Equal(body, post.Text);
 
@@ -349,7 +350,7 @@ public sealed class GatewayImagesTests
             content: new ByteArrayContent(bytes) { Headers = { { HeaderNames.ContentType, contentType } } });
 
         Assert.Equal(HttpStatusCode.OK, edit.StatusCode);
-        var upload = Assert.Single(relay.Upstream.Requests, r => r.Uri.AbsolutePath == "/images/edits");
+        var upload = Assert.Single(relay.Upstream.Requests, r => r.Uri.AbsolutePath == "/v1/images/edits");
         Assert.Equal("Bearer gho_test_alice", upload.Authorization);
         Assert.Equal(contentType, upload.Headers["Content-Type"]);
         Assert.Equal(bytes, upload.Body);

@@ -465,6 +465,32 @@ public sealed class SubscriptionAccountsModel : ModelBase
         if (ok) await BulkAsync(a => _api.DeleteAsync(Provider.Id, a.Id));
     }
 
+    /// <summary>
+    /// Exports the provider's account credentials: asks first (they leave Astra as plain text), then returns what the
+    /// server answered — null when declined or failed (the view puts the text on the clipboard; it is never logged).
+    /// </summary>
+    public async Task<AccountExportDto?> ExportAsync()
+    {
+        if (!await _feedback.ConfirmAsync(new ConfirmRequest(
+                Loc.T("providers.accounts.exportConfirm"), Loc.T("providers.accounts.exportDetail"), Loc.T("providers.accounts.export"), null, false)))
+            return null;
+        try
+        {
+            var r = await _api.ExportAsync(Provider.Id);
+            if (r.Count == 0)
+            {
+                _feedback.Info(Loc.T("providers.accounts.exportNone"));
+                return null;
+            }
+            return r;
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            _feedback.Error(AccountRules.ErrorText(e));
+            return null;
+        }
+    }
+
     // ---- local imports ----
 
     /// <summary>Adopts the machine's codex login.</summary>

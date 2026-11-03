@@ -89,7 +89,7 @@ function makeStream(done: unknown) {
 }
 
 /** Stubs fetch: model lists answer immediately, test runs answer when their release() is called. */
-function stubFetch(models: string[]) {
+function stubFetch(models: string[], done: unknown = DONE) {
   const pending: { url: string; body: unknown; release: () => void; closed: Promise<void> }[] = [];
   let inFlight = 0;
   let peak = 0;
@@ -98,7 +98,7 @@ function stubFetch(models: string[]) {
     if (url.endsWith('/models')) {
       return new Response(JSON.stringify(models.map(model)), { status: 200, headers: { 'Content-Type': 'application/json' } });
     }
-    const { response, release, closed } = makeStream(DONE);
+    const { response, release, closed } = makeStream(done);
     inFlight += 1;
     peak = Math.max(peak, inFlight);
     void closed.then(() => (inFlight -= 1));
@@ -166,6 +166,103 @@ describe('provider test dialog', () => {
     ]);
     expect(rows()).toHaveLength(5);
     within(screen.getByRole('table')).getByText('m5');
+  });
+
+  it('offers generate / edit for an image model and sends the chosen ability on the Images API', async () => {
+    const fetcher = stubFetch(['gpt-5', 'gpt-image-2.5-flare']);
+    show(<ProviderTestDialog provider={provider} open onOpenChange={() => {}} />);
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Test model' }) as HTMLInputElement).value).toBe('gpt-5'));
+    // A chat model: no image controls.
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show model list' }));
+    fireEvent.mouseDown(await screen.findByRole('button', { name: 'gpt-image-2.5-flare' }));
+    // Picking the image model switches the test to the Images API and shows the ability switch.
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start test' }));
+    await waitFor(() => expect(fetcher.pending).toHaveLength(1));
+    expect(fetcher.pending[0]!.body).toMatchObject({ modelId: 'gpt-image-2.5-flare', protocol: 'openai-images', imageOperation: 'edit' });
+    expect(fetcher.pending[0]!.body).not.toHaveProperty('stream');
+    fetcher.pending[0]!.release();
+    await screen.findByText('OK');
+    fireEvent.click(screen.getByRole('button', { name: 'Show model list' }));
+    // Back to a chat model: a chat request again.
+    fireEvent.mouseDown(await screen.findByRole('button', { name: 'gpt-5' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Test again' }))[0]!);
+    await waitFor(() => expect(fetcher.pending).toHaveLength(2));
+    expect(fetcher.pending[1]!.body).toMatchObject({ modelId: 'gpt-5', protocol: 'openai-chat', stream: true });
+    fetcher.pending[1]!.release();
+  });
+
+  it('uploads the picture picked for an edit test and refuses one it cannot send', async () => {
+    const fetcher = stubFetch(['gpt-image-2.5-flare']);
+    show(<ProviderTestDialog provider={provider} open onOpenChange={() => {}} />);
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Test model' }) as HTMLInputElement).value).toBe('gpt-image-2.5-flare'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    // Nothing picked yet: the built-in picture is described, and the request carries no picture.
+    expect(screen.getByText('Built-in red circle (default)')).toBeInTheDocument();
+    const input = screen.getByLabelText('Test picture', { selector: 'input' }) as HTMLInputElement;
+
+    // A format the Images API does not edit is refused on the spot.
+    fireEvent.change(input, { target: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' })] } });
+    expect(await screen.findByText('Only PNG, JPEG and WebP pictures are supported')).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { files: [new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'mine.png', { type: 'image/png' })] } });
+    expect(await screen.findByText('mine.png')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Start test' }));
+    await waitFor(() => expect(fetcher.pending).toHaveLength(1));
+    expect(fetcher.pending[0]!.body).toMatchObject({ protocol: 'openai-images', imageOperation: 'edit', imageInput: 'iVBORw==' });
+    fetcher.pending[0]!.release();
+    await screen.findByText('OK');
+
+    // "Use default" goes back to the built-in picture: no imageInput.
+    fireEvent.click(screen.getByRole('button', { name: 'Use default' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Test again' }))[0]!);
+    await waitFor(() => expect(fetcher.pending).toHaveLength(2));
+    expect(fetcher.pending[1]!.body).not.toHaveProperty('imageInput');
+    fetcher.pending[1]!.release();
+  });
+
+  it('shows the pictures of a single image test, and asks for none in a batch', async () => {
+    const fetcher = stubFetch(['gpt-image-2.5-flare'], { ...DONE, text: 'Generated 1 image, png', images: [{ mime: 'image/png', data: 'iVBORw==' }] });
+    show(<ProviderTestDialog provider={provider} open onOpenChange={() => {}} />);
+    await waitFor(() => expect((screen.getByRole('combobox', { name: 'Test model' }) as HTMLInputElement).value).toBe('gpt-image-2.5-flare'));
+    fireEvent.click(screen.getByRole('button', { name: 'Start test' }));
+    await waitFor(() => expect(fetcher.pending).toHaveLength(1));
+    expect(fetcher.pending[0]!.body).toMatchObject({ protocol: 'openai-images', imagePreview: true });
+    fetcher.pending[0]!.release();
+    const picture = (await screen.findByAltText('Result picture 1')) as HTMLImageElement;
+    expect(picture.src).toBe('data:image/png;base64,iVBORw==');
+    expect(screen.getByRole('link', { name: 'Save picture' })).toHaveAttribute('download', 'astra-test-1.png');
+    expect(screen.getByText('Generated 1 image, png')).toBeInTheDocument();
+
+    // The batch asks for no pictures: a table of many results stays a table.
+    fireEvent.click(screen.getByRole('button', { name: 'Batch' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'gpt-image-2.5-flare' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Test 1 models' }));
+    await waitFor(() => expect(fetcher.pending).toHaveLength(2));
+    expect(fetcher.pending[1]!.body).toMatchObject({ protocol: 'openai-images', imagePreview: false });
+    fetcher.pending[1]!.release();
+  });
+
+  it('sends every model of a batch to the interface it needs', async () => {
+    const fetcher = stubFetch(['gpt-5', 'gpt-image-2.5-flare', 'dall-e-3']);
+    show(<ProviderTestDialog provider={provider} open onOpenChange={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Batch' }));
+    // Settings: the ability applies to the image models; the batch protocol box has no "OpenAI Images" choice.
+    fireEvent.click(await screen.findByRole('button', { name: 'Test configuration' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    for (const id of ['gpt-5', 'gpt-image-2.5-flare', 'dall-e-3']) fireEvent.click(await screen.findByRole('checkbox', { name: id }));
+    fireEvent.click(screen.getByRole('button', { name: 'Test 3 models' }));
+    await waitFor(() => expect(fetcher.pending).toHaveLength(3));
+    const byModel = Object.fromEntries(fetcher.pending.map((r) => [(r.body as { modelId: string }).modelId, r.body]));
+    expect(byModel['gpt-5']).toMatchObject({ protocol: 'openai-chat', stream: true });
+    expect(byModel['gpt-5']).not.toHaveProperty('imageOperation');
+    expect(byModel['gpt-image-2.5-flare']).toMatchObject({ protocol: 'openai-images', imageOperation: 'edit' });
+    expect(byModel['dall-e-3']).toMatchObject({ protocol: 'openai-images', imageOperation: 'edit' });
+    fetcher.pending.forEach((r) => r.release());
+    await waitFor(() => expect(within(screen.getByRole('table')).getAllByText('Edit')).toHaveLength(2));
   });
 
   it('keeps its clicks away from a clickable ancestor', async () => {

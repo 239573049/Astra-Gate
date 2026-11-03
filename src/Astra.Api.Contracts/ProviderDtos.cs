@@ -92,10 +92,15 @@ public sealed record RemoteModelDto(string Id, string? DisplayName, string? Link
 /// <summary>
 /// Everything one test run needs, after validation. Every field is optional on the wire. <see cref="Image"/> tests the model
 /// on the OpenAI Images API (the wire protocol is the id <c>openai-images</c>, not an <see cref="ApiProtocol"/>); the
-/// <c>Image*</c> fields are that test's optional parameters (null / 1 = left out of the request).
+/// <c>Image*</c> fields are that test's optional parameters (null / 1 = left out of the request); <see cref="ImageEdit"/> tests
+/// <c>images/edits</c> instead of <c>images/generations</c>, uploading <see cref="ImageInput"/> (a PNG / JPEG / WebP picked by the person,
+/// <see cref="ImageInputType"/> its media type) or, when none, a small built-in picture. <see cref="ImagePreview"/> asks for the
+/// resulting pictures in the final <c>done</c> event (<c>images</c>: <c>{mime, data}</c> with base64), for a person looking at one test; they
+/// are never written to the request log, a debug capture or the raw view.
 /// </summary>
 public sealed record ProviderTestOptions(string? ModelId, ApiProtocol? Protocol, bool Stream, string? Prompt, int MaxOutputTokens,
-    bool Image = false, string? ImageSize = null, string? ImageQuality = null, int ImageCount = 1);
+    bool Image = false, string? ImageSize = null, string? ImageQuality = null, int ImageCount = 1, bool ImageEdit = false,
+    byte[]? ImageInput = null, string? ImageInputType = null, bool ImagePreview = false);
 
 /// <summary>One event of a provider test stream, ready to be written as SSE.</summary>
 public sealed record ProviderTestEvent(string Event, JsonNode Payload);

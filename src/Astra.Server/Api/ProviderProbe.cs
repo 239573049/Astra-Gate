@@ -71,6 +71,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     public const string DefaultTestPrompt = "Reply with OK.";
     /// <summary>The prompt of an image test (the cheapest picture to ask for) when the caller sends none.</summary>
     public const string DefaultImageTestPrompt = "A small red circle on a white background.";
+    /// <summary>The prompt of an image-edit test: what to change in the picture <see cref="TestImages.RedCircle"/> uploads.</summary>
+    public const string DefaultImageEditPrompt = "Change the red circle to blue. Keep everything else the same.";
     public const int DefaultMaxOutputTokens = 256;
     public const int MaxTestPromptChars = 4000;
 
@@ -115,6 +117,37 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         return body;
     }
 
+    /// <summary>
+    /// The multipart body of an image-edit test: every field of the guarded JSON, and the picture as <c>image[]</c> — the one the person
+    /// picked, else the built-in red circle.
+    /// </summary>
+    private static MultipartFormDataContent EditForm(string fieldsJson, ProviderTestOptions options)
+    {
+        var form = new MultipartFormDataContent();
+        if (JsonNode.Parse(fieldsJson) is JsonObject fields)
+            foreach (var (name, value) in fields)
+                if (value is not null) form.Add(new StringContent(value is JsonValue v && v.TryGetValue<string>(out var s) ? s : value.ToJsonString()), name);
+        var (bytes, mediaType, _) = EditPicture(options);
+        var image = new ByteArrayContent(bytes);
+        image.Headers.ContentType = new MediaTypeHeaderValue(mediaType);
+        form.Add(image, "image[]", "test." + TestImages.ExtensionOf(mediaType));
+        return form;
+    }
+
+    /// <summary>What the debug capture keeps of an edit's form: the fields, and a note instead of the picture's bytes.</summary>
+    private static string EditCapture(string fieldsJson, ProviderTestOptions options)
+    {
+        var fields = JsonNode.Parse(fieldsJson) as JsonObject ?? new JsonObject();
+        var (bytes, mediaType, what) = EditPicture(options);
+        fields["image[]"] = $"<test.{TestImages.ExtensionOf(mediaType)}, {mediaType}, {bytes.Length} bytes: {what}>";
+        return fields.ToJsonString(GatewayJson.Options);
+    }
+
+    private static (byte[] Bytes, string MediaType, string What) EditPicture(ProviderTestOptions options) =>
+        options.ImageInput is { Length: > 0 } picked
+            ? (picked, options.ImageInputType ?? "image/png", "uploaded by the person running the test")
+            : (TestImages.RedCircle(), "image/png", TestImages.RedCircleDescription);
+
     /// <summary>The <c>quality</c> values the Images API families accept (gpt-image: low/medium/high/auto; dall-e-3: standard/hd).</summary>
     internal static readonly string[] ImageQualities = ["auto", "low", "medium", "high", "standard", "hd"];
 
@@ -155,8 +188,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         if (string.IsNullOrWhiteSpace(modelId)) throw new AdminApiException(400, "Add a model or provide modelId first");
         modelId = modelId.Trim();
         if (modelId.Length > 512 || modelId.Any(char.IsControl)) throw new AdminApiException(400, "Invalid model ID");
+        // An image model with no protocol named goes to the Images API even when the provider prefers another protocol.
         var protocol = options.Protocol
-                       ?? (options.Image
+                       ?? (options.Image || IsImageModel(modelId)
                            ? (p.EndpointFor(ApiProtocol.OpenAIChat) ?? p.EndpointFor(ApiProtocol.OpenAIResponses))?.Protocol
                              ?? throw new AdminApiException(400, "The Images API needs an OpenAI endpoint (openai-chat or openai-responses)")
                            : PreferredEndpoint(p).Protocol);
@@ -180,7 +214,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         // An image model is tested on the Images API through the endpoint's OpenAI protocols, never streamed.
         var image = (options.Image || IsImageModel(run.ModelId)) && protocol is ApiProtocol.OpenAIChat or ApiProtocol.OpenAIResponses;
         var stream = options.Stream && !image;
-        var prompt = string.IsNullOrWhiteSpace(run.Prompt) ? (image ? DefaultImageTestPrompt : DefaultTestPrompt) : run.Prompt;
+        var edit = image && options.ImageEdit;
+        var prompt = string.IsNullOrWhiteSpace(run.Prompt) ? (edit ? DefaultImageEditPrompt : image ? DefaultImageTestPrompt : DefaultTestPrompt) : run.Prompt;
         var (_, effective) = await models.ResolveByModelIdAsync(p, run.ModelId, ct);
         run.Emit = emit;
 
@@ -201,6 +236,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         string? error = null;
         string? contentType = null;
         var headers = new JsonObject();
+        var pictures = new JsonArray();
         var ok = false;
         var text = new StringBuilder();
         var raw = new StringBuilder();
@@ -230,7 +266,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             {
                 using var client = CreateClient(p);
                 var url = image
-                    ? UpstreamUrls.Images(endpoint, "images/generations")
+                    ? UpstreamUrls.Images(endpoint, GatewayPipeline.ImagesPath(p, edit ? ImageOperation.Edits : ImageOperation.Generations))
                       ?? throw new AdminApiException(400, "The provider's OpenAI endpoint is a complete address; the Images API address cannot be derived from it")
                     : UpstreamUrls.For(endpoint, run.ModelId, stream);
                 using var request = await RequestAsync(p, HttpMethod.Post, url, protocol, stream, deadline.Token);
@@ -239,8 +275,10 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 var outbound = protocol == ApiProtocol.Anthropic && SubscriptionSupport.MimicClaudeCodeOf(p)
                     ? ClaudeCodeMimicry.ApplyBody(guard.Body, p.Id, null)
                     : guard.Body;
-                request.Content = new StringContent(outbound, Encoding.UTF8, "application/json");
-                if (capture is not null) capture[BodyStore.UpstreamRequest] = Redact(outbound, p, request);
+                // An edit is a multipart upload: the guarded fields as form fields, plus the built-in test picture.
+                request.Content = edit ? EditForm(outbound, options) : new StringContent(outbound, Encoding.UTF8, "application/json");
+                if (capture is not null)
+                    capture[BodyStore.UpstreamRequest] = Redact(edit ? EditCapture(outbound, options) : outbound, p, request);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 httpMs = sw.ElapsedMilliseconds;
                 record.HttpStatus = (int)response.StatusCode;
@@ -278,7 +316,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 }
                 else if (image)
                 {
-                    var answer = await ReadImageAsync(response, Redacted, sw, sink, deadline.Token);
+                    var answer = await ReadImageAsync(response, Redacted, sw, sink, options.ImagePreview ? pictures : null, deadline.Token);
                     decodedBody = answer;
                     ok = sink.Ok && answer is not null;
                     error = sink.Error;
@@ -401,6 +439,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             ["rawTruncated"] = rawTruncated,
             ["contentType"] = contentType,
             ["headers"] = headers.DeepClone(),
+            // Only for a person looking at one test (options.ImagePreview); the pictures are in no log, capture or raw view.
+            ["images"] = pictures.Count > 0 ? pictures : null,
             ["responseModel"] = record.ResponseModel,
             ["requestId"] = record.Id,
             ["usage"] = usage is null ? null : new JsonObject
@@ -476,7 +516,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     /// shown; <c>usage</c> is read from it as reported. No picture, or an <c>error</c> object, fails the test.
     /// </summary>
     private static async Task<JsonObject?> ReadImageAsync(HttpResponseMessage response, Func<string, string> collect,
-        Stopwatch sw, EventSink sink, CancellationToken ct)
+        Stopwatch sw, EventSink sink, JsonArray? pictures, CancellationToken ct)
     {
         var text = await ReadResponseAsync(response, ct, MaxImageResponseBytes);
         var body = TryObject(text);
@@ -502,6 +542,16 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         {
             sink.Failed("Upstream returned no image");
             return null;
+        }
+        if (pictures is not null && data is not null)
+        {
+            var mime = format?.ToLowerInvariant() switch { "jpeg" or "jpg" => "image/jpeg", "webp" => "image/webp", _ => "image/png" };
+            foreach (var item in data)
+            {
+                if (pictures.Count >= MaxTestImages) break;
+                if (item is JsonObject o && Text(o["b64_json"]) is { Length: > 0 } b64)
+                    pictures.Add((JsonNode?)new JsonObject { ["mime"] = mime, ["data"] = b64 });
+            }
         }
         if (body["usage"] is JsonObject usage) sink.Usage = usage;
         sink.SawUsage();

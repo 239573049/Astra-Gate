@@ -70,13 +70,13 @@ public sealed class ClientRouting(AstraDatabase db, EffectiveModelResolver model
     /// Model ids usable across <paramref name="targets"/>, in binding order: per provider its enabled models (in its
     /// model order), then its mapped ids whose target is one of those models. An id offered by several providers is
     /// listed once, for the first of them — the one <see cref="MatchAsync"/> picks. With a <paramref name="qualifier"/> (issue
-    /// #21) every provider lists its own ids, each carrying the provider's alias, so nothing is merged and nothing is shadowed.
+    /// #21) every provider lists its own ids, each carrying the provider's alias, so nothing is merged and nothing is shadowed;
+    /// a <see cref="ModelQualifier.SharedOnly"/> qualifier tags only the ids two or more providers serve and lists the rest bare.
     /// </summary>
     public async Task<List<RoutableModel>> ListModelsAsync(IReadOnlyList<RouteTarget> targets, ModelQualifier? qualifier = null, CancellationToken ct = default)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var result = new List<RoutableModel>();
-        string Listed(string id, RouteTarget target) => qualifier is null ? id : qualifier.Qualify(id, target.Provider);
+        // Every (id, target) pair in listing order; the id is what the client asks for, before any qualification.
+        var offered = new List<RoutableModel>();
         foreach (var target in targets)
         {
             var map = target.Provider.ModelMap();
@@ -88,10 +88,24 @@ public sealed class ClientRouting(AstraDatabase db, EffectiveModelResolver model
             }
             // A provider model whose id is itself mapped elsewhere is reached under that id only through the mapping.
             foreach (var (id, (pm, effective)) in enabled)
-                if (!map.ContainsKey(id) && seen.Add(Listed(id, target))) result.Add(new RoutableModel(Listed(id, target), target, pm, effective));
+                if (!map.ContainsKey(id)) offered.Add(new RoutableModel(id, target, pm, effective));
             foreach (var (alias, upstream) in map)
-                if (enabled.TryGetValue(upstream, out var hit) && seen.Add(Listed(alias, target)))
-                    result.Add(new RoutableModel(Listed(alias, target), target, hit.Model, hit.Effective));
+                if (enabled.TryGetValue(upstream, out var hit)) offered.Add(new RoutableModel(alias, target, hit.Model, hit.Effective));
+        }
+
+        // Shared-only: which ids more than one provider serves.
+        HashSet<string>? shared = null;
+        if (qualifier is { SharedOnly: true })
+            shared = offered.GroupBy(m => m.Id, StringComparer.Ordinal)
+                .Where(g => g.Select(m => m.Target.Provider.Id).Distinct(StringComparer.Ordinal).Skip(1).Any())
+                .Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var result = new List<RoutableModel>();
+        foreach (var m in offered)
+        {
+            var listed = qualifier is null || (shared is not null && !shared.Contains(m.Id)) ? m.Id : qualifier.Qualify(m.Id, m.Target.Provider);
+            if (seen.Add(listed)) result.Add(m with { Id = listed });
         }
         return result;
     }

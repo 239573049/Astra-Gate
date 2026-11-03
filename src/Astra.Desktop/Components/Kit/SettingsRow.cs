@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using TKCode.Arc.DesignTokens;
+using TKCode.Arc.Icons.Lucide;
 
 namespace Astra.Desktop.Components.Kit;
 
@@ -23,6 +24,21 @@ public sealed class SettingsRow : UserControl
 
     /// <summary>A second, smaller line: a string, or any control.</summary>
     public static readonly StyledProperty<object?> DetailProperty = AvaloniaProperty.Register<SettingsRow, object?>(nameof(Detail));
+
+    /// <summary>An explanation kept out of the row: an ⓘ after the label shows it as a tooltip (the compact Settings layout).</summary>
+    public static readonly StyledProperty<string?> HintProperty = AvaloniaProperty.Register<SettingsRow, string?>(nameof(Hint));
+
+    /// <summary>
+    /// Inherited: rows and groups under a control that sets it use the compact metrics (36 px rows, tighter padding and group gaps).
+    /// The Settings page sets it on its root; every other page keeps the web's metrics.
+    /// </summary>
+    public static readonly AttachedProperty<bool> DenseProperty = AvaloniaProperty.RegisterAttached<SettingsRow, Control, bool>("Dense", inherits: true);
+
+    /// <summary>Sets <see cref="DenseProperty"/> on <paramref name="control"/> (and so on everything under it).</summary>
+    public static void SetDense(Control control, bool value) => control.SetValue(DenseProperty, value);
+
+    /// <summary>Reads <see cref="DenseProperty"/>.</summary>
+    public static bool GetDense(Control control) => control.GetValue(DenseProperty);
 
     /// <summary>Leading glyph or avatar.</summary>
     public static readonly StyledProperty<object?> IconProperty = AvaloniaProperty.Register<SettingsRow, object?>(nameof(Icon));
@@ -42,7 +58,13 @@ public sealed class SettingsRow : UserControl
     private readonly StackPanel _trailing = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
     private readonly Controls _items = new();
     private readonly Border _surface;
+    private readonly Grid _grid;
+    private readonly StackPanel _labelLine;
+    private readonly LucideIcon _hintIcon;
     private bool _hover;
+
+    /// <inheritdoc cref="HintProperty"/>
+    public string? Hint { get => GetValue(HintProperty); set => SetValue(HintProperty, value); }
 
     /// <inheritdoc cref="LabelProperty"/>
     public object? Label { get => GetValue(LabelProperty); set => SetValue(LabelProperty, value); }
@@ -77,14 +99,18 @@ public sealed class SettingsRow : UserControl
     {
         MinHeight = 44;
         _label.Content = null;
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _label, _detail } };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(16, 8) };
+        _hintIcon = new LucideIcon { Kind = LucideIconKind.Info, Size = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(5, 0, 0, 0), IsVisible = false };
+        _hintIcon.Token(Avalonia.Controls.Primitives.TemplatedControl.ForegroundProperty, ArcDesignTokenKind.TextMuted);
+        // A transparent fill makes the whole label line (not only the glyph's strokes) answer the pointer for the tooltip.
+        _labelLine = new StackPanel { Orientation = Orientation.Horizontal, Background = Brushes.Transparent, HorizontalAlignment = HorizontalAlignment.Left, Children = { _label, _hintIcon } };
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { _labelLine, _detail } };
+        _grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(16, 8) };
         Grid.SetColumn(text, 1);
         Grid.SetColumn(_trailing, 2);
-        grid.Children.Add(_icon);
-        grid.Children.Add(text);
-        grid.Children.Add(_trailing);
-        _surface = new Border { MinHeight = 44, Background = Brushes.Transparent, Child = grid };
+        _grid.Children.Add(_icon);
+        _grid.Children.Add(text);
+        _grid.Children.Add(_trailing);
+        _surface = new Border { MinHeight = 44, Background = Brushes.Transparent, Child = _grid };
         Content = _surface;
         _icon.IsVisible = false;
         _icon.Margin = new Thickness(0, 0, 12, 0);
@@ -109,6 +135,9 @@ public sealed class SettingsRow : UserControl
         return content;
     }
 
+    /// <summary>The tooltip body of a hint: wrapped at a readable width (a long explanation would otherwise run across the screen).</summary>
+    internal static TextBlock HintTip(string hint) => new() { Text = hint, TextWrapping = TextWrapping.Wrap, MaxWidth = 320 };
+
     private bool IsInteractive => Command is not null || _hasHandler;
 
     /// <inheritdoc />
@@ -127,6 +156,19 @@ public sealed class SettingsRow : UserControl
         {
             _icon.Content = Icon;
             _icon.IsVisible = Icon is not null;
+        }
+        else if (p == HintProperty)
+        {
+            var hint = Hint;
+            _hintIcon.IsVisible = !string.IsNullOrEmpty(hint);
+            ToolTip.SetTip(_labelLine, string.IsNullOrEmpty(hint) ? null : HintTip(hint));
+            Avalonia.Automation.AutomationProperties.SetHelpText(this, hint);
+        }
+        else if (p == DenseProperty)
+        {
+            var dense = change.GetNewValue<bool>();
+            MinHeight = _surface.MinHeight = dense ? 36 : 44;
+            _grid.Margin = dense ? new Thickness(14, 5) : new Thickness(16, 8);
         }
         else if (p == IsSelectedProperty || p == CommandProperty) Refresh();
     }

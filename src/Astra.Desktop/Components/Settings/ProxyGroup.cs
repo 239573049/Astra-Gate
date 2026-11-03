@@ -39,20 +39,20 @@ public sealed class ProxyGroup
         _saved = settings;
         _form = new ProxyForm(settings);
 
-        _group = RowBuilder.Group(Loc.T("settings.proxy"), Loc.T("settings.proxy.footer"));
+        _group = RowBuilder.Group(Loc.T("settings.proxy"), null).WithHint(Loc.T("settings.proxy.footer"));
         _mode = new ControlledSegmented(ProxyForm.Modes.Select(m => (m, Loc.T("settings.proxy.mode." + m))), _form.Mode);
         Avalonia.Automation.AutomationProperties.SetName(_mode, Loc.T("settings.proxy.mode"));
         _mode.Chose += m => _ = ChangeModeAsync(m);
         _modeRow = RowBuilder.Row(Loc.T("settings.proxy.mode"), null, _mode);
 
         _url = Ui.Field(Loc.T("settings.proxy.url"), _form.Url, t => Typed(() => _form.Url = t), 256, mono: true, placeholder: "http://127.0.0.1:7890");
-        _urlRow = RowBuilder.Row(Loc.T("settings.proxy.url"), Loc.T("settings.proxy.urlHint"), _url);
-        _user = Ui.Field(Loc.T("settings.proxy.username"), _form.Username, t => Typed(() => _form.Username = t));
-        _userRow = RowBuilder.Row(Loc.T("settings.proxy.username"), Loc.T("settings.proxy.optional"), _user);
+        _urlRow = RowBuilder.Hinted(Loc.T("settings.proxy.url"), Loc.T("settings.proxy.urlHint"), _url);
+        _user = Ui.Field(Loc.T("settings.proxy.username"), _form.Username, t => Typed(() => _form.Username = t), placeholder: Loc.T("settings.proxy.optional"));
+        _userRow = RowBuilder.Row(Loc.T("settings.proxy.username"), null, _user);
         _password = Ui.Secret(Loc.T("settings.proxy.password"), "", t => Typed(() => _form.Password = t));
         _passwordRow = RowBuilder.Row(Loc.T("settings.proxy.password"), null, _password);
         _bypass = Ui.Field(Loc.T("settings.proxy.bypass"), _form.Bypass, t => Typed(() => _form.Bypass = t), 256, mono: true, placeholder: "example.com, *.lan");
-        _bypassRow = RowBuilder.Row(Loc.T("settings.proxy.bypass"), Loc.T("settings.proxy.bypassHint"), _bypass);
+        _bypassRow = RowBuilder.Hinted(Loc.T("settings.proxy.bypass"), Loc.T("settings.proxy.bypassHint"), _bypass);
         _save = Ui.Button(Loc.T("common.save"), () => _ = SaveAsync());
         _saveBar = Ui.ButtonBar([_save]);
         Update(settings, settings);
@@ -150,12 +150,12 @@ public sealed class MarketGroup
         _api = api;
         _saved = settings;
         _form = new MarketForm(settings);
-        _group = RowBuilder.Group(Loc.T("settings.pluginMarket"), Loc.T("settings.pluginMarket.footer"));
+        _group = RowBuilder.Group(Loc.T("settings.pluginMarket"), null).WithHint(Loc.T("settings.pluginMarket.footer"));
         Avalonia.Automation.AutomationProperties.SetName(_offline, Loc.T("settings.pluginMarket.offline"));
         _offline.ToggleRequested += on => _ = WriteAsync(MarketForm.OfflineBody(on), saved: false);
-        _offlineRow = RowBuilder.Row(Loc.T("settings.pluginMarket.offline"), Loc.T("settings.pluginMarket.offlineHint"), _offline);
+        _offlineRow = RowBuilder.Hinted(Loc.T("settings.pluginMarket.offline"), Loc.T("settings.pluginMarket.offlineHint"), _offline);
         _url = Ui.Field(Loc.T("settings.pluginMarket.url"), _form.Url, t => { if (!_syncing) { _form.Url = t; UpdateState(); } }, 320, mono: true, placeholder: settings.PluginMarketDefaultUrl);
-        _urlRow = RowBuilder.Row(Loc.T("settings.pluginMarket.url"), Loc.T("settings.pluginMarket.urlHint"), _url);
+        _urlRow = RowBuilder.Hinted(Loc.T("settings.pluginMarket.url"), Loc.T("settings.pluginMarket.urlHint"), _url);
         _reset = Ui.Button(Loc.T("settings.pluginMarket.reset"), () => _ = WriteAsync(MarketForm.ResetBody(), saved: true));
         _save = Ui.Button(Loc.T("common.save"), () => _ = WriteAsync(_form.SaveBody(), saved: true));
         _bar = Ui.ButtonBar([_reset, _save]);

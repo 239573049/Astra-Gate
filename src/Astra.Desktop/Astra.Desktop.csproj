@@ -31,6 +31,9 @@
     <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="$(ArcVersion)" />
     <!-- MVVM source generators only (AOT-safe, no reflection bindings; plan avalonia-client §3 D3). -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="TKCode.Spyglass.Agent" Version="0.1.2" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="TKCode.Spyglass.Hotreload" Version="0.1.2" Condition="'$(Configuration)' == 'Debug'" />
+
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Astra.Desktop.Core\Astra.Desktop.Core.csproj" />

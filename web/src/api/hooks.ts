@@ -14,6 +14,7 @@ import type {
   PluginSignIn,
   PluginUsage,
   AccountImportInfo,
+  AccountExport,
   AccountImportRequest,
   AuthStatus,
   AutostartStatus,
@@ -884,6 +885,13 @@ export function useImportAccounts(providerId: string) {
     onSuccess: (_r, req) => {
       if (!req.dryRun) invalidateProviderAccounts(qc, providerId);
     },
+  });
+}
+
+/** Plaintext credentials of every account of the provider, in the format the import reads back. */
+export function useExportAccounts(providerId: string) {
+  return useMutation({
+    mutationFn: () => api<AccountExport>('POST', `/api/providers/${enc(providerId)}/accounts/export`, {}),
   });
 }
 

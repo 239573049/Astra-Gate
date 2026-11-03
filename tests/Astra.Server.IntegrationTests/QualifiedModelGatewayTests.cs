@@ -71,8 +71,10 @@ public class QualifiedModelGatewayTests
         var (status, _) = await gw.Host.SendAsync(HttpMethod.Patch, "/api/settings", new { providerQualifiedModels = true });
         Assert.Equal(HttpStatusCode.OK, status);
 
-        Assert.Equal(["shared@fake", "shared@Second-upstream", "only-second@Second-upstream"], await ModelIdsAsync(gw));
+        // Default scope "shared": only the id both providers serve carries an alias.
+        Assert.Equal(["shared@fake", "shared@Second-upstream", "only-second"], await ModelIdsAsync(gw));
 
+        // A qualified id reaches its provider whatever the scope lists.
         foreach (var (id, host, upstreamModel, providerId) in new[]
                  {
                      ("shared@Second-upstream", "second.test", "shared", second.Id),
@@ -93,6 +95,11 @@ public class QualifiedModelGatewayTests
         // A bare id still routes by priority, so configs written before the switch keep working.
         Assert.Equal(HttpStatusCode.OK, (await gw.PostAsync("/v1/chat/completions", Chat("shared"))).StatusCode);
         Assert.Equal("upstream.test", gw.Upstream.Requests[^1].Url.Host);
+
+        // Scope "all": every id carries its provider's alias.
+        Assert.Equal(HttpStatusCode.OK, (await gw.Host.SendAsync(HttpMethod.Patch, "/api/settings", new { modelQualifyScope = "all" })).Item1);
+        Assert.Equal(["shared@fake", "shared@Second-upstream", "only-second@Second-upstream"], await ModelIdsAsync(gw));
+        Assert.Equal(HttpStatusCode.BadRequest, (await gw.Host.SendAsync(HttpMethod.Patch, "/api/settings", new { modelQualifyScope = "some" })).Item1);
     }
 
     [Fact]
@@ -117,7 +124,7 @@ public class QualifiedModelGatewayTests
         await using var _gw = gw;
         var (ok, _) = await gw.Host.SendAsync(HttpMethod.Patch, "/api/settings", new { providerQualifiedModels = true, modelProviderSeparator = "::" });
         Assert.Equal(HttpStatusCode.OK, ok);
-        Assert.Equal(["shared::fake", "shared::Second-upstream", "only-second::Second-upstream"], await ModelIdsAsync(gw));
+        Assert.Equal(["shared::fake", "shared::Second-upstream", "only-second"], await ModelIdsAsync(gw));
         Assert.Equal(HttpStatusCode.OK, (await gw.PostAsync("/v1/chat/completions", Chat("shared::Second-upstream"))).StatusCode);
         Assert.Equal("second.test", gw.Upstream.Requests[^1].Url.Host);
 

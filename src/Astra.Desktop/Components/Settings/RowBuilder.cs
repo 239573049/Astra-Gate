@@ -14,6 +14,28 @@ public static class RowBuilder
         return row;
     }
 
+    /// <summary>A settings row whose explanation is an ⓘ tooltip on the label instead of a second line.</summary>
+    public static SettingsRow Hinted(object? label, string? hint, params Control[] trailing)
+    {
+        var row = Row(label, null, trailing);
+        row.Hint = hint;
+        return row;
+    }
+
+    /// <summary>Gives <paramref name="row"/> an ⓘ tooltip; returns it.</summary>
+    public static SettingsRow WithHint(this SettingsRow row, string? hint)
+    {
+        row.Hint = hint;
+        return row;
+    }
+
+    /// <summary>Gives <paramref name="group"/> an ⓘ tooltip after its title; returns it.</summary>
+    public static SettingsGroup WithHint(this SettingsGroup group, string? hint)
+    {
+        group.Hint = hint;
+        return group;
+    }
+
     /// <summary>A group with its rows.</summary>
     public static SettingsGroup Group(string? title, string? footer, params Control[] rows)
     {

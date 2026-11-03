@@ -18,12 +18,15 @@ namespace Astra.Desktop.Components.Clients;
 /// The master side of the Clients page (web <c>ClientList</c> / <c>ClientListItem</c>): a 232 px card of clients grouped by install state
 /// ("installed · n", "not detected · n", "coming soon · n") in the catalog order; each row shows the client's mark, name, detected version
 /// (and the update it can get), a spinner while an install runs, an update / shadowed badge, and an orange dot when drifted or a green
-/// check when enabled. The selected row has the accent tint. (The web folds this into a horizontal strip below 768 px of content width;
+/// check when enabled. The selected row has the accent tint. The "not detected" group starts folded behind a chevron heading
+/// (<see cref="ClientsLogic.IsCollapsible"/>) and opens on a click, or by itself while it holds the selected client. (The web folds this into a horizontal strip below 768 px of content width;
 /// the desktop window is never that narrow beside the sidebar's list, so only the column layout is built.)
 /// </summary>
 public sealed class ClientListView : UserControl
 {
     private readonly StackPanel _stack = new();
+    // The folding groups the user opened (web ClientList's `open`); kept across redraws.
+    private readonly HashSet<ClientGroup> _open = [];
 
     /// <summary>An empty list.</summary>
     public ClientListView()
@@ -42,13 +45,56 @@ public sealed class ClientListView : UserControl
         if (loading) _stack.Children.Add(new LoadingState(6) { Margin = new Thickness(8) });
         foreach (var group in ClientsLogic.Groups(clients))
         {
-            var heading = ClientUi.Text(Loc.T(group.TitleKey) + " · " + group.Items.Count, 11, ArcDesignTokenKind.TextMuted, FontWeight.Medium);
-            heading.Margin = new Thickness(10, 8, 10, 4);
+            var title = Loc.T(group.TitleKey) + " · " + group.Items.Count;
+            var heading = ClientUi.Text(title, 11, ArcDesignTokenKind.TextMuted, FontWeight.Medium);
             // The web's body line height (1.45) on every text line here: 11 px → 16, 13 px → 19 (a 47 px row like the web's).
             heading.LineHeight = 16;
-            _stack.Children.Add(heading);
+            var expanded = ClientsLogic.IsExpanded(group, selected, _open);
+            if (ClientsLogic.IsCollapsible(group.Group))
+                _stack.Children.Add(GroupToggle(group.Group, title, heading, expanded, () => Show(clients, loading, selected, onSelect)));
+            else
+            {
+                heading.Margin = new Thickness(10, 8, 10, 4);
+                _stack.Children.Add(heading);
+            }
+            if (!expanded) continue;
             foreach (var c in group.Items) _stack.Children.Add(Item(c, c.Kind == selected, () => onSelect(c.Kind)));
         }
+    }
+
+    /// <summary>The heading of a folding group (web: the chevron button): a click opens or closes it and redraws the list.</summary>
+    private Control GroupToggle(ClientGroup group, string title, TextBlock heading, bool expanded, Action redraw)
+    {
+        var chevron = ClientUi.Icon(expanded ? LucideIconKind.ChevronDown : LucideIconKind.ChevronRight, 12, ArcDesignTokenKind.TextMuted);
+        chevron.VerticalAlignment = VerticalAlignment.Center;
+        var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { chevron, heading } };
+        var row = new Border
+        {
+            Padding = new Thickness(10, 8, 10, 4), Child = line, Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand), Focusable = true,
+        };
+        row.Token(Border.CornerRadiusProperty, ArcDesignTokenKind.RadiusControl);
+        Avalonia.Automation.AutomationProperties.SetName(row, Loc.T(expanded ? "clients.group.collapse" : "clients.group.expand", ("group", title)));
+        row.PointerEntered += (_, _) => row.Token(Border.BackgroundProperty, ArcDesignTokenKind.SurfaceMuted);
+        row.PointerExited += (_, _) => row.Background = Brushes.Transparent;
+        void Toggle()
+        {
+            if (!_open.Remove(group)) _open.Add(group);
+            redraw();
+        }
+        row.PointerPressed += (_, e) =>
+        {
+            if (e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) Toggle();
+        };
+        row.KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space)
+            {
+                e.Handled = true;
+                Toggle();
+            }
+        };
+        return row;
     }
 
     private static Control Item(ClientInfoDto client, bool active, Action onSelect)

@@ -8,6 +8,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Windows hidden title bar leaves a caption strip](windows-hidden-title-bar-caption-hint.md) — hint -1 keeps ~31 DIP of HTCAPTION over the content; set it to the frame thickness, draw the caption buttons with roles; unverified on Windows
 - [Avalonia window units](avalonia-window-units.md) — save window bounds in the screen's units (points on macOS), not render-scaled pixels; the sidebarCollapsed report was a harness leak, not a bug in real launches
 - [Desktop page lifetime](desktop-page-lifetime.md) — pages subscribe to shared queries via Subscribe/OnDispose (2026-10-27 leak + Requests redraw storm); one Arc-held instance per page type is expected; polled queries a view rebuilds from use SameData + a QueryWatch select (issue #16)
+- [Desktop settings compact layout](desktop-settings-compact-layout.md) — the Avalonia Settings page has a side category nav, dense rows and ⓘ hints on purpose; it no longer mirrors the web's long General tab
 - [Rebuilt bodies must not re-add kept controls](desktop-rebuild-reparent-crash.md) — a Build that wraps a field control in a new container throws "already has a visual parent" and kills the app (issue #19, 2026-10-30); three language-change cases still open
 - [Desktop tray relaunch](desktop-tray-relaunch.md) — a shown window leaves GPU memory nothing frees; 15 s after a close the app restarts `--hidden` (~250 → ~50 MB, 2026-10-30), which builds no main window; what the ~50 MB floor is; guards and hand-over rules
 - [Electron vs Avalonia memory](desktop-memory-electron-vs-avalonia.md) — measured 2026-10-30: window 316 → 214 MB, tray 157 → 53 MB, 4 → 1 processes; web-vs-Avalonia 466 scenes, 1.6% mean pixel diff; how to re-measure
@@ -41,8 +42,9 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Provider key alternatives](provider-key-alternatives.md) — issues #8/#9: wrong-template keys are fixed by template-switch + `keyAlternatives`, not by key prefix; no endpoint speed test yet
 - [Relay decisions](relay-decisions.md) — `astra-server relay`: same pipeline behind contracts, one template per process, per-request credentials never stored/logged or sent to a request-named address, raw model list
 - [Keep-awake decisions](keep-awake-decisions.md) — issue #14 `PreventSleep`: idle sleep only, server host only, blittable DllImport, Linux `sleep` lock side effect, web server stops first on shutdown
-- [Images API forwarding](images-api-forwarding.md) — issue #17: `/v1/images/*` forwarded untranslated on the same pipeline, logged as `openai-images` (not an ApiProtocol); forms stream after `model` unless guard/encoding/deadline; no pool failover
+- [Images API forwarding](images-api-forwarding.md) — issue #17 (Copilot images live under /v1): `/v1/images/*` forwarded untranslated on the same pipeline, logged as `openai-images` (not an ApiProtocol); forms stream after `model` unless guard/encoding/deadline; no pool failover
 - [Trace routing visualization](trace-routing-visualization.md) — topology draws accounts as rows + a live activity rail (option B, 2026-10-30); tool args / prompt / reply text only when the user turns capture on
+- [Copilot Responses item ids](copilot-responses-item-ids.md) — 401 "input item does not belong to this connection" = stale encrypted reasoning from an earlier session (reproduced 2026-11-03); dropping encrypted_content fixes it, dropping ids does not
 
 ## Reference
 
