@@ -37,8 +37,8 @@ public static partial class Scenes
         d["clients__drifted"] = () => ClientsScene(Rich(), "opencode");
         d["clients__needs-repair"] = () => ClientsScene(Rich(), "crush");
         d["clients__desktop-roles"] = () => ClientsScene(Rich(), "claude-desktop");
-        d["clients__options"] = () => ClientsScene(Rich(), "zed", vm => ClientsReveal(vm, "clients.protocols.title"));
-        d["clients__claude-direct"] = () => ClientsScene(Rich(), "claude-code", vm => ClientsReveal(vm, "clients.claudeDirect.statsTitle"));
+        d["clients__options"] = () => ClientsScene(Rich(), "zed", vm => ClientsReveal(vm, ClientTab.Options, "clients.protocols.title"));
+        d["clients__claude-direct"] = () => ClientsScene(Rich(), "claude-code", vm => ClientsReveal(vm, ClientTab.Routing, "clients.claudeDirect.statsTitle"));
 
         d["clients__enable-preview"] = () => ClientsScene(Rich(), "qwen-code", vm => vm.BeginEnable(vm.Selected!));
         d["clients__disable"] = () => ClientsScene(Rich(), "codex", vm => _ = vm.DisableAsync(vm.Selected!), waitAfter: false);
@@ -50,9 +50,11 @@ public static partial class Scenes
         d["clients__uninstall-running"] = () => ClientsScene(Rich(uninstalling: true), "codex", vm => vm.BeginInstall(vm.Selected!, InstallSheetMode.Log));
     }
 
-    // Scrolls the page so the group titled <titleKey> (below the fold of the 900 px window) is in view.
-    private static void ClientsReveal(ClientsPageViewModel vm, string titleKey)
+    // Opens <tab> and scrolls the panel so the group titled <titleKey> is in view.
+    private static void ClientsReveal(ClientsPageViewModel vm, ClientTab tab, string titleKey)
     {
+        vm.Panel!.ShowTab(tab);
+        SceneCapture.Pump(5);
         var title = Astra.Desktop.Core.I18n.Loc.T(titleKey);
         var group = vm.Panel!.GetVisualDescendants().OfType<Astra.Desktop.Components.Kit.SettingsGroup>().LastOrDefault(g => g.Title == title);
         group?.BringIntoView();

@@ -40,3 +40,9 @@ picture: `image_tokens` > 0). `/images/generations` works at both paths but igno
 (`copilot-runtime`: strings `/v1/images/edits`, `/v1/images/generations`, `multipart/form-data; boundary=`; its `image_generation` is a
 client-side function tool with `input_images`, not a server tool — `/responses` over HTTP or WebSocket answers "tool image_generation
 is not supported"). Official docs (docs.github.com, changelog 2026-10-28) say Copilot generates and edits images but name no endpoint.
+
+**Copilot image model renamed (2026-11-04):** `gpt-image-2.5-sunburst` vanished from Copilot's `/models` (now `gpt-image-2.5-flare`),
+and a call to the old id answers `400 The requested model is not available for integrator "[redacted]". Verify the correct
+Copilot-Integration-Id header` — misleading: the same 400 came back with `copilot-developer-cli`, `copilot-developer-app` and
+`vscode-chat`, while `flare` worked with the template's `copilot-developer-cli`. Check `/api/providers/{id}/remote-models` before
+touching headers; the fix was the template's model list (`catalog.json`, template version 5).

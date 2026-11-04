@@ -295,6 +295,21 @@ internal static class Messages
         "clients.search",
         "clients.warning.drifted",
         "clients.enabled",
+        "clients.filter.all",
+        "clients.filter.enabled",
+        "clients.filter.attention",
+        "clients.filter.label",
+        "clients.filter.empty",
+        "clients.tab.routing",
+        "clients.tab.models",
+        "clients.tab.options",
+        "clients.tab.maintenance",
+        "clients.addProvider",
+        "clients.searchProviders",
+        "clients.pending",
+        "clients.pending.discard",
+        "clients.pending.apply",
+        "clients.drift.review",
         "clients.disabled",
         "clients.detected",
         "clients.notDetected",
@@ -944,6 +959,40 @@ internal static class Messages
         "providers.card.noAuth",
         "providers.card.requests7d",
         "providers.card.noRequests",
+        "providers.card.noRequests7d",
+        "providers.card.requestsUnit",
+        "providers.card.lowSuccess",
+        "providers.view.label",
+        "providers.view.grid",
+        "providers.view.table",
+        "providers.overview.range",
+        "providers.overview.requests",
+        "providers.overview.cost",
+        "providers.overview.successRate",
+        "providers.overview.failoverCount",
+        "providers.overview.enabled",
+        "providers.overview.withTraffic",
+        "providers.overview.share",
+        "providers.overview.ranking",
+        "providers.overview.costShare",
+        "providers.overview.noCost",
+        "providers.overview.noData",
+        "providers.overview.health",
+        "providers.overview.healthy",
+        "providers.overview.lowSuccess",
+        "providers.overview.others",
+        "providers.overview.showCharts",
+        "providers.overview.hideCharts",
+        "providers.col.provider",
+        "providers.col.status",
+        "providers.col.models",
+        "providers.col.trend",
+        "providers.col.requests",
+        "providers.col.successRate",
+        "providers.col.ttft",
+        "providers.col.tokens",
+        "providers.col.cost",
+        "providers.col.enabled",
         "providers.created",
         "providers.addTitle",
         "providers.addTitleDetails",
@@ -2906,6 +2955,21 @@ internal static class Messages
             case "clients.search": return "搜索客户端";
             case "clients.warning.drifted": return "客户端配置与 Astra 记录的不一致，启用或还原前请先检查。";
             case "clients.enabled": return "已启用";
+            case "clients.filter.all": return "全部 {count}";
+            case "clients.filter.enabled": return "已接管 {count}";
+            case "clients.filter.attention": return "需处理 {count}";
+            case "clients.filter.label": return "筛选客户端";
+            case "clients.filter.empty": return "没有符合条件的客户端";
+            case "clients.tab.routing": return "路由";
+            case "clients.tab.models": return "模型与令牌";
+            case "clients.tab.options": return "选项";
+            case "clients.tab.maintenance": return "版本与备份";
+            case "clients.addProvider": return "添加提供商";
+            case "clients.searchProviders": return "搜索提供商";
+            case "clients.pending": return "{count} 项更改尚未写入客户端配置";
+            case "clients.pending.discard": return "放弃";
+            case "clients.pending.apply": return "写入配置";
+            case "clients.drift.review": return "检查并重新写入";
             case "clients.disabled": return "未启用";
             case "clients.detected": return "已检测到 {version}";
             case "clients.notDetected": return "未检测到安装";
@@ -3555,6 +3619,40 @@ internal static class Messages
             case "providers.card.noAuth": return "无需密钥";
             case "providers.card.requests7d": return "近 7 天请求";
             case "providers.card.noRequests": return "暂无请求";
+            case "providers.card.noRequests7d": return "7 天无请求";
+            case "providers.card.requestsUnit": return "次";
+            case "providers.card.lowSuccess": return "成功率偏低";
+            case "providers.view.label": return "列表视图";
+            case "providers.view.grid": return "卡片";
+            case "providers.view.table": return "表格";
+            case "providers.overview.range": return "统计范围";
+            case "providers.overview.requests": return "请求";
+            case "providers.overview.cost": return "成本";
+            case "providers.overview.successRate": return "成功率";
+            case "providers.overview.failoverCount": return "故障转移 {count} 次";
+            case "providers.overview.enabled": return "启用 / 全部";
+            case "providers.overview.withTraffic": return "{count} 个有请求";
+            case "providers.overview.share": return "请求占比";
+            case "providers.overview.ranking": return "请求量排行";
+            case "providers.overview.costShare": return "成本占比";
+            case "providers.overview.noCost": return "该时段暂无成本";
+            case "providers.overview.noData": return "该时段暂无请求";
+            case "providers.overview.health": return "健康状况";
+            case "providers.overview.healthy": return "正常";
+            case "providers.overview.lowSuccess": return "成功率 < 90%";
+            case "providers.overview.others": return "其他";
+            case "providers.overview.showCharts": return "展开图表";
+            case "providers.overview.hideCharts": return "收起图表";
+            case "providers.col.provider": return "提供商";
+            case "providers.col.status": return "状态";
+            case "providers.col.models": return "模型";
+            case "providers.col.trend": return "7 天趋势";
+            case "providers.col.requests": return "请求";
+            case "providers.col.successRate": return "成功率";
+            case "providers.col.ttft": return "首字延迟";
+            case "providers.col.tokens": return "Token 入 / 出";
+            case "providers.col.cost": return "成本";
+            case "providers.col.enabled": return "启用";
             case "providers.created": return "已添加 {name}";
             case "providers.addTitle": return "选择提供商模板";
             case "providers.addTitleDetails": return "填写提供商信息";
@@ -5519,6 +5617,21 @@ internal static class Messages
             case "clients.search": return "Search clients";
             case "clients.warning.drifted": return "The client configuration differs from what Astra recorded. Review it before enabling or restoring.";
             case "clients.enabled": return "Enabled";
+            case "clients.filter.all": return "All {count}";
+            case "clients.filter.enabled": return "Enabled {count}";
+            case "clients.filter.attention": return "Attention {count}";
+            case "clients.filter.label": return "Filter clients";
+            case "clients.filter.empty": return "No clients match";
+            case "clients.tab.routing": return "Routing";
+            case "clients.tab.models": return "Models & token";
+            case "clients.tab.options": return "Options";
+            case "clients.tab.maintenance": return "Version & backups";
+            case "clients.addProvider": return "Add provider";
+            case "clients.searchProviders": return "Search providers";
+            case "clients.pending": return "{count} change(s) not yet written to the client config";
+            case "clients.pending.discard": return "Discard";
+            case "clients.pending.apply": return "Write config";
+            case "clients.drift.review": return "Review and rewrite";
             case "clients.disabled": return "Not enabled";
             case "clients.detected": return "Detected {version}";
             case "clients.notDetected": return "Not detected";
@@ -6168,6 +6281,40 @@ internal static class Messages
             case "providers.card.noAuth": return "No key needed";
             case "providers.card.requests7d": return "Requests, last 7 days";
             case "providers.card.noRequests": return "No requests yet";
+            case "providers.card.noRequests7d": return "No requests in 7 days";
+            case "providers.card.requestsUnit": return "req";
+            case "providers.card.lowSuccess": return "Low success rate";
+            case "providers.view.label": return "List view";
+            case "providers.view.grid": return "Cards";
+            case "providers.view.table": return "Table";
+            case "providers.overview.range": return "Stats range";
+            case "providers.overview.requests": return "Requests";
+            case "providers.overview.cost": return "Cost";
+            case "providers.overview.successRate": return "Success rate";
+            case "providers.overview.failoverCount": return "{count} failovers";
+            case "providers.overview.enabled": return "Enabled / total";
+            case "providers.overview.withTraffic": return "{count} with traffic";
+            case "providers.overview.share": return "Request share";
+            case "providers.overview.ranking": return "Top by requests";
+            case "providers.overview.costShare": return "Cost share";
+            case "providers.overview.noCost": return "No cost in this period";
+            case "providers.overview.noData": return "No requests in this period";
+            case "providers.overview.health": return "Health";
+            case "providers.overview.healthy": return "Healthy";
+            case "providers.overview.lowSuccess": return "Success < 90%";
+            case "providers.overview.others": return "Other";
+            case "providers.overview.showCharts": return "Show charts";
+            case "providers.overview.hideCharts": return "Hide charts";
+            case "providers.col.provider": return "Provider";
+            case "providers.col.status": return "Status";
+            case "providers.col.models": return "Models";
+            case "providers.col.trend": return "7-day trend";
+            case "providers.col.requests": return "Requests";
+            case "providers.col.successRate": return "Success";
+            case "providers.col.ttft": return "TTFT";
+            case "providers.col.tokens": return "Tokens in / out";
+            case "providers.col.cost": return "Cost";
+            case "providers.col.enabled": return "Enabled";
             case "providers.created": return "Added {name}";
             case "providers.addTitle": return "Choose a provider template";
             case "providers.addTitleDetails": return "Provider details";

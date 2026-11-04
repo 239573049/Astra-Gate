@@ -32,6 +32,19 @@ public enum ClientStatusBadge
     Disabled,
 }
 
+/// <summary>The filter above the desktop's client list (compact layout): every client, the enabled ones, or those that need a look.</summary>
+public enum ClientFilter
+{
+    /// <summary>Every client.</summary>
+    All,
+
+    /// <summary>Clients Astra manages (<c>enabled</c>).</summary>
+    Enabled,
+
+    /// <summary><see cref="ClientsLogic.NeedsAttention"/>.</summary>
+    Attention,
+}
+
 /// <summary>One group of the client list with its rows in display order.</summary>
 public sealed record ClientListGroup(ClientGroup Group, IReadOnlyList<ClientInfoDto> Items)
 {
@@ -100,6 +113,28 @@ public static class ClientsLogic
             if (items.Count > 0) result.Add(new ClientListGroup(group, items));
         }
         return result;
+    }
+
+    /// <summary>
+    /// A client that wants the user's attention: its config drifted, a file needs repairing, an update is available or a newer copy is
+    /// shadowed (the list's "needs attention" filter).
+    /// </summary>
+    public static bool NeedsAttention(ClientInfoDto c)
+        => c.Status == "drifted" || c.Repairs is { Count: > 0 } || UpdateOf(c) is not null || IsShadowed(c);
+
+    /// <summary>Whether <paramref name="c"/> passes <paramref name="filter"/> and contains <paramref name="query"/> in its name or kind (case-insensitive).</summary>
+    public static bool Matches(ClientInfoDto c, ClientFilter filter, string? query)
+    {
+        var pass = filter switch
+        {
+            ClientFilter.Enabled => c.Enabled,
+            ClientFilter.Attention => NeedsAttention(c),
+            _ => true,
+        };
+        if (!pass) return false;
+        var q = query?.Trim();
+        if (string.IsNullOrEmpty(q)) return true;
+        return ClientCatalog.Name(c.Kind, c.Name).Contains(q, StringComparison.OrdinalIgnoreCase) || c.Kind.Contains(q, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Groups the list keeps folded until the user opens them (web <c>COLLAPSIBLE_GROUPS</c>, issue #20).</summary>

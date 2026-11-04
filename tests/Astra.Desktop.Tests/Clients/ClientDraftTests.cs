@@ -120,6 +120,20 @@ public sealed class ClientDraftTests
     }
 
     [Fact]
+    public void Pending_counts_changed_parts_and_revert_drops_them()
+    {
+        var draft = new ClientDraft(Client(patch: o => o["selectedModel"] = "a"));
+        Assert.Equal(0, draft.PendingCount);
+        draft.Model = "b";
+        draft.TokenId = "t2";
+        Assert.Equal(2, draft.PendingCount);
+        draft.Revert();
+        Assert.Equal(0, draft.PendingCount);
+        Assert.Equal("a", draft.Model);
+        Assert.Equal("default", draft.TokenId);
+    }
+
+    [Fact]
     public void Plain_client_sends_no_extras()
     {
         var draft = new ClientDraft(Client(patch: o => o["selectedModel"] = "m"));
