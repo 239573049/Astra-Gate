@@ -61,20 +61,23 @@ public class ClientsPollingTests
             SceneCapture.Await(context.Queries.WhenIdleAsync(TimeSpan.FromSeconds(3)), TimeSpan.FromSeconds(10));
             SceneCapture.Pump(20);
             var panel = ((ClientsPageViewModel)shell.Navigator.Current).Panel!;
-            var root = (StackPanel)panel.Content!;
-            var header = root.Children[0];
+            // The install log row (which watches the job) lives on the version tab.
+            panel.ShowTab(ClientTab.Maintenance);
+            SceneCapture.Pump(5);
+            var header = panel.HeaderRow;
+            Assert.NotNull(header);
 
             // A few job polls (each with more output) and a client-list poll with the same answer.
             var polls = server.JobPolls;
             PumpFor(TimeSpan.FromSeconds(2.6));
             Assert.True(server.JobPolls - polls >= 2, $"the job was polled {server.JobPolls - polls} times");
-            Assert.Same(header, root.Children[0]);
+            Assert.Same(header, panel.HeaderRow);
 
             // The run ends: the list refetches (busy off, new version) and the panel shows it.
             server.Finished = true;
             var limit = System.Diagnostics.Stopwatch.StartNew();
-            while (ReferenceEquals(header, root.Children[0]) && limit.Elapsed < TimeSpan.FromSeconds(6)) PumpFor(TimeSpan.FromMilliseconds(100));
-            Assert.NotSame(header, root.Children[0]);
+            while (ReferenceEquals(header, panel.HeaderRow) && limit.Elapsed < TimeSpan.FromSeconds(6)) PumpFor(TimeSpan.FromMilliseconds(100));
+            Assert.NotSame(header, panel.HeaderRow);
         }
         finally
         {

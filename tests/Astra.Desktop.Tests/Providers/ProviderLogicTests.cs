@@ -66,6 +66,93 @@ public sealed class ProviderLogicTests : IDisposable
         Assert.Equal(1, map["OpenAI"].Total);
     }
 
+    [Fact]
+    public void Health_flags_disabled_missing_key_and_a_poor_success_rate_only_with_enough_requests()
+    {
+        Assert.Equal(ProviderHealth.Disabled, ProviderHealthRules.Of(Provider(enabled: false, hasKey: false), null));
+        Assert.Equal(ProviderHealth.NoKey, ProviderHealthRules.Of(Provider(hasKey: false), null));
+        Assert.Equal(ProviderHealth.Healthy, ProviderHealthRules.Of(Provider(auth: "plugin", hasKey: false), null));
+        Assert.Equal(ProviderHealth.LowSuccess, ProviderHealthRules.Of(Provider(), Stat("p1", 10, 8)));
+        Assert.Equal(ProviderHealth.Healthy, ProviderHealthRules.Of(Provider(), Stat("p1", 10, 9)));
+        Assert.Equal(ProviderHealth.Healthy, ProviderHealthRules.Of(Provider(), Stat("p1", 2, 0)));
+    }
+
+    [Fact]
+    public void Overview_totals_and_folds_providers_past_the_palette_into_other()
+    {
+        var providers = Enumerable.Range(1, 8).Select(i => Provider() with { Id = "p" + i, Name = "P" + i, Enabled = i != 8 }).ToList();
+        var stats = Enumerable.Range(1, 8).Select(i => Stat("p" + i, i * 10, i * 10, cost: i == 1 ? 2m : 0)).ToList();
+        var week = stats.ToDictionary(x => x.ProviderId);
+        var d = ProviderOverviewData.Build(providers, stats, week, "other");
+        Assert.Equal(360, d.Requests);
+        Assert.Equal(1.0, d.SuccessRate);
+        Assert.Equal(2m, d.CostUsd);
+        Assert.Equal(7, d.Enabled);
+        Assert.Equal(8, d.WithTraffic);
+        Assert.Equal(7, d.RequestShare.Count);
+        Assert.Equal("P8", d.RequestShare[0].Name);
+        Assert.Equal(ProviderOverviewData.OtherKey, d.RequestShare[^1].Key);
+        Assert.Equal(30, d.RequestShare[^1].Value); // p1 + p2
+        Assert.Equal(-1, d.RequestShare[^1].ColorIndex);
+        Assert.Single(d.CostShare);
+        Assert.Equal(1, d.Health[ProviderHealth.Disabled]);
+        Assert.Equal(7, d.Health[ProviderHealth.Healthy]);
+    }
+
+    [Fact]
+    public void Mini_bars_use_a_shared_square_root_scale_with_a_floor()
+    {
+        Assert.Equal(0, MiniBarScale.Share(0, 100));
+        Assert.Equal(1, MiniBarScale.Share(100, 100));
+        Assert.Equal(0.5, MiniBarScale.Share(25, 100), 6);
+        Assert.Equal(MiniBarScale.MinShare, MiniBarScale.Share(1, 10_000));
+    }
+
+    [Fact]
+    public void Providers_prefs_store_only_what_differs_from_the_defaults()
+    {
+        var store = new MemoryPrefs();
+        ProvidersPrefs.Use(store);
+        try
+        {
+            Assert.Equal(ProvidersPrefs.GridView, ProvidersPrefs.View);
+            Assert.True(ProvidersPrefs.ChartsOpen);
+            ProvidersPrefs.View = ProvidersPrefs.TableView;
+            ProvidersPrefs.ChartsOpen = false;
+            Assert.Equal("{\"view\":\"table\",\"charts\":false}", store.Get(ProvidersPrefs.Key)!.ToJsonString());
+
+            // A new session reads them back.
+            ProvidersPrefs.Use(null);
+            ProvidersPrefs.Use(store);
+            Assert.Equal(ProvidersPrefs.TableView, ProvidersPrefs.View);
+            Assert.False(ProvidersPrefs.ChartsOpen);
+
+            ProvidersPrefs.View = ProvidersPrefs.GridView;
+            ProvidersPrefs.ChartsOpen = true;
+            Assert.Null(store.Get(ProvidersPrefs.Key));
+        }
+        finally
+        {
+            ProvidersPrefs.Use(null);
+        }
+    }
+
+    private sealed class MemoryPrefs : IProvidersPrefsStore
+    {
+        private readonly Dictionary<string, System.Text.Json.Nodes.JsonNode> _values = [];
+
+        public System.Text.Json.Nodes.JsonNode? Get(string key) => _values.TryGetValue(key, out var v) ? v.DeepClone() : null;
+
+        public void Set(string key, System.Text.Json.Nodes.JsonNode? value)
+        {
+            if (value is null) _values.Remove(key);
+            else _values[key] = value.DeepClone();
+        }
+    }
+
+    private static ProviderStatDto Stat(string id, long requests, long success, decimal cost = 0)
+        => new(id, null, requests, success, requests == 0 ? 0 : (double)success / requests, cost, 0, 0, null, 0, 0);
+
     private static ProviderDto Provider(string auth = "bearer", bool hasKey = true, bool enabled = true, string? priceKey = "openai", decimal mult = 1, bool update = false, string[]? clients = null) => new(
         "p1", "openai", 1, update, "OpenAI", "openai", "official",
         [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "https://api.openai.com/v1" }, new ProviderEndpoint { Protocol = ApiProtocol.OpenAIResponses, BaseUrl = "https://api.openai.com/v1" }],

@@ -48,6 +48,18 @@ public sealed class ProviderQueries
     /// <summary>GET /api/stats/timeseries 7d by provider.</summary>
     public Query<List<TimeseriesPointDto>> Series { get; }
 
+    /// <summary>
+    /// GET /api/stats/providers for <paramref name="range"/> (web <c>useProviderStats(range)</c>, polled every 30 s): success rate, TTFT, tokens
+    /// and failovers per provider id. The cards and the table read "7d"; the overview reads the range the page shows.
+    /// </summary>
+    public Query<List<ProviderStatDto>> Stats(string range)
+        => _queries.Query(new QueryKey("stats", "providers", range, "", ""),
+            async ct => await _api.GetAsync<List<ProviderStatDto>>("/api/stats/providers" + ApiClient.Qs(("range", range)), ct) ?? [],
+            new QueryOptions<List<ProviderStatDto>>
+            {
+                RefetchInterval = _ => TimeSpan.FromSeconds(30), StaleTime = TimeSpan.FromSeconds(5), SameData = QueryData.JsonEqual,
+            });
+
     /// <summary>GET /api/providers/import/sources (the sheet activates it while open).</summary>
     public Query<List<ImportSourceDto>> ImportSources { get; }
 

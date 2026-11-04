@@ -99,6 +99,20 @@ public sealed class ClientDraft
     public bool OverridesChanged => ClientExtras.OverridesKey(Overrides) != _savedOverridesKey;
 
     /// <summary>
+    /// How many of the choices an apply writes into the config differ from the saved state (token, models, roles, options, protocol
+    /// overrides); the account pin is saved on its own and does not count.
+    /// </summary>
+    public int PendingCount => (TokenChanged ? 1 : 0) + (ModelsChanged ? 1 : 0) + (IsDesktopClient && RolesChanged ? 1 : 0)
+        + (OptionsChanged ? 1 : 0) + (OverridesChanged ? 1 : 0);
+
+    /// <summary>Throws every unsaved choice away: the draft equals the saved client again.</summary>
+    public void Revert()
+    {
+        _kind = "";
+        Sync(Client);
+    }
+
+    /// <summary>
     /// The <c>extras</c> an enable / apply sends (web <c>extras</c>): Claude Desktop replaces the role map, Claude Code the tiers and options, a
     /// client with options or several protocols those; null keeps the stored extras.
     /// </summary>

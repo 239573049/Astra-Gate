@@ -16,9 +16,10 @@ using TKCode.Arc;
 namespace Astra.Desktop.Pages.Clients;
 
 /// <summary>
-/// The Clients page body (web <c>ClientsPage</c> markup): master-detail centred in at most 1200 px — the client list on the left (232 px), the
-/// selected client's panel on the right, capped at 760 px and centred in the space the list leaves. Loading shows a skeleton and a failed
-/// list an alert in the panel column, like the web. The sheets the view model asks for open here.
+/// The Clients page body in the desktop's compact layout (it no longer mirrors the web <c>ClientsPage</c> markup): the page fills the
+/// shell's body (<see cref="ClientsPageViewModel.HostScrolls"/> is false) — the client list on the left (228 px, scrolling on its own),
+/// the connect banner, the load state and the selected client's panel on the right, whose header and unapplied-changes bar stay put while
+/// its tab scrolls. Loading shows a skeleton and a failed list an alert in the panel column. The sheets the view model asks for open here.
 /// </summary>
 public sealed class ClientsView : UserControl
 {
@@ -28,7 +29,6 @@ public sealed class ClientsView : UserControl
     private readonly ContentControl _connect = new();
     private readonly ClientPanelView _panel;
     private bool _wired;
-    private ScrollViewer? _scroller;
 
     /// <summary>Builds the body for <paramref name="vm"/>.</summary>
     public ClientsView(ClientsPageViewModel vm)
@@ -36,15 +36,16 @@ public sealed class ClientsView : UserControl
         _vm = vm;
         _panel = new ClientPanelView(vm);
         vm.Panel = _panel;
-        var right = new StackPanel { MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Stretch, Children = { _connect, _status, _panel } };
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 20, MaxWidth = 1200, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var top = new StackPanel { Children = { _connect, _status } };
+        var right = new DockPanel();
+        DockPanel.SetDock(top, Dock.Top);
+        right.Children.Add(top);
+        right.Children.Add(_panel);
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 14, MaxWidth = 1280, HorizontalAlignment = HorizontalAlignment.Stretch };
         grid.Children.Add(_list);
         Grid.SetColumn(right, 1);
         grid.Children.Add(right);
         Content = grid;
-        _list.RenderTransform = new Avalonia.Media.TranslateTransform();
-        _list.VerticalAlignment = VerticalAlignment.Top; // its height is the card's, which is how far it can travel
-        _list.ZIndex = 1;
         Render();
     }
 
@@ -62,21 +63,8 @@ public sealed class ClientsView : UserControl
         _vm.ConnectRequested += OnConnectRequested;
         _vm.Connect.Status.PropertyChanged += OnClients;
         JoinLinkInbox.Arrived += OnInbox;
-        _scroller = this.FindAncestorOfType<ScrollViewer>();
-        if (_scroller is not null) _offset = _scroller.GetObservable(ScrollViewer.OffsetProperty).Subscribe(new Avalonia.Reactive.AnonymousObserver<Vector>(_ => Stick()));
         Render();
         TakeInbox();
-    }
-
-    private IDisposable? _offset;
-
-    // web: the list is `@3xl:sticky @3xl:top-0` — it stays where it is while the page scrolls, until the page's bottom pushes it up.
-
-    private void Stick()
-    {
-        if (_scroller is null || _list.RenderTransform is not Avalonia.Media.TranslateTransform shift) return;
-        var room = Math.Max(0, (Content as Control)!.Bounds.Height - _list.Bounds.Height);
-        shift.Y = Math.Clamp(_scroller.Offset.Y, 0, room);
     }
 
     /// <inheritdoc />
@@ -93,9 +81,6 @@ public sealed class ClientsView : UserControl
         _vm.ConnectRequested -= OnConnectRequested;
         _vm.Connect.Status.PropertyChanged -= OnClients;
         JoinLinkInbox.Arrived -= OnInbox;
-        _offset?.Dispose();
-        _offset = null;
-        _scroller = null;
     }
 
     private bool _pending;

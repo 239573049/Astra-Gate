@@ -15,6 +15,22 @@ using ArcButton = TKCode.Arc.Button;
 
 namespace Astra.Desktop.Pages.Clients;
 
+/// <summary>The tabs of a client's panel in the compact layout.</summary>
+public enum ClientTab
+{
+    /// <summary>The provider list, the account pin and Claude Code's connection mode.</summary>
+    Routing,
+
+    /// <summary>The token and the default model / Claude Code tiers / Claude Desktop role map.</summary>
+    Models,
+
+    /// <summary>The client's options and per-model protocols.</summary>
+    Options,
+
+    /// <summary>The installed version, install / update / uninstall, the config folder and the backups.</summary>
+    Maintenance,
+}
+
 /// <summary>
 /// The Clients page (web/src/pages/ClientsPage.tsx, route <c>/clients[/:kind]</c>): the client list, the selected client's draft and every
 /// action of its panel — check for updates, enable (through the preview sheet), disable and the drift follow-up, repair, account pin,
@@ -97,6 +113,13 @@ public sealed class ClientsPageViewModel : PageViewModel
 
     /// <inheritdoc />
     public override string? Subtitle => Loc.T("clients.subtitle");
+
+    /// <inheritdoc />
+    /// <remarks>The list and the panel's body scroll on their own, so the panel's header and its unapplied-changes bar stay in view.</remarks>
+    public override bool HostScrolls => false;
+
+    /// <summary>The panel's tab; it stays when another client is picked.</summary>
+    public ClientTab Tab { get; set; } = ClientTab.Routing;
 
     /// <inheritdoc />
     public override void OnLanguageChanged()

@@ -22,6 +22,9 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
 {
     private readonly Action<PageContext, ProviderDto>? _openTest;
     private List<ProviderDto> _items = [];
+    private string _range;
+    private IDisposable? _rangedToken;
+    private bool _active;
 
     /// <summary>Creates the page.</summary>
     public ProvidersViewModel(PageContext context, string? param, Action<PageContext, ProviderDto>? openTest = null)
@@ -33,6 +36,11 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
         ImportEnabled(false);
         Observe(ProviderList);
         Observe(Queries.Series);
+        WeekStats = Queries.Stats("7d");
+        Observe(WeekStats);
+        _range = "7d";
+        RangedStats = WeekStats;
+        OnDispose(() => _rangedToken?.Dispose());
         Observe(Queries.Templates);
         Observe(Queries.PriceKeys);
         Observe(Queries.ImportSources);
@@ -44,6 +52,72 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
 
     /// <summary>The page's own queries and writes.</summary>
     public ProviderQueries Queries { get; }
+
+    /// <summary>The ranges the overview offers (web <c>OVERVIEW_RANGES</c>).</summary>
+    public static readonly IReadOnlyList<string> Ranges = ["today", "7d", "30d"];
+
+    /// <summary>Per-provider stats over the cards' week (success rate, TTFT, tokens; health).</summary>
+    public Query<List<ProviderStatDto>> WeekStats { get; }
+
+    /// <summary>Per-provider stats over <see cref="Range"/> (the overview's figures and charts).</summary>
+    public Query<List<ProviderStatDto>> RangedStats { get; private set; }
+
+    /// <summary>The overview's range, one of <see cref="Ranges"/>.</summary>
+    public string Range => _range;
+
+    /// <summary>Raised after <see cref="Range"/>, <see cref="View"/> or <see cref="ChartsOpen"/> changed.</summary>
+    public event Action? LayoutChanged;
+
+    /// <summary>"grid" or "table", remembered in the app's prefs (web localStorage <c>astra.providers.view</c>).</summary>
+    public string View => ProvidersPrefs.View;
+
+    /// <summary>Whether the overview's charts show, remembered (web <c>astra.providers.charts</c>).</summary>
+    public bool ChartsOpen => ProvidersPrefs.ChartsOpen;
+
+    /// <summary>Switches the overview's range; the ranged query is watched while the page is active.</summary>
+    public void SetRange(string range)
+    {
+        if (range == _range || !Ranges.Contains(range)) return;
+        _range = range;
+        _rangedToken?.Dispose();
+        _rangedToken = null;
+        RangedStats = range == "7d" ? WeekStats : Queries.Stats(range);
+        if (_active && range != "7d") _rangedToken = RangedStats.Activate();
+        LayoutChanged?.Invoke();
+    }
+
+    /// <summary>Shows the cards or the table and remembers it.</summary>
+    public void SetView(string view)
+    {
+        if (view == ProvidersPrefs.View) return;
+        ProvidersPrefs.View = view;
+        LayoutChanged?.Invoke();
+    }
+
+    /// <summary>Opens or closes the overview's charts and remembers it.</summary>
+    public void SetChartsOpen(bool open)
+    {
+        if (open == ProvidersPrefs.ChartsOpen) return;
+        ProvidersPrefs.ChartsOpen = open;
+        LayoutChanged?.Invoke();
+    }
+
+    /// <inheritdoc />
+    protected override void OnActivated()
+    {
+        base.OnActivated();
+        _active = true;
+        if (_range != "7d") _rangedToken ??= RangedStats.Activate();
+    }
+
+    /// <inheritdoc />
+    protected override void OnDeactivated()
+    {
+        base.OnDeactivated();
+        _active = false;
+        _rangedToken?.Dispose();
+        _rangedToken = null;
+    }
 
     /// <summary>The shared providers list (key ['providers']).</summary>
     public Query<JsonArray> ProviderList { get; }

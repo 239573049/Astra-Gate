@@ -2581,7 +2581,7 @@ public class ProviderApiTests
 
     [Theory]
     [InlineData("gpt-image-1", true)]
-    [InlineData("gpt-image-2.5-sunburst", true)]
+    [InlineData("gpt-image-2.5-flare", true)]
     [InlineData("openai/chatgpt-image-latest", true)]
     [InlineData("dall-e-3", true)]
     [InlineData("gpt-5", false)]

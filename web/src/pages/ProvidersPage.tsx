@@ -1,4 +1,4 @@
-import { Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
+import { ChartColumn, ChevronUp, Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -6,30 +6,42 @@ import {
   useCreateProvider,
   usePriceKeys,
   useProviders,
+  useProviderStats,
   useTemplates,
   useTimeseries,
-  useUpdateProvider,
 } from '../api/hooks';
-import type { ApiProtocol, AuthScheme, Provider, ProviderTemplate, TemplateEndpoint } from '../api/types';
+import type { ApiProtocol, AuthScheme, Provider, ProviderStat, ProviderTemplate, TemplateEndpoint } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
-import { Card } from '../components/arc/card/card';
 import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { PasswordField } from '../components/arc/password-field/password-field';
 import { RadioCards } from '../components/arc/radio-cards/radio-cards';
-import { Sparkline } from '../components/arc/sparkline/sparkline';
 import { Stepper } from '../components/arc/stepper/stepper';
-import { CLIENT_META, clientName, ClientIcon, ProviderIcon } from '../components/icons';
+import { ProviderIcon } from '../components/icons';
 import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
 import { Page } from '../components/layout/Page';
-import { ProviderQuotaLine } from '../components/ProviderQuotaSection';
+import {
+  HEALTH_TONE,
+  healthLabel,
+  hostOf,
+  MiniBars,
+  OVERVIEW_RANGES,
+  ProviderEnabledSwitch,
+  ProviderOverview,
+  providerHealth,
+  ProvidersTable,
+  successColor,
+  useProviderChartsOpen,
+  useProvidersView,
+  type ProvidersView,
+} from '../components/ProviderOverview';
 import { ProviderTestDialog } from '../components/ProviderTestDialog';
-import { Badge, Button, Disclosure, Dot, EmptyState, Field, Input, NumberInput, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
+import { Badge, Button, Disclosure, Dot, EmptyState, Field, Input, NumberInput, SearchField, Segmented, Spinner, Switch, TextArea } from '../components/ui/controls';
 import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
-import { formatTokens, formatUsd } from '../lib/format';
+import { formatPercent, formatTokens, formatUsd } from '../lib/format';
+import { failureText, quotaEnabled, quotaFailure, quotaSummary } from '../lib/quota';
 import { useCommandListener } from '../shell/commands';
-import type { ClientKind } from '../api/types';
 
 export const PROTOCOL_OPTIONS: { value: ApiProtocol; label: string }[] = [
   { value: 'openai-chat', label: 'OpenAI Chat' },
@@ -70,10 +82,17 @@ export function ProvidersPage() {
   // One request for every card: per-provider daily buckets over the last week. The endpoint keys provider
   // series by the logged provider name (not id), so cards look their usage up by name.
   const series = useTimeseries('7d', 'day', 'provider');
+  // Success rate, TTFT and tokens per provider id: the cards' and the table's week, and the overview's own range.
+  const [range, setRange] = useState<OverviewRange>('7d');
+  const week = useProviderStats('7d');
+  const ranged = useProviderStats(range);
+  const [view, setView] = useProvidersView();
+  const [chartsOpen, setChartsOpen] = useProviderChartsOpen();
   const [testing, setTesting] = useState<Provider | null>(null);
   const usage = useMemo(() => {
     const days = lastDays(USAGE_DAYS);
     const byProvider = new Map<string, ProviderUsage>();
+    let max = 0;
     for (const pt of series.data ?? []) {
       const i = days.indexOf(pt.bucket);
       if (i < 0) continue;
@@ -81,9 +100,12 @@ export function ProvidersPage() {
       if (!u) byProvider.set(pt.key, (u = { requests: days.map(() => 0), costUsd: 0 }));
       u.requests[i] = (u.requests[i] ?? 0) + pt.requests;
       u.costUsd += pt.costUsd;
+      max = Math.max(max, u.requests[i]);
     }
-    return { days, byProvider };
+    return { days, labels: days.map((d) => d.slice(5)), byProvider, max };
   }, [series.data]);
+  const stats7d = useMemo(() => new Map((week.data ?? []).map((s) => [s.providerId, s])), [week.data]);
+  const requestsOf = (p: Provider) => usage.byProvider.get(p.name)?.requests ?? usage.days.map(() => 0);
 
   return (
     <Page
@@ -123,18 +145,61 @@ export function ProvidersPage() {
           </div>
         )}
         {providers.data && providers.data.length > 0 && (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
-            {providers.data.map((p) => (
-              <ProviderCard
-                key={p.id}
-                p={p}
-                days={usage.days}
-                usage={usage.byProvider.get(p.name)}
-                onOpen={() => navigate(`/providers/${p.id}`)}
-                onTest={() => setTesting(p)}
+          <>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <Segmented<OverviewRange>
+                ariaLabel={t('providers.overview.range')}
+                value={range}
+                onChange={setRange}
+                items={OVERVIEW_RANGES.map((r) => ({ value: r, label: t(`range.${r}`) }))}
               />
-            ))}
-          </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="plain"
+                  size="sm"
+                  icon={chartsOpen ? <ChevronUp className="size-3.5" /> : <ChartColumn className="size-3.5" />}
+                  onClick={() => setChartsOpen(!chartsOpen)}
+                >
+                  {chartsOpen ? t('providers.overview.hideCharts') : t('providers.overview.showCharts')}
+                </Button>
+                <Segmented<ProvidersView>
+                  ariaLabel={t('providers.view.label')}
+                  value={view}
+                  onChange={setView}
+                  items={[
+                    { value: 'grid', label: t('providers.view.grid') },
+                    { value: 'table', label: t('providers.view.table') },
+                  ]}
+                />
+              </div>
+            </div>
+            <ProviderOverview providers={providers.data} stats={ranged.data ?? []} stats7d={stats7d} range={range} chartsOpen={chartsOpen} />
+            {view === 'table' ? (
+              <ProvidersTable
+                providers={providers.data}
+                stats7d={stats7d}
+                usage={requestsOf}
+                labels={usage.labels}
+                max={usage.max}
+                onOpen={(p) => navigate(`/providers/${p.id}`)}
+              />
+            ) : (
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
+                {providers.data.map((p) => (
+                  <ProviderCard
+                    key={p.id}
+                    p={p}
+                    labels={usage.labels}
+                    max={usage.max}
+                    requests={requestsOf(p)}
+                    stat={stats7d.get(p.id)}
+                    onOpen={() => navigate(`/providers/${p.id}`)}
+                    onTest={() => setTesting(p)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
       <ImportProvidersSheet open={importing} onOpenChange={setImporting} />
@@ -145,6 +210,8 @@ export function ProvidersPage() {
     </Page>
   );
 }
+
+type OverviewRange = (typeof OVERVIEW_RANGES)[number];
 
 const USAGE_DAYS = 7;
 
@@ -163,57 +230,59 @@ function lastDays(n: number): string[] {
   });
 }
 
-function hostOf(url: string | undefined): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
 /** Keeps clicks on a card's own controls (and their portaled menus) from also opening the provider. */
 const stopClick = (e: React.MouseEvent) => e.stopPropagation();
 
-function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: string[]; usage?: ProviderUsage; onOpen: () => void; onTest: () => void }) {
-  const { t } = useI18n();
-  const update = useUpdateProvider(p.id);
-  const { toast } = useFeedback();
-
-  const protocols = [...new Set(p.endpoints.map((e) => e.protocol))];
-  const missingKey = !p.hasApiKey && p.authScheme !== 'none' && p.authScheme !== 'oauth-subscription' && p.authScheme !== 'plugin';
-  const pricing = [p.priceKey ? t('providers.priceKeyShort', { key: p.priceKey }) : null, p.priceMultiplier !== 1 ? `×${p.priceMultiplier}` : null]
-    .filter(Boolean)
-    .join(' · ');
+/**
+ * One compact provider card (~116 px): name row (icon, name, health dot, model count, test, switch), the host with the credential or
+ * the balance, and the last week as bars on the shared scale with requests / success rate / cost. Protocols, bound clients and pricing
+ * are on the provider's page.
+ */
+function ProviderCard({
+  p,
+  labels,
+  max,
+  requests,
+  stat,
+  onOpen,
+  onTest,
+}: {
+  p: Provider;
+  labels: string[];
+  max: number;
+  requests: number[];
+  stat?: ProviderStat;
+  onOpen: () => void;
+  onTest: () => void;
+}) {
+  const { t, locale } = useI18n();
+  const health = providerHealth(p, stat);
   const credential =
     p.authScheme === 'plugin'
       ? t('providers.card.plugin')
       : p.authScheme === 'oauth-subscription'
-      ? t('providers.card.subscription')
-      : p.authScheme === 'none'
-        ? t('providers.card.noAuth')
-        : p.hasApiKey
-          ? (p.apiKeyMasked ?? '••••')
-          : t('providers.noKey');
-  const state = !p.enabled
-    ? { tone: 'neutral' as const, label: t('providers.card.disabled') }
-    : missingKey
-      ? { tone: 'orange' as const, label: t('providers.noKey') }
-      : { tone: 'green' as const, label: t('providers.card.active') };
-  const requests = usage?.requests ?? days.map(() => 0);
-  const totalRequests = requests.reduce((a, b) => a + b, 0);
-  const maxClients = p.templateUpdateAvailable ? 5 : 8;
+        ? t('providers.card.subscription')
+        : p.authScheme === 'none'
+          ? t('providers.card.noAuth')
+          : p.hasApiKey
+            ? (p.apiKeyMasked ?? '••••')
+            : t('providers.noKey');
+  const quota = quotaEnabled(p) ? quotaSummary(p.quota, t, locale) : null;
+  const quotaFailed = quotaEnabled(p) ? quotaFailure(p.quota) : null;
+  const total = requests.reduce((a, b) => a + b, 0);
+  const host = hostOf(p.endpoints[0]?.baseUrl);
 
   return (
-    // The whole card opens the provider; like Row it holds its own controls, so it cannot be a <button>.
-    // Uniform, compact height: the title is one line, the description is clamped to two lines with a
-    // reserved minimum, and the footer is pinned to the bottom of the content column.
-    <Card
-      className="flex flex-col [&>div:first-child>div]:min-h-0! [&>div:last-child]:flex [&>div:last-child]:flex-1 [&>div:last-child]:flex-col [&>div:last-child]:p-3 [&>div:last-child>:last-child]:mt-auto! [&>div:last-child>:last-child]:min-h-[44px] [&>div:last-child>:last-child]:pt-2 [&>div:last-child>h3]:line-clamp-1 [&>div:last-child>h3]:text-[15px] [&>div:last-child>p]:line-clamp-2 [&>div:last-child>p]:min-h-[2lh] [&>div:last-child>p]:text-[12px]"
-      data-density="compact"
+    // The whole card opens the provider; it holds its own controls, so it cannot be a <button>.
+    <div
+      className={cn(
+        'card flex h-[116px] cursor-pointer flex-col gap-[7px] px-3 py-2.5 transition-colors hover:border-[var(--border-strong,var(--border))]',
+        !p.enabled && 'opacity-60',
+      )}
       role="button"
       tabIndex={0}
       aria-label={p.name}
+      title={p.name}
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
@@ -221,36 +290,18 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
           onOpen();
         }
       }}
-      // Same translucent content layer as `.card`, so the window background still shows through.
-      style={{ backgroundColor: 'var(--surface)' }}
-      title={p.name}
-      description={protocols.map((x) => PROTOCOL_OPTIONS.find((o) => o.value === x)?.label ?? x).join(' / ')}
-      media={
-        <div
-          className="flex flex-col justify-between gap-1.5 self-stretch justify-self-stretch px-3 py-2.5"
-          style={{ background: 'linear-gradient(135deg, color-mix(in oklab, var(--accent) 12%, transparent), transparent 70%)' }}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <span className={cn('transition-[filter,opacity]', !p.enabled && 'opacity-50 grayscale')}>
-              <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={28} />
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[color-mix(in_oklab,var(--surface)_80%,transparent)] px-2 py-0.5 text-[11px] text-[var(--text-secondary)]">
-              <Dot tone={state.tone} />
-              {state.label}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-3 text-[11px] text-[var(--text-muted)]">
-            <span className="min-w-0 truncate font-mono" title={p.endpoints[0]?.baseUrl}>
-              {hostOf(p.endpoints[0]?.baseUrl) ?? '—'}
-            </span>
-            <span className="shrink-0">{t('providers.modelCount', { count: p.modelCount })}</span>
-          </div>
-        </div>
-      }
-      meta={<span className={cn(p.hasApiKey && p.authScheme !== 'oauth-subscription' && 'font-mono')}>{credential}</span>}
-      status={pricing || undefined}
-      action={
-        <div className="flex items-center gap-1" onClick={stopClick}>
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <span className={cn('inline-flex shrink-0', !p.enabled && 'grayscale')}>
+          <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={24} />
+        </span>
+        <span className="min-w-0 truncate text-[14px] font-semibold">{p.name}</span>
+        <span title={healthLabel(health, t)} className="inline-flex">
+          <Dot tone={HEALTH_TONE[health]} />
+        </span>
+        {p.templateUpdateAvailable && <Badge tone="accent">{t('providers.templateUpdate')}</Badge>}
+        <span className="ml-auto shrink-0 text-[11.5px] text-[var(--text-muted)]">{t('providers.modelCount', { count: p.modelCount })}</span>
+        <div className="flex shrink-0 items-center" onClick={stopClick}>
           <Button
             variant="plain"
             size="sm"
@@ -259,65 +310,45 @@ function ProviderCard({ p, days, usage, onOpen, onTest }: { p: Provider; days: s
             title={t('providers.test')}
             onClick={onTest}
           />
-          <span className="ml-1 inline-flex">
-            <Switch
-              checked={p.enabled}
-              label={t('common.enabled')}
-              onChange={(enabled) => update.mutate({ enabled }, { onError: (e) => toast(errorText(e), 'error') })}
-            />
-          </span>
+          <ProviderEnabledSwitch provider={p} />
         </div>
-      }
-    >
-      {/* Fixed one-row slot (also when empty), so every card keeps the same height. Overflow collapses into "+N". */}
-      <div className="mt-1.5 flex h-5 flex-nowrap items-center gap-1 overflow-hidden">
-        {p.templateUpdateAvailable && <Badge tone="accent">{t('providers.templateUpdate')}</Badge>}
-        {p.boundClients.slice(0, maxClients).map((k) =>
-          k in CLIENT_META ? (
-            <span key={k} title={clientName(k)} className="inline-flex shrink-0">
-              <ClientIcon kind={k as ClientKind} size={18} />
-            </span>
-          ) : (
-            <Badge key={k} tone="green">{k}</Badge>
-          ),
-        )}
-        {p.boundClients.length > maxClients && (
-          <span
-            title={p.boundClients.slice(maxClients).map((k) => CLIENT_META[k as ClientKind]?.name ?? k).join(', ')}
-            className="shrink-0 text-[11px] text-[var(--text-muted)]"
-          >
-            +{p.boundClients.length - maxClients}
+      </div>
+      <div className="flex min-w-0 gap-1.5 text-[11.5px] text-[var(--text-muted)]">
+        <span className="min-w-0 shrink truncate font-mono" title={p.endpoints[0]?.baseUrl}>
+          {host ?? '—'}
+        </span>
+        <span>·</span>
+        {quotaFailed ? (
+          <span className="min-w-0 truncate text-[var(--warning)]" title={quotaFailed.message}>
+            {t('providers.quota.failed', { error: failureText(quotaFailed, t) })}
           </span>
-        )}
-      </div>
-      {/* Balance / quota of the provider's usage query; its refresh button must not open the provider. Reserves its row when absent. */}
-      <div className="min-h-[32px] [&>div]:mt-1" onClick={stopClick}>
-        <ProviderQuotaLine provider={p} />
-      </div>
-      {/* Scrubbing the trend must not open the provider. */}
-      <div className="mt-2" onClick={stopClick}>
-        {totalRequests > 0 ? (
-          <Sparkline
-            label={t('providers.card.requests7d')}
-            data={requests}
-            labels={days.map((d) => d.slice(5))}
-            value={formatTokens(totalRequests, true)}
-            change={formatUsd(usage?.costUsd ?? 0)}
-            width={320}
-            height={28}
-            formatValue={(v) => formatTokens(v, true)}
-          />
+        ) : quota ? (
+          <span className="num min-w-0 truncate text-[var(--text-secondary)]" title={quota}>
+            {quota}
+          </span>
         ) : (
-          // Same footprint as the sparkline, so cards with and without traffic line up.
-          <div className="grid gap-2">
-            <div className="text-[13px] text-[var(--text-secondary)]">{t('providers.card.requests7d')}</div>
-            <div className="grid aspect-[320/28] place-items-center border-b border-dashed border-[var(--border)] text-[11px] text-[var(--text-muted)]">
-              {t('providers.card.noRequests')}
-            </div>
-          </div>
+          <span className={cn('min-w-0 truncate', p.hasApiKey && p.authScheme !== 'oauth-subscription' && 'font-mono')}>{credential}</span>
         )}
       </div>
-    </Card>
+      <div className="mt-auto flex items-end justify-between gap-2.5" onClick={stopClick}>
+        <MiniBars data={requests} labels={labels} max={max} />
+        {total > 0 ? (
+          <span className="flex gap-2.5 whitespace-nowrap text-[11.5px] text-[var(--text-secondary)]" title={t('providers.card.requests7d')}>
+            <span>
+              <b className="num font-semibold text-[var(--text)]">{formatTokens(total, true)}</b> {t('providers.card.requestsUnit')}
+            </span>
+            {stat && stat.requests > 0 && (
+              <span className="num" style={{ color: successColor(stat.successRate) }} title={t('providers.col.successRate')}>
+                {formatPercent(stat.successRate)}
+              </span>
+            )}
+            {stat && stat.costUsd > 0 && <span className="num">{formatUsd(stat.costUsd)}</span>}
+          </span>
+        ) : (
+          <span className="text-[11.5px] text-[var(--text-muted)]">{t('providers.card.noRequests7d')}</span>
+        )}
+      </div>
+    </div>
   );
 }
 

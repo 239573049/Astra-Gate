@@ -51,6 +51,27 @@ public sealed class ClientsLogicTests
     }
 
     [Fact]
+    public void Filter_matches_state_and_search()
+    {
+        var plain = Client("codex");
+        var enabled = Client("claude-code", o => { o["enabled"] = true; o["status"] = "enabled"; });
+        var drifted = Client("gemini-cli", o => { o["enabled"] = true; o["status"] = "drifted"; });
+        Assert.False(ClientsLogic.NeedsAttention(plain));
+        Assert.False(ClientsLogic.NeedsAttention(enabled));
+        Assert.True(ClientsLogic.NeedsAttention(drifted));
+
+        Assert.True(ClientsLogic.Matches(plain, ClientFilter.All, null));
+        Assert.False(ClientsLogic.Matches(plain, ClientFilter.Enabled, ""));
+        Assert.True(ClientsLogic.Matches(enabled, ClientFilter.Enabled, " "));
+        Assert.False(ClientsLogic.Matches(enabled, ClientFilter.Attention, null));
+        Assert.True(ClientsLogic.Matches(drifted, ClientFilter.Attention, null));
+        // The search looks at the name and the kind, ignoring case.
+        Assert.True(ClientsLogic.Matches(enabled, ClientFilter.All, "CLAUDE"));
+        Assert.True(ClientsLogic.Matches(plain, ClientFilter.All, "dex"));
+        Assert.False(ClientsLogic.Matches(plain, ClientFilter.All, "zed"));
+    }
+
+    [Fact]
     public void Selected_kind_falls_back_to_codex()
     {
         var clients = new[] { Client("codex"), Client("zed") };
