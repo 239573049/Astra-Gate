@@ -37,6 +37,7 @@ public sealed class OverviewView : UserControl
     private RequestDetailSheet? _sheet;
     private bool _wired;
     private bool _compact;
+    private double _toolbarWidth = double.PositiveInfinity;
 
     /// <summary>Builds the body for <paramref name="page"/>.</summary>
     public OverviewView(OverviewPage page)
@@ -111,8 +112,15 @@ public sealed class OverviewView : UserControl
 
     private void OnClients(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == "Data") BuildClientFilter();
+        if (e.PropertyName != "Data") return;
+        // The list decides how much room the logo strip needs, and its answer usually comes after the first layout (issue #22).
+        _compact = ClientsNeedDropdown();
+        BuildClientFilter();
     }
+
+    /// <summary>Too narrow for the logo strip beside the token select and the range switch: the clients become a dropdown.</summary>
+    private bool ClientsNeedDropdown() =>
+        _toolbarWidth < (ClientCatalog.Filterable(_page.Clients.Data, _page.ClientKind).Count + 1) * 42 + 16 + 176 + 340 + 32;
 
     /// <summary>The measure changed: the chart and the legend next to the card title follow; nothing else is rebuilt.</summary>
     private void OnMeasure()
@@ -162,10 +170,10 @@ public sealed class OverviewView : UserControl
         grid.Children.Add(left);
         Grid.SetColumn(range, 1);
         grid.Children.Add(range);
-        // Too narrow for the logo strip beside the token select and the range switch: the clients become a dropdown.
         grid.SizeChanged += (_, e) =>
         {
-            var compact = e.NewSize.Width < (ClientCatalog.Filterable(_page.Clients.Data, _page.ClientKind).Count() + 1) * 42 + 16 + 176 + 340 + 32;
+            _toolbarWidth = e.NewSize.Width;
+            var compact = ClientsNeedDropdown();
             if (compact == _compact) return;
             _compact = compact;
             BuildClientFilter();

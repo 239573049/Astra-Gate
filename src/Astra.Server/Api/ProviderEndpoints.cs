@@ -495,12 +495,12 @@ public static class ProviderEndpoints
     }
 
     /// <summary>
-    /// Defaults for a model just added (fetched from upstream or typed by hand), by model family: Claude goes over Anthropic
+    /// Defaults for a model just added (fetched from upstream, typed by hand or synced after a login), by model family: Claude goes over Anthropic
     /// Messages — only when the provider has such an endpoint, since an explicit constraint with no endpoint answers 503 —
     /// and Claude / GPT / o-series get prompt-cache creation on. An upstream list that declares per-model protocols
     /// overrides the protocol afterwards; existing rows are never touched (<see cref="PlanModelsAsync"/> skips them).
     /// </summary>
-    private static void ApplyFamilyDefaults(Provider p, ProviderModel m)
+    internal static void ApplyFamilyDefaults(Provider p, ProviderModel m)
     {
         var name = m.ModelId[(m.ModelId.LastIndexOf('/') + 1)..];
         var claude = name.StartsWith("claude", StringComparison.OrdinalIgnoreCase);

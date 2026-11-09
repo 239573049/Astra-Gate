@@ -915,6 +915,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 SystemModelId = ModelIdMatcher.Match(id, candidates, index),
                 SortOrder = order++,
             };
+            ProviderEndpoints.ApplyFamilyDefaults(p, model);
             existing[id] = model;
             result.Add(model);
         }

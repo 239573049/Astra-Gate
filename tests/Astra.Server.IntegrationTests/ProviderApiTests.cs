@@ -277,6 +277,39 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Synced_Models_Get_The_Same_Family_Defaults_And_A_Declared_Protocol_Still_Wins()
+    {
+        var handler = new StubHandler(_ => Task.FromResult(JsonResponse("""
+            {"data":[{"id":"claude-sonnet-4-5"},{"id":"claude-opus-4-5","supported_endpoints":["/chat/completions"]},{"id":"gpt-5"},{"id":"deepseek-v4-flash"}]}
+            """)));
+        await using var host = await TestHost.StartAsync(builder =>
+            builder.Services.AddHttpClient(ProviderProbe.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => handler));
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new
+        {
+            name = "Both",
+            apiKey = "sk-test-long-enough",
+            endpoints = new[]
+            {
+                new { protocol = "openai-chat", baseUrl = "https://example.invalid/v1", fullUrl = false },
+                new { protocol = "anthropic", baseUrl = "https://example.invalid", fullUrl = false },
+            },
+            models = Array.Empty<string>(),
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var p = body!["id"]!.GetValue<string>();
+
+        Assert.Equal(4, await host.App.Services.GetRequiredService<ProviderProbe>().SyncModelsFromUpstreamAsync(p));
+
+        var stored = (await host.Db.Providers.ListModelsAsync(p)).ToDictionary(m => m.ModelId);
+        Assert.Equal([ApiProtocol.Anthropic], stored["claude-sonnet-4-5"].UpstreamProtocols);
+        Assert.Equal([ApiProtocol.OpenAIChat], stored["claude-opus-4-5"].UpstreamProtocols);
+        Assert.Empty(stored["gpt-5"].UpstreamProtocols);
+        Assert.True(stored["claude-sonnet-4-5"].Overrides.Capabilities!.PromptCache);
+        Assert.True(stored["gpt-5"].Overrides.Capabilities!.PromptCache);
+        Assert.Null(stored["deepseek-v4-flash"].Overrides.Capabilities);
+    }
+
+    [Fact]
     public async Task Price_Override_Does_Not_Multiply_And_Null_Resets_To_Inherited()
     {
         await using var host = await TestHost.StartAsync();
