@@ -23,7 +23,7 @@ namespace Astra.Desktop.Components.Providers;
 internal sealed record ProviderCardServices(ProviderQueries Queries, IFeedback Feedback, Action<ProviderDto> Open, Action<ProviderDto> Test);
 
 /// <summary>
-/// One compact provider card (ProvidersPage.tsx <c>ProviderCard</c>, 116 px): the name row (icon, name, health dot, template-update badge,
+/// One compact provider card (ProvidersPage.tsx <c>ProviderCard</c>, 116 px): the name row (icon, name, health dot, template-update badge or
 /// model count, test button, enabled switch), the host with the credential or the balance, and the last week as <see cref="MiniBars"/> on the
 /// shared scale with requests / success rate / cost. Protocols, bound clients and pricing live on the provider's page. The whole card opens
 /// the provider; the switch, the test button and the bars do not.
@@ -102,16 +102,21 @@ internal sealed class ProviderCardView : Border
         var test = ProviderUi.IconButton(LucideIconKind.FlaskConical, Loc.T("providers.test"), () => _services.Test(p));
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { test, new ProviderEnabledSwitch(p, _services) } };
 
-        // icon | name | dot | [badge] | (space) | models | actions
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,*,Auto,Auto"), ColumnSpacing = 8 };
-        // The name may take what is left but no more, so the dot stays beside it.
-        grid.ColumnDefinitions[1] = new ColumnDefinition(GridLength.Auto) { MaxWidth = 150 };
+        // The name gets what is left and trims (web min-w-0 truncate); a Grid Auto column would measure it unconstrained and push the switch
+        // out of the card. Docked and left-aligned, the dot stays beside the name however short it is.
+        dot.Margin = new Thickness(8, 0, 0, 0);
+        DockPanel.SetDock(dot, Dock.Right);
+        var title = new DockPanel { HorizontalAlignment = HorizontalAlignment.Left, Children = { dot, name } };
+
+        // icon | name + dot | badge or models | actions: the narrowest card has no room for both the badge and the count.
+        Control info = p.TemplateUpdateAvailable
+            ? KitBadge.Create(Loc.T("providers.templateUpdate"), Tone.Accent).With(b => b.VerticalAlignment = VerticalAlignment.Center)
+            : models;
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 8 };
         Add(grid, icon, 0);
-        Add(grid, name, 1);
-        Add(grid, dot, 2);
-        if (p.TemplateUpdateAvailable) Add(grid, KitBadge.Create(Loc.T("providers.templateUpdate"), Tone.Accent).With(b => b.VerticalAlignment = VerticalAlignment.Center), 3);
-        Add(grid, models, 5);
-        Add(grid, actions, 6);
+        Add(grid, title, 1);
+        Add(grid, info, 2);
+        Add(grid, actions, 3);
         return grid;
     }
 

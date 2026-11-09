@@ -176,7 +176,8 @@ public sealed class ProvidersView : UserControl
                 usage.TryGetValue(p.Name, out var u) ? u.Requests : new int[days.Count])).ToList();
             return ProvidersTableView.Build(rows, max, labels, services);
         }
-        var grid = new AutoFillGrid { MinColumnWidth = 260, Gap = 12 };
+        // Wider than the web's 260: there the name row left a card about 60 px for the provider's name ("Zhi…").
+        var grid = new AutoFillGrid { MinColumnWidth = 300, Gap = 12 };
         foreach (var p in items)
         {
             usage.TryGetValue(p.Name, out var u);

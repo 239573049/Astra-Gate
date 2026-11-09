@@ -49,6 +49,26 @@
           </ControlTemplate>
         </Setter>
       </ControlTheme>
+      <!-- ToolTip.SetTip is Avalonia's tooltip, which Arc does not theme either (Arc's own is the Tooltip control): the text floated with no
+           bubble over whatever was behind it. -->
+      <ControlTheme x:Key="{x:Type ToolTip}" TargetType="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource KitMenuBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource KitMenuBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{DynamicResource KitMenuText}" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="8,4" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="MaxWidth" Value="320" />
+        <Setter Property="Template">
+          <ControlTemplate>
+            <ContentPresenter Name="PART_ContentPresenter" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                              BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                              Padding="{TemplateBinding Padding}" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                              TextWrapping="Wrap" />
+          </ControlTemplate>
+        </Setter>
+      </ControlTheme>
       <ControlTheme x:Key="{x:Type Separator}" TargetType="Separator">
         <Setter Property="Height" Value="1" />
         <Setter Property="Margin" Value="6,4" />
