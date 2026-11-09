@@ -126,7 +126,7 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
     the run executes at `GatewayPipeline.cs:151` — **before** the privacy guard, on agent requests only (`astra-gateway`)
 22. `src/Astra.Plugins/Middleware/MiddlewareEngine.cs:96` `Load` → `MiddlewareModule.Load`
     (`src/Astra.Plugins/Middleware/MiddlewareModule.cs:47`) evaluates the module once per plugin and requires at least
-    one of `onRequest`/`onEvent`/`onResponse`; a module that throws is recorded per spec and shown on the plugins page
+    one of `onRequest`/`onEvent`/`onResponse`/`onUpstream`; a module that throws is recorded per spec and shown on the plugins page
     (`MiddlewareEngine.cs:108`) (`astra-plugins`)
 23. `src/Astra.Plugins/Js/JsRuntime.cs:19` — one Jint engine per module, with the deadline constraint
     (`DeadlineConstraint`, `:207`), `LimitRecursion(512)`, `LimitMemory(256 MiB)`, a 200 ms regex timeout and
@@ -144,6 +144,10 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
     reply, the response body feature is replaced so `onEvent` sees one complete SSE event (`SseEventFramer.TrySplit`,
     `MiddlewareEngine.cs:189`) and `onResponse` sees a whole JSON reply with `ctx.status` (`:209`); a `null` from
     `onEvent` drops the event, a `null` from `onResponse` is an error (`:216`) (`astra-gateway`)
+26a. **onUpstream** (Astra's own hook) — `GatewayPipeline.PrepareAsync` calls `MiddlewareRun.Upstream` per attempt,
+    after translation, the privacy guard and the Claude subscription identity, with `ctx.upstream` (protocol, provider,
+    model, stream); a returned object replaces the upstream tree, and the headers it set travel on `UpstreamPlan.HeaderEdits`
+    to `SendAsync`'s `Build`, applied after the gateway's own headers and before the credential (`astra-gateway`)
 27. **Agent** — `src/Astra.Plugins/Agents/AgentPluginCatalog.cs:43` `RefreshAsync` loads every enabled plugin's
     `magpie.agent` module on Jint (checked by `Check` `:148`: id, config file, model, format, MCP format; an id that is
     a built-in client kind or `astra` is refused `:117`); `ClientAdapterRegistry.CreateDefault`

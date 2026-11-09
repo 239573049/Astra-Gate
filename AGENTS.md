@@ -139,7 +139,9 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
 - Gateway middleware (`Middleware/`) and agent plugins (`Agents/`) run in process on Jint
   (`Js/JsRuntime.cs`; host interop is JSON text and `JsValue` only — never `AllowClr` or CLR wrappers,
   which is what keeps it AOT-safe). Middleware runs in `GatewayPipeline.HandleAsync` before the privacy
-  guard, on agent requests only. Agent plugins are clients `plugin-<id>` (`PluginClientAdapter`); their
+  guard, on agent requests only — except Astra's own `onUpstream` hook (not magpie's), which runs per attempt in
+  `PrepareAsync` on the translated, guarded body with `ctx.upstream` (protocol, provider, model); the headers it sets
+  (`MiddlewareHeader` refuses credential and framing headers) go on after the gateway's own and before the credential. Agent plugins are clients `plugin-<id>` (`PluginClientAdapter`); their
   row keeps the descriptor (`extras.plugin`) so `restore-all` works without the plugin.
 - Provider plugins run in magpie's own `host.js` / `pi.js` (vendored unmodified in `Host/`, MIT;
   `Host/VENDORED.md` records commit and hashes, `HostAssetsTests` checks them, refresh with

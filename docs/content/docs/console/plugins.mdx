@@ -53,9 +53,10 @@ pi 扩展（`pi-coding-agent` 的扩展包）由插件宿主通过 pi 自己的�
 
 - `onRequest(body, ctx)`：在隐私护栏之前看到客户端发出的请求（客户端自己的协议格式）；返回对象即替换请求，`ctx.reject(status, message)` 拒绝请求；
 - `onEvent(event, ctx)`：流式回复的每个事件，返回 `null` 丢弃该事件；
-- `onResponse(body, ctx)`：非流式回复，`ctx.status` 是状态码。
+- `onResponse(body, ctx)`：非流式回复，`ctx.status` 是状态码；
+- `onUpstream(body, ctx)`：Astra 自有的钩子（magpie 不调用）。看到的是发往某个提供商的请求：已转换成该提供商的协议，并已经过隐私护栏，它加入的内容不会再被检查。连接池或客户端切换到下一个提供商时会再运行一次。`ctx.upstream` 有 `protocol`（`anthropic`、`chat`、`responses`、`gemini`）、`provider.id`、`provider.name`、`model`、`stream`。返回对象即替换请求体；`ctx.setHeader(name, value)` / `ctx.removeHeader(name)` 改这次上游请求的请求头。凭据和传输类请求头（`Authorization`、`x-api-key`、`Cookie`、`Host`、`Content-*` 等）不能修改，提供商的密钥总是由 Astra 最后写入。`ctx.sha256(text 或字节数组)` 返回十六进制摘要。提供商页面的「测试」不经过中间件。
 
-每个钩子有时间限制（请求与整段回复 250 ms，单个事件 50 ms）。出错或超时会原样放行，只计入失败次数，不会让请求失败。中间件只能 `import` 插件目录内的相对文件，没有网络和文件系统访问。
+每个钩子有时间限制（请求、整段回复和 `onUpstream` 250 ms，单个事件 50 ms）。出错或超时会原样放行，只计入失败次数，不会让请求失败。中间件只能 `import` 插件目录内的相对文件，没有网络和文件系统访问。
 
 中间件的选项在插件行的 **选项** 中以 JSON 编辑（插件中读作 `ctx.options`），首次打开时会填入插件给出的示例。
 

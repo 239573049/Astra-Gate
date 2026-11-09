@@ -183,7 +183,64 @@ public class MiddlewareEngineTests
 
         Assert.Null(await engine.BeginAsync(Anthropic));
         var states = (await engine.StatesAsync()).Values.Select(s => s.Error).Order().ToList();
-        Assert.Equal(["\"lodash\": a middleware imports only files beside it; bundle packages into it", "exports none of onRequest, onEvent and onResponse"], states);
+        Assert.Equal(["\"lodash\": a middleware imports only files beside it; bundle packages into it", "exports none of onRequest, onEvent, onResponse and onUpstream"], states);
+    }
+
+    private static readonly MiddlewareUpstream ToUpstream = new("anthropic", "prov_1", "Channel", "claude-sonnet-4-5", true);
+
+    [Fact]
+    public async Task On_upstream_sees_where_the_attempt_goes_and_sets_headers()
+    {
+        var (engine, log, plugins) = await EngineAsync(("cc", """
+            export function onUpstream(b, ctx) {
+              if (ctx.upstream.provider.id !== 'prov_1' || ctx.upstream.protocol !== 'anthropic') return
+              ctx.setHeader('User-Agent', 'claude-cli/9.9.9 (external, cli)')
+              ctx.setHeader('x-app', 'cli')
+              ctx.removeHeader('x-stale')
+              ctx.setHeader('Authorization', 'Bearer stolen')
+              ctx.setHeader('bad name', 'x')
+              ctx.setHeader('x-split', 'a\r\nb')
+              if (ctx.sha256([97, 98, 99]) !== ctx.sha256('abc')) throw new Error('bytes and text disagree')
+              b.system = ctx.sha256('abc') + '/' + ctx.upstream.model + '/' + ctx.upstream.stream + '/' + ctx.upstream.provider.name
+              return b
+            }
+            """, null));
+        using var run = (await engine.BeginAsync(Anthropic))!;
+        Assert.True(run.WantsUpstream);
+
+        var (body, headers) = run.Upstream(ToUpstream, B("""{"model":"claude-sonnet-4-5"}"""));
+
+        Assert.Equal("""{"model":"claude-sonnet-4-5","system":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad/claude-sonnet-4-5/true/Channel"}""", S(body));
+        Assert.Equal([new("User-Agent", "claude-cli/9.9.9 (external, cli)"), new("x-app", "cli"), new MiddlewareHeader("x-stale", null)], headers);
+        Assert.Contains(log, l => l.Contains("ctx.setHeader(Authorization) ignored: a header the gateway keeps"));
+        Assert.Contains(log, l => l.Contains("ctx.setHeader(bad name) ignored: not a header name"));
+        Assert.Contains(log, l => l.Contains("ctx.setHeader(x-split) ignored: not a header value"));
+        Assert.Equal(["onUpstream"], (await engine.StatesAsync())[(await plugins.Store.ListAsync()).Single().Spec].Hooks);
+
+        // another channel: the plugin leaves it alone
+        var (other, none) = run.Upstream(ToUpstream with { ProviderId = "prov_2" }, B("""{"a":1}"""));
+        Assert.Null(other);
+        Assert.Empty(none);
+    }
+
+    [Fact]
+    public async Task A_failing_on_upstream_keeps_neither_its_body_nor_its_headers_and_setters_do_nothing_elsewhere()
+    {
+        var (engine, log, _) = await EngineAsync(
+            ("throws", "export function onUpstream(b, ctx) { ctx.setHeader('x-a', '1'); b.x = 1; throw new Error('late') }", null),
+            ("nulls", "export function onUpstream(b, ctx) { ctx.setHeader('x-b', '1'); return null }", null),
+            ("early", "export function onRequest(b, ctx) { ctx.setHeader('x-c', '1') }\nexport function onUpstream(b, ctx) { ctx.setHeader('x-d', '1') }", null));
+        using var run = (await engine.BeginAsync(Anthropic))!;
+
+        var (requestBody, _) = run.Request(B("""{"a":1}"""));
+        var (body, headers) = run.Upstream(ToUpstream, B("""{"a":1}"""));
+
+        Assert.Equal("""{"a":1}""", S(requestBody));
+        Assert.Null(body);
+        Assert.Equal([new MiddlewareHeader("x-d", "1")], headers);
+        Assert.Contains(log, l => l.Contains("onUpstream: Error: late"));
+        Assert.Contains(log, l => l.Contains("onUpstream: returned null"));
+        Assert.Contains(log, l => l.Contains("ctx.setHeader works in onUpstream only"));
     }
 
     [Fact]

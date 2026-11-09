@@ -523,6 +523,24 @@ public sealed partial class GatewayPipeline(
                 else if (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
                     upstreamDirty |= ClaudeOAuthHeaders.PromoteCacheControlTtl(upstreamTree, clientCacheTtl);
 
+                // Astra's own middleware hook (onUpstream): the request as this member gets it, in the upstream's API, after
+                // translation and the guard — what a plugin needs to write for one channel (issue #24). It runs per attempt,
+                // and replaces the tree rather than editing it, so the client's tree stays as it came for the next member.
+                List<MiddlewareHeader> headerEdits = [];
+                if (middlewareRun is { WantsUpstream: true })
+                {
+                    var (changed, edits) = middlewareRun.Upstream(
+                        new MiddlewareUpstream(GatewayMiddleware.ProtocolName(upstreamProtocol), provider.Id, provider.Name, upstreamModel, stream),
+                        Encoding.UTF8.GetBytes(upstreamTree.ToJsonString()));
+                    if (changed is not null && JsonNode.Parse(changed) is JsonObject replaced)
+                    {
+                        upstreamTree = replaced;
+                        upstreamDirty = true;
+                    }
+                    headerEdits = edits;
+                    encodeSpan.Set("astra.middleware.upstream_rewritten", changed is not null).Set("astra.middleware.upstream_headers", edits.Count);
+                }
+
                 PooledBuffer payload;
                 PooledBuffer? owned = null;
                 if (upstreamDirty)
@@ -549,7 +567,7 @@ public sealed partial class GatewayPipeline(
                 // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
                 if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
                 return new UpstreamPlan(candidate, endpoint, passthrough, claudeMode, upstreamCodec, attemptIr, model, upstreamModel, stream,
-                    clientWantsStream, forceResponsesStream, injectedChatUsage, attemptEffective, upstreamTree, payload, owned, url);
+                    clientWantsStream, forceResponsesStream, injectedChatUsage, attemptEffective, upstreamTree, payload, owned, url, headerEdits);
             }
 
             // The next pool member that can take the request; null when none is left (the record then describes the
@@ -627,7 +645,7 @@ public sealed partial class GatewayPipeline(
                 try
                 {
                     sent = await SendAsync(plan.Route, plan.Endpoint, plan.Url, plan.Payload, plan.UpstreamTree, plan.Stream, plan.Passthrough,
-                        plan.ClaudeMode, plan.UpstreamModel, stickyKey, ctx.Request, capture, trace, attempts, ct);
+                        plan.ClaudeMode, plan.UpstreamModel, stickyKey, ctx.Request, capture, trace, attempts, ct, headerEdits: plan.HeaderEdits);
                 }
                 catch (Exception e) when (Failed(plan.Route.Provider, e))
                 {
@@ -815,7 +833,8 @@ public sealed partial class GatewayPipeline(
     private async Task<(HttpResponseMessage Response, string? AccountId, AccountScheduler.Lease? Lease)> SendAsync(
         GatewayRoute route, ProviderEndpoint endpoint, string url, PooledBuffer body, JsonObject bodyTree, bool stream, bool passthrough,
         ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, RequestTrace trace,
-        AttemptTrace attempts, CancellationToken ct, Func<HttpContent>? content = null, bool resendable = true)
+        AttemptTrace attempts, CancellationToken ct, Func<HttpContent>? content = null, bool resendable = true,
+        IReadOnlyList<MiddlewareHeader>? headerEdits = null)
     {
         var provider = route.Provider;
         var plugin = provider.AuthScheme == AuthSchemes.Plugin;
@@ -1097,6 +1116,7 @@ public sealed partial class GatewayPipeline(
             {
                 // Claude Code → Claude subscription: its own headers verbatim, only the credential and the OAuth beta change.
                 ClaudeOAuthHeaders.ApplyRelay(request, clientRequest.Headers, upstreamModel, provider.ExtraHeaders, DefaultAnthropicVersion);
+                ApplyHeaderEdits(request);
                 a.Apply(request);
                 return request;
             }
@@ -1133,9 +1153,22 @@ public sealed partial class GatewayPipeline(
             if (claudeMimic)
                 ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? provider.Id, claudeSessionId);
             else if (claudeMode == ClaudeHeaderMode.Compat) ClaudeOAuthHeaders.ApplyCompat(request, clientRequest.Headers);
+            ApplyHeaderEdits(request);
             // 凭据 + 上游 CLI 固定头（Authorization / chatgpt-account-id）。
             a.Apply(request);
             return request;
+        }
+
+        // onUpstream's headers (MiddlewareHeader refuses credentials and framing headers), after everything the gateway
+        // writes itself except the credential, so a plugin's identity wins and the key is still the gateway's.
+        void ApplyHeaderEdits(HttpRequestMessage request)
+        {
+            if (headerEdits is null) return;
+            foreach (var edit in headerEdits)
+            {
+                request.Headers.Remove(edit.Name);
+                if (edit.Value is not null) request.Headers.TryAddWithoutValidation(edit.Name, edit.Value);
+            }
         }
     }
 
@@ -1188,7 +1221,8 @@ public sealed partial class GatewayPipeline(
     private sealed record UpstreamPlan(
         GatewayRoute Route, ProviderEndpoint Endpoint, bool Passthrough, ClaudeHeaderMode ClaudeMode, IProtocolCodec? UpstreamCodec,
         UnifiedRequest? Ir, string Model, string UpstreamModel, bool Stream, bool ClientWantsStream, bool ForceResponsesStream,
-        bool InjectedChatUsage, EffectiveModel Effective, JsonObject UpstreamTree, PooledBuffer Payload, PooledBuffer? OwnedPayload, string Url)
+        bool InjectedChatUsage, EffectiveModel Effective, JsonObject UpstreamTree, PooledBuffer Payload, PooledBuffer? OwnedPayload, string Url,
+        IReadOnlyList<MiddlewareHeader> HeaderEdits)
     {
         /// <summary>Puts this plan's provider, protocol and models back on the record.</summary>
         public void ApplyTo(RequestRecord record)

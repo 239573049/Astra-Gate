@@ -40,6 +40,9 @@ internal sealed class MiddlewareModule
     public bool HasEvent { get; private set; }
     public bool HasResponse { get; private set; }
 
+    /// <summary>Astra's own hook (not magpie's): the request as it goes to one upstream, after translation.</summary>
+    public bool HasUpstream { get; private set; }
+
     /// <summary>The stream events onEvent is called for, by name; null is every one.</summary>
     public HashSet<string>? Events { get; private set; }
 
@@ -52,8 +55,9 @@ internal sealed class MiddlewareModule
         m.HasRequest = Has(first.OnRequest);
         m.HasEvent = Has(first.OnEvent);
         m.HasResponse = Has(first.OnResponse);
-        if (!m.HasRequest && !m.HasEvent && !m.HasResponse)
-            throw new JsHookException("exports none of onRequest, onEvent and onResponse");
+        m.HasUpstream = Has(first.OnUpstream);
+        if (!m.HasRequest && !m.HasEvent && !m.HasResponse && !m.HasUpstream)
+            throw new JsHookException("exports none of onRequest, onEvent, onResponse and onUpstream");
         var events = first.Runtime.Export("events");
         if (events.IsArray())
         {
@@ -108,6 +112,7 @@ internal sealed class MiddlewareModule
         if (HasRequest) hooks.Add("onRequest");
         if (HasEvent) hooks.Add("onEvent");
         if (HasResponse) hooks.Add("onResponse");
+        if (HasUpstream) hooks.Add("onUpstream");
         var calls = Interlocked.Read(ref _calls);
         return new MiddlewareState(hooks, Events?.Order(StringComparer.Ordinal).ToList(), null, calls,
             calls > 0 ? Interlocked.Read(ref _nanos) / (double)calls / 1e3 : 0, Interlocked.Read(ref _failures), _lastError);
@@ -117,7 +122,7 @@ internal sealed class MiddlewareModule
     {
         var rt = new JsRuntime(_loader, Say);
         rt.Load(MiddlewareEngine.LoadLimit);
-        return new MiddlewareInstance(rt, Hook(rt, "onRequest"), Hook(rt, "onEvent"), Hook(rt, "onResponse"));
+        return new MiddlewareInstance(rt, Hook(rt, "onRequest"), Hook(rt, "onEvent"), Hook(rt, "onResponse"), Hook(rt, "onUpstream"));
     }
 
     // The export, or default's member, when it is a function.
@@ -131,10 +136,10 @@ internal sealed class MiddlewareModule
 }
 
 /// <summary>One engine of a middleware, with its hooks looked up.</summary>
-internal sealed record MiddlewareInstance(JsRuntime Runtime, JsValue OnRequest, JsValue OnEvent, JsValue OnResponse);
+internal sealed record MiddlewareInstance(JsRuntime Runtime, JsValue OnRequest, JsValue OnEvent, JsValue OnResponse, JsValue OnUpstream);
 
 /// <summary>A middleware as the Plugins page shows it (magpie's middleware.State).</summary>
-/// <param name="Hooks">The hooks it has: onRequest, onEvent, onResponse.</param>
+/// <param name="Hooks">The hooks it has: onRequest, onEvent, onResponse, onUpstream.</param>
 /// <param name="Events">The events its onEvent wants; null is every one.</param>
 /// <param name="Error">Why it didn't load.</param>
 /// <param name="AvgMicros">Average µs a call, JSON in and out included.</param>

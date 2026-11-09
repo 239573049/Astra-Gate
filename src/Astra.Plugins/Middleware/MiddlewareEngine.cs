@@ -132,6 +132,34 @@ public sealed record MiddlewareInfo(string Protocol, string? Model, bool Stream,
 /// <summary>A request a middleware turned away (ctx.reject): the agent gets it in its API's error shape.</summary>
 public sealed record MiddlewareReject(int Status, string Message);
 
+/// <summary>Where one attempt of a request goes, for onUpstream (<c>ctx.upstream</c>).</summary>
+/// <param name="Protocol">The upstream's API, named as ctx.protocol names the agent's: anthropic, chat, responses or gemini.</param>
+/// <param name="Model">The model id sent upstream.</param>
+public sealed record MiddlewareUpstream(string Protocol, string ProviderId, string ProviderName, string Model, bool Stream);
+
+/// <summary>A header an onUpstream sets on the upstream request; a null value removes it.</summary>
+public sealed record MiddlewareHeader(string Name, string? Value)
+{
+    // Credentials and transport headers stay the gateway's: a plugin never sees or replaces a key, and never breaks framing.
+    private static readonly HashSet<string> Reserved = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "authorization", "proxy-authorization", "x-api-key", "api-key", "x-goog-api-key", "cookie", "host", "connection",
+        "content-length", "content-type", "content-encoding", "transfer-encoding", "te", "upgrade", "expect",
+    };
+
+    /// <summary>Why a plugin may not set this header; null when it may.</summary>
+    public static string? Refusal(string name, string? value)
+    {
+        if (name.Length == 0 || name.Length > 256 || !name.All(c => c is > ' ' and < '\x7f' and not (':' or '(' or ')' or ',' or '/' or ';' or '<' or '=' or '>' or '?' or '@' or '[' or '\\' or ']' or '{' or '}' or '"')))
+            return "not a header name";
+        if (Reserved.Contains(name) || name.StartsWith("x-astra-", StringComparison.OrdinalIgnoreCase))
+            return "a header the gateway keeps";
+        if (value is not null && (value.Length > 8192 || value.Any(c => c is '\r' or '\n' or '\0')))
+            return "not a header value";
+        return null;
+    }
+}
+
 /// <summary>
 /// The middleware of one request (magpie's middleware.Run). Each middleware's hooks run in one engine for
 /// the whole request, taken from its pool on first use and given back by <see cref="Dispose"/>.
@@ -143,6 +171,10 @@ public sealed class MiddlewareRun : IDisposable
     private readonly MiddlewareInstance?[] _instances;
     private readonly ObjectInstance?[] _contexts;
     private MiddlewareReject? _rejected;
+    // Set only while an onUpstream runs: its target, and the headers it set (ctx.setHeader / ctx.removeHeader).
+    private MiddlewareUpstream? _upstream;
+    private List<MiddlewareHeader>? _headers;
+    private int _current = -1;
 
     internal MiddlewareRun(MiddlewareSet set, MiddlewareInfo info)
     {
@@ -162,6 +194,40 @@ public sealed class MiddlewareRun : IDisposable
 
     /// <summary>Whether some middleware wants a whole JSON reply.</summary>
     public bool WantsResponse => _set.Modules.Any(m => m.HasResponse);
+
+    /// <summary>Whether some middleware wants the request as it goes upstream (onUpstream).</summary>
+    public bool WantsUpstream => _set.Modules.Any(m => m.HasUpstream);
+
+    /// <summary>
+    /// Runs each onUpstream on <paramref name="body"/> — the JSON one attempt sends <paramref name="upstream"/>, in the
+    /// upstream's API, after translation and the privacy guard — with <c>ctx.upstream</c> set. What one returns is what
+    /// the next is given. Returns the body when some hook changed it (null otherwise) and the headers the hooks set, in
+    /// order; a hook that fails keeps neither its body nor its headers. Runs again for each attempt (a pool's next member).
+    /// </summary>
+    public (byte[]? Body, List<MiddlewareHeader> Headers) Upstream(MiddlewareUpstream upstream, byte[] body)
+    {
+        byte[]? changed = null;
+        var headers = new List<MiddlewareHeader>();
+        for (var i = 0; i < _set.Modules.Count; i++)
+        {
+            var m = _set.Modules[i];
+            if (!m.HasUpstream) continue;
+            _upstream = upstream;
+            _headers = [];
+            var (output, error) = Apply(i, Hook.Upstream, MiddlewareEngine.RequestLimit, changed ?? body, null);
+            var set = _headers;
+            _upstream = null;
+            _headers = null;
+            if (error == Dropped) m.Fail("onUpstream", "returned null; a request can't be dropped here (ctx.reject is onRequest's)");
+            else if (error is not null) m.Fail("onUpstream", error);
+            else
+            {
+                if (output is not null) changed = output;
+                headers.AddRange(set);
+            }
+        }
+        return (changed, headers);
+    }
 
     /// <summary>
     /// Runs each onRequest on <paramref name="body"/> (the agent's JSON, in its own API), in turn: what one
@@ -244,6 +310,7 @@ public sealed class MiddlewareRun : IDisposable
         Request,
         Event,
         Response,
+        Upstream,
     }
 
     // Calls a hook on JSON data: the JSON it returned, null for undefined (keep), or an error — Dropped
@@ -258,12 +325,18 @@ public sealed class MiddlewareRun : IDisposable
             var (instance, ctx) = Acquire(i);
             if (status is { } s) ctx.Set("status", s);
             var rt = instance.Runtime;
+            if (hook == Hook.Upstream && _upstream is { } u)
+                ctx.Set("upstream", rt.ParseJson(new StringBuilder("{\"protocol\":").Append(Quote(u.Protocol))
+                    .Append(",\"provider\":{\"id\":").Append(Quote(u.ProviderId)).Append(",\"name\":").Append(Quote(u.ProviderName))
+                    .Append("},\"model\":").Append(Quote(u.Model)).Append(",\"stream\":").Append(u.Stream ? "true" : "false").Append('}').ToString()));
             var fn = hook switch
             {
                 Hook.Request => instance.OnRequest,
                 Hook.Event => instance.OnEvent,
+                Hook.Upstream => instance.OnUpstream,
                 _ => instance.OnResponse,
             };
+            _current = i;
             var result = rt.Call(fn, limit, rt.ParseJson(data), ctx);
             if (result.IsUndefined()) return (null, null);
             if (result.IsNull()) return (null, Dropped);
@@ -281,12 +354,13 @@ public sealed class MiddlewareRun : IDisposable
         }
         finally
         {
+            _current = -1;
             m.Count(Stopwatch.GetElapsedTime(started).Ticks * 100);
         }
     }
 
     // Middleware i's engine for this request and its ctx: the request's info, the plugin's options, a
-    // state of its own and reject.
+    // state of its own, reject, sha256, and the header setters onUpstream uses.
     private (MiddlewareInstance, ObjectInstance) Acquire(int i)
     {
         if (_instances[i] is { } existing) return (existing, _contexts[i]!);
@@ -296,6 +370,9 @@ public sealed class MiddlewareRun : IDisposable
         var json = new StringBuilder(_info).Append(",\"options\":").Append(Encoding.UTF8.GetString(m.Options)).Append(",\"state\":{}}").ToString();
         var ctx = rt.ParseJson(json).AsObject();
         ctx.Set("reject", rt.Function("reject", 2, Reject));
+        ctx.Set("sha256", rt.Function("sha256", 1, Sha256));
+        ctx.Set("setHeader", rt.Function("setHeader", 2, args => SetHeader(args, remove: false)));
+        ctx.Set("removeHeader", rt.Function("removeHeader", 1, args => SetHeader(args, remove: true)));
         _instances[i] = instance;
         _contexts[i] = ctx;
         return (instance, ctx);
@@ -308,6 +385,45 @@ public sealed class MiddlewareRun : IDisposable
         if (args.Length > 0 && args[0].IsNumber() && args[0].AsNumber() is var n && n >= 400 && n <= 599) status = (int)n;
         var message = args.Length > 1 && args[1].IsString() ? args[1].AsString() : "turned away by a gateway middleware";
         _rejected ??= new MiddlewareReject(status, message);
+        return JsValue.Undefined;
+    }
+
+    // ctx.sha256(text | bytes): the hex SHA-256 of a string's UTF-8 bytes, or of an array of byte values (0–255, taken
+    // modulo 256) for a digest over raw bytes, such as a few bytes cut out of UTF-8 text. The engine has no crypto of its own.
+    private static JsValue Sha256(JsValue[] args)
+    {
+        byte[] data;
+        if (args.Length > 0 && args[0].IsArray())
+        {
+            var array = args[0].AsArray();
+            var length = (int)Math.Clamp(Jint.Runtime.TypeConverter.ToNumber(array.Get("length")), 0, 16 * 1024 * 1024);
+            data = new byte[length];
+            for (var i = 0; i < length; i++)
+            {
+                var v = array.Get(i);
+                data[i] = v.IsNumber() ? (byte)((long)v.AsNumber() & 0xff) : (byte)0;
+            }
+        }
+        else data = Encoding.UTF8.GetBytes(args.Length > 0 && args[0].IsString() ? args[0].AsString() : "");
+        return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(data));
+    }
+
+    // ctx.setHeader(name, value) / ctx.removeHeader(name): only inside onUpstream; anything else is ignored with a line in
+    // the log, so a plugin written against the wrong hook does nothing rather than fail the request.
+    private JsValue SetHeader(JsValue[] args, bool remove)
+    {
+        var m = _current >= 0 ? _set.Modules[_current] : null;
+        var name = args.Length > 0 && args[0].IsString() ? args[0].AsString().Trim() : "";
+        string? value = remove ? null : args.Length > 1 && !args[1].IsUndefined() && !args[1].IsNull() ? Jint.Runtime.TypeConverter.ToString(args[1]) : null;
+        var verb = remove ? "removeHeader" : "setHeader";
+        if (_headers is null)
+            m?.Say("warn", $"ctx.{verb} works in onUpstream only");
+        else if (!remove && value is null)
+            m?.Say("warn", $"ctx.setHeader({name}) without a value; use ctx.removeHeader");
+        else if (MiddlewareHeader.Refusal(name, value) is { } why)
+            m?.Say("warn", $"ctx.{verb}({name}) ignored: {why}");
+        else
+            _headers.Add(new MiddlewareHeader(name, value));
         return JsValue.Undefined;
     }
 

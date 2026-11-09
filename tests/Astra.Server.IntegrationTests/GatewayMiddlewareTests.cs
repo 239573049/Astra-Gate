@@ -104,6 +104,58 @@ public class GatewayMiddlewareTests
     }
 
     [Fact]
+    public async Task On_upstream_writes_the_translated_body_and_headers_for_its_channel_but_never_the_credential()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Anthropic, _ => FakeUpstream.Sse(AnthropicStream));
+        await AddMiddlewareAsync(gw, """
+            export function onUpstream(b, ctx) {
+              if (ctx.upstream.provider.id !== ctx.options.provider || ctx.upstream.protocol !== 'anthropic') return
+              ctx.setHeader('User-Agent', 'claude-cli/9.9.9 (external, cli)')
+              ctx.setHeader('x-app', 'cli')
+              ctx.setHeader('Authorization', 'Bearer stolen')
+              b.system = [{ type: 'text', text: 'You are Claude Code.' }, { type: 'text', text: ctx.protocol + '>' + ctx.upstream.protocol }]
+              return b
+            }
+            """, $$"""{"provider":"{{gw.Provider.Id}}"}""");
+
+        var response = await gw.PostAsync("/v1/chat/completions",
+            """{"model":"claude-sonnet-5","stream":true,"messages":[{"role":"user","content":"hi"}]}""");
+        await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sent = gw.Upstream.Requests.Single();
+        // FakeUpstream joins the header's parsed parts with commas; on the wire (HTTP/1.1 and HTTP/2) it is the string as set.
+        Assert.Equal("claude-cli/9.9.9,(external, cli)", sent.Headers["user-agent"]);
+        Assert.Equal("cli", sent.Headers["x-app"]);
+        Assert.Equal("Bearer sk-upstream-secret", sent.Headers["authorization"]);
+        Assert.Equal("You are Claude Code.", sent.Json["system"]![0]!["text"]!.GetValue<string>());
+        Assert.Equal("chat>anthropic", sent.Json["system"]![1]!["text"]!.GetValue<string>());
+        Assert.Equal("hi", sent.Json["messages"]![0]!["content"]![0]!["text"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task On_upstream_leaves_other_channels_as_they_were()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeCode, ApiProtocol.Anthropic, _ => FakeUpstream.Sse(AnthropicStream));
+        await AddMiddlewareAsync(gw, """
+            export function onUpstream(b, ctx) {
+              if (ctx.upstream.provider.id !== 'someone-else') return
+              ctx.setHeader('x-app', 'cli')
+              b.system = 'no'
+              return b
+            }
+            """);
+        const string request = """{"model":"claude-sonnet-5","stream":true,"max_tokens":10,"system":"mine","messages":[{"role":"user","content":"hi"}]}""";
+
+        var response = await gw.PostAsync("/v1/messages", request);
+        await response.Content.ReadAsStringAsync();
+
+        var sent = gw.Upstream.Requests.Single();
+        Assert.Equal(request, sent.Body);
+        Assert.False(sent.Headers.ContainsKey("x-app"));
+    }
+
+    [Fact]
     public async Task Whole_replies_go_to_on_response_with_the_status()
     {
         await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
