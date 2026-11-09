@@ -8,6 +8,9 @@ using TKCode.Arc;
 using TKCode.Arc.Fonts;
 
 [assembly: AvaloniaTestApplication(typeof(Astra.Desktop.UiTests.TestAppBuilder))]
+// PerTest resets the dispatcher between tests, and whichever thread next touches it becomes the UI thread: a timer or task left
+// by an earlier test could take it, failing a random test with "The calling thread cannot access this object" (seen on CI).
+[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Astra.Desktop.UiTests;
