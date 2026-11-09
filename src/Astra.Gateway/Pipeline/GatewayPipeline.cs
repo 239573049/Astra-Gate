@@ -61,6 +61,9 @@ public sealed partial class GatewayPipeline(
 
     internal const long MaxRequestBytes = 64L * 1024 * 1024;
     private const int MaxErrorBodyBytes = 1024 * 1024;
+
+    // Both wordings Copilot uses ("input item [ID] does not belong to this connection") end like this.
+    private const string CopilotStaleInputItemMarker = "does not belong to this connection";
     private const string DefaultAnthropicVersion = "2023-06-01";
 
     /// <summary><c>astra.attempt.retry</c> of an attempt whose failure handed the request to the next pool member.</summary>
@@ -885,6 +888,7 @@ public sealed partial class GatewayPipeline(
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
                 }
+                await RejectStaleInputItemsAsync(attempt, response);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription && credentials.CanRefresh && resendable)
                 {
                     // Plan §5.4: renew a grant once before switching accounts. Direct tokens / API keys cannot be renewed.
@@ -917,6 +921,7 @@ public sealed partial class GatewayPipeline(
                     request = Build(credentials);
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    await RejectStaleInputItemsAsync(attempt, response);
                 }
                 if (failover && resendable && response.StatusCode is (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                     && credentials.AccountId is { } rejected)
@@ -957,6 +962,29 @@ public sealed partial class GatewayPipeline(
         {
             // Failures must not leak an in-flight slot; on success the caller owns the lease.
             if (!handedOver) lease?.Dispose();
+        }
+
+        // Copilot answers 401 for Responses input items it no longer accepts (.agents/memory/copilot-responses-item-ids.md).
+        // The request is at fault, not the credential: renewing or switching accounts cannot help, so the client gets a 400 saying why.
+        async Task RejectStaleInputItemsAsync(TraceSpanBuilder span, HttpResponseMessage response)
+        {
+            if (response.StatusCode != HttpStatusCode.Unauthorized || endpoint.Protocol != ApiProtocol.OpenAIResponses
+                || !CopilotModelIds.IsCopilot(provider)) return;
+            var text = await ReadLimitedAsync(response, MaxErrorBodyBytes, ct);
+            if (!text.Contains(CopilotStaleInputItemMarker, StringComparison.OrdinalIgnoreCase))
+            {
+                // Any other 401 carries on as usual, and may still be forwarded: its body goes back for that.
+                var read = response.Content;
+                response.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(text)) { Headers = { ContentType = read.Headers.ContentType } };
+                read.Dispose();
+                return;
+            }
+            capture?.Set(BodyStore.UpstreamResponse, text);
+            EndAttempt(span, response, null);
+            response.Dispose();
+            throw new GatewayException(400, "invalid_request_error",
+                "上游拒绝了请求里的 input：其中的 reasoning 条目（encrypted_content 或条目 ID）已不被上游接受，通常是因为它们来自较早的会话"
+                + "（上游返回 401：input item does not belong to this connection）。这是请求内容的问题，与账号和令牌无关。请新开一个会话，或从 input 中去掉这些 reasoning 条目后重试。");
         }
 
         TraceSpanBuilder Retry(TraceSpanBuilder span, HttpResponseMessage response, string reason, string? account)

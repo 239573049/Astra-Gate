@@ -101,6 +101,8 @@ persisted at the end.
     API keys skip it. Failover/balanced modes cool a still-rejected account for `ProviderHealth.AuthCooldown` (10 min)
     and try an untried usable account (`auth_failover`), even after a successful renewal. Credential-resolution
     failures also hand over in those modes. Manual mode returns an upstream rejection without cooling or switching.
+    Exception: Copilot's Responses 401 "input item … does not belong to this connection" blames the request, so `SendAsync`
+    (`RejectStaleInputItemsAsync`) skips all of this and throws a 400 `invalid_request_error` saying why; the attempt span keeps the 401.
 15. Response side: `Protocol/Ir.cs` decode (or passthrough), `Pipeline/PrivacyGuardService.cs:ChunkRestorer`
     restores placeholders (streaming: `Pipeline/GatewayPipeline.cs:StreamAsync`; buffered: `BufferAsync`;
     forced-stream-when-client-wanted-JSON: `CollapseStreamAsync`), `Pipeline/RequestBilling.cs` prices the usage, and

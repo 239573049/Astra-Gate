@@ -45,7 +45,8 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Keep-awake decisions](keep-awake-decisions.md) — issue #14 `PreventSleep`: idle sleep only, server host only, blittable DllImport, Linux `sleep` lock side effect, web server stops first on shutdown
 - [Images API forwarding](images-api-forwarding.md) — issue #17 (Copilot images live under /v1; "not available for integrator" = renamed model id): `/v1/images/*` forwarded untranslated on the same pipeline, logged as `openai-images` (not an ApiProtocol); forms stream after `model` unless guard/encoding/deadline; no pool failover
 - [Trace routing visualization](trace-routing-visualization.md) — topology draws accounts as rows + a live activity rail (option B, 2026-10-30); tool args / prompt / reply text only when the user turns capture on
-- [Copilot Responses item ids](copilot-responses-item-ids.md) — 401 "input item does not belong to this connection" = stale encrypted reasoning from an earlier session (reproduced 2026-11-03); dropping encrypted_content fixes it, dropping ids does not
+- [Copilot Responses item ids](copilot-responses-item-ids.md) — 401 "input item does not belong to this connection" = stale encrypted reasoning from an earlier session (reproduced 2026-11-03); dropping encrypted_content fixes it, dropping ids does not; the gateway answers 400 with the reason (user decision 2026-11-08)
+- [dotnet-install kills the host on macOS](dotnet-install-macos-sigkill.md) — installing an SDK over ~/.dotnet leaves `dotnet` exiting 137; replace the host with a fresh copy; rollForward picks a new SDK at once
 
 ## Reference
 

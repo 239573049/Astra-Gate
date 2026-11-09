@@ -233,6 +233,67 @@ public class CopilotGatewayTests
         Assert.Equal(0, scheduler.InFlight("acc-b"));
     }
 
+    private static string StaleItem(string wording) => $$$"""{"error":{"message":"{{{wording}}}","type":"invalid_request_error"}}""";
+
+    [Theory]
+    [InlineData("balanced", "input item does not belong to this connection")]
+    [InlineData("failover", "input item ID does not belong to this connection")]
+    [InlineData("manual", "input item does not belong to this connection")]
+    public async Task A_Stale_Input_Item_Is_A_Bad_Request_Not_A_Dead_Credential(string mode, string wording)
+    {
+        await using var gw = await StartAsync(mode, true, _ => FakeUpstream.Json(StaleItem(wording), HttpStatusCode.Unauthorized));
+
+        using var response = await gw.PostAsync("/v1/responses", Request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var error = JsonNode.Parse(await response.Content.ReadAsStringAsync())!["error"]!;
+        Assert.Equal("invalid_request_error", error["type"]!.GetValue<string>());
+        Assert.Contains("新开一个会话", error["message"]!.GetValue<string>());
+        // Neither renewed nor handed to the next account, and the account stays usable.
+        Assert.Equal(["Bearer " + TokenA], GenerationTokens(gw));
+        Assert.Single(gw.Upstream.Requests);
+        var account = (await gw.Host.Db.Accounts.GetAsync("acc-a"))!;
+        Assert.Equal(AccountStatus.Active, account.Status);
+        Assert.Null(account.CooldownUntilUtc);
+        Assert.Equal(0, gw.Host.App.Services.GetRequiredService<AccountScheduler>().InFlight("acc-a"));
+
+        var record = await gw.RecordOfAsync(response);
+        Assert.Equal(400, record.HttpStatus);
+        Assert.Equal("invalid_request_error", record.ErrorType);
+        Assert.Equal(RequestErrorCategories.InvalidRequest, RequestErrorCategories.Of(record.Status, record.HttpStatus, record.ErrorType));
+        // The trace keeps what the upstream really said.
+        Assert.Equal(401, (await AttemptsAsync(gw, response)).Single()["http.response.status_code"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task A_Stale_Input_Item_Is_Recognised_After_A_Refresh_Too()
+    {
+        await using var gw = await StartAsync("balanced", true, seen => seen.Url.AbsolutePath == "/copilot_internal/v2/token"
+            ? FakeUpstream.Json($$"""{"token":"{{RenewedA}}","expires_at":4102444800}""")
+            : seen.Headers["authorization"] == "Bearer " + TokenA
+                ? FakeUpstream.Json(Denied, HttpStatusCode.Unauthorized)
+                : FakeUpstream.Json(StaleItem("input item does not belong to this connection"), HttpStatusCode.Unauthorized));
+
+        using var response = await gw.PostAsync("/v1/responses", Request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(["Bearer " + TokenA, "Bearer " + RenewedA], GenerationTokens(gw));
+        Assert.Null((await gw.Host.Db.Accounts.GetAsync("acc-a"))!.CooldownUntilUtc);
+    }
+
+    [Fact]
+    public async Task A_Stale_Input_Item_Answers_In_The_Inbound_Protocols_Shape()
+    {
+        await using var gw = await StartAsync("balanced", false,
+            _ => FakeUpstream.Json(StaleItem("input item does not belong to this connection"), HttpStatusCode.Unauthorized));
+
+        using var response = await gw.PostAsync("/v1/chat/completions",
+            """{"model":"gpt-5","stream":false,"messages":[{"role":"user","content":"hi"}]}""");
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("新开一个会话", JsonNode.Parse(await response.Content.ReadAsStringAsync())!["error"]!["message"]!.GetValue<string>());
+    }
+
     [Theory]
     [InlineData("failover")]
     [InlineData("balanced")]

@@ -2,7 +2,7 @@
 name: copilot-responses-item-ids
 description: Copilot rejects encrypted reasoning items issued by an earlier session with 401 "input item does not belong to this connection"; ids themselves are opaque and harmless (measured 2026-11-03)
 type: project
-updated: 2026-11-03
+updated: 2026-11-08
 source: session
 evidence: ["live calls via a scratch-home source build, provider github-copilot-subscription, model gpt-6.1-sol, store:false + reasoning.encrypted_content", "reasoning items from ~/.codex rollouts dated 2026-10-16/19/22 replayed on 2026-11-03", "src/Astra.Gateway/Protocol/Responses/ResponsesItemIds.cs"]
 ---
@@ -21,11 +21,10 @@ real Codex CLI 0.166.0 `exec` + `exec resume` run. Copilot ids are opaque base64
 400 "item_id did not match". What the binding is tied to (time window? GitHub token/login?) is unknown.
 Untested: items from the ChatGPT/Codex subscription continued on Copilot (that account was expired).
 
-Astra side effect: the gateway treats this 401 as a dead credential — it force-refreshes the Copilot
-token and retries (new Bearer each time), which fails the same way.
+Decision (user, 2026-11-08): this is the caller's parameter error. `GatewayPipeline.SendAsync`
+(`RejectStaleInputItemsAsync`) recognises the message, does not refresh, cool or switch the account, and answers 400
+`invalid_request_error` with the reason and the fix. It does not silently retry with the reasoning items removed.
 
 **Why:** Long-lived or resumed Codex sessions (and likely sessions that switch provider) carry reasoning
-items Copilot no longer accepts.
-**How to apply:** A fix belongs where the 401 is classified: recognise this message, don't refresh or
-switch the account for it, and retry once with `encrypted_content` (or the reasoning items) removed from
-`input`. Workaround for users: start a new Codex session.
+items Copilot no longer accepts; before this the gateway took the 401 for a dead credential and refreshed in vain.
+**How to apply:** Keep the message's fix current: start a new session, or drop those reasoning items from `input`.
