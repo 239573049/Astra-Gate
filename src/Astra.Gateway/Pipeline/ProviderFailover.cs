@@ -36,7 +36,12 @@ public static class ProviderFailover
             OperationCanceledException => new(true, ProviderOutcome.Timeout),
             // An account-based provider with no usable sign-in (SendAsync turns that into a 401).
             GatewayException { Status: 401 } => new(true, ProviderOutcome.AuthRejected),
+            // The provider's first-byte timeout (settings.first_byte_timeout_sec) ran out.
+            GatewayException { Status: 504, Type: FirstByteTimeoutType } => new(true, ProviderOutcome.Timeout),
             _ => null,
         };
     }
+
+    /// <summary><see cref="GatewayException.Type"/> of an attempt that got no response headers within the provider's first-byte timeout.</summary>
+    public const string FirstByteTimeoutType = "first_byte_timeout";
 }

@@ -41,8 +41,44 @@ public sealed class PoolRouting(ClientRouting routing, UpstreamAuthResolver auth
         // Nobody serves the model: the first member answers for it, exactly like a single provider would.
         if (serving.Count == 0) return new PoolPlan([route.Targets[0]], 1, true, []);
 
-        var now = DateTimeOffset.UtcNow;
         var probes = new List<ProviderHealth.Probe>();
+        var available = await AdmitAsync(serving, commit, probes, ct);
+        if (available.Count == 0)
+        {
+            // Everything is cooling down: one try at the member that recovers first beats refusing outright.
+            var soonest = serving.OrderBy(t => health.AvailableAt(t.Provider.Id) ?? DateTimeOffset.MinValue).First();
+            return new PoolPlan([soonest], 1, false, probes);
+        }
+
+        var members = available.Select(t => MemberOf(pool, t)).ToList();
+        var ordered = scheduler.Order(route.Token.Id, pool, members, stickyKey, commit);
+        var order = ordered.Select(m => available[members.IndexOf(m)]).ToList();
+        return new PoolPlan(order, pool.AttemptLimit(order.Count), false, probes);
+    }
+
+    /// <summary>
+    /// A client bound to several providers (issue #28): the bound providers serving the model, in binding order, minus those
+    /// that cannot take it now (same availability rules as a pool), tried one after another while an attempt fails before
+    /// anything reached the client. Null when there is nothing to choose between (fewer than two serve the model, or every one is cooling down) — the caller keeps the plain
+    /// <see cref="ClientRouting"/> choice (first provider serving the model, else the primary).
+    /// </summary>
+    public async Task<PoolPlan?> PlanBindingsAsync(GatewayRoute route, string clientModel, bool isClaudeCode, CancellationToken ct)
+    {
+        var serving = await routing.MatchAllAsync(route.Targets, clientModel, isClaudeCode, ct);
+        if (serving.Count < 2) return null;
+        var probes = new List<ProviderHealth.Probe>();
+        var available = await AdmitAsync(serving, true, probes, ct);
+        if (available.Count == 0)
+        {
+            foreach (var probe in probes) probe.Dispose();
+            return null;
+        }
+        return new PoolPlan(available, Math.Min(available.Count, TokenPool.MaxAttemptsLimit), false, probes);
+    }
+
+    private async Task<List<RouteTarget>> AdmitAsync(List<RouteTarget> serving, bool commit, List<ProviderHealth.Probe> probes, CancellationToken ct)
+    {
+        var now = DateTimeOffset.UtcNow;
         var available = new List<RouteTarget>();
         foreach (var target in serving)
         {
@@ -64,17 +100,7 @@ public sealed class PoolRouting(ClientRouting routing, UpstreamAuthResolver auth
                 if (probe is not null) probes.Add(probe);
             }
         }
-        if (available.Count == 0)
-        {
-            // Everything is cooling down: one try at the member that recovers first beats refusing outright.
-            var soonest = serving.OrderBy(t => health.AvailableAt(t.Provider.Id) ?? DateTimeOffset.MinValue).First();
-            return new PoolPlan([soonest], 1, false, probes);
-        }
-
-        var members = available.Select(t => MemberOf(pool, t)).ToList();
-        var ordered = scheduler.Order(route.Token.Id, pool, members, stickyKey, commit);
-        var order = ordered.Select(m => available[members.IndexOf(m)]).ToList();
-        return new PoolPlan(order, pool.AttemptLimit(order.Count), false, probes);
+        return available;
     }
 
     private static TokenPoolMember MemberOf(TokenPool pool, RouteTarget target) =>

@@ -1701,6 +1701,8 @@ internal static class Messages
         "settings.requestCompression.none",
         "settings.preventSleep",
         "settings.preventSleepHint",
+        "settings.clientFailover",
+        "settings.clientFailoverHint",
         "settings.sidebar",
         "settings.sidebar.footer",
         "settings.qualifiedModels",
@@ -1717,6 +1719,11 @@ internal static class Messages
         "providers.alias.label",
         "providers.alias.hint",
         "providers.alias.saved",
+        "providers.timeout.title",
+        "providers.timeout.label",
+        "providers.timeout.hint",
+        "providers.timeout.footer",
+        "providers.timeout.saved",
         "settings.logging",
         "settings.debugBodies",
         "settings.debugBodiesHint",
@@ -4361,6 +4368,8 @@ internal static class Messages
             case "settings.requestCompression.none": return "不压缩";
             case "settings.preventSleep": return "处理请求时阻止系统休眠";
             case "settings.preventSleepHint": return "网关有请求在处理（包括流式输出）时，阻止系统因闲置而睡眠，最后一个请求结束约 30 秒后解除；关闭开关或退出服务立即解除。显示器照常熄灭，合盖仍会睡眠。默认关闭；Linux 需要 systemd（systemd-inhibit），容器里不起作用。";
+            case "settings.clientFailover": return "提供商失败时自动切换";
+            case "settings.clientFailoverHint": return "客户端绑定了多个提供商时，请求遇到限流、认证被拒、5xx 或网络错误，且还没有任何内容返回给客户端，网关会按绑定顺序换下一个能服务该模型的提供商重试，所有提供商都失败才把错误返回给客户端。默认开启；关闭后只使用第一个能服务该模型的提供商。失败的提供商会短暂冷却，期间被跳过。";
             case "settings.sidebar": return "侧边栏菜单";
             case "settings.sidebar.footer": return "关闭后该项从左侧菜单隐藏，页面仍可通过地址或命令面板打开。设置不可隐藏。";
             case "settings.qualifiedModels": return "按提供商区分同名模型";
@@ -4377,6 +4386,11 @@ internal static class Messages
             case "providers.alias.label": return "提供商别名";
             case "providers.alias.hint": return "留空则使用提供商名称";
             case "providers.alias.saved": return "已保存别名";
+            case "providers.timeout.title": return "响应超时";
+            case "providers.timeout.label": return "首字超时（秒）";
+            case "providers.timeout.hint": return "等待这个提供商开始响应的最长时间，留空不限制。";
+            case "providers.timeout.footer": return "超时算这个提供商失败：绑定了多个提供商的客户端和令牌的提供商池会换下一个继续，否则返回 504。只限制「开始响应」之前，响应开始后由设置里的流式空闲超时管。最大 3600 秒。";
+            case "providers.timeout.saved": return "已保存响应超时";
             case "settings.logging": return "记录";
             case "settings.debugBodies": return "保存请求与响应内容";
             case "settings.debugBodiesHint": return "用于排查问题；内容保存在本机数据目录，不含密钥。";
@@ -7023,6 +7037,8 @@ internal static class Messages
             case "settings.requestCompression.none": return "No compression";
             case "settings.preventSleep": return "Keep the system awake while requests are in flight";
             case "settings.preventSleepHint": return "While the gateway is handling requests (streams included), the system does not go to sleep when idle; it may again about 30 seconds after the last one finishes, or at once when you turn this off or the server stops. The display still turns off and closing the lid still sleeps. Off by default; on Linux it needs systemd (systemd-inhibit) and has no effect in containers.";
+            case "settings.clientFailover": return "Switch provider automatically when one fails";
+            case "settings.clientFailoverHint": return "When a client is bound to several providers and a request hits a rate limit, rejected credentials, a 5xx or a network error before anything reached the client, the gateway retries it on the next bound provider that serves the model, in binding order; the client sees an error only when every one failed. On by default; off = only the first provider serving the model is used. A failing provider cools down briefly and is skipped meanwhile.";
             case "settings.sidebar": return "Sidebar menu";
             case "settings.sidebar.footer": return "A hidden entry leaves the left menu; its page still opens by address or from the command palette. Settings cannot be hidden.";
             case "settings.qualifiedModels": return "Tell providers apart by model id";
@@ -7039,6 +7055,11 @@ internal static class Messages
             case "providers.alias.label": return "Provider alias";
             case "providers.alias.hint": return "Leave empty to use the provider's name";
             case "providers.alias.saved": return "Alias saved";
+            case "providers.timeout.title": return "Response timeout";
+            case "providers.timeout.label": return "First-byte timeout (seconds)";
+            case "providers.timeout.hint": return "The longest the gateway waits for this provider to start answering; empty = no limit.";
+            case "providers.timeout.footer": return "A timeout counts as this provider failing: a client bound to several providers and a token's provider pool move on to the next one, otherwise the caller gets a 504. It only limits the wait before the response starts; after that the stream idle timeout in Settings applies. Up to 3600 seconds.";
+            case "providers.timeout.saved": return "Response timeout saved";
             case "settings.logging": return "Logging";
             case "settings.debugBodies": return "Save request & response bodies";
             case "settings.debugBodiesHint": return "For troubleshooting. Stored in the local data folder, without secrets.";

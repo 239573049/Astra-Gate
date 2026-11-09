@@ -967,6 +967,8 @@ export interface Settings {
   effortBudgets: { low: number; medium: number; high: number }; streamIdleTimeoutSec: number;
   /** Keep the system from idle sleep while gateway requests are in flight; released ~30 s after the last one (off by default). */
   preventSleep?: boolean;
+  /** A client bound to several providers retries a failed request on the next bound provider serving the model (default on). */
+  clientProviderFailover?: boolean;
   /** Provider-qualified model ids (`model@alias`): model lists tell providers apart and a qualified id goes to that provider (off by default). */
   providerQualifiedModels?: boolean;
   /** Sidebar entries hidden from the menu (the pages still open by address); Settings cannot be hidden. */

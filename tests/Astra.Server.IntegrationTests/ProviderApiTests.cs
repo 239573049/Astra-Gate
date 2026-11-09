@@ -240,6 +240,43 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Added_Claude_And_Gpt_Models_Get_Prompt_Cache_On_And_Others_Stay_Empty()
+    {
+        await using var host = await TestHost.StartAsync();
+        var p = await Create(host, "siliconflow"); // OpenAI Chat only: no Anthropic endpoint, so no protocol constraint
+        var (_, added) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{p}/models",
+            new { modelIds = new[] { "claude-sonnet-4-5", "gpt-5", "deepseek-v4-flash" } });
+        var rows = added!.AsArray();
+        Assert.True(rows[0]!["overrides"]!["capabilities"]!["promptCache"]!.GetValue<bool>());
+        Assert.True(rows[1]!["overrides"]!["capabilities"]!["promptCache"]!.GetValue<bool>());
+        Assert.Equal("{}", rows[2]!["overrides"]!.ToJsonString());
+        var stored = await host.Db.Providers.ListModelsAsync(p);
+        Assert.All(stored, m => Assert.Empty(m.UpstreamProtocols));
+    }
+
+    [Fact]
+    public async Task Added_Claude_Model_Goes_Over_Messages_When_The_Provider_Has_An_Anthropic_Endpoint()
+    {
+        await using var host = await TestHost.StartAsync();
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers", new
+        {
+            name = "Both",
+            endpoints = new[]
+            {
+                new { protocol = "openai-chat", baseUrl = "https://example.invalid/v1", fullUrl = false },
+                new { protocol = "anthropic", baseUrl = "https://example.invalid", fullUrl = false },
+            },
+            models = Array.Empty<string>(),
+        });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var p = body!["id"]!.GetValue<string>();
+        await host.SendAsync(HttpMethod.Post, $"/api/providers/{p}/models", new { modelIds = new[] { "claude-sonnet-4-5", "gpt-5" } });
+        var stored = (await host.Db.Providers.ListModelsAsync(p)).ToDictionary(m => m.ModelId);
+        Assert.Equal([ApiProtocol.Anthropic], stored["claude-sonnet-4-5"].UpstreamProtocols);
+        Assert.Empty(stored["gpt-5"].UpstreamProtocols);
+    }
+
+    [Fact]
     public async Task Price_Override_Does_Not_Multiply_And_Null_Resets_To_Inherited()
     {
         await using var host = await TestHost.StartAsync();

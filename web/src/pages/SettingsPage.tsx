@@ -228,6 +228,12 @@ function GeneralSettings() {
             </Row>
           </Group>
 
+          <Group footer={t('settings.clientFailoverHint')}>
+            <Row label={t('settings.clientFailover')}>
+              <Switch checked={s.clientProviderFailover ?? true} label={t('settings.clientFailover')} onChange={(clientProviderFailover) => patch({ clientProviderFailover })} />
+            </Row>
+          </Group>
+
           <QualifiedModelsSettings settings={s} />
 
           <SidebarSettings settings={s} />

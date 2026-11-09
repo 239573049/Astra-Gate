@@ -84,6 +84,19 @@ public sealed class Provider
     public bool SettingFlag(string key, bool defaultValue) =>
         Settings.TryGetPropertyValue(key, out var node) && node is JsonValue v && v.TryGetValue<bool>(out var b) ? b : defaultValue;
 
+    /// <summary>Settings key of <see cref="FirstByteTimeout"/>.</summary>
+    public const string FirstByteTimeoutKey = "first_byte_timeout_sec";
+
+    public const int MaxFirstByteTimeoutSec = 3600;
+
+    /// <summary>
+    /// How long the gateway waits for this provider's response headers before giving up on the attempt (issue #28); null = no
+    /// limit beyond the connect timeout. Once the response has started, the stream idle timeout takes over.
+    /// </summary>
+    public TimeSpan? FirstByteTimeout() =>
+        Settings.TryGetPropertyValue(FirstByteTimeoutKey, out var node) && node is JsonValue v && v.TryGetValue<int>(out var sec) && sec > 0
+            ? TimeSpan.FromSeconds(Math.Min(sec, MaxFirstByteTimeoutSec)) : null;
+
     /// <summary>Settings key of the provider alias, see <see cref="Alias"/>.</summary>
     public const string AliasKey = "alias";
 

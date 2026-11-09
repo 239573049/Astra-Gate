@@ -259,6 +259,7 @@ function ModelsTab({ provider, models, loading, selected, onSelect }: { provider
         </Group>
       )}
       <ProviderAliasGroup provider={provider} />
+      <ProviderTimeoutGroup provider={provider} />
       {models && <ModelMapGroup provider={provider} models={models} />}
       <AddModelsSheet open={addOpen} onOpenChange={setAddOpen} provider={provider} />
       <RemoteModelsSheet open={remoteOpen} onOpenChange={setRemoteOpen} provider={provider} />
@@ -302,6 +303,50 @@ function ProviderAliasGroup({ provider }: { provider: Provider }) {
           onChange={(e) => setAlias(e.target.value)}
         />
         <Button size="sm" disabled={update.isPending || alias.trim() === stored} onClick={save}>
+          {t('common.save')}
+        </Button>
+      </Row>
+    </Group>
+  );
+}
+
+/**
+ * How long the gateway waits for this provider's response headers (settings.first_byte_timeout_sec, issue #28) before the
+ * attempt counts as a timeout and a client / pool with another provider moves on. Empty = no limit.
+ */
+function ProviderTimeoutGroup({ provider }: { provider: Provider }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateProvider(provider.id);
+  const raw = provider.settings.first_byte_timeout_sec;
+  const stored = typeof raw === 'number' && raw > 0 ? String(raw) : '';
+  const [value, setValue] = useState(stored);
+  useEffect(() => setValue(stored), [stored]);
+
+  const save = () => {
+    const sec = Math.min(3600, Math.floor(Number(value)));
+    const settings = { ...provider.settings };
+    if (value.trim() && sec > 0) settings.first_byte_timeout_sec = sec;
+    else delete settings.first_byte_timeout_sec;
+    update.mutate(
+      { settings },
+      { onSuccess: () => toast(t('providers.timeout.saved'), 'success'), onError: (e) => toast(errorText(e), 'error') },
+    );
+  };
+
+  return (
+    <Group title={t('providers.timeout.title')} footer={t('providers.timeout.footer')}>
+      <Row label={t('providers.timeout.label')} detail={t('providers.timeout.hint')}>
+        <Input
+          className="w-28"
+          mono
+          inputMode="numeric"
+          aria-label={t('providers.timeout.label')}
+          placeholder="—"
+          value={value}
+          onChange={(e) => setValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+        />
+        <Button size="sm" disabled={update.isPending || value === stored} onClick={save}>
           {t('common.save')}
         </Button>
       </Row>

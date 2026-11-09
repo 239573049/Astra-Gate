@@ -488,9 +488,26 @@ public static class ProviderEndpoints
         {
             if (existing.ContainsKey(id)) continue;
             var m = new ProviderModel { ProviderId = p.Id, ModelId = id, SystemModelId = ModelIdMatcher.Match(id, candidates, index), SortOrder = order++ };
+            ApplyFamilyDefaults(p, m);
             existing[id] = m; result.Add(m);
         }
         return result;
+    }
+
+    /// <summary>
+    /// Defaults for a model just added (fetched from upstream or typed by hand), by model family: Claude goes over Anthropic
+    /// Messages — only when the provider has such an endpoint, since an explicit constraint with no endpoint answers 503 —
+    /// and Claude / GPT / o-series get prompt-cache creation on. An upstream list that declares per-model protocols
+    /// overrides the protocol afterwards; existing rows are never touched (<see cref="PlanModelsAsync"/> skips them).
+    /// </summary>
+    private static void ApplyFamilyDefaults(Provider p, ProviderModel m)
+    {
+        var name = m.ModelId[(m.ModelId.LastIndexOf('/') + 1)..];
+        var claude = name.StartsWith("claude", StringComparison.OrdinalIgnoreCase);
+        var openai = name.StartsWith("gpt", StringComparison.OrdinalIgnoreCase)
+            || (name.Length > 1 && char.ToLowerInvariant(name[0]) == 'o' && char.IsDigit(name[1]));
+        if (claude && p.EndpointFor(ApiProtocol.Anthropic) is not null) m.UpstreamProtocols = [ApiProtocol.Anthropic];
+        if (claude || openai) m.Overrides.Capabilities ??= new ModelCapabilities { PromptCache = true };
     }
 
     /// <summary>

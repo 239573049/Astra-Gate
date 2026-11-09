@@ -489,7 +489,7 @@ runtime needed on the target).
     strategy table in `docs/content/docs/console/tokens.mdx`; what fails over (`ProviderFailover.Classify`) and how long a
     provider cools (`ProviderHealth`) are the failover table there — change them together. In `GatewayPipeline`, while
     another pool attempt may follow, never rewrite the client's guarded tree in place and never re-read the request
-    bytes (they are the unredacted original once the privacy guard rewrote the tree): `PrepareAsync` clones instead.
+    bytes (they are the unredacted original once the privacy guard rewrote the tree): `PrepareAsync` clones instead. A client bound to several providers fails over the same way (issue #28, `AppSettings.ClientProviderFailover`, default on; `PoolRouting.PlanBindingsAsync`; mirrors: `SettingsDto`, `web` settings page, zh/en `settings.clientFailover*`, `docs/content/docs/console/settings.mdx`).
 19. **Smart routing** (`.plan/smart-routing.md`): a request for the virtual model (`SmartRoutingSettings.VirtualModel`,
     default `astra-auto`) gets the model of the grade a judge picks. Settings live under their own `settings` key
     `smart_routing` (`SmartRoutingService`, a snapshot like `PrivacyGuardService`; no migration), the judge key is

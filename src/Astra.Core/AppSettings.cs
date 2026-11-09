@@ -95,6 +95,13 @@ public sealed class AppSettings
     public string RequestCompression { get; set; } = "default";
 
     /// <summary>
+    /// Provider fallback for clients (issue #28): a client bound to several providers retries a request that failed before
+    /// anything reached it — rate limit, rejected credentials, 5xx, network error — on the next bound provider that serves the
+    /// model, in binding order. On by default; off = the first provider serving the model answers, whatever it returns.
+    /// </summary>
+    public bool ClientProviderFailover { get; set; } = true;
+
+    /// <summary>
     /// Provider-qualified model ids (issue #21): the model lists clients see carry each provider's alias after the
     /// <see cref="ModelProviderSeparator"/> (<c>glm-5.3@zcode</c>), so providers serving the same model id can be told apart, and a
     /// request for such an id goes to that provider. Off = ids as they are, the first provider serving one wins.

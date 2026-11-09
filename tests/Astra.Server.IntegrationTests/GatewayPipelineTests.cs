@@ -23,12 +23,16 @@ public sealed class FakeUpstream(Func<FakeUpstream.Seen, HttpResponseMessage> re
 
     public List<Seen> Requests { get; } = [];
 
+    /// <summary>Runs before the answer is produced; awaiting a cancellable delay here makes a hung upstream.</summary>
+    public Func<Seen, CancellationToken, Task>? Before { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var headers = request.Headers.Concat(request.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>())
             .ToDictionary(h => h.Key.ToLowerInvariant(), h => string.Join(",", h.Value));
         var seen = new Seen(request.Method, request.RequestUri!, headers, request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct));
         lock (Requests) Requests.Add(seen);
+        if (Before is not null) await Before(seen, ct);
         return respond(seen);
     }
 

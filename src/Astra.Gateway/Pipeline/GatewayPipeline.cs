@@ -309,6 +309,16 @@ public sealed partial class GatewayPipeline(
                 resolveSpan.Set("astra.pool.strategy", pool.Strategy).Set("astra.pool.candidates", candidates.Count)
                     .Set("astra.pool.max_attempts", maxAttempts);
             }
+            else if (s.ClientProviderFailover && route.Client is not null && route.Targets.Count > 1 && pools is not null
+                     && await pools.PlanBindingsAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct) is { } bound)
+            {
+                // A client bound to several providers (issue #28): the binding order is the fallback chain, retried like a pool's.
+                poolPlan = bound;
+                candidates = bound.Order.Select(t => route with { Provider = t.Provider, AccountId = t.AccountId }).ToList();
+                maxAttempts = bound.MaxAttempts;
+                resolveSpan.Set("astra.pool.strategy", "bindings").Set("astra.pool.candidates", candidates.Count)
+                    .Set("astra.pool.max_attempts", maxAttempts);
+            }
             else candidates = [await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct)];
 
             // Every attempt that starts or ends goes to the live feed: the topology shows the account a call is on and a retry as it happens.
@@ -873,11 +883,27 @@ public sealed partial class GatewayPipeline(
                 // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
                 var client = plugin ? _pluginClient ?? throw NoPluginProviders()
                     : credentials.Proxy is { Length: > 0 } accountProxy ? http.For(accountProxy) : http.For(provider);
+                // The provider's own first-byte timeout (issue #28): a hung upstream hands the request on instead of holding it.
+                async Task<HttpResponseMessage> SendWithDeadlineAsync(HttpClient c, HttpRequestMessage r)
+                {
+                    if (provider.FirstByteTimeout() is not { } limit) return await c.SendAsync(r, HttpCompletionOption.ResponseHeadersRead, ct);
+                    using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    deadline.CancelAfter(limit);
+                    try
+                    {
+                        return await c.SendAsync(r, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+                    }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                    {
+                        attempt.Error("first byte timeout");
+                        throw new GatewayException(504, ProviderFailover.FirstByteTimeoutType, $"提供商 {provider.Name} 在 {(int)limit.TotalSeconds} 秒内没有响应。");
+                    }
+                }
                 var request = Build(credentials);
                 // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
                 // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
                 capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
-                var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                var response = await SendWithDeadlineAsync(client, request);
                 if (response.StatusCode == HttpStatusCode.UnsupportedMediaType && compressed is not null)
                 {
                     // 上游不收压缩的请求体：本请求剩下的发送都改发原文。
@@ -886,7 +912,7 @@ public sealed partial class GatewayPipeline(
                     compressed = null;
                     request = Build(credentials);
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
-                    response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    response = await SendWithDeadlineAsync(client, request);
                 }
                 await RejectStaleInputItemsAsync(attempt, response);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription && credentials.CanRefresh && resendable)
@@ -920,7 +946,7 @@ public sealed partial class GatewayPipeline(
                     attempt.Set("astra.credentials.refreshed", true);
                     request = Build(credentials);
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
-                    response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    response = await SendWithDeadlineAsync(client, request);
                     await RejectStaleInputItemsAsync(attempt, response);
                 }
                 if (failover && resendable && response.StatusCode is (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)

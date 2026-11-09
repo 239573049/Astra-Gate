@@ -95,8 +95,8 @@ persisted at the end.
     disables `ActivityHeadersPropagator` so the agent's `traceparent` never leaks to the provider. Steps 11–13 run in
     `HandleAsync`'s local `PrepareAsync`, once per candidate: a pool request whose attempt fails before anything reached
     the client (`Pipeline/ProviderFailover.cs` classifies the status / exception) is prepared again for the next member
-    and resent (`astra.attempt.retry = provider_failover`); the client's guarded tree is cloned, never rewritten, while
-    another attempt may follow. Every route reports its outcome to `ProviderHealth`.
+    and resent (`astra.attempt.retry = provider_failover`); a client bound to several providers gets the same treatment (issue #28, `AppSettings.ClientProviderFailover`, default on): `PoolRouting.PlanBindingsAsync` orders the bound providers serving the model by binding order, minus cooling ones, and the loop below runs on that plan; the client's guarded tree is cloned, never rewritten, while
+    another attempt may follow. Every route reports its outcome to `ProviderHealth`. A provider's `settings.first_byte_timeout_sec` (`Provider.FirstByteTimeout`) bounds the wait for response headers in `SendAsync`; it throws a 504 `first_byte_timeout` `GatewayException`, which `ProviderFailover.Classify` counts as a timeout.
     Account recovery is separate: `UpstreamAuth.CanRefresh` permits one renewal/reload on 401/403; direct tokens and
     API keys skip it. Failover/balanced modes cool a still-rejected account for `ProviderHealth.AuthCooldown` (10 min)
     and try an untried usable account (`auth_failover`), even after a successful renewal. Credential-resolution

@@ -71,11 +71,15 @@ public sealed class GatewaySettingsView : SettingsSectionView
         // Keeping the system awake while requests are in flight (the web shows it as its own group after the gateway).
         var awake = RowBuilder.Hinted(Loc.T("settings.preventSleep"), Loc.T("settings.preventSleepHint"),
             Switch(Loc.T("settings.preventSleep"), x => x.PreventSleep, on => PatchAsync(JsonPatch.Of(("preventSleep", on)))));
+        // Clients bound to several providers fall back along their bindings (issue #28).
+        var failover = RowBuilder.Hinted(Loc.T("settings.clientFailover"), Loc.T("settings.clientFailoverHint"),
+            Switch(Loc.T("settings.clientFailover"), x => x.ClientProviderFailover, on => PatchAsync(JsonPatch.Of(("clientProviderFailover", on)))));
         stack.Children.Add(RowBuilder.Group(null, null,
             _requireRow,
             idle,
             RowBuilder.Hinted(Loc.T("settings.requestCompression"), Loc.T("settings.requestCompressionHint"), compression),
-            awake));
+            awake,
+            failover));
     }
 
     /// <inheritdoc />
