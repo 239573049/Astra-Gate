@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.TextFormatting;
 using TKCode.Arc;
@@ -34,10 +35,10 @@ public static class SelectMenuFit
     /// <summary>Room the menu leaves of the window's width (the web's <c>100vw - 20px</c>).</summary>
     public const double WindowGutter = 20;
 
-    /// <summary>The template parts read here; the options view is Arc-internal, so its row metrics are read by property name.</summary>
-    private sealed record Parts(Border Surface, ScrollViewer? Scroll, Control Options);
+    /// <summary>The menu's parts read here; the options view is Arc-internal, so its row metrics are read by property name.</summary>
+    private sealed record Parts(Border Surface, ScrollViewer Scroll, Control Options);
 
-    private static readonly ConditionalWeakTable<Select, Parts> s_parts = new();
+    private static readonly ConditionalWeakTable<Select, ArcPopup> s_popups = new();
     private static readonly Dictionary<(string Text, string Family, FontWeight Weight, double Size), double> s_widths = [];
     private static bool _installed;
 
@@ -56,16 +57,27 @@ public static class SelectMenuFit
 
     private static void Attach(Select select, INameScope scope)
     {
-        if (scope.Find<Border>(Select.SurfacePart) is not { } surface || scope.Find<Control>(Select.OptionsPart) is not { } options) return;
-        s_parts.AddOrUpdate(select, new Parts(surface, scope.Find<ScrollViewer>(Select.ScrollPart), options));
-        scope.Find<ArcPopup>(Select.PopupPart)?.SetCurrentValue(ArcPopup.RequestedPlacementProperty, PlacementMode.BottomEdgeAlignedLeft);
+        if (scope.Find<ArcPopup>(Select.PopupPart) is not { } popup) return;
+        s_popups.AddOrUpdate(select, popup);
+        popup.SetCurrentValue(ArcPopup.RequestedPlacementProperty, PlacementMode.BottomEdgeAlignedLeft);
         if (select.IsOpen) Fit(select);
+    }
+
+    /// <summary>Arc 1.0 builds the menu on its first open, inside the popup's frame (<c>Select.EnsureMenu</c>), so it is not in the template's name scope.</summary>
+    private static Parts? MenuParts(ArcPopup popup)
+    {
+        if (popup.Child is null) return null;
+        var controls = popup.Child.GetLogicalDescendants().OfType<Control>().ToList();
+        var surface = controls.OfType<Border>().FirstOrDefault(c => c.Name == Select.SurfacePart);
+        var scroll = controls.OfType<ScrollViewer>().FirstOrDefault(c => c.Name == Select.ScrollPart);
+        var options = controls.FirstOrDefault(c => c.Name == Select.OptionsPart);
+        return surface is null || scroll is null || options is null ? null : new Parts(surface, scroll, options);
     }
 
     /// <summary>Sizes the open menu of <paramref name="select"/> to its options.</summary>
     public static void Fit(Select select)
     {
-        if (!s_parts.TryGetValue(select, out var parts)) return;
+        if (!s_popups.TryGetValue(select, out var popup) || MenuParts(popup) is not { } parts) return;
         var cap = MaxMenuWidth;
         if (TopLevel.GetTopLevel(select) is { } top && top.ClientSize.Width > 0) cap = Math.Min(cap, top.ClientSize.Width - WindowGutter);
         var width = Math.Min(Math.Max(MenuWidth(select, parts), MinMenuWidth), Math.Max(0, cap));
@@ -101,7 +113,7 @@ public static class SelectMenuFit
             widest += 16 + spacing;
         var chrome = padding.Left + padding.Right + options.Margin.Left + options.Margin.Right
             + parts.Surface.Padding.Left + parts.Surface.Padding.Right + parts.Surface.BorderThickness.Left + parts.Surface.BorderThickness.Right;
-        if (parts.Scroll is { } scroll) chrome += scroll.Padding.Left + scroll.Padding.Right;
+        chrome += parts.Scroll.Padding.Left + parts.Scroll.Padding.Right;
         // One pixel for the text layout's rounding, so a label that fits is not trimmed.
         return widest + chrome + 1;
     }
