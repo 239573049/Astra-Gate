@@ -15,9 +15,9 @@
     <!-- Arc 0.3.2 on the .NET 11 SDK with PublishAot: otherwise the compiled XAML is left out of the published app. -->
     <UseOptimizedPublish>false</UseOptimizedPublish>
   </PropertyGroup>
-  <!-- The four Arc packages move together: pin the exact preview (its docs require it). -->
+  <!-- The Arc packages move together and require this exact Avalonia (Arc 1.0.0: [12.1.4]; NU1608 otherwise). -->
   <PropertyGroup>
-    <ArcVersion>0.3.2-preview.1</ArcVersion>
+    <ArcVersion>1.0.0</ArcVersion>
     <AvaloniaVersion>12.1.4</AvaloniaVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -31,8 +31,8 @@
     <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="$(ArcVersion)" />
     <!-- MVVM source generators only (AOT-safe, no reflection bindings; plan avalonia-client §3 D3). -->
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="TKCode.Spyglass.Agent" Version="0.1.2" Condition="'$(Configuration)' == 'Debug'" />
-    <PackageReference Include="TKCode.Spyglass.Hotreload" Version="0.1.2" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="TKCode.Spyglass.Agent" Version="0.2.3" Condition="'$(Configuration)' == 'Debug'" />
+    <PackageReference Include="TKCode.Spyglass.Hotreload" Version="0.2.3" Condition="'$(Configuration)' == 'Debug'" />
 
   </ItemGroup>
   <ItemGroup>
