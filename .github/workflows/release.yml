@@ -261,6 +261,12 @@ jobs:
             exit 1
           fi
 
+      # No runner has macOS 13 any more, so its dyld is checked statically (both RIDs, incl. the cross-built x64).
+      - name: Check the macOS floor
+        if: startsWith(matrix.rid, 'osx')
+        shell: bash
+        run: node scripts/check-macos-floor.mjs out/publish/astra-server out/desktop-publish/astra-desktop
+
       # osx-x64 is cross-built on Apple silicon and not run here.
       - name: Smoke-test the desktop app
         if: matrix.rid != 'osx-x64'

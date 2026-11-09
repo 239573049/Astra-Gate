@@ -1,0 +1,26 @@
+<Project>
+  <!-- The macOS floor of the AOT binaries (issue #27). .NET 11 defaults to 14.0 and does not support 13, so this is ours to
+       keep: the deployment target here, the shim for the symbols macOS 13 lacks, LSMinimumSystemVersion in
+       src/Astra.Desktop/Packaging/Info.plist, and scripts/check-macos-floor.mjs, which release.yml and desktop-aot.yml run
+       on the published binaries. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true' and $(RuntimeIdentifier.StartsWith('osx-'))">
+    <AppleMinOSVersion>13.0</AppleMinOSVersion>
+    <_MacOsFloorArch Condition="'$(RuntimeIdentifier)' == 'osx-x64'">x86_64</_MacOsFloorArch>
+    <_MacOsFloorArch Condition="'$(RuntimeIdentifier)' == 'osx-arm64'">arm64</_MacOsFloorArch>
+  </PropertyGroup>
+
+  <Target Name="CompileMacOsFloorShim" BeforeTargets="LinkNative"
+          Condition="'$(PublishAot)' == 'true' and '$(_MacOsFloorArch)' != ''">
+    <PropertyGroup>
+      <_MacOsFloorShim>$(MSBuildThisFileDirectory)swift-lookup-shim.c</_MacOsFloorShim>
+      <_MacOsFloorShimObject>$(NativeIntermediateOutputPath)swift-lookup-shim.o</_MacOsFloorShimObject>
+    </PropertyGroup>
+    <MakeDir Directories="$(NativeIntermediateOutputPath)" />
+    <Exec Command="xcrun clang -c -O2 -Wall -Werror -target $(_MacOsFloorArch)-apple-macos$(AppleMinOSVersion) &quot;$(_MacOsFloorShim)&quot; -o &quot;$(_MacOsFloorShimObject)&quot;" />
+    <!-- LinkerArg, because ILC already expanded NativeLibrary into it by now; NativeLibrary too, for LinkNative's Inputs. -->
+    <ItemGroup>
+      <LinkerArg Include="&quot;$(_MacOsFloorShimObject)&quot;" />
+      <NativeLibrary Include="$(_MacOsFloorShimObject)" />
+    </ItemGroup>
+  </Target>
+</Project>

@@ -9,6 +9,8 @@ on:
   pull_request:
     paths:
       - 'src/Astra.Desktop/**'
+      - 'src/MacOsFloor/**'
+      - 'scripts/check-macos-floor.mjs'
       - 'Directory.Build.props'
       - 'global.json'
       - '.github/workflows/desktop-aot.yml'
@@ -85,6 +87,11 @@ jobs:
             echo "::error::AOT/trim warnings in the desktop publish"
             exit 1
           fi
+
+      - name: Check the macOS floor
+        if: startsWith(matrix.rid, 'osx')
+        shell: bash
+        run: node scripts/check-macos-floor.mjs out/publish/astra-desktop
 
       - name: Publish size
         shell: bash

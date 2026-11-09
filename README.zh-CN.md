@@ -62,7 +62,7 @@ npx @aidotnet/astra-gate install --desktop
 独立安装包 —— macOS `.dmg`、Windows `.exe`、Linux `.AppImage`，内置服务端、无需
 Node.js —— 见[官网下载页](https://astra-gate.si/download)。
 
-支持 macOS、Windows、Linux，各提供 x64 与 arm64 两个架构。
+支持 macOS 13 及以上、Windows、Linux，各提供 x64 与 arm64 两个架构。
 
 ## 快速开始
 

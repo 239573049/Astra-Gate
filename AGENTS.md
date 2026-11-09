@@ -332,6 +332,12 @@ runtime needed on the target).
   desktop installers copy that whole directory in as `resources/server`, `scripts/package-desktop.mjs`),
   and `packages/update-core` (`staging.ts`/`swap.ts`/`apply.ts`) stages, commits and rolls them
   back with the same `.prev` pattern as the binary.
+- macOS floor is 13.0, one below .NET 11's own default and support (issue #27): `src/MacOsFloor/MacOsFloor.targets`,
+  imported by `Astra.Server` and `Astra.Desktop`, sets `AppleMinOSVersion` and links `swift-lookup-shim.c`, which forwards
+  the two Swift lookups macOS 13 lacks. `scripts/check-macos-floor.mjs` (`release.yml`, `desktop-aot.yml`) checks the
+  published binaries against the macOS 13.3 SDK's stubs; when an SDK bump makes it fail, extend the shim only for an entry
+  point shown to be equivalent, otherwise move the floor together with `LSMinimumSystemVersion` in `Packaging/Info.plist`
+  and the requirement in `docs/content/docs/guide/install.mdx` and both READMEs.
 - Known gap: `scripts/gen-manifest.mjs` hashes only the executable, so the companion carries no
   integrity hash in the update feed.
 

@@ -72,7 +72,7 @@ npx @aidotnet/astra-gate install --desktop
 Standalone installers — macOS `.dmg`, Windows `.exe`, Linux `.AppImage` with the server
 bundled (no Node.js required) — are on the [download page](https://astra-gate.si/download).
 
-Supported platforms: macOS, Windows and Linux, each on x64 and arm64.
+Supported platforms: macOS 13 or later, Windows and Linux, each on x64 and arm64.
 
 ## Quick start
 
