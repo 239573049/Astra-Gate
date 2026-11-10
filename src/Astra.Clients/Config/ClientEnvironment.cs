@@ -13,7 +13,7 @@ public sealed class ClientEnvironment
     private readonly Func<string, string?> _lookup;
     private readonly bool _readLoginShellPath;
     private readonly Lock _shellPathLock = new();
-    private (IReadOnlyList<string> Dirs, DateTimeOffset At)? _shellPath;
+    private (IReadOnlyList<string> Dirs, IReadOnlyDictionary<string, string> Proxy, DateTimeOffset At)? _shellPath;
     private bool _shellPathRefreshing;
 
     public ClientEnvironment(string homeDirectory, string os, Func<string, string?>? environmentVariableLookup = null,
@@ -174,6 +174,11 @@ public sealed class ClientEnvironment
 
     private const string PathBegin = "__ASTRA_PATH_BEGIN__";
     private const string PathEnd = "__ASTRA_PATH_END__";
+    private const string ProxyBegin = "__ASTRA_PROXY_BEGIN__";
+    private const string ProxyEnd = "__ASTRA_PROXY_END__";
+
+    /// <summary>The proxy variables read from the login shell, in the order the shell prints them.</summary>
+    private static readonly string[] ProxyNames = ["HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy", "NO_PROXY", "no_proxy"];
 
     /// <summary>
     /// PATH as the user's interactive login shell sets it (macOS / Linux; cached, and re-read in the background once
@@ -182,9 +187,19 @@ public sealed class ClientEnvironment
     /// client than the one the user runs in a terminal (e.g. a fresh copy in ~/.npm-global/bin while the terminal
     /// still runs an older one from ~/.local/bin). Empty in tests, on Windows, for non-POSIX shells, or on failure.
     /// </summary>
-    public IReadOnlyList<string> LoginShellPath()
+    public IReadOnlyList<string> LoginShellPath() => ReadLoginShellCached().Dirs;
+
+    /// <summary>
+    /// The proxy variables (<c>HTTPS_PROXY</c>, <c>HTTP_PROXY</c>, <c>ALL_PROXY</c>, <c>NO_PROXY</c>, either case) the login shell
+    /// exports, read in the same shell call and cache as <see cref="LoginShellPath"/>; only the non-empty ones. A terminal has them
+    /// from .zshrc / .bash_profile while a server started from the desktop app does not, so an npm install run by Astra could not
+    /// reach a registry that the same command in a terminal reached. Empty in tests, on Windows, or on failure.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> LoginShellProxy() => ReadLoginShellCached().Proxy;
+
+    private (IReadOnlyList<string> Dirs, IReadOnlyDictionary<string, string> Proxy) ReadLoginShellCached()
     {
-        if (!_readLoginShellPath || Os == "windows") return [];
+        if (!_readLoginShellPath || Os == "windows") return ([], EmptyProxy);
         lock (_shellPathLock)
         {
             if (_shellPath is { } cached)
@@ -194,21 +209,23 @@ public sealed class ClientEnvironment
                     _shellPathRefreshing = true;
                     _ = Task.Run(() =>
                     {
-                        var fresh = ReadLoginShellPath();
+                        var fresh = ReadLoginShell();
                         lock (_shellPathLock)
                         {
-                            _shellPath = (fresh, DateTimeOffset.UtcNow);
+                            _shellPath = (fresh.Dirs, fresh.Proxy, DateTimeOffset.UtcNow);
                             _shellPathRefreshing = false;
                         }
                     });
                 }
-                return cached.Dirs;
+                return (cached.Dirs, cached.Proxy);
             }
-            var dirs = ReadLoginShellPath();
-            _shellPath = (dirs, DateTimeOffset.UtcNow);
-            return dirs;
+            var read = ReadLoginShell();
+            _shellPath = (read.Dirs, read.Proxy, DateTimeOffset.UtcNow);
+            return read;
         }
     }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptyProxy = new Dictionary<string, string>();
 
     /// <summary>Forgets the cached login-shell PATH (after an install that may have changed it).</summary>
     public void RefreshLoginShellPath()
@@ -216,11 +233,11 @@ public sealed class ClientEnvironment
         lock (_shellPathLock) _shellPath = null;
     }
 
-    private IReadOnlyList<string> ReadLoginShellPath()
+    private (IReadOnlyList<string> Dirs, IReadOnlyDictionary<string, string> Proxy) ReadLoginShell()
     {
         var shell = _lookup("SHELL") is { Length: > 0 } s && File.Exists(s) ? s : Os == "osx" ? "/bin/zsh" : "/bin/bash";
         // fish / nushell do not take POSIX "$PATH" syntax; better no shell PATH than a wrong one.
-        if (Path.GetFileName(shell) is not ("zsh" or "bash" or "sh" or "ksh" or "dash")) return [];
+        if (Path.GetFileName(shell) is not ("zsh" or "bash" or "sh" or "ksh" or "dash")) return ([], EmptyProxy);
         try
         {
             using var process = new System.Diagnostics.Process
@@ -237,7 +254,9 @@ public sealed class ClientEnvironment
             };
             // -i and -l: PATH additions live in .zprofile / .zshrc / .bash_profile / .bashrc alike.
             process.StartInfo.ArgumentList.Add("-ilc");
-            process.StartInfo.ArgumentList.Add($"printf '{PathBegin}%s{PathEnd}' \"$PATH\"");
+            process.StartInfo.ArgumentList.Add(
+                $"printf '{PathBegin}%s{PathEnd}{ProxyBegin}{string.Join("\\n", ProxyNames.Select(_ => "%s"))}{ProxyEnd}' \"$PATH\" "
+                + string.Join(' ', ProxyNames.Select(n => $"\"${{{n}}}\"")));
             process.Start();
             process.StandardInput.Close();
             var stdout = process.StandardOutput.ReadToEndAsync();
@@ -246,14 +265,30 @@ public sealed class ClientEnvironment
             {
                 try { process.Kill(entireProcessTree: true); }
                 catch (InvalidOperationException) { }
-                return [];
+                return ([], EmptyProxy);
             }
-            return ParseMarkedPath(stdout.GetAwaiter().GetResult());
+            var output = stdout.GetAwaiter().GetResult();
+            return (ParseMarkedPath(output), ParseMarkedProxy(output));
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException or InvalidOperationException)
         {
-            return [];
+            return ([], EmptyProxy);
         }
+    }
+
+    /// <summary>The proxy variables printed between the markers, by name; the empty ones are left out.</summary>
+    public static IReadOnlyDictionary<string, string> ParseMarkedProxy(string output)
+    {
+        var start = output.LastIndexOf(ProxyBegin, StringComparison.Ordinal);
+        if (start < 0) return EmptyProxy;
+        start += ProxyBegin.Length;
+        var end = output.IndexOf(ProxyEnd, start, StringComparison.Ordinal);
+        if (end < 0) return EmptyProxy;
+        var values = output[start..end].Split('\n');
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var i = 0; i < ProxyNames.Length && i < values.Length; i++)
+            if (values[i].Trim() is { Length: > 0 } value) result[ProxyNames[i]] = value;
+        return result;
     }
 
     /// <summary>The PATH printed between the markers (rc files may print banners around it), split into absolute directories.</summary>

@@ -376,6 +376,22 @@ public class ClientEnvironmentToolPathTests : IDisposable
     }
 
     [Fact]
+    public void Login_Shell_Proxy_Variables_Are_Read_By_Name_And_Empty_Ones_Are_Left_Out()
+    {
+        // HTTPS_PROXY, https_proxy, HTTP_PROXY, http_proxy, ALL_PROXY, all_proxy, NO_PROXY, no_proxy — one per line.
+        const string output = "motd\n__ASTRA_PATH_BEGIN__/usr/bin__ASTRA_PATH_END__"
+            + "__ASTRA_PROXY_BEGIN__http://127.0.0.1:7890\n\n\nhttp://127.0.0.1:7890\n\n\nlocalhost,127.0.0.1\n__ASTRA_PROXY_END__";
+        var proxy = Astra.Clients.Config.ClientEnvironment.ParseMarkedProxy(output);
+        Assert.Equal(3, proxy.Count);
+        Assert.Equal("http://127.0.0.1:7890", proxy["HTTPS_PROXY"]);
+        Assert.Equal("http://127.0.0.1:7890", proxy["http_proxy"]);
+        Assert.Equal("localhost,127.0.0.1", proxy["NO_PROXY"]);
+        Assert.Empty(Astra.Clients.Config.ClientEnvironment.ParseMarkedProxy("no markers here"));
+        Assert.Empty(Astra.Clients.Config.ClientEnvironment.ParseMarkedProxy("__ASTRA_PROXY_BEGIN__a\nb"));
+        Assert.Empty(_home.Env.LoginShellProxy());
+    }
+
+    [Fact]
     public void Tests_Never_Read_The_Real_Login_Shell() =>
         // TestHome's environment is not the real one: no shell is spawned and the tool path is PATH only.
         Assert.Empty(_home.Env.LoginShellPath());

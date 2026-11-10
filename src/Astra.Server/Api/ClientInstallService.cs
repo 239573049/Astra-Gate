@@ -671,6 +671,9 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         try
         {
             using var process = CreateProcess(job.Command, ExtraPathFor(state));
+            // npm is silent until it finishes (progress is off); its request lines show where a slow or stuck run is waiting.
+            // Set here, not in CreateProcess: the version and root probes read their output.
+            process.StartInfo.Environment["npm_config_loglevel"] = "http";
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) job.Append(e.Data); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) job.Append(e.Data); };
             process.Start();
@@ -679,6 +682,9 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             process.BeginErrorReadLine();
             job.Attach(process);
             using var timeout = new CancellationTokenSource(JobTimeout);
+            using var heartbeat = new CancellationTokenSource();
+            // An elevated run shows its output only when it ends, so silence there is expected.
+            if (!job.Elevated) _ = Task.Run(() => SilenceNoticesAsync(job, heartbeat.Token));
             try
             {
                 await process.WaitForExitAsync(timeout.Token);
@@ -688,6 +694,10 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
                 job.Kill();
                 job.Finish("failed", null, "timeout");
                 return;
+            }
+            finally
+            {
+                heartbeat.Cancel();
             }
             process.WaitForExit(); // flush the async output readers
             var exit = process.ExitCode;
@@ -709,6 +719,27 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             lock (_jobLock) if (_running == job) _running = null;
             logger.LogInformation("客户端{Action}结束：{Kind} {State}", job.Action, job.Kind, job.State);
         }
+    }
+
+    private static readonly TimeSpan SilenceNotice = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// While a run prints nothing, says so in its log every <see cref="SilenceNotice"/> — a dialog stuck on "running…" with an empty
+    /// log looks the same as a hung one (issue #32). The notice is not output: it does not restart the silence.
+    /// </summary>
+    private static async Task SilenceNoticesAsync(Job job, CancellationToken ct)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(SilenceNotice);
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var silent = job.SinceLastOutput;
+                if (silent >= SilenceNotice)
+                    job.Notice($"仍在运行…已 {(int)silent.TotalSeconds} 秒没有新输出，可能在等待网络或代理；需要时可点“停止”。");
+            }
+        }
+        catch (OperationCanceledException) { }
     }
 
     /// <summary>
@@ -823,7 +854,8 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
     /// only read HTTPS_PROXY / HTTP_PROXY, never the macOS / Windows proxy settings, and a server started by the
     /// desktop app has none of those variables — without this, "claude update" and npm installs cannot reach the
     /// registry behind a proxy even though Astra's own update check (which uses <see cref="SystemProxy"/>) can.
-    /// Nothing is added when the server already has proxy variables (the child inherits them) or there is no proxy.
+    /// Nothing is added when the server already has proxy variables (the child inherits them) or there is no proxy; otherwise the
+    /// proxy variables of the user's login shell come before the system proxy (a terminal's npm uses those).
     /// A proxy chosen in settings overrides inherited variables: "custom" sets them, "direct" blanks them.
     /// </summary>
     private List<KeyValuePair<string, string>> ProxyEnvironment()
@@ -837,6 +869,8 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
             return [.. ProxyVariables.Select(v => new KeyValuePair<string, string>(v, url)), new("NO_PROXY", noProxy), new("no_proxy", noProxy)];
         }
         if (ProxyVariables.Any(v => env.GetEnvironmentVariable(v) is { Length: > 0 })) return [];
+        // What the user's terminal has: the same npm command works there, and a server the desktop app started has none of it.
+        if (env.LoginShellProxy() is { Count: > 0 } fromShell) return [.. fromShell.Select(kv => new KeyValuePair<string, string>(kv.Key, kv.Value))];
         if (SystemProxy.ProxyUrlFor(new Uri(NpmRegistry())) is not { } proxy) return [];
         var result = ProxyVariables.Take(4).Select(v => new KeyValuePair<string, string>(v, proxy)).ToList();
         if (env.GetEnvironmentVariable("NO_PROXY") is not { Length: > 0 } && env.GetEnvironmentVariable("no_proxy") is not { Length: > 0 })
@@ -891,7 +925,24 @@ public sealed partial class ClientInstallService(ClientEnvironment env, IHttpCli
         [GeneratedRegex(@"\x1B\[[0-9;?]*[ -/]*[@-~]")]
         private static partial Regex Ansi();
 
+        private DateTimeOffset _lastOutput = DateTimeOffset.UtcNow;
+
         public void Append(string line)
+        {
+            lock (_lock) _lastOutput = DateTimeOffset.UtcNow;
+            Add(line);
+        }
+
+        /// <summary>A line from Astra itself: it goes in the log without counting as output.</summary>
+        public void Notice(string line) => Add(line);
+
+        /// <summary>How long since the run last printed a line (or since it started).</summary>
+        public TimeSpan SinceLastOutput
+        {
+            get { lock (_lock) return DateTimeOffset.UtcNow - _lastOutput; }
+        }
+
+        private void Add(string line)
         {
             var clean = Ansi().Replace(line, "").TrimEnd('\r');
             lock (_lock)
