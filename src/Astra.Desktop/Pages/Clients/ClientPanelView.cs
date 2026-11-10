@@ -76,8 +76,10 @@ public sealed class ClientPanelView : UserControl
         _vm = vm;
         _watch = new QueryWatch(Schedule);
         _body.Margin = new Thickness(16, 14, 16, 20);
-        _body.MaxWidth = 760;
-        _body.HorizontalAlignment = HorizontalAlignment.Left;
+        // Stretch, not Left: a left-aligned body is only as wide as its content, which left the routing tab's one provider row
+        // in a narrow strip with the rest of the panel empty (issue #31). The cap keeps rows readable on a very wide window.
+        _body.MaxWidth = 1040;
+        _body.HorizontalAlignment = HorizontalAlignment.Stretch;
         _scroll = new ScrollViewer { Content = _body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
         grid.Children.Add(_head);
@@ -244,7 +246,9 @@ public sealed class ClientPanelView : UserControl
         var title = ClientUi.HRow(6, ClientUi.Text(name, 14, ArcDesignTokenKind.Foreground, FontWeight.SemiBold));
         title.Children.Add(isDirect ? KitBadge.Create(Loc.T("clients.claudeDirect.direct")) : StatusBadge(client));
 
-        var meta = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(0, 2, 0, 0) };
+        // A WrapPanel, not a horizontal StackPanel: the middle column is as wide as the window leaves it, and a StackPanel keeps its
+        // full width and runs under the action buttons (issue #31, "更新到 x" covering the written-at time).
+        var meta = new WrapPanel { ItemSpacing = 5, LineSpacing = 2, Margin = new Thickness(0, 2, 0, 0) };
         TextBlock Muted(string text)
         {
             var block = ClientUi.Text(text, 11.5, ArcDesignTokenKind.TextMuted);
