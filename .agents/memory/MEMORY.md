@@ -4,6 +4,7 @@ Index of this directory: one line per entry. Open an entry before relying on it.
 Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork/memory/` (not committed).
 
 ## Project
+- [MCP gateway design](mcp-gateway-design.md) — issue #29: remote upstreams only, OAuth in phase 1 (no CIMD), no legacy-SSE front end; the SDK serves the upstream side, the front end is ours
 - [Avalonia native menu is set once](avalonia-native-menu-set-once.md) — a second NativeMenu.SetMenu on a macOS window throws "The menu being updated does not match"; relabel in place
 - [Windows hidden title bar leaves a caption strip](windows-hidden-title-bar-caption-hint.md) — hint -1 keeps ~31 DIP of HTCAPTION over the content; set it to the frame thickness, draw the caption buttons with roles; unverified on Windows
 - [Avalonia window units](avalonia-window-units.md) — save window bounds in the screen's units (points on macOS), not render-scaled pixels; the sidebarCollapsed report was a harness leak, not a bug in real launches
