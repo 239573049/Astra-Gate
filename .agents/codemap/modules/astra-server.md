@@ -38,6 +38,7 @@ and Bun host (`astra-plugins`), and the CLI/web/desktop/docs/packaging side (`cl
 | `ServerOptions` / `ApplyEnvironment` / `ApplyArgs` | `src/Astra.Server/Hosting/ServerOptions.cs:9`, `:85`, `:123` | Startup config; precedence flags > env > `config.json`; `LocalUrl`/`GatewayBaseUrl` (public URL else local), `IsLoopback`, `Version` from the assembly. |
 | `PortPicker.FindFree` / `CanListen` | `src/Astra.Server/Hosting/PortPicker.cs:15`, `:25` | Probe-only (listener stopped immediately); `MaxAttempts = 20`; unparsable hosts are left to Kestrel. |
 | `RuntimeFile.Write` / `Delete` | `src/Astra.Server/Hosting/RuntimeFile.cs:32`, `:54` | Atomic `runtime.json` (tmp + move, owner-only) with pid/port/host/version/apiVersion/startedBy + `RuntimeToken`; delete only if the pid still matches. |
+| `McpEndpoints.MapMcpEndpoints` / `McpService` / `McpOAuthService` | `src/Astra.Server/Api/McpEndpoints.cs`, `McpService.cs`, `McpOAuthService.cs` | `/api/mcp/{settings,servers,calls}` plus test connection and OAuth start / `GET /api/mcp/oauth/callback`. Creating, changing, testing and authorizing a server answer only callers from this machine; header values and tokens never leave the server. The data plane is `Astra.Gateway/Http/McpGatewayEndpoints.cs`. |
 | `AdminSessions` | `src/Astra.Server/Security/Security.cs:37` | `astra_session` cookie (time-limited DataProtection protector, HttpOnly, SameSite=Strict, Secure iff https). |
 | `PasswordHasher` | `src/Astra.Server/Security/Security.cs:13` | PBKDF2-SHA256, 210k iterations, `pbkdf2-sha256$iter$salt$hash`; constant-time verify. |
 | `AlertEngine` | `src/Astra.Server/Alerts/AlertEngine.cs:27` | `IAlertSignals` sink + `BackgroundService`: 1-minute sweep after a 20 s initial delay, bounded signal queue (4096, DropOldest, single reader), per rule×subject state machine, one background reader so reporting never blocks. |
@@ -149,6 +150,7 @@ and Bun host (`astra-plugins`), and the CLI/web/desktop/docs/packaging side (`cl
 - [subscription-account-refresh](../flows/subscription-account-refresh.md)
 - [privacy-redaction](../flows/privacy-redaction.md)
 - [token-limits-enforcement](../flows/token-limits-enforcement.md)
+- [mcp-gateway](../flows/mcp-gateway.md)
 - [plugin-install-and-run](../flows/plugin-install-and-run.md)
 - [release-and-update](../flows/release-and-update.md)
 ../flows/release-and-update.md)

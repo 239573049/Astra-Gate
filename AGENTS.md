@@ -600,6 +600,28 @@ runtime needed on the target).
     with installed apps, like the other packaging names (linked update 22). `astra-connect` (npx) is separate and unchanged: it still writes
     the bare key into clients (linked update 20); the two paths must not manage the same client at once.
 
+25. **MCP gateway** (GitHub issue #29, `.plan/mcp-gateway.md`): `/mcp` (all servers a token is bound to, tool names `<slug>__<tool>`) and
+    `/mcp/{slug}` (one server, unprefixed) are `Astra.Gateway/Http/McpGatewayEndpoints.cs`; the upstream side is `Astra.Gateway/Mcp` on the official
+    `ModelContextProtocol.Core` SDK (era detection, initialize sessions, OAuth client — keep the package out of `Astra.Core`). Both protocol eras
+    are served and spoken, always statelessly: modern 2026-07-28 (per-request `_meta` and `MCP-Protocol-Version` / `Mcp-Method` / `Mcp-Name`
+    headers checked against the body) and legacy Streamable HTTP (`initialize` without a session id); the deprecated HTTP+SSE transport is not
+    served, and replies are JSON, never SSE. Storage is migration 0022 (`mcp_servers`, `mcp_oauth`, `mcp_calls`, `tokens.mcp_json`;
+    `McpRepository`); static header values and OAuth tokens go through `ISecretProtector` and are never returned, logged or put in a DTO; a
+    server's tool-call failures never name its address. Rules to keep: the token is read from `Authorization: Bearer` / `x-api-key` only (never
+    the query string); an unlisted browser `Origin` is a 403 (`AppSettings.McpGateway`, off by default, 404 while off); a token reaches no MCP
+    server until `tokens.mcp_json` binds it (`PATCH /api/tokens/{id}` `mcpServers`), and an unbound tool looks exactly like an unknown one;
+    creating, changing, testing or authorizing a server is local-origin only (it makes Astra connect to an address of the admin's choosing); the
+    data plane never starts an interactive OAuth flow and never even connects to an OAuth server that holds no tokens (the SDK would register a
+    client at the authorization server first); one OAuth identity is shared by every token bound to the server; a tool call that may have had
+    its effect is never retried. The callback is `GET /api/mcp/oauth/callback` (`McpOAuthService`: single-use in-memory `state`, `iss` checked by
+    the SDK before the code is spent). Calls are logged to `mcp_calls` (who, tool, duration, outcome — no arguments, no results; not the request
+    log, so linked update 15 is untouched). Mirrors (a change to the admin API moves them together): `Astra.Api.Contracts/McpDtos.cs` (+ `TokenDto.McpServers`; the
+    server DTO's `OAuth` is pinned to the JSON name `oauth`), `web/src/api` (`useMcp*`) and `types.ts`, the web page `McpGateway.tsx` and the
+    token settings sheet's MCP choice, the Avalonia page (`Pages/Mcp`, `Components/Mcp/McpServerSheet.cs`, `Astra.Desktop.Core/Mcp/McpApi.cs`,
+    `TokenSettingsDraft.McpServers`, route `AppRoute.Mcp`), zh/en `mcp.*` / `nav.mcp` / `tokens.mcp*` keys (+ `gen-desktop-i18n`), the UI fixtures
+    (`scripts/visual/gen-fixtures.mjs`: `/api/mcp/*`, `mcpServers` on a token) and `docs/content/docs/console/mcp.mdx` (linked update 14). The
+    nav entry is not in `NavItems.Hideable` yet. Tests: `McpGatewayTests`, `McpAdminApiTests`, `McpOAuthTests` (real SDK servers on `TestServer`, `McpFixture`), `McpRepositoryTests`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
@@ -716,6 +738,7 @@ they disagree, trust the code and fix the page). Read the matching page before y
 - server startup, the port or `runtime.json` → `.agents/codemap/flows/server-startup.md`
 - taking over or restoring a local AI client's config → `.agents/codemap/flows/client-config-takeover.md`
 - installing or running a plugin → `.agents/codemap/flows/plugin-install-and-run.md`
+- the MCP gateway (`/mcp`, its upstream servers or their OAuth) → `.agents/codemap/flows/mcp-gateway.md`
 - a release, the update feed or the desktop/CLI updater → `.agents/codemap/flows/release-and-update.md`
 - unsure where new code belongs → `.agents/codemap/architecture.md` (ownership table)
 - a business term you do not recognise → `.agents/codemap/domain.md`

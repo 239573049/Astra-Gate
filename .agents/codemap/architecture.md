@@ -72,6 +72,7 @@ Astra.Core ──┬──> Astra.Data ─────┐
 | A provider family or quota probe | `src/Astra.Providers` | the quota worker's due-check, the console's card, the alert descriptor |
 | A local client adapter | `src/Astra.Clients/Adapters` | `ClientKinds.All`, `ClientAdapterRegistry.BuiltIn`, docs client list, the console's option group |
 | A plugin capability | `src/Astra.Plugins` | the contracts in `src/Astra.Core/Plugins`, the server's plugin endpoints |
+| An MCP gateway capability (a method, an upstream behaviour) | `src/Astra.Gateway/Mcp` (engine), `src/Astra.Gateway/Http/McpGatewayEndpoints.cs` (front end) | `ModelContextProtocol.Core` only in `Astra.Gateway`, never `Astra.Core`; the mirrors in root AGENTS.md linked update 25 ([mcp-gateway](flows/mcp-gateway.md)) |
 | A background job | `src/Astra.Server/Hosting/*Worker.cs` | registration + `BackgroundService` in `AstraApp.Create`, an explicit initial delay |
 | A console screen | `web/src/pages` + `web/src/api/hooks.ts` | both i18n catalogs |
 | A documentation page | `docs/content/docs/<module>/` + that folder's `meta.json` | the root `meta.json` when it is a new module |

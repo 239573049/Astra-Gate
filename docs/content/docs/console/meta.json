@@ -12,6 +12,7 @@
     "---[KeyRound]客户端与令牌---",
     "clients",
     "tokens",
+    "mcp",
     "---[Puzzle]插件---",
     "plugins",
     "---[ShieldCheck]运行与安全---",

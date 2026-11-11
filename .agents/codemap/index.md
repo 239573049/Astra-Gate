@@ -38,6 +38,7 @@ Rules live in the root AGENTS.md; reasons and history live in `.agents/memory/`.
 | Request tracing | The same request, recorded as spans and linked into its agent's turn | astra-gateway, astra-core, astra-data, astra-server, web-ui, docs-site | [request-tracing](flows/request-tracing.md) |
 | Privacy redaction | Any client request with the guard enabled | astra-gateway, astra-core, astra-server, astra-data, web-ui, astra-plugins | [privacy-redaction](flows/privacy-redaction.md) |
 | Token limits enforcement | A request with a limited gateway token | astra-gateway, astra-core, astra-data, astra-server, web-ui | [token-limits-enforcement](flows/token-limits-enforcement.md) |
+| MCP gateway | An MCP client posts to `/mcp` or `/mcp/{slug}`; an admin registers or authorizes an upstream MCP server | astra-gateway, astra-core, astra-data, astra-server, web-ui | [mcp-gateway](flows/mcp-gateway.md) |
 | Client config take-over | Enable/disable/restore a local AI client in the console or the CLI | web-ui, astra-server, astra-clients, astra-data, cli | [client-config-takeover](flows/client-config-takeover.md) |
 | Plugin install and run | Install a plugin from the market/git/npm, then a matching request | web-ui, astra-server, astra-plugins, astra-gateway, astra-clients, astra-data | [plugin-install-and-run](flows/plugin-install-and-run.md) |
 | Admin API request | The console or CLI calls `/api/**` | web-ui, cli, astra-server, astra-data, astra-core, desktop-app | [admin-api-request](flows/admin-api-request.md) |

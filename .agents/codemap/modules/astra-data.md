@@ -46,6 +46,7 @@ decides what a row should say (`astra-gateway`), and the TS/Docker side that onl
 | `TokenRepository` | `src/Astra.Data/Repositories/TokenRepository.cs:TokenRepository` | `tokens` plus its `token_usage_totals` / `token_usage_daily` counters; `DeleteAsync` refuses the default token. |
 | `ClientConfigStateStore` | `src/Astra.Data/Repositories/ClientConfigStateStore.cs:ClientConfigStateStore` | Synchronous Dapper implementation of `Astra.Core.Clients.IClientConfigStateStore` (`src/Astra.Core/Clients/ClientContracts.cs:143`) — the original/applied value of every key Astra writes into a client config file. |
 | `PluginRepository` | `src/Astra.Data/Repositories/PluginRepository.cs:PluginRepository` | `plugins` + `plugin_provider_prefs`; implements `IPluginListStore` (`src/Astra.Core/Plugins/PluginContracts.cs:65`); `ReplaceAsync` carries sort order, added time and provider picks to a new spec. |
+| `McpRepository` | `src/Astra.Data/Repositories/McpRepository.cs:McpRepository` | Migration 0022: `mcp_servers`, `mcp_oauth` (one encrypted token container per OAuth server, cascades with the server), `mcp_calls` (a log that outlives a deleted server; `PruneCallsAsync`) and the token's binding `tokens.mcp_json` (read through `TokenRecord.McpServerIds()`). |
 | `AlertRepository` | `src/Astra.Data/Repositories/AlertRepository.cs:AlertRepository` | `webhooks`, `alert_rules`, `alert_rule_webhooks`, `alert_states`, `webhook_deliveries`; rule+links are written in one transaction. |
 | `ClaudeDirectRequestRepository` | `src/Astra.Data/Repositories/ClaudeDirectRequestRepository.cs:ClaudeDirectRequestRepository` | `claude_direct_requests`: client-reported telemetry, `ON CONFLICT(id) DO NOTHING` so a replayed upload is idempotent. Constructed directly from `db.Factory`, not exposed on `AstraDatabase` (`src/Astra.Server/Api/ClaudeDirectService.cs:51`). |
 | `ForeignSqlite` | `src/Astra.Data/Foreign/ForeignSqlite.cs:ForeignSqlite` | Raw ADO.NET reader over another app's DB (no Dapper, no pooling); table names are validated against `^[A-Za-z_][A-Za-z0-9_]*$` before being interpolated. |
@@ -126,5 +127,6 @@ decides what a row should say (`astra-gateway`), and the TS/Docker side that onl
 - [token-limits-enforcement](../flows/token-limits-enforcement.md) — `token_usage_totals` / `token_usage_daily` are the counters the limiter reads.
 - [client-config-takeover](../flows/client-config-takeover.md) — `client_config_state` is the restore bookkeeping.
 - [plugin-install-and-run](../flows/plugin-install-and-run.md) — the installed list is the `plugins` table.
+- [mcp-gateway](../flows/mcp-gateway.md) — the servers, their OAuth tokens and the call log are `McpRepository`'s.
 - [admin-api-request](../flows/admin-api-request.md) — every admin endpoint group reaches its table through one of these repositories.
 very admin endpoint group reaches its table through one of these repositories.

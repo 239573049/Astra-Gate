@@ -175,6 +175,7 @@ Every page renders into `Page` (`web/src/components/layout/Page.tsx:15`) unless 
 | `ModelsPage` | `web/src/pages/ModelsPage.tsx:21` | System model catalog with search/vendor filter, create, and the models.dev sync preview/apply. |
 | `ModelDetailPage` | `web/src/pages/ModelDetailPage.tsx:42` | One model: fields, capabilities, seed-reset, per-price-key prices, billing simulator. |
 | `PluginsPage` | `web/src/pages/PluginsPage.tsx:77` | Installed plugins / market / Bun runtime tabs: install, enable, options, reorder, sign-in accounts, magpie import. |
+| `McpPage` | `web/src/pages/McpPage.tsx` → `web/src/components/McpGateway.tsx` | MCP gateway: the on/off switch and the address clients use, allowed browser origins, servers (none / header / OAuth auth) with test, authorize and status, and the recent tool calls. The token sheet's "MCP servers" choice is in `TokensPage.tsx`. |
 | `PrivacyPage` | `web/src/pages/PrivacyPage.tsx:14` | Privacy guard tabs: overview stats, interception logs, rules, dry-run tester. |
 | `SettingsPage` | `web/src/pages/SettingsPage.tsx:32` | General (retention, limits, proxy, locale, update), notifications, remote access, tray panel (desktop only). |
 | `LoginPage` | `web/src/pages/LoginPage.tsx:11` | The password form `AuthGate` shows; says why when a tunnel keeps the admin UI local. |
@@ -201,6 +202,7 @@ first — `web/package.json:9`).
 - [provider-quota-refresh](../flows/provider-quota-refresh.md)
 - [subscription-account-refresh](../flows/subscription-account-refresh.md)
 - [token-limits-enforcement](../flows/token-limits-enforcement.md)
+- [mcp-gateway](../flows/mcp-gateway.md)
 - [privacy-redaction](../flows/privacy-redaction.md)
 - [release-and-update](../flows/release-and-update.md)
 - [server-startup](../flows/server-startup.md)
