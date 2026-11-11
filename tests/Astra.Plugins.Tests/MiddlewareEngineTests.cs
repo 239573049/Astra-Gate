@@ -103,6 +103,42 @@ public class MiddlewareEngineTests
     }
 
     [Fact]
+    public async Task An_engine_a_limit_stopped_is_replaced_for_the_next_hook_and_request()
+    {
+        // a stopped Jaunt engine can't run again: the request's next hook, and the next request, get a fresh one
+        var (engine, _, plugins) = await EngineAsync(("sometimes", """
+            export function onRequest(b) { if (b.loop) while (true) {} b.ok = true; return b }
+            export function onResponse(b, ctx) { b.ok = true; ctx.reject(400, 'no effect here'); return b }
+            """, null));
+        using (var run = (await engine.BeginAsync(Anthropic))!)
+        {
+            Assert.Equal("""{"loop":true}""", S(run.Request(B("""{"loop":true}""")).Body));
+            Assert.Equal("""{"ok":true}""", S(run.Response(B("{}"), 200)));
+        }
+        using (var run = (await engine.BeginAsync(Anthropic))!)
+            Assert.Equal("""{"ok":true}""", S(run.Request(B("{}")).Body));
+
+        var state = (await engine.StatesAsync())[(await plugins.Store.ListAsync())[0].Spec];
+        Assert.Equal(1, state.Failures);
+        Assert.Equal("onRequest: took too long", state.LastError);
+    }
+
+    [Fact]
+    public async Task Sha256_hashes_text_and_byte_arrays_and_headers_take_string_forms()
+    {
+        var (engine, _, _) = await EngineAsync(("hash", """
+            export function onRequest(b, ctx) { b.text = ctx.sha256('abc'); b.bytes = ctx.sha256([97, 98, 99 + 256]); return b }
+            export function onUpstream(b, ctx) { ctx.setHeader('x-n', 42); ctx.setHeader('x-b', true); ctx.removeHeader('x-gone') }
+            """, null));
+        using var run = (await engine.BeginAsync(Anthropic))!;
+
+        const string abc = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        Assert.Equal($$"""{"text":"{{abc}}","bytes":"{{abc}}"}""", S(run.Request(B("{}")).Body));
+        var (_, headers) = run.Upstream(ToUpstream, B("{}"));
+        Assert.Equal([new MiddlewareHeader("x-n", "42"), new MiddlewareHeader("x-b", "true"), new MiddlewareHeader("x-gone", null)], headers);
+    }
+
+    [Fact]
     public async Task The_first_reject_wins_and_stops_the_chain()
     {
         var (engine, _, _) = await EngineAsync(

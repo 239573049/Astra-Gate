@@ -8,7 +8,7 @@ Astra 的插件与 [magpie](https://github.com/yetone/magpie) 兼容：为 magpi
 | 类型 | 是什么 | 在哪里运行 |
 | --- | --- | --- |
 | 提供商插件 | OpenCode 插件（`@opencode-ai/plugin` v1），负责某个订阅的登录、模型列表与请求 | 独立的 Bun 进程（插件宿主，即 magpie 的 `host.js`） |
-| 网关中间件 | `package.json` 的 `magpie.middleware` 或 `*.middleware.js`，在网关里改写请求与回复 | Astra 进程内（Jint JavaScript 引擎） |
+| 网关中间件 | `package.json` 的 `magpie.middleware` 或 `*.middleware.js`，在网关里改写请求与回复 | Astra 进程内（Jaunt JavaScript 引擎） |
 | 客户端插件 | `magpie.agent` 或 `*.agent.js`，让 Astra 能接入一个它本身不认识的客户端 | Astra 进程内 |
 
 pi 扩展（`pi-coding-agent` 的扩展包）由插件宿主通过 pi 自己的加载器运行，表现为提供商插件。

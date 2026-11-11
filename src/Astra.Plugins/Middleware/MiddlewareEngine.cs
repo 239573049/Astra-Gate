@@ -1,9 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 using Astra.Plugins.Js;
-using Jint;
-using Jint.Native;
-using Jint.Native.Object;
+using Jaunt;
 
 namespace Astra.Plugins.Middleware;
 
@@ -162,14 +160,16 @@ public sealed record MiddlewareHeader(string Name, string? Value)
 
 /// <summary>
 /// The middleware of one request (magpie's middleware.Run). Each middleware's hooks run in one engine for
-/// the whole request, taken from its pool on first use and given back by <see cref="Dispose"/>.
+/// the whole request, taken from its pool on first use and given back by <see cref="Dispose"/>. An engine a
+/// limit stopped is dropped at once, so that middleware's next hook in the request gets a fresh one (and a
+/// fresh <c>ctx.state</c>).
 /// </summary>
 public sealed class MiddlewareRun : IDisposable
 {
     private readonly MiddlewareSet _set;
     private readonly string _info;
     private readonly MiddlewareInstance?[] _instances;
-    private readonly ObjectInstance?[] _contexts;
+    private readonly JsValue[] _contexts;
     private MiddlewareReject? _rejected;
     // Set only while an onUpstream runs: its target, and the headers it set (ctx.setHeader / ctx.removeHeader).
     private MiddlewareUpstream? _upstream;
@@ -186,7 +186,7 @@ public sealed class MiddlewareRun : IDisposable
         if (!string.IsNullOrEmpty(info.Agent)) b.Append(",\"agent\":").Append(Quote(info.Agent));
         _info = b.ToString();
         _instances = new MiddlewareInstance?[set.Modules.Count];
-        _contexts = new ObjectInstance?[set.Modules.Count];
+        _contexts = new JsValue[set.Modules.Count];
     }
 
     /// <summary>Whether some middleware wants the reply's stream events.</summary>
@@ -299,7 +299,7 @@ public sealed class MiddlewareRun : IDisposable
         {
             if (_instances[i] is { } instance) _set.Modules[i].Put(instance);
             _instances[i] = null;
-            _contexts[i] = null;
+            _contexts[i] = default;
         }
     }
 
@@ -320,13 +320,15 @@ public sealed class MiddlewareRun : IDisposable
     {
         var m = _set.Modules[i];
         var started = Stopwatch.GetTimestamp();
+        MiddlewareInstance? held = null;
         try
         {
             var (instance, ctx) = Acquire(i);
-            if (status is { } s) ctx.Set("status", s);
+            held = instance;
             var rt = instance.Runtime;
+            if (status is { } s) rt.Set(ctx, "status", s);
             if (hook == Hook.Upstream && _upstream is { } u)
-                ctx.Set("upstream", rt.ParseJson(new StringBuilder("{\"protocol\":").Append(Quote(u.Protocol))
+                rt.Set(ctx, "upstream", rt.ParseJson(new StringBuilder("{\"protocol\":").Append(Quote(u.Protocol))
                     .Append(",\"provider\":{\"id\":").Append(Quote(u.ProviderId)).Append(",\"name\":").Append(Quote(u.ProviderName))
                     .Append("},\"model\":").Append(Quote(u.Model)).Append(",\"stream\":").Append(u.Stream ? "true" : "false").Append('}').ToString()));
             var fn = hook switch
@@ -337,84 +339,90 @@ public sealed class MiddlewareRun : IDisposable
                 _ => instance.OnResponse,
             };
             _current = i;
+            // a JSON.parse of the data itself fails as a SyntaxError (it was not JSON after all)
             var result = rt.Call(fn, limit, rt.ParseJson(data), ctx);
-            if (result.IsUndefined()) return (null, null);
-            if (result.IsNull()) return (null, Dropped);
-            if (!result.IsObject()) return (null, "returned neither an object, null nor undefined");
+            if (result.IsUndefined) return (null, null);
+            if (result.IsNull) return (null, Dropped);
+            if (!result.IsObject) return (null, "returned neither an object, null nor undefined");
             return (rt.ToJsonBytes(result), null);
         }
         catch (JsHookException e)
         {
             return (null, e.Message);
         }
-        catch (Jint.Runtime.JavaScriptException e)
-        {
-            // a JSON.parse of the data itself (it was not JSON after all)
-            return (null, "SyntaxError: " + e.Message);
-        }
         finally
         {
             _current = -1;
+            if (held is { Runtime.IsFaulted: true })
+            {
+                // a limit stopped it: Jaunt can't run that engine again
+                _instances[i] = null;
+                _contexts[i] = default;
+                m.Put(held);
+            }
             m.Count(Stopwatch.GetElapsedTime(started).Ticks * 100);
         }
     }
 
     // Middleware i's engine for this request and its ctx: the request's info, the plugin's options, a
     // state of its own, reject, sha256, and the header setters onUpstream uses.
-    private (MiddlewareInstance, ObjectInstance) Acquire(int i)
+    private (MiddlewareInstance, JsValue) Acquire(int i)
     {
-        if (_instances[i] is { } existing) return (existing, _contexts[i]!);
+        if (_instances[i] is { } existing) return (existing, _contexts[i]);
         var m = _set.Modules[i];
         var instance = m.Get();
+        instance.Run = this;
+        _instances[i] = instance;
         var rt = instance.Runtime;
         var json = new StringBuilder(_info).Append(",\"options\":").Append(Encoding.UTF8.GetString(m.Options)).Append(",\"state\":{}}").ToString();
-        var ctx = rt.ParseJson(json).AsObject();
-        ctx.Set("reject", rt.Function("reject", 2, Reject));
-        ctx.Set("sha256", rt.Function("sha256", 1, Sha256));
-        ctx.Set("setHeader", rt.Function("setHeader", 2, args => SetHeader(args, remove: false)));
-        ctx.Set("removeHeader", rt.Function("removeHeader", 1, args => SetHeader(args, remove: true)));
-        _instances[i] = instance;
+        var ctx = rt.ParseJson(json);
+        rt.Set(ctx, "reject", instance.Reject);
+        rt.Set(ctx, "sha256", instance.Sha256);
+        rt.Set(ctx, "setHeader", instance.SetHeader);
+        rt.Set(ctx, "removeHeader", instance.RemoveHeader);
         _contexts[i] = ctx;
         return (instance, ctx);
     }
 
     // ctx.reject(status, message): onRequest turns the request away. Only the first call counts.
-    private JsValue Reject(JsValue[] args)
+    internal JsValue Reject(HostArgs args)
     {
         var status = 403;
-        if (args.Length > 0 && args[0].IsNumber() && args[0].AsNumber() is var n && n >= 400 && n <= 599) status = (int)n;
-        var message = args.Length > 1 && args[1].IsString() ? args[1].AsString() : "turned away by a gateway middleware";
+        if (args[0].IsNumber && args[0].AsNumber() is var n && n >= 400 && n <= 599) status = (int)n;
+        var message = args[1].IsString ? args[1].AsString() : "turned away by a gateway middleware";
         _rejected ??= new MiddlewareReject(status, message);
         return JsValue.Undefined;
     }
 
     // ctx.sha256(text | bytes): the hex SHA-256 of a string's UTF-8 bytes, or of an array of byte values (0–255, taken
     // modulo 256) for a digest over raw bytes, such as a few bytes cut out of UTF-8 text. The engine has no crypto of its own.
-    private static JsValue Sha256(JsValue[] args)
+    internal static JsValue Sha256(HostArgs args)
     {
         byte[] data;
-        if (args.Length > 0 && args[0].IsArray())
+        if (args[0].IsArray)
         {
-            var array = args[0].AsArray();
-            var length = (int)Math.Clamp(Jint.Runtime.TypeConverter.ToNumber(array.Get("length")), 0, 16 * 1024 * 1024);
+            var array = args[0];
+            var count = args.Own(array, "length");
+            var length = count.IsNumber ? (int)Math.Clamp(count.AsNumber(), 0, 16 * 1024 * 1024) : 0;
             data = new byte[length];
             for (var i = 0; i < length; i++)
             {
-                var v = array.Get(i);
-                data[i] = v.IsNumber() ? (byte)((long)v.AsNumber() & 0xff) : (byte)0;
+                var v = args.Own(array, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                data[i] = v.IsNumber && double.IsFinite(v.AsNumber()) ? (byte)((long)v.AsNumber() & 0xff) : (byte)0;
             }
         }
-        else data = Encoding.UTF8.GetBytes(args.Length > 0 && args[0].IsString() ? args[0].AsString() : "");
+        else data = Encoding.UTF8.GetBytes(args[0].IsString ? args[0].AsString() : "");
         return Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(data));
     }
 
     // ctx.setHeader(name, value) / ctx.removeHeader(name): only inside onUpstream; anything else is ignored with a line in
     // the log, so a plugin written against the wrong hook does nothing rather than fail the request.
-    private JsValue SetHeader(JsValue[] args, bool remove)
+    internal JsValue SetHeader(HostArgs args, bool remove)
     {
         var m = _current >= 0 ? _set.Modules[_current] : null;
-        var name = args.Length > 0 && args[0].IsString() ? args[0].AsString().Trim() : "";
-        string? value = remove ? null : args.Length > 1 && !args[1].IsUndefined() && !args[1].IsNull() ? Jint.Runtime.TypeConverter.ToString(args[1]) : null;
+        var name = args[0].IsString ? args[0].AsString().Trim() : "";
+        // a primitive as String(v) gives it; an object has no header form of its own
+        string? value = remove || args[1].IsNullOrUndefined ? null : args[1].ToString();
         var verb = remove ? "removeHeader" : "setHeader";
         if (_headers is null)
             m?.Say("warn", $"ctx.{verb} works in onUpstream only");

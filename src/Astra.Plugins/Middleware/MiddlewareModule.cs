@@ -1,14 +1,15 @@
 using System.Collections.Concurrent;
+using System.Text.Json.Nodes;
 using Astra.Plugins.Js;
-using Jint;
-using Jint.Native;
+using Jaunt;
 
 namespace Astra.Plugins.Middleware;
 
 /// <summary>
 /// One loaded gateway middleware: its module (parsed once), which hooks it has, the stream events its
 /// onEvent wants, and a pool of engines with the module evaluated — a request takes one for all its
-/// hooks, so they share <c>ctx.state</c>, and module globals persist across requests as in magpie.
+/// hooks, so they share <c>ctx.state</c>, and module globals persist across requests as in magpie — until
+/// the engine is retired: one a limit stopped (Jaunt can't run it again), or one that has allocated a lot.
 /// </summary>
 internal sealed class MiddlewareModule
 {
@@ -59,11 +60,11 @@ internal sealed class MiddlewareModule
         if (!m.HasRequest && !m.HasEvent && !m.HasResponse && !m.HasUpstream)
             throw new JsHookException("exports none of onRequest, onEvent, onResponse and onUpstream");
         var events = first.Runtime.Export("events");
-        if (events.IsArray())
+        if (events.IsArray && JsonNode.Parse(first.Runtime.ToJson(events) ?? "[]") is JsonArray names)
         {
             m.Events = [];
-            foreach (var v in events.AsArray())
-                if (v.IsString()) m.Events.Add(v.AsString());
+            foreach (var v in names)
+                if (v is JsonValue s && s.TryGetValue<string>(out var ev)) m.Events.Add(ev);
         }
         m._pool.Add(first);
         return m;
@@ -73,7 +74,9 @@ internal sealed class MiddlewareModule
 
     public void Put(MiddlewareInstance instance)
     {
-        if (_pool.Count < MaxPooled) _pool.Add(instance);
+        instance.Run = null;
+        if (!instance.Runtime.Worn && _pool.Count < MaxPooled) _pool.Add(instance);
+        else instance.Runtime.Dispose();
     }
 
     public void Count(long nanos)
@@ -121,22 +124,60 @@ internal sealed class MiddlewareModule
     private MiddlewareInstance NewInstance()
     {
         var rt = new JsRuntime(_loader, Say);
-        rt.Load(MiddlewareEngine.LoadLimit);
-        return new MiddlewareInstance(rt, Hook(rt, "onRequest"), Hook(rt, "onEvent"), Hook(rt, "onResponse"), Hook(rt, "onUpstream"));
+        try
+        {
+            rt.Load(MiddlewareEngine.LoadLimit);
+            return new MiddlewareInstance(rt, Hook(rt, "onRequest"), Hook(rt, "onEvent"), Hook(rt, "onResponse"), Hook(rt, "onUpstream"));
+        }
+        catch
+        {
+            rt.Dispose();
+            throw;
+        }
     }
 
     // The export, or default's member, when it is a function.
     private static JsValue Hook(JsRuntime rt, string name)
     {
         var v = rt.Export(name);
-        return v is Jint.Native.Function.Function ? v : JsValue.Undefined;
+        return v.IsFunction ? v : JsValue.Undefined;
     }
 
-    private static bool Has(JsValue hook) => !hook.IsUndefined();
+    private static bool Has(JsValue hook) => !hook.IsUndefined;
 }
 
-/// <summary>One engine of a middleware, with its hooks looked up.</summary>
-internal sealed record MiddlewareInstance(JsRuntime Runtime, JsValue OnRequest, JsValue OnEvent, JsValue OnResponse, JsValue OnUpstream);
+/// <summary>
+/// One engine of a middleware, with its hooks looked up and the host functions its ctx gets (made once per
+/// engine; they act for the request holding it, <see cref="Run"/>).
+/// </summary>
+internal sealed class MiddlewareInstance
+{
+    public MiddlewareInstance(JsRuntime runtime, JsValue onRequest, JsValue onEvent, JsValue onResponse, JsValue onUpstream)
+    {
+        Runtime = runtime;
+        OnRequest = onRequest;
+        OnEvent = onEvent;
+        OnResponse = onResponse;
+        OnUpstream = onUpstream;
+        Reject = runtime.Function("reject", 2, args => Run?.Reject(args) ?? JsValue.Undefined);
+        Sha256 = runtime.Function("sha256", 1, MiddlewareRun.Sha256);
+        SetHeader = runtime.Function("setHeader", 2, args => Run?.SetHeader(args, remove: false) ?? JsValue.Undefined);
+        RemoveHeader = runtime.Function("removeHeader", 1, args => Run?.SetHeader(args, remove: true) ?? JsValue.Undefined);
+    }
+
+    public JsRuntime Runtime { get; }
+    public JsValue OnRequest { get; }
+    public JsValue OnEvent { get; }
+    public JsValue OnResponse { get; }
+    public JsValue OnUpstream { get; }
+    public JsValue Reject { get; }
+    public JsValue Sha256 { get; }
+    public JsValue SetHeader { get; }
+    public JsValue RemoveHeader { get; }
+
+    /// <summary>The request this engine is serving; null while pooled.</summary>
+    public MiddlewareRun? Run { get; set; }
+}
 
 /// <summary>A middleware as the Plugins page shows it (magpie's middleware.State).</summary>
 /// <param name="Hooks">The hooks it has: onRequest, onEvent, onResponse, onUpstream.</param>

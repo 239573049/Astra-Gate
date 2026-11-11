@@ -31,7 +31,7 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 | `partial` mode | `scripts/gen-manifest.mjs:38` | Writes `{rid, server, serverSha256, serverSize}` for one RID, hashing **only the executable**. |
 | `merge` mode | `scripts/gen-manifest.mjs:60` | Merges partials into `{version, apiVersion, releasedAt, notes, platforms}` — the `latest.json` contract. |
 | `changelog-section` | `scripts/changelog-section.mjs:32` | `^## \[?v?<ver>\]?` body up to the next `## `; prints nothing (exit 0) when absent, so callers can test for empty. |
-| `check-aot-warnings` | `scripts/check-aot-warnings.mjs:21` | Fails on any `IL\d{4}` warning/error line that is not Jint's; de-dupes MSBuild's repeated lines. |
+| `check-aot-warnings` | `scripts/check-aot-warnings.mjs:21` | Fails on any `IL\d{4}` warning/error line (no exceptions); de-dupes MSBuild's repeated lines. |
 | `publish-feed` | `scripts/publish-feed.mjs:41`,`:69` | rsync/copy to a local dir or `user@host:/path`: versioned artifacts first, `latest*.json|yml` pointers last; never `--delete`. |
 | `Upload platform packages` step | `.github/workflows/release.yml:285` | Publishes `pkg-<rid>` (the tgz is the artifact, not the directory). |
 | `Publish platform packages first, then the CLI` step | `.github/workflows/release.yml:458` | `publish()` (skip-if-on-npm, `--tag $NPM_TAG`) + `wait_for()` (90 min) then the CLI, twice (renamed), a `wait_for` on both CLIs, and the `preview` dist-tag move for a stable with `tag_preview`. |
@@ -96,7 +96,7 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 
 ## Tests
 There is no unit-test suite in this module; the gates are commands the workflows run:
-- `node scripts/check-aot-warnings.mjs out/publish.log` — fails on any non-Jint IL warning (`.github/workflows/release.yml:200`).
+- `node scripts/check-aot-warnings.mjs out/publish.log` — fails on any IL warning (`.github/workflows/release.yml:200`).
 - `out/publish/astra-server[.exe] plugin-selftest` — run-time AOT check on the freshly published binary, all rows except osx-x64 (`.github/workflows/release.yml:208`).
 - `node scripts/relay-smoke.mjs out/publish/astra-server[.exe]` — the relay against a fake upstream on the published binary, all rows except osx-x64.
 - `node scripts/sync-versions.mjs --check` — read-only version gate, exits 1 on any mismatch (`.github/workflows/release.yml:212`).

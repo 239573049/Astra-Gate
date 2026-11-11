@@ -136,9 +136,11 @@ the hand-written mirror for the browser.
 names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_PROXY`). Design rationale:
 `.plan/plugins.md`.
 
-- Gateway middleware (`Middleware/`) and agent plugins (`Agents/`) run in process on Jint
-  (`Js/JsRuntime.cs`; host interop is JSON text and `JsValue` only — never `AllowClr` or CLR wrappers,
-  which is what keeps it AOT-safe). Middleware runs in `GatewayPipeline.HandleAsync` before the privacy
+- Gateway middleware (`Middleware/`) and agent plugins (`Agents/`) run in process on Jaunt
+  (`Js/JsRuntime.cs`; host interop is JSON text and `JsValue` only, plus the bridge script there that reads and sets
+  properties and makes host functions — Jaunt has no reflection interop, which is what keeps it AOT-clean). A limit hit
+  (deadline, recursion, memory) faults a Jaunt engine for good, unlike a thrown error: its owner drops it
+  (`JsRuntime.Worn`) and loads the module in a new one. Middleware runs in `GatewayPipeline.HandleAsync` before the privacy
   guard, on agent requests only — except Astra's own `onUpstream` hook (not magpie's), which runs per attempt in
   `PrepareAsync` on the translated, guarded body with `ctx.upstream` (protocol, provider, model); the headers it sets
   (`MiddlewareHeader` refuses credential and framing headers) go on after the gateway's own and before the credential. Agent plugins are clients `plugin-<id>` (`PluginClientAdapter`); their
@@ -206,6 +208,8 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   that format, never logged or returned by the API), `packages/` (`bun add` / npm tarball installs),
   `runtime/` (the downloaded Bun), `host/<hash>/` (the vendored host.js / pi.js). The installed-plugin
   list itself is SQLite (`plugins`, `plugin_provider_prefs`); the host gets it in its `init` call.
+  `~/.astra/library/skills/` (`AstraPaths.LibrarySkillsDir`) likewise holds the Skills Astra manages — client directories hold links into it
+  (linked update 26); their rows are SQLite (`library_skills`, `library_placements`).
   `~/.astra/tools/` (`AstraPaths.ToolsDir`) likewise holds the downloaded `cloudflared-<version>/` and the
   running tunnel's `cloudflared.pid` (remote access; the tunnel settings themselves are `AppSettings.Tunnel`).
   Runtime-editable settings are one `AppSettings` JSON blob stored under key `"app"`
@@ -297,13 +301,11 @@ runtime needed on the target).
   `<EnableRequestDelegateGenerator>true</EnableRequestDelegateGenerator>`: the SDK only
   auto-enables the Request Delegate Generator when `PublishTrimmed`/`PublishAot` is set, so
   without it a plain build analyses differently from the publish.
-- The one sanctioned exception is Jint's: its unused CLR-interop and System.Text.Json paths
-  trip ILC's IL2026/IL2104/IL3053, which ILC cannot collapse for a package marked trimmable.
-  `Astra.Server.csproj` passes `--nowarnaserr` for those three codes to the ILC step only (Roslyn's
-  analyzer gate is untouched), `release.yml` runs `scripts/check-aot-warnings.mjs` over the
-  publish log and fails on any IL warning not from Jint, then runs `astra-server plugin-selftest`
-  and `node scripts/relay-smoke.mjs` (the relay against a fake upstream) on the binary (AOT can break
-  at run time what the JIT never shows). Do not widen the exception to other codes or assemblies.
+- There is no exception: `release.yml` runs `scripts/check-aot-warnings.mjs` over the publish log and
+  fails on any IL warning at all (the old Jint allowance for IL2026/IL2104/IL3053 went with Jint), then
+  runs `astra-server plugin-selftest` and `node scripts/relay-smoke.mjs` (the relay against a fake upstream)
+  on the binary (AOT can break at run time what the JIT never shows). Do not add `--nowarnaserr` ILC
+  arguments for a new package; fix or replace it.
 - JSON is source-generated: `JsonContexts` (`src/Astra.Core/JsonContexts.cs`) is the registry
   and every assembly contributes its own `JsonSerializerContext` via `[ModuleInitializer]`
   (`src/Astra.Core/JsonContext.cs`, `src/Astra.Providers/Templates/ProviderJsonContext.cs`,
@@ -623,6 +625,24 @@ runtime needed on the target).
     "Apply to clients" (issue #34, `.plan/client-mcp-apply.md`): `ClientMcpApplier` (`src/Astra.Clients/Config`, a class of its own — no adapter, so no TS port or golden cases) writes `mcpServers.astra` into Claude Code's `.claude.json` (`CLAUDE_CONFIG_DIR`) and `[mcp_servers.astra]` into Codex's `config.toml` through `ClientConfigApplier`, under the state kind `<kind>-mcp`, so it is independent of the client's take-over (disabling that leaves it; `Commands.RestoreAllAsync` removes it). A foreign `astra` entry is never overwritten. `ClientMcpService` / `ClientMcpEndpoints` (`/api/clients/mcp`, `/api/clients/{kind}/mcp`; writes local-origin only) write the token's key server-side and never return it. Mirrors: `Astra.Api.Contracts/ClientMcpDtos.cs`, `web/src/api` (`useClientMcp` …) and `components/ClientMcpEntries.tsx`, zh/en `mcp.clients.*`, `mcp.mdx`; the Avalonia mirror is not done. Tests: `ClientMcpApplierTests`, `ClientMcpApiTests`.
     nav entry is not in `NavItems.Hideable` yet. Tests: `McpGatewayTests`, `McpAdminApiTests`, `McpOAuthTests` (real SDK servers on `TestServer`, `McpFixture`), `McpRepositoryTests`.
 
+26. **Resource library: Skills** (`.plan/resources-library.md`, `.agents/codemap/flows/skill-library.md`): Skills live once in
+    `~/.astra/library/skills/<name>` and a client's Skills directory holds a **link** into it (symlink → Windows junction → copy
+    marked `.astra-managed`); switching a client off removes only the link. `library_placements` (migration 0023) is the ownership
+    ledger: Astra removes only what the ledger lists and is still its own (a link into the library, or a copy with an unchanged hash)
+    — never a user's same-named directory or a link they repointed, never recursively through a link (`FsLinks.RemoveLink`).
+    The engine is `Astra.Clients/Library/SkillLibrary`; **which clients and where** is the table in `SkillPlaces` (not an adapter
+    method, so no golden cases and no TS port — linked update 20 does not apply). A client that reads the shared `~/.agents/skills`
+    gets its link there, so switching it off needs confirmation when others read it too; migration links back in place, never into
+    the shared directory; every destructive step backs up to `~/.astra/backups/library/` first (last 30 kept). Installing (a path or
+    a Git address — `SkillGit` refuses `-`/`transport::` addresses and credentials in the URL) is local-origin only, like the MCP
+    server admin. `restore-all` gives every Skill back and exits 3 when one could not be; `astra uninstall --purge` then keeps `~/.astra`.
+    Mirrors: `Astra.Api.Contracts/LibraryDtos.cs`, `web/src/api` (`useSkillLibrary` …) and `types.ts`, `web/src/pages/SkillsPage.tsx` +
+    `components/skills`, the Avalonia page (`Pages/Skills`, `Components/Skills`, `Astra.Desktop.Core/Library/SkillsApi.cs`, route `AppRoute.Skills`,
+    sidebar group `nav.group.resources` in `NavTable`), zh/en `skills.*` / `nav.skills` / `nav.group.resources` (+ `gen-desktop-i18n`), the UI fixtures
+    (`scripts/visual/gen-fixtures.mjs`: `/api/library/skills`), `docs/content/docs/console/skills.mdx` (linked update 14). `~/.astra/library` is a path in
+    linked update 5 (`libraryDir` in the CLI and desktop). The Hooks / instructions / sub-agents menus are not built yet. Tests: `SkillLibraryTests` (+ `SkillGitTests`), `LibraryRepositoryTests`,
+    `LibraryApiTests`, `SkillsLogicTests`, `SkillsPageTests`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
@@ -740,6 +760,7 @@ they disagree, trust the code and fix the page). Read the matching page before y
 - taking over or restoring a local AI client's config → `.agents/codemap/flows/client-config-takeover.md`
 - installing or running a plugin → `.agents/codemap/flows/plugin-install-and-run.md`
 - the MCP gateway (`/mcp`, its upstream servers or their OAuth) → `.agents/codemap/flows/mcp-gateway.md`
+- Skills, the library or their links into a client → `.agents/codemap/flows/skill-library.md`
 - a release, the update feed or the desktop/CLI updater → `.agents/codemap/flows/release-and-update.md`
 - unsure where new code belongs → `.agents/codemap/architecture.md` (ownership table)
 - a business term you do not recognise → `.agents/codemap/domain.md`

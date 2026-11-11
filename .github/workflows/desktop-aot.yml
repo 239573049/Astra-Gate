@@ -79,7 +79,7 @@ jobs:
           mkdir -p out
           dotnet publish src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true --no-build -o out/publish 2>&1 | tee out/publish.log
 
-      # Zero tolerance: unlike astra-server there is no Jint exception to allow.
+      # Zero tolerance, as for astra-server.
       - name: No IL warnings
         shell: bash
         run: |

@@ -4,8 +4,7 @@ using Astra.Core;
 using Astra.Core.Plugins;
 using Astra.Plugins.Js;
 using Astra.Plugins.Middleware;
-using Jint;
-using Jint.Native;
+using Jaunt;
 
 namespace Astra.Plugins.Diagnostics;
 
@@ -60,7 +59,7 @@ public static class PluginSelfTest
             Write(dir, "mw/escape.middleware.js", "import x from '../outside.js'\nexport function onRequest(b) { return b }");
             Write(dir, "outside.js", "export default 1");
             Write(dir, "mw/log.middleware.js", "console.log('hi', {a: 1})\nconsole.warn(2)\nexport function onRequest(b) { return b }");
-            Write(dir, "mw/slow.middleware.js", "export function onRequest(b) { while (true) {} }\nexport function onEvent(e) { return e }\nexport function pending() { return new Promise(() => {}) }\nexport function deep(n) { return deep(n + 1) }\nexport function boom() { throw new TypeError('bad thing') }");
+            Write(dir, "mw/slow.middleware.js", "export function onRequest(b) { while (true) {} }\nexport function onEvent(e) { return e }\nexport function pending() { return new Promise(() => {}) }\nexport function deep(n) { return 1 + deep(n + 1) }\nexport function boom() { throw new TypeError('bad thing') }");
 
             var root = Path.Combine(dir, "mw");
             var loader = new JsModuleLoader(root, Path.Combine(root, "guard.middleware.js"), "a middleware");
@@ -95,7 +94,7 @@ public static class PluginSelfTest
             {
                 (int, string)? rejected = null;
                 var ctx = Ctx(guard, """{"action":"reject"}""");
-                ctx.FastSetDataProperty("reject", guard.Function("reject", 2, args =>
+                guard.Set(ctx, "reject", guard.Function("reject", 2, args =>
                 {
                     rejected ??= ((int)args[0].AsNumber(), args[1].AsString());
                     return JsValue.Undefined;
@@ -106,32 +105,36 @@ public static class PluginSelfTest
             Check("async hook settles", () =>
             {
                 var ctx = Ctx(guard, "{}");
-                ctx.FastSetDataProperty("status", 201);
-                ctx.Get("state").AsObject().FastSetDataProperty("seen", 3);
+                guard.Set(ctx, "status", 201);
+                guard.Set(guard.Get(ctx, "state"), "seen", 3);
                 var json = guard.ToJson(guard.Call(guard.Export("onResponse"), Limit, guard.ParseJson("{}"), ctx));
                 return json == """{"status":201,"seen":3}""" ? json : throw Fail(json ?? "null");
             });
             Check("null return", () =>
             {
                 var v = guard.Call(guard.Export("onEvent"), Limit, guard.ParseJson("""{"type":"drop"}"""), Ctx(guard, "{}"));
-                return v.IsNull() ? "null" : throw Fail(guard.Text(v));
+                return v.IsNull ? "null" : throw Fail(guard.Text(v));
             });
             Check("bare import refused", () => ExpectLoadError(loader: new JsModuleLoader(root, Path.Combine(root, "bare.middleware.js"), "a middleware"), "bundle packages into it"));
             Check("import outside the plugin refused", () => ExpectLoadError(new JsModuleLoader(root, Path.Combine(root, "escape.middleware.js"), "a middleware"), "outside the plugin"));
 
-            var slow = NewRuntime(new JsModuleLoader(root, Path.Combine(root, "slow.middleware.js"), "a middleware"));
-            Check("endless loop stopped, engine reusable", () =>
+            var slowLoader = new JsModuleLoader(root, Path.Combine(root, "slow.middleware.js"), "a middleware");
+            var slow = NewRuntime(slowLoader);
+            // a limit stops a Jaunt engine for good: the owner drops it and loads the module in a new one
+            Check("endless loop stopped, engine replaced", () =>
             {
                 var sw = Stopwatch.StartNew();
                 var err = Expect(() => slow.Call(slow.Export("onRequest"), TimeSpan.FromMilliseconds(50), slow.ParseJson("{}")));
                 var took = sw.ElapsedMilliseconds;
                 if (err != "took too long" || took > 1000) throw Fail($"{err} after {took}ms");
+                if (!slow.Worn) throw Fail("the stopped engine is not marked worn");
+                slow = NewRuntime(slowLoader);
                 var again = slow.ToJson(slow.Call(slow.Export("onEvent"), Limit, slow.ParseJson("""{"a":1}""")));
-                return again == """{"a":1}""" ? $"stopped after {took}ms, next call ok" : throw Fail(again ?? "null");
+                return again == """{"a":1}""" ? $"stopped after {took}ms, new engine ok" : throw Fail(again ?? "null");
             });
             Check("pending promise is a failure", () => ExpectError(() => slow.Call(slow.Export("pending"), Limit), "never settled"));
-            Check("recursion limited", () => ExpectError(() => slow.Call(slow.Export("deep"), TimeSpan.FromSeconds(2), 0), "Recursion"));
             Check("thrown error text", () => ExpectError(() => slow.Call(slow.Export("boom"), Limit), "TypeError: bad thing"));
+            Check("recursion limited", () => ExpectError(() => slow.Call(slow.Export("deep"), TimeSpan.FromSeconds(2), 0), "call stack"));
             Check("console", () =>
             {
                 logs.Clear();
@@ -176,7 +179,7 @@ public static class PluginSelfTest
                 for (var i = 0; i < n; i++)
                 {
                     var r = rt.Call(onEvent, Limit, rt.ParseJson(ev), ctx);
-                    if (!r.IsUndefined()) rt.ToJson(r);
+                    if (!r.IsUndefined) rt.ToJson(r);
                 }
                 var perEvent = sw.Elapsed.TotalMilliseconds * 1000 / n;
 
@@ -225,14 +228,14 @@ public static class PluginSelfTest
         public Task SetPreferenceAsync(string providerId, string spec, CancellationToken ct = default) => Task.CompletedTask;
     }
 
-    private static bool Has(JsRuntime rt, string name) => rt.Export(name) is { } v && !v.IsUndefined();
+    private static bool Has(JsRuntime rt, string name) => !rt.Export(name).IsUndefined;
 
-    private static Jint.Native.JsObject Ctx(JsRuntime rt, string options)
+    private static JsValue Ctx(JsRuntime rt, string options)
     {
         var ctx = rt.NewObject();
-        ctx.FastSetDataProperty("protocol", "anthropic");
-        ctx.FastSetDataProperty("options", rt.ParseJson(options));
-        ctx.FastSetDataProperty("state", rt.NewObject());
+        rt.Set(ctx, "protocol", "anthropic");
+        rt.Set(ctx, "options", rt.ParseJson(options));
+        rt.Set(ctx, "state", rt.NewObject());
         return ctx;
     }
 

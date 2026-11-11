@@ -6,7 +6,7 @@ updated: 2026-10-14
 ---
 # astra-plugins
 
-Runs magpie-compatible plugins in three shapes: gateway middleware and agent plugins compiled on Jint inside
+Runs magpie-compatible plugins in three shapes: gateway middleware and agent plugins compiled on Jaunt inside
 Astra's own process (`Middleware/`, `Agents/`, `Js/`), OpenCode/pi provider plugins driven as a Bun sidecar
 through magpie's vendored `host.js` (`Host/`, `Runtime/`, `Packages/`), and the plugin catalog, market and
 installer that feed both (`PluginCatalog.cs`, `Market/`, `Packages/`, `Diagnostics/`).
@@ -37,7 +37,7 @@ client config writes for agent-plugin clients (`astra-clients`), plugin contract
 | `MiddlewareModule.Load` | `src/Astra.Plugins/Middleware/MiddlewareModule.cs:47` | Evaluates the module once, requires at least one of `onRequest`/`onEvent`/`onResponse`/`onUpstream`, reads the `events` export, keeps the engine pool. |
 | `MiddlewareRun.Request` / `Event` / `Response` | `src/Astra.Plugins/Middleware/MiddlewareEngine.cs:165`, `:187`, `:209` | The three hooks over JSON in/out, in plugin order; `ctx.reject(status, message)` turns a request away. |
 | `MiddlewareRun.Upstream` | `src/Astra.Plugins/Middleware/MiddlewareEngine.cs` | Astra's own `onUpstream` (issue #24): one attempt's translated body with `ctx.upstream`; returns the body and the headers set by `ctx.setHeader` / `ctx.removeHeader` (`MiddlewareHeader.Refusal` keeps credentials and framing headers); `ctx.sha256` takes text or bytes. |
-| `JsRuntime` / `JsModuleLoader` | `src/Astra.Plugins/Js/JsRuntime.cs:19`, `src/Astra.Plugins/Js/JsModuleLoader.cs:16` | The Jint engine (deadline, recursion/memory/regex limits, `console` as the only global) and the ESM loader that keeps imports inside the plugin root. |
+| `JsRuntime` / `JsModuleLoader` | `src/Astra.Plugins/Js/JsRuntime.cs:23`, `src/Astra.Plugins/Js/JsModuleLoader.cs:13` | The Jaunt engine (per-call deadline, recursion depth 512, tracked-memory budget, `console` as the only global; a bridge script does property reads/writes and host functions; a limit hit faults the engine, `Worn` tells the owner to replace it) and the ESM resolver that keeps imports inside the plugin root (one compile per file, shared by the pool). |
 | `PluginHostClient.Start` / `CallAsync` / `FetchAsync` | `src/Astra.Plugins/Host/PluginHostClient.cs:72`, `:113`, `:136` | Newline-delimited JSON over the host's stdin/stdout, with the credit-windowed fetch streaming. |
 | `PluginProviders.ListAsync` / `LoaderBaseAsync` / `ProtocolOf` | `src/Astra.Plugins/Host/PluginProviders.cs:79`, `:101`, `:129` | The host's provider listing (cached per host), each account's loader base URL, and the wire API a model's AI SDK package speaks. |
 | `HostAssets.Ensure` | `src/Astra.Plugins/Runtime/HostAssets.cs:20` | Writes the embedded `host.js`/`pi.js` into `~/.astra/plugins/host/<sha256[..12]>/`. |

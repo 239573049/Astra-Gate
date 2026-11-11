@@ -6,14 +6,13 @@ using System.Text.RegularExpressions;
 using Astra.Core.Clients;
 using Astra.Core.Plugins;
 using Astra.Plugins.Js;
-using Jint;
-using Jint.Native;
+using Jaunt;
 
 namespace Astra.Plugins.Agents;
 
 /// <summary>
 /// The agents enabled plugins add (magpie's internal/agentplug): each plugin's <c>magpie.agent</c> module
-/// (or a *.agent.js file) compiled on Jint in Astra's process, its <c>agent</c> export checked as magpie
+/// (or a *.agent.js file) compiled on Jaunt in Astra's process, its <c>agent</c> export checked as magpie
 /// checks it, and its <c>connect</c> run on demand. Loaded again when the plugin list or a module's file
 /// changes, looked at once a second.
 /// </summary>
@@ -67,13 +66,18 @@ public sealed partial class AgentPluginCatalog(PluginCatalog catalog, Action<str
     {
         var agent = _current.Agents.FirstOrDefault(a => a.Descriptor.Id == agentId)
                     ?? throw new InvalidOperationException($"no agent plugin \"{agentId}\" is loaded");
-        if (agent.Connect is null) return null;
+        if (!agent.Descriptor.HasConnect) return null;
         lock (agent)
         {
-            JsValue result;
+            string? json;
             try
             {
-                result = agent.Runtime.Call(agent.Connect, Limit, agent.Runtime.ParseJson(input.ToJsonString()));
+                var (rt, connect) = agent.Ready();
+                var result = rt.Call(connect, Limit, rt.ParseJson(input.ToJsonString()));
+                if (result.IsNullOrUndefined) return null;
+                if (!result.IsObject) throw new InvalidOperationException("connect returned neither an object nor nothing");
+                if (result.IsArray) throw new InvalidOperationException("connect returned no object of keys");
+                json = rt.ToJson(result);
             }
             catch (JsHookException e)
             {
@@ -81,10 +85,7 @@ public sealed partial class AgentPluginCatalog(PluginCatalog catalog, Action<str
                     ? "connect " + e.Message
                     : "connect: " + e.Message);
             }
-            if (result.IsUndefined() || result.IsNull()) return null;
-            if (!result.IsObject()) throw new InvalidOperationException("connect returned neither an object nor nothing");
-            if (result.IsArray()) throw new InvalidOperationException("connect returned no object of keys");
-            return JsonNode.Parse(agent.Runtime.ToJson(result) ?? "{}") as JsonObject
+            return JsonNode.Parse(json ?? "{}") as JsonObject
                    ?? throw new InvalidOperationException("connect returned no object of keys");
         }
     }
@@ -131,16 +132,36 @@ public sealed partial class AgentPluginCatalog(PluginCatalog catalog, Action<str
     private LoadedAgent Compile(InstalledPlugin p)
     {
         var loader = new JsModuleLoader(p.Manifest.ModuleRoot, p.Manifest.AgentFile!, "an agent plugin");
-        var rt = new JsRuntime(loader, (_, line) => log("info", $"agent plugin {p.Entry.Name}: {line}"), ["log", "warn", "error", "info"]);
-        rt.Load(Limit);
-        var exported = rt.Export("agent");
-        if (!exported.IsObject() || exported.IsArray()) throw new InvalidOperationException("exports no agent object");
-        var desc = JsonNode.Parse(rt.ToJson(exported) ?? "{}") as JsonObject ?? throw new InvalidOperationException("exports no agent object");
-        var d = Check(desc);
-        d.Spec = p.Entry.Spec;
-        var connect = rt.Export("connect");
-        d.HasConnect = connect is Jint.Native.Function.Function;
-        return new LoadedAgent(d, rt, d.HasConnect ? connect : null);
+        JsRuntime NewRuntime()
+        {
+            var rt = new JsRuntime(loader, (_, line) => log("info", $"agent plugin {p.Entry.Name}: {line}"), ["log", "warn", "error", "info"]);
+            try
+            {
+                rt.Load(Limit);
+                return rt;
+            }
+            catch
+            {
+                rt.Dispose();
+                throw;
+            }
+        }
+        var first = NewRuntime();
+        try
+        {
+            var exported = first.Export("agent");
+            if (!exported.IsObject || exported.IsArray) throw new InvalidOperationException("exports no agent object");
+            var desc = JsonNode.Parse(first.ToJson(exported) ?? "{}") as JsonObject ?? throw new InvalidOperationException("exports no agent object");
+            var d = Check(desc);
+            d.Spec = p.Entry.Spec;
+            d.HasConnect = first.Export("connect").IsFunction;
+            return new LoadedAgent(d, NewRuntime, first);
+        }
+        catch
+        {
+            first.Dispose();
+            throw;
+        }
     }
 
     // magpie's Desc.check: the id, the file and the model key are required; the format comes from the
@@ -211,7 +232,26 @@ public sealed partial class AgentPluginCatalog(PluginCatalog catalog, Action<str
     [GeneratedRegex("^[a-z0-9][a-z0-9._-]{0,63}$")]
     private static partial Regex AgentId();
 
-    private sealed record LoadedAgent(AgentPluginDescriptor Descriptor, JsRuntime Runtime, JsValue? Connect);
+    // An agent's engine, kept across connects (module globals persist, as in magpie) until a limit stops it or it
+    // has allocated a lot; then the next connect loads the module again in a new one. Callers hold the lock.
+    private sealed class LoadedAgent(AgentPluginDescriptor descriptor, Func<JsRuntime> load, JsRuntime first)
+    {
+        private JsRuntime _runtime = first;
+
+        public AgentPluginDescriptor Descriptor { get; } = descriptor;
+
+        public (JsRuntime Runtime, JsValue Connect) Ready()
+        {
+            if (_runtime.Worn)
+            {
+                _runtime.Dispose();
+                _runtime = load();
+            }
+            var connect = _runtime.Export("connect");
+            if (!connect.IsFunction) throw new JsHookException("connect is no longer a function");
+            return (_runtime, connect);
+        }
+    }
 
     private sealed record AgentSet(string Stamp, List<LoadedAgent> Agents, IReadOnlyDictionary<string, string> Errors);
 }

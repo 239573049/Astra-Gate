@@ -13,7 +13,7 @@ path, or a bare npm name.
 **Outcome:** the package is on disk under `~/.astra/plugins/` (`packages/node_modules/<name>`, or a
 `market-packages/<name>/<version>.tgz` kept beside it), one row exists in SQLite `plugins` (its source naming where it
 came from), and the catalog's generation has moved — so the plugin's code runs from then on: middleware in process on
-Jint before the privacy guard of every agent request, an agent as the `plugin-<id>` client kind on the Clients page, a
+Jaunt before the privacy guard of every agent request, an agent as the `plugin-<id>` client kind on the Clients page, a
 provider through the Bun host as `plugin-<id>` provider rows with `plugin://` endpoints.
 
 ## Steps
@@ -128,9 +128,9 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
     (`src/Astra.Plugins/Middleware/MiddlewareModule.cs:47`) evaluates the module once per plugin and requires at least
     one of `onRequest`/`onEvent`/`onResponse`/`onUpstream`; a module that throws is recorded per spec and shown on the plugins page
     (`MiddlewareEngine.cs:108`) (`astra-plugins`)
-23. `src/Astra.Plugins/Js/JsRuntime.cs:19` — one Jint engine per module, with the deadline constraint
-    (`DeadlineConstraint`, `:207`), `LimitRecursion(512)`, `LimitMemory(256 MiB)`, a 200 ms regex timeout and
-    `console` as the only global (`:31`–`:50`); host interop is JSON text and `JsValue` only, with no `AllowClr` — that
+23. `src/Astra.Plugins/Js/JsRuntime.cs:23` — one Jaunt engine per module, each call run in a `JsExecution` with its own
+    timeout, `MaxStackDepth` 512, a tracked-memory budget (an engine is retired past 128 MiB, `Worn`) and
+    `console` as the only global (the `Bridge` script); host interop is JSON text and `JsValue` only, Jaunt has no CLR interop — that
     is what keeps the assembly AOT-safe (`:12`) (`astra-plugins`)
 24. `src/Astra.Plugins/Js/JsModuleLoader.cs:37` `Resolve` — imports must be `./`/`../` and stay inside the plugin
     root, symlinks resolved out of it too (`:48`, `:53`); a package must be bundled into the module (`:49`). Hook
@@ -149,7 +149,7 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
     model, stream); a returned object replaces the upstream tree, and the headers it set travel on `UpstreamPlan.HeaderEdits`
     to `SendAsync`'s `Build`, applied after the gateway's own headers and before the credential (`astra-gateway`)
 27. **Agent** — `src/Astra.Plugins/Agents/AgentPluginCatalog.cs:43` `RefreshAsync` loads every enabled plugin's
-    `magpie.agent` module on Jint (checked by `Check` `:148`: id, config file, model, format, MCP format; an id that is
+    `magpie.agent` module on Jaunt (checked by `Check` `:148`: id, config file, model, format, MCP format; an id that is
     a built-in client kind or `astra` is refused `:117`); `ClientAdapterRegistry.CreateDefault`
     (`src/Astra.Clients/Adapters/ClientAdapterRegistry.cs:18`) adds one `PluginClientAdapter` per loaded agent; the
     kind is `ClientKinds.PluginPrefix + agent.Id` — i.e. `plugin-<id>` (`src/Astra.Clients/Adapters/PluginClientAdapter.cs:25`,
@@ -190,7 +190,7 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
     (`:734`–`:736`) (`astra-gateway`)
 35. **Diagnostics** — `astra-server plugin-selftest` (`PluginSelfTest.Run`,
     `src/Astra.Plugins/Diagnostics/PluginSelfTest.cs:23`) writes throwaway middleware/agent plugins and exercises
-    Jint, imports, rejects and events on each published AOT binary, because AOT can break at run time what the JIT
+    Jaunt, imports, rejects and events on each published AOT binary, because AOT can break at run time what the JIT
     never showed (`astra-plugins`)
 
 ## Sequence
@@ -201,7 +201,7 @@ sequenceDiagram
   participant P as astra-plugins
   participant M as docs-site market
   participant D as astra-data
-  participant B as Bun host / Jint
+  participant B as Bun host / Jaunt
   participant G as astra-gateway
   W->>S: POST /api/plugins spec, source (X-Astra-Admin 1)
   S->>S: PluginService.Add then PluginJobs.Start, returns the job
@@ -216,7 +216,7 @@ sequenceDiagram
   P->>P: PluginCatalog.Invalidate, generation moves
   P-->>W: job log and result
   S->>B: sync plugin providers, mirror plugin-provider rows
-  G->>B: plugin middleware on Jint, before the privacy guard
+  G->>B: plugin middleware on Jaunt, before the privacy guard
   G->>B: plugin:// provider request through PluginFetchHandler
   B-->>G: response, X-Magpie-Sign-In noted
 ```

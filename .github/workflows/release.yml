@@ -203,8 +203,7 @@ jobs:
           dotnet publish src/Astra.Server -c Release -r "$RID" \
             --self-contained true -p:PublishAot=true -o out/publish 2>&1 | tee out/publish.log
 
-      # astra-server.csproj keeps Jint's IL2026/IL2104/IL3053 as warnings for
-      # the ILC step; any other IL warning still fails the release here.
+      # Zero tolerance: any IL trim/AOT warning fails the release.
       - name: Check AOT warnings
         shell: bash
         run: node scripts/check-aot-warnings.mjs out/publish.log
@@ -255,7 +254,7 @@ jobs:
           dotnet build src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true -warnaserror
           dotnet publish src/Astra.Desktop -c Release -r "$RID" -p:PublishAot=true --no-build \
             -o out/desktop-publish 2>&1 | tee out/desktop-publish.log
-          # Zero tolerance: unlike astra-server there is no Jint exception to allow.
+          # Zero tolerance, as for astra-server.
           if grep -E "IL[0-9]{4}" out/desktop-publish.log; then
             echo "::error::AOT/trim warnings in the desktop publish"
             exit 1

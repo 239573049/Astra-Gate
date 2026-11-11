@@ -137,6 +137,26 @@ public class DailyBillSheetTests
         }
     }
 
+    [Fact]
+    public void A_copied_bill_is_on_the_mac_pasteboard_at_once_as_png_and_tiff()
+    {
+        // Avalonia only promised the image (asked for at paste time, after the bitmap was gone): pasting found nothing. The bill is
+        // now written outright. A private pasteboard keeps the developer's clipboard out of it.
+        if (!OperatingSystem.IsMacOS()) return;
+        var name = "io.astra.test." + Guid.NewGuid().ToString("N");
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        try
+        {
+            Assert.True(MacPasteboard.SetImage(png, name));
+            Assert.Equal(png.Length, MacPasteboard.DataLength(name, "public.png"));
+            Assert.True(MacPasteboard.DataLength(name, "public.tiff") > 0);
+        }
+        finally
+        {
+            MacPasteboard.Release(name);
+        }
+    }
+
     private static void Settle(QueryClient queries)
     {
         SceneCapture.Await(queries.WhenIdleAsync(), TimeSpan.FromSeconds(20));

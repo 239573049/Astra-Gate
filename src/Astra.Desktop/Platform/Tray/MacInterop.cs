@@ -43,6 +43,7 @@ internal static class ObjC
     [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern IntPtr SendSize(IntPtr receiver, IntPtr sel, NSSize a);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern long GetLong(IntPtr receiver, IntPtr sel);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern byte GetBool(IntPtr receiver, IntPtr sel, IntPtr a);
+    [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern byte GetBool(IntPtr receiver, IntPtr sel, IntPtr a, IntPtr b);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern NSPoint GetPoint(IntPtr receiver, IntPtr sel);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] public static extern byte PopUp(IntPtr menu, IntPtr sel, IntPtr item, NSPoint location, IntPtr view);
     [DllImport(Lib, EntryPoint = "objc_msgSend")] private static extern NSRect GetRectArm(IntPtr receiver, IntPtr sel);

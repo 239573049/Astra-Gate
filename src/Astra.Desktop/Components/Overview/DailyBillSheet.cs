@@ -5,6 +5,7 @@ using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.Overview;
 using Astra.Desktop.Core.Shell;
+using Astra.Desktop.Platform;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -51,10 +52,23 @@ internal sealed class WindowBillImageTarget(Control owner) : IBillImageTarget
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The caller disposes <paramref name="png"/> as soon as this returns, while Avalonia's clipboard only hands an image over when
+    /// something pastes (a promise on macOS, the selection owner on X11, delayed rendering on Windows): pasting then found a dead
+    /// bitmap and the clipboard came up empty. So the picture goes over as its own bytes — written at once on macOS
+    /// (<see cref="MacPasteboard"/>, which also outlives this process), elsewhere as a bitmap of the clipboard's own that is never
+    /// disposed here (the data transfer holds it until it is replaced; disposing a transfer disposes nothing) and, on Windows, rendered
+    /// at once by <c>FlushAsync</c>.
+    /// </remarks>
     public async Task<bool> CopyAsync(Bitmap png)
     {
+        using var encoded = new MemoryStream();
+        png.Save(encoded, PngBitmapEncoderOptions.Default);
+        if (OperatingSystem.IsMacOS() && MacPasteboard.SetImage(encoded.ToArray())) return true;
         if (TopLevel.GetTopLevel(owner)?.Clipboard is not { } clipboard) return false;
-        await clipboard.SetBitmapAsync(png);
+        encoded.Position = 0;
+        await clipboard.SetBitmapAsync(new Bitmap(encoded));
+        await clipboard.FlushAsync();
         return true;
     }
 }

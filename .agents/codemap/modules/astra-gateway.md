@@ -13,7 +13,7 @@ streaming the answer back while recording timing, usage and cost on one `Request
 **Not responsible for:** the host, DI wiring and every `Map*Endpoints` call (`astra-server` —
 `AstraApp.Create`), domain types, settings/app-settings, pricing/billing math and the privacy
 detector itself (`astra-core`), SQLite repositories and migrations (`astra-data`), provider
-templates, subscription token/refresh internals and quota polling (`astra-providers`), the Jint
+templates, subscription token/refresh internals and quota polling (`astra-providers`), the Jaunt
 runtime, plugin catalogue and Bun host (`astra-plugins` — this module only *calls* them), client
 config rewriting and install (`astra-clients`), and the UI/CLI/Docker side (`cli`, `web-ui`,
 `desktop-app`, `docs-site`, `update-core`, `packaging-release`).

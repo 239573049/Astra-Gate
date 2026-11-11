@@ -41,7 +41,7 @@ publishing that package, re-run the earlier run's failed jobs instead (`gh run r
 
 ### A build row failed
 - `check-aot-warnings` / `plugin-selftest`: a real AOT break. Fix it in code and release the
-  next patch (see AGENTS.md "Native AOT"; never widen the Jint exception).
+  next patch (see AGENTS.md "Native AOT"; never add an ILC warning exception).
 - mac rows: missing signing secrets fail fast. The "Build desktop app" step already retries
   electron-builder 3× on mac (a dropped stapler connection, error 68, failed 0.9.5's osx-x64 row).
   When all three attempts fail, check the log for a real signing or notarization rejection before

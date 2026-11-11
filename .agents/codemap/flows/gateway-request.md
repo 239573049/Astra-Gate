@@ -123,7 +123,7 @@ persisted at the end.
 sequenceDiagram
   participant C as AI client
   participant P as astra-gateway
-  participant MW as astra-plugins (Jint)
+  participant MW as astra-plugins (Jaunt)
   participant PR as privacy guard
   participant U as upstream provider
   participant D as astra-data
