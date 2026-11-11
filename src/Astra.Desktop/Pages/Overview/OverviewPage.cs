@@ -79,7 +79,7 @@ public sealed class OverviewPage : PageViewModel
         // _refresh is kept (its icon turns while stats load), so it leaves the previous group before joining the new one: a
         // language change would otherwise add it to a second panel ("already has a visual parent",
         // .agents/memory/desktop-rebuild-reparent-crash.md).
-
+        (_refresh.Parent as Avalonia.Controls.Panel)?.Children.Remove(_refresh);
         SetHeaderActions(new ActionGroup(8, ProviderUi.Button(Loc.T("bill.generate"), LucideIconKind.ReceiptText, onClick: () => OpenBill()), _refresh));
     }
 
