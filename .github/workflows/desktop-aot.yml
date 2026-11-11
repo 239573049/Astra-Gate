@@ -44,12 +44,12 @@ jobs:
         id: dotnet
         continue-on-error: true
         with:
-          dotnet-version: 11.0.100-rc.3.26522.148
+          dotnet-version: 11.0.100
 
       - uses: actions/setup-dotnet@v4
         if: steps.dotnet.outcome == 'failure'
         with:
-          dotnet-version: 11.0.100-rc.3.26522.148
+          dotnet-version: 11.0.100
 
       - name: Select an Xcode 26 toolchain
         if: startsWith(matrix.rid, 'osx')

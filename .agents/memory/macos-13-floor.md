@@ -2,7 +2,7 @@
 name: macos-13-floor
 description: Issue #27 — the AOT binaries keep macOS 13 on .NET 11 through a Swift lookup shim, by user decision; statically checked, not yet run on a real macOS 13
 type: project
-updated: 2026-11-09
+updated: 2026-11-11
 source: session
 evidence: ["src/MacOsFloor/swift-lookup-shim.c", "scripts/check-macos-floor.mjs", "0c0781a", "https://github.com/239573049/Astra-Gate/issues/27"]
 ---
@@ -17,3 +17,8 @@ them is equivalent on our RIDs. Objects remain minos 14 (ld warns; harmless) and
 compiled without availability guards could still reach a 14-only Objective-C method, which a symbol check cannot see. Ask
 someone on macOS 13 to run a build, then remove this caveat. If a future runtime pack needs more than an equivalent
 forward, raising the floor is the expected outcome; see AGENTS.md (Native AOT).
+
+**GA check, 2026-11-11:** the 11.0.0 runtime pack (SDK 11.0.100, osx-arm64 `astra-server`) still passes `check-macos-floor.mjs`
+(717 imports), so the shim needed no change for the rc.3 → GA move. On a slow link the script's own 300 s SDK download times
+out (and GitHub's HTTP/2 can die with curl 16): fetch the tarball yourself with `curl --http1.1 -C -`, check its sha256
+against `SDK_SHA256`, extract the `*.tbd` files and pass `--sdk <MacOSX13.3.sdk>`.
