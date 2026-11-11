@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import {
   useCreateToken,
   useDeleteToken,
+  useMcpServers,
   useProviders,
   useResetToken,
   useRevealToken,
@@ -465,7 +466,9 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
   const { toast } = useFeedback();
   const update = useUpdateToken();
   const providers = useProviders();
+  const mcpServers = useMcpServers();
   const [name, setName] = useState('');
+  const [mcp, setMcp] = useState<string[]>([]);
   const [pool, setPool] = useState<PoolDraft | null>(null);
   const [budgets, setBudgets] = useState<DraftBudget[]>([]);
   const [rpm, setRpm] = useState<number | null>(null);
@@ -482,6 +485,7 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
     setRpm(token.limits?.rpm ?? null);
     setClientsMode(token.allowedClients == null ? 'any' : 'only');
     setAllowed(token.allowedClients ?? []);
+    setMcp(token.mcpServers ?? []);
   }, [token]);
 
   const save = () => {
@@ -495,6 +499,9 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
         ...(pool ? { pool: poolInputOf(pool, providers.data ?? []) } : {}),
         limits,
         allowedClients: clientsMode === 'any' ? null : allowed,
+        // Only servers that still exist are sent (the id of a deleted one lingers on the token and would be refused), and nothing is sent
+        // before the list has loaded, so a slow response never clears the binding.
+        ...(mcpServers.data ? { mcpServers: mcp.filter((id) => mcpServers.data.some((m) => m.id === id)) } : {}),
       },
       {
         onSuccess: () => {
@@ -532,6 +539,16 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
         </Field>
         <Field label={t('tokens.rpm')} hint={t('tokens.rpmHint')}>
           <NumberInput value={rpm} min={1} step={1} label={t('tokens.rpm')} placeholder={t('tokens.unlimited')} onChange={setRpm} />
+        </Field>
+        <Field label={t('tokens.mcp')} hint={mcpServers.data && mcpServers.data.length === 0 ? t('tokens.mcpNone') : t('tokens.mcpHint')}>
+          {mcpServers.data && mcpServers.data.length > 0 && (
+            <ChipGroup
+              label={t('tokens.mcp')}
+              options={mcpServers.data.map((m) => ({ value: m.id, label: m.name }))}
+              value={mcp.filter((id) => mcpServers.data.some((m) => m.id === id))}
+              onValueChange={(v) => setMcp(v as string[])}
+            />
+          )}
         </Field>
         <Field label={t('tokens.allowedClients')} hint={t('tokens.allowedClientsHint')}>
           <div className="grid gap-2">

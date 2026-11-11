@@ -707,6 +707,9 @@ internal static class Messages
         "tokens.allowedClientsAny",
         "tokens.allowedClientsOnly",
         "tokens.allowedClientsHint",
+        "tokens.mcp",
+        "tokens.mcpHint",
+        "tokens.mcpNone",
         "tokens.directOnly",
         "tokens.selfService",
         "tokens.selfServiceHint",
@@ -2514,6 +2517,94 @@ internal static class Messages
         "traces.error.unsupportedTitle",
         "traces.error.unsupported",
         "nav.smartRouting",
+        "nav.mcp",
+        "mcp.subtitle",
+        "mcp.gateway.title",
+        "mcp.gateway.enable",
+        "mcp.gateway.enableHint",
+        "mcp.gateway.endpoint",
+        "mcp.gateway.endpointHint",
+        "mcp.gateway.origins",
+        "mcp.gateway.originsHint",
+        "mcp.gateway.originsSave",
+        "mcp.gateway.copyEndpoint",
+        "mcp.gateway.copied",
+        "mcp.servers.title",
+        "mcp.servers.add",
+        "mcp.servers.emptyTitle",
+        "mcp.servers.emptyDetail",
+        "mcp.servers.localOnly",
+        "mcp.server.addTitle",
+        "mcp.server.editTitle",
+        "mcp.server.name",
+        "mcp.server.slug",
+        "mcp.server.slugHint",
+        "mcp.server.url",
+        "mcp.server.urlHint",
+        "mcp.server.transport",
+        "mcp.server.transport.http",
+        "mcp.server.transport.sse",
+        "mcp.server.transportHint",
+        "mcp.server.auth",
+        "mcp.server.auth.none",
+        "mcp.server.auth.header",
+        "mcp.server.auth.oauth",
+        "mcp.server.headers",
+        "mcp.server.headersHint",
+        "mcp.server.headerName",
+        "mcp.server.headerValue",
+        "mcp.server.headerKept",
+        "mcp.server.addHeader",
+        "mcp.server.removeHeader",
+        "mcp.server.timeout",
+        "mcp.server.timeoutHint",
+        "mcp.server.enabled",
+        "mcp.server.oauthNote",
+        "mcp.server.created",
+        "mcp.server.saved",
+        "mcp.server.deleted",
+        "mcp.server.deleteConfirm",
+        "mcp.server.deleteDetail",
+        "mcp.status.unknown",
+        "mcp.status.ok",
+        "mcp.status.needs_auth",
+        "mcp.status.auth_error",
+        "mcp.status.unreachable",
+        "mcp.status.version_unsupported",
+        "mcp.server.protocol",
+        "mcp.server.boundTokens",
+        "mcp.server.disabledBadge",
+        "mcp.server.test",
+        "mcp.server.testOk",
+        "mcp.server.testToolsTitle",
+        "mcp.server.testFailed",
+        "mcp.server.authorize",
+        "mcp.server.reauthorize",
+        "mcp.server.authorizeOpened",
+        "mcp.server.authorizeNotNeeded",
+        "mcp.server.authorized",
+        "mcp.server.authorizedBy",
+        "mcp.server.forget",
+        "mcp.server.forgetConfirm",
+        "mcp.server.forgetDetail",
+        "mcp.server.forgotten",
+        "mcp.calls.title",
+        "mcp.calls.hint",
+        "mcp.calls.empty",
+        "mcp.calls.time",
+        "mcp.calls.token",
+        "mcp.calls.tool",
+        "mcp.calls.duration",
+        "mcp.calls.result",
+        "mcp.calls.ok",
+        "mcp.calls.era.modern",
+        "mcp.calls.era.legacy",
+        "mcp.calls.error.tool",
+        "mcp.calls.error.needs_auth",
+        "mcp.calls.error.unreachable",
+        "mcp.calls.error.timeout",
+        "mcp.calls.error.needs_input",
+        "mcp.calls.error.protocol",
         "smartRouting.subtitle",
         "smartRouting.loadFailed",
         "smartRouting.status",
@@ -3376,6 +3467,9 @@ internal static class Messages
             case "tokens.allowedClientsAny": return "所有客户端";
             case "tokens.allowedClientsOnly": return "仅以下客户端";
             case "tokens.allowedClientsHint": return "限制密钥后缀（令牌.客户端）可用的客户端。都不勾选时只能直连（还需要设置直连提供商）。";
+            case "tokens.mcp": return "MCP 服务器";
+            case "tokens.mcpHint": return "这个令牌可以通过 MCP 网关使用的服务器。不选则不能使用 MCP。";
+            case "tokens.mcpNone": return "还没有 MCP 服务器，先到\"MCP 网关\"页面添加。";
             case "tokens.directOnly": return "仅直连";
             case "tokens.selfService": return "自助查询";
             case "tokens.selfServiceHint": return "持有该令牌的人可以用它查询自己的额度和用量（看不到上游信息）：打开 {url}/key 页面，或调用 {url}/v1/astra/key；也兼容 OpenAI 旧版余额接口 {url}/v1/dashboard/billing/subscription。";
@@ -5183,6 +5277,94 @@ internal static class Messages
             case "traces.error.unsupportedTitle": return "当前连接的 Astra 服务不支持链路追踪";
             case "traces.error.unsupported": return "这个端口上运行的是还没有链路追踪功能的旧版本 astra-server。停掉旧服务（例如退出 Astra 桌面版），再用新版本重新启动。";
             case "nav.smartRouting": return "智能路由";
+            case "nav.mcp": return "MCP 网关";
+            case "mcp.subtitle": return "把多个 MCP 服务器聚合成一个地址，按令牌决定谁能用哪些服务器。";
+            case "mcp.gateway.title": return "网关";
+            case "mcp.gateway.enable": return "启用 MCP 网关";
+            case "mcp.gateway.enableHint": return "关闭时 /mcp 不响应（404），不会暴露任何新入口。";
+            case "mcp.gateway.endpoint": return "聚合地址";
+            case "mcp.gateway.endpointHint": return "客户端把它当作一个 MCP 服务器，用 Astra 令牌作为 Bearer 凭据；每个服务器还有自己的 /mcp/<标识> 地址（工具名不带前缀）。";
+            case "mcp.gateway.origins": return "允许的浏览器来源";
+            case "mcp.gateway.originsHint": return "每行一个，例如 https://app.example.com。带有未列出 Origin 头的请求会被拒绝（防 DNS 重绑定）；没有 Origin 头的非浏览器客户端不受影响。";
+            case "mcp.gateway.originsSave": return "保存来源";
+            case "mcp.gateway.copyEndpoint": return "复制地址";
+            case "mcp.gateway.copied": return "已复制";
+            case "mcp.servers.title": return "MCP 服务器";
+            case "mcp.servers.add": return "添加服务器";
+            case "mcp.servers.emptyTitle": return "还没有 MCP 服务器";
+            case "mcp.servers.emptyDetail": return "添加远程的 MCP 服务器（Streamable HTTP 或旧版 SSE），再在令牌里选择它能用哪些。";
+            case "mcp.servers.localOnly": return "添加、修改、测试和授权服务器只能在运行 Astra 的这台机器上操作。";
+            case "mcp.server.addTitle": return "添加 MCP 服务器";
+            case "mcp.server.editTitle": return "编辑 {name}";
+            case "mcp.server.name": return "名称";
+            case "mcp.server.slug": return "标识";
+            case "mcp.server.slugHint": return "小写字母、数字和单个连字符；它是聚合地址里这个服务器工具名的前缀（<标识>__<工具>），发布后不要随意改，客户端的工具白名单会用到它。留空则由名称生成。";
+            case "mcp.server.url": return "地址";
+            case "mcp.server.urlHint": return "http:// 或 https:// 开头，不要在地址里带密钥；需要凭据请用请求头或 OAuth。";
+            case "mcp.server.transport": return "传输";
+            case "mcp.server.transport.http": return "Streamable HTTP";
+            case "mcp.server.transport.sse": return "旧版 SSE";
+            case "mcp.server.transportHint": return "Streamable HTTP 会自动识别服务器说的是新版（2026-07-28）还是带会话的旧版协议；旧版 HTTP+SSE 已弃用，只在服务器只支持它时选用。";
+            case "mcp.server.auth": return "认证";
+            case "mcp.server.auth.none": return "无";
+            case "mcp.server.auth.header": return "请求头";
+            case "mcp.server.auth.oauth": return "OAuth";
+            case "mcp.server.headers": return "请求头";
+            case "mcp.server.headersHint": return "例如 Authorization: Bearer …。值加密保存，保存后不再显示；编辑时留空表示保持原值。";
+            case "mcp.server.headerName": return "名称";
+            case "mcp.server.headerValue": return "值";
+            case "mcp.server.headerKept": return "保持原值";
+            case "mcp.server.addHeader": return "添加请求头";
+            case "mcp.server.removeHeader": return "删除这个请求头";
+            case "mcp.server.timeout": return "超时（秒）";
+            case "mcp.server.timeoutHint": return "单次列出工具或调用工具的时间上限。";
+            case "mcp.server.enabled": return "启用";
+            case "mcp.server.oauthNote": return "保存后点\"授权\"，在浏览器里登录上游服务。授权得到的是你自己账号的权限，所有绑定了这个服务器的令牌共用这个身份。";
+            case "mcp.server.created": return "已添加 {name}";
+            case "mcp.server.saved": return "已保存 {name}";
+            case "mcp.server.deleted": return "已删除 {name}";
+            case "mcp.server.deleteConfirm": return "删除 {name}？";
+            case "mcp.server.deleteDetail": return "绑定了它的令牌将不再能使用这个服务器；已保存的授权也会一并删除。";
+            case "mcp.status.unknown": return "未检测";
+            case "mcp.status.ok": return "正常";
+            case "mcp.status.needs_auth": return "需要授权";
+            case "mcp.status.auth_error": return "凭据被拒绝";
+            case "mcp.status.unreachable": return "无法连接";
+            case "mcp.status.version_unsupported": return "协议版本不支持";
+            case "mcp.server.protocol": return "协议 {version}";
+            case "mcp.server.boundTokens": return "{count} 个令牌";
+            case "mcp.server.disabledBadge": return "已停用";
+            case "mcp.server.test": return "测试连接";
+            case "mcp.server.testOk": return "连接正常，{count} 个工具";
+            case "mcp.server.testToolsTitle": return "{name} 的工具";
+            case "mcp.server.testFailed": return "连接失败：{message}";
+            case "mcp.server.authorize": return "授权";
+            case "mcp.server.reauthorize": return "重新授权";
+            case "mcp.server.authorizeOpened": return "已在浏览器中打开授权页面，完成后回到这里查看状态。";
+            case "mcp.server.authorizeNotNeeded": return "无需再次授权。";
+            case "mcp.server.authorized": return "已授权";
+            case "mcp.server.authorizedBy": return "授权方 {issuer}";
+            case "mcp.server.forget": return "忘记授权";
+            case "mcp.server.forgetConfirm": return "忘记 {name} 的授权？";
+            case "mcp.server.forgetDetail": return "之后需要重新授权，这个服务器才能再被使用。";
+            case "mcp.server.forgotten": return "已忘记授权";
+            case "mcp.calls.title": return "最近的调用";
+            case "mcp.calls.hint": return "只记录谁调用了哪个工具、耗时和结果，不记录参数和返回内容；保留 30 天。";
+            case "mcp.calls.empty": return "还没有调用。";
+            case "mcp.calls.time": return "时间";
+            case "mcp.calls.token": return "令牌";
+            case "mcp.calls.tool": return "工具";
+            case "mcp.calls.duration": return "耗时";
+            case "mcp.calls.result": return "结果";
+            case "mcp.calls.ok": return "成功";
+            case "mcp.calls.era.modern": return "新版";
+            case "mcp.calls.era.legacy": return "旧版";
+            case "mcp.calls.error.tool": return "工具报错";
+            case "mcp.calls.error.needs_auth": return "需要授权";
+            case "mcp.calls.error.unreachable": return "无法连接";
+            case "mcp.calls.error.timeout": return "超时";
+            case "mcp.calls.error.needs_input": return "需要交互";
+            case "mcp.calls.error.protocol": return "协议错误";
             case "smartRouting.subtitle": return "按任务难度给请求挑模型：先让一个小的判定模型看一眼问题，再交给对应档位的模型";
             case "smartRouting.loadFailed": return "加载智能路由设置失败";
             case "smartRouting.status": return "状态";
@@ -6047,6 +6229,9 @@ internal static class Messages
             case "tokens.allowedClientsAny": return "Any client";
             case "tokens.allowedClientsOnly": return "Only these clients";
             case "tokens.allowedClientsHint": return "Restricts which clients the key suffix (token.client) may name. With none checked the token only works for direct calls (which also need a direct-call provider).";
+            case "tokens.mcp": return "MCP servers";
+            case "tokens.mcpHint": return "The servers this token may use through the MCP gateway. With none selected it cannot use MCP.";
+            case "tokens.mcpNone": return "There are no MCP servers yet; add some on the \"MCP gateway\" page first.";
             case "tokens.directOnly": return "Direct calls only";
             case "tokens.selfService": return "Self-service";
             case "tokens.selfServiceHint": return "Whoever holds this token can look up its own limits and usage with it (nothing upstream is shown): open {url}/key, or call {url}/v1/astra/key — the legacy OpenAI balance API {url}/v1/dashboard/billing/subscription works too.";
@@ -7854,6 +8039,94 @@ internal static class Messages
             case "traces.error.unsupportedTitle": return "The connected Astra server has no tracing";
             case "traces.error.unsupported": return "The astra-server on this port is an older version without tracing. Stop it (for example, quit Astra Desktop) and start the new version.";
             case "nav.smartRouting": return "Smart routing";
+            case "nav.mcp": return "MCP gateway";
+            case "mcp.subtitle": return "Put several MCP servers behind one address and decide per token which of them it may use.";
+            case "mcp.gateway.title": return "Gateway";
+            case "mcp.gateway.enable": return "Enable the MCP gateway";
+            case "mcp.gateway.enableHint": return "While off, /mcp answers 404 and exposes nothing new.";
+            case "mcp.gateway.endpoint": return "Aggregate address";
+            case "mcp.gateway.endpointHint": return "Clients use it as one MCP server with an Astra token as the bearer credential. Each server also has its own /mcp/<slug> address (tool names without the prefix).";
+            case "mcp.gateway.origins": return "Allowed browser origins";
+            case "mcp.gateway.originsHint": return "One per line, e.g. https://app.example.com. A request carrying an Origin header that is not listed is refused (DNS-rebinding defence); non-browser clients send none and are not affected.";
+            case "mcp.gateway.originsSave": return "Save origins";
+            case "mcp.gateway.copyEndpoint": return "Copy address";
+            case "mcp.gateway.copied": return "Copied";
+            case "mcp.servers.title": return "MCP servers";
+            case "mcp.servers.add": return "Add server";
+            case "mcp.servers.emptyTitle": return "No MCP servers yet";
+            case "mcp.servers.emptyDetail": return "Add a remote MCP server (Streamable HTTP or the older SSE) and choose, per token, which servers it may use.";
+            case "mcp.servers.localOnly": return "Servers can only be added, changed, tested and authorized on the machine running Astra.";
+            case "mcp.server.addTitle": return "Add an MCP server";
+            case "mcp.server.editTitle": return "Edit {name}";
+            case "mcp.server.name": return "Name";
+            case "mcp.server.slug": return "Slug";
+            case "mcp.server.slugHint": return "Lower-case letters, digits and single hyphens. It prefixes this server's tool names on the aggregate address (<slug>__<tool>); clients put those names in their allow-lists, so avoid changing it. Left empty it is made from the name.";
+            case "mcp.server.url": return "Address";
+            case "mcp.server.urlHint": return "Starts with http:// or https://. Do not put a secret in the address; use headers or OAuth for credentials.";
+            case "mcp.server.transport": return "Transport";
+            case "mcp.server.transport.http": return "Streamable HTTP";
+            case "mcp.server.transport.sse": return "Legacy SSE";
+            case "mcp.server.transportHint": return "Streamable HTTP finds out by itself whether the server speaks the new (2026-07-28) or the session-based older protocol. The older HTTP+SSE is deprecated: choose it only for a server that offers nothing else.";
+            case "mcp.server.auth": return "Authentication";
+            case "mcp.server.auth.none": return "None";
+            case "mcp.server.auth.header": return "Headers";
+            case "mcp.server.auth.oauth": return "OAuth";
+            case "mcp.server.headers": return "Request headers";
+            case "mcp.server.headersHint": return "For example Authorization: Bearer … Values are stored encrypted and never shown again; left empty while editing, a value is kept.";
+            case "mcp.server.headerName": return "Name";
+            case "mcp.server.headerValue": return "Value";
+            case "mcp.server.headerKept": return "Keep current value";
+            case "mcp.server.addHeader": return "Add header";
+            case "mcp.server.removeHeader": return "Remove this header";
+            case "mcp.server.timeout": return "Timeout (seconds)";
+            case "mcp.server.timeoutHint": return "The limit of one call to list or run a tool.";
+            case "mcp.server.enabled": return "Enabled";
+            case "mcp.server.oauthNote": return "After saving, click \"Authorize\" and sign in to the upstream service in your browser. What you grant is your own account's access, and every token bound to this server shares that identity.";
+            case "mcp.server.created": return "Added {name}";
+            case "mcp.server.saved": return "Saved {name}";
+            case "mcp.server.deleted": return "Deleted {name}";
+            case "mcp.server.deleteConfirm": return "Delete {name}?";
+            case "mcp.server.deleteDetail": return "Tokens bound to it lose the server, and any saved authorization is deleted with it.";
+            case "mcp.status.unknown": return "Not checked";
+            case "mcp.status.ok": return "Working";
+            case "mcp.status.needs_auth": return "Needs authorization";
+            case "mcp.status.auth_error": return "Credentials refused";
+            case "mcp.status.unreachable": return "Unreachable";
+            case "mcp.status.version_unsupported": return "Protocol version not supported";
+            case "mcp.server.protocol": return "Protocol {version}";
+            case "mcp.server.boundTokens": return "{count} tokens";
+            case "mcp.server.disabledBadge": return "Disabled";
+            case "mcp.server.test": return "Test connection";
+            case "mcp.server.testOk": return "Connected; {count} tools";
+            case "mcp.server.testToolsTitle": return "Tools of {name}";
+            case "mcp.server.testFailed": return "Connection failed: {message}";
+            case "mcp.server.authorize": return "Authorize";
+            case "mcp.server.reauthorize": return "Authorize again";
+            case "mcp.server.authorizeOpened": return "The authorization page opened in your browser. Come back here when you are done.";
+            case "mcp.server.authorizeNotNeeded": return "No further authorization is needed.";
+            case "mcp.server.authorized": return "Authorized";
+            case "mcp.server.authorizedBy": return "Issued by {issuer}";
+            case "mcp.server.forget": return "Forget authorization";
+            case "mcp.server.forgetConfirm": return "Forget the authorization of {name}?";
+            case "mcp.server.forgetDetail": return "The server cannot be used again until it is authorized again.";
+            case "mcp.server.forgotten": return "Authorization forgotten";
+            case "mcp.calls.title": return "Recent calls";
+            case "mcp.calls.hint": return "Records who called which tool, how long it took and how it ended; never the arguments or the reply. Kept for 30 days.";
+            case "mcp.calls.empty": return "No calls yet.";
+            case "mcp.calls.time": return "Time";
+            case "mcp.calls.token": return "Token";
+            case "mcp.calls.tool": return "Tool";
+            case "mcp.calls.duration": return "Duration";
+            case "mcp.calls.result": return "Result";
+            case "mcp.calls.ok": return "OK";
+            case "mcp.calls.era.modern": return "Modern";
+            case "mcp.calls.era.legacy": return "Legacy";
+            case "mcp.calls.error.tool": return "Tool error";
+            case "mcp.calls.error.needs_auth": return "Needs authorization";
+            case "mcp.calls.error.unreachable": return "Unreachable";
+            case "mcp.calls.error.timeout": return "Timed out";
+            case "mcp.calls.error.needs_input": return "Needs input";
+            case "mcp.calls.error.protocol": return "Protocol error";
             case "smartRouting.subtitle": return "Pick a model by how demanding the task is: a small judge model reads the request, and it goes to the model of the matching grade";
             case "smartRouting.loadFailed": return "Could not load the smart routing settings";
             case "smartRouting.status": return "Status";

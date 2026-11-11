@@ -520,6 +520,8 @@ export interface Token {
   recentRequests: number;
   /** Provider pool of direct calls (issue #2); null = `providerId` alone. `providerId` then holds its first member. */
   pool?: TokenPool | null;
+  /** Ids of the upstream MCP servers the token may use through the MCP gateway; a deleted server's id may linger. */
+  mcpServers?: string[] | null;
 }
 export type TokenPoolStrategy = 'failover' | 'round_robin' | 'weighted' | 'tiered' | 'least_busy';
 export type TokenPoolSticky = 'session' | 'off';
@@ -1569,4 +1571,41 @@ export interface TraceActivity {
   textChars?: number | null;
   reply?: string | null;
   toolCalls: TraceToolCall[];
+}
+
+// ---------- MCP gateway (issue #29) ----------
+
+export type McpTransport = 'http' | 'sse';
+export type McpAuthType = 'none' | 'header' | 'oauth';
+/** What the last contact with an upstream showed. */
+export type McpServerStatus = 'unknown' | 'ok' | 'needs_auth' | 'auth_error' | 'unreachable' | 'version_unsupported';
+
+export interface McpOAuthState { authorized: boolean; issuer?: string | null; scope?: string | null; updatedAt?: string | null }
+
+/** An upstream MCP server. Header values are never returned, only their names. */
+export interface McpServer {
+  id: string; slug: string; name: string; transport: McpTransport; url: string; authType: McpAuthType;
+  headerNames: string[]; enabled: boolean; timeoutSeconds: number;
+  status: McpServerStatus; statusMessage?: string | null;
+  /** The protocol version the last connection settled on, e.g. "2026-07-28" or "2025-11-25". */
+  protocolVersion?: string | null; checkedAt?: string | null;
+  oauth?: McpOAuthState | null;
+  /** How many gateway tokens may use the server. */
+  boundTokens: number; createdAt: string; updatedAt: string;
+}
+
+/** Body of a create / patch. `headers`: name → value; a name whose value is null keeps the stored value. */
+export interface McpServerInput {
+  name?: string; slug?: string; url?: string; transport?: McpTransport; authType?: McpAuthType;
+  headers?: Record<string, string | null>; enabled?: boolean; timeoutSeconds?: number;
+}
+
+export interface McpTestResult { ok: boolean; status: McpServerStatus; message?: string | null; protocolVersion?: string | null; toolCount: number; tools: string[] }
+export interface McpGatewaySettings { enabled: boolean; allowedOrigins: string[]; endpoint: string }
+/** Where to authorize Astra at an upstream; null `authorizationUrl` = nothing to do (`message` says why). */
+export interface McpOAuthStart { authorizationUrl?: string | null; message?: string | null }
+export type McpErrorCategory = 'tool' | 'needs_auth' | 'unreachable' | 'timeout' | 'needs_input' | 'protocol';
+export interface McpCall {
+  id: number; at: string; tokenId: string; tokenName?: string | null; serverId: string; serverSlug: string; tool: string;
+  durationMs: number; ok: boolean; errorCategory?: McpErrorCategory | null; frontEra?: 'modern' | 'legacy' | null;
 }

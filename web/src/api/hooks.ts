@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/
 
 import { api, apiBase, apiStream, apiText, enc, qs, type SseMessage } from './client';
 import type {
+  McpCall,
+  McpGatewaySettings,
+  McpOAuthStart,
+  McpServer,
+  McpServerInput,
+  McpTestResult,
   MarketListing,
   MarketSearchResult,
   PluginAuthMethod,
@@ -1133,6 +1139,8 @@ export const useUpdateToken = () =>
   useTokenMutation((v: {
     id: string; name?: string; enabled?: boolean; providerId?: string | null; accountId?: string | null;
     pool?: TokenPoolInput; limits?: TokenLimits | null; allowedClients?: ClientKind[] | null;
+    /** The upstream MCP servers the token may use (ids); null or [] = none. */
+    mcpServers?: string[] | null;
   }) => {
     const { id, ...body } = v;
     return api<Token>('PATCH', `/api/tokens/${enc(id)}`, body);
@@ -1171,6 +1179,59 @@ export const useRevokeTokenInvite = (id: string) => {
 /** The plaintext token, fetched only when the user copies it. */
 export const useRevealToken = () =>
   useMutation({ mutationFn: (id: string) => api<{ token: string }>('POST', `/api/tokens/${enc(id)}/reveal`) });
+
+// ---------- MCP gateway (issue #29) ----------
+
+export const useMcpSettings = () =>
+  useQuery({ queryKey: ['mcp-settings'], queryFn: () => api<McpGatewaySettings>('GET', '/api/mcp/settings') });
+
+export const useUpdateMcpSettings = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { enabled?: boolean; allowedOrigins?: string[] }) => api<McpGatewaySettings>('PUT', '/api/mcp/settings', body),
+    onSuccess: (data) => qc.setQueryData(['mcp-settings'], data),
+  });
+};
+
+export const useMcpServers = () =>
+  useQuery({
+    queryKey: ['mcp-servers'],
+    queryFn: () => api<McpServer[]>('GET', '/api/mcp/servers'),
+    refetchInterval: 15_000,
+  });
+
+/** Every mutation that changes a server also changes what a token may use and what the status says. */
+function useMcpServerMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['mcp-servers'] });
+      void qc.invalidateQueries({ queryKey: keys.tokens });
+    },
+  });
+}
+
+export const useCreateMcpServer = () => useMcpServerMutation((body: McpServerInput) => api<McpServer>('POST', '/api/mcp/servers', body));
+
+export const useUpdateMcpServer = () =>
+  useMcpServerMutation((v: { id: string; body: McpServerInput }) => api<McpServer>('PATCH', `/api/mcp/servers/${enc(v.id)}`, v.body));
+
+export const useDeleteMcpServer = () => useMcpServerMutation((id: string) => api<void>('DELETE', `/api/mcp/servers/${enc(id)}`));
+
+export const useTestMcpServer = () => useMcpServerMutation((id: string) => api<McpTestResult>('POST', `/api/mcp/servers/${enc(id)}/test`));
+
+/** Starts authorizing Astra at an OAuth upstream; the page opens the address it returns. */
+export const useStartMcpOAuth = () => useMcpServerMutation((id: string) => api<McpOAuthStart>('POST', `/api/mcp/servers/${enc(id)}/oauth/start`));
+
+export const useForgetMcpOAuth = () => useMcpServerMutation((id: string) => api<McpServer>('DELETE', `/api/mcp/servers/${enc(id)}/oauth`));
+
+export const useMcpCalls = (limit = 50) =>
+  useQuery({
+    queryKey: ['mcp-calls', limit],
+    queryFn: () => api<McpCall[]>('GET', `/api/mcp/calls${qs({ limit })}`),
+    refetchInterval: 10_000,
+  });
 
 // ---------- requests & stats ----------
 
