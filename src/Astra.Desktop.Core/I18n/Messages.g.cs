@@ -2604,6 +2604,100 @@ internal static class Messages
         "traces.error.unsupported",
         "nav.smartRouting",
         "nav.mcp",
+        "nav.group.resources",
+        "nav.skills",
+        "skills.subtitle",
+        "skills.tab.managed",
+        "skills.tab.found",
+        "skills.search",
+        "skills.install",
+        "skills.returnAll",
+        "skills.foundBanner",
+        "skills.foundBannerAction",
+        "skills.empty.title",
+        "skills.empty.detail",
+        "skills.found.empty",
+        "skills.found.selected",
+        "skills.found.migrate",
+        "skills.found.kind.unmanaged",
+        "skills.found.kind.external",
+        "skills.found.externalHint",
+        "skills.found.skillsCli",
+        "skills.found.skillsCliHint",
+        "skills.found.differs",
+        "skills.found.places",
+        "skills.found.inLibrary",
+        "skills.source.git",
+        "skills.source.local",
+        "skills.source.migrated",
+        "skills.badge.shared",
+        "skills.badge.copy",
+        "skills.badge.modified",
+        "skills.badge.sharedHint",
+        "skills.badge.viaHint",
+        "skills.badge.copyHint",
+        "skills.badge.notDetected",
+        "skills.badge.unsupported",
+        "skills.legend.on",
+        "skills.legend.shared",
+        "skills.legend.copy",
+        "skills.legend.off",
+        "skills.copyModified",
+        "skills.noPlacements",
+        "skills.menu.take",
+        "skills.menu.overwrite",
+        "skills.menu.return",
+        "skills.menu.delete",
+        "skills.confirm.sharedOff.title",
+        "skills.confirm.sharedOff.detail",
+        "skills.confirm.sharedOff.confirm",
+        "skills.confirm.delete.title",
+        "skills.confirm.delete.detail",
+        "skills.confirm.return.title",
+        "skills.confirm.return.detail",
+        "skills.confirm.returnAll.title",
+        "skills.confirm.returnAll.detail",
+        "skills.confirm.take.title",
+        "skills.confirm.take.detail",
+        "skills.confirm.overwrite.title",
+        "skills.confirm.overwrite.detail",
+        "skills.toast.returned",
+        "skills.toast.deleted",
+        "skills.toast.installed",
+        "skills.toast.migrated",
+        "skills.toast.done",
+        "skills.toast.partial",
+        "skills.install.title",
+        "skills.install.localOnly",
+        "skills.install.kind.git",
+        "skills.install.kind.local",
+        "skills.install.repo",
+        "skills.install.repoHint",
+        "skills.install.ref",
+        "skills.install.refPlaceholder",
+        "skills.install.dir",
+        "skills.install.probe",
+        "skills.install.found",
+        "skills.install.apply",
+        "skills.install.submit",
+        "skills.install.disabled",
+        "skills.status.exists",
+        "skills.status.differs",
+        "skills.status.invalid",
+        "skills.reason.name",
+        "skills.reason.size",
+        "skills.migrate.title",
+        "skills.migrate.lead",
+        "skills.migrate.keep",
+        "skills.migrate.keepHint",
+        "skills.migrate.keepLibrary",
+        "skills.migrate.noConflict",
+        "skills.migrate.needsChoice",
+        "skills.migrate.inLibrary",
+        "skills.migrate.backup",
+        "skills.migrate.submit",
+        "skills.migrate.modified",
+        "skills.error.load",
         "mcp.subtitle",
         "mcp.gateway.title",
         "mcp.clients.title",
@@ -5472,6 +5566,100 @@ internal static class Messages
             case "traces.error.unsupported": return "这个端口上运行的是还没有链路追踪功能的旧版本 astra-server。停掉旧服务（例如退出 Astra 桌面版），再用新版本重新启动。";
             case "nav.smartRouting": return "智能路由";
             case "nav.mcp": return "MCP 网关";
+            case "nav.group.resources": return "资源";
+            case "nav.skills": return "Skills";
+            case "skills.subtitle": return "Skills 统一存放在 Astra，通过链接映射到各客户端；关闭只会删除链接，内容始终保留在 Astra。";
+            case "skills.tab.managed": return "Astra 托管";
+            case "skills.tab.found": return "在客户端中发现";
+            case "skills.search": return "搜索名称或描述";
+            case "skills.install": return "安装…";
+            case "skills.returnAll": return "全部归还…";
+            case "skills.foundBanner": return "在客户端目录中发现 {n} 个未托管的 Skill，可以迁移到 Astra 统一管理（原位置会换成链接，先备份）。";
+            case "skills.foundBannerAction": return "查看并迁移";
+            case "skills.empty.title": return "还没有 Skill";
+            case "skills.empty.detail": return "从 Git 仓库或本机目录安装一个，或把客户端里已有的迁移进来。";
+            case "skills.found.empty": return "客户端目录里没有发现未托管的 Skill。";
+            case "skills.found.selected": return "已选 {n} / {total}";
+            case "skills.found.migrate": return "迁移所选…";
+            case "skills.found.kind.unmanaged": return "真实目录";
+            case "skills.found.kind.external": return "外部链接";
+            case "skills.found.externalHint": return "指向别处（如 dotfiles 仓库），Astra 不会移动它。";
+            case "skills.found.skillsCli": return "skills CLI";
+            case "skills.found.skillsCliHint": return "由 skills CLI 管理；迁移后 npx skills update 会写进 Astra 的副本，默认不勾选。";
+            case "skills.found.differs": return "内容不同";
+            case "skills.found.places": return "{n} 处";
+            case "skills.found.inLibrary": return "已在 Astra 中";
+            case "skills.source.git": return "Git";
+            case "skills.source.local": return "本地";
+            case "skills.source.migrated": return "已迁移";
+            case "skills.badge.shared": return "共享";
+            case "skills.badge.copy": return "副本";
+            case "skills.badge.modified": return "已改";
+            case "skills.badge.sharedHint": return "通过共享目录 ~/.agents/skills 看到这个 Skill，和读同一目录的客户端一起开关。";
+            case "skills.badge.viaHint": return "通过 {client} 的 Skills 目录看到这个 Skill；要关闭请关闭 {client}。";
+            case "skills.badge.copyHint": return "无法建链接（例如网络盘），已复制一份。";
+            case "skills.badge.notDetected": return "没有检测到这个客户端。";
+            case "skills.badge.unsupported": return "暂不支持。";
+            case "skills.legend.on": return "已启用，点击关闭";
+            case "skills.legend.shared": return "经共享目录可见，需一起开关";
+            case "skills.legend.copy": return "无法建链接，已复制";
+            case "skills.legend.off": return "未启用，点击开启";
+            case "skills.copyModified": return "副本已修改";
+            case "skills.noPlacements": return "尚未应用到任何客户端";
+            case "skills.menu.take": return "收回修改到 Astra…";
+            case "skills.menu.overwrite": return "用 Astra 版本覆盖副本…";
+            case "skills.menu.return": return "归还到客户端目录…";
+            case "skills.menu.delete": return "删除…";
+            case "skills.confirm.sharedOff.title": return "关闭 {client} 会影响其他客户端";
+            case "skills.confirm.sharedOff.detail": return "{client} 通过共享目录 ~/.agents/skills 看到 {skill}。关闭会移除共享目录里的链接，同时影响：{others}";
+            case "skills.confirm.sharedOff.confirm": return "仍然关闭";
+            case "skills.confirm.delete.title": return "删除 {skill}？";
+            case "skills.confirm.delete.detail": return "会移除 Astra 放在各客户端里的链接，并删除库里的目录（先备份）。";
+            case "skills.confirm.return.title": return "归还 {skill}？";
+            case "skills.confirm.return.detail": return "各客户端里的链接会换成真实目录，内容不变，Astra 不再管理它。";
+            case "skills.confirm.returnAll.title": return "归还全部 Skill？";
+            case "skills.confirm.returnAll.detail": return "所有 Astra 放置的链接都会换成真实目录，Astra 不再管理它们。";
+            case "skills.confirm.take.title": return "把副本的修改收回到 Astra？";
+            case "skills.confirm.take.detail": return "Astra 现有的版本先备份，再用这份副本的内容替换。";
+            case "skills.confirm.overwrite.title": return "用 Astra 的版本覆盖副本？";
+            case "skills.confirm.overwrite.detail": return "副本里被修改的内容先备份，再替换。";
+            case "skills.toast.returned": return "已归还";
+            case "skills.toast.deleted": return "已删除";
+            case "skills.toast.installed": return "已安装 {n} 个";
+            case "skills.toast.migrated": return "已迁移 {n} 个";
+            case "skills.toast.done": return "完成";
+            case "skills.toast.partial": return "{ok} 个成功，{failed} 个失败：{reason}";
+            case "skills.install.title": return "安装 Skill";
+            case "skills.install.localOnly": return "仅限本机操作：Skill 里可以带脚本。";
+            case "skills.install.kind.git": return "Git 仓库";
+            case "skills.install.kind.local": return "本地目录";
+            case "skills.install.repo": return "仓库地址";
+            case "skills.install.repoHint": return "不支持带密码或 token 的地址；会用你本机 git 的凭据和 SSH key。";
+            case "skills.install.ref": return "分支 / 标签（可选）";
+            case "skills.install.refPlaceholder": return "默认分支";
+            case "skills.install.dir": return "目录的完整路径";
+            case "skills.install.probe": return "探测 Skill";
+            case "skills.install.found": return "找到 {n} 个 Skill";
+            case "skills.install.apply": return "安装后应用到（可稍后再选）";
+            case "skills.install.submit": return "安装 {n} 个";
+            case "skills.install.disabled": return "只能在运行 Astra 的这台机器上安装 Skill。";
+            case "skills.status.exists": return "已有";
+            case "skills.status.differs": return "同名不同内容";
+            case "skills.status.invalid": return "不可用";
+            case "skills.reason.name": return "名称不合法";
+            case "skills.reason.size": return "超过 200 MB";
+            case "skills.migrate.title": return "迁移到 Astra";
+            case "skills.migrate.lead": return "把目录移到 Astra，并在原位置建链接。迁移后各客户端能看到的 Skill 不变，原件先备份。";
+            case "skills.migrate.keep": return "内容不同，选择保留哪一份";
+            case "skills.migrate.keepHint": return "没选中的一份先备份，原位置同样换成指向所选版本的链接。";
+            case "skills.migrate.keepLibrary": return "Astra 里已有的版本";
+            case "skills.migrate.noConflict": return "无冲突";
+            case "skills.migrate.needsChoice": return "需要选择";
+            case "skills.migrate.inLibrary": return "Astra 里已有同名 Skill，各处会改为指向它";
+            case "skills.migrate.backup": return "原件会先备份到 {dir}，保留最近 30 次。";
+            case "skills.migrate.submit": return "迁移 {n} 个";
+            case "skills.migrate.modified": return "修改于 {time}";
+            case "skills.error.load": return "加载 Skills 失败";
             case "mcp.subtitle": return "把多个 MCP 服务器聚合成一个地址，按令牌决定谁能用哪些服务器。";
             case "mcp.gateway.title": return "网关";
             case "mcp.clients.title": return "应用到客户端";
@@ -8342,6 +8530,100 @@ internal static class Messages
             case "traces.error.unsupported": return "The astra-server on this port is an older version without tracing. Stop it (for example, quit Astra Desktop) and start the new version.";
             case "nav.smartRouting": return "Smart routing";
             case "nav.mcp": return "MCP gateway";
+            case "nav.group.resources": return "Resources";
+            case "nav.skills": return "Skills";
+            case "skills.subtitle": return "Skills live in Astra and are mapped into each client with a link; switching one off only removes the link, and the content always stays in Astra.";
+            case "skills.tab.managed": return "Managed by Astra";
+            case "skills.tab.found": return "Found in clients";
+            case "skills.search": return "Search name or description";
+            case "skills.install": return "Install…";
+            case "skills.returnAll": return "Give all back…";
+            case "skills.foundBanner": return "{n} unmanaged Skill(s) found in client directories. Migrate them to manage them in Astra (the original place becomes a link, backed up first).";
+            case "skills.foundBannerAction": return "Review and migrate";
+            case "skills.empty.title": return "No Skills yet";
+            case "skills.empty.detail": return "Install one from a Git repository or a folder on this machine, or migrate the ones your clients already have.";
+            case "skills.found.empty": return "No unmanaged Skills found in the client directories.";
+            case "skills.found.selected": return "{n} / {total} selected";
+            case "skills.found.migrate": return "Migrate selected…";
+            case "skills.found.kind.unmanaged": return "Real folder";
+            case "skills.found.kind.external": return "External link";
+            case "skills.found.externalHint": return "Points somewhere else (a dotfiles repository, say); Astra will not move it.";
+            case "skills.found.skillsCli": return "skills CLI";
+            case "skills.found.skillsCliHint": return "Managed by the skills CLI; after migrating, npx skills update would write into Astra's copy. Not selected by default.";
+            case "skills.found.differs": return "Different content";
+            case "skills.found.places": return "{n} places";
+            case "skills.found.inLibrary": return "Already in Astra";
+            case "skills.source.git": return "Git";
+            case "skills.source.local": return "Local";
+            case "skills.source.migrated": return "Migrated";
+            case "skills.badge.shared": return "shared";
+            case "skills.badge.copy": return "copy";
+            case "skills.badge.modified": return "edited";
+            case "skills.badge.sharedHint": return "Sees this Skill through the shared folder ~/.agents/skills; it switches together with the other clients that read it.";
+            case "skills.badge.viaHint": return "Sees this Skill through {client}'s Skills folder; switch {client} off to remove it.";
+            case "skills.badge.copyHint": return "A link could not be made (a network drive, for example), so it was copied.";
+            case "skills.badge.notDetected": return "This client was not detected.";
+            case "skills.badge.unsupported": return "Not supported yet.";
+            case "skills.legend.on": return "On, click to switch off";
+            case "skills.legend.shared": return "Visible through the shared folder; switches together";
+            case "skills.legend.copy": return "No link possible, copied";
+            case "skills.legend.off": return "Off, click to switch on";
+            case "skills.copyModified": return "Copy was edited";
+            case "skills.noPlacements": return "Not applied to any client yet";
+            case "skills.menu.take": return "Take the edits back into Astra…";
+            case "skills.menu.overwrite": return "Overwrite the copy with Astra's version…";
+            case "skills.menu.return": return "Give back to client folders…";
+            case "skills.menu.delete": return "Delete…";
+            case "skills.confirm.sharedOff.title": return "Switching off {client} affects other clients";
+            case "skills.confirm.sharedOff.detail": return "{client} sees {skill} through the shared folder ~/.agents/skills. Switching it off removes the link there, which also affects: {others}";
+            case "skills.confirm.sharedOff.confirm": return "Switch off anyway";
+            case "skills.confirm.delete.title": return "Delete {skill}?";
+            case "skills.confirm.delete.detail": return "Removes the links Astra put in client folders and deletes the library folder (backed up first).";
+            case "skills.confirm.return.title": return "Give {skill} back?";
+            case "skills.confirm.return.detail": return "The links in client folders become real folders with the same content, and Astra stops managing it.";
+            case "skills.confirm.returnAll.title": return "Give every Skill back?";
+            case "skills.confirm.returnAll.detail": return "Every link Astra placed becomes a real folder, and Astra stops managing them.";
+            case "skills.confirm.take.title": return "Take the copy's edits back into Astra?";
+            case "skills.confirm.take.detail": return "Astra's current version is backed up, then replaced by this copy's content.";
+            case "skills.confirm.overwrite.title": return "Overwrite the copy with Astra's version?";
+            case "skills.confirm.overwrite.detail": return "The edited copy is backed up first, then replaced.";
+            case "skills.toast.returned": return "Given back";
+            case "skills.toast.deleted": return "Deleted";
+            case "skills.toast.installed": return "{n} installed";
+            case "skills.toast.migrated": return "{n} migrated";
+            case "skills.toast.done": return "Done";
+            case "skills.toast.partial": return "{ok} succeeded, {failed} failed: {reason}";
+            case "skills.install.title": return "Install Skills";
+            case "skills.install.localOnly": return "Only on this machine: a Skill may carry scripts.";
+            case "skills.install.kind.git": return "Git repository";
+            case "skills.install.kind.local": return "Local folder";
+            case "skills.install.repo": return "Repository address";
+            case "skills.install.repoHint": return "Addresses with a password or token are refused; your machine's git credentials and SSH keys are used.";
+            case "skills.install.ref": return "Branch / tag (optional)";
+            case "skills.install.refPlaceholder": return "Default branch";
+            case "skills.install.dir": return "Full path of the folder";
+            case "skills.install.probe": return "Look for Skills";
+            case "skills.install.found": return "{n} Skill(s) found";
+            case "skills.install.apply": return "Apply to after installing (can be done later)";
+            case "skills.install.submit": return "Install {n}";
+            case "skills.install.disabled": return "Skills can only be installed on the machine Astra runs on.";
+            case "skills.status.exists": return "Already there";
+            case "skills.status.differs": return "Same name, other content";
+            case "skills.status.invalid": return "Unusable";
+            case "skills.reason.name": return "Invalid name";
+            case "skills.reason.size": return "Over 200 MB";
+            case "skills.migrate.title": return "Migrate to Astra";
+            case "skills.migrate.lead": return "Moves the folder into Astra and links it back in place. Each client keeps seeing the same Skills, and the originals are backed up first.";
+            case "skills.migrate.keep": return "Contents differ; choose which one to keep";
+            case "skills.migrate.keepHint": return "The one you do not pick is backed up, and its place also becomes a link to the chosen version.";
+            case "skills.migrate.keepLibrary": return "The version already in Astra";
+            case "skills.migrate.noConflict": return "No conflict";
+            case "skills.migrate.needsChoice": return "Needs a choice";
+            case "skills.migrate.inLibrary": return "Astra already has a Skill with this name; every place will point at it";
+            case "skills.migrate.backup": return "Originals are backed up to {dir} first; the last 30 are kept.";
+            case "skills.migrate.submit": return "Migrate {n}";
+            case "skills.migrate.modified": return "Modified {time}";
+            case "skills.error.load": return "Could not load Skills";
             case "mcp.subtitle": return "Put several MCP servers behind one address and decide per token which of them it may use.";
             case "mcp.gateway.title": return "Gateway";
             case "mcp.clients.title": return "Apply to clients";

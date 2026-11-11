@@ -11,6 +11,11 @@ import { runAutostart } from './autostart.js';
 import { runUninstallClient } from './desktop.js';
 import { PACKAGE_NAME } from '../version.js';
 
+/** restore-all's exit code when a Skill is still a link into the library: the data directory must stay. */
+const SKILLS_NOT_RETURNED = 3;
+
+class SkillsNotReturnedError extends AstraError {}
+
 async function restoreAllOffline(purge: boolean): Promise<void> {
   const command = resolveServerBinary();
   const child = spawn(
@@ -19,6 +24,9 @@ async function restoreAllOffline(purge: boolean): Promise<void> {
     { stdio: 'inherit', windowsHide: true },
   );
   const code = await exitCodeOf(child);
+  if (code === SKILLS_NOT_RETURNED) {
+    throw new SkillsNotReturnedError('some Skills could not be given back to their client directories.');
+  }
   if (code !== 0) throw new AstraError(`restore-all exited with code ${code}.`);
 }
 
@@ -31,10 +39,12 @@ export async function runUninstall(opts: { purge?: boolean }): Promise<void> {
   info('Uninstalling Astra…');
 
   info('• Restoring client configurations…');
+  let skillsKept = false;
   try {
     await restoreAllOffline(opts.purge === true);
   } catch (err) {
     warn(`restore-all failed: ${(err as Error).message}`);
+    skillsKept = err instanceof SkillsNotReturnedError;
   }
 
   info('• Disabling autostart…');
@@ -58,7 +68,10 @@ export async function runUninstall(opts: { purge?: boolean }): Promise<void> {
     warn(`Could not stop the server: ${(err as Error).message}`);
   }
 
-  if (opts.purge) {
+  if (opts.purge && skillsKept) {
+    // Deleting ~/.astra now would leave client directories full of dangling Skill links.
+    warn(`Kept ${home}: some Skills are still links into it. Fix the errors above, then run \`astra uninstall --purge\` again.`);
+  } else if (opts.purge) {
     if (process.stdin.isTTY) {
       const ok = await confirmPrompt(`Delete all Astra data in ${home}? [y/N] `);
       if (!ok) {

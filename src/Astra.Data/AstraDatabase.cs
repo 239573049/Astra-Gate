@@ -21,6 +21,7 @@ public sealed class AstraDatabase
         Tokens = new TokenRepository(factory);
         TokenInvites = new TokenInviteRepository(factory);
         Mcp = new McpRepository(factory);
+        Library = new LibraryRepository(factory);
         ClientConfigState = new ClientConfigStateStore(factory);
         Requests = new RequestRepository(factory);
         Traces = new TraceRepository(factory);
@@ -40,6 +41,7 @@ public sealed class AstraDatabase
     public TokenRepository Tokens { get; }
     public TokenInviteRepository TokenInvites { get; }
     public McpRepository Mcp { get; }
+    public LibraryRepository Library { get; }
     public ClientConfigStateStore ClientConfigState { get; }
     public RequestRepository Requests { get; }
     public TraceRepository Traces { get; }

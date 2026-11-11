@@ -104,6 +104,15 @@ import type {
 } from './types';
 import type { PrivacyEvent } from './types';
 import type { ClientMcpEntry } from './types';
+import type {
+  SkillLibrary,
+  SkillMigrateItem,
+  SkillMigratePreviewItem,
+  SkillOutcome,
+  SkillProbeRequest,
+  SkillProbeResult,
+  SkillSwitchResult,
+} from './types';
 import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebDavStatus } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
@@ -1768,3 +1777,45 @@ export const useTestSmartRouting = () =>
 /** Every model id a provider serves: what a grade can be given. */
 export const useRoutingModels = () =>
   useQuery({ queryKey: keys.routingModels, queryFn: ({ signal }) => api<RoutingModel[]>('GET', '/api/smart-routing/models', undefined, signal) });
+
+// ---------- the resource library: Skills (.plan/resources-library.md) ----------
+
+const SKILLS_KEY = ['library-skills'] as const;
+
+export const useSkillLibrary = () =>
+  useQuery({ queryKey: SKILLS_KEY, queryFn: () => api<SkillLibrary>('GET', '/api/library/skills'), refetchInterval: 20_000 });
+
+/** Every change to the library can change what a client sees, so each one refreshes the whole page's data. */
+function useSkillMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => void qc.invalidateQueries({ queryKey: SKILLS_KEY }) });
+}
+
+export const useSwitchSkill = () =>
+  useSkillMutation((v: { name: string; client: string; on: boolean; confirm?: boolean }) =>
+    api<SkillSwitchResult>('PUT', `/api/library/skills/${enc(v.name)}/clients/${enc(v.client)}`, { on: v.on, confirm: v.confirm === true }),
+  );
+
+export const useProbeSkills = () => useMutation({ mutationFn: (body: SkillProbeRequest) => api<SkillProbeResult>('POST', '/api/library/skills/probe', body) });
+
+export const useInstallSkills = () =>
+  useSkillMutation((v: { probeId: string; names: string[]; clients: string[] }) => api<SkillOutcome[]>('POST', '/api/library/skills/install', v));
+
+export const useMigrateSkillsPreview = () =>
+  useMutation({ mutationFn: (names?: string[]) => api<SkillMigratePreviewItem[]>('POST', '/api/library/skills/migrate/preview', { names }) });
+
+export const useMigrateSkills = () =>
+  useSkillMutation((items: SkillMigrateItem[]) => api<SkillOutcome[]>('POST', '/api/library/skills/migrate', { items }));
+
+/** `name` null gives every Skill back. */
+export const useReturnSkills = () =>
+  useSkillMutation((name: string | null) =>
+    api<SkillOutcome[]>('POST', name === null ? '/api/library/skills/return-all' : `/api/library/skills/${enc(name)}/return`),
+  );
+
+export const useDeleteSkill = () => useSkillMutation((name: string) => api<void>('DELETE', `/api/library/skills/${enc(name)}`));
+
+export const useSkillCopyAction = () =>
+  useSkillMutation((v: { name: string; action: 'take-edits' | 'overwrite-copy' }) =>
+    api<void>('POST', `/api/library/skills/${enc(v.name)}/${v.action}`),
+  );

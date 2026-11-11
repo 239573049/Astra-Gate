@@ -43,6 +43,7 @@ public sealed class TestHost : IAsyncDisposable
     public string ClientHome => Path.Combine(Root, "client-home");
     public WebApplication App { get; }
     public AstraDatabase Db { get; }
+    public AstraPaths Paths => Db.Paths;
     public HttpClient Client { get; }
 
     public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

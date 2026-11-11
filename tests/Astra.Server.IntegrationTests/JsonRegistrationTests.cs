@@ -36,13 +36,18 @@ public sealed class JsonRegistrationTests
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/stats/daily-bill", "/api/provider-quota/templates",
             "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
-            "/api/smart-routing", "/api/smart-routing/models",
+            "/api/smart-routing", "/api/smart-routing/models", "/api/library/skills",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
         JsonContexts.ResetFallbackTracking();
 
         foreach (var url in gets) await host.GetJsonAsync(url);
+        // The Skill library's request bodies and results (nothing to migrate or install, but both directions are serialized).
+        await host.SendAsync(HttpMethod.Post, "/api/library/skills/migrate/preview", new { });
+        await host.SendAsync(HttpMethod.Post, "/api/library/skills/migrate", new { items = Array.Empty<object>() });
+        await host.SendAsync(HttpMethod.Put, "/api/library/skills/none/clients/claude-code", new { on = true });
+        await host.SendAsync(HttpMethod.Post, "/api/library/skills/return-all");
 
         // A model round trip: create, patch, read detail, reset a field, delete.
         var created = await host.SendAsync(HttpMethod.Post, "/api/models",

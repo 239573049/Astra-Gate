@@ -70,6 +70,24 @@ public static class Commands
             Console.Error.WriteLine($"MCP gateway entries: restore failed: {ex.Message}");
             incomplete = true;
         }
-        return incomplete ? 1 : 0;
+        var skillsIncomplete = false;
+        // Skills are the user's content, not gateway settings: they are given back (links become real directories) whatever --purge says.
+        try
+        {
+            var library = new Astra.Clients.Library.SkillLibrary(env, paths, db.Library);
+            foreach (var outcome in await library.ReturnAsync(null))
+            {
+                if (outcome.Ok) continue;
+                Console.Error.WriteLine($"Skill {outcome.Name}: could not be given back: {outcome.Reason}");
+                skillsIncomplete = true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Astra.Clients.Library.SkillLibraryException)
+        {
+            Console.Error.WriteLine($"Skills: give-back failed: {ex.Message}");
+            skillsIncomplete = true;
+        }
+        // 3 = a Skill is still a link into ~/.astra/library: `astra uninstall --purge` must not delete that directory.
+        return skillsIncomplete ? 3 : incomplete ? 1 : 0;
     }
 }

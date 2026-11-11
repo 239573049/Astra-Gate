@@ -1649,3 +1649,27 @@ export interface ClientMcpEntry {
   kind: ClientKind; state: ClientMcpState; file: string; url?: string | null; tokenId?: string | null; tokenName?: string | null;
   gatewayEnabled: boolean; gatewayUrl: string; error?: string | null;
 }
+
+// ---------- the resource library: Skills (.plan/resources-library.md) ----------
+export interface SkillTarget { kind: ClientKind; supported: boolean; detected: boolean; dir?: string | null; readsShared: boolean; alsoReads: ClientKind[] }
+/** `own`, `via-shared`, `via-<kind>` (through another client's folder) or `off`. */
+export interface SkillClient { kind: ClientKind; state: string; how?: 'symlink' | 'junction' | 'copy' | null; modified: boolean }
+export interface SkillPlacement { path: string; target: string; how: string; origin: string; modified: boolean; missing: boolean }
+export interface Skill {
+  name: string; description: string; sourceKind: 'migrated' | 'local' | 'git'; sourceJson?: string | null; updatedAt: string;
+  clients: SkillClient[]; placements: SkillPlacement[];
+}
+export interface FoundSkillLocation { path: string; target: string; hash: string; modified: string }
+/** `unmanaged` is a real folder (can be migrated); `external` is a link to somewhere else (shown only). */
+export interface FoundSkill {
+  name: string; kind: 'unmanaged' | 'external'; locations: FoundSkillLocation[]; conflict: boolean; inLibrary: boolean; skillsCli: boolean; linkTarget?: string | null;
+}
+export interface SkillLibrary { targets: SkillTarget[]; skills: Skill[]; found: FoundSkill[]; libraryDir: string; sharedDir: string; canCreate: boolean }
+export interface SkillSwitchResult { done: boolean; needsConfirm: boolean; affected: ClientKind[] }
+export interface SkillOutcome { name: string; ok: boolean; reason?: string | null }
+export interface SkillMigratePreviewItem { name: string; locations: FoundSkillLocation[]; conflict: boolean; inLibrary: boolean; skip?: string | null }
+export interface SkillMigrateItem { name: string; keep?: string | null }
+export type SkillCandidateStatus = 'new' | 'exists' | 'differs' | 'invalid';
+export interface SkillCandidate { name: string; description: string; status: SkillCandidateStatus; reason?: string | null }
+export interface SkillProbeResult { probeId: string; skills: SkillCandidate[] }
+export interface SkillProbeRequest { kind: 'git' | 'local'; source: string; ref?: string }

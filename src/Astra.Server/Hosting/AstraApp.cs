@@ -96,6 +96,7 @@ public static class AstraApp
         builder.Services.AddSingleton<ProviderProbe>();
         builder.Services.AddSingleton<ImportService>();
         builder.Services.AddSingleton<ClientMcpService>();
+        builder.Services.AddSingleton<LibraryService>();
         builder.Services.AddSingleton<ProviderBackupService>();
         builder.Services.AddSingleton<WebDavBackupService>();
         builder.Services.AddHttpClient(WebDavBackupService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
@@ -322,6 +323,7 @@ public static class AstraApp
         app.MapTraceEndpoints();
         app.MapClientEndpoints();
         app.MapClientMcpEndpoints();
+        app.MapLibraryEndpoints();
         app.MapClaudeDirectEndpoints();
         app.MapTokenEndpoints();
         app.MapJoinEndpoints();

@@ -1,0 +1,94 @@
+---
+title: Skills
+description: 把 Skills 统一放在 Astra，用链接映射到各个客户端，随时开关
+---
+
+Skills 是客户端（Claude Code、Codex 等）读取的一个个目录，每个目录里有一份 `SKILL.md`。同时用好几个客户端时，同一个 Skill 要在每个客户端的目录里各放一份，改一处就得改多处。
+
+Astra 的做法是：**Skills 只存一份**在 `~/.astra/library/skills/<名称>/`，客户端的目录里放的是指向它的**链接**，而不是副本。
+
+- 在某个客户端上**开启**，就是在它的 Skills 目录里建一个链接。
+- **关闭**，只删掉这个链接，库里的内容不动。
+- 改一次库里的 Skill，所有开启它的客户端立刻都看到。
+
+左侧「资源 → Skills」打开这个页面。
+
+## 安装
+
+点「安装…」。**只能在运行 Astra 的这台机器上操作**，因为 Skill 里可以带脚本。
+
+- **Git 仓库**：填仓库地址（可选分支或标签），点「探测 Skill」，Astra 会列出仓库里所有含 `SKILL.md` 的目录。用的是你本机的 `git`，所以你的 SSH key 和凭据照常生效。带密码或 token 的地址会被拒绝（来源会显示在界面上）。
+- **本地目录**：填目录的完整路径。目录本身含 `SKILL.md` 就是一个 Skill，否则里面每个含 `SKILL.md` 的子目录算一个。
+
+勾选要装的 Skill，再选「安装后应用到」哪些客户端（也可以以后再开）。同名的 Skill 如果内容相同会标「已有」；内容不同就跳过，不会覆盖。
+
+## 开关客户端
+
+每个 Skill 一行，后面是各个客户端的小标签，点一下就开或关。
+
+| 标签 | 含义 |
+|---|---|
+| 蓝色实心 | 已开启，点击关闭 |
+| 蓝色实心 + 「共享」 | 通过共享目录 `~/.agents/skills` 可见 |
+| 蓝色虚线 | 通过另一个客户端的目录可见，不能单独关，要关那个客户端 |
+| 橙色「副本」 | 这个位置没法建链接（例如网络盘），已复制一份 |
+| 灰色 | 未开启 |
+| 灰色划线 | 没有检测到这个客户端，或暂不支持 |
+
+### 共享目录
+
+Codex、Gemini CLI、OpenCode、Droid、Grok Build 都会读 `~/.agents/skills`。给其中一个开启时，Astra 把链接建在这个共享目录，于是这些客户端**一起**看到它。所以关闭其中一个之前，Astra 会先列出同样会受影响的客户端，让你确认。
+
+OpenCode 还会读 Claude Code 的目录，所以 Claude Code 开着的 Skill，OpenCode 也看得到（虚线标签）。
+
+### 副本被改过
+
+链接建不了、改成复制时，副本如果被改过，行上会出现「副本已修改」。菜单里可以选：
+
+- **收回修改到 Astra**：Astra 现有版本先备份，再用这份副本的内容替换；
+- **用 Astra 版本覆盖副本**：副本先备份，再替换。
+
+Astra 从不静默覆盖你改过的内容。
+
+## 迁移已有的 Skills
+
+客户端目录里原来就有的 Skill，会出现在「在客户端中发现」。勾选后点「迁移所选…」，预览里会写清每个 Skill 的移动和链接：
+
+1. 每个原位置先**备份**到 `~/.astra/backups/library/<时间>/`，保留最近 30 次；
+2. 目录移到 Astra 的库里；
+3. 原位置换成指向库的链接。
+
+迁移**不改变任何客户端能看到的 Skill 集合**：只在 `~/.codex/skills` 里的 Skill，迁移后仍然只在那里（变成链接），不会跑到共享目录去。
+
+几种特殊情况：
+
+- **内容不同的同名 Skill**：要选保留哪一份，没选的先备份，原位置同样换成链接。
+- **外部链接**（指向 dotfiles 仓库等别处）：只展示，Astra 不会移动它。
+- **由 skills CLI 管理的**（在它的 `.skill-lock.json` 里）：默认不勾选。迁移后 `npx skills update` 会写进 Astra 的副本。
+
+## 归还与删除
+
+- **归还**：把 Astra 放的链接换成真实目录，内容不变，Astra 不再管理它。可以按单个 Skill，也可以「全部归还」。
+- **删除**：移除所有仍属于 Astra 的链接，再把库里的目录删掉（先备份）。
+
+只有「Astra 放的、而且现在还是它放的」东西才会被移除：你自己放的同名目录、你换成别的链接的位置，Astra 都不会碰。
+
+卸载时：`astra uninstall` 和 `astra-server restore-all` 会先把所有 Skill 归还，客户端目录里不会留下悬空的链接。如果归还失败，`astra uninstall --purge` 会**保留** `~/.astra`，不会删到链接指向的内容。
+
+## 支持的客户端
+
+| 客户端 | Skills 目录 | 读共享目录 |
+|---|---|---|
+| Claude Code | `~/.claude/skills`（`CLAUDE_CONFIG_DIR`） | 否 |
+| Codex | `~/.codex/skills`（`CODEX_HOME`） | 是 |
+| Gemini CLI | `~/.gemini/skills` | 是 |
+| OpenCode | `~/.config/opencode/skills` | 是（也读 Claude Code 的） |
+| Copilot CLI | `~/.copilot/skills`（`COPILOT_HOME`） | 否 |
+| Droid | `~/.factory/skills` | 是 |
+| Grok Build | `~/.grok/skills` | 是 |
+
+其他客户端暂不支持。Docker 或远程部署的服务器检测不到你本机的客户端，页面会是空的。
+
+## Windows
+
+普通用户常常没有建符号链接的权限。Astra 会依次尝试：符号链接 → 目录联接（junction，不需要特权，仅限本地磁盘）→ 复制。复制出来的目录里有一个 `.astra-managed` 文件，用来和你自己的目录区分。

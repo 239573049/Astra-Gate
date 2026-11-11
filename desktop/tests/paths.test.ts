@@ -13,6 +13,7 @@ describe('astraPaths', () => {
     expect(p.installFile).toBe(path.join(p.home, 'install.json'));
     expect(p.logsDir).toBe(path.join(p.home, 'logs'));
     expect(p.pluginsDir).toBe(path.join(p.home, 'plugins'));
+    expect(p.libraryDir).toBe(path.join(p.home, 'library'));
     expect(p.toolsDir).toBe(path.join(p.home, 'tools'));
     expect(p.connectDir).toBe(path.join(p.home, 'connect'));
   });

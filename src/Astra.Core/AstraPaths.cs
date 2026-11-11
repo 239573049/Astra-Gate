@@ -53,6 +53,18 @@ public sealed class AstraPaths
     /// <summary>The plugin market's cached listings.</summary>
     public string PluginMarketDir => Path.Combine(PluginsDir, "market");
 
+    /// <summary>
+    /// The resource library: files clients read (Skills), kept apart from the SQLite rows that describe them. Like plugins, an exception to
+    /// "everything else is in SQLite", because a client can only read a directory.
+    /// </summary>
+    public string LibraryDir => Path.Combine(Root, "library");
+
+    /// <summary>Skills Astra manages: library/skills/&lt;name&gt;/ (each holds a SKILL.md). Client directories hold links to these.</summary>
+    public string LibrarySkillsDir => Path.Combine(LibraryDir, "skills");
+
+    /// <summary>Originals saved before a migration, replacement or delete: backups/library/&lt;timestamp&gt;/.</summary>
+    public string LibraryBackupsDir => Path.Combine(BackupsDir, "library");
+
     public void EnsureCreated()
     {
         foreach (var dir in new[] { Root, KeysDir, LogsDir, BackupsDir, ClientBackupsDir, DbBackupsDir, BodiesDir, PluginsDir })

@@ -11,6 +11,8 @@ export interface AstraPaths {
   pluginsDir: string;
   /** Helper programs the server downloads for itself (cloudflared for remote access). */
   toolsDir: string;
+  /** Resource library (Skills Astra manages; client directories link into it). */
+  libraryDir: string;
   /** State of astra-connect (the employee CLI): profile.json, state.json, backups/. The server never reads it. */
   connectDir: string;
   /** Path of the server's log file for a given day: astra-YYYYMMDD.log. */
@@ -38,6 +40,7 @@ export function astraPaths(
     logsDir: path.join(home, 'logs'),
     pluginsDir: path.join(home, 'plugins'),
     toolsDir: path.join(home, 'tools'),
+    libraryDir: path.join(home, 'library'),
     connectDir: path.join(home, 'connect'),
     logFile: (date: Date) => path.join(home, 'logs', logFileName(date)),
   };

@@ -1,4 +1,4 @@
-import { AppWindow, Boxes, KeyRound, LayoutDashboard, Plug, Puzzle, Route as RouteIcon, ScrollText, Server, Settings as SettingsIcon, ShieldCheck, Waypoints } from 'lucide-react';
+import { AppWindow, Boxes, KeyRound, LayoutDashboard, Plug, Puzzle, Route as RouteIcon, Sparkles, ScrollText, Server, Settings as SettingsIcon, ShieldCheck, Waypoints } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type { NavTarget } from '../../shell/bridge';
@@ -32,7 +32,13 @@ export const NAV_GROUPS: { title?: MessageKey; items: NavItem[] }[] = [
       { id: 'plugins', path: '/plugins', label: 'nav.plugins', color: '#bf5af2', icon: <Puzzle className={ic} strokeWidth={1.75} /> },
       { id: 'privacy', path: '/privacy', label: 'nav.privacy', color: '#30d158', icon: <ShieldCheck className={ic} strokeWidth={1.75} /> },
       { id: 'smartRouting', path: '/smart-routing', label: 'nav.smartRouting', color: '#ffd60a', icon: <RouteIcon className={ic} strokeWidth={1.75} /> },
+    ],
+  },
+  {
+    title: 'nav.group.resources',
+    items: [
       { id: 'mcp', path: '/mcp', label: 'nav.mcp', color: '#0a84ff', icon: <Plug className={ic} strokeWidth={1.75} /> },
+      { id: 'skills', path: '/skills', label: 'nav.skills', color: '#ff9f0a', icon: <Sparkles className={ic} strokeWidth={1.75} /> },
     ],
   },
   {

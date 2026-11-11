@@ -8,6 +8,7 @@ using Astra.Desktop.Pages.ProviderDetail;
 using Astra.Desktop.Pages.Providers;
 using Astra.Desktop.Pages.Requests;
 using Astra.Desktop.Pages.Settings;
+using Astra.Desktop.Pages.Skills;
 using Astra.Desktop.Pages.SmartRouting;
 using Astra.Desktop.Pages.Tokens;
 using Astra.Desktop.Pages.Traces;
@@ -33,6 +34,7 @@ public static class AppModules
         new ProvidersModule(Astra.Desktop.Components.ProviderDetail.ProviderTestDialog.Opener),
         new RequestsModule(),
         new SettingsModule(),
+        new SkillsModule(),
         new SmartRoutingModule(),
         new TokensModule(),
         new TracesModule(),

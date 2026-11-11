@@ -312,6 +312,11 @@
     },
     {
       "method": "GET",
+      "path": "/api/library/skills",
+      "file": "library/skills.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/health",
       "file": "health.json"
     },

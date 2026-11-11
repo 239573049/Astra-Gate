@@ -327,6 +327,58 @@ put('mcp/calls.json', [
 ]);
 route('/api/mcp/calls', 'mcp/calls.json');
 
+// resource library: Skills (.plan/resources-library.md)
+const skillTarget = (kind, readsShared, alsoReads = [], detected = true) => ({ kind, supported: true, detected, dir: `/Users/demo/.${kind}/skills`, readsShared, alsoReads });
+const skillClients = (views) => ['claude-code', 'codex', 'gemini-cli', 'opencode', 'copilot-cli', 'droid', 'grok-build'].map((kind) => ({ kind, state: 'off', how: null, modified: false, ...(views[kind] ?? {}) }));
+put('library/skills.json', {
+  targets: [
+    skillTarget('claude-code', false), skillTarget('codex', true), skillTarget('gemini-cli', true), skillTarget('opencode', true, ['claude-code']),
+    skillTarget('copilot-cli', false), skillTarget('droid', true, [], false), skillTarget('grok-build', true, [], false),
+  ],
+  skills: [
+    {
+      name: 'pdf-tools', description: '读取、合并、拆分 PDF，并从中提取表格和文本。', sourceKind: 'git',
+      sourceJson: JSON.stringify({ url: 'https://github.com/anthropics/skills', commit: 'a1b2c3d4e5f60718293a4b5c6d7e8f9012345678' }), updatedAt: ago(9 * DAY),
+      clients: skillClients({ 'claude-code': { state: 'own', how: 'symlink' }, codex: { state: 'via-shared', how: 'symlink' }, 'gemini-cli': { state: 'via-shared', how: 'symlink' }, opencode: { state: 'via-shared', how: 'symlink' } }),
+      placements: [
+        { path: '/Users/demo/.claude/skills/pdf-tools', target: 'claude-code', how: 'symlink', origin: 'applied', modified: false, missing: false },
+        { path: '/Users/demo/.agents/skills/pdf-tools', target: 'shared', how: 'symlink', origin: 'applied', modified: false, missing: false },
+      ],
+    },
+    {
+      name: 'code-review-zh', description: '按团队规范审查 diff，输出中文评审意见。', sourceKind: 'migrated', sourceJson: JSON.stringify({ from: '/Users/demo/.codex/skills/code-review-zh' }), updatedAt: ago(3 * DAY),
+      clients: skillClients({ codex: { state: 'own', how: 'symlink' } }),
+      placements: [{ path: '/Users/demo/.codex/skills/code-review-zh', target: 'codex', how: 'symlink', origin: 'migrated', modified: false, missing: false }],
+    },
+    {
+      name: 'db-migrate', description: '生成并检查数据库迁移脚本。', sourceKind: 'local', sourceJson: JSON.stringify({ path: '/Users/demo/dev/skills/db-migrate' }), updatedAt: ago(DAY),
+      clients: skillClients({ 'claude-code': { state: 'own', how: 'symlink' }, 'copilot-cli': { state: 'own', how: 'copy', modified: true } }),
+      placements: [
+        { path: '/Users/demo/.claude/skills/db-migrate', target: 'claude-code', how: 'symlink', origin: 'applied', modified: false, missing: false },
+        { path: '/Users/demo/.copilot/skills/db-migrate', target: 'copilot-cli', how: 'copy', origin: 'applied', modified: true, missing: false },
+      ],
+    },
+    {
+      name: 'brand-writer', description: '按品牌语气写作和润色。', sourceKind: 'local', sourceJson: JSON.stringify({ path: '/Users/demo/dev/skills/brand-writer' }), updatedAt: ago(5 * HOUR),
+      clients: skillClients({}), placements: [],
+    },
+  ],
+  found: [
+    { name: 'review-helper', kind: 'unmanaged', locations: [{ path: '/Users/demo/.claude/skills/review-helper', target: 'claude-code', hash: 'aa11', modified: ago(20 * DAY) }], conflict: false, inLibrary: false, skillsCli: false, linkTarget: null },
+    {
+      name: 'sql-style', kind: 'unmanaged', conflict: true, inLibrary: false, skillsCli: false, linkTarget: null,
+      locations: [
+        { path: '/Users/demo/.claude/skills/sql-style', target: 'claude-code', hash: 'bb22', modified: ago(5 * DAY) },
+        { path: '/Users/demo/.codex/skills/sql-style', target: 'codex', hash: 'cc33', modified: ago(40 * DAY) },
+      ],
+    },
+    { name: 'frontend-design', kind: 'unmanaged', locations: [{ path: '/Users/demo/.agents/skills/frontend-design', target: 'shared', hash: 'dd44', modified: ago(12 * DAY) }], conflict: false, inLibrary: false, skillsCli: true, linkTarget: null },
+    { name: 'my-dotfiles-skill', kind: 'external', locations: [{ path: '/Users/demo/.claude/skills/my-dotfiles-skill', target: 'claude-code', hash: '', modified: ago(60 * DAY) }], conflict: false, inLibrary: false, skillsCli: false, linkTarget: '/Users/demo/dotfiles/skills/x' },
+  ],
+  libraryDir: '/Users/demo/.astra/library/skills', sharedDir: '/Users/demo/.agents/skills', canCreate: true,
+});
+route('/api/library/skills', 'library/skills.json');
+
 // shell-level singletons
 for (const [path, file] of [['/api/health', 'health.json'], ['/api/version', 'version.json'], ['/api/auth/status', 'auth-status.json'], ['/api/settings', 'settings.json'], ['/api/update/status', 'update-status.json'], ['/api/tunnel', 'tunnel.json'], ['/api/server/listen', 'listen.json'], ['/api/server/autostart', 'autostart.json']]) route(path, file);
 

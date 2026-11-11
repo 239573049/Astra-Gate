@@ -26,6 +26,7 @@ describe('homePaths', () => {
     expect(p.pluginsDir).toBe('/h/plugins');
     expect(p.toolsDir).toBe('/h/tools');
     expect(p.connectDir).toBe('/h/connect');
+    expect(p.libraryDir).toBe('/h/library');
   });
 });
 

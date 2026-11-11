@@ -1,0 +1,390 @@
+{
+  "targets": [
+    {
+      "kind": "claude-code",
+      "supported": true,
+      "detected": true,
+      "dir": "/Users/demo/.claude-code/skills",
+      "readsShared": false,
+      "alsoReads": []
+    },
+    {
+      "kind": "codex",
+      "supported": true,
+      "detected": true,
+      "dir": "/Users/demo/.codex/skills",
+      "readsShared": true,
+      "alsoReads": []
+    },
+    {
+      "kind": "gemini-cli",
+      "supported": true,
+      "detected": true,
+      "dir": "/Users/demo/.gemini-cli/skills",
+      "readsShared": true,
+      "alsoReads": []
+    },
+    {
+      "kind": "opencode",
+      "supported": true,
+      "detected": true,
+      "dir": "/Users/demo/.opencode/skills",
+      "readsShared": true,
+      "alsoReads": [
+        "claude-code"
+      ]
+    },
+    {
+      "kind": "copilot-cli",
+      "supported": true,
+      "detected": true,
+      "dir": "/Users/demo/.copilot-cli/skills",
+      "readsShared": false,
+      "alsoReads": []
+    },
+    {
+      "kind": "droid",
+      "supported": true,
+      "detected": false,
+      "dir": "/Users/demo/.droid/skills",
+      "readsShared": true,
+      "alsoReads": []
+    },
+    {
+      "kind": "grok-build",
+      "supported": true,
+      "detected": false,
+      "dir": "/Users/demo/.grok-build/skills",
+      "readsShared": true,
+      "alsoReads": []
+    }
+  ],
+  "skills": [
+    {
+      "name": "pdf-tools",
+      "description": "读取、合并、拆分 PDF，并从中提取表格和文本。",
+      "sourceKind": "git",
+      "sourceJson": "{\"url\":\"https://github.com/anthropics/skills\",\"commit\":\"a1b2c3d4e5f60718293a4b5c6d7e8f9012345678\"}",
+      "updatedAt": "2026-10-17T12:00:00Z",
+      "clients": [
+        {
+          "kind": "claude-code",
+          "state": "own",
+          "how": "symlink",
+          "modified": false
+        },
+        {
+          "kind": "codex",
+          "state": "via-shared",
+          "how": "symlink",
+          "modified": false
+        },
+        {
+          "kind": "gemini-cli",
+          "state": "via-shared",
+          "how": "symlink",
+          "modified": false
+        },
+        {
+          "kind": "opencode",
+          "state": "via-shared",
+          "how": "symlink",
+          "modified": false
+        },
+        {
+          "kind": "copilot-cli",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "droid",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "grok-build",
+          "state": "off",
+          "how": null,
+          "modified": false
+        }
+      ],
+      "placements": [
+        {
+          "path": "/Users/demo/.claude/skills/pdf-tools",
+          "target": "claude-code",
+          "how": "symlink",
+          "origin": "applied",
+          "modified": false,
+          "missing": false
+        },
+        {
+          "path": "/Users/demo/.agents/skills/pdf-tools",
+          "target": "shared",
+          "how": "symlink",
+          "origin": "applied",
+          "modified": false,
+          "missing": false
+        }
+      ]
+    },
+    {
+      "name": "code-review-zh",
+      "description": "按团队规范审查 diff，输出中文评审意见。",
+      "sourceKind": "migrated",
+      "sourceJson": "{\"from\":\"/Users/demo/.codex/skills/code-review-zh\"}",
+      "updatedAt": "2026-10-23T12:00:00Z",
+      "clients": [
+        {
+          "kind": "claude-code",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "codex",
+          "state": "own",
+          "how": "symlink",
+          "modified": false
+        },
+        {
+          "kind": "gemini-cli",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "opencode",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "copilot-cli",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "droid",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "grok-build",
+          "state": "off",
+          "how": null,
+          "modified": false
+        }
+      ],
+      "placements": [
+        {
+          "path": "/Users/demo/.codex/skills/code-review-zh",
+          "target": "codex",
+          "how": "symlink",
+          "origin": "migrated",
+          "modified": false,
+          "missing": false
+        }
+      ]
+    },
+    {
+      "name": "db-migrate",
+      "description": "生成并检查数据库迁移脚本。",
+      "sourceKind": "local",
+      "sourceJson": "{\"path\":\"/Users/demo/dev/skills/db-migrate\"}",
+      "updatedAt": "2026-10-25T12:00:00Z",
+      "clients": [
+        {
+          "kind": "claude-code",
+          "state": "own",
+          "how": "symlink",
+          "modified": false
+        },
+        {
+          "kind": "codex",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "gemini-cli",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "opencode",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "copilot-cli",
+          "state": "own",
+          "how": "copy",
+          "modified": true
+        },
+        {
+          "kind": "droid",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "grok-build",
+          "state": "off",
+          "how": null,
+          "modified": false
+        }
+      ],
+      "placements": [
+        {
+          "path": "/Users/demo/.claude/skills/db-migrate",
+          "target": "claude-code",
+          "how": "symlink",
+          "origin": "applied",
+          "modified": false,
+          "missing": false
+        },
+        {
+          "path": "/Users/demo/.copilot/skills/db-migrate",
+          "target": "copilot-cli",
+          "how": "copy",
+          "origin": "applied",
+          "modified": true,
+          "missing": false
+        }
+      ]
+    },
+    {
+      "name": "brand-writer",
+      "description": "按品牌语气写作和润色。",
+      "sourceKind": "local",
+      "sourceJson": "{\"path\":\"/Users/demo/dev/skills/brand-writer\"}",
+      "updatedAt": "2026-10-26T07:00:00Z",
+      "clients": [
+        {
+          "kind": "claude-code",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "codex",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "gemini-cli",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "opencode",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "copilot-cli",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "droid",
+          "state": "off",
+          "how": null,
+          "modified": false
+        },
+        {
+          "kind": "grok-build",
+          "state": "off",
+          "how": null,
+          "modified": false
+        }
+      ],
+      "placements": []
+    }
+  ],
+  "found": [
+    {
+      "name": "review-helper",
+      "kind": "unmanaged",
+      "locations": [
+        {
+          "path": "/Users/demo/.claude/skills/review-helper",
+          "target": "claude-code",
+          "hash": "aa11",
+          "modified": "2026-10-06T12:00:00Z"
+        }
+      ],
+      "conflict": false,
+      "inLibrary": false,
+      "skillsCli": false,
+      "linkTarget": null
+    },
+    {
+      "name": "sql-style",
+      "kind": "unmanaged",
+      "conflict": true,
+      "inLibrary": false,
+      "skillsCli": false,
+      "linkTarget": null,
+      "locations": [
+        {
+          "path": "/Users/demo/.claude/skills/sql-style",
+          "target": "claude-code",
+          "hash": "bb22",
+          "modified": "2026-10-21T12:00:00Z"
+        },
+        {
+          "path": "/Users/demo/.codex/skills/sql-style",
+          "target": "codex",
+          "hash": "cc33",
+          "modified": "2026-09-16T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "name": "frontend-design",
+      "kind": "unmanaged",
+      "locations": [
+        {
+          "path": "/Users/demo/.agents/skills/frontend-design",
+          "target": "shared",
+          "hash": "dd44",
+          "modified": "2026-10-14T12:00:00Z"
+        }
+      ],
+      "conflict": false,
+      "inLibrary": false,
+      "skillsCli": true,
+      "linkTarget": null
+    },
+    {
+      "name": "my-dotfiles-skill",
+      "kind": "external",
+      "locations": [
+        {
+          "path": "/Users/demo/.claude/skills/my-dotfiles-skill",
+          "target": "claude-code",
+          "hash": "",
+          "modified": "2026-08-27T12:00:00Z"
+        }
+      ],
+      "conflict": false,
+      "inLibrary": false,
+      "skillsCli": false,
+      "linkTarget": "/Users/demo/dotfiles/skills/x"
+    }
+  ],
+  "libraryDir": "/Users/demo/.astra/library/skills",
+  "sharedDir": "/Users/demo/.agents/skills",
+  "canCreate": true
+}
