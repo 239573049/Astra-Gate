@@ -95,6 +95,12 @@ public static class AstraApp
         builder.Services.AddSingleton<ProviderTemplateCatalog>();
         builder.Services.AddSingleton<ProviderProbe>();
         builder.Services.AddSingleton<ImportService>();
+        builder.Services.AddSingleton<ClientMcpService>();
+        builder.Services.AddSingleton<ProviderBackupService>();
+        builder.Services.AddSingleton<WebDavBackupService>();
+        builder.Services.AddHttpClient(WebDavBackupService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
         builder.Services.AddSingleton<IModelProtocolResolver>(sp => sp.GetRequiredService<ProviderProbe>());
         builder.Services.AddSingleton<ModelSyncService>();
         builder.Services.AddSingleton<Astra.Core.Models.IProviderAccountStore>(database.Accounts);
@@ -315,6 +321,7 @@ public static class AstraApp
         app.MapRequestEndpoints();
         app.MapTraceEndpoints();
         app.MapClientEndpoints();
+        app.MapClientMcpEndpoints();
         app.MapClaudeDirectEndpoints();
         app.MapTokenEndpoints();
         app.MapJoinEndpoints();
@@ -332,6 +339,7 @@ public static class AstraApp
         app.MapAlertEndpoints();
         app.MapTunnelEndpoints();
         app.MapAutostartEndpoints();
+        app.MapWebDavBackupEndpoints();
 
         // SPA fallback for everything that is not an API / gateway route.
         app.MapFallback(async ctx =>

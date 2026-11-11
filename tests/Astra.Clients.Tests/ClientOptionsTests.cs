@@ -72,12 +72,13 @@ public class ClientOptionsTests : IDisposable
     public void ClaudeCode_EnvOptions_AreWrittenAndRemovedOnDisable()
     {
         var adapter = new ClaudeCodeClientAdapter(_home.Env, _store);
-        var options = new JsonObject { ["maxThinkingTokens"] = 16000, ["disablePromptCaching"] = true };
+        var options = new JsonObject { ["maxThinkingTokens"] = 16000, ["disablePromptCaching"] = true, ["autoModeServerOff"] = true };
 
         _applier.Apply(adapter.PlanEnable(TestGateway.Context("astra-claude-x", null, Extras(options))));
         var env = ClaudeEnv();
         Assert.Equal("16000", env["MAX_THINKING_TOKENS"]!.GetValue<string>());
         Assert.Equal("1", env["DISABLE_PROMPT_CACHING"]!.GetValue<string>());
+        Assert.Equal("0", env["CLAUDE_CODE_AUTO_MODE_SERVER"]!.GetValue<string>());
 
         // The settings file did not exist before the takeover, so restoring removes it again.
         _applier.Disable(adapter.PlanDisable());

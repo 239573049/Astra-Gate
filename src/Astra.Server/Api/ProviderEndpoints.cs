@@ -67,6 +67,7 @@ public static class ProviderEndpoints
                     new(u.TodayRequests, u.TodayInputTokens, u.TodayOutputTokens, u.TodayCostNanoUsd))).ToList()));
         });
         group.MapImportEndpoints();
+        group.MapBackupEndpoints();
 
         group.MapPost("", async (JsonObject body, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets,
             ProviderQuotaManager quota, CancellationToken ct) =>
@@ -265,6 +266,24 @@ public static class ProviderEndpoints
             if (m is null || m.ProviderId != id) throw new AdminApiException(404, "Provider model not found");
             await db.Providers.DeleteModelAsync(pmId, ct);
             return Results.NoContent();
+        });
+        // Several models at once ({ ids: [provider model row ids] }): one transaction, so the bound clients' model lists
+        // are re-synced once rather than per model. Every id must belong to this provider.
+        group.MapPost("/{id}/models/delete", async (string id, JsonObject body, AstraDatabase db, CancellationToken ct) =>
+        {
+            await RequireAsync(db, id, ct);
+            if (body["ids"] is not JsonArray input || input.Count == 0) throw new AdminApiException(400, "ids must be a non-empty array of provider model ids");
+            if (input.Count > 5000) throw new AdminApiException(400, "Too many models in one request");
+            var ids = new List<long>(input.Count);
+            foreach (var node in input)
+            {
+                if (node is not JsonValue v || !v.TryGetValue<long>(out var pmId)) throw new AdminApiException(400, "ids must be numbers");
+                ids.Add(pmId);
+            }
+            var owned = (await db.Providers.ListModelsAsync(id, ct)).Select(m => m.Id).ToHashSet();
+            if (ids.Any(x => !owned.Contains(x))) throw new AdminApiException(404, "Provider model not found");
+            var deleted = await db.Providers.DeleteModelsAsync(id, ids, ct);
+            return Results.Ok(new JsonObject { ["deleted"] = deleted });
         });
 
         // Model mapping (Provider.ModelMap, settings.model_map): requested model id → one of this provider's models. Replaces

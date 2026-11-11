@@ -25,6 +25,7 @@ namespace Astra.Server;
 [JsonSerializable(typeof(RuntimeInfo))]
 [JsonSerializable(typeof(UpdateManifest))]
 [JsonSerializable(typeof(UpdateCheckState))]
+[JsonSerializable(typeof(WebDavSettings))]
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(Dictionary<string, string[]>))]

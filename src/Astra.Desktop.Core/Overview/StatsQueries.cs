@@ -61,6 +61,12 @@ public sealed class StatsQueries
         => _queries.Query(new QueryKey("stats", "activity", days.ToString(System.Globalization.CultureInfo.InvariantCulture), client ?? "", token ?? "", TzOffsetMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)), async ct =>
             await _api.GetAsync<List<DailyActivityDto>>("/api/stats/activity-heatmap" + ApiClient.Qs(("days", days), ("client", client), ("token", token), ("tzOffset", TzOffsetMinutes)), ct) ?? []);
 
+    /// <summary>Today's bill in the user's zone, per provider and model (GET /api/stats/daily-bill; web <c>useDailyBill</c>).</summary>
+    public Query<DailyBillDto> DailyBill()
+        => _queries.Query(new QueryKey("stats", "daily-bill", TzOffsetMinutes.ToString(System.Globalization.CultureInfo.InvariantCulture)), async ct =>
+            await _api.GetAsync<DailyBillDto>("/api/stats/daily-bill" + ApiClient.Qs(("tzOffset", TzOffsetMinutes)), ct)
+            ?? throw new ApiException(0, "empty bill response"));
+
     /// <summary>A page of the request log (GET /api/requests); key prefix "requests".</summary>
     public Query<RequestPageDto> Requests(RequestListQuery q)
         => _queries.Query(new QueryKey("requests", q.Client ?? "", q.Token ?? "", q.From ?? "", q.Page.ToString(System.Globalization.CultureInfo.InvariantCulture), q.PageSize.ToString(System.Globalization.CultureInfo.InvariantCulture)), async ct =>

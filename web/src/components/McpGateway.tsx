@@ -18,6 +18,7 @@ import { useI18n, type MessageKey } from '../i18n';
 import { formatDateTime, formatMs } from '../lib/format';
 import { systemActions } from '../shell/systemActions';
 import { Alert } from './arc/alert/alert';
+import { ClientMcpEntries } from './ClientMcpEntries';
 import { Badge, Button, EmptyState, Field, Group, Input, NumberInput, Row, Segmented, Spinner, Switch, TextArea } from './ui/controls';
 import { errorText, Menu, Sheet, useFeedback } from './ui/overlays';
 
@@ -35,6 +36,7 @@ export function McpGateway() {
   return (
     <>
       <GatewaySettings />
+      <ClientMcpEntries />
       <Servers />
       <Calls />
     </>

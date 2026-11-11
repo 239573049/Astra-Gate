@@ -1,0 +1,103 @@
+/*
+ * The daily bill's two looks (A · receipt, E · comic page). A bill is a picture that gets saved and shared, so its colors are
+ * fixed (no theme tokens) and its fonts are the system's (no web fonts: the console runs offline). The Avalonia client draws
+ * the same picture (src/Astra.Desktop/Components/Overview/ReceiptBillView.cs, MangaBillView.cs): every size and color here
+ * has a twin there — change them together.
+ */
+
+/*
+ * A saved bill is this markup plus this file alone, drawn inside an SVG (exportImage.ts) where the console's base styles do
+ * not reach: everything the picture depends on — box sizing, line height, margins — is set here.
+ */
+.bill-rc, .bill-rc *, .bill-rc *::before, .bill-rc *::after,
+.bill-mg-frame, .bill-mg-frame *, .bill-mg-frame *::before, .bill-mg-frame *::after { box-sizing: border-box; margin: 0; }
+.bill-rc, .bill-mg-frame { line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+/* ---------- A · receipt ---------- */
+.bill-rc {
+  width: 372px;
+  color: #1d1d1b;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, 'PingFang SC', 'Microsoft YaHei UI', monospace;
+  font-variant-numeric: tabular-nums;
+}
+.bill-rc .zz-t { height: 8px; background: conic-gradient(from 135deg at 50% 0, #fdfcf8 90deg, transparent 0) 0 0 / 16px 8px repeat-x; }
+.bill-rc .zz-b { height: 8px; background: conic-gradient(from -45deg at 50% 100%, #fdfcf8 90deg, transparent 0) 0 0 / 16px 8px repeat-x; }
+.bill-rc .paper { background: #fdfcf8; padding: 26px 26px 28px; display: flex; flex-direction: column; gap: 16px; }
+.bill-rc .head { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+.bill-rc .logo { width: 60px; height: 60px; border-radius: 14px; border: 2px solid #1d1d1b; filter: grayscale(1); display: block; }
+.bill-rc .brand { font-size: 21px; font-weight: 800; letter-spacing: 0.32em; margin-right: -0.32em; line-height: 1.3; }
+.bill-rc .sub { font-size: 11px; color: #5b5750; letter-spacing: 0.06em; }
+.bill-rc .dash { border-top: 1.5px dashed #1d1d1b; }
+.bill-rc .dbl { border-top: 4px double #1d1d1b; }
+.bill-rc .kv { display: flex; justify-content: space-between; gap: 12px; font-size: 12px; line-height: 21px; }
+.bill-rc .kv > span:first-child { color: #5b5750; }
+.bill-rc .prov { display: flex; flex-direction: column; gap: 8px; }
+.bill-rc .prov-h { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; font-weight: 800; letter-spacing: 0.05em; }
+.bill-rc .m { padding-left: 14px; display: flex; flex-direction: column; gap: 2px; }
+.bill-rc .m-l { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; }
+.bill-rc .m-l > span { overflow-wrap: anywhere; }
+.bill-rc .m-l > b { font-weight: 600; flex: none; }
+.bill-rc .m-s { font-size: 11px; color: #6b675f; }
+.bill-rc .sum { display: flex; align-items: baseline; gap: 6px; padding-left: 14px; font-size: 12px; font-weight: 600; }
+.bill-rc .sum > i { flex: 1; border-bottom: 1.5px dotted #8a857b; transform: translateY(-3px); }
+.bill-rc .none { font-size: 12px; color: #6b675f; text-align: center; padding: 6px 0; }
+.bill-rc .total { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.bill-rc .total > span { font-size: 13px; font-weight: 800; letter-spacing: 0.08em; }
+.bill-rc .total > strong { font-size: 34px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.bill-rc .note { font-size: 10.5px; color: #6b675f; text-align: center; line-height: 1.6; }
+.bill-rc .barcode {
+  height: 48px; width: 286px; margin: 4px auto 0;
+  background: repeating-linear-gradient(90deg, #1d1d1b 0 2px, transparent 2px 4px, #1d1d1b 4px 5px, transparent 5px 7px, #1d1d1b 7px 10px, transparent 10px 11px, #1d1d1b 11px 12px, transparent 12px 15px, #1d1d1b 15px 17px, transparent 17px 18px, #1d1d1b 18px 19px, transparent 19px 22px, #1d1d1b 22px 25px, transparent 25px 26px, #1d1d1b 26px 27px, transparent 27px 29px, #1d1d1b 29px 31px, transparent 31px 34px, #1d1d1b 34px 35px, transparent 35px 36px, #1d1d1b 36px 39px, transparent 39px 41px, #1d1d1b 41px 42px, transparent 42px 45px, #1d1d1b 45px 47px, transparent 47px 48px, #1d1d1b 48px 49px, transparent 49px 53px);
+}
+.bill-rc .code { font-size: 11px; letter-spacing: 0.3em; margin: -8px -0.3em 0 0; text-align: center; }
+.bill-rc .thanks { font-size: 12px; font-weight: 800; text-align: center; letter-spacing: 0.12em; }
+.bill-rc .site { margin-top: -10px; }
+
+/* ---------- E · comic page ---------- */
+/* The 8px hard shadow sits inside the exported box (padding), so a saved image keeps it. */
+.bill-mg-frame { padding: 0 8px 8px 0; width: 628px; }
+.bill-mg {
+  width: 620px; background: #fffdf5; color: #111; padding: 28px; display: flex; flex-direction: column; gap: 20px;
+  border: 3px solid #111; box-shadow: 8px 8px 0 #111;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.bill-mg .tone { background-color: #fff; background-image: radial-gradient(#111 1.1px, transparent 1.5px); background-size: 7px 7px; }
+.bill-mg .top { display: grid; grid-template-columns: 176px minmax(0, 1fr); gap: 26px; }
+.bill-mg .face { width: 176px; height: 176px; border: 3px solid #111; overflow: hidden; background: #fff; }
+.bill-mg .face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bill-mg .say { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; min-width: 0; }
+.bill-mg .kicker { display: flex; justify-content: space-between; gap: 8px; font-weight: 900; font-size: 12px; letter-spacing: 0.14em; }
+.bill-mg .bubble { position: relative; border: 3px solid #111; border-radius: 28px; background: #fff; padding: 14px 20px; font-size: 18px; font-weight: 700; line-height: 1.5; }
+.bill-mg .bubble::before { content: ''; position: absolute; left: -26px; top: 36px; border-style: solid; border-width: 12px 26px 12px 0; border-color: transparent #111 transparent transparent; }
+.bill-mg .bubble::after { content: ''; position: absolute; left: -19px; top: 40px; border-style: solid; border-width: 8px 20px 8px 0; border-color: transparent #fff transparent transparent; }
+.bill-mg .bubble em { font-style: italic; font-weight: 900; font-size: 26px; color: #d7261e; letter-spacing: 0.02em; }
+.bill-mg .strip { background: #111; color: #fffdf5; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 18px; }
+.bill-mg .strip h3 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: 0.06em; }
+.bill-mg .strip span { font-style: italic; font-weight: 900; font-size: 16px; letter-spacing: 0.06em; }
+.bill-mg .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.bill-mg .panel { border: 3px solid #111; background: #fff; box-shadow: 5px 5px 0 #111; min-width: 0; }
+.bill-mg .panel-h { background: #111; color: #fff; display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 7px 12px; font-weight: 900; font-size: 15px; }
+.bill-mg .panel-h > span:first-child { overflow-wrap: anywhere; }
+.bill-mg .panel-h > span:last-child { font-style: italic; font-size: 18px; flex: none; }
+.bill-mg .mr { padding: 9px 12px; border-bottom: 2px dashed #111; display: flex; flex-direction: column; gap: 2px; }
+.bill-mg .mr:last-child { border-bottom: 0; }
+.bill-mg .mr > div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; font-weight: 700; }
+.bill-mg .mr > div > span:first-child { overflow-wrap: anywhere; }
+.bill-mg .mr > div > span:last-child { flex: none; }
+.bill-mg .mr small { font-size: 11px; color: #444; font-weight: 500; }
+.bill-mg .none { border: 3px dashed #111; padding: 22px; text-align: center; font-weight: 700; font-size: 14px; }
+.bill-mg .tot { position: relative; border: 3px solid #111; padding: 18px; display: flex; }
+.bill-mg .tot-in { background: #fff; border: 3px solid #111; padding: 14px 22px 16px; display: flex; flex-direction: column; gap: 6px; }
+.bill-mg .tot-in > span { font-weight: 900; font-size: 14px; letter-spacing: 0.1em; }
+.bill-mg .tot-in > strong { font-style: italic; font-weight: 900; font-size: 64px; line-height: 1; color: #d7261e; letter-spacing: 0.01em; text-shadow: 3px 3px 0 #111; }
+.bill-mg .tot-in > small { font-size: 12px; font-weight: 700; }
+.bill-mg .seal {
+  position: absolute; right: 34px; top: 50%; transform: translateY(-50%) rotate(-14deg);
+  width: 124px; height: 124px; border-radius: 50%; border: 4px solid #d7261e; color: #d7261e;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: rgb(255 253 245 / 0.92); box-shadow: inset 0 0 0 4px #fffdf5, inset 0 0 0 6px #d7261e;
+}
+.bill-mg .seal b { font-style: italic; font-weight: 900; font-size: 22px; letter-spacing: 0.06em; line-height: 1; }
+.bill-mg .seal span { font-size: 12px; font-weight: 900; letter-spacing: 0.2em; margin-right: -0.2em; }
+.bill-mg .ft { display: flex; justify-content: space-between; gap: 12px; font-size: 11px; font-weight: 700; }

@@ -24,6 +24,7 @@ public sealed class ProvidersView : UserControl
     private readonly Border _host = new() { MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly AddProviderSheet _add;
     private readonly ImportProvidersSheet _import;
+    private readonly ProviderBackupSheet _backup;
     private string _signature = "";
     private INotifyPropertyChanged? _watchedRange;
 
@@ -35,15 +36,20 @@ public sealed class ProvidersView : UserControl
         _import = new ImportProvidersSheet(vm);
         vm.AddSheet = _add;
         vm.ImportSheet = _import;
-        Content = new Panel { Children = { _host, _add, _import } };
+        _backup = new ProviderBackupSheet(vm);
+        vm.BackupSheet = _backup;
+        Content = new Panel { Children = { _host, _add, _import, _backup } };
         vm.AddRequested += OpenAdd;
         vm.ImportRequested += OpenImport;
+        vm.BackupRequested += OpenBackup;
         Rebuild(force: true);
     }
 
     private void OpenAdd() => _add.Open();
 
     private void OpenImport() => _import.Open();
+
+    private void OpenBackup() => _backup.Open();
 
     /// <inheritdoc />
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)

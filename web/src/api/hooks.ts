@@ -38,6 +38,7 @@ import type {
   DetectedCloudflared,
   DisableResult,
   DailyActivity,
+  DailyBill,
   EnableRequest,
   ImportedCodexAccount,
   BatchImportResult,
@@ -102,6 +103,8 @@ import type {
   ModelOverrides,
 } from './types';
 import type { PrivacyEvent } from './types';
+import type { ClientMcpEntry } from './types';
+import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebDavStatus } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 import type { RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
@@ -440,6 +443,58 @@ export function useImportProviders() {
   });
 }
 
+/** Provider backup file (issue #33). Exporting with keys is refused off this machine; a file without keys is allowed anywhere. */
+export function useExportProviderBackup() {
+  return useMutation({
+    mutationFn: (v: { secrets: BackupSecrets; passphrase?: string }) => api<BackupFile>('POST', '/api/providers/backup/export', v),
+  });
+}
+
+export function usePreviewProviderBackup() {
+  return useMutation({
+    mutationFn: (v: { file: BackupFile; passphrase?: string }) => api<BackupPreview>('POST', '/api/providers/backup/preview', v),
+  });
+}
+
+export function useImportProviderBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { file: BackupFile; passphrase?: string; indexes: number[] }) =>
+      api<BackupImportResult>('POST', '/api/providers/backup/import', v),
+    onSuccess: () => invalidateProviders(qc),
+  });
+}
+
+/** The WebDAV copy of the provider backup. Everything but reading the status is for this machine only. */
+export const useWebDav = () =>
+  useQuery({ queryKey: ['webdav-backup'], queryFn: () => api<WebDavStatus>('GET', '/api/backup/webdav') });
+
+export function useSaveWebDav() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { url: string; username: string; password?: string; folder: string }) => api<WebDavStatus>('PUT', '/api/backup/webdav', v),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webdav-backup'] }),
+  });
+}
+
+export function useForgetWebDav() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<WebDavStatus>('DELETE', '/api/backup/webdav'),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['webdav-backup'] }),
+  });
+}
+
+export const useTestWebDav = () => useMutation({ mutationFn: () => api<{ ok: boolean }>('POST', '/api/backup/webdav/test') });
+
+export const useUploadWebDav = () =>
+  useMutation({
+    mutationFn: (v: { secrets: BackupSecrets; passphrase?: string }) => api<{ uploaded: number; name: string }>('POST', '/api/backup/webdav/upload', v),
+  });
+
+/** The latest uploaded backup as a file for the ordinary preview / import; nothing is written locally. */
+export const useRestoreWebDav = () => useMutation({ mutationFn: () => api<BackupFile>('POST', '/api/backup/webdav/restore') });
+
 export function useCreateProvider() {
   const qc = useQueryClient();
   return useMutation({
@@ -633,6 +688,15 @@ export function useDeleteProviderModel(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (pmId: number) => api<void>('DELETE', `/api/providers/${enc(id)}/models/${pmId}`),
+    onSuccess: () => invalidateProviderModels(qc, id),
+  });
+}
+
+/** Removes several of a provider's models in one request (one transaction, one client model-list re-sync). */
+export function useDeleteProviderModels(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: number[]) => api<{ deleted: number }>('POST', `/api/providers/${enc(id)}/models/delete`, { ids }),
     onSuccess: () => invalidateProviderModels(qc, id),
   });
 }
@@ -1193,6 +1257,28 @@ export const useUpdateMcpSettings = () => {
   });
 };
 
+/** The MCP gateway entry in Claude Code and Codex. Writing a client's file is refused off this machine. */
+export const useClientMcp = () =>
+  useQuery({ queryKey: ['client-mcp'], queryFn: () => api<ClientMcpEntry[]>('GET', '/api/clients/mcp') });
+
+export function useApplyClientMcp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { kind: string; tokenId: string; force?: boolean }) =>
+      api<ClientMcpEntry>('POST', `/api/clients/${enc(v.kind)}/mcp`, { tokenId: v.tokenId, force: v.force === true }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-mcp'] }),
+  });
+}
+
+export function useRemoveClientMcp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { kind: string; force?: boolean }) =>
+      api<ClientMcpEntry>('DELETE', `/api/clients/${enc(v.kind)}/mcp${v.force ? '?force=true' : ''}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-mcp'] }),
+  });
+}
+
 export const useMcpServers = () =>
   useQuery({
     queryKey: ['mcp-servers'],
@@ -1342,6 +1428,15 @@ export const useActivityHeatmap = (days = 365, client?: string, token?: string) 
     queryFn: () => api<DailyActivity[]>('GET', `/api/stats/activity-heatmap${qs({ days, client, token, tzOffset: tzOffset() })}`),
     refetchInterval: 60_000,
     placeholderData: (prev) => prev,
+  });
+
+// Today's bill in the viewer's zone, fetched when the bill sheet opens (and again on every open).
+export const useDailyBill = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.stats('daily-bill', tzOffset()),
+    queryFn: () => api<DailyBill>('GET', `/api/stats/daily-bill${qs({ tzOffset: tzOffset() })}`),
+    enabled,
+    staleTime: 0,
   });
 
 // ---------- plugins ----------

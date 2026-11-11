@@ -120,6 +120,29 @@ public sealed class ProviderQueries
         return result;
     }
 
+    /// <summary>POST /api/providers/backup/export (<c>useExportProviderBackup</c>): the backup file. Keys are only included on this machine (the server answers 403 elsewhere).</summary>
+    public async Task<JsonObject> ExportBackupAsync(string secrets, string? passphrase, CancellationToken ct = default)
+    {
+        var body = new JsonObject { ["secrets"] = secrets };
+        if (secrets == ProviderBackupLogic.Passphrase) body["passphrase"] = passphrase;
+        return await _api.PostAsync<JsonObject, JsonObject>("/api/providers/backup/export", body, ct) ?? new JsonObject();
+    }
+
+    /// <summary>POST /api/providers/backup/preview: what importing <paramref name="file"/> would do, keys masked, nothing written.</summary>
+    public async Task<BackupPreview> PreviewBackupAsync(JsonObject file, string? passphrase, CancellationToken ct = default)
+    {
+        var result = await _api.PostAsync<JsonObject, JsonObject>("/api/providers/backup/preview", ProviderBackupLogic.Request(file, passphrase, null), ct);
+        return ProviderBackupLogic.ParsePreview(result);
+    }
+
+    /// <summary>POST /api/providers/backup/import for the ticked entries; refreshes the provider lists.</summary>
+    public async Task<BackupResult> ImportBackupAsync(JsonObject file, string? passphrase, IEnumerable<int> indexes, CancellationToken ct = default)
+    {
+        var result = await _api.PostAsync<JsonObject, JsonObject>("/api/providers/backup/import", ProviderBackupLogic.Request(file, passphrase, indexes), ct);
+        InvalidateProviders();
+        return ProviderBackupLogic.ParseResult(result);
+    }
+
     /// <summary>POST /api/providers/{id}/quota: runs the balance query now (the card's gauge button).</summary>
     public async Task FetchQuotaAsync(string id, CancellationToken ct = default)
     {

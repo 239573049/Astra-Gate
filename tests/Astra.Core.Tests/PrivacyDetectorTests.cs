@@ -150,6 +150,29 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.Equal("alice@example.com", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
     }
 
+    // A Gemini signature a Chat client echoes back (tool_calls[].extra_content.google.thought_signature) is opaque like
+    // every other signature: rewriting a byte of it makes Gemini refuse the turn.
+    [Fact]
+    public void Chat_Tool_Call_Thought_Signature_Is_Not_Scanned()
+    {
+        var payload = new string('A', 1_000) + "AKIAIOSFODNN7EXAMPLE";
+        var json = """{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"google":{"thought_signature":"PAYLOAD"}},"function":{"name":"t","arguments":"{\"to\":\"alice@example.com\"}"}}]}]}"""
+            .Replace("PAYLOAD", payload);
+        var result = _detector.ApplyJson(json, Policy(custom:
+            [new() { Id = "custom.payload", Pattern = "A{1000}" }]))!;
+        Assert.Equal("alice@example.com", Assert.Single(result.Redactions).Original);
+        Assert.Contains(payload, result.Text);
+    }
+
+    [Theory]
+    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"google":{"note":"alice@example.com"}},"function":{"name":"t","arguments":"{}"}}]}]}""")]
+    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"other":{"thought_signature":"alice@example.com"}},"function":{"name":"t","arguments":"{}"}}]}]}""")]
+    [InlineData("""{"messages":[{"role":"user","extra_content":{"google":{"thought_signature":"alice@example.com"}},"content":"hi"}]}""")]
+    public void Only_The_Tool_Call_Thought_Signature_Slot_Is_Skipped(string json)
+    {
+        Assert.Equal("alice@example.com", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
+    }
+
     // Issue #10: a tool id with an 11-digit run read as a phone number was rewritten, and the upstream refused every
     // later turn because the id it issued no longer matched.
     [Theory]

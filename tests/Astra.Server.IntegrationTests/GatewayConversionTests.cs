@@ -380,6 +380,63 @@ public class GatewayConversionTests
         Assert.Equal(7, record.TotalOutputTokens);
     }
 
+    // Gemini 3 refuses a replayed function call that lost its thoughtSignature. A Chat client keeps it as
+    // tool_calls[].extra_content.google.thought_signature (what Google's OpenAI-compatible endpoint uses), so the signature
+    // has to come out on the first turn's tool call and go back in on the second.
+    [Fact]
+    public async Task Chat_Client_Echoes_The_Gemini_Thought_Signature_Back_On_The_Next_Turn()
+    {
+        const string signedCall =
+            "data: {\"candidates\":[{\"content\":{\"role\":\"model\",\"parts\":[{\"functionCall\":{\"name\":\"shell\",\"args\":{\"cmd\":\"ls\"}},\"thoughtSignature\":\"c2lnLXJlYWw=\"}]},\"finishReason\":\"STOP\",\"index\":0}],\"usageMetadata\":{\"promptTokenCount\":10,\"candidatesTokenCount\":5,\"totalTokenCount\":15},\"modelVersion\":\"gemini-3-pro\"}\n\n";
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.Gemini, _ => FakeUpstream.Sse(signedCall));
+        const string tools = """[{"type":"function","function":{"name":"shell","parameters":{"type":"object","properties":{"cmd":{"type":"string"}}}}}]""";
+
+        var first = await gw.PostAsync("/v1/chat/completions",
+            $$"""{"model":"gemini-3-pro","stream":true,"tools":{{tools}},"messages":[{"role":"user","content":"list files"}]}""");
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        var calls = SseParser.ParseAll(await first.Content.ReadAsStringAsync())
+            .Where(e => e.Data != "[DONE]")
+            .Select(e => JsonNode.Parse(e.Data)!["choices"]![0]!["delta"]!["tool_calls"])
+            .Where(n => n is JsonArray { Count: > 0 })
+            .Select(n => n![0]!)
+            .ToList();
+        var start = calls.Single(c => c["id"] is not null);
+        Assert.Equal("c2lnLXJlYWw=", start["extra_content"]!["google"]!["thought_signature"]!.GetValue<string>());
+        Assert.All(calls.Where(c => c["id"] is null), c => Assert.Null(c["extra_content"]));
+
+        // The client rebuilds the assistant message from the chunks (keeping extra_content) and runs the tool.
+        var assistant = new JsonObject
+        {
+            ["role"] = "assistant",
+            ["content"] = null,
+            ["tool_calls"] = new JsonArray(new JsonObject
+            {
+                ["id"] = start["id"]!.GetValue<string>(),
+                ["type"] = "function",
+                ["extra_content"] = start["extra_content"]!.DeepClone(),
+                ["function"] = new JsonObject { ["name"] = "shell", ["arguments"] = "{\"cmd\":\"ls\"}" },
+            }),
+        };
+        var second = await gw.PostAsync("/v1/chat/completions", new JsonObject
+        {
+            ["model"] = "gemini-3-pro",
+            ["stream"] = true,
+            ["tools"] = JsonNode.Parse(tools),
+            ["messages"] = new JsonArray(
+                new JsonObject { ["role"] = "user", ["content"] = "list files" },
+                assistant,
+                new JsonObject { ["role"] = "tool", ["tool_call_id"] = start["id"]!.GetValue<string>(), ["content"] = "a.txt" }),
+        }.ToJsonString());
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+
+        Assert.Equal(2, gw.Upstream.Requests.Count);
+        var replay = gw.Upstream.Requests[1];
+        Assert.EndsWith("/models/gemini-3-pro:streamGenerateContent?alt=sse", replay.Url.ToString());
+        var modelPart = replay.Json["contents"]![1]!["parts"]![0]!;
+        Assert.Equal("shell", modelPart["functionCall"]!["name"]!.GetValue<string>());
+        Assert.Equal("c2lnLXJlYWw=", modelPart["thoughtSignature"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task Gemini_Cli_Works_Against_A_Chat_Provider()
     {

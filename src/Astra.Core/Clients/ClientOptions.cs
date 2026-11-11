@@ -21,6 +21,7 @@ public static class ClientOptions
     public const string CacheTtl = "cacheTtl";
     public const string MaxThinkingTokens = "maxThinkingTokens";
     public const string DisablePromptCaching = "disablePromptCaching";
+    public const string AutoModeServerOff = "autoModeServerOff";
     public const string ContextWindow = "contextWindow";
     public const string AutoCompactTokenLimit = "autoCompactTokenLimit";
     public const string ReasoningEffort = "reasoningEffort";
@@ -32,6 +33,7 @@ public static class ClientOptions
         new(CacheTtl, "enum", "default", "gateway", ["default", "5m", "1h"]),
         new(MaxThinkingTokens, "int", "", "config"),
         new(DisablePromptCaching, "bool", "false", "config"),
+        new(AutoModeServerOff, "bool", "false", "config"),
     ];
 
     private static readonly IReadOnlyList<ClientOptionDescriptor> Codex =
@@ -56,7 +58,7 @@ public static class ClientOptions
     /// </summary>
     public static IReadOnlyList<string> ConfigKeyPaths(string kind) => kind switch
     {
-        ClientKinds.ClaudeCode => ["env.MAX_THINKING_TOKENS", "env.DISABLE_PROMPT_CACHING"],
+        ClientKinds.ClaudeCode => ["env.MAX_THINKING_TOKENS", "env.DISABLE_PROMPT_CACHING", "env.CLAUDE_CODE_AUTO_MODE_SERVER"],
         // "models" is the key of the Astra-owned model catalog file (CodexClientAdapter), not of config.toml.
         ClientKinds.Codex => ["model_context_window", "model_auto_compact_token_limit", "model_reasoning_effort", "model_catalog_json", "models"],
         _ => [],

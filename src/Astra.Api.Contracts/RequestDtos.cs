@@ -89,6 +89,46 @@ public sealed record ProviderStatDto(
     long InputTokens, long OutputTokens, double? AvgTtftMs, long FailoversOut, long FailoversIn);
 
 /// <summary>
+/// One local day's spending for the overview's "daily bill" (GET <c>/api/stats/daily-bill</c>): every request routed to a
+/// provider between <see cref="FromUtc"/> and <see cref="ToUtc"/> (failed ones included), grouped by provider and then by
+/// model, most expensive first. Requests that failed before a provider was chosen are left out, so the totals are the sums
+/// of <see cref="Providers"/>.
+/// </summary>
+/// <param name="Date">The local day, <c>yyyy-MM-dd</c>.</param>
+/// <param name="TzOffsetMinutes">The UTC offset the day was cut by (minutes east of UTC).</param>
+/// <param name="FromUtc">Start of the day.</param>
+/// <param name="ToUtc">End of the window: the moment of generation for today, else the end of the day.</param>
+/// <param name="GeneratedAtUtc">When the bill was made.</param>
+/// <param name="CostUsd">Total cost.</param>
+/// <param name="Requests">Total requests.</param>
+/// <param name="SuccessRequests">Requests that succeeded.</param>
+/// <param name="InputTokens">Total input tokens (prompt-cache reads included).</param>
+/// <param name="OutputTokens">Total output tokens.</param>
+/// <param name="Providers">Per provider, most expensive first.</param>
+public sealed record DailyBillDto(
+    string Date, int TzOffsetMinutes, DateTimeOffset FromUtc, DateTimeOffset ToUtc, DateTimeOffset GeneratedAtUtc,
+    decimal CostUsd, long Requests, long SuccessRequests, long InputTokens, long OutputTokens, List<DailyBillProviderDto> Providers);
+
+/// <summary>One provider's part of a <see cref="DailyBillDto"/>.</summary>
+/// <param name="ProviderId">The provider id.</param>
+/// <param name="Name">Its current name, else the one logged with the requests.</param>
+/// <param name="CostUsd">Its cost that day.</param>
+/// <param name="Requests">Requests routed to it.</param>
+/// <param name="InputTokens">Input tokens.</param>
+/// <param name="OutputTokens">Output tokens.</param>
+/// <param name="Models">Per model (the catalog model, else the one the client asked for), most expensive first.</param>
+public sealed record DailyBillProviderDto(
+    string ProviderId, string Name, decimal CostUsd, long Requests, long InputTokens, long OutputTokens, List<DailyBillModelDto> Models);
+
+/// <summary>One model's line on a <see cref="DailyBillProviderDto"/>.</summary>
+/// <param name="Model">The catalog model, else the model the client asked for.</param>
+/// <param name="CostUsd">Its cost that day.</param>
+/// <param name="Requests">Requests.</param>
+/// <param name="InputTokens">Input tokens.</param>
+/// <param name="OutputTokens">Output tokens.</param>
+public sealed record DailyBillModelDto(string Model, decimal CostUsd, long Requests, long InputTokens, long OutputTokens);
+
+/// <summary>
 /// Live request-log rate over a trailing window, normalized to per minute: requests (including in-flight ones)
 /// and tokens (completed requests only — usage settles when a request finishes), plus the window's cache-hit
 /// ratio (null when the window has no input tokens).

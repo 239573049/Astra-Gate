@@ -6,6 +6,7 @@ using Astra.Desktop.Components.Pricing;
 using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.ProviderDetail;
+using Astra.Desktop.Core.Shell;
 using Astra.Desktop.Shell;
 using Avalonia;
 using Avalonia.Controls;
@@ -55,6 +56,11 @@ public sealed class ModelsTabView : UserControl
     private readonly ProviderDto _provider;
     private readonly StackPanel _body = new();
     private readonly SearchField _search;
+    private readonly HashSet<long> _checked = [];
+    private readonly Checkbox _selectAll = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly StackPanel _selection = new() { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
+    private IReadOnlyList<ProviderModelDto> _shown = [];
+    private bool _syncing;
     private long? _selected;
 
     /// <summary>Builds the tab for <paramref name="provider"/>.</summary>
@@ -71,13 +77,22 @@ public sealed class ModelsTabView : UserControl
 
         _search = new SearchField { Width = 224, Placeholder = Loc.T("providers.searchModels"), IsLabelVisible = false, VerticalAlignment = VerticalAlignment.Center };
         _search.TextChanged += (_, _) => Rebuild();
+        Avalonia.Automation.AutomationProperties.SetName(_selectAll, Loc.T("providers.selectAllModels"));
+        _selectAll.IsCheckedChanged += (_, _) =>
+        {
+            if (_syncing) return;
+            _checked.Clear();
+            if (_selectAll.IsChecked == true) foreach (var m in _shown) _checked.Add(m.Id);
+            Rebuild();
+        };
         var buttons = PdUi.Inline(8,
             PdUi.Button(Loc.T("providers.addModels"), PdUi.Look.Glass, LucideIconKind.Plus, click: AddSheet.Show),
             PdUi.Button(Loc.T("providers.fetchRemote"), PdUi.Look.Primary, LucideIconKind.CloudDownload, click: RemoteSheet.Show));
         var bar = new DockPanel { Margin = new Thickness(0, 0, 0, 12), LastChildFill = false };
-        DockPanel.SetDock(_search, Dock.Left);
+        var left = PdUi.Inline(8, _selectAll, _search, _selection);
+        DockPanel.SetDock(left, Dock.Left);
         DockPanel.SetDock(buttons, Dock.Right);
-        bar.Children.Add(_search);
+        bar.Children.Add(left);
         bar.Children.Add(buttons);
         Content = new Panel { Children = { new StackPanel { Children = { bar, _body } }, AddSheet, RemoteSheet, MapSheet, ModelSheet } };
         Rebuild();
@@ -155,6 +170,10 @@ public sealed class ModelsTabView : UserControl
             _body.Children.Add(empty);
         }
         var list = ProviderDetailLogic.FilterModels(models, _search.Text ?? "");
+        // only rows that still exist count, so a model deleted elsewhere never lingers in the selection (web: picked = list.filter(...))
+        _checked.IntersectWith(models.Select(m => m.Id));
+        _shown = list;
+        RefreshSelection();
         if (list.Count > 0)
         {
             var group = new SettingsGroup { Footer = Loc.T("providers.modelsFooter") };
@@ -165,6 +184,38 @@ public sealed class ModelsTabView : UserControl
         _body.Children.Add(MapGroup(models));
     }
 
+    /// <summary>The select-all box and, while models are ticked, "n selected" and the remove button (web: the toolbar of <c>ModelsTab</c>).</summary>
+    private void RefreshSelection()
+    {
+        var picked = _shown.Where(m => _checked.Contains(m.Id)).ToList();
+        _syncing = true;
+        _selectAll.IsVisible = _shown.Count > 0;
+        _selectAll.IsChecked = _shown.Count > 0 && picked.Count == _shown.Count;
+        _syncing = false;
+        _selection.Children.Clear();
+        if (picked.Count == 0) return;
+        _selection.Children.Add(PdUi.Text(Loc.T("providers.selectedModels", ("n", picked.Count)), 12.5, ArcDesignTokenKind.TextMuted));
+        ArcButton? remove = null;
+        remove = PdUi.Button(Loc.T("providers.removeSelected"), PdUi.Look.Destructive, LucideIconKind.Trash2, small: true, click: () => _ = RemovePickedAsync(picked.Select(m => m.Id).ToList(), remove));
+        _selection.Children.Add(remove);
+    }
+
+    private async Task RemovePickedAsync(List<long> ids, ArcButton? button)
+    {
+        if (!await _ctx.Feedback.ConfirmAsync(new ConfirmRequest(Loc.T("providers.removeSelectedConfirm", ("n", ids.Count)), null, Loc.T("common.delete"), Destructive: true))) return;
+        if (!await PdRun.TryAsync(_ctx, () => _api.DeleteModelsAsync(ids), button)) return;
+        _checked.Clear();
+        if (_selected is { } open && ids.Contains(open)) ModelSheet.Close();
+        Rebuild();
+    }
+
+    /// <summary>Ticks or unticks a model row (scenes and tests).</summary>
+    internal void Tick(long id, bool on)
+    {
+        if (on) _checked.Add(id); else _checked.Remove(id);
+        Rebuild();
+    }
+
     private SettingsRow ModelRow(ProviderModelDto m)
     {
         // web: font-mono text-[12.5px] with no color of its own (the tab panel's text-secondary) unless disabled (muted).
@@ -173,7 +224,14 @@ public sealed class ModelsTabView : UserControl
         var label = PdUi.Inline(8, id);
         if (m.SystemModelId is null) label.Children.Add(PdUi.Badge(Loc.T("providers.unlinked"), Tone.Orange));
         var toggle = PdUi.Toggle(m.Enabled, on => _ = PdRun.TryAsync(_ctx, () => _api.UpdateModelAsync(m.Id, new JsonObject { ["enabled"] = on })), Loc.T("common.enabled"));
-        var row = PdUi.Row(label, ProviderDetailLogic.ModelDetail(m), PricingSourceBadge.Create(m.PricingSource, m.PriceKey), toggle);
+        var box = new Checkbox { IsChecked = _checked.Contains(m.Id), VerticalAlignment = VerticalAlignment.Center };
+        Avalonia.Automation.AutomationProperties.SetName(box, Loc.T("providers.selectModel", ("id", m.ModelId)));
+        box.IsCheckedChanged += (_, _) =>
+        {
+            if (box.IsChecked == true) _checked.Add(m.Id); else _checked.Remove(m.Id);
+            RefreshSelection();
+        };
+        var row = PdUi.Row(label, ProviderDetailLogic.ModelDetail(m), PricingSourceBadge.Create(m.PricingSource, m.PriceKey), box, toggle);
         row.IsSelected = m.Id == _selected;
         row.Invoked += (_, _) => Select(m);
         return row;

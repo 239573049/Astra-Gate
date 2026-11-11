@@ -1,11 +1,12 @@
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
-import { Activity, ArrowRight, RefreshCw } from 'lucide-react';
+import { Activity, ArrowRight, ReceiptText, RefreshCw } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router';
 
 import { useActivityHeatmap, useClients, useRequests, useSettings, useStatsSummary, useTimeseries, useTokens, useTopModels } from '../api/hooks';
 import type { ClientKind, Range, RequestSummary, TimeseriesPoint } from '../api/types';
 import { ActivityHeatmap } from '../components/arc/activity-heatmap/activity-heatmap';
+import { DailyBillSheet } from '../components/bill/DailyBillSheet';
 import { BarChart } from '../components/arc/bar-chart/bar-chart';
 import { SortableDataTable, type DataColumn } from '../components/arc/sortable-data-table/sortable-data-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/arc/tabs/tabs';
@@ -63,6 +64,7 @@ export function OverviewPage() {
   const [client, setClient] = useState<ClientFilterValue>('all');
   const [measure, setMeasure] = useState<Measure>('requests');
   const [token, setToken] = useState('');
+  const [billOpen, setBillOpen] = useState(false);
   const tokens = useTokens();
   const clients = useClients();
   // The logo strip needs ~40px per client; when it would crowd the token select and range switch, it becomes a dropdown.
@@ -114,14 +116,20 @@ export function OverviewPage() {
     <Page
       title={t('nav.overview')}
       actions={
-        <Button
-          variant="plain"
-          icon={<RefreshCw className={cn('size-4', fetching && 'animate-spin')} />}
-          aria-label={t('common.refresh')}
-          onClick={refresh}
-        />
+        <>
+          <Button icon={<ReceiptText className="size-4" />} onClick={() => setBillOpen(true)}>
+            {t('bill.generate')}
+          </Button>
+          <Button
+            variant="plain"
+            icon={<RefreshCw className={cn('size-4', fetching && 'animate-spin')} />}
+            aria-label={t('common.refresh')}
+            onClick={refresh}
+          />
+        </>
       }
     >
+      <DailyBillSheet open={billOpen} onOpenChange={setBillOpen} />
       <div ref={toolbarRef} className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           <ClientFilter value={client} onChange={setClient} compact={compact} />

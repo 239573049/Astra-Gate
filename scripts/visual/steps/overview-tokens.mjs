@@ -13,6 +13,18 @@ const range = (label) => async (page, h) => {
   await h.wait(500);
 };
 
+// The daily bill (OverviewPage.OpenBill in C#), optionally switched to another style (its Segmented, buttons by label).
+const bill = (style) => async (page, h) => {
+  await page.getByRole('button', { name: '生成账单', exact: true }).first().click({ timeout: 5000 });
+  await h.dialog();
+  await page.getByTestId('bill-preview').locator('[data-bill-style]').waitFor({ timeout: 5000 });
+  if (style) {
+    await page.getByRole('button', { name: style, exact: true }).first().click({ timeout: 5000 });
+    await page.locator('[data-bill-style="manga"]').waitFor({ timeout: 5000 });
+  }
+  await h.wait(400);
+};
+
 // A token row's "更多" menu, then one of its items (TokensPage TokenRow Menu).
 const rowMenu = (tokenName, item) => async (page, h) => {
   const row = page.locator('article').filter({ has: page.getByRole('heading', { name: tokenName, exact: true }) }).first();
@@ -48,6 +60,9 @@ export const STEPS = {
   },
   'overview__error': {},
   'overview__loading': { settle: 400 },
+  // OpenBill(): the header's "生成账单" opens DailyBillSheet; the manga scene then picks "漫画" in its style switch.
+  'overview__bill-receipt': { storage: { 'astra.bill.style': 'receipt' }, run: bill() },
+  'overview__bill-manga': { storage: { 'astra.bill.style': 'receipt' }, run: bill('漫画') },
   // OpenRequest("req_0050"): the newest row of the recent-requests table (its model button opens RequestDetailSheet).
   'overview__request-detail': {
     run: async (page, h) => {

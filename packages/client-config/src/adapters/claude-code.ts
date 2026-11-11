@@ -71,6 +71,9 @@ export class ClaudeCodeClientAdapter extends ClientAdapterBase {
     if (thinking !== null) changes.push(this.envKey(file, 'MAX_THINKING_TOKENS', String(thinking)));
     if (getBoolOption(ctx.extras, ClientOptionKeys.disablePromptCaching))
       changes.push(this.envKey(file, 'DISABLE_PROMPT_CACHING', '1'));
+    // auto mode's server-side safety review needs an upstream that answers it; 0 makes Claude Code use its own classifier
+    if (getBoolOption(ctx.extras, ClientOptionKeys.autoModeServerOff))
+      changes.push(this.envKey(file, 'CLAUDE_CODE_AUTO_MODE_SERVER', '0'));
 
     // An existing ANTHROPIC_API_KEY would fight the gateway auth token: remove it (recorded, restored on disable).
     const apiKeyBefore = this.currentValue(file, 'json', API_KEY_PATH);

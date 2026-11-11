@@ -13,6 +13,7 @@ public sealed class StatsQueriesTests
         {
             "/api/stats/summary" => (HttpStatusCode.OK, """{"range":"today","costUsd":6.36,"requests":50,"successRate":0.912,"inputTokens":1,"outputTokens":2,"cacheReadTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"avgTtftMs":null}"""),
             "/api/requests" => (HttpStatusCode.OK, """{"items":[],"total":0,"page":1,"pageSize":20,"totalCostNanoUsd":0}"""),
+            "/api/stats/daily-bill" => (HttpStatusCode.OK, """{"date":"2026-11-11","tzOffsetMinutes":480,"fromUtc":"2026-11-10T16:00:00Z","toUtc":"2026-11-11T10:42:07Z","generatedAtUtc":"2026-11-11T10:42:07Z","costUsd":0,"requests":0,"successRequests":0,"inputTokens":0,"outputTokens":0,"providers":[]}"""),
             _ => (HttpStatusCode.OK, "[]"),
         });
         var queries = new QueryClient();
@@ -53,6 +54,17 @@ public sealed class StatsQueriesTests
         Assert.Equal("/api/stats/top-models?range=today&limit=20&token=t", server.Seen[0].Url);
         Assert.Equal("/api/stats/providers?range=7d&token=t", server.Seen[1].Url);
         Assert.Equal("/api/requests?from=2026-10-26T00%3A00%3A00.000Z&client=codex&token=t&page=1&pageSize=20", server.Seen[2].Url);
+    }
+
+    [Fact]
+    public async Task Daily_bill_asks_for_today_in_the_users_offset_under_the_stats_prefix()
+    {
+        var (stats, server, queries) = Make(tz: 480);
+        var bill = stats.DailyBill();
+        await bill.RefetchAsync();
+        Assert.Equal("/api/stats/daily-bill?tzOffset=480", server.Seen[0].Url);
+        queries.Invalidate("stats");
+        Assert.True(bill.IsStale);
     }
 
     [Fact]

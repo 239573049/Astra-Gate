@@ -8,6 +8,7 @@ import {
   useApplyTemplateUpdate,
   useDeleteProvider,
   useDeleteProviderModel,
+  useDeleteProviderModels,
   useDuplicateProvider,
   useModels,
   usePriceKeys,
@@ -110,10 +111,6 @@ const mimicOf = (settings: Record<string, unknown>) =>
   (settings.subscription as { mimic_claude_code?: unknown } | undefined)?.mimic_claude_code === true;
 
 function BackButton({ onClick }: { onClick: () => void }) {
-/** settings.subscription.mimic_claude_code — the same switch the Claude subscription's policy block sets. */
-const mimicOf = (settings: Record<string, unknown>) =>
-  (settings.subscription as { mimic_claude_code?: unknown } | undefined)?.mimic_claude_code === true;
-
   const { t } = useI18n();
   return <Button variant="glass" icon={<ArrowLeft className="size-4" />} aria-label={t('common.back')} onClick={onClick} />;
 }
@@ -213,17 +210,55 @@ function TemplateUpdateSheet({ open, onOpenChange, provider }: { open: boolean; 
 
 function ModelsTab({ provider, models, loading, selected, onSelect }: { provider: Provider; models?: ProviderModel[]; loading: boolean; selected: number | null; onSelect: (id: number | null) => void }) {
   const { t } = useI18n();
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
   const [search, setSearch] = useState('');
   const [remoteOpen, setRemoteOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [checked, setChecked] = useState<Set<number>>(new Set());
   const update = useUpdateProviderModel(provider.id);
+  const removeMany = useDeleteProviderModels(provider.id);
   const list = (models ?? []).filter((m) => !search || m.modelId.toLowerCase().includes(search.toLowerCase()) || m.effective.displayName.toLowerCase().includes(search.toLowerCase()));
+  // only rows that still exist count, so a model deleted elsewhere never lingers in the selection
+  const picked = list.filter((m) => checked.has(m.id));
+  const allPicked = list.length > 0 && picked.length === list.length;
+  const toggle = (id: number) =>
+    setChecked((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+
+  const removePicked = async () => {
+    if (!(await confirm({ title: t('providers.removeSelectedConfirm', { n: picked.length }), destructive: true, confirmLabel: t('common.delete') }))) return;
+    const ids = picked.map((m) => m.id);
+    removeMany.mutate(ids, {
+      onSuccess: () => {
+        setChecked(new Set());
+        if (selected !== null && ids.includes(selected)) onSelect(null);
+      },
+      onError: (e) => toast(errorText(e), 'error'),
+    });
+  };
 
   return (
     <>
       <div className="mb-3 flex flex-wrap items-center gap-2">
+        {list.length > 0 && (
+          <Checkbox
+            aria-label={t('providers.selectAllModels')}
+            checked={allPicked}
+            onCheckedChange={() => setChecked(allPicked ? new Set() : new Set(list.map((m) => m.id)))}
+          />
+        )}
         <SearchField className="w-56" value={search} onChange={setSearch} placeholder={t('providers.searchModels')} />
+        {picked.length > 0 && (
+          <>
+            <span className="text-[12.5px] text-[var(--text-muted)]">{t('providers.selectedModels', { n: picked.length })}</span>
+            <Button size="sm" variant="destructive" icon={<Trash2 className="size-3.5" />} disabled={removeMany.isPending} onClick={() => void removePicked()}>
+              {t('providers.removeSelected')}
+            </Button>
+          </>
+        )}
         <div className="ml-auto flex items-center gap-2">
           <Button icon={<Plus className="size-3.5" />} onClick={() => setAddOpen(true)}>
             {t('providers.addModels')}
@@ -261,6 +296,9 @@ function ModelsTab({ provider, models, loading, selected, onSelect }: { provider
                 .join(' · ')}
             >
               <PricingSourceBadge source={m.pricingSource} priceKey={m.priceKey} />
+              <span onClick={(e) => e.stopPropagation()}>
+                <Checkbox aria-label={t('providers.selectModel', { id: m.modelId })} checked={checked.has(m.id)} onCheckedChange={() => toggle(m.id)} />
+              </span>
               <Switch checked={m.enabled} label={t('common.enabled')} onChange={(enabled) => update.mutate({ pmId: m.id, enabled }, { onError: (e) => toast(errorText(e), 'error') })} />
             </Row>
           ))}
@@ -956,6 +994,15 @@ function SettingsTab({ provider }: { provider: Provider }) {
       </Group>
 
       <Group title={t('providers.section.advanced')}>
+        {form.authScheme !== 'oauth-subscription' && form.authScheme !== 'plugin' && form.endpoints.some((e) => e.protocol === 'anthropic') && (
+          <Row label={t('providers.mimicClaudeCode')} detail={t('providers.mimicClaudeCode.hint')}>
+            <Switch
+              checked={mimicOf(form.settings)}
+              label={t('providers.mimicClaudeCode')}
+              onChange={(on) => set({ settings: { ...form.settings, subscription: { ...(form.settings.subscription as object | undefined), mimic_claude_code: on } } })}
+            />
+          </Row>
+        )}
         <Row label={t('providers.proxy')} detail={t('providers.proxyHint')}>
           <Input className="w-64 font-mono" aria-label={t('providers.proxy')} placeholder="http://127.0.0.1:7890" value={form.httpProxy ?? ''} onChange={(e) => set({ httpProxy: e.target.value || null })} />
         </Row>
@@ -998,15 +1045,6 @@ function SettingsTab({ provider }: { provider: Provider }) {
           <KV label={t('providers.boundClients')}>{provider.boundClients.map((k) => CLIENT_META[k as ClientKind]?.name ?? k).join(', ') || '—'}</KV>
         </div>
       </Group>
-        {form.authScheme !== 'oauth-subscription' && form.authScheme !== 'plugin' && form.endpoints.some((e) => e.protocol === 'anthropic') && (
-          <Row label={t('providers.mimicClaudeCode')} detail={t('providers.mimicClaudeCode.hint')}>
-            <Switch
-              checked={mimicOf(form.settings)}
-              label={t('providers.mimicClaudeCode')}
-              onChange={(on) => set({ settings: { ...form.settings, subscription: { ...(form.settings.subscription as object | undefined), mimic_claude_code: on } } })}
-            />
-          </Row>
-        )}
 
       <AddEndpointSheet open={endpointOpen} onOpenChange={setEndpointOpen} onAdd={(e) => set({ endpoints: [...form.endpoints, e] })} />
       <AddHeaderSheet open={headerOpen} onOpenChange={setHeaderOpen} onAdd={(h) => setHeaders([...headers.filter(([k]) => k.toLowerCase() !== h[0].toLowerCase()), h])} />

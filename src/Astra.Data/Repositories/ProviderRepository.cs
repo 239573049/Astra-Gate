@@ -351,6 +351,20 @@ public sealed class ProviderRepository
             new { provider_id = providerId, model_id = modelId }) > 0;
     }
 
+    /// <summary>Deletes several of one provider's models in one transaction; ids of other providers are ignored. Returns how many rows went.</summary>
+    public async Task<int> DeleteModelsAsync(string providerId, IReadOnlyList<long> ids, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        await using var tx = await conn.BeginTransactionAsync(ct);
+        var deleted = 0;
+        foreach (var id in ids)
+            deleted += await conn.ExecuteAsync(
+                "DELETE FROM provider_models WHERE id = @id AND provider_id = @provider_id",
+                new { id, provider_id = providerId }, transaction: tx);
+        await tx.CommitAsync(ct);
+        return deleted;
+    }
+
     /// <summary>Rewrites sort_order for the provider's models from the given row-id order.</summary>
     public async Task ReorderModelsAsync(string providerId, IReadOnlyList<long> orderedModelIds, CancellationToken ct = default)
     {

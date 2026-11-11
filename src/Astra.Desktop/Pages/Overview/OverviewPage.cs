@@ -1,5 +1,6 @@
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Layout;
+using Astra.Desktop.Components.Providers;
 using Astra.Desktop.Components.Requests;
 using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.I18n;
@@ -39,6 +40,7 @@ public sealed class OverviewPage : PageViewModel
     private bool _fetching;
     private Query<List<ProviderDto>>? _providers;
     private RequestDetailViewModel? _detail;
+    private Query<DailyBillDto>? _bill;
 
     /// <summary>Creates the page over the app context.</summary>
     public OverviewPage(PageContext context, string? param) : base(AppRoute.Overview, param, context)
@@ -61,8 +63,45 @@ public sealed class OverviewPage : PageViewModel
         };
         Avalonia.Automation.AutomationProperties.SetName(refresh, Loc.T("common.refresh"));
         refresh.Click += (_, _) => Refresh();
-        SetHeaderActions(new ActionGroup(8, refresh));
+        BuildHeader();
     }
+
+    /// <inheritdoc />
+    public override void OnLanguageChanged()
+    {
+        base.OnLanguageChanged();
+        BuildHeader();
+    }
+
+    /// <summary>"生成账单" then the refresh button (web: <c>Button icon=ReceiptText</c> before the plain refresh).</summary>
+    private void BuildHeader()
+    {
+        // _refresh is kept (its icon turns while stats load), so it leaves the previous group before joining the new one: a
+        // language change would otherwise add it to a second panel ("already has a visual parent",
+        // .agents/memory/desktop-rebuild-reparent-crash.md).
+
+        SetHeaderActions(new ActionGroup(8, ProviderUi.Button(Loc.T("bill.generate"), LucideIconKind.ReceiptText, onClick: () => OpenBill()), _refresh));
+    }
+
+    /// <summary>Toasts (the bill sheet's copy / save outcome).</summary>
+    public Astra.Desktop.Core.Shell.IFeedback Feedback => _ctx.Feedback;
+
+    /// <summary>The bill sheet was asked for (the header button, <see cref="OpenBill"/>).</summary>
+    public event Action? BillRequested;
+
+    /// <summary>
+    /// Opens today's bill (web <c>DailyBillSheet</c>): the bill is fetched again (web <c>staleTime: 0</c>); <paramref name="style"/> picks a style
+    /// first (scenes), else the remembered one shows.
+    /// </summary>
+    public void OpenBill(string? style = null)
+    {
+        if (style is not null) BillPrefs.Style = style;
+        Bill().Invalidate();
+        BillRequested?.Invoke();
+    }
+
+    /// <summary>Today's bill in the user's zone; a stats query, so the refresh button refetches it and its icon turns while it loads.</summary>
+    public Query<DailyBillDto> Bill() => _bill ??= Track(_stats.DailyBill());
 
     /// <summary>Filters and refresh changed: sections ask for their queries again.</summary>
     public event Action? FiltersChanged;

@@ -224,6 +224,9 @@ public sealed class ChatCodec : IProtocolCodec
                 if (node is not JsonObject call) continue;
                 var function = call["function"] as JsonObject ?? new JsonObject();
                 var args = StringOrNull(function, "arguments");
+                // A Gemini signature the client echoed back stands before its call, where the Gemini encoder re-attaches it.
+                if (ThoughtSignatureOf(call) is { Length: > 0 } signature)
+                    parts.Add(new ReasoningPart(null, signature, Origin: ApiProtocol.Gemini));
                 parts.Add(new ToolCallPart(
                     StringOrNull(call, "id") ?? Ulid.NewUlid(),
                     StringOrNull(function, "name") ?? "",
@@ -611,6 +614,20 @@ public sealed class ChatCodec : IProtocolCodec
     public IResponseEncoder CreateResponseEncoder(ResponseEncodeContext ctx) => new ChatResponseEncoder(ctx);
 
     // ---------------------------------------------------------------- json helpers
+
+    /// <summary>
+    /// A Gemini thought signature as a tool call carries it in Chat: <c>tool_calls[].extra_content.google.thought_signature</c>,
+    /// the shape Google's own OpenAI-compatible endpoint uses and clients of it already echo back. Chat has no field of
+    /// its own, so this is the only place a Gemini signature can cross a Chat client.
+    /// </summary>
+    internal static string? ThoughtSignatureOf(JsonObject toolCall) =>
+        toolCall["extra_content"] is JsonObject extra && extra["google"] is JsonObject google
+            ? StringOrNull(google, "thought_signature")
+            : null;
+
+    /// <summary>The <c>extra_content</c> value that carries <paramref name="signature"/> (see <see cref="ThoughtSignatureOf"/>).</summary>
+    internal static JsonObject ThoughtSignatureExtra(string signature) =>
+        new() { ["google"] = new JsonObject { ["thought_signature"] = signature } };
 
     internal static string? StringOrNull(JsonObject o, string key) =>
         o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

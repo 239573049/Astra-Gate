@@ -35,6 +35,7 @@ public sealed class OverviewView : UserControl
     private QueryHost<List<TimeseriesPointDto>>? _trendChart;
     private TextBlock? _trendLegend;
     private RequestDetailSheet? _sheet;
+    private DailyBillSheet? _bill;
     private bool _wired;
     private bool _compact;
     private double _toolbarWidth = double.PositiveInfinity;
@@ -65,6 +66,7 @@ public sealed class OverviewView : UserControl
         _page.Clients.PropertyChanged += OnClients;
         _page.MeasureChanged += OnMeasure;
         _page.DetailChanged += OnDetail;
+        _page.BillRequested += OnBill;
         Loc.LanguageChanged += OnLanguage;
         OnDetail();
     }
@@ -80,6 +82,7 @@ public sealed class OverviewView : UserControl
         _page.Clients.PropertyChanged -= OnClients;
         _page.MeasureChanged -= OnMeasure;
         _page.DetailChanged -= OnDetail;
+        _page.BillRequested -= OnBill;
         Loc.LanguageChanged -= OnLanguage;
     }
 
@@ -103,6 +106,20 @@ public sealed class OverviewView : UserControl
         _root.Children.Add(sheet);
         sheet.IsOpen = true;
     }
+
+    /// <summary>The header's "生成账单": the bill sheet over the dashboard, made on first use and opened fresh each time.</summary>
+    private void OnBill()
+    {
+        if (_bill is null)
+        {
+            _bill = new DailyBillSheet(_page.Bill, _page.Feedback);
+            _root.Children.Add(_bill);
+        }
+        _bill.Open();
+    }
+
+    /// <summary>The bill sheet, once the header button made it (scenes pick a style through it).</summary>
+    public DailyBillSheet? BillSheet => _bill;
 
     // The filters are built from the data alone; a fetch's other notifications (fetching, status…) would only rebuild them for nothing.
     private void OnTokens(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

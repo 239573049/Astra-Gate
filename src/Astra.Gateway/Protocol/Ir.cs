@@ -40,6 +40,10 @@ public sealed record ToolResultPart(string CallId, string? Name, IReadOnlyList<C
 /// Reasoning / thinking content. Signatures and encrypted payloads are only valid for the protocol that
 /// produced them (<paramref name="Origin"/>): encoders of another protocol drop them and keep the text
 /// (lossy mapping, plan §6.4). Anthropic redacted_thinking travels as <paramref name="EncryptedContent"/>.
+/// One exception: a Gemini signature (<see cref="ApiProtocol.Gemini"/>, no text) stands before the tool call it signs and
+/// crosses a Chat client as <c>tool_calls[].extra_content.google.thought_signature</c> (<c>ChatCodec.ThoughtSignatureOf</c>),
+/// because Gemini 3 refuses a replayed function call without it. Responses and Anthropic clients have no such carrier yet:
+/// their history reaches Gemini unsigned.
 /// </summary>
 public sealed record ReasoningPart(
     string? Text,

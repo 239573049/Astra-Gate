@@ -22,6 +22,10 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(McpOAuthStartDto))]
 [JsonSerializable(typeof(McpCallDto))]
 [JsonSerializable(typeof(List<McpCallDto>))]
+// client MCP entry
+[JsonSerializable(typeof(ClientMcpDto))]
+[JsonSerializable(typeof(List<ClientMcpDto>))]
+[JsonSerializable(typeof(ClientMcpApplyDto))]
 // tokens
 [JsonSerializable(typeof(TokenDto))]
 [JsonSerializable(typeof(TokenStatsDto))]
@@ -192,6 +196,11 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(DailyActivityDto))]
 [JsonSerializable(typeof(ProviderStatDto))]
 [JsonSerializable(typeof(RateStatsDto))]
+[JsonSerializable(typeof(DailyBillDto))]
+[JsonSerializable(typeof(DailyBillProviderDto))]
+[JsonSerializable(typeof(DailyBillModelDto))]
+[JsonSerializable(typeof(List<DailyBillProviderDto>))]
+[JsonSerializable(typeof(List<DailyBillModelDto>))]
 [JsonSerializable(typeof(List<DailyActivityDto>))]
 [JsonSerializable(typeof(List<TimeseriesPointDto>))]
 [JsonSerializable(typeof(List<TopModelDto>))]

@@ -72,6 +72,9 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
             changes.Add(EnvKey(file, "MAX_THINKING_TOKENS", thinking.ToString(System.Globalization.CultureInfo.InvariantCulture)));
         if (ClientOptions.GetBool(ctx.Extras, ClientOptions.DisablePromptCaching))
             changes.Add(EnvKey(file, "DISABLE_PROMPT_CACHING", "1"));
+        // auto mode's server-side safety review needs an upstream that answers it; 0 makes Claude Code use its own classifier
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.AutoModeServerOff))
+            changes.Add(EnvKey(file, "CLAUDE_CODE_AUTO_MODE_SERVER", "0"));
 
         // An existing ANTHROPIC_API_KEY would fight the gateway auth token: remove it (recorded, restored on disable).
         var apiKeyBefore = CurrentValue(file, ConfigFileFormat.Json, ApiKeyPath);

@@ -193,6 +193,39 @@ public static class RequestEndpoints
             return Results.Ok(activity.Select(a => new DailyActivityDto(a.Day, a.Requests)).ToList());
         });
 
+        // The overview's daily bill: one local day (date=yyyy-MM-dd, default today) cut by the viewer's offset (tzOffset,
+        // minutes east of UTC, default the server's), per provider and model, most expensive first.
+        app.MapGet("/api/stats/daily-bill", async (string? date, int? tzOffset, AstraDatabase db, CancellationToken ct) =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var offset = TimeSpan.FromMinutes(Math.Clamp(tzOffset ?? (int)DateTimeOffset.Now.Offset.TotalMinutes, -14 * 60, 14 * 60));
+            DateTime day;
+            if (Str(date) is not { } d) day = now.ToOffset(offset).Date;
+            else if (!DateTime.TryParseExact(d, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                         System.Globalization.DateTimeStyles.None, out day))
+                return Results.BadRequest(new ErrorOnlyDto("date 必须是 yyyy-MM-dd"));
+            var from = new DateTimeOffset(day, offset);
+            var end = from.AddDays(1);
+            var lines = await db.Requests.BillLinesAsync(from.ToUniversalTime(), end.ToUniversalTime(), ct);
+            var names = (await db.Providers.ListAsync(ct)).ToDictionary(p => p.Id, p => p.Name);
+            var providers = lines.GroupBy(l => l.ProviderId, StringComparer.Ordinal).Select(g =>
+                {
+                    var models = g.OrderByDescending(l => l.CostNanoUsd).ThenByDescending(l => l.Requests).ThenBy(l => l.Model, StringComparer.Ordinal)
+                        .Select(l => new DailyBillModelDto(l.Model.Length == 0 ? "unknown" : l.Model, Money.FromNanos(l.CostNanoUsd), l.Requests,
+                            l.InputTokens, l.OutputTokens))
+                        .ToList();
+                    var name = names.GetValueOrDefault(g.Key) ?? g.Select(l => l.ProviderName).FirstOrDefault(n => !string.IsNullOrEmpty(n)) ?? g.Key;
+                    return (Nanos: g.Sum(l => l.CostNanoUsd), Dto: new DailyBillProviderDto(g.Key, name, Money.FromNanos(g.Sum(l => l.CostNanoUsd)),
+                        g.Sum(l => l.Requests), g.Sum(l => l.InputTokens), g.Sum(l => l.OutputTokens), models));
+                })
+                .OrderByDescending(p => p.Nanos).ThenByDescending(p => p.Dto.Requests).ThenBy(p => p.Dto.Name, StringComparer.Ordinal)
+                .Select(p => p.Dto).ToList();
+            return Results.Ok(new DailyBillDto(day.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), (int)offset.TotalMinutes,
+                from.ToUniversalTime(), (now < from ? from : now > end ? end : now).ToUniversalTime(), now,
+                Money.FromNanos(lines.Sum(l => l.CostNanoUsd)), lines.Sum(l => l.Requests), lines.Sum(l => l.SuccessRequests),
+                lines.Sum(l => l.InputTokens), lines.Sum(l => l.OutputTokens), providers));
+        });
+
         // Live RPM / TPM for the request-log header: everything started in the trailing window ("window" seconds,
         // 10-600, default 60) — persisted rows plus in-flight requests (they are not stored yet) — normalized to
         // per minute. Filters mirror /api/requests.

@@ -605,6 +605,7 @@ public sealed class ProviderDetailApiTests
             .On("PUT /api/providers/prov_openai/model-map", provider)
             .On("POST /api/providers/prov_openai/models", "[]")
             .On("PATCH /api/providers/prov_openai/models/7", JsonSerializer.Serialize(PdData.Model(7, "x"), JsonContexts.Info<ProviderModelDto>(Json.Api)))
+            .On("POST /api/providers/prov_openai/models/delete", "{\"deleted\":2}")
             .On("POST /api/providers/prov_openai/template-switch", provider)
             .On("DELETE /api/providers/prov_openai", "", 204);
         using var api = new ApiClient("http://x", http);
@@ -613,12 +614,15 @@ public sealed class ProviderDetailApiTests
         await pd.SetModelMapAsync(new Dictionary<string, string> { ["a"] = "b" });
         await pd.AddModelsAsync(["m1", "m2"]);
         await pd.UpdateModelAsync(7, new JsonObject { ["enabled"] = false });
+        await pd.DeleteModelsAsync([7, 9]);
         await pd.SwitchTemplateAsync("zhipu-coding", null);
         await pd.DeleteAsync();
         Assert.Equal("{\"map\":{\"a\":\"b\"}}", http.Requests[0].Body);
         Assert.Equal("{\"modelIds\":[\"m1\",\"m2\"]}", http.Requests[1].Body);
         Assert.Equal("{\"enabled\":false}", http.Requests[2].Body);
-        Assert.Equal("{\"templateId\":\"zhipu-coding\"}", http.Requests[3].Body);
+        Assert.Equal("POST /api/providers/prov_openai/models/delete", $"{http.Requests[3].Method} {http.Requests[3].PathAndQuery}");
+        Assert.Equal("{\"ids\":[7,9]}", http.Requests[3].Body);
+        Assert.Equal("{\"templateId\":\"zhipu-coding\"}", http.Requests[4].Body);
         Assert.All(http.Requests, r => Assert.Equal("1", r.Admin));
         Assert.False(pd.RemoteModels.Enabled);
         Assert.False(pd.TemplateUpdate.Enabled);

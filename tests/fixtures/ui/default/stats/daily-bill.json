@@ -1,0 +1,76 @@
+{
+  "date": "2026-10-26",
+  "tzOffsetMinutes": 0,
+  "fromUtc": "2026-10-26T00:00:00.000Z",
+  "toUtc": "2026-10-26T12:00:00Z",
+  "generatedAtUtc": "2026-10-26T12:00:00Z",
+  "costUsd": 6.36,
+  "requests": 50,
+  "successRequests": 46,
+  "inputTokens": 1201000,
+  "outputTokens": 149000,
+  "providers": [
+    {
+      "providerId": "prov_anthropic",
+      "name": "Anthropic",
+      "costUsd": 4.45,
+      "requests": 29,
+      "inputTokens": 720600,
+      "outputTokens": 89400,
+      "models": [
+        {
+          "model": "claude-opus-4-1",
+          "costUsd": 2.71,
+          "requests": 6,
+          "inputTokens": 188000,
+          "outputTokens": 21300
+        },
+        {
+          "model": "claude-sonnet-4-5",
+          "costUsd": 1.58,
+          "requests": 15,
+          "inputTokens": 461200,
+          "outputTokens": 52700
+        },
+        {
+          "model": "claude-haiku-4-5",
+          "costUsd": 0.16,
+          "requests": 8,
+          "inputTokens": 71400,
+          "outputTokens": 15400
+        }
+      ]
+    },
+    {
+      "providerId": "prov_openai",
+      "name": "OpenAI",
+      "costUsd": 1.91,
+      "requests": 21,
+      "inputTokens": 480400,
+      "outputTokens": 59600,
+      "models": [
+        {
+          "model": "gpt-5",
+          "costUsd": 1.37,
+          "requests": 9,
+          "inputTokens": 252100,
+          "outputTokens": 31800
+        },
+        {
+          "model": "o4-mini",
+          "costUsd": 0.42,
+          "requests": 7,
+          "inputTokens": 141900,
+          "outputTokens": 19500
+        },
+        {
+          "model": "gpt-4.1-mini",
+          "costUsd": 0.12,
+          "requests": 5,
+          "inputTokens": 86400,
+          "outputTokens": 8300
+        }
+      ]
+    }
+  ]
+}

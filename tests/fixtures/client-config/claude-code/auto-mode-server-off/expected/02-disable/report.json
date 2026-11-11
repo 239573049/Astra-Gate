@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_BASE_URL",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.CLAUDE_CODE_AUTO_MODE_SERVER",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

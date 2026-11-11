@@ -232,6 +232,21 @@ public sealed class KeyErrorRow
     public long Count { get; set; }
 }
 
+/// <summary>One (provider, model) line of a day's bill: the requests routed to the provider for that model in the window.</summary>
+public sealed class BillLine
+{
+    public string ProviderId { get; init; } = "";
+    /// <summary>The provider name logged with the requests (the current name is the caller's to look up).</summary>
+    public string? ProviderName { get; init; }
+    /// <summary>The catalog model, else the model the client asked for; "" when neither was logged.</summary>
+    public string Model { get; init; } = "";
+    public long Requests { get; init; }
+    public long SuccessRequests { get; init; }
+    public long CostNanoUsd { get; init; }
+    public long InputTokens { get; init; }
+    public long OutputTokens { get; init; }
+}
+
 public sealed class TopModelStat
 {
     public string ModelId { get; init; } = "";
@@ -1058,6 +1073,43 @@ public sealed class RequestRepository
     }
 
     /// <summary>
+    /// The daily bill's lines: requests routed to a provider (failed ones included) in the half-open window
+    /// [<paramref name="from"/>, <paramref name="to"/>), per provider and model (<c>COALESCE(system_model_id, requested_model)</c>,
+    /// as the overview's model stats). Requests that failed before a provider was chosen are left out. Unordered; the endpoint sorts.
+    /// </summary>
+    public async Task<IReadOnlyList<BillLine>> BillLinesAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken ct = default)
+    {
+        await using var conn = await _factory.OpenAsync(ct);
+        var rows = await conn.QueryAsync<BillLineRow>("""
+            SELECT provider_id AS ProviderId, MAX(provider_name) AS ProviderName,
+                   COALESCE(system_model_id, requested_model) AS Model,
+                   COUNT(*) AS Requests,
+                   COALESCE(SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END), 0) AS SuccessRequests,
+                   COALESCE(SUM(cost_nanousd), 0) AS CostNanoUsd,
+                   COALESCE(SUM(total_input_tokens), 0) AS InputTokens,
+                   COALESCE(SUM(total_output_tokens), 0) AS OutputTokens
+            FROM requests
+            WHERE started_at_utc >= @from AND started_at_utc < @to AND provider_id IS NOT NULL
+            GROUP BY provider_id, COALESCE(system_model_id, requested_model)
+            """, new
+        {
+            from = DateTimeOffsetHandler.ToStorage(from),
+            to = DateTimeOffsetHandler.ToStorage(to),
+        });
+        return rows.Select(r => new BillLine
+        {
+            ProviderId = r.ProviderId,
+            ProviderName = r.ProviderName,
+            Model = r.Model ?? "",
+            Requests = r.Requests,
+            SuccessRequests = r.SuccessRequests,
+            CostNanoUsd = r.CostNanoUsd,
+            InputTokens = r.InputTokens,
+            OutputTokens = r.OutputTokens,
+        }).ToList();
+    }
+
+    /// <summary>
     /// Request count per local day since <paramref name="from"/>, for the overview's activity heatmap. Days are
     /// bucketed by the viewer's offset like <see cref="TimeseriesAsync"/> and days with no requests are absent;
     /// <paramref name="clientKind"/> / <paramref name="tokenId"/> restrict the rows to one client / token.
@@ -1175,6 +1227,18 @@ internal sealed class TimeseriesRow
     public long TotalCostNanoUsd { get; set; }
     public long TotalInputTokens { get; set; }
     public long TotalOutputTokens { get; set; }
+}
+
+internal sealed class BillLineRow
+{
+    public string ProviderId { get; set; } = "";
+    public string? ProviderName { get; set; }
+    public string? Model { get; set; }
+    public long Requests { get; set; }
+    public long SuccessRequests { get; set; }
+    public long CostNanoUsd { get; set; }
+    public long InputTokens { get; set; }
+    public long OutputTokens { get; set; }
 }
 
 internal sealed class TopModelRow

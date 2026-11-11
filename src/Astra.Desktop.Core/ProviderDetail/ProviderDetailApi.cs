@@ -186,6 +186,14 @@ public sealed class ProviderDetailApi
         InvalidateProviderModels();
     }
 
+    /// <summary>POST …/models/delete (<c>useDeleteProviderModels</c>): several models in one transaction; the server refuses the whole call if one is not this provider's.</summary>
+    public async Task DeleteModelsAsync(IReadOnlyList<long> pmIds, CancellationToken ct = default)
+    {
+        var ids = new JsonArray(pmIds.Select(i => (JsonNode)JsonValue.Create(i)!).ToArray());
+        await _api.PostAsync(Base(Id) + "/models/delete", new JsonObject { ["ids"] = ids }, ct);
+        InvalidateProviderModels();
+    }
+
     // ---------- quota ----------
 
     private void ApplyQuota(ProviderQuotaDto? state)

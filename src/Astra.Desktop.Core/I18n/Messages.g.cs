@@ -92,6 +92,42 @@ internal static class Messages
         "range.30d",
         "range.90d",
         "range.all",
+        "bill.generate",
+        "bill.title",
+        "bill.description",
+        "bill.style",
+        "bill.style.receipt",
+        "bill.style.manga",
+        "bill.copy",
+        "bill.save",
+        "bill.copied",
+        "bill.saved",
+        "bill.copyFailed",
+        "bill.saveFailed",
+        "bill.subtitle",
+        "bill.field.date",
+        "bill.field.window",
+        "bill.field.number",
+        "bill.field.currency",
+        "bill.field.requests",
+        "bill.field.successRate",
+        "bill.field.input",
+        "bill.field.output",
+        "bill.count",
+        "bill.modelLine",
+        "bill.subtotal",
+        "bill.total",
+        "bill.estimate",
+        "bill.thanks",
+        "bill.empty",
+        "bill.manga.kicker",
+        "bill.manga.until",
+        "bill.manga.say",
+        "bill.manga.top",
+        "bill.manga.sayEmpty",
+        "bill.manga.strip",
+        "bill.manga.facts",
+        "bill.manga.seal",
         "overview.cost",
         "overview.requests",
         "overview.successRate",
@@ -457,6 +493,8 @@ internal static class Messages
         "clients.option.maxThinkingTokens.hint",
         "clients.option.disablePromptCaching",
         "clients.option.disablePromptCaching.hint",
+        "clients.option.autoModeServerOff",
+        "clients.option.autoModeServerOff.hint",
         "clients.option.contextWindow",
         "clients.option.contextWindow.hint",
         "clients.option.autoCompactTokenLimit",
@@ -1289,6 +1327,54 @@ internal static class Messages
         "providers.inheritedPriceHint",
         "providers.removeModel",
         "providers.removeModelShort",
+        "providers.selectAllModels",
+        "providers.selectModel",
+        "providers.selectedModels",
+        "providers.removeSelected",
+        "providers.removeSelectedConfirm",
+        "providers.backup",
+        "backup.title",
+        "backup.detail",
+        "backup.export.title",
+        "backup.export.secrets",
+        "backup.secrets.none",
+        "backup.secrets.passphrase",
+        "backup.secrets.plaintext",
+        "backup.secrets.hint",
+        "backup.passphrase",
+        "backup.passphrase.hint",
+        "backup.plaintext.warn",
+        "backup.export.run",
+        "backup.export.done",
+        "backup.import.title",
+        "backup.import.choose",
+        "backup.import.encrypted",
+        "backup.import.preview",
+        "backup.import.run",
+        "backup.import.done",
+        "backup.import.doneSkipped",
+        "backup.import.badFile",
+        "backup.import.noKeys",
+        "backup.status.new",
+        "backup.status.sameHost",
+        "backup.status.same",
+        "backup.status.invalid",
+        "backup.models",
+        "backup.webdav.title",
+        "backup.webdav.hint",
+        "backup.webdav.url",
+        "backup.webdav.username",
+        "backup.webdav.password",
+        "backup.webdav.passwordKept",
+        "backup.webdav.folder",
+        "backup.webdav.save",
+        "backup.webdav.saved",
+        "backup.webdav.forget",
+        "backup.webdav.test",
+        "backup.webdav.testOk",
+        "backup.webdav.upload",
+        "backup.webdav.uploadDone",
+        "backup.webdav.restore",
         "providers.section.basic",
         "providers.section.auth",
         "providers.section.endpoints",
@@ -1516,6 +1602,8 @@ internal static class Messages
         "providers.proxy",
         "providers.proxyHint",
         "providers.headers",
+        "providers.mimicClaudeCode",
+        "providers.mimicClaudeCode.hint",
         "providers.addHeader",
         "providers.addHeaderDetail",
         "providers.headerName",
@@ -1523,8 +1611,6 @@ internal static class Messages
         "providers.addEndpointDetail",
         "providers.fullUrlHint",
         "providers.adapterSettings",
-        "providers.mimicClaudeCode",
-        "providers.mimicClaudeCode.hint",
         "providers.adapter",
         "providers.boundClients",
         "origin.inherited",
@@ -2520,6 +2606,28 @@ internal static class Messages
         "nav.mcp",
         "mcp.subtitle",
         "mcp.gateway.title",
+        "mcp.clients.title",
+        "mcp.clients.hint",
+        "mcp.clients.token",
+        "mcp.clients.pickToken",
+        "mcp.clients.noToken",
+        "mcp.clients.apply",
+        "mcp.clients.replace",
+        "mcp.clients.remove",
+        "mcp.clients.state.missing",
+        "mcp.clients.state.applied",
+        "mcp.clients.state.drifted",
+        "mcp.clients.state.conflict",
+        "mcp.clients.usesToken",
+        "mcp.clients.gatewayOff",
+        "mcp.clients.drifted",
+        "mcp.clients.conflict",
+        "mcp.clients.unreadable",
+        "mcp.clients.force",
+        "mcp.clients.forceRemove",
+        "mcp.clients.applied",
+        "mcp.clients.removed",
+        "mcp.clients.stdio",
         "mcp.gateway.enable",
         "mcp.gateway.enableHint",
         "mcp.gateway.endpoint",
@@ -2852,6 +2960,42 @@ internal static class Messages
             case "range.30d": return "30 天";
             case "range.90d": return "90 天";
             case "range.all": return "全部";
+            case "bill.generate": return "生成账单";
+            case "bill.title": return "今日账单";
+            case "bill.description": return "按提供商和模型汇总今天的消费，可复制或保存为图片。";
+            case "bill.style": return "账单样式";
+            case "bill.style.receipt": return "小票";
+            case "bill.style.manga": return "漫画";
+            case "bill.copy": return "复制图片";
+            case "bill.save": return "保存 PNG";
+            case "bill.copied": return "账单图片已复制";
+            case "bill.saved": return "账单图片已保存";
+            case "bill.copyFailed": return "复制图片失败：{error}";
+            case "bill.saveFailed": return "保存图片失败：{error}";
+            case "bill.subtitle": return "本地 AI 网关 · 每日消费小票";
+            case "bill.field.date": return "日期";
+            case "bill.field.window": return "区间";
+            case "bill.field.number": return "单号";
+            case "bill.field.currency": return "币种";
+            case "bill.field.requests": return "请求合计";
+            case "bill.field.successRate": return "成功率";
+            case "bill.field.input": return "输入 Token";
+            case "bill.field.output": return "输出 Token";
+            case "bill.count": return "{count} 次";
+            case "bill.modelLine": return "{requests} 次 · 入 {input} / 出 {output}";
+            case "bill.subtotal": return "小计";
+            case "bill.total": return "合计 TOTAL";
+            case "bill.estimate": return "金额按各模型定价估算 · 仅供参考";
+            case "bill.thanks": return "* 感谢使用 ASTRA GATE *";
+            case "bill.empty": return "— 今日暂无消费 —";
+            case "bill.manga.kicker": return "ASTRA GATE 每日账单";
+            case "bill.manga.until": return "截至 {time}";
+            case "bill.manga.say": return "今天一共花掉 {total}！";
+            case "bill.manga.top": return "{provider} 一家就占了 {share} 哦～";
+            case "bill.manga.sayEmpty": return "今天还没有花钱哦～";
+            case "bill.manga.strip": return "{requests} REQ · {tokens} TOKENS";
+            case "bill.manga.facts": return "{requests} 次请求 · 成功率 {rate}";
+            case "bill.manga.seal": return "已结算";
             case "overview.cost": return "费用";
             case "overview.requests": return "请求数";
             case "overview.successRate": return "成功率";
@@ -3217,6 +3361,8 @@ internal static class Messages
             case "clients.option.maxThinkingTokens.hint": return "写入 MAX_THINKING_TOKENS；留空则不设置。";
             case "clients.option.disablePromptCaching": return "关闭提示缓存";
             case "clients.option.disablePromptCaching.hint": return "写入 DISABLE_PROMPT_CACHING=1，客户端不再发送缓存断点。";
+            case "clients.option.autoModeServerOff": return "关闭 auto 模式的服务端审查";
+            case "clients.option.autoModeServerOff.hint": return "写入 CLAUDE_CODE_AUTO_MODE_SERVER=0：auto 模式不再向服务端请求审查，改用 Claude Code 自带的分类器。上游不支持服务端审查、auto 模式反复要求手动确认时打开。";
             case "clients.option.contextWindow": return "上下文窗口";
             case "clients.option.contextWindow.hint": return "写入 model_context_window；留空则用 Codex 默认值。";
             case "clients.option.autoCompactTokenLimit": return "自动压缩阈值";
@@ -4049,6 +4195,54 @@ internal static class Messages
             case "providers.inheritedPriceHint": return "当前生效的价格（继承，已按提供商价格表解析）：";
             case "providers.removeModel": return "从提供商移除 {id}？";
             case "providers.removeModelShort": return "移除此模型";
+            case "providers.selectAllModels": return "选择当前列表中的全部模型";
+            case "providers.selectModel": return "选择 {id}";
+            case "providers.selectedModels": return "已选 {n} 个";
+            case "providers.removeSelected": return "移除所选";
+            case "providers.removeSelectedConfirm": return "从提供商移除所选的 {n} 个模型？";
+            case "providers.backup": return "备份与恢复";
+            case "backup.title": return "备份与恢复";
+            case "backup.detail": return "把提供商和它们的模型导出成一个文件，或从这样的文件恢复。不含 OAuth 账号、客户端绑定、令牌和 MCP 服务器。";
+            case "backup.export.title": return "导出";
+            case "backup.export.secrets": return "API 密钥";
+            case "backup.secrets.none": return "不含密钥（推荐）";
+            case "backup.secrets.passphrase": return "用口令加密密钥";
+            case "backup.secrets.plaintext": return "明文密钥";
+            case "backup.secrets.hint": return "带密钥的导出只能在本机操作。";
+            case "backup.passphrase": return "口令";
+            case "backup.passphrase.hint": return "至少 8 个字符。口令丢失后无法找回文件里的密钥。";
+            case "backup.plaintext.warn": return "文件里的密钥是明文，拿到文件的人可以直接使用。只存放在你自己保管的位置，不要上传到网盘。";
+            case "backup.export.run": return "导出";
+            case "backup.export.done": return "已导出 {count} 个提供商";
+            case "backup.import.title": return "从文件恢复";
+            case "backup.import.choose": return "选择备份文件";
+            case "backup.import.encrypted": return "这个备份的密钥用口令加密了，输入口令后预览。";
+            case "backup.import.preview": return "预览";
+            case "backup.import.run": return "导入所选（{count}）";
+            case "backup.import.done": return "已导入 {count} 个提供商";
+            case "backup.import.doneSkipped": return "已导入 {count} 个，跳过 {skipped} 个";
+            case "backup.import.badFile": return "这不是有效的备份文件。";
+            case "backup.import.noKeys": return "文件里没有密钥，导入后需要重新填写。";
+            case "backup.status.new": return "新增";
+            case "backup.status.sameHost": return "地址已存在";
+            case "backup.status.same": return "已存在，跳过";
+            case "backup.status.invalid": return "无效";
+            case "backup.models": return "{count} 个模型";
+            case "backup.webdav.title": return "云端备份（WebDAV）";
+            case "backup.webdav.hint": return "把备份放到你自己的 WebDAV 服务（Nextcloud、坚果云等）。只能在本机操作；明文密钥不会上传，只能选不含密钥或口令加密。";
+            case "backup.webdav.url": return "服务地址";
+            case "backup.webdav.username": return "用户名";
+            case "backup.webdav.password": return "密码";
+            case "backup.webdav.passwordKept": return "已保存，留空则不修改";
+            case "backup.webdav.folder": return "文件夹";
+            case "backup.webdav.save": return "保存设置";
+            case "backup.webdav.saved": return "已保存";
+            case "backup.webdav.forget": return "移除设置";
+            case "backup.webdav.test": return "测试连接";
+            case "backup.webdav.testOk": return "连接正常，可以读写";
+            case "backup.webdav.upload": return "立即备份";
+            case "backup.webdav.uploadDone": return "已上传 {count} 个提供商";
+            case "backup.webdav.restore": return "从云端恢复";
             case "providers.section.basic": return "基本信息";
             case "providers.section.auth": return "认证";
             case "providers.section.endpoints": return "接口";
@@ -4276,6 +4470,8 @@ internal static class Messages
             case "providers.proxy": return "HTTP 代理";
             case "providers.proxyHint": return "此提供商的请求、订阅登录、令牌刷新与额度查询都走这里；订阅账户可在「账户」里单独设置";
             case "providers.headers": return "额外请求头";
+            case "providers.mimicClaudeCode": return "模拟 Claude Code";
+            case "providers.mimicClaudeCode.hint": return "发往此上游的 Anthropic 请求会带上 Claude Code 的身份（claude-cli User-Agent、X-Stainless 指纹、system 身份块）；真正的 Claude Code 请求原样转发。默认关闭，请只用于允许这种用法的上游。";
             case "providers.addHeader": return "添加请求头";
             case "providers.addHeaderDetail": return "随每个发往该提供商的请求一起发送；保存后生效。";
             case "providers.headerName": return "名称";
@@ -4292,8 +4488,6 @@ internal static class Messages
             case "origin.unset": return "未设置";
             case "origin.reset": return "重置为继承";
             case "models.count": return "{count} 个模型";
-            case "providers.mimicClaudeCode": return "模拟 Claude Code";
-            case "providers.mimicClaudeCode.hint": return "发往此上游的 Anthropic 请求会带上 Claude Code 的身份（claude-cli User-Agent、X-Stainless 指纹、system 身份块）；真正的 Claude Code 请求原样转发。默认关闭，请只用于允许这种用法的上游。";
             case "models.search": return "搜索模型、别名";
             case "models.allVendors": return "全部厂商";
             case "models.sync": return "同步模型目录";
@@ -5282,6 +5476,28 @@ internal static class Messages
             case "nav.mcp": return "MCP 网关";
             case "mcp.subtitle": return "把多个 MCP 服务器聚合成一个地址，按令牌决定谁能用哪些服务器。";
             case "mcp.gateway.title": return "网关";
+            case "mcp.clients.title": return "应用到客户端";
+            case "mcp.clients.hint": return "把网关地址和一个令牌写进 Claude Code 或 Codex 的 MCP 配置，客户端只需要这一个条目就能用上这里所有的服务器。服务器的配置和授权留在 Astra。";
+            case "mcp.clients.token": return "令牌";
+            case "mcp.clients.pickToken": return "选择令牌";
+            case "mcp.clients.noToken": return "还没有绑定了 MCP 服务器的令牌。先到「令牌」页给一个令牌选择 MCP 服务器。";
+            case "mcp.clients.apply": return "写入";
+            case "mcp.clients.replace": return "更换令牌";
+            case "mcp.clients.remove": return "移除";
+            case "mcp.clients.state.missing": return "未写入";
+            case "mcp.clients.state.applied": return "已写入";
+            case "mcp.clients.state.drifted": return "已被改动";
+            case "mcp.clients.state.conflict": return "冲突";
+            case "mcp.clients.usesToken": return "使用令牌 {name}";
+            case "mcp.clients.gatewayOff": return "网关还没有开启，客户端会得到 404。先打开上面的「启用 MCP 网关」。";
+            case "mcp.clients.drifted": return "条目在 Astra 写入之后被改动过。覆盖会用当前选择的令牌重新写入。";
+            case "mcp.clients.conflict": return "文件里已经有一个名为 astra 的条目，不是 Astra 写的，Astra 不会覆盖它。改名或删除它之后再写入。";
+            case "mcp.clients.unreadable": return "客户端的文件现在读不了：{error}";
+            case "mcp.clients.force": return "覆盖并重新写入";
+            case "mcp.clients.forceRemove": return "强制移除";
+            case "mcp.clients.applied": return "已写入 {client}，重启客户端后生效。";
+            case "mcp.clients.removed": return "已从 {client} 移除。";
+            case "mcp.clients.stdio": return "网关只转发 http 类型的 MCP 服务器；本机上的 stdio 服务器不在其中。";
             case "mcp.gateway.enable": return "启用 MCP 网关";
             case "mcp.gateway.enableHint": return "关闭时 /mcp 不响应（404），不会暴露任何新入口。";
             case "mcp.gateway.endpoint": return "聚合地址";
@@ -5616,6 +5832,42 @@ internal static class Messages
             case "range.30d": return "30 days";
             case "range.90d": return "90 days";
             case "range.all": return "All time";
+            case "bill.generate": return "Daily bill";
+            case "bill.title": return "Today's bill";
+            case "bill.description": return "Today's spending by provider and model, ready to copy or save as an image.";
+            case "bill.style": return "Bill style";
+            case "bill.style.receipt": return "Receipt";
+            case "bill.style.manga": return "Comic";
+            case "bill.copy": return "Copy image";
+            case "bill.save": return "Save PNG";
+            case "bill.copied": return "Bill image copied";
+            case "bill.saved": return "Bill image saved";
+            case "bill.copyFailed": return "Couldn't copy the image: {error}";
+            case "bill.saveFailed": return "Couldn't save the image: {error}";
+            case "bill.subtitle": return "Local AI gateway · daily receipt";
+            case "bill.field.date": return "Date";
+            case "bill.field.window": return "Period";
+            case "bill.field.number": return "No.";
+            case "bill.field.currency": return "Currency";
+            case "bill.field.requests": return "Requests";
+            case "bill.field.successRate": return "Success rate";
+            case "bill.field.input": return "Input tokens";
+            case "bill.field.output": return "Output tokens";
+            case "bill.count": return "{count} req";
+            case "bill.modelLine": return "{requests} req · in {input} / out {output}";
+            case "bill.subtotal": return "Subtotal";
+            case "bill.total": return "TOTAL";
+            case "bill.estimate": return "Estimated from model prices · for reference only";
+            case "bill.thanks": return "* THANKS FOR USING ASTRA GATE *";
+            case "bill.empty": return "— Nothing spent today —";
+            case "bill.manga.kicker": return "ASTRA GATE DAILY BILL";
+            case "bill.manga.until": return "as of {time}";
+            case "bill.manga.say": return "Spent {total} today!";
+            case "bill.manga.top": return "{provider} alone took {share}~";
+            case "bill.manga.sayEmpty": return "Not a cent spent today~";
+            case "bill.manga.strip": return "{requests} REQ · {tokens} TOKENS";
+            case "bill.manga.facts": return "{requests} requests · {rate} success";
+            case "bill.manga.seal": return "SETTLED";
             case "overview.cost": return "Cost";
             case "overview.requests": return "Requests";
             case "overview.successRate": return "Success rate";
@@ -5981,6 +6233,8 @@ internal static class Messages
             case "clients.option.maxThinkingTokens.hint": return "Writes MAX_THINKING_TOKENS; leave empty to not set it.";
             case "clients.option.disablePromptCaching": return "Disable prompt caching";
             case "clients.option.disablePromptCaching.hint": return "Writes DISABLE_PROMPT_CACHING=1 so the client stops sending cache breakpoints.";
+            case "clients.option.autoModeServerOff": return "Turn off auto mode server review";
+            case "clients.option.autoModeServerOff.hint": return "Writes CLAUDE_CODE_AUTO_MODE_SERVER=0 so auto mode stops asking the server to review actions and uses Claude Code's own classifier. Turn it on when the upstream cannot answer the server review and auto mode keeps asking you to confirm.";
             case "clients.option.contextWindow": return "Context window";
             case "clients.option.contextWindow.hint": return "Writes model_context_window; leave empty to use Codex's default.";
             case "clients.option.autoCompactTokenLimit": return "Auto-compact threshold";
@@ -6813,6 +7067,54 @@ internal static class Messages
             case "providers.inheritedPriceHint": return "Effective price (inherited, resolved with this provider's price table):";
             case "providers.removeModel": return "Remove {id} from this provider?";
             case "providers.removeModelShort": return "Remove model";
+            case "providers.selectAllModels": return "Select every model in the list";
+            case "providers.selectModel": return "Select {id}";
+            case "providers.selectedModels": return "{n} selected";
+            case "providers.removeSelected": return "Remove selected";
+            case "providers.removeSelectedConfirm": return "Remove the {n} selected models from this provider?";
+            case "providers.backup": return "Backup and restore";
+            case "backup.title": return "Backup and restore";
+            case "backup.detail": return "Export providers and their models to one file, or restore from such a file. OAuth accounts, client bindings, tokens and MCP servers are not included.";
+            case "backup.export.title": return "Export";
+            case "backup.export.secrets": return "API keys";
+            case "backup.secrets.none": return "Without keys (recommended)";
+            case "backup.secrets.passphrase": return "Keys encrypted with a passphrase";
+            case "backup.secrets.plaintext": return "Plaintext keys";
+            case "backup.secrets.hint": return "An export with keys can only be made on this machine.";
+            case "backup.passphrase": return "Passphrase";
+            case "backup.passphrase.hint": return "At least 8 characters. The keys in the file cannot be recovered without it.";
+            case "backup.plaintext.warn": return "The keys in the file are plaintext: anyone holding the file can use them. Keep it somewhere only you control, and do not upload it to cloud storage.";
+            case "backup.export.run": return "Export";
+            case "backup.export.done": return "Exported {count} providers";
+            case "backup.import.title": return "Restore from a file";
+            case "backup.import.choose": return "Choose a backup file";
+            case "backup.import.encrypted": return "This backup has its keys encrypted with a passphrase. Enter it to preview.";
+            case "backup.import.preview": return "Preview";
+            case "backup.import.run": return "Import selected ({count})";
+            case "backup.import.done": return "Imported {count} providers";
+            case "backup.import.doneSkipped": return "Imported {count}, skipped {skipped}";
+            case "backup.import.badFile": return "This is not a valid backup file.";
+            case "backup.import.noKeys": return "The file has no keys; enter them again after importing.";
+            case "backup.status.new": return "New";
+            case "backup.status.sameHost": return "Address already used";
+            case "backup.status.same": return "Already there, skipped";
+            case "backup.status.invalid": return "Invalid";
+            case "backup.models": return "{count} models";
+            case "backup.webdav.title": return "Cloud backup (WebDAV)";
+            case "backup.webdav.hint": return "Keep the backup on your own WebDAV service (Nextcloud, Jianguoyun, ...). Only on this machine; plaintext keys are never uploaded, so choose no keys or a passphrase.";
+            case "backup.webdav.url": return "Server address";
+            case "backup.webdav.username": return "User name";
+            case "backup.webdav.password": return "Password";
+            case "backup.webdav.passwordKept": return "Saved; leave empty to keep it";
+            case "backup.webdav.folder": return "Folder";
+            case "backup.webdav.save": return "Save settings";
+            case "backup.webdav.saved": return "Saved";
+            case "backup.webdav.forget": return "Remove settings";
+            case "backup.webdav.test": return "Test connection";
+            case "backup.webdav.testOk": return "Connected; reading and writing works";
+            case "backup.webdav.upload": return "Back up now";
+            case "backup.webdav.uploadDone": return "Uploaded {count} providers";
+            case "backup.webdav.restore": return "Restore from the cloud";
             case "providers.section.basic": return "Basics";
             case "providers.section.auth": return "Authentication";
             case "providers.section.endpoints": return "Endpoints";
@@ -7040,6 +7342,8 @@ internal static class Messages
             case "providers.proxy": return "HTTP proxy";
             case "providers.proxyHint": return "This provider's requests, subscription sign-ins, token refreshes and quota checks; subscription accounts can override it under Accounts";
             case "providers.headers": return "Extra headers";
+            case "providers.mimicClaudeCode": return "Impersonate Claude Code";
+            case "providers.mimicClaudeCode.hint": return "Anthropic requests to this upstream carry the Claude Code identity (claude-cli User-Agent, X-Stainless fingerprint, system identity block); real Claude Code requests are forwarded as they are. Off by default — use it only with upstreams that allow this.";
             case "providers.addHeader": return "Add header";
             case "providers.addHeaderDetail": return "Sent with every request to this provider; applied when you save.";
             case "providers.headerName": return "Name";
@@ -7063,8 +7367,6 @@ internal static class Messages
             case "models.new": return "New model";
             case "models.newDetail": return "Add parameters and a default price for a model the catalog does not have.";
             case "models.col.model": return "Model";
-            case "providers.mimicClaudeCode": return "Impersonate Claude Code";
-            case "providers.mimicClaudeCode.hint": return "Anthropic requests to this upstream carry the Claude Code identity (claude-cli User-Agent, X-Stainless fingerprint, system identity block); real Claude Code requests are forwarded as they are. Off by default — use it only with upstreams that allow this.";
             case "models.col.vendor": return "Vendor";
             case "models.col.context": return "Context";
             case "models.col.price": return "Input / output";
@@ -8046,6 +8348,28 @@ internal static class Messages
             case "nav.mcp": return "MCP gateway";
             case "mcp.subtitle": return "Put several MCP servers behind one address and decide per token which of them it may use.";
             case "mcp.gateway.title": return "Gateway";
+            case "mcp.clients.title": return "Apply to clients";
+            case "mcp.clients.hint": return "Writes the gateway address and one token into the MCP settings of Claude Code or Codex, so the client needs this one entry to use every server here. The servers' own settings and sign-ins stay in Astra.";
+            case "mcp.clients.token": return "Token";
+            case "mcp.clients.pickToken": return "Choose a token";
+            case "mcp.clients.noToken": return "No token has MCP servers bound yet. Choose MCP servers for a token on the Tokens page first.";
+            case "mcp.clients.apply": return "Write";
+            case "mcp.clients.replace": return "Change token";
+            case "mcp.clients.remove": return "Remove";
+            case "mcp.clients.state.missing": return "Not written";
+            case "mcp.clients.state.applied": return "Written";
+            case "mcp.clients.state.drifted": return "Changed";
+            case "mcp.clients.state.conflict": return "Conflict";
+            case "mcp.clients.usesToken": return "Uses token {name}";
+            case "mcp.clients.gatewayOff": return "The gateway is off, so the client gets a 404. Turn on \"Enable the MCP gateway\" above first.";
+            case "mcp.clients.drifted": return "The entry was changed after Astra wrote it. Overwriting writes it again with the token chosen here.";
+            case "mcp.clients.conflict": return "The file already has an entry named astra that Astra did not write, and Astra will not overwrite it. Rename or remove it, then write again.";
+            case "mcp.clients.unreadable": return "The client's file cannot be read right now: {error}";
+            case "mcp.clients.force": return "Overwrite and write again";
+            case "mcp.clients.forceRemove": return "Force remove";
+            case "mcp.clients.applied": return "Written to {client}. Restart the client for it to take effect.";
+            case "mcp.clients.removed": return "Removed from {client}.";
+            case "mcp.clients.stdio": return "The gateway only forwards http MCP servers; stdio servers on this machine are not part of it.";
             case "mcp.gateway.enable": return "Enable the MCP gateway";
             case "mcp.gateway.enableHint": return "While off, /mcp answers 404 and exposes nothing new.";
             case "mcp.gateway.endpoint": return "Aggregate address";

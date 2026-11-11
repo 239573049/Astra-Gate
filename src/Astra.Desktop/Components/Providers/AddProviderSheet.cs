@@ -23,6 +23,9 @@ internal interface IProviderSheetHost
 
     IReadOnlyList<ProviderDto> Items { get; }
 
+    /// <summary>The page's clock (tests freeze it).</summary>
+    DateTimeOffset Now { get; }
+
     void Open(ProviderDto provider);
 
     void NavigateTo(string route, string? param);

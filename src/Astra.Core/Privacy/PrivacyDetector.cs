@@ -542,7 +542,7 @@ public sealed partial class PrivacyDetector
         }
     }
 
-    private enum JsonScope { Root, Content, ToolContent, Call, Source, InlineData, ImageUrl, Audio, File, Ordinary }
+    private enum JsonScope { Root, Content, ToolContent, Call, CallExtra, Source, InlineData, ImageUrl, Audio, File, Ordinary }
 
     // The "type" discriminators the scope rules compare against (any other type behaves like none).
     private static readonly string[] KnownTypes =
@@ -558,7 +558,7 @@ public sealed partial class PrivacyDetector
         "source", "image_url", "input_audio", "file", "inlineData", "inline_data", "data", "url", "file_data", "signature",
         "encrypted_content", "thoughtSignature", "thought_signature", "id", "tool_use_id", "tool_call_id", "call_id",
         "previous_response_id", "tool_calls", "functionCall", "functionResponse", "function_call", "function_response",
-        "approval_request_id", "conversation", "container", "cachedContent", "cached_content",
+        "approval_request_id", "conversation", "container", "cachedContent", "cached_content", "extra_content", "google",
     ];
 
     private static readonly byte[][] KnownKeysUtf8 = KnownKeys.Select(Encoding.UTF8.GetBytes).ToArray();
@@ -590,6 +590,9 @@ public sealed partial class PrivacyDetector
         (JsonScope.Content, "content") when type == "tool_result" && child.ValueKind == JsonValueKind.Array => JsonScope.ToolContent,
         (JsonScope.Content, "content" or "parts") when child.ValueKind == JsonValueKind.Array => JsonScope.Content,
         (JsonScope.Content, "tool_calls") when child.ValueKind == JsonValueKind.Array => JsonScope.Call,
+        // Chat tool_calls[].extra_content.google.thought_signature: Gemini's signature, echoed back by Chat clients.
+        (JsonScope.Call, "extra_content") when child.ValueKind == JsonValueKind.Object => JsonScope.CallExtra,
+        (JsonScope.CallExtra, "google") when child.ValueKind == JsonValueKind.Object => JsonScope.CallExtra,
         (JsonScope.Content, "functionCall" or "functionResponse" or "function_call" or "function_response")
             when child.ValueKind == JsonValueKind.Object => JsonScope.Call,
         // Responses' {"conversation":{"id":…}} and Anthropic's {"container":{"id":…}}: like a call, only the id is opaque.
@@ -633,6 +636,7 @@ public sealed partial class PrivacyDetector
             // functionCall / functionResponse ids. Arguments, tool results and text stay inspected.
             (JsonScope.Content, "id" or "tool_use_id" or "tool_call_id" or "call_id" or "approval_request_id") => true,
             (JsonScope.Call, "id") => true,
+            (JsonScope.CallExtra, "thought_signature") => true,
             // Server-side state the request continues: Responses previous_response_id / conversation, Anthropic container,
             // Gemini cachedContent.
             (JsonScope.Root, "previous_response_id" or "conversation" or "container" or "cachedContent" or "cached_content") => true,

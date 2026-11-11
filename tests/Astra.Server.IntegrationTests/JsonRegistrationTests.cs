@@ -34,7 +34,7 @@ public sealed class JsonRegistrationTests
             "/api/health", "/api/version", "/api/auth/status", "/api/settings", "/api/privacy",
             "/api/privacy/events", "/api/privacy/events/stats", "/api/providers", "/api/clients", "/api/clients/summary", "/api/tokens",
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
-            "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/provider-quota/templates",
+            "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/stats/daily-bill", "/api/provider-quota/templates",
             "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
             "/api/smart-routing", "/api/smart-routing/models",
         ];

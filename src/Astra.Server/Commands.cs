@@ -54,6 +54,22 @@ public static class Commands
                 incomplete = true;
             }
         }
+        // The MCP gateway entry of Claude Code and Codex (issue #34) has its own state, independent of the take-over above.
+        try
+        {
+            foreach (var (kind, report) in new ClientMcpApplier(env, db.ClientConfigState, applier).RemoveAll())
+            {
+                var drifted = report.Keys.Where(k => k.Outcome == RestoreKeyOutcome.Drifted).ToList();
+                if (report.Keys.Any(k => k.Outcome == RestoreKeyOutcome.Restored)) Console.WriteLine($"{kind}: removed the MCP gateway entry");
+                foreach (var key in drifted) Console.Error.WriteLine($"  Left modified key untouched: {key.FilePath}:{key.KeyPath}");
+                incomplete |= drifted.Count > 0;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Astra.Clients.Editing.EditorException)
+        {
+            Console.Error.WriteLine($"MCP gateway entries: restore failed: {ex.Message}");
+            incomplete = true;
+        }
         return incomplete ? 1 : 0;
     }
 }

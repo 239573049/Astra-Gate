@@ -131,6 +131,9 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
     /// <summary>The import sheet of the shown view.</summary>
     internal ImportProvidersSheet? ImportSheet { get; set; }
 
+    /// <summary>The backup and restore sheet of the shown view.</summary>
+    internal ProviderBackupSheet? BackupSheet { get; set; }
+
     /// <summary>True when the page was opened for the new-provider flow: the view opens the wizard once it is shown.</summary>
     public bool OpenAddOnShow { get; set; }
 
@@ -139,6 +142,9 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
 
     /// <summary>Raised when the import sheet should open.</summary>
     public event Action? ImportRequested;
+
+    /// <summary>Raised when the backup and restore sheet should open.</summary>
+    public event Action? BackupRequested;
 
     /// <summary>The today's date for the usage columns: the page's clock, not the machine's (tests freeze it).</summary>
     public DateTimeOffset Now => Context!.Clock.Now;
@@ -157,6 +163,9 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
 
     /// <summary>Asks the view to open the import sheet.</summary>
     public void RequestImport() => ImportRequested?.Invoke();
+
+    /// <summary>Asks the view to open the backup and restore sheet.</summary>
+    public void RequestBackup() => BackupRequested?.Invoke();
 
     /// <summary>Opens the provider's detail page (web <c>navigate('/providers/:id')</c>), keeping the list below it so Back returns here.</summary>
     public void Open(ProviderDto provider) => Context!.Navigator.Push("ProviderDetail", provider.Id);
@@ -189,6 +198,7 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
     private void BuildHeader()
     {
         SetHeaderActions(new ActionGroup(8,
+            ProviderUi.Button(Loc.T("providers.backup"), LucideIconKind.Archive, onClick: RequestBackup),
             ProviderUi.Button(Loc.T("providers.import"), LucideIconKind.Download, onClick: RequestImport),
             ProviderUi.Button(Loc.T("providers.add"), LucideIconKind.Plus, ButtonVariant.Primary, onClick: RequestAdd)));
     }

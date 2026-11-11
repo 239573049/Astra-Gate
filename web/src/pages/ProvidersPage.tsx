@@ -1,4 +1,4 @@
-import { ChartColumn, ChevronUp, Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
+import { Archive, ChartColumn, ChevronUp, Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
@@ -18,6 +18,7 @@ import { RadioCards } from '../components/arc/radio-cards/radio-cards';
 import { Stepper } from '../components/arc/stepper/stepper';
 import { ProviderIcon } from '../components/icons';
 import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
+import { ProviderBackupSheet } from '../components/ProviderBackupSheet';
 import { Page } from '../components/layout/Page';
 import {
   HEALTH_TONE,
@@ -66,6 +67,7 @@ export function ProvidersPage() {
   const providers = useProviders();
   const [adding, setAdding] = useState(params.get('new') === '1');
   const [importing, setImporting] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
 
   useEffect(() => {
     if (params.get('new') === '1') {
@@ -113,6 +115,9 @@ export function ProvidersPage() {
       subtitle={providers.data ? t('providers.count', { count: providers.data.length }) : undefined}
       actions={
         <>
+          <Button icon={<Archive className="size-3.5" />} onClick={() => setBackingUp(true)}>
+            {t('providers.backup')}
+          </Button>
           <Button icon={<Download className="size-3.5" />} onClick={() => setImporting(true)}>
             {t('providers.import')}
           </Button>
@@ -203,6 +208,7 @@ export function ProvidersPage() {
         )}
       </div>
       <ImportProvidersSheet open={importing} onOpenChange={setImporting} />
+      <ProviderBackupSheet open={backingUp} onOpenChange={setBackingUp} />
       <AddProviderSheet open={adding} onOpenChange={setAdding} onCreated={(p) => navigate(`/providers/${p.id}`)} />
       {/* Rendered outside the cards on purpose: a dialog portaled from inside a clickable card would still bubble
           its clicks up React's tree and open the provider behind it. */}

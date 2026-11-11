@@ -277,6 +277,11 @@
     },
     {
       "method": "GET",
+      "path": "/api/stats/daily-bill",
+      "file": "stats/daily-bill.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/mcp/servers",
       "file": "mcp/servers.json"
     },

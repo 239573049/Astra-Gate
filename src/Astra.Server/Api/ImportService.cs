@@ -181,7 +181,7 @@ public sealed class ImportService(
 
     private static string? Authority(string url) => Uri.TryCreate(url, UriKind.Absolute, out var u) ? $"{u.Host.ToLowerInvariant()}:{u.Port}" : null;
 
-    private static string CustomTemplateId(ApiProtocol protocol) => protocol switch
+    internal static string CustomTemplateId(ApiProtocol protocol) => protocol switch
     {
         ApiProtocol.OpenAIResponses => "custom-responses",
         ApiProtocol.Anthropic => "custom-anthropic",
@@ -189,7 +189,7 @@ public sealed class ImportService(
         _ => "custom-chat",
     };
 
-    private static string UniqueName(string name, HashSet<string> taken)
+    internal static string UniqueName(string name, HashSet<string> taken)
     {
         var candidate = name;
         for (var n = 2; !taken.Add(candidate); n++) candidate = $"{name} ({n})";
@@ -215,8 +215,8 @@ public sealed class ImportService(
     }
 
     /// <summary>SHA-256 hex of a key (null for none). Only hashes are ever compared, never plaintext.</summary>
-    private static string? KeyHash(string? key) =>
+    internal static string? KeyHash(string? key) =>
         key is null ? null : Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
 
-    private static string? Mask(string? key) => key is null ? null : key.Length >= 12 ? key[..3] + "…" + key[^4..] : "••••";
+    internal static string? Mask(string? key) => key is null ? null : key.Length >= 12 ? key[..3] + "…" + key[^4..] : "••••";
 }

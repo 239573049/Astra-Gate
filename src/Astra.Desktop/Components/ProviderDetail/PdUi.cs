@@ -33,6 +33,9 @@ public static class PdUi
 
         /// <summary>No chrome.</summary>
         Plain,
+
+        /// <summary>The destructive action (web <c>variant="destructive"</c>).</summary>
+        Destructive,
     }
 
     /// <summary>A button; <paramref name="text"/> null makes it icon-only with <paramref name="name"/> as tooltip and accessible name.</summary>
@@ -40,7 +43,7 @@ public static class PdUi
     {
         var button = new ArcButton
         {
-            Variant = look switch { Look.Primary => ButtonVariant.Primary, Look.Plain => ButtonVariant.Ghost, _ => ButtonVariant.Secondary },
+            Variant = look switch { Look.Primary => ButtonVariant.Primary, Look.Plain => ButtonVariant.Ghost, Look.Destructive => ButtonVariant.Danger, _ => ButtonVariant.Secondary },
             Size = small ? ControlSize.Small : ControlSize.Medium,
             VerticalAlignment = VerticalAlignment.Center,
         };

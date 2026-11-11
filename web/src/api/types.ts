@@ -723,12 +723,29 @@ export interface ProviderStat {
 export interface DailyActivity { day: string; requests: number }
 /** Live request-log rate over a trailing window, per minute: requests (in-flight included), tokens (completed only), and the window's cache-hit ratio (null without input tokens). */
 export interface RateStats { rpm: number; tpm: number; cacheHitRate?: number | null; windowSeconds: number }
+/**
+ * One local day of spending, per provider and then model, most expensive first (GET /api/stats/daily-bill; the overview's
+ * "daily bill"). Only requests routed to a provider count (failed ones too), so the totals are the providers' sums. `toUtc` is the moment of
+ * generation for today, else the end of the day.
+ */
+export interface DailyBill {
+  date: string; tzOffsetMinutes: number; fromUtc: string; toUtc: string; generatedAtUtc: string;
+  costUsd: number; requests: number; successRequests: number; inputTokens: number; outputTokens: number;
+  providers: DailyBillProvider[];
+}
+export interface DailyBillProvider {
+  providerId: string; name: string; costUsd: number; requests: number; inputTokens: number; outputTokens: number;
+  models: DailyBillModel[];
+}
+/** `model` is the catalog model, else the one the client asked for. */
+export interface DailyBillModel { model: string; costUsd: number; requests: number; inputTokens: number; outputTokens: number }
 // GET /api/stats/summary?range=&client=&token= -> StatsSummary
 // GET /api/stats/timeseries?range=&groupBy=day|hour&by=model|provider|client|token&client=&token=&tzOffset= -> TimeseriesPoint[]
 //    (tzOffset = viewer's UTC offset in minutes; buckets are local "yyyy-MM-dd" / "yyyy-MM-ddTHH:00")
 // GET /api/stats/top-models?range=&limit=10&client=&token= -> TopModel[]
 // GET /api/stats/activity-heatmap?days=365&client=&token=&tzOffset= -> DailyActivity[]
 //    (a fixed window ending today, 30-730 days; it ignores the range selector's 今天/7d/30d/90d)
+// GET /api/stats/daily-bill?date=yyyy-MM-dd&tzOffset= -> DailyBill (date defaults to today in that offset)
 // GET /api/stats/rate?window=60&client=&token=&provider=&model=&status= -> RateStats
 //    (a trailing window in seconds, 10-600; filters mirror /api/requests)
 // `client` (a ClientKind) / `token` (a token id) narrow any stats call to those requests.
@@ -1608,4 +1625,27 @@ export type McpErrorCategory = 'tool' | 'needs_auth' | 'unreachable' | 'timeout'
 export interface McpCall {
   id: number; at: string; tokenId: string; tokenName?: string | null; serverId: string; serverSlug: string; tool: string;
   durationMs: number; ok: boolean; errorCategory?: McpErrorCategory | null; frontEra?: 'modern' | 'legacy' | null;
+}
+
+// ---------- provider backup (issue #33) ----------
+export type BackupSecrets = 'none' | 'passphrase' | 'plaintext';
+/** The exported file as the server wrote it; the page only reads `secrets` and `providers.length`, everything else is passed back untouched. */
+export interface BackupFile {
+  format: string; version: number; secrets: BackupSecrets; providers: unknown[]; [key: string]: unknown;
+}
+export type BackupItemStatus = 'new' | 'sameHost' | 'same' | 'invalid';
+export interface BackupPreviewItem {
+  index: number; name: string; status: BackupItemStatus; modelCount: number; endpoints?: { protocol: string; baseUrl: string }[];
+  authScheme?: string; hasKey: boolean; keyMasked?: string | null; existing?: { id: string; name: string }; error?: string; ignored: string[];
+}
+export interface BackupPreview { secrets: BackupSecrets; items: BackupPreviewItem[] }
+export interface BackupImportResult { added: { id: string; name: string }[]; skipped: { index: number; reason: string }[] }
+export interface WebDavStatus { configured: boolean; url: string; username: string; hasPassword: boolean; folder: string }
+
+// ---------- the MCP gateway entry in Claude Code / Codex (issue #34) ----------
+export type ClientMcpState = 'missing' | 'applied' | 'drifted' | 'conflict';
+/** Where a client stands with the `astra` MCP entry; never carries the token's key. */
+export interface ClientMcpEntry {
+  kind: ClientKind; state: ClientMcpState; file: string; url?: string | null; tokenId?: string | null; tokenName?: string | null;
+  gatewayEnabled: boolean; gatewayUrl: string; error?: string | null;
 }

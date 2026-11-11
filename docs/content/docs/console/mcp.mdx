@@ -33,6 +33,22 @@ claude mcp add --transport http astra http://127.0.0.1:17321/mcp \
 
 一个令牌看不到没有绑定给它的服务器；调用没绑定的工具和调用不存在的工具得到同样的错误，不会泄露哪些服务器存在。
 
+## 应用到客户端
+
+页面上的 **应用到客户端** 把 `/mcp` 地址和一个令牌写进 Claude Code 或 Codex 自己的 MCP 配置，不用手工拷贝：
+
+| 客户端 | 写入的位置 |
+| --- | --- |
+| Claude Code | `~/.claude.json`（设置了 `CLAUDE_CONFIG_DIR` 时在该目录下）顶层 `mcpServers` 里的 `astra`，`type` 为 `http`，`Authorization` 请求头带令牌 |
+| Codex | `~/.codex/config.toml`（遵循 `CODEX_HOME`）里的 `[mcp_servers.astra]`，带 `url` 和 `http_headers` 里的 `Authorization` |
+
+- 只列出已经绑定了 MCP 服务器、且启用的令牌；令牌的密钥由服务器直接写入客户端文件，**不经过浏览器**，接口也不会返回它；
+- 写入和移除只能在本机操作。第一次写入前的文件会备份（和客户端接管网关用的是同一套备份与还原规则），移除时还原成写入前的样子，没有别的残留；
+- **不会覆盖不是 Astra 写的 `astra` 条目**（状态显示「冲突」），请先改名或删除它。Astra 写入之后被改动的条目显示「已被改动」，只有你选择「覆盖并重新写入」才会替换，「强制移除」才会删掉；
+- 这个条目和客户端的「接管网关」开关各自独立：关闭接管不会删掉它，`astra-server restore-all` 会把它一并移除；
+- 网关关闭时（上面的开关）客户端会得到 404，页面会提示；写入后需要重启客户端；
+- 网关只转发 http 类型的 MCP 服务器，本机上的 stdio 服务器不在其中，也不会被写进客户端。
+
 ## 协议
 
 MCP 现在有两代协议，Astra 两边都能说，客户端和上游各用各的：
@@ -106,3 +122,4 @@ MCP 现在有两代协议，Astra 两边都能说，客户端和上游各用各�
 | `POST /api/mcp/servers/{id}/oauth/start`、`DELETE /api/mcp/servers/{id}/oauth` | 发起授权（仅限本机）、忘记授权 |
 | `GET /api/mcp/calls` | 最近的调用 |
 | `PATCH /api/tokens/{id}` 的 `mcpServers` | 令牌可以使用的服务器 id |
+| `GET /api/clients/mcp`、`GET` / `POST` / `DELETE /api/clients/{kind}/mcp` | 客户端里的网关条目：状态、写入（`{ tokenId, force }`）、移除（`?force=true`）；`kind` 为 `claude-code` 或 `codex`，`POST`、`DELETE` 仅限本机 |

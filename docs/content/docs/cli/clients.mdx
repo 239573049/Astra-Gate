@@ -55,6 +55,25 @@ astra provider import --yes --only magpie:relay --only codex:my-relay   # 只导
 
 列表里的 `REF` 用于 `--only`。来源只读，API Key 由服务端直接读取并加密保存，不经过 CLI；已存在（同地址同 Key）与无法导入的条目会被拒绝。控制台里的导入面板行为一致，详见「控制台 → 提供商」。
 
+### 导出与恢复备份文件
+
+```bash
+astra provider export                                  # 写 ./astra-providers-<日期>.json，不含 API Key
+astra provider export --out ~/backup/astra.json --force
+astra provider export --id <id> --id <id>              # 只导出指定的提供商
+echo 'my passphrase' | astra provider export --passphrase-stdin   # 用口令加密密钥（也可设环境变量 ASTRA_BACKUP_PASSPHRASE）
+astra provider export --include-keys                   # 明文密钥，只能在本机操作
+
+astra provider import-file astra-providers.json        # 只预览，不写入
+astra provider import-file astra-providers.json --yes  # 导入状态为 new 的条目
+astra provider import-file astra-providers.json --yes --only 0 --only 3   # 只导入预览里指定的行号
+```
+
+- 默认**不含密钥**；口令和明文密钥都不能写在命令行参数里：口令来自 stdin（终端里是隐藏输入）或 `ASTRA_BACKUP_PASSPHRASE`，`--include-keys` 与口令不能同时用；
+- 输出文件以仅所有者可读写（`0600`）创建，已存在时必须加 `--force` 才会覆盖；
+- 预览只显示遮掩后的密钥；口令加密的文件导入时同样从 stdin 或环境变量取口令；
+- 文件内容、去重规则和不包含的内容与控制台的「备份与恢复」一致，详见「控制台 → 提供商」。
+
 ## 离线还原：restore-all
 
 ```bash

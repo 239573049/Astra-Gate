@@ -67,7 +67,8 @@ that row is what the console's interception log, stats, request detail and the p
 10. `src/Astra.Core/Privacy/PrivacyDetector.cs:610` `IsOpaque` — the protocol slots that are never scanned:
     base64 media under `source.data`/`inlineData.data`/`input_audio.data` + data-URL `image_url`/`file_data`
     (decided from ≤ 512 bytes: `IsBinaryDataUrl`, `:659`), Anthropic `thinking.signature`,
-    `redacted_thinking.data`, `reasoning.encrypted_content`, any `thoughtSignature`, and the ids the upstream
+    `redacted_thinking.data`, `reasoning.encrypted_content`, any `thoughtSignature` (and a Chat tool call's
+    `extra_content.google.thought_signature`, `JsonScope.CallExtra`), and the ids the upstream
     pairs verbatim (issue #10: a rewritten one fails every later turn) — in message / content-block scope any
     `id`, `tool_use_id`, `tool_call_id`, `call_id`, `approval_request_id`; `id` of Chat `tool_calls[]` and Gemini
     `functionCall`/`functionResponse` (`JsonScope.Call`); top-level `previous_response_id`, `conversation`,

@@ -346,6 +346,32 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Several_Models_Are_Removed_In_One_Request_And_Only_Own_Ones()
+    {
+        await using var host = await TestHost.StartAsync();
+        var a = await Create(host);
+        var b = await Create(host);
+        var (_, added) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{a}/models", new { modelIds = new[] { "gpt-5", "gpt-5-mini", "gpt-5-nano" } });
+        var ids = added!.AsArray().Select(m => m!["id"]!.GetValue<long>()).ToList();
+        var (_, other) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{b}/models", new { modelIds = new[] { "gpt-5" } });
+        var otherId = other![0]!["id"]!.GetValue<long>();
+
+        // one id of another provider refuses the whole request, nothing is removed
+        var (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{a}/models/delete", new { ids = new[] { ids[0], otherId } });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.Equal(3, (await host.Db.Providers.ListModelsAsync(a)).Count);
+
+        (status, _) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{a}/models/delete", new { ids = Array.Empty<long>() });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+
+        (status, var done) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{a}/models/delete", new { ids = new[] { ids[0], ids[2] } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, done!["deleted"]!.GetValue<int>());
+        Assert.Equal(["gpt-5-mini"], (await host.Db.Providers.ListModelsAsync(a)).Select(m => m.ModelId).ToList());
+        Assert.Single(await host.Db.Providers.ListModelsAsync(b));
+    }
+
+    [Fact]
     public async Task Bound_Provider_Deletion_Is_Blocked_And_Duplicate_Has_Independent_Models()
     {
         await using var host = await TestHost.StartAsync();

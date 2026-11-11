@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using Astra.Desktop.Components.Kit;
 using Astra.Desktop.Core.Api;
+using Astra.Desktop.Core.Overview;
 using Astra.Desktop.Core.Shell;
 using Astra.Desktop.Pages.Overview;
 using Astra.Desktop.Pages.Tokens;
@@ -36,6 +37,9 @@ public static partial class Scenes
         d["overview__loading"] = () => Loading(AppRoute.Overview, "/api/stats/");
         // a recent-requests row opens the request's detail over the dashboard (web RequestDetailSheet in Breakdown)
         d["overview__request-detail"] = () => Run(AppRoute.Overview, Fixtures(), after: (_, p) => ((OverviewPage)p).OpenRequest("req_0050"));
+        // the header's 生成账单 opens today's bill over the dashboard (web DailyBillSheet), once per style
+        d["overview__bill-receipt"] = () => Run(AppRoute.Overview, Fixtures(), after: (_, p) => ((OverviewPage)p).OpenBill(BillStyles.Receipt));
+        d["overview__bill-manga"] = () => Run(AppRoute.Overview, Fixtures(), after: (_, p) => ((OverviewPage)p).OpenBill(BillStyles.Manga));
 
         // ----- tokens -----
         d["tokens__data"] = () => Page(AppRoute.Tokens, Fixtures());

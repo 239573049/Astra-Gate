@@ -24,7 +24,9 @@ import {
   runClientList,
   runClientStatus,
   runProviderAdd,
+  runProviderExport,
   runProviderImport,
+  runProviderImportFile,
   runProviderList,
   runProviderRemove,
   runTokenList,
@@ -195,6 +197,23 @@ provider
   .option('--yes', 'Import the new entries (or those named with --only)')
   .option('--only <ref...>', 'With --yes: import only these refs (see the listing)')
   .action((opts: { from?: string; yes?: boolean; only?: string[] }) => runProviderImport(opts));
+provider
+  .command('export')
+  .description('Export providers and their models to a backup file (no API keys unless asked)')
+  .option('--out <file>', 'File to write (default: ./astra-providers-<date>.json)')
+  .option('--force', 'Replace the file when it already exists')
+  .option('--include-keys', 'Write API keys in plain text (this machine only)')
+  .option('--passphrase-stdin', 'Encrypt API keys with a passphrase read from stdin (or ASTRA_BACKUP_PASSPHRASE)')
+  .option('--id <id...>', 'Only these provider ids')
+  .action((opts: { out?: string; force?: boolean; includeKeys?: boolean; passphraseStdin?: boolean; id?: string[] }) =>
+    runProviderExport(opts),
+  );
+provider
+  .command('import-file <file>')
+  .description('Preview a backup file made by `provider export`, or with --yes import its providers')
+  .option('--yes', 'Import the new entries (or those named with --only)')
+  .option('--only <row...>', 'With --yes: import only these preview rows')
+  .action((file: string, opts: { yes?: boolean; only?: string[] }) => runProviderImportFile(file, opts));
 provider
   .command('remove')
   .description('Remove a provider')

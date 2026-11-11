@@ -276,6 +276,24 @@ put('stats/activity-heatmap.json', heat.reverse());
 route('/api/stats/activity-heatmap', 'stats/activity-heatmap.json');
 put('stats/rate.json', { rpm: 3.4, tpm: 61_800, cacheHitRate: 0.59, windowSeconds: 60 });
 route('/api/stats/rate', 'stats/rate.json');
+// The overview's daily bill (today, UTC): fixed numbers, no rnd(), so the files after it stay as they were.
+put('stats/daily-bill.json', {
+  date: iso(NOW).slice(0, 10), tzOffsetMinutes: 0, fromUtc: iso(NOW).slice(0, 10) + 'T00:00:00.000Z', toUtc: iso(NOW), generatedAtUtc: iso(NOW),
+  costUsd: 6.36, requests: 50, successRequests: 46, inputTokens: 1_201_000, outputTokens: 149_000,
+  providers: [
+    { providerId: 'prov_anthropic', name: 'Anthropic', costUsd: 4.45, requests: 29, inputTokens: 720_600, outputTokens: 89_400, models: [
+      { model: 'claude-opus-4-1', costUsd: 2.71, requests: 6, inputTokens: 188_000, outputTokens: 21_300 },
+      { model: 'claude-sonnet-4-5', costUsd: 1.58, requests: 15, inputTokens: 461_200, outputTokens: 52_700 },
+      { model: 'claude-haiku-4-5', costUsd: 0.16, requests: 8, inputTokens: 71_400, outputTokens: 15_400 },
+    ] },
+    { providerId: 'prov_openai', name: 'OpenAI', costUsd: 1.91, requests: 21, inputTokens: 480_400, outputTokens: 59_600, models: [
+      { model: 'gpt-5', costUsd: 1.37, requests: 9, inputTokens: 252_100, outputTokens: 31_800 },
+      { model: 'o4-mini', costUsd: 0.42, requests: 7, inputTokens: 141_900, outputTokens: 19_500 },
+      { model: 'gpt-4.1-mini', costUsd: 0.12, requests: 5, inputTokens: 86_400, outputTokens: 8_300 },
+    ] },
+  ],
+});
+route('/api/stats/daily-bill', 'stats/daily-bill.json');
 
 // ---------------------------------------------------------------- MCP gateway
 const mcpServers = [
