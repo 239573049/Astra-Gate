@@ -2,6 +2,7 @@ using Astra.Api.Contracts;
 using Astra.Desktop.Components.Layout;
 using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.I18n;
+using Astra.Desktop.Core.Mcp;
 using Astra.Desktop.Core.Overview;
 using Astra.Desktop.Core.Tokens;
 using Astra.Desktop.Shell;
@@ -30,10 +31,12 @@ public sealed class TokensPage : PageViewModel
         _ctx = context;
         _lists = new ListQueries(context.Api, context.Queries);
         Providers = _lists.Providers();
+        McpServers = new McpApi(context.Api, context.Queries).Servers;
         Tunnel = _lists.Tunnel();
         Observe(context.Tokens.Tokens);
         Observe(context.Settings.Settings);
         Observe(Providers);
+        Observe(McpServers);
         Observe(Tunnel);
         Actions = new TokenActions(context.Api, context.Queries, context.Feedback, (key, args) => Loc.T(key, args));
         Accounts = id => _lists.Accounts(id);
@@ -60,6 +63,9 @@ public sealed class TokensPage : PageViewModel
 
     /// <summary>The providers (the direct-provider names, the create sheet's options, the pool editor).</summary>
     public Query<List<ProviderDto>> Providers { get; }
+
+    /// <summary>The upstream MCP servers (the settings sheet's "MCP servers" choice).</summary>
+    public Query<List<McpServerDto>> McpServers { get; }
 
     /// <summary>The remote-access state: with the tunnel up, the addresses to hand out are its.</summary>
     public Query<TunnelStatusDto> Tunnel { get; }

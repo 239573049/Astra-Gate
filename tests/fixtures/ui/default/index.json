@@ -277,6 +277,36 @@
     },
     {
       "method": "GET",
+      "path": "/api/mcp/servers",
+      "file": "mcp/servers.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/servers/mcp_github",
+      "file": "mcp/servers/mcp_github.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/servers/mcp_docs",
+      "file": "mcp/servers/mcp_docs.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/servers/mcp_notion",
+      "file": "mcp/servers/mcp_notion.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/settings",
+      "file": "mcp/settings.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/calls",
+      "file": "mcp/calls.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/health",
       "file": "health.json"
     },

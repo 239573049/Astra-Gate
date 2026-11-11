@@ -160,7 +160,7 @@ const tokens = [
     id: 'tok_pool', name: 'team-shared', isDefault: false, enabled: true, keyMasked: 'sk-astra-Tn8…p4W', providerId: 'prov_openai', accountId: null,
     createdAt: ago(9 * DAY), updatedAt: ago(1 * DAY), lastUsedAt: ago(2 * HOUR), clients: ['opencode'],
     today: stat(5, 0.91, 88_000, 9_000, 20_000, 0), total: stat(190, 41.2, 4_400_000, 520_000, 1_100_000, 0),
-    limits: null, allowedClients: null, limitUsage: noLimits, recentRequests: 0,
+    limits: null, allowedClients: null, limitUsage: noLimits, recentRequests: 0, mcpServers: ['mcp_github', 'mcp_docs'],
     pool: {
       strategy: 'failover', sticky: 'session', failover: true, maxAttempts: 2,
       members: [
@@ -276,6 +276,38 @@ put('stats/activity-heatmap.json', heat.reverse());
 route('/api/stats/activity-heatmap', 'stats/activity-heatmap.json');
 put('stats/rate.json', { rpm: 3.4, tpm: 61_800, cacheHitRate: 0.59, windowSeconds: 60 });
 route('/api/stats/rate', 'stats/rate.json');
+
+// ---------------------------------------------------------------- MCP gateway
+const mcpServers = [
+  {
+    id: 'mcp_github', slug: 'github', name: 'GitHub', transport: 'http', url: 'https://api.githubcopilot.com/mcp/', authType: 'oauth', headerNames: [],
+    enabled: true, timeoutSeconds: 60, status: 'ok', statusMessage: null, protocolVersion: '2026-07-28', checkedAt: ago(4 * 60_000),
+    oauth: { authorized: true, issuer: 'https://github.com/login/oauth', scope: 'repo read:org', updatedAt: ago(3 * DAY) },
+    boundTokens: 2, createdAt: ago(12 * DAY), updatedAt: ago(3 * DAY),
+  },
+  {
+    id: 'mcp_docs', slug: 'docs', name: 'Docs search', transport: 'http', url: 'https://docs.example.com/mcp', authType: 'header', headerNames: ['Authorization'],
+    enabled: true, timeoutSeconds: 30, status: 'ok', statusMessage: null, protocolVersion: '2025-11-25', checkedAt: ago(9 * 60_000),
+    oauth: null, boundTokens: 1, createdAt: ago(9 * DAY), updatedAt: ago(9 * DAY),
+  },
+  {
+    id: 'mcp_notion', slug: 'notion', name: 'Notion', transport: 'http', url: 'https://mcp.notion.com/mcp', authType: 'oauth', headerNames: [],
+    enabled: true, timeoutSeconds: 60, status: 'needs_auth', statusMessage: '上游 MCP 服务器需要授权，请管理员在 Astra 中重新授权', protocolVersion: null, checkedAt: ago(20 * 60_000),
+    oauth: { authorized: false, issuer: null, scope: null, updatedAt: null }, boundTokens: 0, createdAt: ago(1 * DAY), updatedAt: ago(1 * DAY),
+  },
+];
+put('mcp/servers.json', mcpServers);
+route('/api/mcp/servers', 'mcp/servers.json');
+for (const m of mcpServers) { put(`mcp/servers/${m.id}.json`, m); route(`/api/mcp/servers/${m.id}`, `mcp/servers/${m.id}.json`); }
+put('mcp/settings.json', { enabled: true, allowedOrigins: [], endpoint: 'http://127.0.0.1:17321/mcp' });
+route('/api/mcp/settings', 'mcp/settings.json');
+put('mcp/calls.json', [
+  { id: 4, at: ago(3 * 60_000), tokenId: 'tok_pool', tokenName: 'team-shared', serverId: 'mcp_github', serverSlug: 'github', tool: 'search_issues', durationMs: 412, ok: true, errorCategory: null, frontEra: 'modern' },
+  { id: 3, at: ago(11 * 60_000), tokenId: 'tok_pool', tokenName: 'team-shared', serverId: 'mcp_docs', serverSlug: 'docs', tool: 'search', durationMs: 188, ok: true, errorCategory: null, frontEra: 'legacy' },
+  { id: 2, at: ago(26 * 60_000), tokenId: 'tok_ci', tokenName: 'ci-bot', serverId: 'mcp_notion', serverSlug: 'notion', tool: 'fetch', durationMs: 9, ok: false, errorCategory: 'needs_auth', frontEra: 'modern' },
+  { id: 1, at: ago(2 * HOUR), tokenId: 'tok_pool', tokenName: 'team-shared', serverId: 'mcp_github', serverSlug: 'github', tool: 'create_pull_request', durationMs: 1530, ok: false, errorCategory: 'tool', frontEra: 'modern' },
+]);
+route('/api/mcp/calls', 'mcp/calls.json');
 
 // shell-level singletons
 for (const [path, file] of [['/api/health', 'health.json'], ['/api/version', 'version.json'], ['/api/auth/status', 'auth-status.json'], ['/api/settings', 'settings.json'], ['/api/update/status', 'update-status.json'], ['/api/tunnel', 'tunnel.json'], ['/api/server/listen', 'listen.json'], ['/api/server/autostart', 'autostart.json']]) route(path, file);

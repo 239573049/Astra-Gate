@@ -12,7 +12,7 @@ tests/fixtures/ui/<set>/
 The set `default` has 2 providers (OpenAI, Anthropic with a balance quota), 3 tokens (default, a limited one, a pooled one),
 8 models, 4 clients (enabled / drifted / not installed), 50 requests (the last ~2 h before `now`, with failures and cache hits),
 stats for `today` / `7d` / `30d` (summary, top models, providers, per-provider and per-token time series, heatmap, rate),
-settings, version, health, update, tunnel, listen and autostart status. `now` is `2026-10-26T12:00:00Z`, time zone UTC.
+the MCP gateway (settings, 3 servers — one authorized, one on header auth, one needing authorization — and 4 tool calls), settings, version, health, update, tunnel, listen and autostart status. `now` is `2026-10-26T12:00:00Z`, time zone UTC.
 The files are generated: edit `scripts/visual/gen-fixtures.mjs` and run `node scripts/visual/gen-fixtures.mjs`
 (`--check` fails when the committed files are stale). The stats are internally plausible, not recomputed from the 50 requests.
 

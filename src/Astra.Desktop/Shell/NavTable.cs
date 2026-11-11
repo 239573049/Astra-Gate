@@ -28,6 +28,7 @@ public static class NavTable
             new(AppRoute.Plugins, "plugins", "nav.plugins", LucideIconKind.Puzzle),
             new(AppRoute.Privacy, "privacy", "nav.privacy", LucideIconKind.ShieldCheck),
             new(AppRoute.SmartRouting, "smartRouting", "nav.smartRouting", LucideIconKind.Route),
+            new(AppRoute.Mcp, "mcp", "nav.mcp", LucideIconKind.Plug),
         ]),
         new("nav.group.system",
         [

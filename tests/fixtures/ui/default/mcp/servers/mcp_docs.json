@@ -1,0 +1,21 @@
+{
+  "id": "mcp_docs",
+  "slug": "docs",
+  "name": "Docs search",
+  "transport": "http",
+  "url": "https://docs.example.com/mcp",
+  "authType": "header",
+  "headerNames": [
+    "Authorization"
+  ],
+  "enabled": true,
+  "timeoutSeconds": 30,
+  "status": "ok",
+  "statusMessage": null,
+  "protocolVersion": "2025-11-25",
+  "checkedAt": "2026-10-26T11:51:00Z",
+  "oauth": null,
+  "boundTokens": 1,
+  "createdAt": "2026-10-17T12:00:00Z",
+  "updatedAt": "2026-10-17T12:00:00Z"
+}

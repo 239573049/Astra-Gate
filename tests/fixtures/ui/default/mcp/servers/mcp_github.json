@@ -1,0 +1,24 @@
+{
+  "id": "mcp_github",
+  "slug": "github",
+  "name": "GitHub",
+  "transport": "http",
+  "url": "https://api.githubcopilot.com/mcp/",
+  "authType": "oauth",
+  "headerNames": [],
+  "enabled": true,
+  "timeoutSeconds": 60,
+  "status": "ok",
+  "statusMessage": null,
+  "protocolVersion": "2026-07-28",
+  "checkedAt": "2026-10-26T11:56:00Z",
+  "oauth": {
+    "authorized": true,
+    "issuer": "https://github.com/login/oauth",
+    "scope": "repo read:org",
+    "updatedAt": "2026-10-23T12:00:00Z"
+  },
+  "boundTokens": 2,
+  "createdAt": "2026-10-14T12:00:00Z",
+  "updatedAt": "2026-10-23T12:00:00Z"
+}

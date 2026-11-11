@@ -16,6 +16,7 @@ public enum AppRoute
     Plugins,
     Privacy,
     SmartRouting,
+    Mcp,
     Settings,
 }
 
@@ -41,6 +42,7 @@ public sealed record RouteInfo(AppRoute Route, string WebPath, string TitleKey, 
         new(AppRoute.Plugins, "/plugins[/:tab]", "nav.plugins", AppRoute.Plugins),
         new(AppRoute.Privacy, "/privacy[/:tab]", "nav.privacy", AppRoute.Privacy),
         new(AppRoute.SmartRouting, "/smart-routing", "nav.smartRouting", AppRoute.SmartRouting),
+        new(AppRoute.Mcp, "/mcp", "nav.mcp", AppRoute.Mcp),
         new(AppRoute.Settings, "/settings[/:tab]", "nav.settings", AppRoute.Settings),
     ];
 

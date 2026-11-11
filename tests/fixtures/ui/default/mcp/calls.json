@@ -1,0 +1,54 @@
+[
+  {
+    "id": 4,
+    "at": "2026-10-26T11:57:00Z",
+    "tokenId": "tok_pool",
+    "tokenName": "team-shared",
+    "serverId": "mcp_github",
+    "serverSlug": "github",
+    "tool": "search_issues",
+    "durationMs": 412,
+    "ok": true,
+    "errorCategory": null,
+    "frontEra": "modern"
+  },
+  {
+    "id": 3,
+    "at": "2026-10-26T11:49:00Z",
+    "tokenId": "tok_pool",
+    "tokenName": "team-shared",
+    "serverId": "mcp_docs",
+    "serverSlug": "docs",
+    "tool": "search",
+    "durationMs": 188,
+    "ok": true,
+    "errorCategory": null,
+    "frontEra": "legacy"
+  },
+  {
+    "id": 2,
+    "at": "2026-10-26T11:34:00Z",
+    "tokenId": "tok_ci",
+    "tokenName": "ci-bot",
+    "serverId": "mcp_notion",
+    "serverSlug": "notion",
+    "tool": "fetch",
+    "durationMs": 9,
+    "ok": false,
+    "errorCategory": "needs_auth",
+    "frontEra": "modern"
+  },
+  {
+    "id": 1,
+    "at": "2026-10-26T10:00:00Z",
+    "tokenId": "tok_pool",
+    "tokenName": "team-shared",
+    "serverId": "mcp_github",
+    "serverSlug": "github",
+    "tool": "create_pull_request",
+    "durationMs": 1530,
+    "ok": false,
+    "errorCategory": "tool",
+    "frontEra": "modern"
+  }
+]

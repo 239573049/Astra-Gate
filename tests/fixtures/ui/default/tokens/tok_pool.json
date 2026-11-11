@@ -38,6 +38,10 @@
   "allowedClients": null,
   "limitUsage": [],
   "recentRequests": 0,
+  "mcpServers": [
+    "mcp_github",
+    "mcp_docs"
+  ],
   "pool": {
     "strategy": "failover",
     "sticky": "session",

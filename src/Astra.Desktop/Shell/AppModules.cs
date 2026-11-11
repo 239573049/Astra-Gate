@@ -1,4 +1,5 @@
 using Astra.Desktop.Pages.Clients;
+using Astra.Desktop.Pages.Mcp;
 using Astra.Desktop.Pages.Models;
 using Astra.Desktop.Pages.Overview;
 using Astra.Desktop.Pages.Plugins;
@@ -23,6 +24,7 @@ public static class AppModules
     public static IReadOnlyList<IPageModule> All { get; } =
     [
         new ClientsModule(),
+        new McpModule(),
         new ModelsModule(),
         new OverviewModule(),
         new PluginsModule(),

@@ -1,0 +1,71 @@
+[
+  {
+    "id": "mcp_github",
+    "slug": "github",
+    "name": "GitHub",
+    "transport": "http",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "authType": "oauth",
+    "headerNames": [],
+    "enabled": true,
+    "timeoutSeconds": 60,
+    "status": "ok",
+    "statusMessage": null,
+    "protocolVersion": "2026-07-28",
+    "checkedAt": "2026-10-26T11:56:00Z",
+    "oauth": {
+      "authorized": true,
+      "issuer": "https://github.com/login/oauth",
+      "scope": "repo read:org",
+      "updatedAt": "2026-10-23T12:00:00Z"
+    },
+    "boundTokens": 2,
+    "createdAt": "2026-10-14T12:00:00Z",
+    "updatedAt": "2026-10-23T12:00:00Z"
+  },
+  {
+    "id": "mcp_docs",
+    "slug": "docs",
+    "name": "Docs search",
+    "transport": "http",
+    "url": "https://docs.example.com/mcp",
+    "authType": "header",
+    "headerNames": [
+      "Authorization"
+    ],
+    "enabled": true,
+    "timeoutSeconds": 30,
+    "status": "ok",
+    "statusMessage": null,
+    "protocolVersion": "2025-11-25",
+    "checkedAt": "2026-10-26T11:51:00Z",
+    "oauth": null,
+    "boundTokens": 1,
+    "createdAt": "2026-10-17T12:00:00Z",
+    "updatedAt": "2026-10-17T12:00:00Z"
+  },
+  {
+    "id": "mcp_notion",
+    "slug": "notion",
+    "name": "Notion",
+    "transport": "http",
+    "url": "https://mcp.notion.com/mcp",
+    "authType": "oauth",
+    "headerNames": [],
+    "enabled": true,
+    "timeoutSeconds": 60,
+    "status": "needs_auth",
+    "statusMessage": "上游 MCP 服务器需要授权，请管理员在 Astra 中重新授权",
+    "protocolVersion": null,
+    "checkedAt": "2026-10-26T11:40:00Z",
+    "oauth": {
+      "authorized": false,
+      "issuer": null,
+      "scope": null,
+      "updatedAt": null
+    },
+    "boundTokens": 0,
+    "createdAt": "2026-10-25T12:00:00Z",
+    "updatedAt": "2026-10-25T12:00:00Z"
+  }
+]

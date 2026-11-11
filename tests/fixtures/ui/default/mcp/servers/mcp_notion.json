@@ -1,0 +1,24 @@
+{
+  "id": "mcp_notion",
+  "slug": "notion",
+  "name": "Notion",
+  "transport": "http",
+  "url": "https://mcp.notion.com/mcp",
+  "authType": "oauth",
+  "headerNames": [],
+  "enabled": true,
+  "timeoutSeconds": 60,
+  "status": "needs_auth",
+  "statusMessage": "上游 MCP 服务器需要授权，请管理员在 Astra 中重新授权",
+  "protocolVersion": null,
+  "checkedAt": "2026-10-26T11:40:00Z",
+  "oauth": {
+    "authorized": false,
+    "issuer": null,
+    "scope": null,
+    "updatedAt": null
+  },
+  "boundTokens": 0,
+  "createdAt": "2026-10-25T12:00:00Z",
+  "updatedAt": "2026-10-25T12:00:00Z"
+}

@@ -93,6 +93,7 @@ public static class TokenSheets
                 new FieldBlock(Loc.T("tokens.pool.title"), pool, Loc.T("tokens.pool.hint")),
                 limitsField,
                 new FieldBlock(Loc.T("tokens.rpm"), rpm, Loc.T("tokens.rpmHint")),
+                McpChoice(page, () => draft, d => Edited(d)),
                 new FieldBlock(Loc.T("tokens.allowedClients"), AllowedClients(draft, d => Edited(d)), Loc.T("tokens.allowedClientsHint")),
             },
         };
@@ -102,12 +103,36 @@ public static class TokenSheets
         save.Click += async (_, _) =>
         {
             save.IsLoading = true;
-            var ok = await page.Actions.UpdateAsync(token.Id, draft.ToPatch(providers.Select(p => p.Id)), Loc.T("common.saved"));
+            // The MCP servers are sent only once their list has loaded, so a slow response never clears the binding.
+            var ok = await page.Actions.UpdateAsync(token.Id, draft.ToPatch(providers.Select(p => p.Id), page.McpServers.Data?.Select(m => m.Id)), Loc.T("common.saved"));
             save.IsLoading = false;
             if (ok) sheet.Close();
         };
         _ = sheet.ShowAsync(owner);
         return sheet;
+    }
+
+    /// <summary>
+    /// The MCP servers the token may use through the MCP gateway (a chip per server; none chosen = no MCP). Only servers that still exist are
+    /// shown: the id of a deleted one lingers on the token and is dropped when the token is saved.
+    /// </summary>
+    private static Control McpChoice(TokensPage page, Func<TokenSettingsDraft> current, Action<TokenSettingsDraft> edited)
+    {
+        var servers = page.McpServers.Data ?? [];
+        if (servers.Count == 0)
+            return new FieldBlock(Loc.T("tokens.mcp"), new TextBlock { Text = Loc.T("tokens.mcpNone"), TextWrapping = Avalonia.Media.TextWrapping.Wrap }, null);
+        var chips = new ChipGroup
+        {
+            Label = Loc.T("tokens.mcp"),
+            ItemsSource = servers.Select(s => s.Id).ToList(),
+            TextSelector = id => servers.First(s => s.Id == (string)id!).Name,
+            ValueSelector = id => id,
+        };
+        var ids = servers.Select(s => s.Id).ToList();
+        foreach (var id in current().McpServers ?? [])
+            if (ids.IndexOf(id) is var at and >= 0) chips.Selection.Select(at);
+        chips.SelectionChanged += (_, _) => edited(current() with { McpServers = chips.SelectedValues.Cast<string>().ToList() });
+        return new FieldBlock(Loc.T("tokens.mcp"), chips, Loc.T("tokens.mcpHint"));
     }
 
     /// <summary>"Any client" or "Only these" with a chip per client; kinds outside the catalog (plugin agents) stay selectable once chosen.</summary>

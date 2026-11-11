@@ -64,22 +64,25 @@ public enum ClientsMode
 /// save (web <c>TokenSettingsSheet</c>).
 /// </summary>
 public sealed record TokenSettingsDraft(
-    string Name, PoolDraft Pool, IReadOnlyList<DraftBudget> Budgets, double? Rpm, ClientsMode Mode, IReadOnlyList<string> Allowed)
+    string Name, PoolDraft Pool, IReadOnlyList<DraftBudget> Budgets, double? Rpm, ClientsMode Mode, IReadOnlyList<string> Allowed,
+    IReadOnlyList<string>? McpServers = null)
 {
     /// <summary>The draft of a saved token.</summary>
     public static TokenSettingsDraft Of(TokenDto token) => new(
         token.Name, PoolDrafts.Of(token),
         token.Limits?.Budgets.Select(b => new DraftBudget(b.Metric, b.Period, b.Limit)).ToList() ?? [],
-        token.Limits?.Rpm, token.AllowedClients is null ? ClientsMode.Any : ClientsMode.Only, token.AllowedClients ?? []);
+        token.Limits?.Rpm, token.AllowedClients is null ? ClientsMode.Any : ClientsMode.Only, token.AllowedClients ?? [], token.McpServers ?? []);
 
     /// <summary>Save is allowed with a name and no duplicate budget.</summary>
     public bool CanSave => !string.IsNullOrWhiteSpace(Name) && !BudgetRules.HasDuplicate(Budgets);
 
     /// <summary>
     /// The PATCH body: name, the pool (replacing the direct provider; members of deleted providers dropped), the limits (null =
-    /// unlimited) and the allowed clients (null = any).
+    /// unlimited), the allowed clients (null = any) and — only when <paramref name="knownMcpServerIds"/> is given, i.e. the server list has
+    /// loaded — the MCP servers the token may use. Only servers that still exist are sent: the id of a deleted one lingers on the token
+    /// and the server refuses an unknown id.
     /// </summary>
-    public JsonObject ToPatch(IEnumerable<string> knownProviderIds)
+    public JsonObject ToPatch(IEnumerable<string> knownProviderIds, IEnumerable<string>? knownMcpServerIds = null)
     {
         var body = new JsonObject
         {
@@ -93,6 +96,13 @@ public sealed record TokenSettingsDraft(
             var kinds = new JsonArray();
             foreach (var k in Allowed) kinds.Add((JsonNode?)JsonValue.Create(k));
             body["allowedClients"] = kinds;
+        }
+        if (knownMcpServerIds is not null)
+        {
+            var known = knownMcpServerIds.ToHashSet(StringComparer.Ordinal);
+            var ids = new JsonArray();
+            foreach (var id in McpServers ?? []) if (known.Contains(id)) ids.Add((JsonNode?)JsonValue.Create(id));
+            body["mcpServers"] = ids;
         }
         return body;
     }
