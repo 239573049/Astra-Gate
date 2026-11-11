@@ -19,6 +19,7 @@ vi.mock('../api/hooks', () => {
     useTunnel: () => ({ data: spies.tunnel }),
     useProviders: () => ({ data: spies.providers }),
     useProviderAccounts: () => ({ data: [] }),
+    useMcpServers: () => ({ data: [] }),
     useUpdateToken: () => ({ mutate: spies.update, isPending: false }),
     useCreateToken: () => idle,
     useDeleteToken: () => idle,
