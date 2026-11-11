@@ -1,6 +1,6 @@
 {
   "name": "@aidotnet/server-win32-arm64",
-  "version": "0.14.3101",
+  "version": "0.14.3102",
   "description": "Astra self-contained server binary for Windows (ARM64).",
   "license": "MIT",
   "os": [
