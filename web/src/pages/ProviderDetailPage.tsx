@@ -110,6 +110,10 @@ const mimicOf = (settings: Record<string, unknown>) =>
   (settings.subscription as { mimic_claude_code?: unknown } | undefined)?.mimic_claude_code === true;
 
 function BackButton({ onClick }: { onClick: () => void }) {
+/** settings.subscription.mimic_claude_code — the same switch the Claude subscription's policy block sets. */
+const mimicOf = (settings: Record<string, unknown>) =>
+  (settings.subscription as { mimic_claude_code?: unknown } | undefined)?.mimic_claude_code === true;
+
   const { t } = useI18n();
   return <Button variant="glass" icon={<ArrowLeft className="size-4" />} aria-label={t('common.back')} onClick={onClick} />;
 }

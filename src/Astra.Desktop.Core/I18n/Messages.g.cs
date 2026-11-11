@@ -4292,6 +4292,8 @@ internal static class Messages
             case "origin.unset": return "未设置";
             case "origin.reset": return "重置为继承";
             case "models.count": return "{count} 个模型";
+            case "providers.mimicClaudeCode": return "模拟 Claude Code";
+            case "providers.mimicClaudeCode.hint": return "发往此上游的 Anthropic 请求会带上 Claude Code 的身份（claude-cli User-Agent、X-Stainless 指纹、system 身份块）；真正的 Claude Code 请求原样转发。默认关闭，请只用于允许这种用法的上游。";
             case "models.search": return "搜索模型、别名";
             case "models.allVendors": return "全部厂商";
             case "models.sync": return "同步模型目录";
@@ -7061,6 +7063,8 @@ internal static class Messages
             case "models.new": return "New model";
             case "models.newDetail": return "Add parameters and a default price for a model the catalog does not have.";
             case "models.col.model": return "Model";
+            case "providers.mimicClaudeCode": return "Impersonate Claude Code";
+            case "providers.mimicClaudeCode.hint": return "Anthropic requests to this upstream carry the Claude Code identity (claude-cli User-Agent, X-Stainless fingerprint, system identity block); real Claude Code requests are forwarded as they are. Off by default — use it only with upstreams that allow this.";
             case "models.col.vendor": return "Vendor";
             case "models.col.context": return "Context";
             case "models.col.price": return "Input / output";
