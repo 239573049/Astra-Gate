@@ -105,6 +105,10 @@ export function ProviderDetailPage() {
   );
 }
 
+/** settings.subscription.mimic_claude_code — the same switch the Claude subscription's policy block sets. */
+const mimicOf = (settings: Record<string, unknown>) =>
+  (settings.subscription as { mimic_claude_code?: unknown } | undefined)?.mimic_claude_code === true;
+
 function BackButton({ onClick }: { onClick: () => void }) {
   const { t } = useI18n();
   return <Button variant="glass" icon={<ArrowLeft className="size-4" />} aria-label={t('common.back')} onClick={onClick} />;
@@ -990,6 +994,15 @@ function SettingsTab({ provider }: { provider: Provider }) {
           <KV label={t('providers.boundClients')}>{provider.boundClients.map((k) => CLIENT_META[k as ClientKind]?.name ?? k).join(', ') || '—'}</KV>
         </div>
       </Group>
+        {form.authScheme !== 'oauth-subscription' && form.authScheme !== 'plugin' && form.endpoints.some((e) => e.protocol === 'anthropic') && (
+          <Row label={t('providers.mimicClaudeCode')} detail={t('providers.mimicClaudeCode.hint')}>
+            <Switch
+              checked={mimicOf(form.settings)}
+              label={t('providers.mimicClaudeCode')}
+              onChange={(on) => set({ settings: { ...form.settings, subscription: { ...(form.settings.subscription as object | undefined), mimic_claude_code: on } } })}
+            />
+          </Row>
+        )}
 
       <AddEndpointSheet open={endpointOpen} onOpenChange={setEndpointOpen} onAdd={(e) => set({ endpoints: [...form.endpoints, e] })} />
       <AddHeaderSheet open={headerOpen} onOpenChange={setHeaderOpen} onAdd={(h) => setHeaders([...headers.filter(([k]) => k.toLowerCase() !== h[0].toLowerCase()), h])} />

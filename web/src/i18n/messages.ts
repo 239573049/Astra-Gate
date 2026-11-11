@@ -1537,6 +1537,8 @@ export const zh = {
   'providers.addEndpointDetail': '为一种协议配置接口地址；保存后生效。',
   'providers.fullUrlHint': '地址即完整请求 URL，不再追加路径',
   'providers.adapterSettings': '适配器设置（JSON）',
+  'providers.mimicClaudeCode': '模拟 Claude Code',
+  'providers.mimicClaudeCode.hint': '发往此上游的 Anthropic 请求会带上 Claude Code 的身份（claude-cli User-Agent、X-Stainless 指纹、system 身份块）；真正的 Claude Code 请求原样转发。默认关闭，请只用于允许这种用法的上游。',
   'providers.adapter': '适配器',
   'providers.boundClients': '使用中的客户端',
 
@@ -4242,6 +4244,8 @@ export const en: Record<MessageKey, string> = {
   'origin.overridden': 'Overridden',
   'origin.unset': 'Unset',
   'origin.reset': 'Reset to inherited',
+  'providers.mimicClaudeCode': 'Impersonate Claude Code',
+  'providers.mimicClaudeCode.hint': 'Anthropic requests to this upstream carry the Claude Code identity (claude-cli User-Agent, X-Stainless fingerprint, system identity block); real Claude Code requests are forwarded as they are. Off by default — use it only with upstreams that allow this.',
 
   'models.count': '{count} models',
   'models.search': 'Search models, aliases',

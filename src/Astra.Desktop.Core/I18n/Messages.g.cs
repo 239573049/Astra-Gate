@@ -1520,6 +1520,8 @@ internal static class Messages
         "providers.addEndpointDetail",
         "providers.fullUrlHint",
         "providers.adapterSettings",
+        "providers.mimicClaudeCode",
+        "providers.mimicClaudeCode.hint",
         "providers.adapter",
         "providers.boundClients",
         "origin.inherited",
@@ -4187,6 +4189,8 @@ internal static class Messages
             case "providers.addEndpointDetail": return "为一种协议配置接口地址；保存后生效。";
             case "providers.fullUrlHint": return "地址即完整请求 URL，不再追加路径";
             case "providers.adapterSettings": return "适配器设置（JSON）";
+            case "providers.mimicClaudeCode": return "模拟 Claude Code";
+            case "providers.mimicClaudeCode.hint": return "发往此上游的 Anthropic 请求会带上 Claude Code 的身份（claude-cli User-Agent、X-Stainless 指纹、system 身份块）；真正的 Claude Code 请求原样转发。默认关闭，请只用于允许这种用法的上游。";
             case "providers.adapter": return "适配器";
             case "providers.boundClients": return "使用中的客户端";
             case "origin.inherited": return "继承";
@@ -6856,6 +6860,8 @@ internal static class Messages
             case "providers.addEndpointDetail": return "The URL for one protocol; applied when you save.";
             case "providers.fullUrlHint": return "The URL is the complete request URL; no path is appended";
             case "providers.adapterSettings": return "Adapter settings (JSON)";
+            case "providers.mimicClaudeCode": return "Impersonate Claude Code";
+            case "providers.mimicClaudeCode.hint": return "Anthropic requests to this upstream carry the Claude Code identity (claude-cli User-Agent, X-Stainless fingerprint, system identity block); real Claude Code requests are forwarded as they are. Off by default — use it only with upstreams that allow this.";
             case "providers.adapter": return "Adapter";
             case "providers.boundClients": return "Used by";
             case "origin.inherited": return "Inherited";

@@ -670,12 +670,21 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             request.Headers.TryAddWithoutValidation("anthropic-version", "2023-06-01");
         // Claude subscription OAuth tokens are rejected without the claude-code / oauth betas (same as the gateway's compat path).
         // With subscription.mimic_claude_code the probe presents the full Claude Code identity, like the gateway does.
+        if (protocol == ApiProtocol.Anthropic && !SubscriptionSupport.IsClaudeSubscription(p)
+            && p.AuthScheme != AuthSchemes.Plugin && SubscriptionSupport.MimicClaudeCodeOf(p))
+            ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? p.Id, null, oauth: false);
         if (protocol == ApiProtocol.Anthropic && SubscriptionSupport.IsClaudeSubscription(p))
         {
             if (SubscriptionSupport.MimicClaudeCodeOf(p))
                 ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? p.Id, null);
             else
                 ClaudeOAuthHeaders.ApplyCompat(request, new HeaderDictionary());
+        }
+        // the fixed client header the gateway also sends (the Codex subscription's chatgpt-account-id)
+        if (credentials.ExtraHeaderName is { } extraHeader && credentials.ExtraHeaderValue is { } extraValue)
+        {
+            request.Headers.Remove(extraHeader);
+            request.Headers.TryAddWithoutValidation(extraHeader, extraValue);
         }
         if (credentials.HeaderName is { } header)
         {

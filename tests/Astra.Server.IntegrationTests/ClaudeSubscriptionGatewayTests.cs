@@ -159,6 +159,29 @@ public class ClaudeSubscriptionGatewayTests
     }
 
     [Fact]
+    public async Task Mimic_Mode_Also_Covers_An_API_Key_Anthropic_Upstream_And_Leaves_Real_Claude_Code_Alone()
+    {
+        // settings.subscription.mimic_claude_code on a plain API-key provider: other clients get the identity (no OAuth beta,
+        // the key stays x-api-key), a real Claude Code request goes through as it is.
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.ClaudeCode, ApiProtocol.Anthropic, _ => FakeUpstream.Json(Message));
+        gw.Provider.Settings = JsonNode.Parse("""{"subscription":{"mimic_claude_code":true}}""")!.AsObject();
+        await gw.Host.Db.Providers.UpdateAsync(gw.Provider);
+
+        var other = await gw.PostAsync("/v1/messages", PlainBody, null, ("User-Agent", "opencode/1.0"), ("anthropic-version", "2023-06-01"));
+        Assert.Equal(HttpStatusCode.OK, other.StatusCode);
+        var seen = Assert.Single(gw.Upstream.Requests);
+        Assert.StartsWith("claude-cli/2.1.281", seen.Headers["user-agent"]);
+        Assert.DoesNotContain("oauth-2025-04-20", seen.Headers["anthropic-beta"]);
+        Assert.Equal(3, JsonNode.Parse(seen.Body)!["system"]!.AsArray().Count);
+
+        var real = await gw.PostAsync("/v1/messages?beta=true", ClaudeCodeBody, null, ClaudeCodeHeaders);
+        Assert.Equal(HttpStatusCode.OK, real.StatusCode);
+        var relayed = gw.Upstream.Requests.Last();
+        Assert.StartsWith("claude-cli/2.1.99", relayed.Headers["user-agent"]);
+        Assert.Equal(JsonNode.Parse(ClaudeCodeBody)!.ToJsonString(), JsonNode.Parse(relayed.Body)!.ToJsonString());
+    }
+
+    [Fact]
     public async Task Count_Tokens_From_Claude_Code_Is_Relayed_Too()
     {
         await using var gw = await StartAsync(_ => FakeUpstream.Json("""{"input_tokens":12}"""));

@@ -126,7 +126,7 @@ description: 添加上游服务商、配置密钥与计费、测试连接
 | **认证** | 认证方式（Bearer / x-api-key / x-goog-api-key / query-key）；API Key 在「API Key」标签 |
 | **接口** | 每种协议一个地址；客户端协议与上游不同时 Astra 自动转换，转换时按「上游协议优先级」选择接口 |
 | **计费** | **价格表**（决定用哪套模型价格，如 `deepseek`、`openrouter`）与 **价格倍率**（中转站按官方价 ×1.1 计费的场景） |
-| **高级** | 仅此提供商生效的 HTTP 代理（订阅登录、刷新与额度查询同样走它）、额外请求头、适配器设置（JSON） |
+| **高级** | 仅此提供商生效的 HTTP 代理（订阅登录、刷新与额度查询同样走它）、额外请求头、「模拟 Claude Code」（仅 Anthropic 协议的非订阅提供商）、适配器设置（JSON） |
 
 ### 更换模板
 
@@ -199,3 +199,9 @@ API Key 类提供商可以在 **API Key → 用量查询** 里打开余额 / 套
 <Callout type="warn" title="删除提供商前">
   如果还有客户端绑定在这个提供商上，Astra 会拒绝删除并提示先为它们切换提供商，避免客户端突然失联。
 </Callout>
+
+## 模拟 Claude Code（第三方上游）
+
+给走 Anthropic 协议的 API Key / 第三方中转提供商，可以在详情页「设置 → 高级」打开「模拟 Claude Code」。开启后，发往该上游的请求会带上 Claude Code 的身份：`claude-cli` User-Agent、`X-Stainless-*` 指纹、完整 beta 集（不含 OAuth beta），请求体改写成三块 system 加 `metadata.user_id`。真正的 Claude Code 请求在直通时原样转发，不会被改写。
+
+默认关闭。这是对客户端检查的伪装，只应用于允许这种用法的上游，风险自负。Claude 订阅（OAuth）提供商的同名开关在「使用策略」里，是同一个设置。

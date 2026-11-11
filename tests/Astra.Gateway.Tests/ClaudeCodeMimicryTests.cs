@@ -102,4 +102,16 @@ public class ClaudeCodeMimicryTests
         Assert.Equal("en-US,en; q=0.9", request.Headers.TryGetValues("Accept-Language", out var locale) ? string.Join(",", locale) : "");
         Assert.Equal("sess-1", request.Headers.TryGetValues("x-claude-code-session-id", out var session) ? string.Join(",", session) : "");
     }
+
+    [Fact]
+    public void An_API_key_upstream_gets_the_identity_without_the_oauth_beta()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://relay.example/v1/messages");
+        ClaudeCodeMimicry.ApplyHeaders(request, "prov-1", null, oauth: false);
+
+        var betas = string.Join(",", request.Headers.GetValues("anthropic-beta")).Split(',');
+        Assert.DoesNotContain(ClaudeOAuthHeaders.BetaOAuth, betas);
+        Assert.Equal(ClaudeCodeMimicry.Betas.Length - 1, betas.Length);
+        Assert.StartsWith("claude-cli/", request.Headers.UserAgent.ToString());
+    }
 }

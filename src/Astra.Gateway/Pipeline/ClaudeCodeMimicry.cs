@@ -85,7 +85,7 @@ public static class ClaudeCodeMimicry
     /// the full beta set and the CLI's anthropic-version. Anything the caller sent for these is
     /// replaced — a stray client header that contradicts the injected identity is itself a tell.
     /// </summary>
-    public static void ApplyHeaders(HttpRequestMessage request, string accountId, string? clientSessionId)
+    public static void ApplyHeaders(HttpRequestMessage request, string accountId, string? clientSessionId, bool oauth = true)
     {
         foreach (var (name, value) in StainlessBase) Set(request.Headers, name, value);
         var profile = HostProfiles[StableIndex(DeviceId(accountId), HostProfiles.Length)];
@@ -93,7 +93,8 @@ public static class ClaudeCodeMimicry
         Set(request.Headers, "X-Stainless-Arch", profile.Arch);
         Set(request.Headers, "X-Stainless-Runtime-Version", profile.RuntimeVersion);
         ClaudeOAuthHeaders.SetUserAgent(request, UserAgent);
-        Set(request.Headers, "anthropic-beta", string.Join(',', Betas));
+        // An API-key upstream is not OAuth: leave the oauth beta out (the rest is what the CLI sends).
+        Set(request.Headers, "anthropic-beta", string.Join(',', oauth ? Betas : Betas.Where(b => b != ClaudeOAuthHeaders.BetaOAuth)));
         Set(request.Headers, "anthropic-version", "2023-06-01");
         Set(request.Headers, "Accept-Language", "en-US,en;q=0.9");
         if (!string.IsNullOrWhiteSpace(clientSessionId))

@@ -367,10 +367,15 @@ public sealed partial class GatewayPipeline(
                 // its own headers; other callers get the minimal OAuth compatibility headers — or, when the user enabled
                 // subscription.mimic_claude_code, the full Claude Code identity (see ClaudeCodeMimicry), which
                 // Anthropic's client check requires from non-Haiku callers.
-                var claudeMode = !SubscriptionSupport.IsClaudeSubscription(provider) || upstreamProtocol != ApiProtocol.Anthropic
-                    ? ClaudeHeaderMode.None
+                // Any other Anthropic-protocol upstream (a third-party relay, an API key) can opt into the same identity:
+                // ClaudeHeaderMode.Mimic, with the same switch; a real Claude Code caller passes through untouched.
+                var claudeMode = upstreamProtocol != ApiProtocol.Anthropic ? ClaudeHeaderMode.None
+                    : !SubscriptionSupport.IsClaudeSubscription(provider)
+                        ? provider.AuthScheme != AuthSchemes.Plugin && !(passthrough && isClaudeCode) && SubscriptionSupport.MimicClaudeCodeOf(provider)
+                            ? ClaudeHeaderMode.Mimic : ClaudeHeaderMode.None
                     : passthrough && isClaudeCode ? ClaudeHeaderMode.Relay : ClaudeHeaderMode.Compat;
-                var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
+                var claudeMimic = claudeMode == ClaudeHeaderMode.Mimic
+                    || claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
 
                 // Legal per plan §6.2, but worth a line in the log: the provider prefers this protocol, has no address for
                 // it, and the request is translated into a lower-preference protocol instead of passing through.
@@ -850,7 +855,8 @@ public sealed partial class GatewayPipeline(
         // account. An account pinned by the token / client binding is never rescheduled.
         var balanced = switchMode == SwitchModes.Balanced && route.AccountId is null;
         // 模拟 Claude Code（subscription.mimic_claude_code）：只作用于 compat 路径（调用方不是 Claude Code 本身）。
-        var claudeMimic = claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
+        var claudeMimic = claudeMode == ClaudeHeaderMode.Mimic
+            || claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
         var claudeSessionId = clientRequest.Headers["x-claude-code-session-id"].ToString();
         // 上游请求体压缩（settings.request_compression；codex-cli 发 chatgpt.com 用 zstd）：整个请求只压一次，
         // 各次重试共用；设置里的「上游请求压缩」可以换格式或关掉；插件提供商的请求不走 HTTP，不压。
@@ -1151,7 +1157,7 @@ public sealed partial class GatewayPipeline(
             // (subscription.mimic_claude_code — canonical headers only, nothing of the client's leaks
             // through) or just the betas OAuth tokens require.
             if (claudeMimic)
-                ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? provider.Id, claudeSessionId);
+                ClaudeCodeMimicry.ApplyHeaders(request, accountId ?? provider.Id, claudeSessionId, oauth: claudeMode != ClaudeHeaderMode.Mimic);
             else if (claudeMode == ClaudeHeaderMode.Compat) ClaudeOAuthHeaders.ApplyCompat(request, clientRequest.Headers);
             ApplyHeaderEdits(request);
             // 凭据 + 上游 CLI 固定头（Authorization / chatgpt-account-id）。
@@ -1243,6 +1249,9 @@ public sealed partial class GatewayPipeline(
     {
         /// <summary>Not a Claude subscription upstream.</summary>
         None,
+
+        /// <summary>A non-subscription Anthropic upstream with <c>subscription.mimic_claude_code</c> on: the Claude Code identity, without the OAuth beta.</summary>
+        Mimic,
 
         /// <summary>Claude Code itself on the pass-through path: relay its headers verbatim.</summary>
         Relay,

@@ -81,6 +81,19 @@ public sealed partial record ProviderSettingsForm(
     public ProviderSettingsForm WithHeader(int index, string name, string value)
         => this with { Headers = Headers.Select((h, i) => i == index ? (name, value) : h).ToList() };
 
+    /// <summary>Whether <c>settings.subscription.mimic_claude_code</c> is on (the switch a Claude subscription's policy block also sets).</summary>
+    public bool MimicClaudeCode => Settings["subscription"] is JsonObject o && o["mimic_claude_code"] is JsonValue v && v.TryGetValue<bool>(out var on) && on;
+
+    /// <summary>A copy with the Claude Code identity switch set (web <c>mimicOf</c> / the settings page switch).</summary>
+    public ProviderSettingsForm WithMimicClaudeCode(bool on)
+    {
+        var settings = (JsonObject)Settings.DeepClone();
+        var section = settings["subscription"] as JsonObject ?? new JsonObject();
+        section["mimic_claude_code"] = on;
+        settings["subscription"] = section;
+        return this with { Settings = settings };
+    }
+
     /// <summary>A copy without header <paramref name="index"/>.</summary>
     public ProviderSettingsForm WithoutHeader(int index) => this with { Headers = Headers.Where((_, i) => i != index).ToList() };
 

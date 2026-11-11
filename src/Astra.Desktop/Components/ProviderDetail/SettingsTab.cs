@@ -132,6 +132,9 @@ public sealed class SettingsTabView : UserControl
         _root.Children.Add(billing);
 
         var advanced = new SettingsGroup { Title = Loc.T("providers.section.advanced") };
+        if (_form.AuthScheme is not ("oauth-subscription" or "plugin") && _form.Endpoints.Any(e => e.Protocol == "anthropic"))
+            advanced.Rows.Add(PdUi.Row(Loc.T("providers.mimicClaudeCode"), Loc.T("providers.mimicClaudeCode.hint"),
+                PdUi.Toggle(_form.MimicClaudeCode, on => Set(f => f.WithMimicClaudeCode(on)), Loc.T("providers.mimicClaudeCode"))));
         advanced.Rows.Add(PdUi.Row(Loc.T("providers.proxy"), Loc.T("providers.proxyHint"),
             PdUi.TextBox(_form.HttpProxy, v => Set(f => f with { HttpProxy = v.Length > 0 ? v : null }), 256, mono: true, name: Loc.T("providers.proxy"), placeholder: "http://127.0.0.1:7890")));
         _headers.Content = HeadersEditor();
