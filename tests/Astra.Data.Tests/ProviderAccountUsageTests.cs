@@ -122,9 +122,14 @@ public class ProviderAccountUsageTests
             Request("key-history", "key", From, 200, 40, 456),
         ]);
         await using (var conn = await db.Factory.OpenAsync())
-            // Back to just before 0019 — which means undoing 0020_request_routing and 0021_token_invites too: only migrations
+            // Back to just before 0019 — which means undoing 0020_request_routing, 0021_token_invites and 0022_mcp_gateway too: only migrations
             // above the highest recorded version are pending.
             await conn.ExecuteAsync("""
+                DROP TABLE mcp_calls;
+                DROP TABLE mcp_oauth;
+                DROP TABLE mcp_servers;
+                ALTER TABLE tokens DROP COLUMN mcp_json;
+                DELETE FROM schema_version WHERE version = 22;
                 DROP TABLE token_invites;
                 DELETE FROM schema_version WHERE version = 21;
                 ALTER TABLE requests DROP COLUMN routing_json;

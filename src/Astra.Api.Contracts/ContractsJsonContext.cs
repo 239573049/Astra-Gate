@@ -13,6 +13,15 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(StatusDto))]
 [JsonSerializable(typeof(VersionDto))]
 [JsonSerializable(typeof(UpdateStatusDto))]
+// mcp gateway
+[JsonSerializable(typeof(McpServerDto))]
+[JsonSerializable(typeof(List<McpServerDto>))]
+[JsonSerializable(typeof(McpOAuthDto))]
+[JsonSerializable(typeof(McpTestResultDto))]
+[JsonSerializable(typeof(McpSettingsDto))]
+[JsonSerializable(typeof(McpOAuthStartDto))]
+[JsonSerializable(typeof(McpCallDto))]
+[JsonSerializable(typeof(List<McpCallDto>))]
 // tokens
 [JsonSerializable(typeof(TokenDto))]
 [JsonSerializable(typeof(TokenStatsDto))]

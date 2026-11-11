@@ -126,7 +126,27 @@ public sealed class AppSettings
     /// <summary>Remote access through a Cloudflare Tunnel (Astra.Server's TunnelService).</summary>
     public TunnelSettings Tunnel { get; set; } = new();
 
+    /// <summary>The MCP gateway (<c>/mcp</c>, plan mcp-gateway, GitHub issue #29).</summary>
+    public McpGatewaySettings McpGateway { get; set; } = new();
+
     public AppSettings Clone() => Json.Deserialize<AppSettings>(Json.Serialize(this))!;
+}
+
+/// <summary>
+/// The MCP gateway: one endpoint (<c>/mcp</c>) in front of the upstream MCP servers an admin registered. Off by default: with
+/// <see cref="Enabled"/> unset the endpoint answers 404, so a fresh install exposes nothing new.
+/// </summary>
+public sealed class McpGatewaySettings
+{
+    /// <summary>Whether <c>/mcp</c> and <c>/mcp/{slug}</c> answer.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>
+    /// Browser origins allowed to call the endpoint (a request with an <c>Origin</c> header that is not listed, <c>null</c> included,
+    /// gets 403: the DNS-rebinding defence the MCP spec asks of an HTTP server). A request without <c>Origin</c> — every non-browser
+    /// client — is not affected. Empty = no browser origin is allowed.
+    /// </summary>
+    public List<string> AllowedOrigins { get; set; } = [];
 }
 
 /// <summary>

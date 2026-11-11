@@ -47,6 +47,12 @@ public sealed class TokenRecord
     /// </summary>
     public string? PoolJson { get; set; }
 
+    /// <summary>
+    /// The upstream MCP servers this token may use through the MCP gateway (JSON array of <c>mcp_servers.id</c>, plan mcp-gateway); null or
+    /// empty = none, so a token cannot reach MCP until an admin binds servers to it. A deleted server's id may linger and is skipped.
+    /// </summary>
+    public string? McpJson { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public DateTimeOffset? LastUsedAt { get; set; }
@@ -54,6 +60,10 @@ public sealed class TokenRecord
     public TokenLimits? Limits() => TokenLimits.Parse(LimitsJson);
 
     public TokenPool? Pool() => TokenPool.Parse(PoolJson);
+
+    /// <summary>The bound MCP server ids (see <see cref="McpJson"/>).</summary>
+    public List<string> McpServerIds() =>
+        string.IsNullOrWhiteSpace(McpJson) ? [] : Json.Deserialize<List<string>>(McpJson) ?? [];
 
     /// <summary>Whether a bare token (direct call) has anywhere to go: a provider or a provider pool.</summary>
     public bool HasDirectRoute() => ProviderId is not null || Pool() is not null;

@@ -84,6 +84,12 @@ public static class AstraApp
         builder.Services.AddSingleton<ClaudeDirectService>();
         builder.Services.AddSingleton<TokenService>();
         builder.Services.AddSingleton<TokenInviteService>();
+        Astra.Gateway.Mcp.McpUpstreamPool.ServerVersion = ServerOptions.Version.Split('+')[0];
+        builder.Services.AddSingleton<Astra.Gateway.Mcp.McpRuntime>();
+        builder.Services.AddSingleton<Astra.Gateway.Mcp.McpUpstreamPool>();
+        builder.Services.AddSingleton<Astra.Gateway.Mcp.McpAggregator>();
+        builder.Services.AddSingleton<McpService>();
+        builder.Services.AddSingleton<McpOAuthService>();
         builder.Services.AddSingleton<ConnectService>();
         builder.Services.AddHostedService<TokenMigrationWorker>();
         builder.Services.AddSingleton<ProviderTemplateCatalog>();
@@ -312,6 +318,8 @@ public static class AstraApp
         app.MapClaudeDirectEndpoints();
         app.MapTokenEndpoints();
         app.MapJoinEndpoints();
+        app.MapMcpEndpoints();
+        app.MapMcpGatewayEndpoints();
         app.MapConnectEndpoints();
         app.MapProviderEndpoints();
         app.MapPrivacyEndpoints();

@@ -13,6 +13,9 @@
   <ItemGroup>
     <!-- Content-Encoding: zstd request bodies (codex-cli compresses with it); managed port, no native library. -->
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
+    <!-- The MCP gateway's upstream side: era detection (Streamable HTTP / HTTP+SSE), sessions of initialize-based servers and the OAuth client
+         (.plan/mcp-gateway.md §11). Only here: Astra.Core stays free of NuGet references. -->
+    <PackageReference Include="ModelContextProtocol.Core" Version="2.4.0" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />

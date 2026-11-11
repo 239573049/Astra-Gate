@@ -21,6 +21,7 @@ namespace Astra.Core;
 [JsonSerializable(typeof(Astra.Core.Plugins.AgentPluginDescriptor))]
 [JsonSerializable(typeof(EffortBudgets))]
 [JsonSerializable(typeof(TunnelSettings))]
+[JsonSerializable(typeof(McpGatewaySettings))]
 [JsonSerializable(typeof(PricingSchedule))]
 [JsonSerializable(typeof(PriceSet))]
 [JsonSerializable(typeof(ServiceTierRule))]

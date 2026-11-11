@@ -17,6 +17,7 @@ public sealed class TokenService(
     ProviderHealth health, ProviderPoolScheduler poolScheduler)
 {
     private const int MaxNameLength = 64;
+    private const int MaxMcpServers = 100;
 
     /// <summary>
     /// Makes sure the default token exists and has a key (the 0006 migration inserts it without one). Runs at startup;
@@ -109,6 +110,7 @@ public sealed class TokenService(
         }
         if (body.ContainsKey("limits")) token.LimitsJson = ReadLimits(body["limits"]);
         if (body.ContainsKey("allowedClients")) token.AllowedClientsJson = ReadAllowedClients(body["allowedClients"]);
+        if (body.ContainsKey("mcpServers")) token.McpJson = await ReadMcpServersAsync(body["mcpServers"], ct);
         token.UpdatedAt = DateTimeOffset.UtcNow;
         await db.Tokens.UpdateAsync(token, ct);
         return await GetAsync(id, ct);
@@ -233,6 +235,27 @@ public sealed class TokenService(
         poolScheduler.Forget(token.Id);
     }
 
+    /// <summary>
+    /// The <c>mcpServers</c> body field: the ids of the upstream MCP servers the token may use through the MCP gateway. Null or empty = none.
+    /// Every id must name an existing server; a server deleted later leaves its id behind, which the gateway skips.
+    /// </summary>
+    private async Task<string?> ReadMcpServersAsync(JsonNode? node, CancellationToken ct)
+    {
+        if (node is null) return null;
+        if (node is not JsonArray array) throw new AdminApiException(400, "mcpServers must be an array of MCP server ids");
+        var ids = new List<string>();
+        foreach (var item in array)
+        {
+            var id = item is JsonValue v && v.TryGetValue<string>(out var text) ? text.Trim() : null;
+            if (string.IsNullOrEmpty(id)) throw new AdminApiException(400, "mcpServers must be an array of MCP server ids");
+            if (ids.Contains(id, StringComparer.Ordinal)) continue;
+            if (await db.Mcp.GetAsync(id, ct) is null) throw new AdminApiException(404, $"MCP server not found: {id}");
+            ids.Add(id);
+        }
+        if (ids.Count > MaxMcpServers) throw new AdminApiException(400, $"A token may use at most {MaxMcpServers} MCP servers");
+        return ids.Count == 0 ? null : Json.Serialize(ids);
+    }
+
     private async Task<TokenRecord> RequireAsync(string id, CancellationToken ct) =>
         await db.Tokens.GetAsync(id, ct) ?? throw new AdminApiException(404, "Token not found");
 
@@ -303,7 +326,7 @@ public sealed class TokenService(
         t.AllowedClients(),
         usage.Select(s => new TokenBudgetUsageDto(s.Budget.Metric, s.Budget.Period, Amount(s.Budget.Metric, s.Budget.Limit),
             Amount(s.Budget.Metric, s.Used), Amount(s.Budget.Metric, s.Remaining), s.UsedPercent, s.Exhausted, s.ResetsAt)).ToList(),
-        recentRequests, pool);
+        recentRequests, pool, t.McpServerIds());
 
     private static decimal Amount(string metric, long value) => metric == TokenLimitMetrics.Cost ? Money.FromNanos(value) : value;
 

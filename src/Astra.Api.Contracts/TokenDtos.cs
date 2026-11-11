@@ -41,11 +41,12 @@ public sealed record TokenPoolInputDto(string? Strategy, string? Sticky, bool? F
 /// <param name="AllowedClients">Client kinds the key may be used with; null = any, empty = direct calls only.</param>
 /// <param name="RecentRequests">Requests let through during the last minute (what the RPM cap counts).</param>
 /// <param name="Pool">The provider pool of direct calls; null = <paramref name="ProviderId"/> alone (or no direct calls).</param>
+/// <param name="McpServers">Ids of the upstream MCP servers the token may use through the MCP gateway; a deleted server's id may linger.</param>
 public sealed record TokenDto(
     string Id, string Name, bool IsDefault, bool Enabled, string KeyMasked, string? ProviderId, string? AccountId,
     DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, DateTimeOffset? LastUsedAt, IReadOnlyList<string> Clients,
     TokenStatsDto Today, TokenStatsDto Total, TokenLimitsDto? Limits, List<string>? AllowedClients,
-    List<TokenBudgetUsageDto> LimitUsage, int RecentRequests, TokenPoolDto? Pool);
+    List<TokenBudgetUsageDto> LimitUsage, int RecentRequests, TokenPoolDto? Pool, List<string>? McpServers = null);
 
 /// <summary>Admin API payload: token secret.</summary>
 public sealed record TokenSecretDto(string Token);
