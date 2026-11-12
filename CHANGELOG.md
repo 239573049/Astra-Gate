@@ -4,6 +4,21 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.14.3104] - 2026-11-12
+
+### 新增
+
+- **插件系统 v2**：全新的插件格式（`astra.plugin.json`，`manifestVersion: 2`），在沙箱中运行并按授权开放能力：服务端渲染的插件界面（网页控制台与桌面端共用同一套组件）、网关钩子、插件自带存储与密钥、提供商与客户端扩展；管理接口为 `/api/plugins/v2/**`（数据库迁移 0024）。市场新增独立的 v2 插件列表，旧版本 Astra 不会把它们当作 v1 插件安装。
+- **插件开发工具**：新增 `@astragate/plugin-sdk`（`astra-plugin`：`init` / `validate` / `build` / `pack`，附带本地测试环境）；从文件夹安装的插件会作为开发插件监听改动并热重载，保留已打开视图的状态；`astra plugin test` 可在隔离环境中运行插件的测试。
+- **插件提供商与响应转换**：插件可以声明自己的提供商，并把非标准的上游响应（SSE / NDJSON / JSON / AWS EventStream / Connect）逐帧转换成网关能解码的格式，用于 Cursor 双向 Run 等场景。
+- **Skills 资源库**：Skills 只在 `~/.astra/library/skills` 保存一份，各客户端的 Skills 目录放指向它的链接（符号链接 / Windows 联接 / 标记过的副本），关闭客户端只移除链接；支持从文件夹或 Git 地址安装、迁移已有 Skills（先备份）、共享目录 `~/.agents/skills` 的确认提示。新增「Skills」页（网页控制台与桌面端，数据库迁移 0023，`/api/library/skills`）；`astra-server restore-all` 会把 Skills 还给各客户端。
+
+### 改进
+
+- **插件脚本运行时换为 Jaunt**：中间件与代理插件在进程内用 Jaunt 运行，不再依赖 Jint；沙箱补齐 `TextEncoder`、`atob`、`URL`、`structuredClone` 等全局对象与 `crypto` / `encoding`。
+- **桌面端**：macOS 剪贴板图片、托盘与概览页「生成账单」等细节完善。
+- **.NET 11 正式版**：服务端与桌面端升级到 .NET 11.0.100 / 11.0.0 正式版。
+
 ## [0.14.3103] - 2026-11-11
 
 ### 新增
