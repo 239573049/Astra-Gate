@@ -1,0 +1,12 @@
+{
+  "id": "QRCode/default",
+  "component": "QRCode",
+  "state": "default",
+  "tree": {
+    "type": "QRCode",
+    "props": {
+      "value": "astra://join?gateway=https://gw.example&token=abc",
+      "size": "md"
+    }
+  }
+}

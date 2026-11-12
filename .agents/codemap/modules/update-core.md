@@ -54,7 +54,7 @@ server-side feed check and cache (`src/Astra.Server/Hosting/UpdateCheckService.c
   (`packages/update-core/package.json:18`), so it is safe to bundle into any host.
 - Uses: `docs-site` via HTTP — `${feed}/<channel>/latest.json` (`packages/update-core/src/manifest.ts:49`),
   default origin `https://astra-gate.si/api/client-releases` (`manifest.ts:26`), served by
-  `docs/app/api/client-releases/[channel]/[...path]/route.ts:80`.
+  `astra-gate-web/app/api/client-releases/[channel]/[...path]/route.ts:80`.
 - Uses: `astra-server` via HTTP — `/api/update/status` as the cheap check path
   (`packages/update-core/src/check.ts:33`).
 - Uses: `packaging-release` via npm + HTTP — `npm install --prefix <staging> <pkg>@<version>` where

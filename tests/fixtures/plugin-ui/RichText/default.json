@@ -1,0 +1,33 @@
+{
+  "id": "RichText/default",
+  "component": "RichText",
+  "state": "default",
+  "tree": {
+    "type": "RichText",
+    "props": {
+      "spans": [
+        {
+          "text": "Plain, "
+        },
+        {
+          "text": "bold",
+          "bold": true
+        },
+        {
+          "text": ", "
+        },
+        {
+          "text": "code",
+          "code": true
+        },
+        {
+          "text": " and a "
+        },
+        {
+          "text": "link",
+          "link": "https://astra-gate.si"
+        }
+      ]
+    }
+  }
+}

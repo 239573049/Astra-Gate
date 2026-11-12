@@ -1,0 +1,12 @@
+{
+  "id": "TokenPicker/invalid",
+  "component": "TokenPicker",
+  "state": "invalid",
+  "tree": {
+    "type": "TokenPicker",
+    "props": {
+      "name": "token",
+      "invalid": true
+    }
+  }
+}

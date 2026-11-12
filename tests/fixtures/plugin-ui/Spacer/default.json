@@ -1,0 +1,11 @@
+{
+  "id": "Spacer/default",
+  "component": "Spacer",
+  "state": "default",
+  "tree": {
+    "type": "Spacer",
+    "props": {
+      "size": "4"
+    }
+  }
+}

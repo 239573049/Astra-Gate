@@ -1,0 +1,12 @@
+{
+  "id": "Text/tone-neutral",
+  "component": "Text",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "tone": "neutral"
+    }
+  }
+}

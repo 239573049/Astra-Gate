@@ -1,0 +1,24 @@
+{
+  "id": "Popover/default",
+  "component": "Popover",
+  "state": "default",
+  "tree": {
+    "type": "Popover",
+    "props": {
+      "trigger": {
+        "type": "Button",
+        "props": {
+          "label": "Details"
+        }
+      }
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Popover body"
+        }
+      }
+    ]
+  }
+}

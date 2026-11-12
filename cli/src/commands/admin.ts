@@ -268,11 +268,9 @@ export async function runProviderRemove(id: string): Promise<void> {
   try {
     await api(`/api/providers/${encodeURIComponent(id)}`, { method: 'DELETE' });
   } catch (err) {
+    // The server unbinds the clients using it first (one left with none is disabled); a 409 means one was bound meanwhile.
     if (err instanceof ApiError && err.status === 409) {
-      throw new AstraError(
-        `Provider "${id}" is still bound to one or more clients.`,
-        'Disable the client or bind it to another provider first (`astra client disable <kind>`).',
-      );
+      throw new AstraError(`A client was bound to provider "${id}" while it was being removed.`, 'Run the command again.');
     }
     throw err;
   }

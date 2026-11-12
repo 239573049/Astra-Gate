@@ -1,0 +1,93 @@
+{
+  "id": "Scroll/default",
+  "component": "Scroll",
+  "state": "default",
+  "tree": {
+    "type": "Scroll",
+    "props": {
+      "maxHeight": "xs"
+    },
+    "children": [
+      {
+        "type": "Stack",
+        "props": {
+          "gap": "2"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 1"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 2"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 3"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 4"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 5"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 6"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 7"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 8"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 9"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 10"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 11"
+            }
+          },
+          {
+            "type": "Text",
+            "props": {
+              "value": "Line 12"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

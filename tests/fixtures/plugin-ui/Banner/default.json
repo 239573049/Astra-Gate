@@ -1,0 +1,12 @@
+{
+  "id": "Banner/default",
+  "component": "Banner",
+  "state": "default",
+  "tree": {
+    "type": "Banner",
+    "props": {
+      "tone": "accent",
+      "message": "A new version of this plugin is available."
+    }
+  }
+}

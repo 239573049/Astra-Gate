@@ -1,0 +1,12 @@
+{
+  "id": "CopyButton/default",
+  "component": "CopyButton",
+  "state": "default",
+  "tree": {
+    "type": "CopyButton",
+    "props": {
+      "value": "sk-astra-…",
+      "label": "Copy key"
+    }
+  }
+}

@@ -5,7 +5,8 @@ updated: 2026-10-14
 # Architecture
 
 Astra is one product with two toolchains that meet at a build artifact and at HTTP. The .NET side is the runtime;
-the pnpm workspace is the surfaces around it (console, CLI, desktop shell, docs/website, packaging).
+the pnpm workspace is the surfaces around it (console, CLI, desktop shell, packaging). The docs/website is its own
+repository since 2026-11-11 (`astra-gate-web`; paths written `astra-gate-web/...` in these pages).
 
 ## Runtimes and processes
 
@@ -15,7 +16,7 @@ the pnpm workspace is the surfaces around it (console, CLI, desktop shell, docs/
 | `astra-server relay` (same binary) | The same gateway pipeline without storage: one template, each request's own credential, nothing on disk | Docker / a container platform, by hand |
 | Bun sidecar (downloaded, pinned, sha256-verified) | magpie provider plugins (`host.js` / `pi.js`, vendored unmodified) and `bun add` package installs | `astra-server` on demand (`astra-plugins/Runtime`) |
 | Jaunt (in-process, no CLR access) | Plugin gateway middleware and agent plugins | `astra-server` request path |
-| Node | `astra` CLI, `docs` Next.js site, vitest suites, tsup/esbuild bundling | the user / CI |
+| Node | `astra` CLI, vitest suites, tsup/esbuild bundling | the user / CI |
 | Electron | Desktop shell: `app://astra` protocol, tray, server child process, update controller | the user |
 | Browser | The React console served from `wwwroot` by the server (or from `desktop/renderer`) | the user |
 
@@ -75,8 +76,8 @@ Astra.Core ──┬──> Astra.Data ─────┐
 | An MCP gateway capability (a method, an upstream behaviour) | `src/Astra.Gateway/Mcp` (engine), `src/Astra.Gateway/Http/McpGatewayEndpoints.cs` (front end) | `ModelContextProtocol.Core` only in `Astra.Gateway`, never `Astra.Core`; the mirrors in root AGENTS.md linked update 25 ([mcp-gateway](flows/mcp-gateway.md)) |
 | A background job | `src/Astra.Server/Hosting/*Worker.cs` | registration + `BackgroundService` in `AstraApp.Create`, an explicit initial delay |
 | A console screen | `web/src/pages` + `web/src/api/hooks.ts` | both i18n catalogs |
-| A documentation page | `docs/content/docs/<module>/` + that folder's `meta.json` | the root `meta.json` when it is a new module |
-| A CLI command | `cli/src/commands` | `cli/src/index.ts` wiring, the command map in `docs/content/docs/cli/index.mdx` |
+| A documentation page | `astra-gate-web/content/docs/<module>/` + that folder's `meta.json` | the root `meta.json` when it is a new module |
+| A CLI command | `cli/src/commands` | `cli/src/index.ts` wiring, the command map in `astra-gate-web/content/docs/cli/index.mdx` |
 | A change to a client adapter, the applier or an editor | `src/Astra.Clients` **and** `packages/client-config` | the golden cases `tests/fixtures/client-config/**` (linked update 20), [connect](modules/connect.md) |
 | A packaging or release step | `.github/workflows/*.yml`, `scripts/*.mjs` | the linked-update list in the root AGENTS.md |
 
@@ -111,7 +112,7 @@ graph TD
   Web[web-ui] -->|HTTP + SSE| Server
   Desktop[desktop-app] -->|IPC + HTTP| Web
   Desktop -->|child process| Server
-  Docs[docs-site] -->|serves feed/market/mirror| Plugins
+  Docs[docs-site, external] -->|serves feed/market/mirror| Plugins
   UpdateCore[update-core] -->|HTTP feed, npm| Docs
   Pack[packaging-release] -->|publishes| Server
   Pack -->|publishes| CLI

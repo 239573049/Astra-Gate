@@ -1,0 +1,33 @@
+{
+  "id": "ListEditor/default",
+  "component": "ListEditor",
+  "state": "default",
+  "tree": {
+    "type": "ListEditor",
+    "props": {
+      "name": "origins",
+      "value": [
+        {
+          "origin": "https://a.example",
+          "note": "staging"
+        },
+        {
+          "origin": "https://b.example",
+          "note": ""
+        }
+      ],
+      "item": [
+        {
+          "name": "origin",
+          "placeholder": "https://…"
+        },
+        {
+          "name": "note",
+          "label": "Note"
+        }
+      ],
+      "addLabel": "Add origin",
+      "reorderable": true
+    }
+  }
+}

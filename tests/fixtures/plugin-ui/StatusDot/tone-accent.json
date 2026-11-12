@@ -1,0 +1,13 @@
+{
+  "id": "StatusDot/tone-accent",
+  "component": "StatusDot",
+  "state": "tone-accent",
+  "tree": {
+    "type": "StatusDot",
+    "props": {
+      "tone": "accent",
+      "label": "Running",
+      "pulse": true
+    }
+  }
+}

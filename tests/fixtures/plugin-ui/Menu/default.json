@@ -1,0 +1,30 @@
+{
+  "id": "Menu/default",
+  "component": "Menu",
+  "state": "default",
+  "tree": {
+    "type": "Menu",
+    "props": {
+      "label": "More",
+      "icon": "ellipsis",
+      "items": [
+        {
+          "label": "Rename",
+          "action": "rename"
+        },
+        {
+          "label": "Duplicate",
+          "action": "dup"
+        },
+        {
+          "separator": true
+        },
+        {
+          "label": "Delete",
+          "action": "del",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

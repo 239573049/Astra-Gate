@@ -1,0 +1,12 @@
+{
+  "id": "Link/default",
+  "component": "Link",
+  "state": "default",
+  "tree": {
+    "type": "Link",
+    "props": {
+      "label": "Open the docs",
+      "href": "https://astra-gate.si/docs"
+    }
+  }
+}

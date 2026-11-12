@@ -1,0 +1,15 @@
+{
+  "id": "Button/size-lg",
+  "component": "Button",
+  "state": "size-lg",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "primary",
+      "icon": "check",
+      "onPress": "save",
+      "size": "lg"
+    }
+  }
+}

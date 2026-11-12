@@ -1,0 +1,13 @@
+{
+  "id": "Icon/tone-danger",
+  "component": "Icon",
+  "state": "tone-danger",
+  "tree": {
+    "type": "Icon",
+    "props": {
+      "name": "shield-check",
+      "size": "md",
+      "tone": "danger"
+    }
+  }
+}

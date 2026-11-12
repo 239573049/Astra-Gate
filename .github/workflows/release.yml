@@ -556,6 +556,26 @@ jobs:
             npm dist-tag add "@aidotnet/astra-connect@$VER" preview
           fi
 
+      - name: Publish the v2 plugin SDK
+        # @astragate/plugin-sdk (packages/plugin-sdk, design/plugin-v2 06 §1) is versioned with the plugin API, not with
+        # Astra: it goes out only when its own version isn't on npm yet, tagged by that version (a prerelease is `next`).
+        # It never holds a release back: a failure here is a warning, and the SDK can be published by re-running.
+        continue-on-error: true
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          SDK_VER=$(node -p "require('./packages/plugin-sdk/package.json').version")
+          if [ -n "$(npm view "@astragate/plugin-sdk@$SDK_VER" version 2>/dev/null)" ]; then
+            echo "@astragate/plugin-sdk@$SDK_VER is already on npm — skipping."
+            exit 0
+          fi
+          node packages/plugin-sdk/scripts/gen.mjs --check
+          npm pack ./packages/plugin-sdk --pack-destination out/sdk
+          case "$SDK_VER" in *-*) SDK_TAG=next ;; *) SDK_TAG=latest ;; esac
+          npm publish out/sdk/astragate-plugin-sdk-"$SDK_VER".tgz --access public --tag "$SDK_TAG" \
+            || { echo "::warning::@astragate/plugin-sdk@$SDK_VER was not published (does the token own the @astragate scope?)"; exit 1; }
+
       - name: Publish the update manifest to the docs site
         # Last of the feed: latest.json names the npm packages the CLI and the
         # desktop app install (update-core / UpdateCheckService fetch

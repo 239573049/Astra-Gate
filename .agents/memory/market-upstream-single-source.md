@@ -4,10 +4,10 @@ description: The docs site's plugin market reads one fixed community registry an
 type: project
 updated: 2026-10-14
 source: init
-evidence: ["6abd354", "docs/lib/plugin-market/upstream.ts"]
+evidence: ["6abd354", "astra-gate-web/lib/plugin-market/upstream.ts"]
 ---
 The plugin market's community list comes from exactly one address, the `registry.json` of
-`astragate-community/astra-gate-plugins`, hardcoded in `docs/lib/plugin-market/upstream.ts`. The cached
+`astragate-community/astra-gate-plugins`, hardcoded in `astra-gate-web/lib/plugin-market/upstream.ts`. The cached
 copy (`upstream.json`) records the address it was fetched from, and a cache whose recorded source
 differs is never served.
 

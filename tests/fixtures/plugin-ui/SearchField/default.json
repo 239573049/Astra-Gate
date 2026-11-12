@@ -1,0 +1,13 @@
+{
+  "id": "SearchField/default",
+  "component": "SearchField",
+  "state": "default",
+  "tree": {
+    "type": "SearchField",
+    "props": {
+      "name": "q",
+      "placeholder": "Search hits",
+      "onSearch": "search"
+    }
+  }
+}

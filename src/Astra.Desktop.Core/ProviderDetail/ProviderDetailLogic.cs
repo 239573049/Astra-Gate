@@ -47,6 +47,14 @@ public static class ProviderDetailLogic
     }
 
     /// <summary>
+    /// The delete confirmation's detail (web <c>remove</c>): the server unbinds the clients using the provider (one left with none is
+    /// disabled), so they are named before the user agrees.
+    /// </summary>
+    public static string DeleteDetail(ProviderDto p) => p.BoundClients.Count > 0
+        ? Loc.T("providers.deleteDetailBound", ("clients", BoundClients(p.BoundClients)))
+        : Loc.T("providers.deleteDetail");
+
+    /// <summary>
     /// The toast of a failed delete (web <c>onError</c>): a 409 naming bound clients becomes <c>providers.deleteBound</c>, anything else is the
     /// error's message.
     /// </summary>

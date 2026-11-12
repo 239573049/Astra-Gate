@@ -4,7 +4,7 @@ description: Three separate 0.2.0 release failures (workflow syntax, npm size, t
 type: project
 updated: 2026-10-14
 source: init
-evidence: ["d282517", "4a521a2", "208801f", "415d99d", "docs/proxy.ts", "scripts/pack-desktop.mjs"]
+evidence: ["d282517", "4a521a2", "208801f", "415d99d", "astra-gate-web/proxy.ts", "scripts/pack-desktop.mjs"]
 ---
 The 0.2.0 release (2026-10-08) failed three different ways, and a fourth mismatch showed up in the
 update API the same day.
@@ -16,7 +16,7 @@ update API the same day.
   hit npm's size limit (E413). `scripts/pack-desktop.mjs` now strips `resources/server` from those
   packages; the signed macOS `.app` keeps it because its Resources are sealed.
 - `208801f`: every installer uploaded through the docs site was stored truncated. A request that passes
-  through `docs/proxy.ts` has its body buffered and cut at Next's 10 MB proxy limit, so the proxy's
+  through `astra-gate-web/proxy.ts` has its body buffered and cut at Next's 10 MB proxy limit, so the proxy's
   matcher excludes `/api`. The same change taught `scripts/sync-versions.mjs` to rewrite
   `desktop/package.json`, because electron-builder stamps it into the app and the 0.2.0 installers
   reported 0.1.0.

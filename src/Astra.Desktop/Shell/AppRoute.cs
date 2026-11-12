@@ -19,6 +19,12 @@ public enum AppRoute
     Mcp,
     Skills,
     Settings,
+
+    /// <summary>A v2 plugin's page (ui.pages); the param is "plugin/page[/rest]".</summary>
+    PluginPage,
+
+    /// <summary>The v2 plugin UI component gallery (design/plugin-v2 06 §2); the param is a component, or "scene:&lt;id&gt;" for one scene alone.</summary>
+    PluginGallery,
 }
 
 /// <summary>
@@ -46,6 +52,8 @@ public sealed record RouteInfo(AppRoute Route, string WebPath, string TitleKey, 
         new(AppRoute.Mcp, "/mcp", "nav.mcp", AppRoute.Mcp),
         new(AppRoute.Skills, "/skills", "nav.skills", AppRoute.Skills),
         new(AppRoute.Settings, "/settings[/:tab]", "nav.settings", AppRoute.Settings),
+        new(AppRoute.PluginPage, "/plugins/v2/:plugin/:page/*", "nav.plugins", AppRoute.PluginPage),
+        new(AppRoute.PluginGallery, "/plugins/dev/gallery", "pluginUi.gallery.title", AppRoute.Plugins),
     ];
 
     public static IReadOnlyList<RouteInfo> Routes => All;

@@ -1,0 +1,16 @@
+{
+  "id": "TextField/disabled",
+  "component": "TextField",
+  "state": "disabled",
+  "tree": {
+    "type": "TextField",
+    "props": {
+      "name": "endpoint",
+      "value": "https://api.acme.example",
+      "placeholder": "https://…",
+      "type": "url",
+      "clearable": true,
+      "disabled": true
+    }
+  }
+}

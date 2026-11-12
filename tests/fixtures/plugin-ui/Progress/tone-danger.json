@@ -1,0 +1,13 @@
+{
+  "id": "Progress/tone-danger",
+  "component": "Progress",
+  "state": "tone-danger",
+  "tree": {
+    "type": "Progress",
+    "props": {
+      "value": 0.62,
+      "label": "Syncing",
+      "tone": "danger"
+    }
+  }
+}

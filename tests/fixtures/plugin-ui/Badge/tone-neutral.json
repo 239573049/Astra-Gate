@@ -1,0 +1,12 @@
+{
+  "id": "Badge/tone-neutral",
+  "component": "Badge",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "Badge",
+    "props": {
+      "label": "beta",
+      "tone": "neutral"
+    }
+  }
+}

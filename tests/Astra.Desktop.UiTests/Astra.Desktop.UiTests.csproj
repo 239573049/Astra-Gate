@@ -21,6 +21,8 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Astra.Desktop\Astra.Desktop.csproj" />
+    <!-- the plugin UI scene set, normalised as the server serves it (Scenes.PluginUi.cs) -->
+    <ProjectReference Include="..\..\src\Astra.Plugins\Astra.Plugins.csproj" />
   </ItemGroup>
   <ItemGroup>
     <!-- The fixture set both sides replay (tests/fixtures/ui/README.md). Copied so tests read it from the output folder. -->

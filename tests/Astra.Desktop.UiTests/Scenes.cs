@@ -57,6 +57,7 @@ public static partial class Scenes
         AddSettingsAndPrivacy(d);
         AddTray(d);
         AddShell(d);
+        AddPluginUi(d);
         return d;
     }
 
@@ -72,6 +73,7 @@ public static partial class Scenes
     static partial void AddSettingsAndPrivacy(Dictionary<string, Func<Scene>> d);
     static partial void AddTray(Dictionary<string, Func<Scene>> d);
     static partial void AddShell(Dictionary<string, Func<Scene>> d);
+    static partial void AddPluginUi(Dictionary<string, Func<Scene>> d);
 
     /// <summary>
     /// The scene's admin-API client over <paramref name="handler"/> (the fixture handler, possibly wrapped by the scene's own

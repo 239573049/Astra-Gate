@@ -15,6 +15,7 @@ import { useI18n } from '../i18n';
 import { formatMs, formatPercent, formatTime, formatTokens, formatUsd } from '../lib/format';
 import { bucketAxisLabel, bucketFullLabel, bucketTotals, fillBuckets, rangeBuckets } from '../lib/stats';
 import { cacheHitRatio } from '../lib/usage';
+import { PluginSlot } from '../plugin-ui/PluginPage';
 
 type ProviderRow = {
   id: string;
@@ -217,6 +218,7 @@ export function TokenDetailPage() {
           </div>
           <SortableDataTable<LogRow> caption={t('tokens.detail.recent')} rows={logRows} columns={logColumns} rowKey="id" emptyMessage={t('common.noData')} />
         </section>
+        <PluginSlot name="token.detail.sections" params={{ tokenId: id }} />
       </div>
     </Page>
   );

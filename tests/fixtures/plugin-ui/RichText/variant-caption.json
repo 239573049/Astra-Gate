@@ -1,0 +1,34 @@
+{
+  "id": "RichText/variant-caption",
+  "component": "RichText",
+  "state": "variant-caption",
+  "tree": {
+    "type": "RichText",
+    "props": {
+      "spans": [
+        {
+          "text": "Plain, "
+        },
+        {
+          "text": "bold",
+          "bold": true
+        },
+        {
+          "text": ", "
+        },
+        {
+          "text": "code",
+          "code": true
+        },
+        {
+          "text": " and a "
+        },
+        {
+          "text": "link",
+          "link": "https://astra-gate.si"
+        }
+      ],
+      "variant": "caption"
+    }
+  }
+}

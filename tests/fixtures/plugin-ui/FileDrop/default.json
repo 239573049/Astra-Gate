@@ -1,0 +1,14 @@
+{
+  "id": "FileDrop/default",
+  "component": "FileDrop",
+  "state": "default",
+  "tree": {
+    "type": "FileDrop",
+    "props": {
+      "name": "file",
+      "accept": ".json",
+      "label": "Drop a rules file",
+      "onDrop": "drop"
+    }
+  }
+}

@@ -169,6 +169,15 @@ internal sealed class JsRuntime : IDisposable
         }
     }
 
+    /// <summary>The loaded module's export names.</summary>
+    public IReadOnlyCollection<string> ExportNames => _exportNames ?? (IReadOnlyCollection<string>)[];
+
+    /// <summary>Evaluates a script within <paramref name="limit"/> and returns its completion value.</summary>
+    public JsValue Evaluate(string script, TimeSpan limit) => Run(limit, x => x.Evaluate(script));
+
+    /// <summary>Bytes the engine has allocated over its life (Jaunt's count only grows).</summary>
+    public long TrackedBytes => _engine.GetStatistics().TrackedBytes;
+
     /// <summary>JSON text as a value of this engine.</summary>
     public JsValue ParseJson(string json) => Run(null, x => x.ParseJson(json));
 

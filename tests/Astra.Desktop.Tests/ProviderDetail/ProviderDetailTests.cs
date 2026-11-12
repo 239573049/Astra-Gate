@@ -285,6 +285,15 @@ public sealed class ProviderDetailLogicTests : IDisposable
     }
 
     [Fact]
+    public void The_delete_confirmation_names_the_clients_that_will_be_unbound()
+    {
+        Assert.Equal(Loc.T("providers.deleteDetail"), ProviderDetailLogic.DeleteDetail(PdData.Provider(o => o["boundClients"] = new JsonArray())));
+        var bound = ProviderDetailLogic.DeleteDetail(PdData.Provider(o => o["boundClients"] = new JsonArray("codex", "claude-code")));
+        Assert.Contains("Codex, Claude Code", bound);
+        Assert.Contains("disabled", bound);
+    }
+
+    [Fact]
     public void Model_search_matches_id_or_display_name()
     {
         var list = new[] { PdData.Model(1, "gpt-4.1"), PdData.Model(2, "o4-mini", change: o => o["effective"]!["displayName"] = "Reasoner") };

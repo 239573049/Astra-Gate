@@ -1,0 +1,14 @@
+{
+  "id": "ConfirmButton/tone-success",
+  "component": "ConfirmButton",
+  "state": "tone-success",
+  "tree": {
+    "type": "ConfirmButton",
+    "props": {
+      "label": "Delete",
+      "confirmLabel": "Really delete?",
+      "tone": "success",
+      "onPress": "delete"
+    }
+  }
+}

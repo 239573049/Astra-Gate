@@ -1,0 +1,12 @@
+{
+  "id": "ClientPicker/default",
+  "component": "ClientPicker",
+  "state": "default",
+  "tree": {
+    "type": "ClientPicker",
+    "props": {
+      "name": "client",
+      "value": "claude-code"
+    }
+  }
+}

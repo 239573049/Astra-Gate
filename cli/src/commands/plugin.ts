@@ -187,3 +187,266 @@ export async function runPluginMarket(query?: string): Promise<void> {
   );
   info('Install one with `astra plugin add <package>`.');
 }
+
+// ---------- plugins v2 (design/plugin-v2): /api/plugins/v2
+
+interface PluginV2Row {
+  id: string;
+  spec: string;
+  version: string;
+  name: string;
+  permissions: string[];
+  granted: string[];
+  missing: string[];
+  sensitive: string[];
+  enabled: boolean;
+  running: boolean;
+  problem?: string | null;
+  lastError?: string | null;
+  contributes: { commands: { plugin: string; id: string; title: string }[]; pages: { id: string; title: string }[]; hooks: string[] };
+}
+
+interface PluginSuccessor {
+  spec: string;
+  v1Name: string;
+  name: string;
+  version: string;
+  permissions: string[];
+  sensitive: string[];
+  notes?: string | null;
+}
+
+async function findV2(id: string): Promise<PluginV2Row> {
+  const { plugins } = await api<{ plugins: PluginV2Row[] }>('/api/plugins/v2');
+  const hit = plugins.find((p) => p.id === id || p.spec === id || p.name === id);
+  if (!hit) throw new AstraError(`No v2 plugin "${id}".`, 'See `astra plugin v2`.');
+  return hit;
+}
+
+/** Lists v2 plugins: state, permissions waiting for a grant, what they add. */
+export async function runPluginV2List(opts: { json?: boolean }): Promise<void> {
+  const list = await api<{ plugins: PluginV2Row[] }>('/api/plugins/v2');
+  if (opts.json) {
+    console.log(JSON.stringify(list, null, 2));
+    return;
+  }
+  if (list.plugins.length === 0) {
+    info('No v2 plugins installed.');
+    return;
+  }
+  printTable(
+    list.plugins.map((p) => [p.id, p.version, p.running ? 'running' : p.enabled ? 'idle' : 'off', p.missing.length ? `needs ${p.missing.join(', ')}` : '', p.spec]),
+    ['ID', 'VERSION', 'STATE', 'PERMISSIONS', 'SPEC'],
+  );
+  for (const p of list.plugins) {
+    if (p.problem) warn(`${p.id}: ${p.problem}`);
+    if (p.lastError) warn(`${p.id}: ${p.lastError}`);
+    if (p.contributes.commands.length) console.log(`  ${p.id} commands: ${p.contributes.commands.map((c) => c.id).join(', ')}`);
+  }
+}
+
+/** Grants a v2 plugin the permissions it asks for, after showing them (--yes skips the question). */
+export async function runPluginGrant(id: string, opts: { yes?: boolean; permission?: string[] }): Promise<void> {
+  const p = await findV2(id);
+  const asked = opts.permission?.length ? opts.permission : p.missing;
+  if (asked.length === 0) {
+    info(`${p.id} has every permission it asks for: ${p.granted.join(', ') || '(none)'}.`);
+    return;
+  }
+  console.log(`${p.name} asks for:`);
+  for (const perm of asked) console.log(`  ${p.sensitive.includes(perm) ? '!' : '-'} ${perm}`);
+  if (!opts.yes && !(await confirm('Grant these permissions?'))) return;
+  await api(`/api/plugins/v2/${encodeURIComponent(p.id)}/grant`, 'POST', { permissions: asked });
+  success(`Granted ${asked.length} permission(s) to ${p.id}.`);
+}
+
+/** Runs a v2 plugin's command; args is JSON. */
+export async function runPluginRun(id: string, command: string, args?: string): Promise<void> {
+  let parsed: unknown = null;
+  if (args) {
+    try {
+      parsed = JSON.parse(args);
+    } catch (e) {
+      throw new AstraError(`The arguments aren't JSON: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  const p = await findV2(id);
+  const r = await api<{ result: unknown }>(`/api/plugins/v2/${encodeURIComponent(p.id)}/commands/${encodeURIComponent(command)}`, 'POST', { args: parsed });
+  console.log(typeof r.result === 'string' ? r.result : JSON.stringify(r.result, null, 2));
+}
+
+/** Sets v2 settings from JSON (secret settings with --secret name=value). */
+export async function runPluginSettings(id: string, values?: string, opts: { secret?: string[] } = {}): Promise<void> {
+  const p = await findV2(id);
+  let parsed: Record<string, unknown> | null = null;
+  if (values) {
+    try {
+      parsed = JSON.parse(values) as Record<string, unknown>;
+    } catch (e) {
+      throw new AstraError(`The settings aren't JSON: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  const secrets: Record<string, string | null> = {};
+  for (const s of opts.secret ?? []) {
+    const at = s.indexOf('=');
+    if (at <= 0) throw new AstraError(`--secret takes name=value, not "${s}".`);
+    secrets[s.slice(0, at)] = s.slice(at + 1) || null;
+  }
+  if (!parsed && Object.keys(secrets).length === 0) {
+    const detail = await api<{ plugin: { settings: Record<string, unknown>; secretsSet: string[] } }>(`/api/plugins/v2/${encodeURIComponent(p.id)}`);
+    console.log(JSON.stringify(detail.plugin.settings, null, 2));
+    if (detail.plugin.secretsSet.length) info(`Secrets set: ${detail.plugin.secretsSet.join(', ')}`);
+    return;
+  }
+  await api(`/api/plugins/v2/${encodeURIComponent(p.id)}/settings`, 'PUT', { values: parsed, secrets });
+  success(`Saved ${p.id}'s settings.`);
+}
+
+/** Lists v1 plugins with a v2 version, or upgrades one (design/plugin-v2 07 §3). */
+export async function runPluginUpgrade(name: string | undefined, opts: { yes?: boolean }): Promise<void> {
+  const successors = await api<PluginSuccessor[]>('/api/plugins/v2/successors');
+  if (!name) {
+    if (successors.length === 0) {
+      info('No installed plugin has a v2 version in the market.');
+      return;
+    }
+    printTable(
+      successors.map((s) => [s.v1Name, `${s.name} ${s.version}`, s.permissions.join(', ')]),
+      ['V1 PLUGIN', 'V2 VERSION', 'PERMISSIONS'],
+    );
+    info('Upgrade one with `astra plugin upgrade <name>`.');
+    return;
+  }
+  const s = successors.find((x) => x.v1Name === name || x.spec === name);
+  if (!s) throw new AstraError(`"${name}" has no v2 version in the market.`, 'See `astra plugin upgrade`.');
+  if (s.notes) console.log(s.notes);
+  console.log(`${s.name} ${s.version} asks for:`);
+  for (const perm of s.permissions) console.log(`  ${s.sensitive.includes(perm) ? '!' : '-'} ${perm}`);
+  if (!opts.yes && !(await confirm('Grant these and upgrade?'))) return;
+  await follow(await api<PluginJob>('/api/plugins/v2/upgrade', 'POST', { spec: s.spec, grant: s.permissions }));
+  success(`Upgraded ${s.v1Name} to ${s.name} ${s.version}.`);
+}
+
+/**
+ * Mounts a v2 plugin folder as a dev plugin (design/plugin-v2 06 §2): Astra reloads it on save and keeps its open views'
+ * state; this prints its log until Ctrl+C, then unmounts it (unless --keep). This machine only.
+ */
+export async function runPluginDev(dir: string, opts: { yes?: boolean; keep?: boolean }): Promise<void> {
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const root = resolve(dir);
+  let id: string;
+  try {
+    id = (JSON.parse(readFileSync(resolve(root, 'astra.plugin.json'), 'utf8')) as { id?: string }).id ?? '';
+  } catch {
+    throw new AstraError(`${root} has no readable astra.plugin.json.`, 'Start one with `npx @astragate/plugin-sdk init`.');
+  }
+  if (!id) throw new AstraError('astra.plugin.json has no id.');
+  const list = await api<{ plugins: PluginV2Row[] }>('/api/plugins/v2');
+  const mounted = list.plugins.some((p) => p.spec === root);
+  if (!mounted) await follow(await api<PluginJob>('/api/plugins', 'POST', { spec: root }));
+  // the host picks the folder up on its next refresh
+  let p: PluginV2Row | undefined;
+  for (let i = 0; i < 20 && !p; i++) {
+    p = (await api<{ plugins: PluginV2Row[] }>('/api/plugins/v2')).plugins.find((x) => x.id === id);
+    if (!p) await new Promise((r) => setTimeout(r, 500));
+  }
+  if (!p) throw new AstraError(`Astra didn't load ${id}.`, 'Run `astra-plugin validate` in the folder, or see `astra plugin v2`.');
+  if (p.missing.length > 0) await runPluginGrant(id, { yes: opts.yes });
+  info(`Developing ${id} from ${root}: it reloads on save. Ctrl+C to stop${opts.keep || mounted ? '' : ' (and unmount it)'}.`);
+
+  let stop = false;
+  const done = new Promise<void>((resolveDone) =>
+    process.once('SIGINT', () => {
+      stop = true;
+      resolveDone();
+    }),
+  );
+  let last = '';
+  let lastProblem: string | null | undefined;
+  while (!stop) {
+    try {
+      const detail = await api<{ plugin: PluginV2Row; lines: { at: string; level: string; text: string }[] }>(`/api/plugins/v2/${encodeURIComponent(id)}`);
+      for (const l of detail.lines.filter((l) => l.at > last)) {
+        const line = `${l.at.slice(11, 19)} ${l.level.padEnd(5)} ${l.text}`;
+        if (l.level === 'error') warn(line);
+        else console.log(line);
+      }
+      if (detail.lines.length > 0) last = detail.lines[detail.lines.length - 1]!.at > last ? detail.lines[detail.lines.length - 1]!.at : last;
+      const problem = detail.plugin.problem ?? detail.plugin.lastError;
+      if (problem !== lastProblem && problem) warn(problem);
+      lastProblem = problem;
+    } catch (e) {
+      if (e instanceof AstraError) warn(e.message);
+      else throw e;
+    }
+    await Promise.race([done, new Promise((r) => setTimeout(r, 1000))]);
+  }
+  if (!opts.keep && !mounted) {
+    await follow(await api<PluginJob>(`/api/plugins${q(root)}`, 'DELETE'));
+    success(`Unmounted ${id}.`);
+  }
+}
+
+/**
+ * Runs a v2 plugin folder's tests (test/**\/*.test.js|mjs) in Astra's own sandbox (design/plugin-v2 06 §4): the same files
+ * vitest runs in Node with the SDK, here against the real `astra` module and host calls, over a throwaway store. A folder
+ * that isn't mounted yet is mounted for the run and unmounted after. This machine only.
+ */
+export async function runPluginTest(dir: string, opts: { json?: boolean }): Promise<void> {
+  const { readFileSync } = await import('node:fs');
+  const { resolve } = await import('node:path');
+  const root = resolve(dir);
+  let id: string;
+  try {
+    id = (JSON.parse(readFileSync(resolve(root, 'astra.plugin.json'), 'utf8')) as { id?: string }).id ?? '';
+  } catch {
+    throw new AstraError(`${root} has no readable astra.plugin.json.`);
+  }
+  const mounted = (await api<{ plugins: PluginV2Row[] }>('/api/plugins/v2')).plugins.some((p) => p.spec === root);
+  if (!mounted) await follow(await api<PluginJob>('/api/plugins', 'POST', { spec: root }));
+  try {
+    const results = await api<{ file: string; name: string; status: string; ms?: number | null; error?: string | null }[]>(
+      `/api/plugins/v2/${encodeURIComponent(id)}/test`,
+      'POST',
+      {},
+    );
+    if (opts.json) console.log(JSON.stringify(results, null, 2));
+    else {
+      let file = '';
+      for (const r of results) {
+        if (r.file !== file) console.log((file = r.file));
+        const mark = r.status === 'passed' ? '✓' : r.status === 'skipped' ? '-' : '✗';
+        console.log(`  ${mark} ${r.name}${r.ms != null ? ` (${Math.round(r.ms)} ms)` : ''}`);
+        if (r.error) console.log(`      ${r.error}`);
+      }
+    }
+    const failed = results.filter((r) => r.status === 'failed').length;
+    const passed = results.filter((r) => r.status === 'passed').length;
+    if (results.length === 0) warn('No tests: put them in test/**/*.test.js (or .mjs).');
+    else if (failed) {
+      warn(`${failed} failed, ${passed} passed (in Astra's sandbox).`);
+      process.exitCode = 1;
+    } else success(`${passed} passed in Astra's sandbox.`);
+  } finally {
+    if (!mounted) await follow(await api<PluginJob>(`/api/plugins${q(root)}`, 'DELETE'));
+  }
+}
+
+/** Goes back to the v1 plugin a v2 one replaced (within 30 days of the upgrade). */
+export async function runPluginRollback(id: string, opts: { yes?: boolean }): Promise<void> {
+  if (!opts.yes && !(await confirm(`Remove ${id} and reinstall the v1 plugin it replaced?`))) return;
+  await follow(await api<PluginJob>(`/api/plugins/v2/${encodeURIComponent(id)}/rollback`, 'POST', {}));
+  success(`${id} is back on its v1 plugin.`);
+}
+
+async function confirm(question: string): Promise<boolean> {
+  if (!process.stdin.isTTY) throw new AstraError(`${question} (not a terminal: pass --yes)`);
+  const { createInterface } = await import('node:readline/promises');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return /^y(es)?$/i.test((await rl.question(`${question} [y/N] `)).trim());
+  } finally {
+    rl.close();
+  }
+}

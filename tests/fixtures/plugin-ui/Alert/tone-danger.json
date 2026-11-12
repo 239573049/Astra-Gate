@@ -1,0 +1,13 @@
+{
+  "id": "Alert/tone-danger",
+  "component": "Alert",
+  "state": "tone-danger",
+  "tree": {
+    "type": "Alert",
+    "props": {
+      "tone": "danger",
+      "title": "Words list is empty",
+      "message": "Nothing will be checked until you add a word."
+    }
+  }
+}

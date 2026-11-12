@@ -1,0 +1,13 @@
+{
+  "id": "Alert/tone-success",
+  "component": "Alert",
+  "state": "tone-success",
+  "tree": {
+    "type": "Alert",
+    "props": {
+      "tone": "success",
+      "title": "Words list is empty",
+      "message": "Nothing will be checked until you add a word."
+    }
+  }
+}

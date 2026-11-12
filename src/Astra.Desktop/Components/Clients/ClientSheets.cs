@@ -34,6 +34,9 @@ public static class ClientSheets
 
     private static string ErrorText(Exception e) => e.Message;
 
+    /// <summary>A switched-off provider named with where to fix it (<see cref="ClientsLogic.DisabledProvider"/>), else null.</summary>
+    private static (string Title, string Hint)? DisabledProvider(Exception e) => ClientsLogic.DisabledProvider(e, (key, args) => Loc.T(key, args));
+
     // ---------- enable ----------
 
     /// <summary>
@@ -68,7 +71,7 @@ public static class ClientSheets
             }
             catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException)
             {
-                ctx.Feedback.Error(ErrorText(e));
+                ctx.Feedback.Error(DisabledProvider(e) is { } off ? $"{off.Title} · {off.Hint}" : ErrorText(e));
             }
             finally
             {
@@ -92,7 +95,9 @@ public static class ClientSheets
             catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException)
             {
                 body.Children.Clear();
-                body.Children.Add(ClientUi.Alert(AlertTone.Danger, Loc.T("common.error"), ErrorText(e)));
+                body.Children.Add(DisabledProvider(e) is { } off
+                    ? ClientUi.Alert(AlertTone.Danger, off.Title, off.Hint)
+                    : ClientUi.Alert(AlertTone.Danger, Loc.T("common.error"), ErrorText(e)));
             }
         }
     }

@@ -1,0 +1,11 @@
+{
+  "id": "Text/default",
+  "component": "Text",
+  "state": "default",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog."
+    }
+  }
+}

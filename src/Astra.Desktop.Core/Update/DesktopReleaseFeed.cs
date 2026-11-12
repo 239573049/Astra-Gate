@@ -14,7 +14,7 @@ namespace Astra.Desktop.Core.Update;
 public sealed record DesktopRelease(string Version, string? Notes, string FileName, string Url, long Size, string Sha256);
 
 /// <summary>
-/// The desktop half of the update feed: <c>&lt;feed&gt;/&lt;channel&gt;/releases.json</c> (docs/app/api/client-releases), which lists every release
+/// The desktop half of the update feed: <c>&lt;feed&gt;/&lt;channel&gt;/releases.json</c> (app/api/client-releases in the website repository), which lists every release
 /// the channel offers with its files, their platform and kind tags and their hashes. The tags are the ones release.yml's
 /// "Upload to the docs site" step sends (<c>darwin|win32|linux</c>-<c>arm64|x64</c>; <c>zip</c> / <c>exe</c> / <c>appimage</c>), so the two
 /// change together. Installers go up before npm and carry their own server, so an app offer does not wait for <c>latest.json</c>.

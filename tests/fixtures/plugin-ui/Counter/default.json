@@ -1,0 +1,12 @@
+{
+  "id": "Counter/default",
+  "component": "Counter",
+  "state": "default",
+  "tree": {
+    "type": "Counter",
+    "props": {
+      "value": 128430,
+      "format": "compact"
+    }
+  }
+}

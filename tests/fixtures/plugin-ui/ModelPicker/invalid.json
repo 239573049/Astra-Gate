@@ -1,0 +1,13 @@
+{
+  "id": "ModelPicker/invalid",
+  "component": "ModelPicker",
+  "state": "invalid",
+  "tree": {
+    "type": "ModelPicker",
+    "props": {
+      "name": "model",
+      "value": "claude-sonnet-4",
+      "invalid": true
+    }
+  }
+}

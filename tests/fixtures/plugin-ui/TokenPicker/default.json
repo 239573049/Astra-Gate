@@ -1,0 +1,11 @@
+{
+  "id": "TokenPicker/default",
+  "component": "TokenPicker",
+  "state": "default",
+  "tree": {
+    "type": "TokenPicker",
+    "props": {
+      "name": "token"
+    }
+  }
+}

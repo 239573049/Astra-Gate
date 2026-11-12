@@ -1,0 +1,13 @@
+{
+  "id": "MoneyField/default",
+  "component": "MoneyField",
+  "state": "default",
+  "tree": {
+    "type": "MoneyField",
+    "props": {
+      "name": "budget",
+      "value": 12.5,
+      "currency": "USD"
+    }
+  }
+}

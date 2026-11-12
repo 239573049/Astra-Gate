@@ -22,6 +22,8 @@ export type MenuCommand =
   | 'refresh'
   | 'new-provider'
   | 'toggle-sidebar'
+  /** The command palette (pages and v2 plugin commands). */
+  | 'palette'
   /** Settings › Tray panel tab (the tray panel's gear button). */
   | 'settings:tray';
 
@@ -172,6 +174,7 @@ export function menuLabels(locale: string) {
     find: zh ? '搜索' : 'Find',
     refresh: zh ? '刷新数据' : 'Reload Data',
     toggleSidebar: zh ? '显示/隐藏侧边栏' : 'Toggle Sidebar',
+    palette: zh ? '命令面板…' : 'Command Palette…',
     openLogs: zh ? '打开日志目录' : 'Open Logs Folder',
     nav: {
       overview: zh ? '概览' : 'Overview',

@@ -257,9 +257,10 @@ v2 不再有明文凭据文件：v1 的 `plugin-auth.json` 只属于 v1。
 
 | 阶段 | 内容 |
 |---|---|
-| P0 | 技术验证（README「待验证」四项）+ 模式文件与代码生成的骨架 |
+| P0 | 技术验证（README「待验证」各项）+ 模式文件与代码生成的骨架 |
 | P1 | 运行时核心：清单、注册表、调用表、权限、`main` 上下文、`storage` / `secrets` / `log` / `i18n` / `commands`、`configuration` 设置表单 |
-| P2 | UI API：协议、两端渲染器、`ui.pages` / `ui.settings` / 首批 `ui.slots`、一致性测试 |
+| P2a | UI 协议与两端渲染器：会话、补丁、效果、本地状态；两端已有的组件；`ui.pages` / `ui.settings`；一致性测试流程 |
+| P2b | 补齐组件：先做必须项（树、日期、折线图、`RichText` 与宿主侧 Markdown 解析），再做 04 §12 其余缺口；首批 `ui.slots` / `ui.menus`、数据通道、画廊与检查器 |
 | P3 | 网关钩子 v2（`gateway` 上下文、`raw` / `ir` 视图）、与 v1 链的组合 |
 | P4 | 市场条目、v2 升级提醒与升级流程（07）、CLI、SDK、文档 |
 | 2.1 | `providers`、`clients` 扩展点（替代 v1 的 provider / agent 插件），`net` 流式、登录流程视图 |

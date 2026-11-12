@@ -1,0 +1,12 @@
+{
+  "id": "AccountPicker/invalid",
+  "component": "AccountPicker",
+  "state": "invalid",
+  "tree": {
+    "type": "AccountPicker",
+    "props": {
+      "name": "account",
+      "invalid": true
+    }
+  }
+}

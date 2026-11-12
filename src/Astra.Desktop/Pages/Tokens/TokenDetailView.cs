@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Kit;
 using Astra.Desktop.Components.Tokens;
@@ -104,6 +105,7 @@ public sealed class TokenDetailView : UserControl
 
         _pool = new QueryHost<TokenDto>(_page.Token, q => q.Data?.Pool is { } pool ? PoolSection(pool) : null);
         _body.Children.Add(_pool);
+        _body.Children.Add(Astra.Desktop.PluginUi.PluginShell.Slot("token.detail.sections", () => new JsonObject { ["tokenId"] = _page.Id }));
 
         _lower = new QueryHost<StatsSummaryDto>(_page.Summary(), q =>
         {

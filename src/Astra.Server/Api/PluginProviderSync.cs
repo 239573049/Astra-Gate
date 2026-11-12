@@ -46,7 +46,8 @@ public sealed class PluginProviderSync(AstraDatabase db, PluginProviders provide
                 logger.LogWarning("Plugin providers not synced: {Error}", e.Message);
                 return;
             }
-            var rows = (await db.Providers.ListAsync(ct)).Where(p => p.AuthScheme == AuthSchemes.Plugin).ToList();
+            // only v1's own rows: a v2 provider's row (plugin2-…) belongs to PluginV2ProviderSync
+            var rows = (await db.Providers.ListAsync(ct)).Where(p => p.AuthScheme == AuthSchemes.Plugin && p.Id.StartsWith(IdPrefix, StringComparison.Ordinal)).ToList();
             foreach (var pp in listed) await SyncProviderAsync(pp, rows.FirstOrDefault(r => r.Id == RowId(pp.Id)), ct);
             foreach (var gone in rows.Where(r => listed.All(pp => RowId(pp.Id) != r.Id) && r.Enabled))
             {
@@ -185,7 +186,7 @@ public sealed class PluginProviderSync(AstraDatabase db, PluginProviders provide
     private async Task<JsonObject> ProxiesAsync(CancellationToken ct)
     {
         var proxies = new JsonObject();
-        foreach (var row in (await db.Providers.ListAsync(ct)).Where(p => p.AuthScheme == AuthSchemes.Plugin))
+        foreach (var row in (await db.Providers.ListAsync(ct)).Where(p => p.AuthScheme == AuthSchemes.Plugin && p.Id.StartsWith(IdPrefix, StringComparison.Ordinal)))
         {
             var id = Gateway.Pipeline.GatewayPipeline.PluginProviderOf(row);
             var entry = new JsonObject();
@@ -199,7 +200,7 @@ public sealed class PluginProviderSync(AstraDatabase db, PluginProviders provide
 
     public static string? PluginKeyOf(ProviderAccount account) => Gateway.Pipeline.UpstreamAuthResolver.PluginKeyOf(account);
 
-    private static string? SafeIcon(string? icon) =>
+    internal static string? SafeIcon(string? icon) =>
         icon is not null && (icon.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
                              || (icon.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase) && !icon.StartsWith("data:image/svg", StringComparison.OrdinalIgnoreCase) && icon.Length <= 64 * 1024))
             ? icon

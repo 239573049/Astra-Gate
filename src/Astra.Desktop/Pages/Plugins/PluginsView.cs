@@ -28,7 +28,11 @@ internal sealed class PluginsView : LiveView
     {
         _page = page;
         var model = page.Model;
-        _installed.Content = new InstalledTabView(model) { Margin = new Thickness(0, 4, 0, 0) };
+        var installed = new StackPanel { Margin = new Thickness(0, 4, 0, 0) };
+        if (Astra.Desktop.PluginUi.PluginShell.Api is { } v2 && page.Context is { } ctx)
+            installed.Children.Add(new Astra.Desktop.PluginUi.PluginsV2Section(v2, ctx.Feedback, ctx.Api));
+        installed.Children.Add(new InstalledTabView(model));
+        _installed.Content = installed;
         _market.Content = new MarketTabView(model) { Margin = new Thickness(0, 4, 0, 0) };
         _runtime.Content = new RuntimeTabView(model) { Margin = new Thickness(0, 4, 0, 0) };
         _tabs.Items.Add(_installed);

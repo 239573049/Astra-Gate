@@ -1,0 +1,15 @@
+{
+  "id": "CodeField/invalid",
+  "component": "CodeField",
+  "state": "invalid",
+  "tree": {
+    "type": "CodeField",
+    "props": {
+      "name": "rules",
+      "value": "{\n  \"words\": [\"secret\"]\n}",
+      "language": "json",
+      "rows": 5,
+      "invalid": true
+    }
+  }
+}

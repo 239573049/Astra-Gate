@@ -1,0 +1,22 @@
+{
+  "id": "Box/default",
+  "component": "Box",
+  "state": "default",
+  "tree": {
+    "type": "Box",
+    "props": {
+      "surface": "card",
+      "padding": "4",
+      "border": true,
+      "radius": "md"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Inside a card box"
+        }
+      }
+    ]
+  }
+}

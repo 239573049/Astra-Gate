@@ -1,0 +1,22 @@
+{
+  "id": "Section/default",
+  "component": "Section",
+  "state": "default",
+  "tree": {
+    "type": "Section",
+    "props": {
+      "title": "Advanced",
+      "description": "Rarely needed",
+      "collapsible": true,
+      "defaultOpen": true
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Section body"
+        }
+      }
+    ]
+  }
+}

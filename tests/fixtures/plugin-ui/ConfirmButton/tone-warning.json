@@ -1,0 +1,14 @@
+{
+  "id": "ConfirmButton/tone-warning",
+  "component": "ConfirmButton",
+  "state": "tone-warning",
+  "tree": {
+    "type": "ConfirmButton",
+    "props": {
+      "label": "Delete",
+      "confirmLabel": "Really delete?",
+      "tone": "warning",
+      "onPress": "delete"
+    }
+  }
+}

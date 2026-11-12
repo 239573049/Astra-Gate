@@ -1,0 +1,27 @@
+{
+  "id": "Segmented/disabled",
+  "component": "Segmented",
+  "state": "disabled",
+  "tree": {
+    "type": "Segmented",
+    "props": {
+      "name": "range",
+      "value": "week",
+      "options": [
+        {
+          "value": "day",
+          "label": "Day"
+        },
+        {
+          "value": "week",
+          "label": "Week"
+        },
+        {
+          "value": "month",
+          "label": "Month"
+        }
+      ],
+      "disabled": true
+    }
+  }
+}

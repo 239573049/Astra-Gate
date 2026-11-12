@@ -21,8 +21,9 @@ import * as accountsModels from './steps/accounts-models.mjs';
 import * as requestsTraces from './steps/requests-traces.mjs';
 import * as clientsPlugins from './steps/clients-plugins.mjs';
 import * as settingsPrivacy from './steps/settings-privacy.mjs';
+import * as pluginUi from './steps/plugin-ui.mjs';
 
-const areas = [overview, shell, providers, accountsModels, requestsTraces, clientsPlugins, settingsPrivacy];
+const areas = [overview, shell, providers, accountsModels, requestsTraces, clientsPlugins, settingsPrivacy, pluginUi];
 
 export const STEPS = Object.assign({}, ...areas.map((a) => a.STEPS ?? {}));
 export const DESKTOP_ONLY = Object.assign({}, ...areas.map((a) => a.DESKTOP_ONLY ?? {}));
@@ -46,6 +47,7 @@ export function webPathFor(rec) {
     case 'Privacy': return p ? `/privacy/${p}` : '/privacy';
     case 'SmartRouting': return '/smart-routing';
     case 'Settings': return p ? `/settings/${p}` : '/settings';
+    case 'PluginGallery': return rec.param?.startsWith('scene:') ? `/plugins/dev/gallery?scene=${encodeURIComponent(rec.param.slice(6))}` : '/plugins/dev/gallery';
     default: return '/';
   }
 }

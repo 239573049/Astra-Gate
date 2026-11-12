@@ -1,0 +1,23 @@
+{
+  "id": "SplitButton/default",
+  "component": "SplitButton",
+  "state": "default",
+  "tree": {
+    "type": "SplitButton",
+    "props": {
+      "label": "Export",
+      "variant": "primary",
+      "items": [
+        {
+          "label": "CSV",
+          "action": "csv"
+        },
+        {
+          "label": "JSON",
+          "action": "json"
+        }
+      ],
+      "onPress": "export"
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "ConfirmButton/default",
+  "component": "ConfirmButton",
+  "state": "default",
+  "tree": {
+    "type": "ConfirmButton",
+    "props": {
+      "label": "Delete",
+      "confirmLabel": "Really delete?",
+      "tone": "danger",
+      "onPress": "delete"
+    }
+  }
+}

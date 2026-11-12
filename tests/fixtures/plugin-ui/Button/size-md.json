@@ -1,0 +1,15 @@
+{
+  "id": "Button/size-md",
+  "component": "Button",
+  "state": "size-md",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "primary",
+      "icon": "check",
+      "onPress": "save",
+      "size": "md"
+    }
+  }
+}

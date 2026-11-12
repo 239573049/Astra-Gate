@@ -1,0 +1,14 @@
+{
+  "id": "Button/default",
+  "component": "Button",
+  "state": "default",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "primary",
+      "icon": "check",
+      "onPress": "save"
+    }
+  }
+}

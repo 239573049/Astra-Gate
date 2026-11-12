@@ -26,6 +26,7 @@ import { Badge, Button, EmptyState, Field, Input, KV, Spinner, Switch } from './
 import { errorText, Select, Sheet, useFeedback } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
 import { formatDateTime } from '../lib/format';
+import { PluginFlowButton, v2ProviderOf } from '../plugin-ui/flows';
 
 /**
  * Accounts of a plugin's provider (auth scheme "plugin"): the sign-ins its plugin keeps. Signing in runs the
@@ -36,7 +37,9 @@ export function PluginAccounts({ provider }: { provider: Provider }) {
   const { t } = useI18n();
   const accounts = useProviderAccounts(provider.id);
   const gatewayUsage = useProviderUsage(provider.id);
-  const methods = usePluginMethods(provider.id);
+  // a v2 provider (design/plugin-v2 08) signs in through its plugin's flow, not the Bun host's methods
+  const v2 = v2ProviderOf(provider);
+  const methods = usePluginMethods(provider.id, !v2);
   // with more than one sign-in: how requests pick between them (the same switch modes as a subscription's)
   const policy = useSubscriptionPolicy(provider.id, true);
   const updatePolicy = useUpdateSubscriptionPolicy(provider.id);
@@ -46,6 +49,7 @@ export function PluginAccounts({ provider }: { provider: Provider }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
+        {v2 && <PluginFlowButton provider={provider} />}
         {methods.isLoading && <Spinner lines={1} />}
         {methods.isError && <Alert tone="danger" title={t('pluginAccounts.noPlugin')}>{errorText(methods.error)}</Alert>}
         {methods.data?.map((m) => (

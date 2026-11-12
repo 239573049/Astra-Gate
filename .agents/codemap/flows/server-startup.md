@@ -271,7 +271,7 @@ sequenceDiagram
 - **A new subcommand**: add the case in `Program.Main` (`Program.cs:32`) and the header comment
   above it; offline ones belong in `Commands.cs` (they must work without the HTTP server).
 - **A new startup setting**: a property on `ServerOptions` + (for containers) a variable in
-  `ApplyEnvironment` and a line in the header comment, + a flag in `ApplyArgs`, + `docs/…/docker.mdx`
+  `ApplyEnvironment` and a line in the header comment, + a flag in `ApplyArgs`, + `astra-gate-web/content/docs/guide/docker.mdx`
   and `compose.yaml` when the container surface changes. Runtime-editable settings are the other
   half: an `AppSettings` property (`src/Astra.Core/AppSettings.cs`) loaded by `SettingsService` — no
   migration.

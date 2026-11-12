@@ -1,0 +1,22 @@
+{
+  "id": "Card/tone-warning",
+  "component": "Card",
+  "state": "tone-warning",
+  "tree": {
+    "type": "Card",
+    "props": {
+      "title": "Today",
+      "subtitle": "since 00:00",
+      "icon": "activity",
+      "tone": "warning"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "1,204 requests"
+        }
+      }
+    ]
+  }
+}

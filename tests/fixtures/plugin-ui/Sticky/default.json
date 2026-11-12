@@ -1,0 +1,27 @@
+{
+  "id": "Sticky/default",
+  "component": "Sticky",
+  "state": "default",
+  "tree": {
+    "type": "Sticky",
+    "props": {
+      "edge": "top"
+    },
+    "children": [
+      {
+        "type": "Toolbar",
+        "props": {
+          "start": [
+            {
+              "type": "Button",
+              "props": {
+                "label": "Save",
+                "variant": "primary"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

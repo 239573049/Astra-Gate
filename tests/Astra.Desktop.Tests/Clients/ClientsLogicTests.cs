@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using Astra.Api.Contracts;
+using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.Clients;
 using Astra.Desktop.Core.Overview;
 using static Astra.Desktop.Tests.Clients.ClientsTestData;
@@ -10,6 +11,20 @@ public sealed class ClientsLogicTests
 {
     private static string T(string key, params (string Name, object? Value)[] args)
         => key + (args.Length == 0 ? "" : "(" + string.Join(",", args.Select(a => a.Name + "=" + a.Value)) + ")");
+
+    [Fact]
+    public void A_switched_off_provider_is_named_with_where_to_fix_it()
+    {
+        var off = ClientsLogic.DisabledProvider(new ApiException(409, "Provider \"WorkBuddy\" is disabled",
+            JsonNode.Parse("""{"providerId":"plugin-workbuddy","providerName":"WorkBuddy","pluginOff":true}""")), T);
+        Assert.Equal(("clients.providerDisabledTitle(name=WorkBuddy)", "clients.providerDisabledPluginHint"), off);
+        off = ClientsLogic.DisabledProvider(new ApiException(409, "x", JsonNode.Parse("""{"providerId":"p","providerName":"Mine","pluginOff":false}""")), T);
+        Assert.Equal("clients.providerDisabledHint", off!.Value.Hint);
+        // any other refusal keeps its own message
+        Assert.Null(ClientsLogic.DisabledProvider(new ApiException(409, "x", JsonNode.Parse("""{"boundClients":["codex"]}""")), T));
+        Assert.Null(ClientsLogic.DisabledProvider(new ApiException(500, "boom"), T));
+        Assert.Null(ClientsLogic.DisabledProvider(new HttpRequestException("down"), T));
+    }
 
     [Fact]
     public void Order_is_the_catalog_then_plugins_by_name()

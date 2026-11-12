@@ -1,4 +1,6 @@
+using System.Text.Json.Nodes;
 using Astra.Api.Contracts;
+using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.Overview;
 
 namespace Astra.Desktop.Core.Clients;
@@ -87,6 +89,17 @@ public static class ClientsLogic
     /// <summary>The server words this warning in English (<c>ClientService</c>); it is shown in the UI language.</summary>
     public static string WarningText(string warning, Translate t)
         => warning.StartsWith("Client configuration differs from the recorded Astra configuration", StringComparison.Ordinal) ? t("clients.warning.drifted") : warning;
+
+    /// <summary>
+    /// The refusal of a switched-off provider (409 with <see cref="DisabledProviderDetailsDto"/>, web <c>disabledProviderText</c>): which
+    /// one, and where to fix it — the plugin when that is what is off. Null for any other error.
+    /// </summary>
+    public static (string Title, string Hint)? DisabledProvider(Exception e, Translate t)
+    {
+        if (e is not ApiException { Status: 409, Details: JsonObject d } || d["providerName"]?.GetValue<string>() is not { Length: > 0 } name) return null;
+        var pluginOff = d["pluginOff"] is JsonValue v && v.TryGetValue<bool>(out var off) && off;
+        return (t("clients.providerDisabledTitle", ("name", name)), t(pluginOff ? "clients.providerDisabledPluginHint" : "clients.providerDisabledHint"));
+    }
 
     /// <summary>
     /// The group of a client (web <c>groupOf</c>): an enabled client has a config Astra wrote, so it counts as installed even when

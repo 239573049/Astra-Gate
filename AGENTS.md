@@ -1,7 +1,7 @@
 # AGENTS.md
 
-Guidance for coding agents working in this repository. It covers the whole repo; the only
-scoped file is `docs/AGENTS.md`, Next.js notes that `next dev` writes into the docs site. Design rationale lives in `.plan/*.md` (local planning docs,
+Guidance for coding agents working in this repository. It covers the whole repo; there are no
+scoped files (the website, once `docs/`, is its own repository — see below). Design rationale lives in `.plan/*.md` (local planning docs,
 gitignored) — code comments cite them as "plan §N"; keep such comments true when you change
 the behavior they describe.
 
@@ -20,32 +20,34 @@ Astra (`astragate`) — a local AI gateway. One product, two toolchains:
 - **pnpm workspace** (`pnpm@9.15.0`, `pnpm-workspace.yaml`; Node >= 18 per `cli`, CI runs Node 24):
   `cli/` (npm package `astragate`, bin `astra`; `release.yml` also rebuilds and publishes it as
   `@aidotnet/astra-gate`, whose self-update targets its own baked-in name), `web/` (`@aidotnet/web`, Vite + React admin UI),
-  `desktop/` (`@aidotnet/desktop`, Electron shell), `docs/` (`@aidotnet/docs`, Next.js/Fumadocs
-  documentation site), `npm/*` (platform packages `@aidotnet/server-*` / `@aidotnet/desktop-*`),
+  `desktop/` (`@aidotnet/desktop`, Electron shell), `npm/*` (platform packages `@aidotnet/server-*` / `@aidotnet/desktop-*`),
   `packages/update-core` (shared update engine), `connect/` (npm `@aidotnet/astra-connect`, bin `astra-connect`: the
   employee-side CLI that points local AI clients at a company's Astra gateway) and `packages/client-config` (source-only:
   the TypeScript port of `Astra.Clients` that it bundles). Design: `.plan/enterprise-connect.md`.
+  `packages/plugin-sdk` (`@astragate/plugin-sdk`, bin `astra-plugin`) is the v2 plugin authors' SDK: typings of the
+  `astra` module, a Node test harness on copies of the server's `boot.js` / `astra.js` / `components.json`, and
+  `init` / `validate` / `build` / `pack`, plus layout composites (`/patterns`). It has its own version (the plugin API's, not
+  Astra's): `release.yml`'s "Publish the v2 plugin SDK" step publishes a version npm doesn't have yet and never fails a release.
 
-`docs/` is the fumadocs documentation site (`pnpm --filter @aidotnet/docs dev` / `build`; content in
-`docs/content/docs`, shown as a single grouped sidebar: the root `meta.json` orders the module
+The website — landing page, fumadocs documentation, plugin market, download page and the release /
+plugin-market / cloudflared-mirror APIs — is the website repository (`astra-gate-web`, served at astra-gate.si;
+locally `../astra-gate-web`): a separate Next.js project with its own pnpm install, `AGENTS.md`, Docker image and
+workflow, not part of this workspace (it was `docs/` here until 2026-11-11). Website paths in this file are relative to
+that repository. Content is in `content/docs`, shown as a single grouped sidebar: the root `meta.json` orders the module
 folders, each folder's `meta.json` carries `title`/`description`/`icon`/`defaultOpen`, and
-`---[Icon]Name---` entries inside `pages` add sub-group separators — no `"root": true` tabs).
+`---[Icon]Name---` entries inside `pages` add sub-group separators — no `"root": true` tabs.
 Canonical/hreflang/sitemap/robots/llms URLs use the fixed origin `https://astra-gate.si`
-(the `siteUrl` constant in `docs/lib/shared.ts` — not env-driven; change it there to rebrand).
-It doubles as the official website and ships as its own Docker image: `.github/workflows/docs.yml`
-builds `docs/Dockerfile` (Next standalone output; the build context is the repo root) and pushes to
-`ghcr.io/<owner>/<repo>/docs` on every `main` push that touches `docs/**` (or the lockfile / workflow).
-The site also serves the plugin market (`docs/lib/plugin-market/`, `/api/plugin-market/**`, pages under
-`/plugins` and `/en/plugins` — both languages' copy and cards live in `components/plugins/`, kept free of the
-registry store so the client components don't pull in `node:fs`): upstream community registry (astragate-community/astra-gate-plugins' `registry.json`, whose tarballs are GitHub Release assets; regenerate it and the two built-in copies with that repo's `scripts/release.mjs pack`) + published
+(the `siteUrl` constant in `lib/shared.ts` — not env-driven; change it there to rebrand).
+The site also serves the plugin market (`lib/plugin-market/`, `/api/plugin-market/**`, pages under
+`/integrations` and `/en/integrations`; `/plugins` redirects there): upstream community registry (astragate-community/astra-gate-plugins' `registry.json`, whose tarballs are GitHub Release assets; regenerate it and the two built-in copies with that repo's `scripts/release.mjs pack`) + published
 entries/tarballs under `${DATA_DIR}/plugin-market/`; publishing needs `PLUGIN_UPLOAD_TOKEN` (see linked update 10).
-Tutorial screenshots in `docs/public/screenshots/` are captured from the live UI (`web` dev server on
-:5173 + a running astra-server) via `node docs/scripts/snap.mjs`; re-run it after UI changes instead of
+Tutorial screenshots in its `public/screenshots/` are captured from this repository's live UI (`web` dev server on
+:5173 + a running astra-server) via its `node scripts/snap.mjs`; re-run it after UI changes instead of
 editing PNGs. `login.png` is the only mockup-rendered shot (`shots/login.html`, loopback never shows a
-login page). `docs` has no `lint`/`test` script and its typecheck is named `types:check`
-(`next typegen && tsc --noEmit`), which `pnpm -r --if-present lint|typecheck|test` therefore skips
-silently — run those two by hand when the site changes. Its `build` is a full Next.js build and
-fails if the shell exports a non-standard `NODE_ENV` (unset it first).
+login page). Its `scripts/sync-catalog.mjs` copies `src/Astra.Providers/Templates/catalog.json` from here; rerun it
+there after the catalog changes. A change that spans both repositories (the linked updates below that name website
+files) is made in both — there is no shared commit or CI. Run its `pnpm types:check` / `pnpm build` there when the
+site changes; the build fails if the shell exports a non-standard `NODE_ENV` (unset it first).
 
 Distribution couples the sides: the server binary and `web/dist` are packed into `npm/server-*`
 (`scripts/pack-platform.mjs`), and `web/dist` is copied into `desktop/renderer`
@@ -58,8 +60,8 @@ The Docker image (root `Dockerfile`, `compose.yaml`, published to `ghcr.io/<owne
 `docker` job in `release.yml`) is a fourth consumer of that output: it compiles nothing, it
 `COPY`s `docker-bin/<amd64|arm64>/` — the unpacked `npm/server-linux-{x64,arm64}` package
 (binary + `libe_sqlite3.so` + `wwwroot/`) — onto `mcr.microsoft.com/dotnet/runtime-deps` (glibc, on
-purpose: the release RIDs are not `linux-musl-*`). `Dockerfile.dockerignore` limits its context;
-the root `.dockerignore` belongs to `docs/Dockerfile`.
+purpose: the release RIDs are not `linux-musl-*`). `Dockerfile.dockerignore` limits its context
+(there is no root `.dockerignore`).
 
 ## Commands
 
@@ -151,6 +153,15 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   `PluginProviderSync` mirrors them into providers `plugin-<id>` with `AuthSchemes.Plugin` (deliberately
   not in `AuthSchemes.All`), `plugin://` endpoints, and accounts whose `extra.plugin_key` names the
   sign-in in plugin-auth.json; the gateway sends their requests through `PluginFetchHandler`.
+- **v2 plugins** (`src/Astra.Plugins/V2`, design in `design/plugin-v2/` — tracked, unlike `.plan`) are Astra's own
+  format: an `astra.plugin.json` (`manifestVersion: 2`) package that the v1 runtimes ignore (`PackageManifest.IsV2`).
+  `PluginV2Host` runs each in one Jaunt engine (`Runtime/PluginMain.cs` + `boot.js` / `astra.js`, the virtual `astra`
+  module), and only once its permissions are granted; every host call goes through `HostCalls` and its permission
+  check. Views run server-side and reach the shells as a normalized tree plus patches over SSE (`V2/Ui`, `/api/plugins/v2/ui/sessions`);
+  the web (`web/src/plugin-ui`) and Avalonia (`src/Astra.Desktop/PluginUi`, protocol in `Astra.Desktop.Core/Plugins/V2`)
+  renderers share `V2/Ui/components.json` and the behaviour fixtures in `tests/fixtures/plugin-ui-behavior/`.
+  `gateway.hooks` join the v1 middleware chain (`MiddlewareModule.LoadV2`), and what a hook may write is decided by its
+  grant (`CanRewriteRequest`, `CanReject`, …), not by what it returns.
 - Tests that need Bun use `[BunFact]` (skip without one); CI installs the pinned Bun.
 - A plugin's run-time inputs are files under `~/.astra/plugins/` (see State ownership), so anything
   a plugin reads at request time resolves there or not at all — never relative to the process's
@@ -168,7 +179,7 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   the template's or the operator's origin only — never one a request names), no database, console, tokens, accounts,
   plugins or request log, nothing written to disk, and no state shared between requests. The pipeline reaches its host
   only through `src/Astra.Gateway/Pipeline/PipelineContracts.cs` (linked update 21). Tests: `Relay*Tests` in
-  `tests/Astra.Server.IntegrationTests` (`RelayHost`); docs: `docs/content/docs/guide/relay.mdx`.
+  `tests/Astra.Server.IntegrationTests` (`RelayHost`); docs: the website's `content/docs/guide/relay.mdx`.
 - Most admin endpoint groups live in `src/Astra.Server/Api/*Endpoints.cs` (their wire DTOs are in
   `src/Astra.Api.Contracts/*Dtos.cs`, one file per area; `Api/Dtos.cs` only points there), with one exception: `src/Astra.Server/Alerts/AlertEndpoints.cs` sits beside the
   alert service and its contracts. Register the group's `Map*Endpoints` in `AstraApp.Create`.
@@ -341,7 +352,7 @@ runtime needed on the target).
   the two Swift lookups macOS 13 lacks. `scripts/check-macos-floor.mjs` (`release.yml`, `desktop-aot.yml`) checks the
   published binaries against the macOS 13.3 SDK's stubs; when an SDK bump makes it fail, extend the shim only for an entry
   point shown to be equivalent, otherwise move the floor together with `LSMinimumSystemVersion` in `Packaging/Info.plist`
-  and the requirement in `docs/content/docs/guide/install.mdx` and both READMEs.
+  and the requirement in the website's `content/docs/guide/install.mdx` and both READMEs.
 - Known gap: `scripts/gen-manifest.mjs` hashes only the executable, so the companion carries no
   integrity hash in the update feed.
 
@@ -407,19 +418,19 @@ runtime needed on the target).
 9. **Server startup configuration or release packaging**: the container surface is the env vars in
    `ServerOptions.ApplyEnvironment` (tests: `ServerOptionsEnvironmentTests`), the `healthcheck`
    subcommand, `Dockerfile` / `compose.yaml`, the `docker` job in `release.yml`, and
-   `docs/content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects
+   the website's `content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects
    `/api/health`, `/api/auth/status` (`required: true`) and the SPA at `/`. The same image runs `relay`: its
    settings are `RelayOptions` (`ASTRA_RELAY_*`, tests: `RelayCredentialTests`), `healthcheck` falls back to its
    `/readyz` when `/api/health` is a 404, and the `docker` job's relay smoke plus `scripts/relay-smoke.mjs` (build job)
-   and `docs/content/docs/guide/relay.mdx` describe it — change those with it.
-10. **Plugin market contract**: the registry the docs site serves (`docs/lib/plugin-market/`, routes
-    `docs/app/api/plugin-market/**`, document shape in `types.ts`) is parsed by `PluginMarket.Parse`
+   and the website's `content/docs/guide/relay.mdx` describe it — change those with it.
+10. **Plugin market contract**: the registry the website serves (the website repository's `lib/plugin-market/`, routes
+    `app/api/plugin-market/**`, document shape in `types.ts`) is parsed by `PluginMarket.Parse`
     (`src/Astra.Plugins/Market/PluginMarket.cs`) and shown by `web/src/api/types.ts` (`MarketListing`,
     `MarketSearchResult`) and `cli/src/commands/plugin.ts` — a field added on one side is added on all of them,
-    and `docs/content/docs/advanced/plugin-market.mdx` lists the fields. The client reads only the docs registry
+    and the website's `content/docs/advanced/plugin-market.mdx` lists the fields. The client reads only the website's registry
     (default `PluginMarket.DefaultUrl`; `ASTRA_PLUGIN_MARKET` > the `pluginMarketUrl` setting > default) and never
-    asks npm or GitHub itself (search goes through the registry's `/search`). `docs/lib/plugin-market/upstream-fallback.json`
-    is a copy of `Market/market.json` (the docs image build context has no `src/`): update both together. A hosted
+    asks npm or GitHub itself (search goes through the registry's `/search`). The website's `lib/plugin-market/upstream-fallback.json`
+    is a copy of `Market/market.json` (the website repository has no `src/`): update both together, in both repositories. A hosted
     package's tarball address and hash come from the registry only (`PluginService.Add` never takes them from the
     caller; the download follows redirects by hand — https only, at most 5 hops — because a GitHub Release asset always
     redirects, and the sha256 from the registry decides whether what arrived is installed), and `PluginSources.MarketPackage` entries update through the market, not npm.
@@ -427,17 +438,17 @@ runtime needed on the target).
     `AlertConditions` (`src/Astra.Core/Alerts/AlertContracts.cs`), the observation its subject type reports
     (`AlertEngine.SweepAsync`, `TokenLimiter.Observation`), its zh/en message in `src/Astra.Server/Alerts/AlertMessages.cs`,
     web i18n `alerts.event.<id>[.hint]` (plus `alerts.param.*` / `alerts.choice.*` for new condition fields), and the event
-    table in `docs/content/docs/console/notifications.mdx`. The webhook payload shape is a public contract documented there.
+    table in the website's `content/docs/console/notifications.mdx`. The webhook payload shape is a public contract documented there.
 12. **cloudflared version** (`CloudflaredRuntime.Version` + its SHA-256 table, from the release assets' digests —
     `gh api repos/cloudflare/cloudflared/releases/tags/<v>`) move together. The asset names `CloudflaredRuntime.Asset`
-    returns are also the docs site mirror's allowlist (`CLOUDFLARED_ASSETS` in `docs/lib/tools-mirror.ts`, served at
+    returns are also the website mirror's allowlist (`CLOUDFLARED_ASSETS` in the website's `lib/tools-mirror.ts`, served at
     `/api/tools/cloudflared/<version>/<asset>`, cached under `${DATA_DIR}/tools/`): change them together. The remote access page and
-    `docs/content/docs/guide/remote-access.mdx` describe what remote requests may reach — keep them in step with
+    the website's `content/docs/guide/remote-access.mdx` describe what remote requests may reach — keep them in step with
     `SecurityMiddleware`.
 13. **Release publishing** pairs a version bump with `release.yml`: the manifest the CLI and
     desktop read (`packages/update-core/src/check.ts`, `manifest.ts`, `DEFAULT_FEED_URL`) is served
-    by the docs site from bytes `release.yml` uploads to `${DATA_DIR}/client-releases/<channel>/`
-    through `docs/app/api/client-releases/` (storage and hashing: `docs/lib/releases.ts`, which
+    by the website from bytes `release.yml` uploads to `${DATA_DIR}/client-releases/<channel>/`
+    through its `app/api/client-releases/` (storage and hashing: the website's `lib/releases.ts`, which
     owns `CLIENT_UPLOAD_TOKEN`). The upload step warns and exits 0 when `DOCS_RELEASE_URL` /
     `DOCS_RELEASE_TOKEN` are unset — a green run with a missing secret publishes nothing to the
     site, so check that step's log rather than assuming a release reached the feed. `release.yml`
@@ -445,18 +456,18 @@ runtime needed on the target).
     after the `version` job, so the `build` and `publish` jobs never run in that case.
     Channels: uploads carry `x-astra-channel` (`stable` | `preview`, refused when it disagrees with
     the version), and the `preview` feed offers preview releases plus every stable (`FEED_SOURCES`,
-    `docs/lib/releases.ts`). The installers go up before npm, the server-update `latest.json` only
+    the website's `lib/releases.ts`). The installers go up before npm, the server-update `latest.json` only
     after npm serves every package it names; the routes serve the newest release that has the file
     asked for. Clients follow the server's `updateChannel` setting (`UpdateChannels`, default
     stable): the server check, the desktop (manifest + DMG feed, `desktop/src/shared/updateChannel.ts`)
     and `astra update` (`--channel` overrides once; the self-update installs the manifest's exact
     version). The version ordering is semver precedence in five places that move together:
     `scripts/release-channel.mjs`, `UpdateCheckService.IsNewer`, `packages/update-core/src/version.ts`,
-    `docs/lib/releases.ts` `compareVersions` and `ReleaseVersion` (`src/Astra.Desktop.Core`).
-14. **A `docs/` page or sidebar entry**: the folder's `meta.json` carries `title`/`description`/
+    the website's `lib/releases.ts` `compareVersions` and `ReleaseVersion` (`src/Astra.Desktop.Core`).
+14. **A website docs page or sidebar entry** (in the website repository's `content/docs`): the folder's `meta.json` carries `title`/`description`/
     `icon`/`defaultOpen` and lists its `pages` (with `---[Icon]Name---` separators between
     sub-groups); a new page is added there and, when it belongs to a module, to the root
-    `docs/content/docs/meta.json` order as well.
+    `content/docs/meta.json` order as well.
 15. **Trace spans** (`.plan/observability.md`): span names are `TraceSpanNames` (`src/Astra.Core/Requests/TraceSpan.cs`),
     recorded by `GatewayPipeline` through `src/Astra.Gateway/Tracing` (`RequestTrace`; the agent links — session, turn,
     parent call — from `TraceKeys` + `TraceLinker`) and written to `trace_spans` with the request row
@@ -465,24 +476,24 @@ runtime needed on the target).
     `astra.response.*`, `astra.request.cause` / `astra.request.prompt`, the `tool_result` and `tool_call` events, …) are
     also matched by SQL in `TraceRepository` and `RequestRepository.ProviderStatsAsync`, by `/api/traces` (`TraceEndpoints`,
     incl. `ToActivity` behind `/api/traces/activity`) and by the web views (`web/src/components/traces/model.ts`
-    `SPAN` and the inspectors): renaming one changes all of them, and `docs/content/docs/console/traces.mdx` lists what is
+    `SPAN` and the inspectors): renaming one changes all of them, and the website's `content/docs/console/traces.mdx` lists what is
     recorded. Anything copied from the conversation (tool arguments, prompt, reply) is recorded only while
     `AppSettings.TraceContent` is on (off by default). Upstream requests never carry trace context: `GatewayHttpClients` sets a no-output
     `ActivityHeadersPropagator`, and `UpstreamTraceHeadersTests` checks it with the real handler (the integration
     fixture swaps the handler out, so it cannot).
 
-16. **Install scripts** (`docs/public/install.sh`, `install.ps1`): they consume the release feed
+16. **Install scripts** (the website's `public/install.sh`, `public/install.ps1`): they consume the release feed
     (`<channel>/latest.json`, `releases.json`, `/v/<version>/<file>` names from `canonicalFileName`;
     channel `stable` unless `--preview` / `ASTRA_CHANNEL=preview`), the npm server
     package layout (`bin/astra-server`, companions, `wwwroot/`) and the managed layout `update-core` owns
     (`~/.astra/server/astra-server-<version>`, `install.json` — they preserve its `desktop*` fields). Change
-    them together with those, and with `docs/content/docs/guide/install.mdx`, both READMEs and the download page.
+    them together with those, and with the website's `content/docs/guide/install.mdx`, both READMEs and the download page.
 17. **Server autostart entries**: `astra autostart` (`cli/src/lib/autostart.ts`) and the settings page's switch
     (`src/Astra.Server/Autostart/AutostartService.cs`, `GET`/`PUT /api/server/autostart`) write the same entries —
     LaunchAgent `io.astra.server`, systemd user unit `astra.service`, Run key value `Astra Server` (the CLI's old
     `schtasks` task is only found and removed) — running `<server> serve --started-by autostart`. Names, paths,
     argv and file formats change in both (`AutostartTests.Entry_formats_match_the_cli` and `cli/test/autostart.test.ts`
-    pin the text), plus `docs/content/docs/console/settings.mdx` and `cli/service.mdx`. The desktop app's own login
+    pin the text), plus the website's `content/docs/console/settings.mdx` and `cli/service.mdx`. The desktop app's own login
     item is separate (`desktop/src/shared/loginItem.ts`; Linux uses an XDG autostart entry).
 18. **Token provider pools** (GitHub issue #2): `TokenPool` (`src/Astra.Core/Tokens/TokenPool.cs`, stored in
     `tokens.pool_json`, migration 0018) applies to bare-token direct calls only. `TokenService.ApplyPoolAsync` stores it
@@ -490,17 +501,17 @@ runtime needed on the target).
     older binary still routes; keep that. A new strategy is a `TokenPoolStrategies` constant, its branch in
     `ProviderPoolScheduler` (`Tiers` / `Pick` / `Rest`), the web editor's `POOL_STRATEGIES` and `expectedShares`
     (`web/src/components/TokenPoolEditor.tsx`, which mirrors the scheduler), zh/en `tokens.strategy.<id>[.hint]`, and the
-    strategy table in `docs/content/docs/console/tokens.mdx`; what fails over (`ProviderFailover.Classify`) and how long a
+    strategy table in the website's `content/docs/console/tokens.mdx`; what fails over (`ProviderFailover.Classify`) and how long a
     provider cools (`ProviderHealth`) are the failover table there — change them together. In `GatewayPipeline`, while
     another pool attempt may follow, never rewrite the client's guarded tree in place and never re-read the request
-    bytes (they are the unredacted original once the privacy guard rewrote the tree): `PrepareAsync` clones instead. A client bound to several providers fails over the same way (issue #28, `AppSettings.ClientProviderFailover`, default on; `PoolRouting.PlanBindingsAsync`; mirrors: `SettingsDto`, `web` settings page, zh/en `settings.clientFailover*`, `docs/content/docs/console/settings.mdx`).
+    bytes (they are the unredacted original once the privacy guard rewrote the tree): `PrepareAsync` clones instead. A client bound to several providers fails over the same way (issue #28, `AppSettings.ClientProviderFailover`, default on; `PoolRouting.PlanBindingsAsync`; mirrors: `SettingsDto`, `web` settings page, zh/en `settings.clientFailover*`, the website's `content/docs/console/settings.mdx`).
 19. **Smart routing** (`.plan/smart-routing.md`): a request for the virtual model (`SmartRoutingSettings.VirtualModel`,
     default `astra-auto`) gets the model of the grade a judge picks. Settings live under their own `settings` key
     `smart_routing` (`SmartRoutingService`, a snapshot like `PrivacyGuardService`; no migration), the judge key is
     `ApiKeyProtected`, and changing the judge's address or dialect without a new key drops it (`SmartRoutingEndpoints.Apply`).
     The judge is an `IRoutingJudge` per wire dialect (`src/Astra.Gateway/Routing`, registered in `RoutingJudges.Register`);
     a new dialect is a class, a `JudgeProtocols` constant, the web `PRESETS` and `smartRouting.judge.protocol.<id>[.hint]`
-    keys, the table in `docs/content/docs/console/smart-routing.mdx` and its tests with golden fixtures
+    keys, the table in the website's `content/docs/console/smart-routing.mdx` and its tests with golden fixtures
     (`tests/Astra.Gateway.Tests/Fixtures/routing`). A dialect posts through `JudgeHttp.PostAsync`, which uses the judge's
     own long-lived HTTP/2 client (`GatewayHttpClients.ForJudge`) and gives a call that must connect first
     `JudgeEndpoint.ConnectAllowance` more — never `GatewayHttpClients.For`, whose two-minute pool made nearly every judgement
@@ -539,7 +550,7 @@ runtime needed on the target).
     `astra-connect` writes into a client is the **bare token**: a client-suffixed key would need that client enabled and bound
     on the server. Keys never go on argv (`ASTRA_API_KEY` / `--key-stdin` / masked prompt); `connect` is published by
     `release.yml` with the other packages (before `@aidotnet/astra-gate`, whose presence marks a finished release) and
-    versioned by `sync-versions.mjs`. Docs: `docs/content/docs/cli/connect.mdx`; the console's token row has the
+    versioned by `sync-versions.mjs`. Docs: the website's `content/docs/cli/connect.mdx`; the console's token row has the
     "copy join command" button (zh/en `tokens.copyJoin` / `tokens.joinCopied`).
 
 21. **The pipeline's host contracts** (`src/Astra.Gateway/Pipeline/PipelineContracts.cs`): `GatewayPipeline` has two hosts —
@@ -570,7 +581,7 @@ runtime needed on the target).
     `installer.nsi`, `astra.desktop`) under the Electron app's exact names — `Astra-<ver>-<arch>.dmg` / `.zip` +
     `latest-mac.yml`, `Astra-<ver>-<arch>-setup.exe`, `Astra-<ver>-<x86_64|arm64>.AppImage` — and the executable is renamed
     `Astra` / `Astra.exe` / `astra` (the assembly stays `astra-desktop`: `avares://astra-desktop/` URIs depend on it). Keep
-    those names: old clients, the docs site's upload and download routes and existing shortcuts all match on them.
+    those names: old clients, the website's upload and download routes and existing shortcuts all match on them.
     The Avalonia app updates itself from the same files: `DesktopReleaseFeed` (`src/Astra.Desktop.Core/Update`) picks them out
     of `<feed>/<channel>/releases.json` by the upload step's `x-astra-platform` / `x-astra-kind` tags (`darwin|win32|linux-arm64|x64`,
     `zip|exe|appimage`) and their sha256, so those tags, the zip's layout (one `Astra.app`) and `installer.nsi`'s
@@ -584,7 +595,7 @@ runtime needed on the target).
     turning the setting on or off re-syncs enabled clients' model lists (`PATCH /api/settings` in `RequestEndpoints.cs` → `ClientService.SyncModelListsAsync`).
     Mirrors: `SettingsDto`, `web/src/api/types.ts` (`Settings`, `Provider.settings.alias`), the web settings/provider pages and
     zh/en `settings.qualifiedModels.*` / `providers.alias.*` keys (+ `gen-desktop-i18n`), the Avalonia `ModelSettingsView` and
-    `ModelsTab`, and `docs/content/docs/console/settings.mdx` / `providers.mdx`.
+    `ModelsTab`, and the website's `content/docs/console/settings.mdx` / `providers.mdx`.
 
 24. **Join links / unified gateway** (the desktop's "connect to a unified gateway"): the server issues one-time codes for a token
     (`token_invites`, migration 0021; `TokenInviteService`, admin `POST|GET /api/tokens/{id}/invites`, `DELETE …/{inviteId}`) and
@@ -621,7 +632,7 @@ runtime needed on the target).
     server DTO's `OAuth` is pinned to the JSON name `oauth`), `web/src/api` (`useMcp*`) and `types.ts`, the web page `McpGateway.tsx` and the
     token settings sheet's MCP choice, the Avalonia page (`Pages/Mcp`, `Components/Mcp/McpServerSheet.cs`, `Astra.Desktop.Core/Mcp/McpApi.cs`,
     `TokenSettingsDraft.McpServers`, route `AppRoute.Mcp`), zh/en `mcp.*` / `nav.mcp` / `tokens.mcp*` keys (+ `gen-desktop-i18n`), the UI fixtures
-    (`scripts/visual/gen-fixtures.mjs`: `/api/mcp/*`, `mcpServers` on a token) and `docs/content/docs/console/mcp.mdx` (linked update 14). The
+    (`scripts/visual/gen-fixtures.mjs`: `/api/mcp/*`, `mcpServers` on a token) and the website's `content/docs/console/mcp.mdx` (linked update 14). The
     "Apply to clients" (issue #34, `.plan/client-mcp-apply.md`): `ClientMcpApplier` (`src/Astra.Clients/Config`, a class of its own — no adapter, so no TS port or golden cases) writes `mcpServers.astra` into Claude Code's `.claude.json` (`CLAUDE_CONFIG_DIR`) and `[mcp_servers.astra]` into Codex's `config.toml` through `ClientConfigApplier`, under the state kind `<kind>-mcp`, so it is independent of the client's take-over (disabling that leaves it; `Commands.RestoreAllAsync` removes it). A foreign `astra` entry is never overwritten. `ClientMcpService` / `ClientMcpEndpoints` (`/api/clients/mcp`, `/api/clients/{kind}/mcp`; writes local-origin only) write the token's key server-side and never return it. Mirrors: `Astra.Api.Contracts/ClientMcpDtos.cs`, `web/src/api` (`useClientMcp` …) and `components/ClientMcpEntries.tsx`, zh/en `mcp.clients.*`, `mcp.mdx`; the Avalonia mirror is not done. Tests: `ClientMcpApplierTests`, `ClientMcpApiTests`.
     nav entry is not in `NavItems.Hideable` yet. Tests: `McpGatewayTests`, `McpAdminApiTests`, `McpOAuthTests` (real SDK servers on `TestServer`, `McpFixture`), `McpRepositoryTests`.
 
@@ -639,9 +650,43 @@ runtime needed on the target).
     Mirrors: `Astra.Api.Contracts/LibraryDtos.cs`, `web/src/api` (`useSkillLibrary` …) and `types.ts`, `web/src/pages/SkillsPage.tsx` +
     `components/skills`, the Avalonia page (`Pages/Skills`, `Components/Skills`, `Astra.Desktop.Core/Library/SkillsApi.cs`, route `AppRoute.Skills`,
     sidebar group `nav.group.resources` in `NavTable`), zh/en `skills.*` / `nav.skills` / `nav.group.resources` (+ `gen-desktop-i18n`), the UI fixtures
-    (`scripts/visual/gen-fixtures.mjs`: `/api/library/skills`), `docs/content/docs/console/skills.mdx` (linked update 14). `~/.astra/library` is a path in
+    (`scripts/visual/gen-fixtures.mjs`: `/api/library/skills`), the website's `content/docs/console/skills.mdx` (linked update 14). `~/.astra/library` is a path in
     linked update 5 (`libraryDir` in the CLI and desktop). The Hooks / instructions / sub-agents menus are not built yet. Tests: `SkillLibraryTests` (+ `SkillGitTests`), `LibraryRepositoryTests`,
     `LibraryApiTests`, `SkillsLogicTests`, `SkillsPageTests`.
+
+27. **v2 plugins** (`design/plugin-v2/`): the component vocabulary is `src/Astra.Plugins/V2/Ui/components.json` — a
+    component or prop changes it, `UiTree` normalization, both renderers (`web/src/plugin-ui/render.tsx` / `widgets.tsx` and
+    `src/Astra.Desktop/PluginUi/UiRender.cs`), the shared fixtures, and the SDK (`node packages/plugin-sdk/scripts/gen.mjs`
+    regenerates its copies and `components.g.d.ts`; its `test` fails while they are stale). A permission is a constant in
+    `PluginPermissions` (+ `Fixed`), its check in `HostCalls` or the hook's `Can*`, zh/en `pluginUi.perm.<p>`, the SDK
+    validator (`bin/astra-plugin.mjs` `FIXED`) and the table in the website's `content/docs/plugin-dev/index.mdx`; an extension
+    point is an `ExtensionPoint` in `ExtensionPoints.All`, the same validator and that page; a slot or menu name
+    (`SlotNames` / `MenuNames`) also needs its place in both shells (slots: `PluginSlot` / `PluginShell.Slot`; menus:
+    `usePluginMenuItems` or `PluginMenu` in `web/src/plugin-ui/menus.tsx` / `PluginShell.AddMenuEntries` or `PluginShell.Menu`;
+    `command.palette` is accepted but shown nowhere yet — neither shell has a palette). Storage is migration 0024 (`plugin_kv`, `plugin_secrets`,
+    `plugin_grants`, `plugin_activity`, `plugin_successor_dismissals`; `PluginDataRepository`). The UI scene set
+    `tests/fixtures/plugin-ui/` (and its bundle `src/Astra.Plugins/V2/Ui/scenes.json`, served at `/api/plugins/v2/ui/scenes` for
+    the component gallery) is generated by `node scripts/plugin-ui/gen-scenes.mjs` and the component reference pages under
+    the website's `content/docs/plugin-dev/components/` by `node scripts/plugin-ui/gen-docs.mjs` (it writes into the website
+    repository: `$ASTRA_WEB_DIR`, default `../astra-gate-web`, and fails when that is missing) — rerun both after a component or prop
+    change (`--check` verifies; `UiGalleryTests` fails on a scene the normalizer warns about); the desktop captures the scenes as
+    `plugin-ui__*` (`Scenes.PluginUi.cs`; every state only with `ASTRA_VISUAL_PLUGIN_UI=all`) and `scripts/visual/steps/plugin-ui.mjs`
+    mirrors them on the web. The SDK's `src/validate-tree.mjs` copies the normalizer's rules: change it with `UiTree`.
+    Dev tools: a v2 plugin installed from a folder is a dev plugin (`PluginSources.Path`; mounting one is local-origin only):
+    `PluginV2Host` watches its folder and reloads it keeping open views' state (`UiSessions.ReloadAsync`), its sessions answer
+    `/ui/sessions/{id}/inspect` (the inspector), and `POST /api/plugins/v2/{id}/test` (`astra plugin test`, local only) runs its
+    `test/**/*.test.js` in an isolated host (`PluginV2TestRunner`; in-sandbox `vitest.js` / `testing.js`, the boot's `test` context).
+    The sandbox's missing web globals (`TextEncoder`/`TextDecoder`, `atob`/`btoa`, `URL`/`URLSearchParams`, `structuredClone`, …) are `V2/Runtime/globals.js`, and `crypto` / `encoding` are `V2/Runtime/CryptoCalls.cs` (pure computation, no permission, hook-callable); a change to either mirrors into the SDK harness (`packages/plugin-sdk/runtime/node-crypto.mjs`, `index.d.ts`) and `design/plugin-v2/02` §11, with the same known-answer vectors in `PluginV2SandboxTests` and `plugin-sdk/test/crypto.test.ts`. `http.fetch` takes `redirect` and hands back `setCookies`; `cookie` / `authorization` never cross origins (02 §5).
+    2.1 (`design/plugin-v2/08-2.1-providers-clients.md`): `providers` become rows `plugin2-<plugin>-<provider>` (`PluginV2ProviderSync`;
+    v1's `PluginProviderSync` touches only `plugin-` rows) with `AuthScheme = plugin` and `settings.plugin.v2`, so the gateway's
+    plugin transport (`PluginFetchHandler`) hands their requests to `V2ProviderTransport` (the plugin's prepare, the host sends) and
+    the pipeline's 401 path asks the plugin's refresh (`GatewayPipeline.V2PluginOf`); `clients` reach the client layer through
+    `V2AgentCatalog` (the registered `IAgentPluginCatalog`), so writes stay `PluginClientAdapter` → `ClientConfigApplier`;
+    `ui.flows` are views the shells open in a sheet (a v2 provider's sign-in). A provider whose upstream reply is not a wire format the gateway decodes declares `reply: { framing, output }` and registers `transformResponse { start, frame, end, dispose }`: the host frames the reply (`V2/Reply/FrameReaders.cs`: sse / ndjson / json / aws-eventstream / connect) and `V2ReplyTransform` calls the plugin per frame and re-encodes as SSE or one JSON body; a frame's `{ $end: true }` stops reading and closes the upstream, and `prepare` may return a byte body (`bodyBase64` over the bridge) and a `state` the reply starts with — Cursor's bidirectional Run rests on these (08 §2.2; the manifest check is `ProvidersPoint`, the SDK's `validate` and `runResponse` mirror it). The admin surface is
+    `/api/plugins/v2/**` (`src/Astra.Server/PluginsV2`), mirrored by `Astra.Api.Contracts/PluginV2Dtos.cs`, `web/src/api`
+    (`usePluginV2`, `useGrantPluginV2` …), `Astra.Desktop.Core/Plugins/V2/PluginV2Api.cs` and `cli/src/commands/plugin.ts`. The market lists v2
+    plugins in their own `pluginsV2` array (never `plugins`, so an older Astra never installs one as v1): `PluginMarket.ToV2Listing`,
+    the website's `lib/plugin-market` (`toV2`, `metaFromAstraManifest`, `readManifests`), and linked update 10 applies.
 
 ## Conventions
 
@@ -649,8 +694,7 @@ runtime needed on the target).
   comments on public types.
 - TypeScript is `strict` everywhere, but `noUncheckedIndexedAccess` is not: `tsconfig.base.json`
   sets it, `cli/tsconfig.json` and `packages/*` extend the base, `desktop/tsconfig.json` repeats
-  the flag, and **`web/tsconfig.json` extends the base and turns it off** (`docs` uses Next's own
-  config and is outside the base entirely). Index an array or object without a guard freely in the
+  the flag, and **`web/tsconfig.json` extends the base and turns it off**. Index an array or object without a guard freely in the
   web UI; in the CLI, desktop and shared packages a non-null assertion like `arr[0]!` is the
   expected form.
 - Formatting: root `.prettierrc` (100 cols, single quotes, semicolons, trailing commas). There

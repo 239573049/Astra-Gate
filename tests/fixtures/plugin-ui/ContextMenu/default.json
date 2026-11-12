@@ -1,0 +1,37 @@
+{
+  "id": "ContextMenu/default",
+  "component": "ContextMenu",
+  "state": "default",
+  "tree": {
+    "type": "ContextMenu",
+    "props": {
+      "items": [
+        {
+          "label": "Copy",
+          "action": "copy"
+        },
+        {
+          "label": "Open",
+          "action": "open"
+        }
+      ]
+    },
+    "children": [
+      {
+        "type": "Box",
+        "props": {
+          "surface": "sunken",
+          "padding": "4"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Right-click me"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

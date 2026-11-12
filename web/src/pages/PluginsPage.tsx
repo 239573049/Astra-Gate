@@ -28,6 +28,7 @@ import { errorText, Menu, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/format';
+import { PluginsV2Section } from '../plugin-ui/PluginsV2Panel';
 
 type Tab = 'installed' | 'market' | 'runtime';
 type KindFilter = 'all' | 'provider' | 'middleware' | 'agent';
@@ -40,6 +41,9 @@ const KIND_LABEL: Record<PluginKind, MessageKey> = {
   middleware: 'plugins.kind.middleware',
   agent: 'plugins.kind.agent',
   pi: 'plugins.kind.pi',
+  v2: 'plugins.kind.v2',
+  ui: 'plugins.kind.ui',
+  hooks: 'plugins.kind.hooks',
 };
 
 const KIND_TONE: Record<PluginKind, 'neutral' | 'accent' | 'green' | 'orange'> = {
@@ -47,6 +51,9 @@ const KIND_TONE: Record<PluginKind, 'neutral' | 'accent' | 'green' | 'orange'> =
   middleware: 'accent',
   agent: 'green',
   pi: 'orange',
+  v2: 'accent',
+  ui: 'neutral',
+  hooks: 'accent',
 };
 
 /** A plugin's picture: the one it gives (an https: / data:image URL), a brand Astra knows, else its kind's glyph. */
@@ -118,9 +125,12 @@ export function PluginsPage() {
           <TabsContent value="installed" className="pt-1">
             {plugins.isLoading && <Spinner lines={4} />}
             {plugins.isError && <Alert tone="danger" title={t('common.error')}>{errorText(plugins.error)}</Alert>}
+            <div className="mb-4">
+              <PluginsV2Section onJob={setJob} />
+            </div>
             {plugins.data && (
               <InstalledList
-                plugins={plugins.data.plugins}
+                plugins={plugins.data.plugins.filter((p) => !p.kinds.includes('v2'))}
                 preferences={plugins.data.preferences}
                 onJob={setJob}
                 onBrowse={() => navigate('/plugins/market')}

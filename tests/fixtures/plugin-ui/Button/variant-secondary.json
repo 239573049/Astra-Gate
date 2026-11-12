@@ -1,0 +1,14 @@
+{
+  "id": "Button/variant-secondary",
+  "component": "Button",
+  "state": "variant-secondary",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "secondary",
+      "icon": "check",
+      "onPress": "save"
+    }
+  }
+}

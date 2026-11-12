@@ -1,0 +1,20 @@
+{
+  "id": "TagInput/invalid",
+  "component": "TagInput",
+  "state": "invalid",
+  "tree": {
+    "type": "TagInput",
+    "props": {
+      "name": "words",
+      "value": [
+        "secret",
+        "password"
+      ],
+      "suggestions": [
+        "token",
+        "api key"
+      ],
+      "invalid": true
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "Banner/tone-success",
+  "component": "Banner",
+  "state": "tone-success",
+  "tree": {
+    "type": "Banner",
+    "props": {
+      "tone": "success",
+      "message": "A new version of this plugin is available."
+    }
+  }
+}

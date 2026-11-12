@@ -95,11 +95,14 @@ public sealed class ProviderDetailPage : PageViewModel
         }
     }
 
-    /// <summary>Asks, then deletes the provider and returns to the list (web <c>remove</c>); a 409 names the bound clients.</summary>
+    /// <summary>
+    /// Asks (naming the clients the server will unbind), then deletes the provider and returns to the list (web <c>remove</c>); a 409
+    /// (a client bound in the meantime) names the bound clients.
+    /// </summary>
     public async Task DeleteAsync()
     {
         if (Provider is not { } p) return;
-        var ok = await _ctx.Feedback.ConfirmAsync(new ConfirmRequest(Loc.T("providers.deleteConfirm", ("name", p.Name)), Loc.T("providers.deleteDetail"), Loc.T("common.delete"), null, true));
+        var ok = await _ctx.Feedback.ConfirmAsync(new ConfirmRequest(Loc.T("providers.deleteConfirm", ("name", p.Name)), ProviderDetailLogic.DeleteDetail(p), Loc.T("common.delete"), null, true));
         if (!ok) return;
         try
         {
@@ -174,6 +177,8 @@ public sealed class ProviderDetailPage : PageViewModel
         menu.Items.Add(Entry(Loc.T("providers.duplicate"), LucideIconKind.Copy, () => _ = DuplicateAsync()));
         menu.Items.Add(Entry(Loc.T("providers.templateUpdate"), LucideIconKind.Sparkles, () => Request(ProviderSheetKind.TemplateUpdate), enabled: !string.IsNullOrEmpty(p.TemplateId)));
         menu.Items.Add(Entry(Loc.T("providers.templateSwitch"), LucideIconKind.ArrowLeftRight, () => Request(ProviderSheetKind.TemplateSwitch), enabled: TemplateSwitchLogic.CanSwitch(p)));
+        var providerId = p.Id;
+        Astra.Desktop.PluginUi.PluginShell.AddMenuEntries(menu, "provider.row", () => new System.Text.Json.Nodes.JsonObject { ["providerId"] = providerId });
         menu.Items.Add(Entry(Loc.T("common.delete"), LucideIconKind.Trash2, () => _ = DeleteAsync(), destructive: true, separator: true));
         SetHeaderActions(new ActionGroup(8, test, menu));
     }

@@ -13,4 +13,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Astra.Desktop.Core\Astra.Desktop.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- the plugin UI behaviour cases both shells run, and the component schema (design/plugin-v2 06 §5) -->
+    <None Include="..\fixtures\plugin-ui-behavior\*.json" LinkBase="PluginUi" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\Astra.Plugins\V2\Ui\components.json" Link="PluginUi\components.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

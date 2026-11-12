@@ -1,0 +1,31 @@
+{
+  "id": "RadioCards/invalid",
+  "component": "RadioCards",
+  "state": "invalid",
+  "tree": {
+    "type": "RadioCards",
+    "props": {
+      "name": "plan",
+      "value": "anthropic",
+      "columns": 3,
+      "options": [
+        {
+          "value": "anthropic",
+          "label": "Anthropic",
+          "description": "Anthropic models"
+        },
+        {
+          "value": "openai",
+          "label": "OpenAI",
+          "description": "OpenAI models"
+        },
+        {
+          "value": "gemini",
+          "label": "Gemini",
+          "description": "Gemini models"
+        }
+      ],
+      "invalid": true
+    }
+  }
+}

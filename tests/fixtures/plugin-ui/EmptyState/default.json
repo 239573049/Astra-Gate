@@ -1,0 +1,20 @@
+{
+  "id": "EmptyState/default",
+  "component": "EmptyState",
+  "state": "default",
+  "tree": {
+    "type": "EmptyState",
+    "props": {
+      "icon": "inbox",
+      "title": "No hits yet",
+      "detail": "Requests that contain a word show up here.",
+      "action": {
+        "type": "Button",
+        "props": {
+          "label": "Add a word",
+          "variant": "primary"
+        }
+      }
+    }
+  }
+}

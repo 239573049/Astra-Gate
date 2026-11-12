@@ -1,0 +1,13 @@
+{
+  "id": "Progress/variant-bar",
+  "component": "Progress",
+  "state": "variant-bar",
+  "tree": {
+    "type": "Progress",
+    "props": {
+      "value": 0.62,
+      "label": "Syncing",
+      "variant": "bar"
+    }
+  }
+}

@@ -3,7 +3,9 @@ using TKCode.Arc.Icons.Lucide;
 namespace Astra.Desktop.Shell;
 
 /// <summary>One sidebar entry (web/src/components/layout/nav.tsx <c>NavItem</c>).</summary>
-public sealed record NavEntry(AppRoute Route, string Key, string LabelKey, LucideIconKind Icon);
+/// <param name="Param">The route's param (a plugin page's "plugin/page").</param>
+/// <param name="Label">A literal label (a plugin page's title, already translated); null = <paramref name="LabelKey"/>.</param>
+public sealed record NavEntry(AppRoute Route, string Key, string LabelKey, LucideIconKind Icon, string? Param = null, string? Label = null);
 
 /// <summary>A sidebar group; <see cref="TitleKey"/> is null for the untitled first group.</summary>
 public sealed record NavGroup(string? TitleKey, IReadOnlyList<NavEntry> Items);

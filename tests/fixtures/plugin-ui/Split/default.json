@@ -1,0 +1,43 @@
+{
+  "id": "Split/default",
+  "component": "Split",
+  "state": "default",
+  "tree": {
+    "type": "Split",
+    "props": {
+      "ratio": 0.35
+    },
+    "children": [
+      {
+        "type": "Box",
+        "props": {
+          "surface": "sunken",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "List"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Detail"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

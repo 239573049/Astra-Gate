@@ -1,0 +1,31 @@
+{
+  "id": "Page/default",
+  "component": "Page",
+  "state": "default",
+  "tree": {
+    "type": "Page",
+    "props": {
+      "title": "Word guard",
+      "subtitle": "acme.word-guard",
+      "icon": "shield",
+      "actions": [
+        {
+          "type": "Button",
+          "props": {
+            "label": "Add word",
+            "variant": "primary",
+            "onPress": "add"
+          }
+        }
+      ]
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Page body"
+        }
+      }
+    ]
+  }
+}

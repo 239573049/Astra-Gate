@@ -121,6 +121,35 @@ public sealed class ClientService(
             return await InfoAsync(adapter, ct);
         }, ct);
 
+    /// <summary>
+    /// Takes a provider out of every client's list before it goes away (deleting it, leaving the unified gateway): a client
+    /// with other providers keeps them in their order; an enabled client left with none is disabled (its config restored,
+    /// keys the user changed since are left alone), since the gateway would refuse it anyway. Returns the clients unbound
+    /// and, of those, the ones disabled.
+    /// </summary>
+    public async Task<(List<string> Unbound, List<string> Disabled)> UnbindProviderAsync(string providerId, CancellationToken ct)
+    {
+        var unbound = new List<string>();
+        var disabled = new List<string>();
+        foreach (var kind in (await db.Clients.ListBindingsByProviderAsync(providerId, ct)).Select(b => b.ClientKind).Distinct())
+        {
+            var rest = (await db.Clients.ListBindingsAsync(kind, ct)).Where(b => b.ProviderId != providerId)
+                .Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList();
+            if (rest.Count > 0) await SetBindingsAsync(kind, rest, ct);
+            else
+            {
+                if (await db.Clients.GetAsync(kind, ct) is { Enabled: true })
+                {
+                    await DisableAsync(kind, false, ct);
+                    disabled.Add(kind);
+                }
+                await db.Clients.ReplaceBindingsAsync(kind, [], ct);
+            }
+            unbound.Add(kind);
+        }
+        return (unbound, disabled);
+    }
+
     /// <summary>The provider a client nobody has configured yet defaults to: the first usable one, in the providers page's order.</summary>
     private Lazy<Task<string?>> DefaultProvider(CancellationToken ct) =>
         new(async () => (await db.Providers.ListAsync(ct)).FirstOrDefault(ClientRouting.IsUsable)?.Id);
@@ -671,10 +700,20 @@ public sealed class ClientService(
         _registryKey = key;
     }
 
+    /// <summary>
+    /// The provider, which must exist and be switched on. The refusal names it and says whether its plugin is off, so the
+    /// console can tell the user which provider to fix and where.
+    /// </summary>
     internal async Task<Astra.Core.Models.Provider> RequireProviderAsync(string id, CancellationToken ct)
     {
         var provider = await db.Providers.GetAsync(id, ct) ?? throw new AdminApiException(404, "Provider not found");
-        if (!provider.Enabled) throw new AdminApiException(409, "Provider is disabled");
+        if (!provider.Enabled)
+        {
+            // PluginProviderSync marks a plugin provider "absent" when its plugin was removed or switched off.
+            var pluginOff = provider.AuthScheme == Astra.Core.Models.AuthSchemes.Plugin && provider.Settings["plugin"]?["absent"] is not null;
+            throw new AdminApiException(409, $"Provider \"{provider.Name}\" is disabled{(pluginOff ? " because its plugin is turned off" : "")}",
+                new DisabledProviderDetailsDto(provider.Id, provider.Name, pluginOff));
+        }
         return provider;
     }
 

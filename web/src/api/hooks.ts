@@ -116,6 +116,7 @@ import type {
 import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebDavStatus } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
+import type { PluginSuccessor, PluginV2Detail, PluginV2List, PluginV2Notification } from './types';
 import type { RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
 
 export const keys = {
@@ -1819,3 +1820,112 @@ export const useSkillCopyAction = () =>
   useSkillMutation((v: { name: string; action: 'take-edits' | 'overwrite-copy' }) =>
     api<void>('POST', `/api/library/skills/${enc(v.name)}/${v.action}`),
   );
+
+// ---------- plugins v2 (design/plugin-v2)
+
+const v2Keys = {
+  list: (locale: string) => ['pluginsV2', locale] as const,
+  detail: (id: string, locale: string) => ['pluginsV2', 'detail', id, locale] as const,
+  successors: (locale: string) => ['pluginsV2', 'successors', locale] as const,
+};
+
+/** The v2 plugins, what the running ones add to the console, and runtime permission requests waiting. */
+export const usePluginsV2 = (locale: string, enabled = true) =>
+  useQuery({
+    queryKey: v2Keys.list(locale),
+    queryFn: () => api<PluginV2List>('GET', `/api/plugins/v2${qs({ locale })}`),
+    enabled,
+    refetchInterval: 15_000,
+    staleTime: 5_000,
+  });
+
+export const usePluginV2 = (id: string | undefined, locale: string) =>
+  useQuery({
+    queryKey: v2Keys.detail(id ?? '', locale),
+    queryFn: () => api<PluginV2Detail>('GET', `/api/plugins/v2/${enc(id!)}${qs({ locale })}`),
+    enabled: Boolean(id),
+    refetchInterval: 10_000,
+  });
+
+/** v1 plugins that have a v2 version in the market (the update reminder). */
+export const usePluginSuccessors = (locale: string) =>
+  useQuery({
+    queryKey: v2Keys.successors(locale),
+    queryFn: () => api<PluginSuccessor[]>('GET', `/api/plugins/v2/successors${qs({ locale })}`),
+    refetchInterval: 6 * 3600_000,
+    staleTime: 3600_000,
+  });
+
+function useInvalidateV2() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ['pluginsV2'] });
+    void qc.invalidateQueries({ queryKey: keys.plugins });
+  };
+}
+
+export function useGrantPluginV2() {
+  const done = useInvalidateV2();
+  return useMutation({
+    mutationFn: ({ id, permissions, revoke }: { id: string; permissions: string[]; revoke?: boolean }) =>
+      api<PluginV2List>('POST', `/api/plugins/v2/${enc(id)}/${revoke ? 'revoke' : 'grant'}`, { permissions }),
+    onSuccess: done,
+  });
+}
+
+export function useSavePluginV2Settings() {
+  const done = useInvalidateV2();
+  return useMutation({
+    mutationFn: ({ id, values, secrets }: { id: string; values?: Record<string, unknown>; secrets?: Record<string, string | null> }) =>
+      api<PluginV2Detail>('PUT', `/api/plugins/v2/${enc(id)}/settings`, { values: values ?? null, secrets: secrets ?? null }),
+    onSuccess: done,
+  });
+}
+
+export function useRunPluginCommand() {
+  return useMutation({
+    mutationFn: ({ plugin, command, args }: { plugin: string; command: string; args?: unknown }) =>
+      api<{ result: unknown }>('POST', `/api/plugins/v2/${enc(plugin)}/commands/${enc(command)}`, { args: args ?? null }),
+  });
+}
+
+export function useAnswerPermissionRequest() {
+  const done = useInvalidateV2();
+  return useMutation({
+    mutationFn: ({ id, allow }: { id: string; allow: boolean }) => api<void>('POST', `/api/plugins/v2/requests/${enc(id)}`, { allow }),
+    onSuccess: done,
+  });
+}
+
+export function useUpgradePlugin() {
+  const done = useInvalidateV2();
+  return useMutation({
+    mutationFn: ({ spec, grant }: { spec: string; grant: string[] }) => api<PluginJob>('POST', '/api/plugins/v2/upgrade', { spec, grant }),
+    onSuccess: done,
+  });
+}
+
+export function useRollbackPlugin() {
+  const done = useInvalidateV2();
+  return useMutation({
+    mutationFn: (id: string) => api<PluginJob>('POST', `/api/plugins/v2/${enc(id)}/rollback`),
+    onSuccess: done,
+  });
+}
+
+export function useDismissSuccessor() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ spec, version }: { spec: string; version: string }) => api<void>('POST', '/api/plugins/v2/successors/dismiss', { spec, version }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['pluginsV2', 'successors'] }),
+  });
+}
+
+/** Notifications plugins sent since <paramref name="after"/> (polled; the shell shows each once). */
+export const usePluginNotifications = (after: number, enabled: boolean) =>
+  useQuery({
+    queryKey: ['pluginsV2', 'notifications', after],
+    queryFn: () => api<PluginV2Notification[]>('GET', `/api/plugins/v2/notifications${qs({ after })}`),
+    enabled,
+    refetchInterval: 20_000,
+  });

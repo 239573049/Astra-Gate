@@ -1,0 +1,100 @@
+{
+  "id": "_patterns/dashboard",
+  "component": null,
+  "state": "dashboard",
+  "tree": {
+    "type": "Stack",
+    "props": {
+      "gap": "4"
+    },
+    "children": [
+      {
+        "type": "Grid",
+        "props": {
+          "columns": 3,
+          "gap": "3"
+        },
+        "children": [
+          {
+            "type": "MetricCard",
+            "props": {
+              "label": "Requests",
+              "value": 1204,
+              "delta": 0.12
+            }
+          },
+          {
+            "type": "MetricCard",
+            "props": {
+              "label": "Hits",
+              "value": 37,
+              "tone": "warning"
+            }
+          },
+          {
+            "type": "MetricCard",
+            "props": {
+              "label": "Cost",
+              "value": 4210000000,
+              "format": "money"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Chart",
+        "props": {
+          "kind": "area",
+          "data": [
+            {
+              "date": "2026-11-01",
+              "requests": 120,
+              "errors": 4
+            },
+            {
+              "date": "2026-11-02",
+              "requests": 180,
+              "errors": 2
+            },
+            {
+              "date": "2026-11-03",
+              "requests": 150,
+              "errors": 9
+            },
+            {
+              "date": "2026-11-04",
+              "requests": 210,
+              "errors": 3
+            },
+            {
+              "date": "2026-11-05",
+              "requests": 260,
+              "errors": 5
+            },
+            {
+              "date": "2026-11-06",
+              "requests": 240,
+              "errors": 1
+            },
+            {
+              "date": "2026-11-07",
+              "requests": 300,
+              "errors": 6
+            }
+          ],
+          "x": {
+            "key": "date",
+            "type": "time"
+          },
+          "series": [
+            {
+              "key": "requests",
+              "label": "Requests"
+            }
+          ],
+          "height": "sm"
+        }
+      }
+    ]
+  }
+}

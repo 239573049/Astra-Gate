@@ -23,6 +23,7 @@ import { Page } from '../components/layout/Page';
 import { healthTone, poolDraftOf, poolInputOf, TokenPoolEditor, useHealthLabel, type PoolDraft } from '../components/TokenPoolEditor';
 import { Badge, Button, Dot, EmptyState, Field, Input, NumberInput, Segmented, Spinner } from '../components/ui/controls';
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
+import { usePluginMenuItems } from '../plugin-ui/menus';
 import { useI18n } from '../i18n';
 import { formatDateTime, formatPercent, formatTime, formatTokens, formatTps, formatUsd } from '../lib/format';
 import { systemActions } from '../shell/systemActions';
@@ -87,6 +88,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
   const reset = useResetToken();
   const remove = useDeleteToken();
   const [open, setOpen] = useState(defaultOpen);
+  const pluginItems = usePluginMenuItems('token.row', { tokenId: token.id });
   const direct = (providers.data ?? []).find((p) => p.id === token.providerId);
   const healthLabel = useHealthLabel();
   const detailId = `token-detail-${token.id}`;
@@ -219,6 +221,7 @@ function TokenRow({ token, defaultOpen, onEdit }: { token: Token; defaultOpen: b
               { id: 'settings', label: t('tokens.settings'), icon: <Pencil className="size-3.5" />, onSelect: onEdit },
               { id: 'toggle', label: token.enabled ? t('tokens.disable') : t('tokens.enable'), icon: <Power className="size-3.5" />, onSelect: () => void toggle() },
               { id: 'reset', label: t('tokens.reset'), icon: <RotateCcw className="size-3.5" />, onSelect: () => void doReset() },
+              ...pluginItems,
               ...(token.isDefault
                 ? []
                 : [{ id: 'delete', label: t('tokens.delete'), icon: <Trash2 className="size-3.5" />, destructive: true, separatorBefore: true, onSelect: () => void doDelete() }]),

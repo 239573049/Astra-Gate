@@ -1,0 +1,17 @@
+{
+  "id": "NumberField/invalid",
+  "component": "NumberField",
+  "state": "invalid",
+  "tree": {
+    "type": "NumberField",
+    "props": {
+      "name": "limit",
+      "value": 25,
+      "min": 1,
+      "max": 100,
+      "step": 1,
+      "unit": "req/min",
+      "invalid": true
+    }
+  }
+}

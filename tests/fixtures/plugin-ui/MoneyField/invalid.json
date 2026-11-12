@@ -1,0 +1,14 @@
+{
+  "id": "MoneyField/invalid",
+  "component": "MoneyField",
+  "state": "invalid",
+  "tree": {
+    "type": "MoneyField",
+    "props": {
+      "name": "budget",
+      "value": 12.5,
+      "currency": "USD",
+      "invalid": true
+    }
+  }
+}

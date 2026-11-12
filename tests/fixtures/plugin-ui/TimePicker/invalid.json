@@ -1,0 +1,14 @@
+{
+  "id": "TimePicker/invalid",
+  "component": "TimePicker",
+  "state": "invalid",
+  "tree": {
+    "type": "TimePicker",
+    "props": {
+      "name": "at",
+      "value": "09:30",
+      "minuteStep": 15,
+      "invalid": true
+    }
+  }
+}

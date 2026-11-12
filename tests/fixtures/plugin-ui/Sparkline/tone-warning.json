@@ -1,0 +1,21 @@
+{
+  "id": "Sparkline/tone-warning",
+  "component": "Sparkline",
+  "state": "tone-warning",
+  "tree": {
+    "type": "Sparkline",
+    "props": {
+      "data": [
+        120,
+        180,
+        150,
+        210,
+        260,
+        240,
+        300
+      ],
+      "tone": "warning",
+      "area": true
+    }
+  }
+}

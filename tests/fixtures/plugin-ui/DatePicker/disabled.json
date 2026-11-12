@@ -1,0 +1,13 @@
+{
+  "id": "DatePicker/disabled",
+  "component": "DatePicker",
+  "state": "disabled",
+  "tree": {
+    "type": "DatePicker",
+    "props": {
+      "name": "day",
+      "value": "2026-11-11",
+      "disabled": true
+    }
+  }
+}

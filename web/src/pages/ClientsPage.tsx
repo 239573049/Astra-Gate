@@ -39,12 +39,15 @@ import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../componen
 import { errorText, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 import { cn } from '../lib/cn';
+import { disabledProviderText } from '../lib/disabledProvider';
 import { formatDateTime } from '../lib/format';
 import { clientOptionsKey, clientOptionsOf, type ClientOptionValues } from '../lib/clientOptions';
 import { protocolModelsOf, protocolOverridesKey, protocolOverridesOf } from '../lib/clientProtocols';
 import { CLAUDE_CODE_MODELS, modelSlotsKey, modelSlotsOf, type ModelSlots } from '../lib/modelSlots';
 import { ROLES, roleKey, rolesOf, suggestRoles, type RoleMap } from '../lib/roleMap';
 import { dirnameOf, systemActions } from '../shell/systemActions';
+import { PluginSlot } from '../plugin-ui/PluginPage';
+import { PluginMenu } from '../plugin-ui/menus';
 
 export function ClientsPage() {
   const { t } = useI18n();
@@ -90,6 +93,12 @@ export function ClientsPage() {
             {clients.isLoading && <Spinner lines={4} />}
             {clients.isError && <Alert tone="danger" title={t('common.error')}>{errorText(clients.error)}</Alert>}
             {client && <ClientPanel client={client} />}
+            {client && (
+              <div className="mt-6">
+                <PluginMenu menu="client.row" args={{ clientKind: client.kind }} />
+                <PluginSlot name="client.detail.sections" params={{ clientKind: client.kind }} />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1185,9 +1194,13 @@ function EnableSheet({
           onOpenChange(false);
           toast(c.requiresRestart ? t('clients.enabledRestart', { name }) : t('clients.enabledToast', { name }), 'success');
         },
-        onError: (e) => toast(errorText(e), 'error'),
+        onError: (e) => {
+          const off = disabledProviderText(e, t);
+          toast(off ? `${off.title} · ${off.hint}` : errorText(e), 'error');
+        },
       },
     );
+  const previewOff = preview.isError ? disabledProviderText(preview.error, t) : null;
 
   return (
     <Sheet
@@ -1206,7 +1219,8 @@ function EnableSheet({
       }
     >
       {preview.isPending && <Spinner lines={4} />}
-      {preview.isError && <Alert tone="danger" title={t('common.error')}>{errorText(preview.error)}</Alert>}
+      {previewOff && <Alert tone="danger" title={previewOff.title}>{previewOff.hint}</Alert>}
+      {preview.isError && !previewOff && <Alert tone="danger" title={t('common.error')}>{errorText(preview.error)}</Alert>}
       {preview.data && <PreviewView preview={preview.data} />}
     </Sheet>
   );

@@ -77,6 +77,9 @@ public static class MenuCommands
     /// <summary>Settings › Tray panel.</summary>
     public const string SettingsTray = "settings:tray";
 
+    /// <summary>The command palette (pages and v2 plugin commands).</summary>
+    public const string Palette = "palette";
+
     /// <summary>"nav:" + target (overview, requests, traces, clients, tokens, providers, models, plugins, privacy, smartRouting, settings).</summary>
     public static string Nav(string target) => "nav:" + target;
 }

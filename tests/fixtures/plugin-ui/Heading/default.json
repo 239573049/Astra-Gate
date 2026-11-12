@@ -1,0 +1,12 @@
+{
+  "id": "Heading/default",
+  "component": "Heading",
+  "state": "default",
+  "tree": {
+    "type": "Heading",
+    "props": {
+      "value": "Section heading",
+      "level": 2
+    }
+  }
+}

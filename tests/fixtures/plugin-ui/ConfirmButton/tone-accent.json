@@ -1,0 +1,14 @@
+{
+  "id": "ConfirmButton/tone-accent",
+  "component": "ConfirmButton",
+  "state": "tone-accent",
+  "tree": {
+    "type": "ConfirmButton",
+    "props": {
+      "label": "Delete",
+      "confirmLabel": "Really delete?",
+      "tone": "accent",
+      "onPress": "delete"
+    }
+  }
+}

@@ -17,14 +17,14 @@
 //    Scenes the web cannot show are web-steps.mjs DESKTOP_ONLY (with the reason) and are skipped.
 //  * --legacy: the original fixed list below (LEGACY), from tests/fixtures/ui/<set> only.
 //
-// Prerequisites: playwright's chromium headless shell cached (see docs/scripts/snap.mjs), docs/node_modules installed
-// (playwright-core), and web/dist built (`pnpm --filter @aidotnet/web build`). Scale default 1 (1440x900 pixels);
-// ASTRA_VISUAL_SCALE or --scale 2 gives snap.mjs's @2x. The Avalonia side reads the same variable.
+// Prerequisites: playwright's chromium headless shell cached (`pnpm dlx playwright install chromium`), `pnpm install` at
+// the repository root (playwright-core), and web/dist built (`pnpm --filter @aidotnet/web build`). Scale default 1
+// (1440x900 pixels); ASTRA_VISUAL_SCALE or --scale 2 gives @2x. The Avalonia side reads the same variable.
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { launchBrowser, settle } from '../../docs/scripts/lib/snap-core.mjs';
+import { launchBrowser, settle } from './lib/snap-core.mjs';
 import { STEPS, DESKTOP_ONLY, NOT_MIRRORED, webPathFor, helpers } from './web-steps.mjs';
 
 const repo = dirname(dirname(dirname(fileURLToPath(import.meta.url))));

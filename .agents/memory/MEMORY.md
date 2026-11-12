@@ -18,7 +18,8 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Avalonia DispatcherTimer starts itself](avalonia-dispatchertimer-autostart.md) — the (interval, priority, callback) constructor runs the timer at once; it made tray-only processes restart in a loop
 - [Windows tray menu is an Avalonia window](avalonia-win32-tray-menu-window.md) — TrayPopupRoot sized to a MenuFlyoutPresenter; without menu themes it was 0 x 0 (issue #18, fixed 0.13.2); TrayMenuWindowTests builds it headless
 - [JS engine AOT fallback was rejected](jint-aot-fallback-rejected.md) — middleware stays in-process; the Bun middleware host was the failure plan, not a design
-- [Plugin v2 design](plugin-v2-design.md) — draft in `design/plugin-v2/` (2026-11-11); user decided tree / date / line chart / Markdown are required, the other decisions (D1–D9, D11, D12) are still proposals
+- [Plugin v2 design](plugin-v2-design.md) — `design/plugin-v2/`, 2.0 + 2.1 implemented 2026-11-11; user required tree / date / line chart / Markdown, the other decisions (D1–D9, D11–D14) were taken as proposed
+- [Cursor v2 runs over HTTP/1.1](cursor-v2-http1-run.md) — RunSSE + BidiAppend on byte bodies, connect framing, `$end`, `dispose` (2026-11-12); HTTP/2 regional host given up; unverified against real Cursor
 - [Jaunt replaces Jint](jaunt-replaces-jint.md) — 2026-11-11 user request; limit hits fault the engine, strict tail calls dodge the depth limit, tracked bytes only grow
 - [Webhook formats were added](webhook-formats-added.md) — Feishu, DingTalk, WeCom, Slack and Discord renderers exist despite the "generic JSON only" design
 - [Plugin market has one upstream](market-upstream-single-source.md) — the community registry address is fixed, and a cache from the old one is never served
@@ -43,6 +44,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Dapper.AOT sequence cast](dapper-aot-sequence-cast.md) — a List<anonymous> sequence parameter throws InvalidCastException at run time; pass IEnumerable
 - [astra-server --help starts a server](astra-server-flag-first-serves.md) — a flag-first call or `serve --help` runs `serve` on ~/.astra and overwrites runtime.json; use ASTRA_HOME for throwaway servers
 - [Harness thinking picker needs reasoningEfforts](harness-reasoning-efforts-field.md) — `reasoning` is a route default; models without `reasoningEfforts` get no effort picker (issue #7)
+- [Provider delete unbinds clients](provider-delete-unbinds-clients.md) — 2026-11-11 user request: no more 409 on a bound provider; enabled clients left with none are disabled; the "disabled provider" refusal names the provider and its plugin
 - [Client default provider is read-side](client-default-provider-read-side.md) — a client with no bindings reads as bound to the first usable provider; stored on enable or a bindings edit, never on read
 - [WorkBuddy's Anthropic route](workbuddy-anthropic-route.md) — only hy3 / hy3-x answer on /v1/messages (China build), no thinking switch there; the plugin declares them @ai-sdk/anthropic (probed 2026-10-20)
 - [Provider key alternatives](provider-key-alternatives.md) — issues #8/#9: wrong-template keys are fixed by template-switch + `keyAlternatives`, not by key prefix; no endpoint speed test yet
@@ -55,6 +57,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Copilot Responses item ids](copilot-responses-item-ids.md) — 401 "input item does not belong to this connection" = stale encrypted reasoning from an earlier session (reproduced 2026-11-03); dropping encrypted_content fixes it, dropping ids does not; the gateway answers 400 with the reason (user decision 2026-11-08)
 - [CI UI test cleanup flake](ci-ui-test-cleanup-flake.md) — one random SceneCaptureTests case fails after 1 ms with "Test Case Cleanup Failure" on ubuntu; an Avalonia headless race, not the scene; does not gate release.yml
 - [Claude Code identity plugin](claude-code-identity-plugin.md) — issue #24: a community middleware on Astra's own onUpstream hook (user decision 2026-11-09); the identity now lives in C# and in the plugin, move them together
+- [Website moved to astra-gate-web](website-moved-to-astra-gate-web.md) — 2026-11-11: docs/ site → ~/code/astra-gate-web, rewritten on Arc (Pro via Astra's MCP gateway), Pet removed, market redesigned; docs/ removed here the same day, gen-docs writes into the website
 - [Four-digit patch versions](four-digit-patch-versions.md) — from 0.14.3100 on the patch number stays four digits on purpose; still x.y.z, not a typo
 - [dotnet-install kills the host on macOS](dotnet-install-macos-sigkill.md) — installing an SDK over ~/.dotnet leaves `dotnet` exiting 137; replace the host with a fresh copy; rollForward picks a new SDK at once
 

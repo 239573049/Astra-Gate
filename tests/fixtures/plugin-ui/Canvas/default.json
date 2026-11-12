@@ -1,0 +1,53 @@
+{
+  "id": "Canvas/default",
+  "component": "Canvas",
+  "state": "default",
+  "tree": {
+    "type": "Canvas",
+    "props": {
+      "height": "sm",
+      "viewBox": [
+        0,
+        0,
+        200,
+        100
+      ],
+      "draw": [
+        {
+          "rect": [
+            10,
+            10,
+            80,
+            50
+          ],
+          "fill": "accent"
+        },
+        {
+          "circle": [
+            150,
+            50,
+            30
+          ],
+          "fill": "success"
+        },
+        {
+          "line": [
+            10,
+            90,
+            190,
+            90
+          ],
+          "stroke": "border"
+        },
+        {
+          "text": "Canvas",
+          "at": [
+            100,
+            80
+          ],
+          "anchor": "middle"
+        }
+      ]
+    }
+  }
+}

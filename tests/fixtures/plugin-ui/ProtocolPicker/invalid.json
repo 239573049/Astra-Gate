@@ -1,0 +1,13 @@
+{
+  "id": "ProtocolPicker/invalid",
+  "component": "ProtocolPicker",
+  "state": "invalid",
+  "tree": {
+    "type": "ProtocolPicker",
+    "props": {
+      "name": "protocol",
+      "value": "anthropic",
+      "invalid": true
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "Badge/size-lg",
+  "component": "Badge",
+  "state": "size-lg",
+  "tree": {
+    "type": "Badge",
+    "props": {
+      "label": "beta",
+      "tone": "accent",
+      "size": "lg"
+    }
+  }
+}

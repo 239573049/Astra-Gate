@@ -251,7 +251,8 @@ export interface QuotaTemplate {
 // GET /api/providers -> Provider[] ; GET /api/providers/{id} -> Provider
 // POST /api/providers body ProviderCreate -> Provider
 // PATCH /api/providers/{id} body Partial<ProviderUpdate> -> Provider  (apiKey: "" clears, omitted keeps)
-// DELETE /api/providers/{id}  -> 409 {error, details:{boundClients}} when a client is bound
+// DELETE /api/providers/{id}  -> 204; the clients using it are unbound first (one left with none is disabled).
+//   409 {error, details:{boundClients}} only when a client was bound to it in the meantime.
 // POST /api/providers/{id}/duplicate -> Provider
 // POST /api/providers/{id}/test body ProviderTestRequest -> text/event-stream of ProviderTestEvent
 //   Validation failures (unknown provider, bad parameter) answer with plain JSON {error} instead.
@@ -440,12 +441,15 @@ export interface EnableRequest { providerId?: string | null; model?: string | nu
 export interface ConfigChange { file: string; format: "toml" | "json" | "env" | "yaml"; keyPath: string; before?: string | null; after?: string | null }
 export interface ConfigPreview { changes: ConfigChange[]; diffs: { file: string; unifiedDiff: string }[]; warnings: string[] }
 export interface DisableResult { restored: string[]; drifted: string[]; client: ClientInfo }
+/** `details` of a 409 because the provider a client would use is switched off; `pluginOff`: its plugin is turned off. */
+export interface DisabledProviderDetails { providerId: string; providerName: string; pluginOff: boolean }
 export interface BackupInfo { id: string; createdAt: string; files: string[]; firstWrite: boolean }
 // GET /api/clients -> ClientInfo[]
 // PUT /api/clients/{kind}/binding body {providerId} -> ClientInfo      (sets the primary provider; takes effect immediately)
 // PUT /api/clients/{kind}/bindings body {bindings: ClientBinding[]} -> ClientInfo   (full provider list in routing order)
 // POST /api/clients/{kind}/preview-enable body EnableRequest -> ConfigPreview
 // POST /api/clients/{kind}/enable body EnableRequest -> ClientInfo
+//   Both (and PUT …/binding) answer 409 {error, details: DisabledProviderDetails} when the provider is switched off.
 // POST /api/clients/{kind}/disable -> DisableResult
 // POST /api/clients/{kind}/force-restore -> DisableResult
 // POST /api/clients/{kind}/repair -> ClientInfo   (fixes every file in `repairs`; nothing to fix is not an error)
@@ -1082,7 +1086,7 @@ export interface UpdateStatus {
 
 
 // ---------- plugins (magpie-compatible: provider plugins, gateway middleware, agents, pi extensions) ----------
-export type PluginKind = "provider" | "middleware" | "agent" | "pi";
+export type PluginKind = "provider" | "middleware" | "agent" | "pi" | "v2" | "ui" | "hooks";
 
 /** A gateway middleware's hooks and counters, or why it didn't load. */
 export interface MiddlewareState {
@@ -1134,6 +1138,12 @@ export interface MarketListing {
   minAstraVersion?: string | null;
   /** Versions the market hosts itself, newest first; empty = installed from npm (or spec). */
   tarballs: MarketTarball[];
+  /** 2 for a v2 plugin (registry pluginsV2): its permissions are asked for once it is installed. */
+  apiVersion?: number;
+  permissions?: string[] | null;
+  /** The v1 plugins a v2 plugin takes over from (the update reminder). */
+  replacesV1?: string[] | null;
+  notes?: Record<string, string> | null;
 }
 
 // GET /api/plugins/search?q= — searched by the registry's host: its own entries, then npm and GitHub
@@ -1673,3 +1683,45 @@ export type SkillCandidateStatus = 'new' | 'exists' | 'differs' | 'invalid';
 export interface SkillCandidate { name: string; description: string; status: SkillCandidateStatus; reason?: string | null }
 export interface SkillProbeResult { probeId: string; skills: SkillCandidate[] }
 export interface SkillProbeRequest { kind: 'git' | 'local'; source: string; ref?: string }
+
+// ---------- plugins v2 (design/plugin-v2): /api/plugins/v2 ----------
+export interface PluginV2Route { path: string; view: string }
+export interface PluginV2Page { plugin: string; id: string; title: string; icon?: string | null; nav: 'overview' | 'gateway' | 'resources' | 'tools' | 'plugins'; routes: PluginV2Route[] }
+export interface PluginV2Slot { plugin: string; slot: string; view: string; title?: string | null }
+export interface PluginV2MenuItem { plugin: string; menu: string; command: string; title: string; icon?: string | null }
+export interface PluginV2Command { plugin: string; id: string; title: string; icon?: string | null; keybinding?: string | null }
+export interface PluginV2Contributions {
+  pages: PluginV2Page[]; slots: PluginV2Slot[]; menus: PluginV2MenuItem[]; commands: PluginV2Command[];
+  settings: { plugin: string; view: string }[]; hooks: string[]; jobs: string[];
+  /** 2.1 (design/plugin-v2 08): flows shown in a sheet, providers (their row ids) and clients (their kinds) */
+  flows?: PluginV2Flow[] | null; providers?: PluginV2ProviderEntry[] | null; clients?: string[] | null;
+}
+export interface PluginV2Flow { plugin: string; id: string; view: string; title: string }
+export interface PluginV2ProviderEntry { plugin: string; id: string; name: string; providerId: string; signInFlow?: string | null }
+/** A settings field of a plugin's configuration (titles already in the caller's language). */
+export interface PluginV2SettingField {
+  name: string; type: 'string' | 'number' | 'integer' | 'boolean' | 'array' | 'object'; title: string; description?: string | null;
+  default?: unknown; secret: boolean; widget?: string | null; unit?: string | null; minimum?: number | null; maximum?: number | null;
+  pattern?: string | null; itemsType?: string | null; required: boolean; enum?: string[]; enumTitles?: string[];
+}
+export interface PluginV2Configuration { properties: PluginV2SettingField[]; groups: { title?: string | null; properties: string[] }[] }
+export interface PluginV2 {
+  id: string; spec: string; version: string; name: string; description?: string | null; icon?: string | null; publisher?: string | null;
+  homepage?: string | null; license?: string | null; permissions: string[]; optionalPermissions: string[]; granted: string[]; missing: string[];
+  /** Permissions that see or change the conversation, or reach the network: marked on the plugin page. */
+  sensitive: string[];
+  enabled: boolean; running: boolean; healthy: boolean; problem?: string | null; lastError?: string | null;
+  contributes: PluginV2Contributions; configuration?: PluginV2Configuration | null; settings: Record<string, unknown>; secretsSet: string[];
+  counters: Record<string, number>; warnings: string[]; dev: boolean; replaces: string[];
+}
+export interface PluginPermissionRequest { id: string; plugin: string; pluginName: string; permissions: string[]; at: string }
+export interface PluginV2List { plugins: PluginV2[]; contributions: PluginV2Contributions; requests: PluginPermissionRequest[] }
+export interface PluginV2Detail {
+  plugin: PluginV2; activity: { at: string; call: string; target?: string | null; outcome: string }[];
+  lines: { at: string; level: string; text: string }[];
+}
+/** A v1 plugin's v2 successor in the market: the update reminder (design/plugin-v2 07 §3). */
+export interface PluginSuccessor {
+  spec: string; v1Name: string; id: string; package: string; version: string; name: string; notes?: string | null; permissions: string[]; sensitive: string[];
+}
+export interface PluginV2Notification { id: number; plugin: string; title: string; body?: string | null; tone: string; at: string }

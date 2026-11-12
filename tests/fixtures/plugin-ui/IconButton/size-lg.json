@@ -1,0 +1,15 @@
+{
+  "id": "IconButton/size-lg",
+  "component": "IconButton",
+  "state": "size-lg",
+  "tree": {
+    "type": "IconButton",
+    "props": {
+      "icon": "trash-2",
+      "variant": "ghost",
+      "a11yLabel": "Delete",
+      "onPress": "delete",
+      "size": "lg"
+    }
+  }
+}

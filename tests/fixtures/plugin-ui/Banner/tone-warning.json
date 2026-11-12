@@ -1,0 +1,12 @@
+{
+  "id": "Banner/tone-warning",
+  "component": "Banner",
+  "state": "tone-warning",
+  "tree": {
+    "type": "Banner",
+    "props": {
+      "tone": "warning",
+      "message": "A new version of this plugin is available."
+    }
+  }
+}

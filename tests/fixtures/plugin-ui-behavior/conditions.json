@@ -1,0 +1,15 @@
+{
+  "$comment": "Local conditions (design/plugin-v2 03 §6): expression + local bag = result, the same in both shells.",
+  "cases": [
+    { "expr": ["eq", ["local", "mode"], "custom"], "local": { "mode": "custom" }, "result": true },
+    { "expr": ["eq", ["local", "mode"], "custom"], "local": { "mode": "auto" }, "result": false },
+    { "expr": ["ne", ["local", "mode"], "custom"], "local": {}, "result": true },
+    { "expr": ["and", ["local", "on"], ["not", ["empty", ["local", "url"]]]], "local": { "on": true, "url": "x" }, "result": true },
+    { "expr": ["and", ["local", "on"], ["not", ["empty", ["local", "url"]]]], "local": { "on": true, "url": "" }, "result": false },
+    { "expr": ["or", ["eq", ["local", "a"], 1], ["eq", ["local", "b"], 2]], "local": { "a": 0, "b": 2 }, "result": true },
+    { "expr": ["in", ["local", "kind"], ["a", "b"]], "local": { "kind": "b" }, "result": true },
+    { "expr": ["in", ["local", "kind"], ["a", "b"]], "local": { "kind": "c" }, "result": false },
+    { "expr": ["empty", ["local", "tags"]], "local": { "tags": [] }, "result": true },
+    { "expr": ["gt", ["local", "n"], 3], "local": { "n": 5 }, "result": true }
+  ]
+}

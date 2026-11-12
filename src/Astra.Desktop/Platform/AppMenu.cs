@@ -84,6 +84,7 @@ public static class AppMenu
         Key.F => "KeyF",
         Key.R => "KeyR",
         Key.N => "KeyN",
+        Key.K => "KeyK",
         Key.S => "KeyS",
         Key.OemComma => "Comma",
         _ => null,
@@ -146,6 +147,7 @@ public static class AppMenu
         view.Items.Add(Item(t.Refresh, MenuCommands.Refresh, Cmd(Key.R)));
         view.Items.Add(new NativeMenuItemSeparator());
         view.Items.Add(Item(t.ToggleSidebar, MenuCommands.ToggleSidebar, Cmd(Key.S, KeyModifiers.Alt)));
+        view.Items.Add(Item(t.Palette, MenuCommands.Palette, Cmd(Key.K)));
 
         var logs = new NativeMenuItem(t.OpenLogs);
         logs.Click += (_, _) => openLogs();

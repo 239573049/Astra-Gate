@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.ComponentModel;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Kit;
@@ -77,7 +78,13 @@ public sealed class RequestDetailSheet : Sheet
         var stack = new StackPanel { Spacing = 24 };
         if (q.IsLoading || (!q.HasData && !q.IsError)) stack.Children.Add(new LoadingState(5));
         if (q.IsError) stack.Children.Add(new Alert { Tone = AlertTone.Danger, Title = Loc.T("common.error"), Content = q.Error?.Message });
-        if (r is not null) Fill(stack, r);
+        if (r is not null)
+        {
+            Fill(stack, r);
+            var id = r.Id;
+            stack.Children.Add(Astra.Desktop.PluginUi.PluginShell.Menu("request.row", () => new JsonObject { ["requestId"] = id }));
+            stack.Children.Add(Astra.Desktop.PluginUi.PluginShell.Slot("request.detail.sections", () => new JsonObject { ["requestId"] = id }));
+        }
         Content = stack;
     }
 

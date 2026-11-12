@@ -23,6 +23,12 @@ public sealed record UpstreamStatusDetailsDto(int HttpStatus);
 /// <summary><c>details</c> of a refusal because clients are still bound.</summary>
 public sealed record BoundClientsDetailsDto(IReadOnlyList<string> BoundClients);
 
+/// <summary>
+/// <c>details</c> of a refusal because the provider a client would use is switched off: which one, and whether it is off
+/// because the plugin it comes from is (a plugin provider stays out of service until its plugin is back).
+/// </summary>
+public sealed record DisabledProviderDetailsDto(string ProviderId, string ProviderName, bool PluginOff);
+
 /// <summary>The plain <c>{ "error" }</c> envelope shared by several endpoints.</summary>
 public sealed record ErrorOnlyDto(string Error);
 

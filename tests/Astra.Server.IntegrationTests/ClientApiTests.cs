@@ -689,6 +689,60 @@ public class ClientApiTests
     private static JsonNode EnvOf(string settingsFile) =>
         JsonNode.Parse(File.ReadAllText(settingsFile), documentOptions: new System.Text.Json.JsonDocumentOptions { CommentHandling = System.Text.Json.JsonCommentHandling.Skip, AllowTrailingCommas = true })!["env"]!;
 
+    [Fact]
+    public async Task A_Disabled_Provider_Is_Named_In_The_Refusal_And_Says_When_Its_Plugin_Is_Off()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host, "Switched off");
+        provider.Enabled = false;
+        await host.Db.Providers.UpdateAsync(provider);
+        await WriteCodexConfig(host);
+
+        var (status, error) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/preview-enable", new { providerId = provider.Id });
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("Switched off", error!["error"]!.GetValue<string>());
+        Assert.Equal(provider.Id, error["details"]!["providerId"]!.GetValue<string>());
+        Assert.Equal("Switched off", error["details"]!["providerName"]!.GetValue<string>());
+        Assert.False(error["details"]!["pluginOff"]!.GetValue<bool>());
+
+        // a plugin provider whose plugin went away (PluginProviderSync marks it "absent")
+        var plugin = new Provider { Id = "plugin-gone", Name = "Gone", AuthScheme = AuthSchemes.Plugin, Enabled = false,
+            Endpoints = [new ProviderEndpoint { Protocol = ApiProtocol.OpenAIChat, BaseUrl = "plugin://gone/openai-chat" }],
+            Settings = new JsonObject { ["plugin"] = new JsonObject { ["absent"] = true } } };
+        await host.Db.Providers.InsertAsync(plugin);
+        (status, error) = await host.SendAsync(HttpMethod.Post, "/api/clients/codex/preview-enable", new { providerId = plugin.Id });
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.True(error!["details"]!["pluginOff"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Deleting_A_Provider_Unbinds_Its_Clients_And_Disables_One_Left_With_None()
+    {
+        await using var host = await TestHost.StartAsync();
+        var first = await AddProvider(host, "First");
+        var second = await AddProvider(host, "Second");
+        var config = await WriteCodexConfig(host);
+        await host.SendAsync(HttpMethod.Post, "/api/clients/codex/enable", new { providerId = first.Id, model = "gpt-5" });
+        await host.SendAsync(HttpMethod.Put, "/api/clients/codex/bindings",
+            new { bindings = new[] { new { providerId = first.Id }, new { providerId = second.Id } } });
+
+        // the client keeps its other provider and stays enabled
+        var (status, _) = await host.SendAsync(HttpMethod.Delete, $"/api/providers/{first.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, status);
+        Assert.Equal([second.Id], (await host.Db.Clients.ListBindingsAsync("codex")).Select(b => b.ProviderId));
+        Assert.True((await host.Db.Clients.GetAsync("codex"))!.Enabled);
+        Assert.Contains("[model_providers.astra]", await File.ReadAllTextAsync(config));
+
+        // its last provider gone, the client is disabled and its config restored
+        (status, _) = await host.SendAsync(HttpMethod.Delete, $"/api/providers/{second.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, status);
+        Assert.Empty(await host.Db.Clients.ListBindingsAsync("codex"));
+        Assert.False((await host.Db.Clients.GetAsync("codex"))!.Enabled);
+        Assert.Equal(Original, await File.ReadAllTextAsync(config));
+        Assert.Empty(await host.Db.Providers.ListAsync());
+    }
+
     private static async Task<string> WriteCodexConfig(TestHost host)
     {
         var path = Path.Combine(host.ClientHome, ".codex", "config.toml");

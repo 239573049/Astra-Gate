@@ -1,0 +1,41 @@
+{
+  "$comment": "Patch cases both shells apply (design/plugin-v2 06 §5): before + ops = after. Generated ops come from the host's UiDiff; tests/Astra.Plugins.Tests checks the host produces ops that give 'after'.",
+  "cases": [
+    {
+      "name": "props set and unset",
+      "before": { "type": "Stack", "props": {}, "children": [{ "type": "Text", "key": "a", "props": { "value": "1", "tone": "accent" } }] },
+      "ops": [{ "op": "props", "path": [0], "set": { "value": "2" }, "unset": ["tone"] }],
+      "after": { "type": "Stack", "props": {}, "children": [{ "type": "Text", "key": "a", "props": { "value": "2" } }] }
+    },
+    {
+      "name": "insert, move, remove",
+      "before": { "type": "Stack", "props": {}, "children": [
+        { "type": "Text", "key": "a", "props": { "value": "a" } },
+        { "type": "Text", "key": "b", "props": { "value": "b" } },
+        { "type": "Text", "key": "c", "props": { "value": "c" } }
+      ] },
+      "ops": [
+        { "op": "remove", "path": [], "index": 1 },
+        { "op": "move", "path": [], "from": 1, "to": 0 },
+        { "op": "insert", "path": [], "index": 2, "node": { "type": "Text", "key": "d", "props": { "value": "d" } } }
+      ],
+      "after": { "type": "Stack", "props": {}, "children": [
+        { "type": "Text", "key": "c", "props": { "value": "c" } },
+        { "type": "Text", "key": "a", "props": { "value": "a" } },
+        { "type": "Text", "key": "d", "props": { "value": "d" } }
+      ] }
+    },
+    {
+      "name": "replace the root",
+      "before": { "type": "Stack", "props": {} },
+      "ops": [{ "op": "replace", "path": [], "node": { "type": "Alert", "props": { "tone": "danger" } } }],
+      "after": { "type": "Alert", "props": { "tone": "danger" } }
+    },
+    {
+      "name": "replace a nested child",
+      "before": { "type": "Stack", "props": {}, "children": [{ "type": "Group", "props": {}, "children": [{ "type": "Text", "props": { "value": "x" } }] }] },
+      "ops": [{ "op": "replace", "path": [0, 0], "node": { "type": "Badge", "props": { "label": "y" } } }],
+      "after": { "type": "Stack", "props": {}, "children": [{ "type": "Group", "props": {}, "children": [{ "type": "Badge", "props": { "label": "y" } }] }] }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "DatePicker/invalid",
+  "component": "DatePicker",
+  "state": "invalid",
+  "tree": {
+    "type": "DatePicker",
+    "props": {
+      "name": "day",
+      "value": "2026-11-11",
+      "invalid": true
+    }
+  }
+}

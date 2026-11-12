@@ -1,0 +1,35 @@
+{
+  "id": "_patterns/empty-loading-error",
+  "component": null,
+  "state": "empty-loading-error",
+  "tree": {
+    "type": "Stack",
+    "props": {
+      "gap": "4"
+    },
+    "children": [
+      {
+        "type": "EmptyState",
+        "props": {
+          "icon": "inbox",
+          "title": "Nothing yet"
+        }
+      },
+      {
+        "type": "Skeleton",
+        "props": {
+          "shape": "block",
+          "lines": 2
+        }
+      },
+      {
+        "type": "Alert",
+        "props": {
+          "tone": "danger",
+          "title": "Could not load",
+          "message": "The plugin stopped: fetch failed (503)."
+        }
+      }
+    ]
+  }
+}

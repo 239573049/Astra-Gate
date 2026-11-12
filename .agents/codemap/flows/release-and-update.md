@@ -76,25 +76,25 @@ the `preview` feed also offers every stable. Clients follow the server's `update
     run that publishes nothing). The legacy `FEED_UPLOAD_TARGET` step (11) also runs after npm
     (`packaging-release` → `docs-site`)
 13. ⇢ crosses **network** boundary via `POST /api/client-releases/upload`
-14. `docs/app/api/client-releases/upload/route.ts:POST` — `verifyUploadToken` (constant-time bearer,
-    503 when `CLIENT_UPLOAD_TOKEN` is unset, `docs/lib/releases.ts:34`), header sanitizing and semver
+14. `astra-gate-web/app/api/client-releases/upload/route.ts:POST` — `verifyUploadToken` (constant-time bearer,
+    503 when `CLIENT_UPLOAD_TOKEN` is unset, `astra-gate-web/lib/releases.ts:34`), header sanitizing and semver
     validation, a 400 when `x-astra-channel` is unknown or disagrees with the version (`channelOfVersion`),
-    then `docs/lib/releases.ts:saveUpload` (`docs-site`)
-15. `docs/lib/releases.ts:saveUpload` — streams to `${DATA_DIR}/client-releases/<channel>/<version>/
+    then `astra-gate-web/lib/releases.ts:saveUpload` (`docs-site`)
+15. `astra-gate-web/lib/releases.ts:saveUpload` — streams to `${DATA_DIR}/client-releases/<channel>/<version>/
     Astra-<ver>-<platform>.<ext>` while computing sha256 **and** sha512 (base64, which
     electron-updater wants), tmp + rename, then merges into that channel's `index.json`
-    (`docs/lib/releases.ts:134`) (`docs-site`)
-16. `docs/app/api/client-releases/[channel]/[...path]/route.ts:GET` — public read surface over
+    (`astra-gate-web/lib/releases.ts:134`) (`docs-site`)
+16. `astra-gate-web/app/api/client-releases/[channel]/[...path]/route.ts:GET` — public read surface over
     `readFeed(channel)` (the channel's index merged with those in `FEED_SOURCES`: preview = preview +
     stable, each entry remembering its storage channel; unknown channel ⇒ 404, `beta` reads as preview):
     `/latest.json` (newest release **with** a `kind=json` file — installers uploaded ahead of the
     manifest are skipped), `/latest-mac.yml` (newest with a zip, `renderLatestMacYml`), `/releases.json`
     (semver-sorted, `channel` per version), `/v/<version>/<file>` and a bare filename looked up across
     the feed (`docs-site`)
-17. `docs/app/(home)/download/page.tsx:DownloadPage` — the download page renders `readFeed('stable')` and,
+17. `astra-gate-web/app/(site)/download/page.tsx:DownloadPage` — the download page renders `readFeed('stable')` and,
     in a folded section, the newest preview while it is newer than that stable, straight off those
     directories, so the upload step is what populates the site
-    (`docs-site`); `docs/proxy.ts:config` deliberately excludes `/api` (the proxy body cap of 10 MB
+    (`docs-site`); `astra-gate-web/proxy.ts:config` deliberately excludes `/api` (the proxy body cap of 10 MB
     truncated installers)
 18. `release.yml` "Publish platform packages first, then the CLI" — npm publish order is a contract, every
     package under `--tag $NPM_TAG` (`latest` | `preview`): server tarballs → desktop tarballs →
@@ -293,16 +293,16 @@ sequenceDiagram
 - **A new manifest field**: three readers must move together — `scripts/gen-manifest.mjs:merge` (writer),
   `packages/update-core/src/manifest.ts:UpdateManifest` (CLI + desktop) and
   `src/Astra.Server/Hosting/UpdateCheckService.cs:UpdateManifest`. `minUpdateable` exists in the .NET and
-  TS types but nothing reads it, and the docs-side `index.json` entry (`docs/lib/releases.ts:60`) is a
+  TS types but nothing reads it, and the docs-side `index.json` entry (`astra-gate-web/lib/releases.ts:60`) is a
   fourth copy of the same idea.
 - **A new platform / RID**: `scripts/rid-map.mjs` + an `npm/server-*` and `npm/desktop-*` package +
   the `release.yml` matrix + the desktop's `serverPackage` string (`desktop/src/main.ts:113`) and
   `cli/src/lib/platform.ts:platformInfo`.
-- **A new artifact kind on the download page**: `EXT_BY_KIND` (`docs/lib/releases.ts:72`) + the
+- **A new artifact kind on the download page**: `EXT_BY_KIND` (`astra-gate-web/lib/releases.ts:72`) + the
   filename→`os/arch/kind` mapping in the upload step (`release.yml:404-419`) + the download panel. The
   Avalonia self-update reads the same `platform`/`kind` tags (`DesktopReleaseFeed.PlatformTag` /
   `KindForThisOs`), so renaming a tag or an installer kind changes what installed apps can find.
-- **The install scripts** (`docs/public/install.sh` / `install.ps1`, served at `/install.sh` / `/install.ps1`):
+- **The install scripts** (`astra-gate-web/public/install.sh` / `install.ps1`, served at `/install.sh` / `/install.ps1`):
   they read `latest.json` (version + `platforms[<rid>].server/serverSha256`) and `releases.json`
   (`versions[].files[].name/sha256`), download the server tarball straight from the npm registry and
   desktop installers from `/v/<version>/Astra-<version>-<os>-<arch>.<ext>` — so a change to those feed
@@ -315,7 +315,7 @@ sequenceDiagram
   are what get replaced — applying is deliberately out of process); `-p:PublishSingleFile=true` in any
   publish command; publishing the CLI before its platform packages; renaming `cli/package.json` to
   `@aidotnet/astra-gate` without the tsup rebuild that bakes the name into the self-updater; adding
-  `/api` to the `docs/proxy.ts` matcher (installers get truncated at 10 MB); editing an
+  `/api` to the `astra-gate-web/proxy.ts` matcher (installers get truncated at 10 MB); editing an
   already-applied update by hand instead of going through `applyServerUpdate` (the `.prev`/`install.json`
   protocol is what makes rollback work). Also keep the duplicated `NATIVE_LIBRARY` regex in sync —
   `scripts/pack-platform.mjs:67` and `packages/update-core/src/staging.ts:45`.

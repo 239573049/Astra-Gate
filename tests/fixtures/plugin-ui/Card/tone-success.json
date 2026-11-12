@@ -1,0 +1,22 @@
+{
+  "id": "Card/tone-success",
+  "component": "Card",
+  "state": "tone-success",
+  "tree": {
+    "type": "Card",
+    "props": {
+      "title": "Today",
+      "subtitle": "since 00:00",
+      "icon": "activity",
+      "tone": "success"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "1,204 requests"
+        }
+      }
+    ]
+  }
+}

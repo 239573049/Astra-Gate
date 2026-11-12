@@ -19,8 +19,13 @@ namespace Astra.Server.Api;
 /// questions, a browser sign-in the plugin finishes on its own or with a pasted code, a key, signing out, and each
 /// account's allowance as the plugin tells it. Every finished sign-in syncs the provider's accounts.
 /// </summary>
-public sealed partial class PluginSignInService(AstraDatabase db, PluginProviders providers, PluginProviderSync sync)
+public sealed partial class PluginSignInService(AstraDatabase db, PluginProviders providers, PluginProviderSync sync, Astra.Plugins.V2.PluginV2Host? v2 = null)
 {
+    // a v2 provider's row (design/plugin-v2 08 §2): (plugin id, provider id), or null for a v1 one
+    private async Task<(string Plugin, string Provider)?> V2Async(string providerId, CancellationToken ct) =>
+        await db.Providers.GetAsync(providerId, ct) is { } row && Gateway.Pipeline.GatewayPipeline.V2PluginOf(row) is { } plugin
+            ? (plugin, Gateway.Pipeline.GatewayPipeline.PluginProviderOf(row)) : null;
+
     private static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(10);
     private readonly ConcurrentDictionary<string, Flow> _flows = new();
 
@@ -112,6 +117,14 @@ public sealed partial class PluginSignInService(AstraDatabase db, PluginProvider
     /// <summary>Signs the account out of the plugin (plugin-auth.json forgets it) and removes it.</summary>
     public async Task SignOutAsync(string providerId, string accountId, CancellationToken ct)
     {
+        if (await V2Async(providerId, ct) is { } v2p)
+        {
+            // a v2 account: its host-held credential and its row go; the plugin's own storage is its business
+            var v2key = await KeyOfAsync(providerId, accountId, ct);
+            await db.PluginData.DeleteSecretAsync(v2p.Plugin, $"provider:{v2p.Provider}:{v2key}", ct);
+            await db.Accounts.DeleteAsync(accountId, ct);
+            return;
+        }
         var pp = await PluginProviderAsync(providerId, ct);
         var key = await KeyOfAsync(providerId, accountId, ct);
         await Host("signOut", new JsonObject { ["provider"] = pp.Id, ["account"] = key }, ct);
@@ -122,6 +135,19 @@ public sealed partial class PluginSignInService(AstraDatabase db, PluginProvider
     /// <summary>The account's allowance as the plugin tells it: plan, windows used and when they reset.</summary>
     public async Task<JsonObject> UsageAsync(string providerId, string accountId, CancellationToken ct)
     {
+        if (await V2Async(providerId, ct) is { } v2p)
+        {
+            var v2key = await KeyOfAsync(providerId, accountId, ct);
+            try
+            {
+                return await (v2 ?? throw new AdminApiException(409, "v2 plugins aren't running here"))
+                    .ProviderCallAsync(v2p.Plugin, v2p.Provider, "usage", null, new JsonObject { ["key"] = v2key }, ct) as JsonObject ?? new JsonObject();
+            }
+            catch (Astra.Plugins.V2.Runtime.PluginCallException e)
+            {
+                throw new AdminApiException(502, "The plugin could not tell the allowance: " + e.Message);
+            }
+        }
         var pp = await PluginProviderAsync(providerId, ct);
         if (!pp.Usage) throw new AdminApiException(409, $"{pp.Name}'s plugin tells no allowance");
         var (key, proxy) = await AccountOfAsync(providerId, accountId, ct);

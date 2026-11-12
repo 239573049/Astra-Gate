@@ -1,0 +1,54 @@
+{
+  "id": "Tree/default",
+  "component": "Tree",
+  "state": "default",
+  "tree": {
+    "type": "Tree",
+    "props": {
+      "nodes": [
+        {
+          "key": "src",
+          "label": "src",
+          "children": [
+            {
+              "key": "src/main.js",
+              "label": "main.js",
+              "detail": "2 KB"
+            },
+            {
+              "key": "src/gateway.js",
+              "label": "gateway.js",
+              "badge": "hook"
+            }
+          ]
+        },
+        {
+          "key": "locales",
+          "label": "locales",
+          "children": [
+            {
+              "key": "locales/en.json",
+              "label": "en.json"
+            },
+            {
+              "key": "locales/zh.json",
+              "label": "zh.json"
+            }
+          ]
+        },
+        {
+          "key": "astra.plugin.json",
+          "label": "astra.plugin.json"
+        }
+      ],
+      "expanded": [
+        "src"
+      ],
+      "selected": [
+        "src/main.js"
+      ],
+      "selection": "single",
+      "onSelect": "select"
+    }
+  }
+}

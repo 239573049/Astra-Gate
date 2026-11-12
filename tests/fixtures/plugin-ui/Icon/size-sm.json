@@ -1,0 +1,13 @@
+{
+  "id": "Icon/size-sm",
+  "component": "Icon",
+  "state": "size-sm",
+  "tree": {
+    "type": "Icon",
+    "props": {
+      "name": "shield-check",
+      "size": "sm",
+      "tone": "accent"
+    }
+  }
+}

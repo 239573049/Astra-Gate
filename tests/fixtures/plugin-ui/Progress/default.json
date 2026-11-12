@@ -1,0 +1,12 @@
+{
+  "id": "Progress/default",
+  "component": "Progress",
+  "state": "default",
+  "tree": {
+    "type": "Progress",
+    "props": {
+      "value": 0.62,
+      "label": "Syncing"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "TextArea/default",
+  "component": "TextArea",
+  "state": "default",
+  "tree": {
+    "type": "TextArea",
+    "props": {
+      "name": "notes",
+      "value": "Line one\nLine two",
+      "rows": 4
+    }
+  }
+}

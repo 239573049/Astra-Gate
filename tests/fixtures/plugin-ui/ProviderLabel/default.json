@@ -1,0 +1,11 @@
+{
+  "id": "ProviderLabel/default",
+  "component": "ProviderLabel",
+  "state": "default",
+  "tree": {
+    "type": "ProviderLabel",
+    "props": {
+      "id": "anthropic"
+    }
+  }
+}

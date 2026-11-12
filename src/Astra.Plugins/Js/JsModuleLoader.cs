@@ -16,13 +16,16 @@ internal sealed class JsModuleLoader : IJsModuleResolver
     private readonly string _entry;
     private readonly string _what;
     private readonly ConcurrentDictionary<string, JsModule> _compiled = new(PathComparer);
+    private readonly IReadOnlyDictionary<string, (string Id, JsModule Module)>? _virtual;
 
     /// <param name="root">The folder imports must stay inside: the plugin's package folder, or the
     /// entry file's own folder for a single-file plugin.</param>
     /// <param name="entry">The module the plugin names (package.json magpie.middleware / magpie.agent).</param>
     /// <param name="what">How the error messages name the kind of module, e.g. "a middleware".</param>
-    public JsModuleLoader(string root, string entry, string what)
+    /// <param name="virtualModules">Bare specifiers the host provides itself (v2's <c>astra</c>): specifier → (module id, compiled module).</param>
+    public JsModuleLoader(string root, string entry, string what, IReadOnlyDictionary<string, (string Id, JsModule Module)>? virtualModules = null)
     {
+        _virtual = virtualModules;
         _root = Path.GetFullPath(root);
         _entry = Path.GetFullPath(entry);
         _what = what;
@@ -42,6 +45,7 @@ internal sealed class JsModuleLoader : IJsModuleResolver
     /// <summary>An import of a loaded module: <paramref name="referrerId"/> is the importing file's path.</summary>
     public JsModuleSource? Resolve(string specifier, string? referrerId)
     {
+        if (_virtual is not null && _virtual.TryGetValue(specifier, out var provided)) return new JsModuleSource(provided.Id, provided.Module);
         if (!specifier.StartsWith("./", StringComparison.Ordinal) && !specifier.StartsWith("../", StringComparison.Ordinal))
             throw new JsLoadException($"\"{specifier}\": {_what} imports only files beside it; bundle packages into it");
         var from = (referrerId is null ? null : Path.GetDirectoryName(referrerId)) ?? _root;

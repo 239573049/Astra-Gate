@@ -1,0 +1,23 @@
+{
+  "id": "Gauge/default",
+  "component": "Gauge",
+  "state": "default",
+  "tree": {
+    "type": "Gauge",
+    "props": {
+      "value": 72,
+      "max": 100,
+      "label": "Budget used",
+      "thresholds": [
+        {
+          "at": 60,
+          "tone": "warning"
+        },
+        {
+          "at": 90,
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

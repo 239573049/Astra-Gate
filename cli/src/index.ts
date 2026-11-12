@@ -41,6 +41,14 @@ import {
   runPluginSwitch,
   runPluginUpdate,
   runPluginUse,
+  runPluginGrant,
+  runPluginRun,
+  runPluginSettings,
+  runPluginUpgrade,
+  runPluginRollback,
+  runPluginDev,
+  runPluginTest,
+  runPluginV2List,
 } from './commands/plugin.js';
 import { runRestoreAll } from './commands/restore-all.js';
 import { runClaude } from './commands/claude.js';
@@ -224,6 +232,53 @@ const plugin = program
   .command('plugin')
   .alias('plugins')
   .description('Manage plugins (magpie-compatible provider plugins, gateway middleware and clients)');
+plugin.command('v2').description('List v2 plugins: state, permissions waiting for a grant, commands').option('--json', 'Print JSON').action((opts: { json?: boolean }) => runPluginV2List(opts));
+plugin
+  .command('grant')
+  .description("Grant a v2 plugin the permissions it asks for (after showing them)")
+  .argument('<id>')
+  .option('-p, --permission <permission...>', 'Only these permissions (e.g. one of its optional ones)')
+  .option('-y, --yes', "Don't ask")
+  .action((id: string, opts: { yes?: boolean; permission?: string[] }) => runPluginGrant(id, opts));
+plugin
+  .command('run')
+  .description("Run a v2 plugin's command")
+  .argument('<id>')
+  .argument('<command>')
+  .argument('[args]', 'Arguments as JSON')
+  .action((id: string, command: string, args?: string) => runPluginRun(id, command, args));
+plugin
+  .command('settings')
+  .description("Show a v2 plugin's settings, or set them from JSON")
+  .argument('<id>')
+  .argument('[values]', 'Settings as a JSON object')
+  .option('-s, --secret <name=value...>', 'Set a secret setting (empty value clears it)')
+  .action((id: string, values: string | undefined, opts: { secret?: string[] }) => runPluginSettings(id, values, opts));
+plugin
+  .command('upgrade')
+  .description('List v1 plugins that have a v2 version, or upgrade one')
+  .argument('[name]')
+  .option('-y, --yes', "Don't ask")
+  .action((name: string | undefined, opts: { yes?: boolean }) => runPluginUpgrade(name, opts));
+plugin
+  .command('dev')
+  .description('Develop a v2 plugin from a folder: reloads on save, prints its log, unmounts on Ctrl+C (this machine only)')
+  .argument('[dir]', 'The plugin folder (with astra.plugin.json)', '.')
+  .option('-y, --yes', 'Grant the permissions it asks for without asking')
+  .option('--keep', 'Leave it mounted after Ctrl+C')
+  .action((dir: string, opts: { yes?: boolean; keep?: boolean }) => runPluginDev(dir, opts));
+plugin
+  .command('test')
+  .description("Run a v2 plugin folder's tests in Astra's own sandbox (the real astra module and host calls; this machine only)")
+  .argument('[dir]', 'The plugin folder (with astra.plugin.json)', '.')
+  .option('--json', 'Print JSON')
+  .action((dir: string, opts: { json?: boolean }) => runPluginTest(dir, opts));
+plugin
+  .command('rollback')
+  .description('Go back to the v1 plugin a v2 one replaced (within 30 days of the upgrade)')
+  .argument('<id>')
+  .option('-y, --yes', "Don't ask")
+  .action((id: string, opts: { yes?: boolean }) => runPluginRollback(id, opts));
 plugin.command('list').alias('ls').description('List installed plugins').option('--json', 'Print JSON').action((opts: { json?: boolean }) => runPluginList(opts));
 plugin
   .command('add')

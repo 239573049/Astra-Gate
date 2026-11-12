@@ -1,0 +1,36 @@
+{
+  "id": "Toolbar/default",
+  "component": "Toolbar",
+  "state": "default",
+  "tree": {
+    "type": "Toolbar",
+    "props": {
+      "start": [
+        {
+          "type": "SearchField",
+          "props": {
+            "name": "q",
+            "placeholder": "Search"
+          }
+        }
+      ],
+      "end": [
+        {
+          "type": "Button",
+          "props": {
+            "label": "Export",
+            "icon": "download"
+          }
+        },
+        {
+          "type": "Button",
+          "props": {
+            "label": "Add",
+            "variant": "primary",
+            "icon": "plus"
+          }
+        }
+      ]
+    }
+  }
+}

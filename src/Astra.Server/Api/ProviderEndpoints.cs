@@ -160,9 +160,12 @@ public static class ProviderEndpoints
             return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
 
-        group.MapDelete("/{id}", async (string id, AstraDatabase db, CancellationToken ct) =>
+        // Clients using the provider are unbound first (one left with none is disabled, ClientService.UnbindProviderAsync);
+        // the delete still checks the bindings itself, so a client bound in between refuses it instead of being cascaded away.
+        group.MapDelete("/{id}", async (string id, AstraDatabase db, ClientService clients, CancellationToken ct) =>
         {
             await RequireAsync(db, id, ct);
+            await clients.UnbindProviderAsync(id, ct);
             if (!await db.Providers.DeleteIfUnboundAsync(id, ct))
             {
                 var bound = (await db.Clients.ListBindingsByProviderAsync(id, ct)).Select(b => b.ClientKind).Distinct().ToList();

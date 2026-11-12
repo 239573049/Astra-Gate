@@ -14,6 +14,13 @@
     <EmbeddedResource Include="Host\pi.js" LogicalName="Astra.Plugins.Host.pi.js" />
     <!-- a built-in copy of the community registry (astragate-community/astra-gate-plugins' registry.json), for when GitHub can't be reached -->
     <EmbeddedResource Include="Market\market.json" LogicalName="Astra.Plugins.Market.market.json" />
+    <EmbeddedResource Include="V2\Runtime\boot.js" LogicalName="Astra.Plugins.V2.boot.js" />
+    <EmbeddedResource Include="V2\Runtime\globals.js" LogicalName="Astra.Plugins.V2.globals.js" />
+    <EmbeddedResource Include="V2\Runtime\astra.js" LogicalName="Astra.Plugins.V2.astra.js" />
+    <EmbeddedResource Include="V2\Ui\components.json" LogicalName="Astra.Plugins.V2.components.json" />
+    <EmbeddedResource Include="V2\Ui\scenes.json" LogicalName="Astra.Plugins.V2.scenes.json" />
+    <EmbeddedResource Include="V2\Runtime\vitest.js" LogicalName="Astra.Plugins.V2.vitest.js" />
+    <EmbeddedResource Include="V2\Runtime\testing.js" LogicalName="Astra.Plugins.V2.testing.js" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Astra.Core\Astra.Core.csproj" />

@@ -1,0 +1,44 @@
+{
+  "id": "FieldGroup/default",
+  "component": "FieldGroup",
+  "state": "default",
+  "tree": {
+    "type": "FieldGroup",
+    "props": {
+      "title": "Limits",
+      "columns": 2
+    },
+    "children": [
+      {
+        "type": "Field",
+        "props": {
+          "label": "Per minute"
+        },
+        "children": [
+          {
+            "type": "NumberField",
+            "props": {
+              "name": "rpm",
+              "value": 60
+            }
+          }
+        ]
+      },
+      {
+        "type": "Field",
+        "props": {
+          "label": "Per day"
+        },
+        "children": [
+          {
+            "type": "NumberField",
+            "props": {
+              "name": "rpd",
+              "value": 5000
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -58,7 +58,7 @@ CLI-side view of the `~/.astra` layout.
 - Uses: `packaging-release` via npm — resolves `@aidotnet/server-<platform>` as an optionalDependency (`cli/package.json:33`, `cli/src/lib/binary.ts:117`).
 - Used by: `desktop-app` via file — reads `install.json` ("shape matches the CLI's InstallJson exactly", `packages/update-core/src/install-info.ts:5`; parser `desktop/src/shared/install.ts:7`).
 - Used by: `packaging-release` via npm publish — `release.yml` packs `astragate`, then renames `cli/package.json` and rebuilds the same CLI as `@aidotnet/astra-gate` (`.github/workflows/release.yml:499`–`:505`).
-- Used by: `docs-site` via docs only — the CLI command map is documented in `docs/content/docs/cli/index.mdx:15`.
+- Used by: `docs-site` via docs only — the CLI command map is documented in `astra-gate-web/content/docs/cli/index.mdx:15`.
 
 ## State it owns
 - `~/.astra/install.json` — the CLI is its primary writer (`cli/src/lib/install-json.ts:17`); fields `serverPath`, `serverVersion`, `desktopPath`, `desktopVersion`, `updatedAt` (`cli/src/lib/install-json.ts:5`). `update-core` writes the identical shape (`packages/update-core/src/install-info.ts:10`) and clears `serverPath` on a rollback of a standalone installer (`clearServerInfo`, `:52`) — the two must stay compatible.

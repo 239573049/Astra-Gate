@@ -1,0 +1,22 @@
+{
+  "id": "Card/default",
+  "component": "Card",
+  "state": "default",
+  "tree": {
+    "type": "Card",
+    "props": {
+      "title": "Today",
+      "subtitle": "since 00:00",
+      "icon": "activity",
+      "tone": "accent"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "1,204 requests"
+        }
+      }
+    ]
+  }
+}

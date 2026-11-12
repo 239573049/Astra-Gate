@@ -1,0 +1,15 @@
+{
+  "id": "Button/loading",
+  "component": "Button",
+  "state": "loading",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "primary",
+      "icon": "check",
+      "onPress": "save",
+      "loading": true
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "Row/default",
+  "component": "Row",
+  "state": "default",
+  "tree": {
+    "type": "Row",
+    "props": {
+      "label": "Notifications",
+      "detail": "A toast when a request is rejected",
+      "icon": "bell"
+    },
+    "children": [
+      {
+        "type": "Switch",
+        "props": {
+          "name": "notify",
+          "checked": true
+        }
+      }
+    ]
+  }
+}

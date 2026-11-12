@@ -98,9 +98,34 @@ public sealed class PackageManifest
         }
     }
 
+    /// <summary>The v2 manifest (astra.plugin.json) when the plugin is a v2 one that reads cleanly; v1 roles are then all off.</summary>
+    public V2.PluginV2Manifest? V2 { get; private set; }
+
+    /// <summary>Why a v2 plugin's manifest can't be used; null when it isn't v2 or reads cleanly.</summary>
+    public string? V2Error { get; private set; }
+
+    /// <summary>Whether this is a v2 plugin (astra.plugin.json with manifestVersion 2), usable or not.</summary>
+    public bool IsV2 => V2 is not null || V2Error is not null;
+
     private void ReadFolder(string dir)
     {
         Name = Path.GetFileName(dir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (Astra.Plugins.V2.PluginV2Manifest.IsV2(dir))
+        {
+            // a v2 plugin is nothing to the v1 runtimes (no middleware, agent, host module or pi): only the v2 host loads it
+            try
+            {
+                V2 = Astra.Plugins.V2.PluginV2Manifest.Read(dir);
+                Name = V2.Id;
+                Version = V2.Version;
+            }
+            catch (Astra.Plugins.V2.PluginManifestException e)
+            {
+                V2Error = e.Message;
+                NotPluginReason = $"{Name}: {e.Message}";
+            }
+            return;
+        }
         var pkg = ReadPackageJson(dir);
         if (pkg is null)
         {

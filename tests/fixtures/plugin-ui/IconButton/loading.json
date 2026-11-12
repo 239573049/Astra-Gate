@@ -1,0 +1,15 @@
+{
+  "id": "IconButton/loading",
+  "component": "IconButton",
+  "state": "loading",
+  "tree": {
+    "type": "IconButton",
+    "props": {
+      "icon": "trash-2",
+      "variant": "ghost",
+      "a11yLabel": "Delete",
+      "onPress": "delete",
+      "loading": true
+    }
+  }
+}

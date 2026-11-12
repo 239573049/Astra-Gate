@@ -1,0 +1,69 @@
+{
+  "id": "Chart/default",
+  "component": "Chart",
+  "state": "default",
+  "tree": {
+    "type": "Chart",
+    "props": {
+      "kind": "line",
+      "data": [
+        {
+          "date": "2026-11-01",
+          "requests": 120,
+          "errors": 4
+        },
+        {
+          "date": "2026-11-02",
+          "requests": 180,
+          "errors": 2
+        },
+        {
+          "date": "2026-11-03",
+          "requests": 150,
+          "errors": 9
+        },
+        {
+          "date": "2026-11-04",
+          "requests": 210,
+          "errors": 3
+        },
+        {
+          "date": "2026-11-05",
+          "requests": 260,
+          "errors": 5
+        },
+        {
+          "date": "2026-11-06",
+          "requests": 240,
+          "errors": 1
+        },
+        {
+          "date": "2026-11-07",
+          "requests": 300,
+          "errors": 6
+        }
+      ],
+      "x": {
+        "key": "date",
+        "type": "time"
+      },
+      "series": [
+        {
+          "key": "requests",
+          "label": "Requests"
+        },
+        {
+          "key": "errors",
+          "label": "Errors",
+          "tone": "danger",
+          "axis": "right"
+        }
+      ],
+      "yRight": {
+        "format": "number"
+      },
+      "curve": "smooth",
+      "height": "md"
+    }
+  }
+}

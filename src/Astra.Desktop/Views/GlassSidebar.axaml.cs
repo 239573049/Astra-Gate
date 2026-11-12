@@ -47,6 +47,31 @@ public partial class GlassSidebar : UserControl
         if (spec.HasAppDragRegion) WindowChrome.AttachDragRegion(HeaderRow);
     }
 
+    private readonly StackPanel _pluginGroup = new();
+    private string _pluginStamp = "";
+
+    /// <summary>
+    /// The v2 plugins' pages (ui.pages), as a group of their own under the built-in entries (design/plugin-v2 05 §3); replaced
+    /// whenever the list changes. Their keys are "plugin:&lt;plugin&gt;/&lt;page&gt;".
+    /// </summary>
+    public void SetPluginEntries(IReadOnlyList<NavEntry> entries)
+    {
+        var stamp = string.Join("|", entries.Select(e => e.Key + "=" + e.Label + "=" + e.Icon));
+        if (stamp == _pluginStamp) return;
+        _pluginStamp = stamp;
+        _rows.RemoveAll(r => r.Entry.Route == AppRoute.PluginPage);
+        _pluginGroup.Children.Clear();
+        if (!Groups.Children.Contains(_pluginGroup)) Groups.Children.Add(_pluginGroup);
+        if (entries.Count == 0) return;
+        var title = new TextBlock { Text = Loc.T("nav.group.pluginPages"), VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(12, 0, 0, 9) };
+        title.Classes.Add("groupTitle");
+        title.Opacity = _collapsed ? 0 : 1;
+        _pluginGroup.Children.Add(new Grid { Height = 24, Margin = new Thickness(0, 8, 0, 0), Children = { title } });
+        foreach (var entry in entries) _pluginGroup.Children.Add(BuildRow(entry));
+        SelectedKey = _selectedKey;
+        foreach (var row in _rows.Where(r => r.Entry.Route == AppRoute.PluginPage)) row.Label.Opacity = _collapsed ? 0 : 1;
+    }
+
     /// <summary>Raised when a row is pressed.</summary>
     public event EventHandler<NavEntry>? ItemInvoked;
 
@@ -98,7 +123,7 @@ public partial class GlassSidebar : UserControl
     {
         foreach (var row in _rows)
         {
-            row.Label.Text = Loc.T(row.Entry.LabelKey);
+            row.Label.Text = row.Entry.Label ?? Loc.T(row.Entry.LabelKey);
             ToolTip.SetTip(row.Item, _collapsed ? row.Label.Text : null);
         }
         foreach (var (title, _, key) in _groupTitles) title.Text = Loc.T(key);
@@ -168,7 +193,7 @@ public partial class GlassSidebar : UserControl
 
     private Border BuildRow(NavEntry entry)
     {
-        var label = new TextBlock { Text = Loc.T(entry.LabelKey) };
+        var label = new TextBlock { Text = entry.Label ?? Loc.T(entry.LabelKey) };
         label.Classes.Add("label");
         label.Transitions = [new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(160) }];
         var icon = new LucideIcon { Kind = entry.Icon, Size = 16, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };

@@ -97,7 +97,7 @@ curl "http://127.0.0.1:17321/gemini/v1beta/models/gemini-2.5-pro:generateContent
 
 模型名只要存在于模型目录（或在某个提供商下添加过），Astra 就会路由到对应的上游，
 协议不一致时自动转换。完整流程见
-[docs/guide/first-request.mdx](docs/content/docs/guide/first-request.mdx)。
+[「第一个请求」](https://astra-gate.si/docs/guide/first-request)。
 
 最后，与其手动给客户端配 base URL，不如让 Astra 代管 —— **客户端** 页点「启用」，
 或：
@@ -184,12 +184,11 @@ dotnet run --project src/Astra.Server -- serve   # 直接运行服务端
 pnpm -r --if-present lint           # eslint
 pnpm -r --if-present typecheck      # tsc --noEmit
 pnpm -r --if-present test           # vitest
-pnpm -r --if-present build          # cli、web、docs、desktop、packages
+pnpm -r --if-present build          # cli、web、desktop、packages
 
 # 只调试单个包，例如
 pnpm --filter @aidotnet/web dev     # 管理控制台，http://localhost:5173
 pnpm --filter astragate test        # CLI 测试
-pnpm --filter @aidotnet/docs dev    # 文档站
 ```
 
 ### 仓库结构
@@ -205,7 +204,6 @@ pnpm --filter @aidotnet/docs dev    # 文档站
 | `cli/` | `astragate` npm 包（`astra` 命令）及其平台服务端包 |
 | `web/` | 中英双语管理控制台，Vite + React |
 | `desktop/` | Electron 桌面端 |
-| `docs/` | Fumadocs 文档站与官网 |
 | `npm/` | 平台包 `@aidotnet/server-*` / `@aidotnet/desktop-*` |
 | `packages/update-core` | 共享更新引擎（CLI 与桌面端共用） |
 | `tests/` | xunit 测试项目，与 `src` 一一对应 |
@@ -215,13 +213,12 @@ pnpm --filter @aidotnet/docs dev    # 文档站
 
 ## 文档
 
-文档在 [`docs/content/docs`](docs/content/docs)，由 `docs/` 下的站点提供
-（`pnpm --filter @aidotnet/docs dev`）。重点页面：
-[安装](docs/content/docs/guide/install.mdx)、
-[第一个请求](docs/content/docs/guide/first-request.mdx)、
-[控制台教程](docs/content/docs/console/index.mdx)、
-[CLI 参考](docs/content/docs/cli/index.mdx) 与
-[隐私](docs/content/docs/advanced/privacy.mdx)。
+文档在官网 [astra-gate.si](https://astra-gate.si/docs)，官网是独立仓库（`astra-gate-web`）。重点页面：
+[安装](https://astra-gate.si/docs/guide/install)、
+[第一个请求](https://astra-gate.si/docs/guide/first-request)、
+[控制台教程](https://astra-gate.si/docs/console)、
+[CLI 参考](https://astra-gate.si/docs/cli) 与
+[隐私](https://astra-gate.si/docs/advanced/privacy)。
 
 ## 许可证
 

@@ -1,0 +1,19 @@
+{
+  "id": "Tab/default",
+  "component": "Tab",
+  "state": "default",
+  "tree": {
+    "type": "Tab",
+    "props": {
+      "value": "a"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "A tab on its own"
+        }
+      }
+    ]
+  }
+}

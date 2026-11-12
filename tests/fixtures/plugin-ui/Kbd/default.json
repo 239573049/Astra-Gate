@@ -1,0 +1,15 @@
+{
+  "id": "Kbd/default",
+  "component": "Kbd",
+  "state": "default",
+  "tree": {
+    "type": "Kbd",
+    "props": {
+      "keys": [
+        "mod",
+        "shift",
+        "k"
+      ]
+    }
+  }
+}

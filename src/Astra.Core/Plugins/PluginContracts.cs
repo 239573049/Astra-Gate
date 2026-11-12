@@ -59,6 +59,15 @@ public static class PluginKinds
 
     /// <summary>A pi coding agent extension, loaded by the host through pi's own loader.</summary>
     public const string Pi = "pi";
+
+    /// <summary>A v2 plugin (astra.plugin.json), run by the v2 host; never one of the v1 kinds above.</summary>
+    public const string V2 = "v2";
+
+    /// <summary>A v2 plugin with views (pages, slots or a settings view).</summary>
+    public const string Ui = "ui";
+
+    /// <summary>A v2 plugin with gateway hooks.</summary>
+    public const string Hooks = "hooks";
 }
 
 /// <summary>The installed-plugin list, implemented by the data layer.</summary>

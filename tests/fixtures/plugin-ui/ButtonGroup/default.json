@@ -1,0 +1,29 @@
+{
+  "id": "ButtonGroup/default",
+  "component": "ButtonGroup",
+  "state": "default",
+  "tree": {
+    "type": "ButtonGroup",
+    "props": {},
+    "children": [
+      {
+        "type": "Button",
+        "props": {
+          "label": "Day"
+        }
+      },
+      {
+        "type": "Button",
+        "props": {
+          "label": "Week"
+        }
+      },
+      {
+        "type": "Button",
+        "props": {
+          "label": "Month"
+        }
+      }
+    ]
+  }
+}

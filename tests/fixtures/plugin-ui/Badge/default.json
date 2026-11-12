@@ -1,0 +1,12 @@
+{
+  "id": "Badge/default",
+  "component": "Badge",
+  "state": "default",
+  "tree": {
+    "type": "Badge",
+    "props": {
+      "label": "beta",
+      "tone": "accent"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "id": "Meter/default",
+  "component": "Meter",
+  "state": "default",
+  "tree": {
+    "type": "Meter",
+    "props": {
+      "value": 70,
+      "max": 100,
+      "label": "Quota",
+      "segments": [
+        {
+          "value": 50,
+          "tone": "success",
+          "label": "Used"
+        },
+        {
+          "value": 20,
+          "tone": "warning",
+          "label": "Reserved"
+        }
+      ]
+    }
+  }
+}

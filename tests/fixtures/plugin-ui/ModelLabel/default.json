@@ -1,0 +1,11 @@
+{
+  "id": "ModelLabel/default",
+  "component": "ModelLabel",
+  "state": "default",
+  "tree": {
+    "type": "ModelLabel",
+    "props": {
+      "id": "claude-sonnet-4"
+    }
+  }
+}

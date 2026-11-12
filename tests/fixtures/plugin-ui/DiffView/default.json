@@ -1,0 +1,13 @@
+{
+  "id": "DiffView/default",
+  "component": "DiffView",
+  "state": "default",
+  "tree": {
+    "type": "DiffView",
+    "props": {
+      "before": "max_tokens: 1024\ntemperature: 1",
+      "after": "max_tokens: 4096\ntemperature: 1\ntop_p: 0.9",
+      "mode": "unified"
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "id": "Dialog/default",
+  "component": "Dialog",
+  "state": "default",
+  "tree": {
+    "type": "Dialog",
+    "props": {
+      "open": false,
+      "title": "Confirm"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Dialog body"
+        }
+      }
+    ]
+  }
+}

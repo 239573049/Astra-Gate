@@ -1,0 +1,12 @@
+{
+  "id": "ProtocolPicker/default",
+  "component": "ProtocolPicker",
+  "state": "default",
+  "tree": {
+    "type": "ProtocolPicker",
+    "props": {
+      "name": "protocol",
+      "value": "anthropic"
+    }
+  }
+}

@@ -109,7 +109,7 @@ curl "http://127.0.0.1:17321/gemini/v1beta/models/gemini-2.5-pro:generateContent
 
 Any model name that exists in the model catalog (or was added under a provider) is routed
 to a matching upstream, converted across protocols when needed. See
-[docs/guide/first-request.mdx](docs/content/docs/guide/first-request.mdx) for the full
+[the first-request guide](https://astra-gate.si/docs/guide/first-request) for the full
 walkthrough.
 
 Finally, instead of pointing clients at the gateway by hand, let Astra manage them —
@@ -200,12 +200,11 @@ dotnet run --project src/Astra.Server -- serve   # run the server directly
 pnpm -r --if-present lint           # eslint
 pnpm -r --if-present typecheck      # tsc --noEmit
 pnpm -r --if-present test           # vitest
-pnpm -r --if-present build          # cli, web, docs, desktop, packages
+pnpm -r --if-present build          # cli, web, desktop, packages
 
 # iterate on a single package, e.g.
 pnpm --filter @aidotnet/web dev     # admin UI on http://localhost:5173
 pnpm --filter astragate test        # CLI tests
-pnpm --filter @aidotnet/docs dev    # documentation site
 ```
 
 ### Repository layout
@@ -221,7 +220,6 @@ pnpm --filter @aidotnet/docs dev    # documentation site
 | `cli/` | The `astragate` npm package (`astra` command) and its platform server packages |
 | `web/` | Bilingual (zh/en) admin console, Vite + React |
 | `desktop/` | Electron app |
-| `docs/` | Fumadocs documentation site and official website |
 | `npm/` | Platform packages `@aidotnet/server-*` / `@aidotnet/desktop-*` |
 | `packages/update-core` | Shared update engine (CLI + desktop) |
 | `tests/` | xunit test projects, one per `src` project |
@@ -231,13 +229,13 @@ Protocol conversion is hub-and-spoke: each wire protocol decodes into a common I
 
 ## Documentation
 
-The docs live in [`docs/content/docs`](docs/content/docs) and are served by the site in
-`docs/` (`pnpm --filter @aidotnet/docs dev`). Notable pages:
-[installation](docs/content/docs/guide/install.mdx),
-[first request](docs/content/docs/guide/first-request.mdx),
-[console tour](docs/content/docs/console/index.mdx),
-[CLI reference](docs/content/docs/cli/index.mdx) and
-[privacy](docs/content/docs/advanced/privacy.mdx).
+The docs are on the official website, [astra-gate.si](https://astra-gate.si/docs), which is its own
+repository (`astra-gate-web`). Notable pages:
+[installation](https://astra-gate.si/docs/guide/install),
+[first request](https://astra-gate.si/docs/guide/first-request),
+[console tour](https://astra-gate.si/docs/console),
+[CLI reference](https://astra-gate.si/docs/cli) and
+[privacy](https://astra-gate.si/docs/advanced/privacy).
 
 ## License
 

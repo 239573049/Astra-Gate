@@ -1,0 +1,24 @@
+{
+  "id": "KeyValueEditor/invalid",
+  "component": "KeyValueEditor",
+  "state": "invalid",
+  "tree": {
+    "type": "KeyValueEditor",
+    "props": {
+      "name": "headers",
+      "value": [
+        {
+          "key": "x-team",
+          "value": "platform"
+        },
+        {
+          "key": "x-env",
+          "value": "prod"
+        }
+      ],
+      "keyPlaceholder": "Header",
+      "valuePlaceholder": "Value",
+      "invalid": true
+    }
+  }
+}

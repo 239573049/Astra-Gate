@@ -4,7 +4,7 @@ description: Why the preview channel is derived from the version, why the previe
 type: project
 updated: 2026-10-15
 source: session
-evidence: ["scripts/release-channel.mjs", "docs/lib/releases.ts:FEED_SOURCES", "src/Astra.Server/Hosting/UpdateCheckService.cs:UpdateChannels", ".github/workflows/release.yml (publish job step order)"]
+evidence: ["scripts/release-channel.mjs", "astra-gate-web/lib/releases.ts:FEED_SOURCES", "src/Astra.Server/Hosting/UpdateCheckService.cs:UpdateChannels", ".github/workflows/release.yml (publish job step order)"]
 ---
 On 2026-10-15 the release design gained a preview channel. The decisions and the alternatives
 that were rejected:

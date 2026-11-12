@@ -26,6 +26,7 @@ public sealed class AstraDatabase
         Requests = new RequestRepository(factory);
         Traces = new TraceRepository(factory);
         Plugins = new PluginRepository(factory);
+        PluginData = new PluginDataRepository(factory);
         Alerts = new AlertRepository(factory);
         Migrations = new MigrationRunner(factory, paths);
         Seed = new SeedImporter(factory);
@@ -46,6 +47,7 @@ public sealed class AstraDatabase
     public RequestRepository Requests { get; }
     public TraceRepository Traces { get; }
     public PluginRepository Plugins { get; }
+    public PluginDataRepository PluginData { get; }
     public AlertRepository Alerts { get; }
     public MigrationRunner Migrations { get; }
     public SeedImporter Seed { get; }

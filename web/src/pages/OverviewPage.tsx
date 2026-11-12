@@ -32,6 +32,7 @@ import {
 import { filterableClients } from '../lib/clientFilter';
 import { cacheHitRatio } from '../lib/usage';
 import { RequestDetailSheet } from './RequestsPage';
+import { PluginSlot } from '../plugin-ui/PluginPage';
 
 type ClientFilterValue = ClientKind | 'all';
 type Section = 'requests' | 'providers' | 'models' | 'tokens';
@@ -241,6 +242,7 @@ export function OverviewPage() {
           </section>
 
           <Breakdown range={range} clientKind={clientKind} tokenId={tokenId} series={series.data ?? []} seriesLoading={series.isLoading} />
+          <PluginSlot name="overview.cards" params={{ range }} />
         </div>
       )}
     </Page>

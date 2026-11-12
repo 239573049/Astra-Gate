@@ -1,0 +1,26 @@
+{
+  "id": "Timeline/default",
+  "component": "Timeline",
+  "state": "default",
+  "tree": {
+    "type": "Timeline",
+    "props": {
+      "items": [
+        {
+          "title": "Installed",
+          "time": "2026-11-10T09:00:00Z"
+        },
+        {
+          "title": "Upgraded to 2.1.0",
+          "time": "2026-11-11T08:00:00Z",
+          "tone": "accent"
+        },
+        {
+          "title": "Hook failed",
+          "time": "2026-11-11T09:30:00Z",
+          "tone": "danger"
+        }
+      ]
+    }
+  }
+}

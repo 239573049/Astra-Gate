@@ -295,6 +295,10 @@ internal static class AccountMenu
             entry.Click += (_, _) => _ = model.RunAsync(id, card.Account, card.Index);
             menu.Items.Add(entry);
         }
+        // plugin commands go before the last entry (signing out) like the console's
+        var account = card.Account;
+        Astra.Desktop.PluginUi.PluginShell.AddMenuEntries(menu, "provider.account.row",
+            () => new System.Text.Json.Nodes.JsonObject { ["providerId"] = account.ProviderId, ["accountId"] = account.Id }, Math.Max(0, menu.Items.Count - 1));
         return menu;
     }
 }

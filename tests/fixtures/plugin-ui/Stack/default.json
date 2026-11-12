@@ -1,0 +1,33 @@
+{
+  "id": "Stack/default",
+  "component": "Stack",
+  "state": "default",
+  "tree": {
+    "type": "Stack",
+    "props": {
+      "gap": "3"
+    },
+    "children": [
+      {
+        "type": "Badge",
+        "props": {
+          "label": "one"
+        }
+      },
+      {
+        "type": "Badge",
+        "props": {
+          "label": "two",
+          "tone": "accent"
+        }
+      },
+      {
+        "type": "Badge",
+        "props": {
+          "label": "three",
+          "tone": "success"
+        }
+      }
+    ]
+  }
+}

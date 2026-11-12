@@ -1,0 +1,27 @@
+{
+  "id": "Select/disabled",
+  "component": "Select",
+  "state": "disabled",
+  "tree": {
+    "type": "Select",
+    "props": {
+      "name": "provider",
+      "value": "anthropic",
+      "options": [
+        {
+          "value": "anthropic",
+          "label": "Anthropic"
+        },
+        {
+          "value": "openai",
+          "label": "OpenAI"
+        },
+        {
+          "value": "gemini",
+          "label": "Gemini"
+        }
+      ],
+      "disabled": true
+    }
+  }
+}

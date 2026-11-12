@@ -1,0 +1,13 @@
+{
+  "id": "TimePicker/default",
+  "component": "TimePicker",
+  "state": "default",
+  "tree": {
+    "type": "TimePicker",
+    "props": {
+      "name": "at",
+      "value": "09:30",
+      "minuteStep": 15
+    }
+  }
+}

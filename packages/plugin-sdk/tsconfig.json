@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "types": ["node"], "paths": { "astra": ["./src/index.d.ts"] } },
+  "include": ["src/**/*.d.ts", "src/**/*.d.mts", "test/**/*.ts"]
+}

@@ -1,0 +1,12 @@
+{
+  "id": "Text/variant-label",
+  "component": "Text",
+  "state": "variant-label",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "variant": "label"
+    }
+  }
+}

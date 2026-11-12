@@ -1,0 +1,12 @@
+{
+  "id": "Banner/tone-neutral",
+  "component": "Banner",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "Banner",
+    "props": {
+      "tone": "neutral",
+      "message": "A new version of this plugin is available."
+    }
+  }
+}

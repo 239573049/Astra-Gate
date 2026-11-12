@@ -1,0 +1,14 @@
+{
+  "id": "ConfirmButton/tone-neutral",
+  "component": "ConfirmButton",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "ConfirmButton",
+    "props": {
+      "label": "Delete",
+      "confirmLabel": "Really delete?",
+      "tone": "neutral",
+      "onPress": "delete"
+    }
+  }
+}

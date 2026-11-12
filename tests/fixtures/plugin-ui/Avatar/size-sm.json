@@ -1,0 +1,13 @@
+{
+  "id": "Avatar/size-sm",
+  "component": "Avatar",
+  "state": "size-sm",
+  "tree": {
+    "type": "Avatar",
+    "props": {
+      "name": "Ada Lovelace",
+      "size": "sm",
+      "status": "success"
+    }
+  }
+}

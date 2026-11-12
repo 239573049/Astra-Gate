@@ -1,0 +1,14 @@
+{
+  "id": "TextArea/invalid",
+  "component": "TextArea",
+  "state": "invalid",
+  "tree": {
+    "type": "TextArea",
+    "props": {
+      "name": "notes",
+      "value": "Line one\nLine two",
+      "rows": 4,
+      "invalid": true
+    }
+  }
+}

@@ -1,4 +1,4 @@
-# 03 UI API
+# 03 UI API：模型与协议
 
 ## 1. 要解决的问题
 
@@ -199,25 +199,27 @@ export const dashboard = ui.defineView({
 
 ### 5.2 首版组件（UI 1.0）
 
-下表是概览。每个组件的属性、事件和两端映射见 [04 组件参考](04-ui-components.md)；布局、导航、表单、数据通道、
-无障碍等横向规则见 [05](05-ui-systems.md)；SDK、调试和一致性流程见 [06](06-ui-tooling.md)。
+UI 1.0 约 100 个组件，按类别：
 
-| 类别 | 组件 | 说明 |
-|---|---|---|
-| 页面 | `Page` | 标题、副标题、右上角操作区、可选标签页 |
-| 布局 | `Stack` `Grid` `Split` `Scroll` `Divider` `Spacer` | `Stack` 有方向、间距、对齐、换行 |
-| 容器 | `Group` + `Row` | Astra 设置页的行式布局（Web `Group`/`Row`，桌面 `SettingsGroup`/`SettingsRow`） |
-| | `Card` `Section` `Tabs` `Accordion` `Disclosure` | |
-| | `Form` + `Field` | 标签、提示、错误信息；`Form` 提交时带上所有字段值 |
-| 文本与展示 | `Text` `Heading` `Markdown` `Code` `Link` `Icon` `Image` `Badge` `StatusDot` `Kbd` `KV` | `Markdown` 是受限子集（无 HTML、无远程图片） |
-| | `Alert` `EmptyState` `Skeleton` `Spinner` `Progress` | |
-| 输入 | `Button` `ButtonGroup` `CopyButton` | |
-| | `TextField` `PasswordField` `TextArea` `NumberField` `SearchField` | |
-| | `Switch` `Checkbox` `Select` `Combobox` `MultiSelect` `Segmented` `RadioCards` `ChipGroup` | |
-| 数据 | `Table` | 列定义、排序、分页、行操作、选择；数据可分页由事件驱动（§9） |
-| | `List` `MetricCard` `Sparkline` `BarChart` `Heatmap` `Pagination` `Stepper` | |
-| 浮层 | `Sheet` `Dialog` `Menu` `Tooltip` | `Sheet` / `Dialog` 通过效果打开，内容是另一个视图 |
-| 自定义绘制 | `Canvas` | 矢量显示列表，见 §11 |
+| 类别 | 组件 |
+|---|---|
+| 页面与布局 | `Page` `Stack` `Grid` `Split` `Scroll` `Box` `Divider` `Spacer` `Sticky` |
+| 容器与结构 | `Group` `Row` `Card` `Section` `Tabs` `Accordion` `Disclosure` `Stepper` `Timeline` `Breadcrumb` `Toolbar` `Boundary` |
+| 文本与展示 | `Text` `Heading` `RichText` `Markdown` `Code` `JsonView` `DiffView` `Link` `Icon` `Image` `Avatar` `Badge` `StatusDot` `Kbd` `KV` `Alert` `EmptyState` `Skeleton` `Spinner` `Progress` `Meter` `Counter` `QRCode` |
+| 操作 | `Button` `IconButton` `ButtonGroup` `SplitButton` `CopyButton` `ConfirmButton` `Menu` `ContextMenu` |
+| 输入 | `TextField` `PasswordField` `TextArea` `NumberField` `MoneyField` `SearchField` `CodeField` `Switch` `Checkbox` `RadioGroup` `RadioCards` `Segmented` `Select` `Combobox` `MultiSelect` `ChipGroup` `TagInput` `Slider` `DatePicker` `DateRangePicker` `TimePicker` `KeyValueEditor` `ListEditor` `FileDrop`，以及 `Form` `Field` `FieldGroup` |
+| 数据 | `Table` `List` `Tree` `Pagination` `LogView` `MetricCard` `Sparkline` `Chart`（折线 / 面积 / 柱状 / 堆叠 / 环形） `Heatmap` `Gauge` |
+| 浮层与反馈 | `Sheet` `Dialog` `Popover` `Tooltip` `Banner`，效果 `confirm` `prompt` `toast` |
+| 领域组件 | `ModelPicker` `ProviderPicker` `AccountPicker` `ClientPicker` `TokenPicker` `ProtocolPicker`，`ModelLabel` 等标签，`Money` `RequestLink` `TraceLink` `UsageBar` |
+| 自定义绘制 | `Canvas`（§11） |
+
+树、日期、折线图、Markdown 是必须项，有单独的详细规格（04 §7）。
+
+各部分的详细内容：
+
+- 每个组件的属性、事件、两端映射，以及两端各自要补的组件：[04 组件参考](04-ui-components.md)
+- 布局与响应式、令牌、导航、表单、数据通道、加载与错误、浮层、交互、格式化、无障碍、壳差异：[05 系统规则](05-ui-systems.md)
+- SDK、开发模式、测试、两端一致性流程、UI 版本：[06 工具链](06-ui-tooling.md)
 
 每个组件的属性、事件、子节点规则都写在模式文件里（01 §5 的单一模式源），生成 SDK 的 TS 类型、
 Web 渲染器的属性类型、C# 节点类型。
@@ -323,12 +325,12 @@ Field({ label: t('url'), visible: { when: ['eq', ['local', 'mode'], 'custom'] } 
 ## 10. 两端一致性怎么保证
 
 1. **一份模式**生成两端的节点类型，属性不会一边有一边没有。
-2. **一份场景集**：`tests/fixtures/plugin-ui/*.json`，每个文件是一棵 UI 树（每个组件的每种主要状态 + 若干组合页面）。
-   Web 和桌面各渲染一遍，用现有的视觉回归流程比对（`scripts/visual/capture-web.mjs`、`tests/Astra.Desktop.UiTests`、
-   `scripts/visual/compare.mjs`）。新增组件必须带场景。
-3. **一份行为用例**：本地条件求值、表单取值、补丁应用，各有一份 JSON 用例，两端的单元测试都跑。
+2. **一份场景集**在两端各渲染一遍，用仓库现有的视觉回归流程比对；新增组件必须带场景。
+3. **一份行为用例**（补丁应用、本地条件、表单取值、格式化、图表刻度）两端的单元测试都跑。
 4. **渲染器只做映射。** 间距、字号、颜色都来自两端已有的 Arc 令牌；渲染器里不写插件专用的样式。
 5. 已知且接受的差异写进文档（字体渲染、滚动条、原生菜单外观），不追求像素相同。
+
+具体流程见 06 §5。
 
 Avalonia 渲染器的一个硬性要求：按 `key` 复用控件、应用补丁，而不是整棵重建——整棵重建会重复触发仓库里已经踩过的
 「控件已有视觉父级」崩溃（`.agents/memory/desktop-rebuild-reparent-crash.md`）。

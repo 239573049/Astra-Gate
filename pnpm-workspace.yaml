@@ -3,6 +3,5 @@ packages:
   - connect
   - web
   - desktop
-  - docs
   - npm/*
   - packages/*

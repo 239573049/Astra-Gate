@@ -1,0 +1,14 @@
+{
+  "id": "Button/variant-ghost",
+  "component": "Button",
+  "state": "variant-ghost",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "ghost",
+      "icon": "check",
+      "onPress": "save"
+    }
+  }
+}

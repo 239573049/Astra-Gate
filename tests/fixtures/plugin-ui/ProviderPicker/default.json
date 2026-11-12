@@ -1,0 +1,11 @@
+{
+  "id": "ProviderPicker/default",
+  "component": "ProviderPicker",
+  "state": "default",
+  "tree": {
+    "type": "ProviderPicker",
+    "props": {
+      "name": "provider"
+    }
+  }
+}

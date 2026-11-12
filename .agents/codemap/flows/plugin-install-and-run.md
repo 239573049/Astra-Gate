@@ -42,23 +42,23 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
    (`:62`) is `ASTRA_PLUGIN_MARKET` > the `PluginMarketUrl` setting > `DefaultUrl`
    `https://astra-gate.si/api/plugin-market/registry.json` (`:47`) (`astra-plugins`)
 6. ⇢ crosses **network** boundary via HTTPS `GET /api/plugin-market/registry.json` (no auth) — the docs site's route
-   `docs/app/api/plugin-market/registry.json/route.ts` → `buildRegistry` (`docs/lib/plugin-market/registry.ts:46`),
+   `astra-gate-web/app/api/plugin-market/registry.json/route.ts` → `buildRegistry` (`astra-gate-web/lib/plugin-market/registry.ts:46`),
    which merges the one fixed community registry (`loadUpstream`,
-   `docs/lib/plugin-market/upstream.ts:160`) with the entries+packs published on the site, and answers ETag/304
+   `astra-gate-web/lib/plugin-market/upstream.ts:160`) with the entries+packs published on the site, and answers ETag/304
    (`astra-plugins` → `docs-site`)
-7. `docs/lib/plugin-market/upstream.ts:18` — `UPSTREAM` is a single hard-coded address
+7. `astra-gate-web/lib/plugin-market/upstream.ts:18` — `UPSTREAM` is a single hard-coded address
    (`https://raw.githubusercontent.com/astragate-community/astra-gate-plugins/main/registry.json`); commit `6abd354`
    deleted the `PLUGIN_MARKET_UPSTREAM` override and added the `source` field to the cached `upstream.json`
    (`:23`–`:28`, checked at `:118`, `:126`) so a list cached from a former upstream is never served as this one's.
-   When upstream is unreachable the shipped snapshot `docs/lib/plugin-market/upstream-fallback.json` stands in
+   When upstream is unreachable the shipped snapshot `astra-gate-web/lib/plugin-market/upstream-fallback.json` stands in
    (`:153`); that file is byte-identical to the server's
    `src/Astra.Plugins/Market/market.json` and the two move together (AGENTS.md linked update 10) (`docs-site`)
-8. `docs/lib/plugin-market/store.ts` — market storage under `${DATA_DIR}/plugin-market/` (`entries.json`, `packages/`,
+8. `astra-gate-web/lib/plugin-market/store.ts` — market storage under `${DATA_DIR}/plugin-market/` (`entries.json`, `packages/`,
    `upstream.json`), tarball paths validated against `packages/` (`packageFile`), publishing gated by
    `PLUGIN_UPLOAD_TOKEN` (`verifyPublishToken`) (`docs-site`)
 9. `src/Astra.Plugins/Market/PluginMarket.cs:139` `SearchAsync` — the registry's search is derived from its address
    (`SearchUrl` `:160` requires the path to end in `/registry.json`), so search goes through the site too
-   (`docs/app/api/plugin-market/search/route.ts` → `docs/lib/plugin-market/search.ts`, npm + GitHub's
+   (`astra-gate-web/app/api/plugin-market/search/route.ts` → `astra-gate-web/lib/plugin-market/search.ts`, npm + GitHub's
    `topic:magpie-plugin`); a market with no search beside it searches nothing (`:143`) (`astra-plugins` → `docs-site`)
 10. `src/Astra.Plugins/Packages/PluginInstaller.cs:49` `AddCoreAsync` — one `_lock` serialises installs; the spec is
     classified by `PluginSpec` (`IsPath`/`IsGit`/`IsPackageName`, `src/Astra.Plugins/Store/PluginSpec.cs:13`, `:22`,
@@ -253,8 +253,8 @@ sequenceDiagram
   (`src/Astra.Core/Plugins/PluginContracts.cs:46`) and a loader. A manifest field without a `Kinds` entry means the
   plugin shows no chip; without a loader it installs and never runs.
 - **A new marketplace field**: `MarketListing` + `ToListing`/`ToTarball` (`src/Astra.Plugins/Market/PluginMarket.cs:20`,
-  `:234`), `web/src/api/types.ts`, `cli/src/commands/plugin.ts`, `docs/lib/plugin-market/types.ts` and
-  `docs/content/docs/advanced/plugin-market.mdx` — one contract across five files (AGENTS.md linked update 10).
+  `:234`), `web/src/api/types.ts`, `cli/src/commands/plugin.ts`, `astra-gate-web/lib/plugin-market/types.ts` and
+  `astra-gate-web/content/docs/advanced/plugin-market.mdx` — one contract across five files (AGENTS.md linked update 10).
 - **A new host RPC**: call it through `PluginHost.CallAsync` and add it to the vendored `host.js` by re-vendoring
   (`node scripts/vendor-magpie-host.mjs <commit>`, then read the diff) — never hand-editing `host.js`/`pi.js`, and
   updating `VENDORED.md` with it (`Host/VENDORED.md:9`).
@@ -267,6 +267,14 @@ sequenceDiagram
   snapshot is what `restore-all` needs);
   and calling `SqlMapper.*` in shipped code (Dapper.AOT, see the module map).
 
+## v2 plugins
+Installing is the same job (a v2 package is recognised by its `astra.plugin.json`, `PackageManifest.ReadFolder`), but
+the v1 runtimes skip it: `PluginV2Host` picks it up from the catalog, waits for `POST /api/plugins/v2/{id}/grant`, then
+activates it (`PluginMain`). A v1 plugin with a market successor (`pluginsV2[].replaces`) is upgraded by
+`POST /api/plugins/v2/upgrade` (`PluginV2Service`, a `PluginJobs` job; the v1 copy is kept 30 days for `/rollback`).
+A v2 provider's requests go `PluginFetchHandler` → `V2ProviderTransport.SendAsync` (`prepare`), and with a `reply` block the reply is reframed and translated by `V2ReplyTransform` before the pipeline decodes it.
+See [astra-plugins](../modules/astra-plugins.md#v2-plugins-v2).
+
 ## Related
 - Modules: [astra-plugins](../modules/astra-plugins.md), [astra-server](../modules/astra-server.md),
   [astra-gateway](../modules/astra-gateway.md), [astra-clients](../modules/astra-clients.md),
@@ -274,4 +282,4 @@ sequenceDiagram
   [docs-site](../modules/docs-site.md), [cli](../modules/cli.md), [astra-providers](../modules/astra-providers.md)
 - Git-history cross-check: `b91acca` added `NpmTarballFetcher.GetFollowingRedirectsAsync` (`:116`) and
   `TarballRedirectTests`; `6abd354` froze the docs site's upstream to one address and versioned the cached copy by
-  its source (`docs/lib/plugin-market/upstream.ts:18`, `:118`); `4db7875` only fixed tarball mtimes in tests.
+  its source (`astra-gate-web/lib/plugin-market/upstream.ts:18`, `:118`); `4db7875` only fixed tarball mtimes in tests.

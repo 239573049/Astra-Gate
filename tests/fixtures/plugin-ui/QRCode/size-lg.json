@@ -1,0 +1,12 @@
+{
+  "id": "QRCode/size-lg",
+  "component": "QRCode",
+  "state": "size-lg",
+  "tree": {
+    "type": "QRCode",
+    "props": {
+      "value": "astra://join?gateway=https://gw.example&token=abc",
+      "size": "lg"
+    }
+  }
+}

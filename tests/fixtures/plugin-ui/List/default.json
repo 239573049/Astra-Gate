@@ -1,0 +1,31 @@
+{
+  "id": "List/default",
+  "component": "List",
+  "state": "default",
+  "tree": {
+    "type": "List",
+    "props": {
+      "items": [
+        {
+          "key": "a",
+          "title": "secret",
+          "detail": "12 hits",
+          "icon": "shield"
+        },
+        {
+          "key": "b",
+          "title": "password",
+          "detail": "3 hits",
+          "icon": "shield"
+        },
+        {
+          "key": "c",
+          "title": "api key",
+          "detail": "no hits",
+          "icon": "shield"
+        }
+      ],
+      "onItemPress": "open"
+    }
+  }
+}

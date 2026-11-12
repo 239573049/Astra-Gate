@@ -1,0 +1,20 @@
+{
+  "id": "Disclosure/default",
+  "component": "Disclosure",
+  "state": "default",
+  "tree": {
+    "type": "Disclosure",
+    "props": {
+      "title": "Show details",
+      "defaultOpen": true
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "The details"
+        }
+      }
+    ]
+  }
+}

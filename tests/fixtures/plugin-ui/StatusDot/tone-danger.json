@@ -1,0 +1,13 @@
+{
+  "id": "StatusDot/tone-danger",
+  "component": "StatusDot",
+  "state": "tone-danger",
+  "tree": {
+    "type": "StatusDot",
+    "props": {
+      "tone": "danger",
+      "label": "Running",
+      "pulse": true
+    }
+  }
+}

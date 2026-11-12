@@ -1,0 +1,14 @@
+{
+  "id": "PasswordField/invalid",
+  "component": "PasswordField",
+  "state": "invalid",
+  "tree": {
+    "type": "PasswordField",
+    "props": {
+      "name": "apiKey",
+      "placeholder": "sk-…",
+      "hasValue": true,
+      "invalid": true
+    }
+  }
+}

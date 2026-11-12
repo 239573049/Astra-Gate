@@ -17,4 +17,4 @@ fires. `WebhookFormats` lists `generic`, `feishu`, `dingtalk`, `wecom`, `slack` 
 **How to apply:** Treat the plan's "generic JSON only" line as superseded. A new platform is another
 `WebhookFormats` constant plus a `Render` branch and a success check in `Rejection`, not a reason to
 remove the existing ones. The generic payload shape is still the public contract documented in
-`docs/content/docs/console/notifications.mdx`.
+`astra-gate-web/content/docs/console/notifications.mdx`.

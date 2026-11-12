@@ -6,7 +6,7 @@ updated: 2026-10-14
 ---
 # packaging-release
 
-Everything between "the code builds" and "a user gets it": the three GitHub Actions pipelines (`ci.yml`, `release.yml`, `docs.yml`), the `scripts/*.mjs` that pack the published server binary and the electron-builder output into npm platform packages, the version-sync gate + `CHANGELOG.md` release notes, and the container surface (root `Dockerfile`, `compose.yaml`, `docker/data`).
+Everything between "the code builds" and "a user gets it": the GitHub Actions pipelines (`ci.yml`, `release.yml`, `desktop-aot.yml`; the website's image is built by its own repository since 2026-11-11), the `scripts/*.mjs` that pack the published server binary and the electron-builder output into npm platform packages, the version-sync gate + `CHANGELOG.md` release notes, and the container surface (root `Dockerfile`, `compose.yaml`, `docker/data`).
 **Not responsible for:** what the AOT binary contains (`astra-server`, `Astra.Server.csproj`), the web build (`web-ui`), electron-builder signing/targets and the renderer build (`desktop-app`), the update algorithm that consumes the manifest (`update-core`), the feed/market/tools HTTP surface on the site (`docs-site`), the CLI tarball's contents and its self-update name (`cli`).
 
 ## Entry points
@@ -17,7 +17,6 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 | `publish` job | `.github/workflows/release.yml:341` | Merges partials into `out/feed/<channel>/latest.json`, uploads the installers to the docs site, publishes platform packages then the CLI to npm under `--tag <npm_tag>`, then uploads the manifest (after npm), creates the `v<version>` GitHub Release (`--prerelease` for a preview). |
 | `docker` job | `.github/workflows/release.yml:531` | Unpacks `pkg-linux-*` into `docker-bin/{amd64,arm64}`, smoke-tests an amd64 image (as the server, then as `relay`), pushes multi-arch `ghcr.io/<owner>/<repo>`. |
 | `dotnet` / `node` jobs | `.github/workflows/ci.yml:13`,`:35` | PR + main CI: `dotnet build -warnaserror` + `dotnet test --no-build`; `pnpm -r --if-present lint/typecheck/test/build`. |
-| `build` job | `.github/workflows/docs.yml:31` | Path-filtered build+push of the docs image to `ghcr.io/<owner>/<repo>/docs`. |
 | `pack-platform.mjs <main>` | `scripts/pack-platform.mjs:28` | `--rid --publish-dir --web-dist` → `npm/<server-*>/bin/{binary, libe_sqlite3.*, wwwroot}`. |
 | `sync-versions.mjs <main>` | `scripts/sync-versions.mjs:30` | `--check` (read-only gate) or write mode: one version across `cli`, `npm/*`, `desktop`, `Directory.Build.props`. |
 
@@ -44,10 +43,10 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 - Uses: `desktop-app` via shell (build + packager) — `pnpm --filter @aidotnet/desktop build` and `electron-builder … --config.directories.output=../out/desktop` (`.github/workflows/release.yml:257`,`:264`); `extraResources: server-bundle → server` (`desktop/electron-builder.yml:15`).
 - Uses: `cli` via npm pack — `npm pack ./cli` then the in-place rename + rebuild as `@aidotnet/astra-gate` (`.github/workflows/release.yml:495`,`:502`); the version source is `cli/package.json:2`.
 - Uses: `update-core` via a JSON contract — `latest.json` written by `scripts/gen-manifest.mjs:83` and fetched from `${feed}/<channel>/latest.json` (`packages/update-core/src/manifest.ts:49`).
-- Uses: `docs-site` via HTTP — `POST ${DOCS_RELEASE_URL}/api/client-releases/upload` with `x-astra-version|channel|platform|kind|notes-b64` (installers before npm, the manifest after; accepted by `docs/app/api/client-releases/upload/route.ts`).
+- Uses: `docs-site` via HTTP — `POST ${DOCS_RELEASE_URL}/api/client-releases/upload` with `x-astra-version|channel|platform|kind|notes-b64` (installers before npm, the manifest after; accepted by `astra-gate-web/app/api/client-releases/upload/route.ts`).
 - Used by: `cli` via npm — `@aidotnet/server-*` are `optionalDependencies` resolved at install time (`cli/package.json:33`, `.github/workflows/release.yml:483`).
 - Used by: `desktop-app` via npm package contents — `npm/desktop-*/app` (`scripts/pack-desktop.mjs:62`).
-- Used by: `docs-site` via the image it serves + the uploaded files (`.github/workflows/docs.yml:28`, `docs/lib/releases.ts:25`).
+- Used by: `docs-site` (the website repository) via the uploaded files (`astra-gate-web/lib/releases.ts`).
 - Used by: `astra-server` via container env — `ASTRA_HOME/ASTRA_HOST/ASTRA_PORT/ASTRA_STRICT_PORT` (`Dockerfile:30`, matching `ServerOptions.ApplyEnvironment`).
 
 ## State it owns
@@ -60,17 +59,16 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 ## Contracts it exposes
 - **Platform packages:** `@aidotnet/server-<os>-<arch>` with `os`/`cpu`, `bin.astra-server` (`bin/astra-server.exe` on win32), `files: ["bin/"]`, `preferUnplugged: true` (`npm/server-win32-x64/package.json:12`); `@aidotnet/desktop-<os>-<arch>` with `files: ["app/"]` and no `bin` (`npm/desktop-darwin-arm64/package.json:12`).
 - **Tarball names:** npm drops `@` and `+` from a scoped tarball, so the artifacts are `aidotnet-server-*.tgz` / `aidotnet-desktop-*.tgz` / `astragate-<v>.tgz` / `aidotnet-astra-gate-<v>.tgz` (`.github/workflows/release.yml:485`,`:486`,`:489`,`:496`,`:505`).
-- **Feed layout:** `out/feed/stable/latest.json` (manifest), plus `latest-mac.yml`, `*.dmg`, `*.zip` for `scripts/publish-feed.mjs` (`.github/workflows/release.yml:375`–`:377`); the docs site re-serves the manifest at `/api/client-releases/stable/latest.json` from a file uploaded with `platform=manifest`, `kind=json` (`docs/app/api/client-releases/[channel]/[...path]/route.ts:80`).
+- **Feed layout:** `out/feed/stable/latest.json` (manifest), plus `latest-mac.yml`, `*.dmg`, `*.zip` for `scripts/publish-feed.mjs` (`.github/workflows/release.yml:375`–`:377`); the docs site re-serves the manifest at `/api/client-releases/stable/latest.json` from a file uploaded with `platform=manifest`, `kind=json` (`astra-gate-web/app/api/client-releases/[channel]/[...path]/route.ts:80`).
 - **Manifest schema:** `{version, apiVersion, releasedAt, notes?, platforms: {<rid>: {server, serverSha256, serverSize}}}` (`scripts/gen-manifest.mjs:83`); the TS mirror also declares an optional `desktop` field (`packages/update-core/src/manifest.ts:9`) that `gen-manifest.mjs` never writes.
 - **Workflow artifacts:** `pkg-<rid>` = `out/pkg/*.tgz`, `feed-<rid>` = `out/feed-upload/*` (`.github/workflows/release.yml:288`,`:311`).
 - **Env vars / secrets:** `NPM_TOKEN` (`.github/workflows/release.yml:450`), `CSC_LINK`/`CSC_KEY_PASSWORD`/`APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID` (`:132`–`:136`), `ASTRA_FEED_URL` (default `https://astra-gate.si/api/client-releases/stable`, `:254`), `FEED_UPLOAD_TARGET` (`:384`), `DOCS_RELEASE_URL` + `DOCS_RELEASE_TOKEN` (falls back to `CLIENT_UPLOAD_TOKEN`, `:395`), `GITHUB_TOKEN` (`:578`).
 - **Container surface:** image `ghcr.io/<owner>/<repo>`, port `17321`, `VOLUME /data`, non-root `app`, `ENTRYPOINT ["/app/astra-server"]` + `CMD ["serve"]` (`Dockerfile:36`–`:45`); `compose.yaml:14` requires `ASTRA_ADMIN_PASSWORD` to be set.
-- **Docs image contract:** `ghcr.io/<owner>/<repo>/docs` tagged `latest`(default branch) / long-sha / semver (`.github/workflows/docs.yml:50`–`:54`), built from `docs/Dockerfile` with the repo root as context (`:58`).
 
 ## How to extend
 - To add a platform (RID): add the entry to `scripts/rid-map.mjs:5`, a new `npm/server-<dir>/package.json` + `npm/desktop-<dir>/package.json` (copy an existing pair; `name`/`os`/`cpu`/`bin.files`), a row in the `build` matrix (`.github/workflows/release.yml:85`) and, if it is mac, extend the Xcode/`Check macOS signing credentials` conditions (`:130`,`:180`). Missing the `rid-map` entry makes every `npm pack`/staging step exit 1 with `Unknown RID`.
 - To cut a release: `node scripts/sync-versions.mjs --version x.y.z`, add a `## [x.y.z] - date` section to `CHANGELOG.md`, `pnpm install`, push to `main`. Missing the changelog section fails the `version` job (`.github/workflows/release.yml:67`); a version already on npm silently stops after `version` (`:60`).
-- To add a new file kind to the feed: extend the `platform`/`kind` mapping in the docs-upload loop (`.github/workflows/release.yml:408`–`:418`) and `EXT_BY_KIND` (`docs/lib/releases.ts:72`). A kind the site does not know lands as `.bin`.
+- To add a new file kind to the feed: extend the `platform`/`kind` mapping in the docs-upload loop (`.github/workflows/release.yml:408`–`:418`) and `EXT_BY_KIND` (`astra-gate-web/lib/releases.ts:72`). A kind the site does not know lands as `.bin`.
 - To change a version number by hand anywhere: run the sync script instead — a hand edit can drift `desktop/package.json` and every installer then reports a stale version (`scripts/sync-versions.mjs:44`).
 - To add a post-publish step: add it to the `publish` job after `.github/workflows/release.yml:448`; the `docker` job already depends on `publish` completing (`:535`).
 
@@ -85,14 +83,13 @@ Everything between "the code builds" and "a user gets it": the three GitHub Acti
 - **osx-x64 is cross-built on Apple silicon and never executed**, so its `plugin-selftest` is skipped (`.github/workflows/release.yml:204`).
 - **Both docs/feed upload steps can "succeed" while publishing nothing**: the client-release upload warns and `exit 0` when its secrets are missing (`.github/workflows/release.yml:400`), and the feed step is skipped when `FEED_UPLOAD_TARGET` is unset because `secrets` is unavailable in a step-level `if` (`:380`). Check the step log, not the run colour.
 - **`build` re-runs `Check macOS signing credentials` before the long build** because unsigned mac artifacts pass CI but break Gatekeeper and Squirrel.Mac's designated-requirement check (`.github/workflows/release.yml:126`).
-- **The docs site synthesizes `latest-mac.yml` itself** (`renderLatestMacYml`, `docs/app/api/client-releases/[channel]/[...path]/route.ts:7`): the upload loop only ships `.dmg/.zip/.exe/.AppImage` + the manifest, so the `latest-mac.yml` produced by electron-builder reaches the feed host only through `publish-feed` (`.github/workflows/release.yml:377`).
+- **The docs site synthesizes `latest-mac.yml` itself** (`renderLatestMacYml`, `astra-gate-web/app/api/client-releases/[channel]/[...path]/route.ts:7`): the upload loop only ships `.dmg/.zip/.exe/.AppImage` + the manifest, so the `latest-mac.yml` produced by electron-builder reaches the feed host only through `publish-feed` (`.github/workflows/release.yml:377`).
 - **`docker` is gated on `publish` completing**, so a failed npm publish never leaves an image for a version that was never released (`.github/workflows/release.yml:533`).
-- **The image is assembled, never compiled**: `Dockerfile:23` copies `docker-bin/${TARGETARCH}/`, and the glibc `runtime-deps` base is deliberate — the release RIDs are `linux-x64`/`linux-arm64`, not `linux-musl-*` (`Dockerfile:17`). `Dockerfile.dockerignore` is the server image's context filter (only `docker-bin`, `docker/data`); the root `.dockerignore` belongs to `docs/Dockerfile` (`Dockerfile.dockerignore:2`).
+- **The image is assembled, never compiled**: `Dockerfile:23` copies `docker-bin/${TARGETARCH}/`, and the glibc `runtime-deps` base is deliberate — the release RIDs are `linux-x64`/`linux-arm64`, not `linux-musl-*` (`Dockerfile:17`). `Dockerfile.dockerignore` is the server image's context filter (only `docker-bin`, `docker/data`); the root `.dockerignore` belongs to `astra-gate-web/Dockerfile` (`Dockerfile.dockerignore:2`).
 - **Dropping `resources/server` is what keeps the Windows/Linux npm desktop tarball under npm's size limit** (E413); macOS keeps it because its `Resources` are sealed by the code signature (`scripts/pack-desktop.mjs:91`), and the pack step then skips a desktop package that has no `app/` at all (`.github/workflows/release.yml:279`).
 - **Version drift is not checked on PRs**: `sync-versions.mjs --check` runs only inside the release `build` matrix (`.github/workflows/release.yml:210`), whereas `ci.yml` runs no version gate at all.
 - **`TreatWarningsAsErrors`** (`Directory.Build.props:7`) plus `dotnet build -warnaserror` (`.github/workflows/ci.yml:30`) means a new warning breaks CI even though nothing else about the build failed.
 - `.npmrc:1` links workspace packages when a dependency version matches exactly — the reason a version-skewed local install still resolves the *published* package; its comment still says `@astragate/server-*` while the packages are `@aidotnet/server-*` (stale comment).
-- `docs/` has no `lint`/`test`/`typecheck` script (its check is `types:check`), so `pnpm -r --if-present …` in `ci.yml` skips it silently — the site is only really verified by `docs.yml`'s image build.
 
 ## Tests
 There is no unit-test suite in this module; the gates are commands the workflows run:

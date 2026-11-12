@@ -1,0 +1,12 @@
+{
+  "id": "Text/variant-body",
+  "component": "Text",
+  "state": "variant-body",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "variant": "body"
+    }
+  }
+}

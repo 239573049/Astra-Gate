@@ -24,6 +24,8 @@ import { cn } from '../lib/cn';
 import { useDebounced } from '../lib/hooks';
 import { formatBytes, formatDateTime, formatMs, formatNanos, formatPercent, formatTime, formatTokens, formatTps, formatUnitPrice, pretty } from '../lib/format';
 import { useCommandListener } from '../shell/commands';
+import { PluginSlot } from '../plugin-ui/PluginPage';
+import { PluginMenu } from '../plugin-ui/menus';
 
 const PAGE_SIZE = 50;
 
@@ -934,6 +936,8 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
             {r.billingDescription && <p className="mt-3 text-[12px] leading-relaxed whitespace-pre-line text-[var(--text-secondary)]">{r.billingDescription}</p>}
           </DetailSection>
 
+          <PluginMenu menu="request.row" args={{ requestId: r.id }} />
+          <PluginSlot name="request.detail.sections" params={{ requestId: r.id }} />
           {raw.length > 0 && <Accordion key={r.id} defaultOpen={-1} items={raw} />}
         </div>
       )}

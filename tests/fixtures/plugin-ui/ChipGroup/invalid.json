@@ -1,0 +1,30 @@
+{
+  "id": "ChipGroup/invalid",
+  "component": "ChipGroup",
+  "state": "invalid",
+  "tree": {
+    "type": "ChipGroup",
+    "props": {
+      "name": "tags",
+      "value": [
+        "openai"
+      ],
+      "options": [
+        {
+          "value": "anthropic",
+          "label": "Anthropic"
+        },
+        {
+          "value": "openai",
+          "label": "OpenAI"
+        },
+        {
+          "value": "gemini",
+          "label": "Gemini"
+        }
+      ],
+      "multiple": true,
+      "invalid": true
+    }
+  }
+}

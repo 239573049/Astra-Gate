@@ -173,7 +173,8 @@ public sealed partial class GatewayPipeline(
             var middlewareStart = Stopwatch.GetTimestamp();
             middlewareRun = middleware is null ? null : await middleware.BeginAsync(() =>
                 GatewayMiddleware.Info(inbound, requestBody.Utf8, ctx.Request.Path,
-                    route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream), ct);
+                    route.ClientKind is { } kind ? ClientKinds.AgentIdOf(kind) : null, StripModels(pathModel), pathStream,
+                    route.Token.Id, route.Token.Name, record.Id), ct);
             if (middlewareRun is not null)
             {
                 var middlewareSpan = trace.StartAt(TraceSpanNames.Middleware, middlewareStart);
@@ -803,13 +804,24 @@ public sealed partial class GatewayPipeline(
                     // the client went away while the held reply was written
                 }
             }
-            middlewareRun?.Dispose();
             // Balanced mode: the account's in-flight slot is held until the whole response has been streamed back.
             accountLease?.Dispose();
             poolLease?.Dispose();
             poolPlan?.Dispose();
             record.ResponseModel = decoder?.ResponseModel;
             Finish(record, observer, sw, effective, provider, s.Locale);
+            if (middlewareRun is { WantsComplete: true })
+            {
+                // v2 onComplete (read-only): how the request ended, never its bodies
+                var usage = new System.Text.Json.Nodes.JsonObject
+                {
+                    ["input"] = record.TotalInputTokens, ["output"] = record.TotalOutputTokens,
+                    ["cacheRead"] = record.CacheReadTokens, ["cacheWrite"] = record.CacheWriteTokens, ["reasoning"] = record.ReasoningTokens,
+                };
+                middlewareRun.Complete(record.HttpStatus ?? 200, usage, (long)sw.Elapsed.TotalMilliseconds,
+                    record.Status == RequestStatus.Success ? null : record.ErrorType ?? record.Status);
+            }
+            middlewareRun?.Dispose();
             FinishTrace(record, trace, link, inboundTraceId, observer, responseSpan, middlewareStream is not null, restorable);
             if (capture is not null)
             {
@@ -827,6 +839,11 @@ public sealed partial class GatewayPipeline(
     // ------------------------------------------------------------------ upstream
 
     /// <summary>The provider id the plugin knows a plugin provider by (its <c>settings.plugin.provider</c>).</summary>
+    /// <summary>The plugin id of a v2 provider row (<c>settings.plugin.v2</c>, design/plugin-v2 08 §2); null for any other row.</summary>
+    public static string? V2PluginOf(Provider provider) =>
+        provider.Settings["plugin"] is System.Text.Json.Nodes.JsonObject o && o["v2"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<bool>(out var isV2) && isV2
+            ? o["plugin"]?.GetValue<string>() : null;
+
     public static string PluginProviderOf(Provider provider) =>
         provider.Settings["plugin"]?["provider"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var id) ? id : provider.Id;
 
@@ -945,14 +962,24 @@ public sealed partial class GatewayPipeline(
                     // Plan §5.4: renew a grant once before switching accounts. Direct tokens / API keys cannot be renewed.
                     var used = credentials.AccountId ?? accountId;
                     attempt = Retry(attempt, response, "auth_refresh", used);
+                    var refusedStatus = (int)response.StatusCode;
+                    var refusedBody = plugin && credentials.PluginKey is not null && V2PluginOf(provider) is not null
+                        ? await Astra.Plugins.V2.V2ProviderTransport.ExcerptAsync(response, ct) : null;
                     response.Dispose();
                     try
                     {
                         if (plugin)
                         {
                             // the plugin renews its own sign-in: its loader is asked again, once
-                            if (credentials.PluginKey is { } key)
-                                await (pluginTransport ?? throw NoPluginProviders()).Providers.ReloadAsync(PluginProviderOf(provider), key, ct);
+                            if (credentials.PluginKey is { } key && V2PluginOf(provider) is { } v2)
+                            {
+                                // a v2 provider (design/plugin-v2 08 §2): its refresh says whether the account is still good
+                                var said = await ((pluginTransport ?? throw NoPluginProviders()).V2 ?? throw NoPluginProviders()).RefreshAsync(v2, PluginProviderOf(provider), key, refusedStatus, refusedBody, ct);
+                                pluginTransport.V2SignIn(provider.Id, key, said ?? "", (int)HttpStatusCode.Unauthorized);
+                                if (said == "expired") throw new SubscriptionAuthException(used ?? "", "the plugin says the account's sign-in has expired");
+                            }
+                            else if (credentials.PluginKey is { } key1)
+                                await (pluginTransport ?? throw NoPluginProviders()).Providers.ReloadAsync(PluginProviderOf(provider), key1, ct);
                         }
                         else
                             credentials = await auth.ResolveAfterUnauthorizedAsync(provider.Id, used, ct);

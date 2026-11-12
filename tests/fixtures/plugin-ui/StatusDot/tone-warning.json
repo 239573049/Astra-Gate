@@ -1,0 +1,13 @@
+{
+  "id": "StatusDot/tone-warning",
+  "component": "StatusDot",
+  "state": "tone-warning",
+  "tree": {
+    "type": "StatusDot",
+    "props": {
+      "tone": "warning",
+      "label": "Running",
+      "pulse": true
+    }
+  }
+}

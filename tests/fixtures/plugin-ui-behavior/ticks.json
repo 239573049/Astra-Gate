@@ -1,0 +1,11 @@
+{
+  "$comment": "Value-axis ticks (design/plugin-v2 04 §7): min, max, count → ticks. Both shells must agree or the same data gets different axes.",
+  "cases": [
+    { "min": 0, "max": 100, "count": 4, "ticks": [0, 20, 40, 60, 80, 100] },
+    { "min": 0, "max": 1, "count": 4, "ticks": [0, 0.2, 0.4, 0.6, 0.8, 1] },
+    { "min": 0, "max": 1234, "count": 4, "ticks": [0, 500, 1000, 1500] },
+    { "min": -5, "max": 5, "count": 4, "ticks": [-6, -4, -2, 0, 2, 4, 6] },
+    { "min": 0, "max": 0, "count": 4, "ticks": [0, 1] },
+    { "min": 3, "max": 3, "count": 4, "ticks": [0, 2, 4, 6] }
+  ]
+}

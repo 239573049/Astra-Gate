@@ -1,0 +1,21 @@
+{
+  "id": "Sparkline/tone-success",
+  "component": "Sparkline",
+  "state": "tone-success",
+  "tree": {
+    "type": "Sparkline",
+    "props": {
+      "data": [
+        120,
+        180,
+        150,
+        210,
+        260,
+        240,
+        300
+      ],
+      "tone": "success",
+      "area": true
+    }
+  }
+}

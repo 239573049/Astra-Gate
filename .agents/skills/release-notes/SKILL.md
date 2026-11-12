@@ -14,8 +14,10 @@ dialog and tray notification (cut at 600 characters, so the first bullet matters
 ```bash
 PREV=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || git log --format=%h --grep '^chore(release)' -n1)
 git log --no-merges --format='%h %s' "$PREV"..HEAD
-git diff --stat "$PREV"..HEAD -- src cli web desktop packages docs/public
+git diff --stat "$PREV"..HEAD -- src cli web desktop packages
 ```
+
+The install scripts and the download page live in the website repository (`astra-gate-web`) since 2026-11-11.
 
 Read the diffs of anything user-visible. Commit subjects alone are not enough: the notes say
 what changed for the user, not which files moved. A preview's notes cover the commits since the

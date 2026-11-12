@@ -1,0 +1,19 @@
+{
+  "id": "Boundary/default",
+  "component": "Boundary",
+  "state": "default",
+  "tree": {
+    "type": "Boundary",
+    "props": {
+      "busy": false
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Content inside a boundary"
+        }
+      }
+    ]
+  }
+}

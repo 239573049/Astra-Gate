@@ -458,6 +458,9 @@ internal static class Messages
         "clients.dragToReorder",
         "clients.removeProvider",
         "clients.providerDisabledBadge",
+        "clients.providerDisabledTitle",
+        "clients.providerDisabledHint",
+        "clients.providerDisabledPluginHint",
         "clients.moreProvidersTitle",
         "clients.providerAdded",
         "clients.providerRemoved",
@@ -1275,6 +1278,7 @@ internal static class Messages
         "providers.duplicate",
         "providers.deleteConfirm",
         "providers.deleteDetail",
+        "providers.deleteDetailBound",
         "providers.deleted",
         "providers.deleteBound",
         "providers.templateVersions",
@@ -2060,6 +2064,115 @@ internal static class Messages
         "plugins.kind.middleware",
         "plugins.kind.agent",
         "plugins.kind.pi",
+        "nav.group.pluginPages",
+        "plugins.kind.v2",
+        "plugins.kind.ui",
+        "plugins.kind.hooks",
+        "pluginUi.v2Title",
+        "pluginUi.more",
+        "pluginUi.commandRan",
+        "pluginUi.menu",
+        "pluginUi.gallery.title",
+        "pluginUi.gallery.subtitle",
+        "pluginUi.gallery.patterns",
+        "pluginUi.gallery.filter",
+        "pluginUi.gallery.width",
+        "pluginUi.gallery.theme",
+        "pluginUi.gallery.surface",
+        "pluginUi.gallery.code",
+        "pluginUi.gallery.events",
+        "pluginUi.inspector.title",
+        "pluginUi.inspector.auto",
+        "pluginUi.inspector.tree",
+        "pluginUi.inspector.state",
+        "pluginUi.inspector.timeline",
+        "pluginUi.inspector.calls",
+        "pluginUi.inspector.warnings",
+        "pluginUi.flow.signIn",
+        "palette.title",
+        "palette.placeholder",
+        "palette.empty",
+        "pluginUi.noV2",
+        "pluginUi.activity",
+        "pluginUi.add",
+        "pluginUi.allow",
+        "pluginUi.contributes",
+        "pluginUi.copied",
+        "pluginUi.deny",
+        "pluginUi.details",
+        "pluginUi.dev",
+        "pluginUi.dismiss",
+        "pluginUi.dropFiles",
+        "pluginUi.empty",
+        "pluginUi.failed",
+        "pluginUi.grant",
+        "pluginUi.grantDetail",
+        "pluginUi.granted",
+        "pluginUi.grantTitle",
+        "pluginUi.hooks",
+        "pluginUi.idle",
+        "pluginUi.invalidJson",
+        "pluginUi.log",
+        "pluginUi.noActivity",
+        "pluginUi.notFound",
+        "pluginUi.off",
+        "pluginUi.open",
+        "pluginUi.openExternal",
+        "pluginUi.pages",
+        "pluginUi.perm.net",
+        "pluginUi.perm.netConfig",
+        "pluginUi.permissions",
+        "pluginUi.publisher",
+        "pluginUi.requestDetail",
+        "pluginUi.requestTitle",
+        "pluginUi.revoke",
+        "pluginUi.rollback",
+        "pluginUi.running",
+        "pluginUi.save",
+        "pluginUi.saved",
+        "pluginUi.search",
+        "pluginUi.secretSet",
+        "pluginUi.selected",
+        "pluginUi.sensitive",
+        "pluginUi.settings",
+        "pluginUi.settingsTitle",
+        "pluginUi.source",
+        "pluginUi.successors",
+        "pluginUi.unsaved",
+        "pluginUi.unsupported",
+        "pluginUi.upgrade",
+        "pluginUi.upgradeConfirm",
+        "pluginUi.upgradeDetail",
+        "pluginUi.upgradePermissions",
+        "pluginUi.upgradeSafety",
+        "pluginUi.upgradeTitle",
+        "pluginUi.version",
+        "pluginUi.preset.today",
+        "pluginUi.preset.yesterday",
+        "pluginUi.preset.7d",
+        "pluginUi.preset.30d",
+        "pluginUi.preset.90d",
+        "pluginUi.preset.thisMonth",
+        "pluginUi.preset.lastMonth",
+        "pluginUi.perm.storage",
+        "pluginUi.perm.secrets",
+        "pluginUi.perm.ui",
+        "pluginUi.perm.notifications",
+        "pluginUi.perm.jobs",
+        "pluginUi.perm.events",
+        "pluginUi.perm.gateway.request:read",
+        "pluginUi.perm.gateway.request:rewrite",
+        "pluginUi.perm.gateway.request:reject",
+        "pluginUi.perm.gateway.response:read",
+        "pluginUi.perm.gateway.response:rewrite",
+        "pluginUi.perm.gateway.upstream:headers",
+        "pluginUi.perm.data.requests:read",
+        "pluginUi.perm.data.providers:read",
+        "pluginUi.perm.data.models:read",
+        "pluginUi.perm.data.tokens:read",
+        "pluginUi.perm.providers",
+        "pluginUi.perm.clients",
+        "pluginUi.perm.legacy.auth:import",
         "plugins.local",
         "plugins.moveUp",
         "plugins.moveDown",
@@ -3420,6 +3533,9 @@ internal static class Messages
             case "clients.dragToReorder": return "拖动调整 {provider} 的顺序";
             case "clients.removeProvider": return "移除 {provider}";
             case "clients.providerDisabledBadge": return "已停用";
+            case "clients.providerDisabledTitle": return "提供商「{name}」已停用";
+            case "clients.providerDisabledHint": return "到提供商页重新启用它，或在「使用的提供商」里把另一个可用的提供商拖到第一位，然后再试。";
+            case "clients.providerDisabledPluginHint": return "它所属的插件已关闭。到插件页重新开启这个插件，或在「使用的提供商」里把另一个可用的提供商拖到第一位，然后再试。";
             case "clients.moreProvidersTitle": return "可添加的提供商";
             case "clients.providerAdded": return "已添加 {provider}，立即生效";
             case "clients.providerRemoved": return "已移除 {provider}";
@@ -4237,6 +4353,7 @@ internal static class Messages
             case "providers.duplicate": return "复制提供商";
             case "providers.deleteConfirm": return "删除 {name}？";
             case "providers.deleteDetail": return "提供商及其模型设置会被删除，请求记录保留。";
+            case "providers.deleteDetailBound": return "提供商及其模型设置会被删除，请求记录保留。正在使用它的客户端会解除绑定：{clients}；其中没有其他提供商的客户端会被关闭，并恢复原来的配置。";
             case "providers.deleted": return "已删除";
             case "providers.deleteBound": return "仍有客户端在使用：{clients}。请先为它们切换提供商。";
             case "providers.templateVersions": return "当前版本 {current}，最新版本 {latest}";
@@ -5022,6 +5139,115 @@ internal static class Messages
             case "plugins.kind.middleware": return "中间件";
             case "plugins.kind.agent": return "客户端";
             case "plugins.kind.pi": return "pi 扩展";
+            case "nav.group.pluginPages": return "插件页面";
+            case "plugins.kind.v2": return "v2";
+            case "plugins.kind.ui": return "界面";
+            case "plugins.kind.hooks": return "网关钩子";
+            case "pluginUi.v2Title": return "v2 插件";
+            case "pluginUi.more": return "加载更多";
+            case "pluginUi.commandRan": return "已运行「{name}」";
+            case "pluginUi.menu": return "插件操作";
+            case "pluginUi.gallery.title": return "组件画廊";
+            case "pluginUi.gallery.subtitle": return "v2 插件界面的每个组件和状态，两端按同一组场景比对";
+            case "pluginUi.gallery.patterns": return "组合场景";
+            case "pluginUi.gallery.filter": return "筛选组件";
+            case "pluginUi.gallery.width": return "宽度";
+            case "pluginUi.gallery.theme": return "主题";
+            case "pluginUi.gallery.surface": return "位置";
+            case "pluginUi.gallery.code": return "组件树";
+            case "pluginUi.gallery.events": return "触发的动作";
+            case "pluginUi.inspector.title": return "检查器";
+            case "pluginUi.inspector.auto": return "自动";
+            case "pluginUi.inspector.tree": return "组件树";
+            case "pluginUi.inspector.state": return "状态";
+            case "pluginUi.inspector.timeline": return "时间线";
+            case "pluginUi.inspector.calls": return "宿主调用";
+            case "pluginUi.inspector.warnings": return "警告";
+            case "pluginUi.flow.signIn": return "登录账号";
+            case "palette.title": return "命令面板";
+            case "palette.placeholder": return "搜索页面和命令…";
+            case "palette.empty": return "没有匹配的页面或命令";
+            case "pluginUi.noV2": return "还没有 v2 插件";
+            case "pluginUi.activity": return "活动记录";
+            case "pluginUi.add": return "添加";
+            case "pluginUi.allow": return "允许";
+            case "pluginUi.contributes": return "提供的能力";
+            case "pluginUi.copied": return "已复制";
+            case "pluginUi.deny": return "拒绝";
+            case "pluginUi.details": return "详情";
+            case "pluginUi.dev": return "开发模式";
+            case "pluginUi.dismiss": return "不再提醒";
+            case "pluginUi.dropFiles": return "把文件拖到这里，或点击选择";
+            case "pluginUi.empty": return "暂无内容";
+            case "pluginUi.failed": return "这个插件页面无法打开";
+            case "pluginUi.grant": return "授予权限";
+            case "pluginUi.grantDetail": return "插件只能使用你授予的权限。之后可以随时收回。";
+            case "pluginUi.granted": return "已授予";
+            case "pluginUi.grantTitle": return "{name} 需要这些权限";
+            case "pluginUi.hooks": return "{count} 组网关钩子";
+            case "pluginUi.idle": return "空闲（按需加载）";
+            case "pluginUi.invalidJson": return "JSON 格式错误";
+            case "pluginUi.log": return "日志";
+            case "pluginUi.noActivity": return "暂无敏感操作记录";
+            case "pluginUi.notFound": return "找不到这个插件页面";
+            case "pluginUi.off": return "已关闭";
+            case "pluginUi.open": return "打开";
+            case "pluginUi.openExternal": return "在浏览器中打开这个链接？";
+            case "pluginUi.pages": return "{count} 个页面";
+            case "pluginUi.perm.net": return "访问 {origin}";
+            case "pluginUi.perm.netConfig": return "访问设置项「{setting}」中填写的地址";
+            case "pluginUi.permissions": return "权限";
+            case "pluginUi.publisher": return "发布者";
+            case "pluginUi.requestDetail": return "插件在运行中请求了额外的权限。允许后可以在插件详情中收回。";
+            case "pluginUi.requestTitle": return "{name} 请求权限";
+            case "pluginUi.revoke": return "收回";
+            case "pluginUi.rollback": return "回到 v1 版本";
+            case "pluginUi.running": return "运行中";
+            case "pluginUi.save": return "保存";
+            case "pluginUi.saved": return "已保存";
+            case "pluginUi.search": return "搜索";
+            case "pluginUi.secretSet": return "已设置（留空不修改）";
+            case "pluginUi.selected": return "已选 {count} 项";
+            case "pluginUi.sensitive": return "敏感权限";
+            case "pluginUi.settings": return "设置";
+            case "pluginUi.settingsTitle": return "{name} 设置";
+            case "pluginUi.source": return "来源";
+            case "pluginUi.successors": return "{count} 个插件有 v2 新版本";
+            case "pluginUi.unsaved": return "有未保存的修改";
+            case "pluginUi.unsupported": return "此版本不支持组件 {type}";
+            case "pluginUi.upgrade": return "升级到 v2";
+            case "pluginUi.upgradeConfirm": return "允许并升级";
+            case "pluginUi.upgradeDetail": return "v2 是新版插件系统：插件在沙箱中运行，只能使用你授予的权限。";
+            case "pluginUi.upgradePermissions": return "新版本需要的权限";
+            case "pluginUi.upgradeSafety": return "升级时先安装并启动新版本，成功后才移除旧版本；失败时旧版本保持不变。30 天内可以回到 v1。";
+            case "pluginUi.upgradeTitle": return "升级 {name}";
+            case "pluginUi.version": return "版本";
+            case "pluginUi.preset.today": return "今天";
+            case "pluginUi.preset.yesterday": return "昨天";
+            case "pluginUi.preset.7d": return "最近 7 天";
+            case "pluginUi.preset.30d": return "最近 30 天";
+            case "pluginUi.preset.90d": return "最近 90 天";
+            case "pluginUi.preset.thisMonth": return "本月";
+            case "pluginUi.preset.lastMonth": return "上月";
+            case "pluginUi.perm.storage": return "保存自己的数据";
+            case "pluginUi.perm.secrets": return "加密保存自己的密钥";
+            case "pluginUi.perm.ui": return "在控制台中显示界面";
+            case "pluginUi.perm.notifications": return "发送通知";
+            case "pluginUi.perm.jobs": return "运行定时任务";
+            case "pluginUi.perm.events": return "发出事件、接收其他插件的事件";
+            case "pluginUi.perm.gateway.request:read": return "读取发往网关的请求内容";
+            case "pluginUi.perm.gateway.request:rewrite": return "修改发往网关的请求内容";
+            case "pluginUi.perm.gateway.request:reject": return "拒绝请求";
+            case "pluginUi.perm.gateway.response:read": return "读取模型的回复";
+            case "pluginUi.perm.gateway.response:rewrite": return "修改模型的回复";
+            case "pluginUi.perm.gateway.upstream:headers": return "为发往上游的请求添加请求头";
+            case "pluginUi.perm.data.requests:read": return "读取请求日志（不含内容）";
+            case "pluginUi.perm.data.providers:read": return "读取服务商列表（不含密钥）";
+            case "pluginUi.perm.data.models:read": return "读取模型与价格";
+            case "pluginUi.perm.data.tokens:read": return "读取令牌列表（不含密钥）";
+            case "pluginUi.perm.providers": return "添加服务商，管理它们的账号（请求经它发往上游）";
+            case "pluginUi.perm.clients": return "让 Astra 接入新的本地客户端（写入它的配置文件）";
+            case "pluginUi.perm.legacy.auth:import": return "升级时取得它所替代的 v1 插件的登录凭据";
             case "plugins.local": return "本地";
             case "plugins.moveUp": return "上移";
             case "plugins.moveDown": return "下移";
@@ -6384,6 +6610,9 @@ internal static class Messages
             case "clients.dragToReorder": return "Drag to reorder {provider}";
             case "clients.removeProvider": return "Remove {provider}";
             case "clients.providerDisabledBadge": return "Disabled";
+            case "clients.providerDisabledTitle": return "Provider \"{name}\" is disabled";
+            case "clients.providerDisabledHint": return "Enable it again on the Providers page, or drag another enabled provider to the top of this client's provider list, then try again.";
+            case "clients.providerDisabledPluginHint": return "The plugin it comes from is turned off. Turn the plugin back on on the Plugins page, or drag another enabled provider to the top of this client's provider list, then try again.";
             case "clients.moreProvidersTitle": return "Available providers";
             case "clients.providerAdded": return "Added {provider}; effective immediately";
             case "clients.providerRemoved": return "Removed {provider}";
@@ -7201,6 +7430,7 @@ internal static class Messages
             case "providers.duplicate": return "Duplicate";
             case "providers.deleteConfirm": return "Delete {name}?";
             case "providers.deleteDetail": return "The provider and its model settings are removed; request history is kept.";
+            case "providers.deleteDetailBound": return "The provider and its model settings are removed; request history is kept. These clients stop using it: {clients}. A client left with no other provider is disabled and its original config restored.";
             case "providers.deleted": return "Deleted";
             case "providers.deleteBound": return "Still used by: {clients}. Switch them to another provider first.";
             case "providers.templateVersions": return "Current version {current}, latest {latest}";
@@ -7986,6 +8216,115 @@ internal static class Messages
             case "plugins.kind.middleware": return "Middleware";
             case "plugins.kind.agent": return "Client";
             case "plugins.kind.pi": return "pi extension";
+            case "nav.group.pluginPages": return "Plugin pages";
+            case "plugins.kind.v2": return "v2";
+            case "plugins.kind.ui": return "UI";
+            case "plugins.kind.hooks": return "Gateway hooks";
+            case "pluginUi.v2Title": return "v2 plugins";
+            case "pluginUi.more": return "Load more";
+            case "pluginUi.commandRan": return "Ran “{name}”";
+            case "pluginUi.menu": return "Plugin actions";
+            case "pluginUi.gallery.title": return "Component gallery";
+            case "pluginUi.gallery.subtitle": return "Every v2 plugin UI component in each state; both shells are compared on these scenes";
+            case "pluginUi.gallery.patterns": return "Composite scenes";
+            case "pluginUi.gallery.filter": return "Filter components";
+            case "pluginUi.gallery.width": return "Width";
+            case "pluginUi.gallery.theme": return "Theme";
+            case "pluginUi.gallery.surface": return "Surface";
+            case "pluginUi.gallery.code": return "Tree";
+            case "pluginUi.gallery.events": return "Actions fired";
+            case "pluginUi.inspector.title": return "Inspector";
+            case "pluginUi.inspector.auto": return "auto";
+            case "pluginUi.inspector.tree": return "Tree";
+            case "pluginUi.inspector.state": return "State";
+            case "pluginUi.inspector.timeline": return "Timeline";
+            case "pluginUi.inspector.calls": return "Host calls";
+            case "pluginUi.inspector.warnings": return "Warnings";
+            case "pluginUi.flow.signIn": return "Sign in an account";
+            case "palette.title": return "Command palette";
+            case "palette.placeholder": return "Search pages and commands…";
+            case "palette.empty": return "No page or command matches";
+            case "pluginUi.noV2": return "No v2 plugins yet";
+            case "pluginUi.activity": return "Activity";
+            case "pluginUi.add": return "Add";
+            case "pluginUi.allow": return "Allow";
+            case "pluginUi.contributes": return "What it adds";
+            case "pluginUi.copied": return "Copied";
+            case "pluginUi.deny": return "Deny";
+            case "pluginUi.details": return "Details";
+            case "pluginUi.dev": return "Development";
+            case "pluginUi.dismiss": return "Don't remind me";
+            case "pluginUi.dropFiles": return "Drop files here, or click to choose";
+            case "pluginUi.empty": return "Nothing here yet";
+            case "pluginUi.failed": return "This plugin page couldn't open";
+            case "pluginUi.grant": return "Grant permissions";
+            case "pluginUi.grantDetail": return "A plugin can only do what you allow. You can take permissions back at any time.";
+            case "pluginUi.granted": return "Granted";
+            case "pluginUi.grantTitle": return "{name} needs these permissions";
+            case "pluginUi.hooks": return "{count} gateway hook sets";
+            case "pluginUi.idle": return "Idle (loads when needed)";
+            case "pluginUi.invalidJson": return "Invalid JSON";
+            case "pluginUi.log": return "Log";
+            case "pluginUi.noActivity": return "No sensitive calls yet";
+            case "pluginUi.notFound": return "This plugin page wasn't found";
+            case "pluginUi.off": return "Off";
+            case "pluginUi.open": return "Open";
+            case "pluginUi.openExternal": return "Open this link in your browser?";
+            case "pluginUi.pages": return "{count} pages";
+            case "pluginUi.perm.net": return "Reach {origin}";
+            case "pluginUi.perm.netConfig": return "Reach the address in the \"{setting}\" setting";
+            case "pluginUi.permissions": return "Permissions";
+            case "pluginUi.publisher": return "Publisher";
+            case "pluginUi.requestDetail": return "The plugin asked for more while running. You can take it back in the plugin's details.";
+            case "pluginUi.requestTitle": return "{name} asks for permission";
+            case "pluginUi.revoke": return "Revoke";
+            case "pluginUi.rollback": return "Go back to v1";
+            case "pluginUi.running": return "Running";
+            case "pluginUi.save": return "Save";
+            case "pluginUi.saved": return "Saved";
+            case "pluginUi.search": return "Search";
+            case "pluginUi.secretSet": return "Set (leave empty to keep)";
+            case "pluginUi.selected": return "{count} selected";
+            case "pluginUi.sensitive": return "Sensitive permissions";
+            case "pluginUi.settings": return "Settings";
+            case "pluginUi.settingsTitle": return "{name} settings";
+            case "pluginUi.source": return "Source";
+            case "pluginUi.successors": return "{count} plugins have a v2 version";
+            case "pluginUi.unsaved": return "Unsaved changes";
+            case "pluginUi.unsupported": return "This version can't show the component {type}";
+            case "pluginUi.upgrade": return "Upgrade to v2";
+            case "pluginUi.upgradeConfirm": return "Allow and upgrade";
+            case "pluginUi.upgradeDetail": return "v2 is the new plugin system: plugins run in a sandbox and can only use the permissions you grant.";
+            case "pluginUi.upgradePermissions": return "Permissions the new version needs";
+            case "pluginUi.upgradeSafety": return "The new version is installed and started first; the old one is removed only after that works, and stays as it was if it fails. You can go back to v1 within 30 days.";
+            case "pluginUi.upgradeTitle": return "Upgrade {name}";
+            case "pluginUi.version": return "Version";
+            case "pluginUi.preset.today": return "Today";
+            case "pluginUi.preset.yesterday": return "Yesterday";
+            case "pluginUi.preset.7d": return "Last 7 days";
+            case "pluginUi.preset.30d": return "Last 30 days";
+            case "pluginUi.preset.90d": return "Last 90 days";
+            case "pluginUi.preset.thisMonth": return "This month";
+            case "pluginUi.preset.lastMonth": return "Last month";
+            case "pluginUi.perm.storage": return "Keep its own data";
+            case "pluginUi.perm.secrets": return "Keep its own secrets, encrypted";
+            case "pluginUi.perm.ui": return "Show pages in the console";
+            case "pluginUi.perm.notifications": return "Send notifications";
+            case "pluginUi.perm.jobs": return "Run scheduled jobs";
+            case "pluginUi.perm.events": return "Send events and hear other plugins' events";
+            case "pluginUi.perm.gateway.request:read": return "Read what is sent through the gateway";
+            case "pluginUi.perm.gateway.request:rewrite": return "Change what is sent through the gateway";
+            case "pluginUi.perm.gateway.request:reject": return "Turn requests away";
+            case "pluginUi.perm.gateway.response:read": return "Read the models' replies";
+            case "pluginUi.perm.gateway.response:rewrite": return "Change the models' replies";
+            case "pluginUi.perm.gateway.upstream:headers": return "Add headers to upstream requests";
+            case "pluginUi.perm.data.requests:read": return "Read the request log (no content)";
+            case "pluginUi.perm.data.providers:read": return "Read the provider list (no keys)";
+            case "pluginUi.perm.data.models:read": return "Read models and prices";
+            case "pluginUi.perm.data.tokens:read": return "Read the token list (no keys)";
+            case "pluginUi.perm.providers": return "Add service providers and manage their accounts (requests go upstream through it)";
+            case "pluginUi.perm.clients": return "Connect new local clients to Astra (writes their config files)";
+            case "pluginUi.perm.legacy.auth:import": return "Take over the sign-ins of the v1 plugin it replaces when upgrading";
             case "plugins.local": return "Local";
             case "plugins.moveUp": return "Move up";
             case "plugins.moveDown": return "Move down";

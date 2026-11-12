@@ -1,0 +1,39 @@
+{
+  "id": "Form/default",
+  "component": "Form",
+  "state": "default",
+  "tree": {
+    "type": "Form",
+    "props": {
+      "onSubmit": "save",
+      "dirtyBar": true
+    },
+    "children": [
+      {
+        "type": "Field",
+        "props": {
+          "label": "Endpoint",
+          "hint": "An https address",
+          "required": true
+        },
+        "children": [
+          {
+            "type": "TextField",
+            "props": {
+              "name": "endpoint",
+              "value": "https://api.acme.example"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "label": "Save",
+          "variant": "primary",
+          "submit": true
+        }
+      }
+    ]
+  }
+}

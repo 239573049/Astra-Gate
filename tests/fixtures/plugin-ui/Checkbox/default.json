@@ -1,0 +1,13 @@
+{
+  "id": "Checkbox/default",
+  "component": "Checkbox",
+  "state": "default",
+  "tree": {
+    "type": "Checkbox",
+    "props": {
+      "name": "agree",
+      "checked": true,
+      "label": "Mask instead of reject"
+    }
+  }
+}

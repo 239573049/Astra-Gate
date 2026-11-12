@@ -1,0 +1,14 @@
+{
+  "id": "Button/variant-link",
+  "component": "Button",
+  "state": "variant-link",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "link",
+      "icon": "check",
+      "onPress": "save"
+    }
+  }
+}

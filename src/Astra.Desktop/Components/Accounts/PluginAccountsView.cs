@@ -148,6 +148,13 @@ public sealed class PluginAccountsView : LiveView
     private void Methods()
     {
         _methods.Children.Clear();
+        if (_model.IsV2)
+        {
+            // its plugin's sign-in flow, in a sheet; the accounts are read again when it closes
+            if (Astra.Desktop.PluginUi.PluginShell.FlowButton(this, _model.Provider, () => _ = _model.Accounts.RefetchAsync()) is { } flow) _methods.Children.Add(flow);
+            _methods.IsVisible = _methods.Children.Count > 0;
+            return;
+        }
         var q = _model.Methods;
         if (q.IsLoading) _methods.Children.Add(new LoadingState(1) { Width = 200 });
         if (q.IsError && !q.HasData)

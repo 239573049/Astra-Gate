@@ -107,7 +107,7 @@ sequenceDiagram
 - **A new stage that should be visible:** open a span with `RequestTrace.Start` inside `HandleAsync`, add its name to
   `TraceSpanNames`, and then to `web/src/components/traces/model.ts` `SPAN` plus the topology stage order in
   `TraceEndpoints.TopologyAsync` and the attribute keys `TraceRepository` groups by. Renaming one without the others
-  makes the stage vanish from the canvas while the row is still written. `docs/content/docs/console/traces.mdx` lists
+  makes the stage vanish from the canvas while the row is still written. `astra-gate-web/content/docs/console/traces.mdx` lists
   what is recorded.
 - **Content in the trace** (anything copied from the conversation — arguments, prompt, reply) stays behind
   `AppSettings.TraceContent` (off by default; `.agents/memory/trace-routing-visualization.md`). Names, counts, timings

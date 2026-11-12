@@ -1,0 +1,56 @@
+{
+  "id": "Group/default",
+  "component": "Group",
+  "state": "default",
+  "tree": {
+    "type": "Group",
+    "props": {
+      "title": "Detection",
+      "description": "What counts as a hit",
+      "footer": "Applies to every request"
+    },
+    "children": [
+      {
+        "type": "Row",
+        "props": {
+          "label": "Case sensitive"
+        },
+        "children": [
+          {
+            "type": "Switch",
+            "props": {
+              "name": "case",
+              "checked": false
+            }
+          }
+        ]
+      },
+      {
+        "type": "Row",
+        "props": {
+          "label": "Action",
+          "detail": "When a word is found"
+        },
+        "children": [
+          {
+            "type": "Segmented",
+            "props": {
+              "name": "action",
+              "value": "mask",
+              "options": [
+                {
+                  "value": "mask",
+                  "label": "Mask"
+                },
+                {
+                  "value": "reject",
+                  "label": "Reject"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

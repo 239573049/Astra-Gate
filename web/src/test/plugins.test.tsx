@@ -58,6 +58,16 @@ vi.mock('../api/hooks', () => {
     useInstallBun: mutation(vi.fn()),
     useMagpieImportPreview: () => ({ data: { found: true, path: '~/.config/magpie/plugins.json', signIns: 2, plugins: [{ spec: 'opencode-gemini-auth@latest', off: false, hasOptions: false, installed: false }] } }),
     useImportMagpie: mutation(vi.fn()),
+    usePluginsV2: () => ({ data: { plugins: [], contributions: { pages: [], slots: [], menus: [], commands: [], settings: [], hooks: [], jobs: [] }, requests: [] }, isLoading: false }),
+    usePluginV2: () => ({ data: undefined }),
+    usePluginSuccessors: () => ({ data: [] }),
+    useGrantPluginV2: mutation(vi.fn()),
+    useSavePluginV2Settings: mutation(vi.fn()),
+    useUpgradePlugin: mutation(vi.fn()),
+    useRollbackPlugin: mutation(vi.fn()),
+    useDismissSuccessor: mutation(vi.fn()),
+    useAnswerPermissionRequest: mutation(vi.fn()),
+    usePluginNotifications: () => ({ data: [] }),
   };
 });
 

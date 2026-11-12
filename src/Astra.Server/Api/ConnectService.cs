@@ -140,21 +140,7 @@ public sealed class ConnectService(AstraDatabase db, ISecretProtector secrets, C
     public async Task<ConnectLeaveResultDto> LeaveAsync(CancellationToken ct)
     {
         var provider = await FindAsync(ct) ?? throw new AdminApiException(409, "Not connected to a unified gateway");
-        var unbound = new List<string>();
-        var disabled = new List<string>();
-        foreach (var kind in (await db.Clients.ListBindingsByProviderAsync(provider.Id, ct)).Select(b => b.ClientKind).Distinct())
-        {
-            var rest = (await db.Clients.ListBindingsAsync(kind, ct)).Where(b => b.ProviderId != provider.Id)
-                .Select(b => new ClientBindingDto(b.ProviderId, b.AccountId)).ToList();
-            if (rest.Count > 0) await clients.SetBindingsAsync(kind, rest, ct);
-            else
-            {
-                await clients.DisableAsync(kind, false, ct);
-                await db.Clients.ReplaceBindingsAsync(kind, [], ct);
-                disabled.Add(kind);
-            }
-            unbound.Add(kind);
-        }
+        var (unbound, disabled) = await clients.UnbindProviderAsync(provider.Id, ct);
         if (!await db.Providers.DeleteIfUnboundAsync(provider.Id, ct))
             throw new AdminApiException(409, "The unified gateway is still bound to a client");
         return new ConnectLeaveResultDto(unbound, disabled);

@@ -6,7 +6,8 @@ export const NAV_ORDER: NavTarget[] = ['overview', 'requests', 'clients', 'provi
 
 /**
  * Maps a keyboard event to a command. Desktop (non-mac; mac uses the native menu): Ctrl+1–6, Ctrl+F,
- * Ctrl+R, Ctrl+N, Ctrl+, … Web: only combos that don't fight the browser — Alt+1–6 and "/" for search.
+ * Ctrl+R, Ctrl+N, Ctrl+K, Ctrl+, … Web: only combos that don't fight the browser — Alt+1–6, "/" for search and
+ * Ctrl/⌘+K for the command palette.
  */
 export function commandForKey(
   e: Pick<KeyboardEvent, 'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>,
@@ -27,6 +28,8 @@ export function commandForKey(
         return 'refresh';
       case 'KeyN':
         return 'new-provider';
+      case 'KeyK':
+        return 'palette';
       case 'Comma':
         return 'nav:settings';
       default:
@@ -34,11 +37,12 @@ export function commandForKey(
     }
   }
   if (digit && e.altKey && !e.ctrlKey && !e.metaKey) return `nav:${NAV_ORDER[Number(digit) - 1]!}`;
+  if (e.code === 'KeyK' && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) return 'palette';
   if (e.key === '/' && !inEditable && !e.ctrlKey && !e.metaKey && !e.altKey) return 'find';
   return null;
 }
 
-function isEditable(target: EventTarget | null): boolean {
+export function isEditable(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el) return false;
   return el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName);

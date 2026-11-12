@@ -975,6 +975,7 @@ function buildAppMenu(): Menu {
         { label: t.refresh, accelerator: 'CmdOrCtrl+R', click: () => sendMenuCommand('refresh') },
         { type: 'separator' },
         { label: t.toggleSidebar, accelerator: 'CmdOrCtrl+Alt+S', click: () => sendMenuCommand('toggle-sidebar') },
+        { label: t.palette, accelerator: 'CmdOrCtrl+K', click: () => sendMenuCommand('palette') },
         { type: 'separator' },
         ...(DEV_RENDERER_URL ? ([{ role: 'toggleDevTools' }] as MenuItemConstructorOptions[]) : []),
         { role: 'togglefullscreen' },

@@ -1,0 +1,65 @@
+{
+  "id": "_patterns/list-detail",
+  "component": null,
+  "state": "list-detail",
+  "tree": {
+    "type": "Split",
+    "props": {
+      "ratio": 0.35,
+      "stackBelow": "compact"
+    },
+    "children": [
+      {
+        "type": "List",
+        "props": {
+          "items": [
+            {
+              "key": "a",
+              "title": "secret",
+              "detail": "12 hits"
+            },
+            {
+              "key": "b",
+              "title": "password",
+              "detail": "3 hits"
+            }
+          ],
+          "selected": [
+            "a"
+          ],
+          "selectable": "single"
+        }
+      },
+      {
+        "type": "Stack",
+        "props": {
+          "gap": "3"
+        },
+        "children": [
+          {
+            "type": "Heading",
+            "props": {
+              "value": "secret",
+              "level": 3
+            }
+          },
+          {
+            "type": "KV",
+            "props": {
+              "items": [
+                {
+                  "label": "Hits",
+                  "value": 12
+                },
+                {
+                  "label": "Last",
+                  "value": "2026-11-11 09:30"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

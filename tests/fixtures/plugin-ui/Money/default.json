@@ -1,0 +1,11 @@
+{
+  "id": "Money/default",
+  "component": "Money",
+  "state": "default",
+  "tree": {
+    "type": "Money",
+    "props": {
+      "value": 12345600000
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "Icon/size-lg",
+  "component": "Icon",
+  "state": "size-lg",
+  "tree": {
+    "type": "Icon",
+    "props": {
+      "name": "shield-check",
+      "size": "lg",
+      "tone": "accent"
+    }
+  }
+}

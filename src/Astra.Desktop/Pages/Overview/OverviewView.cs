@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.Globalization;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Kit;
@@ -52,6 +53,7 @@ public sealed class OverviewView : UserControl
         _root.Children.Add(new Border { Margin = new Thickness(0, 0, 0, 12), Child = _activity });
         _root.Children.Add(_cards);
         _root.Children.Add(new Border { Margin = new Thickness(0, 16, 0, 0), Child = _lower });
+        _root.Children.Add(Astra.Desktop.PluginUi.PluginShell.Slot("overview.cards"));
         Content = _root;
     }
 

@@ -13,6 +13,9 @@ public sealed class SettingsService(AstraDatabase db, ISecretProtector secrets) 
 
     public AppSettings Current => _current ?? throw new InvalidOperationException("SettingsService not loaded");
 
+    /// <summary>Told after every change (v2 plugins hear it as settings.changed).</summary>
+    public event Action<AppSettings>? Changed;
+
     public async Task LoadAsync(CancellationToken ct = default)
     {
         var loaded = await db.Settings.GetAsync<AppSettings>(AppSettings.StorageKey, ct) ?? new AppSettings();
@@ -27,6 +30,7 @@ public sealed class SettingsService(AstraDatabase db, ISecretProtector secrets) 
         await db.Settings.SetAsync(AppSettings.StorageKey, next, ct);
         ApplyProxy(next);
         _current = next;
+        Changed?.Invoke(next);
         return next;
     }
 

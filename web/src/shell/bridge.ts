@@ -9,6 +9,8 @@ export type MenuCommand =
   | 'refresh'
   | 'new-provider'
   | 'toggle-sidebar'
+  /** The command palette (Ctrl/⌘+K): pages and plugin commands. */
+  | 'palette'
   /** Settings › Tray panel tab (the tray panel's gear button). */
   | 'settings:tray';
 

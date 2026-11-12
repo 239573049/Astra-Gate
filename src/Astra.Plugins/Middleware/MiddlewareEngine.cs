@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json.Nodes;
 using Astra.Plugins.Js;
 using Jaunt;
 
@@ -13,6 +14,12 @@ namespace Astra.Plugins.Middleware;
 /// </summary>
 public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, string> log)
 {
+    /// <summary>The v2 host, whose plugins' gateway hooks run in the same chain (by the list's order); null without v2.</summary>
+    public V2.PluginV2Host? V2Host { get; set; }
+
+    /// <summary>The protocol-free views ir hook sets get; null hands them the raw JSON.</summary>
+    public IHookViews? Views { get; set; }
+
     /// <summary>How long a hook may run before it is stopped and its input kept as it was.</summary>
     public static readonly TimeSpan RequestLimit = TimeSpan.FromMilliseconds(250);
 
@@ -36,7 +43,7 @@ public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, strin
     public async ValueTask<MiddlewareRun?> BeginAsync(Func<MiddlewareInfo> info, CancellationToken ct = default)
     {
         var set = await CurrentAsync(ct);
-        return set.Modules.Count == 0 ? null : new MiddlewareRun(set, info());
+        return set.Modules.Count == 0 ? null : new MiddlewareRun(set, info(), Views);
     }
 
     /// <summary>Each middleware plugin's state, by spec: its hooks and counts, or why it didn't load.</summary>
@@ -45,7 +52,20 @@ public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, strin
         var set = await CurrentAsync(ct);
         var states = new Dictionary<string, MiddlewareState>();
         foreach (var (spec, error) in set.Errors) states[spec] = new MiddlewareState([], null, error, 0, 0, 0, null);
-        foreach (var m in set.Modules) states[m.Spec] = m.State();
+        foreach (var m in set.Modules)
+        {
+            var state = m.State();
+            // a v2 plugin's several hook sets show as one: the hooks of all of them
+            if (states.TryGetValue(m.Spec, out var before) && m.V2Plugin is not null)
+                state = state with
+                {
+                    Hooks = [.. before.Hooks.Concat(state.Hooks).Distinct()],
+                    Calls = before.Calls + state.Calls,
+                    Failures = before.Failures + state.Failures,
+                    LastError = state.LastError ?? before.LastError,
+                };
+            states[m.Spec] = state;
+        }
         return states;
     }
 
@@ -76,17 +96,29 @@ public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, strin
         }
     }
 
-    private async Task<(long Generation, List<InstalledPlugin> Plugins)> FindAsync(CancellationToken ct)
+    private async Task<Found> FindAsync(CancellationToken ct)
     {
         var snapshot = await catalog.SnapshotAsync(ct);
-        return (snapshot.Generation, snapshot.Plugins.Where(p => p.Entry.Enabled && p.Manifest.MiddlewareFile is not null).ToList());
+        var v1 = snapshot.Plugins.Where(p => p.Entry.Enabled && p.Manifest.MiddlewareFile is not null).ToList();
+        IReadOnlyList<(V2.PluginV2Instance Plugin, V2.HookContribution Hook)> v2 = [];
+        long v2Generation = 0;
+        if (V2Host is { } host)
+        {
+            v2 = await host.Gateway.HooksAsync(ct);
+            v2Generation = host.Gateway.Generation;
+        }
+        return new Found(snapshot.Generation, v1, v2, v2Generation);
     }
+
+    private sealed record Found(long Generation, List<InstalledPlugin> Plugins,
+        IReadOnlyList<(V2.PluginV2Instance Plugin, V2.HookContribution Hook)> V2, long V2Generation);
 
     // The list's generation, and each middleware file as it is on disk: a plugin under development
     // (a path) is picked up by the next request after a save.
-    private static string Stamp((long Generation, List<InstalledPlugin> Plugins) found)
+    private static string Stamp(Found found)
     {
-        var b = new StringBuilder().Append(found.Generation);
+        var b = new StringBuilder().Append(found.Generation).Append('/').Append(found.V2Generation);
+        foreach (var (p, h) in found.V2) b.Append('|').Append(p.Id).Append('/').Append(h.Id).Append('@').Append(p.Manifest.Version).Append('#').Append(p.OptionsJson?.GetHashCode() ?? 0).Append(p.Granted.Count);
         foreach (var p in found.Plugins)
         {
             var file = p.Manifest.MiddlewareFile!;
@@ -97,17 +129,29 @@ public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, strin
         return b.ToString();
     }
 
-    private MiddlewareSet Load((long Generation, List<InstalledPlugin> Plugins) found, string stamp)
+    private MiddlewareSet Load(Found found, string stamp)
     {
-        var modules = new List<MiddlewareModule>();
+        var modules = new List<(int Order, MiddlewareModule Module)>();
         var errors = new Dictionary<string, string>();
+        foreach (var (plugin, hook) in found.V2)
+        {
+            try
+            {
+                modules.Add((plugin.SortOrder, MiddlewareModule.LoadV2(plugin, hook, V2Host!.Gateway, log)));
+            }
+            catch (Exception e) when (e is JsHookException or JsLoadException or IOException or UnauthorizedAccessException)
+            {
+                errors[plugin.Spec] = e.Message;
+                plugin.Log("error", $"gateway hooks {hook.Id} didn't load: {e.Message}");
+            }
+        }
         foreach (var p in found.Plugins)
         {
             try
             {
                 var options = Encoding.UTF8.GetBytes(p.Entry.OptionsJson is { Length: > 0 } o ? o : "{}");
-                modules.Add(MiddlewareModule.Load(p.Entry.Spec, Store.PluginSpec.ShortName(p.Entry.Name), p.Manifest.ModuleRoot,
-                    p.Manifest.MiddlewareFile!, options, log));
+                modules.Add((p.Entry.SortOrder, MiddlewareModule.Load(p.Entry.Spec, Store.PluginSpec.ShortName(p.Entry.Name), p.Manifest.ModuleRoot,
+                    p.Manifest.MiddlewareFile!, options, log)));
             }
             catch (Exception e) when (e is JsHookException or JsLoadException or IOException or UnauthorizedAccessException)
             {
@@ -115,7 +159,7 @@ public sealed class MiddlewareEngine(PluginCatalog catalog, Action<string, strin
                 log("warn", $"middleware {p.Entry.Name} didn't load: {e.Message}");
             }
         }
-        return new MiddlewareSet(stamp, modules, errors);
+        return new MiddlewareSet(stamp, [.. modules.OrderBy(m => m.Order).Select(m => m.Module)], errors);
     }
 }
 
@@ -125,7 +169,9 @@ internal sealed record MiddlewareSet(string Stamp, List<MiddlewareModule> Module
 /// <summary>What a request's hooks are told of it, in ctx.</summary>
 /// <param name="Protocol">The agent's API: anthropic, chat, responses or gemini.</param>
 /// <param name="Agent">The client that sent it; null for a direct call.</param>
-public sealed record MiddlewareInfo(string Protocol, string? Model, bool Stream, string Path, string? Agent);
+/// <param name="TokenId">The gateway token the request came with (v2 hooks' ctx.token); null for none.</param>
+public sealed record MiddlewareInfo(string Protocol, string? Model, bool Stream, string Path, string? Agent,
+    string? TokenId = null, string? TokenName = null, string? RequestId = null);
 
 /// <summary>A request a middleware turned away (ctx.reject): the agent gets it in its API's error shape.</summary>
 public sealed record MiddlewareReject(int Status, string Message);
@@ -167,7 +213,10 @@ public sealed record MiddlewareHeader(string Name, string? Value)
 public sealed class MiddlewareRun : IDisposable
 {
     private readonly MiddlewareSet _set;
+    private readonly MiddlewareInfo _infoRecord;
     private readonly string _info;
+    private readonly IHookViews? _views;
+    private readonly bool[] _wants;
     private readonly MiddlewareInstance?[] _instances;
     private readonly JsValue[] _contexts;
     private MiddlewareReject? _rejected;
@@ -175,28 +224,42 @@ public sealed class MiddlewareRun : IDisposable
     private MiddlewareUpstream? _upstream;
     private List<MiddlewareHeader>? _headers;
     private int _current = -1;
+    // onText: per module, the characters a hook held back (ctx.holdBack) and how many it wants held
+    private readonly string[] _held;
+    private readonly int[] _holdBack;
+    private byte[]? _lastTextEvent;
 
-    internal MiddlewareRun(MiddlewareSet set, MiddlewareInfo info)
+    internal MiddlewareRun(MiddlewareSet set, MiddlewareInfo info, IHookViews? views = null)
     {
         _set = set;
+        _infoRecord = info;
+        _views = views;
         var b = new StringBuilder("{\"protocol\":").Append(Quote(info.Protocol))
             .Append(",\"model\":").Append(Quote(info.Model ?? ""))
             .Append(",\"stream\":").Append(info.Stream ? "true" : "false")
             .Append(",\"path\":").Append(Quote(info.Path));
         if (!string.IsNullOrEmpty(info.Agent)) b.Append(",\"agent\":").Append(Quote(info.Agent));
         _info = b.ToString();
+        _wants = [.. set.Modules.Select(m => m.Wants(info))];
         _instances = new MiddlewareInstance?[set.Modules.Count];
         _contexts = new JsValue[set.Modules.Count];
+        _held = [.. set.Modules.Select(_ => "")];
+        _holdBack = new int[set.Modules.Count];
     }
 
-    /// <summary>Whether some middleware wants the reply's stream events.</summary>
-    public bool WantsEvents => _set.Modules.Any(m => m.HasEvent);
+    /// <summary>Whether some middleware wants the reply's stream events (onEvent, or a v2 set's onText).</summary>
+    public bool WantsEvents => Active.Any(m => m.HasEvent || m.HasText);
 
     /// <summary>Whether some middleware wants a whole JSON reply.</summary>
-    public bool WantsResponse => _set.Modules.Any(m => m.HasResponse);
+    public bool WantsResponse => Active.Any(m => m.HasResponse);
 
     /// <summary>Whether some middleware wants the request as it goes upstream (onUpstream).</summary>
-    public bool WantsUpstream => _set.Modules.Any(m => m.HasUpstream);
+    public bool WantsUpstream => Active.Any(m => m.HasUpstream);
+
+    /// <summary>Whether some v2 hook set wants to hear how the request ended (onComplete).</summary>
+    public bool WantsComplete => Active.Any(m => m.HasComplete);
+
+    private IEnumerable<MiddlewareModule> Active => _set.Modules.Where((_, i) => _wants[i]);
 
     /// <summary>
     /// Runs each onUpstream on <paramref name="body"/> — the JSON one attempt sends <paramref name="upstream"/>, in the
@@ -211,15 +274,17 @@ public sealed class MiddlewareRun : IDisposable
         for (var i = 0; i < _set.Modules.Count; i++)
         {
             var m = _set.Modules[i];
-            if (!m.HasUpstream) continue;
+            if (!_wants[i] || !m.HasUpstream) continue;
             _upstream = upstream;
             _headers = [];
-            var (output, error) = Apply(i, Hook.Upstream, MiddlewareEngine.RequestLimit, changed ?? body, null);
+            var input = changed ?? body;
+            var (output, error) = ApplyView(i, Hook.Upstream, MiddlewareEngine.RequestLimit, input, null, upstream.Protocol, request: true);
             var set = _headers;
             _upstream = null;
             _headers = null;
             if (error == Dropped) m.Fail("onUpstream", "returned null; a request can't be dropped here (ctx.reject is onRequest's)");
             else if (error is not null) m.Fail("onUpstream", error);
+            else if (output is not null && !m.CanRewriteRequest) m.Fail("onUpstream", "changed the request without the permission gateway.request:rewrite");
             else
             {
                 if (output is not null) changed = output;
@@ -239,22 +304,27 @@ public sealed class MiddlewareRun : IDisposable
         for (var i = 0; i < _set.Modules.Count; i++)
         {
             var m = _set.Modules[i];
-            if (!m.HasRequest) continue;
-            var (output, error) = Apply(i, Hook.Request, MiddlewareEngine.RequestLimit, body, null);
+            if (!_wants[i] || !m.HasRequest) continue;
+            var (output, error) = ApplyView(i, Hook.Request, MiddlewareEngine.RequestLimit, body, null, _infoRecord.Protocol, request: true);
             if (error is not null)
             {
                 m.Fail("onRequest", error);
                 continue;
             }
             if (_rejected is not null) return (body, _rejected);
-            if (output is not null) body = output;
+            if (output is not null)
+            {
+                if (m.CanRewriteRequest) body = output;
+                else m.Fail("onRequest", "changed the request without the permission gateway.request:rewrite");
+            }
         }
         return (body, null);
     }
 
     /// <summary>
-    /// Runs each onEvent that wants it on one complete event of the stream (with its blank line). Returns
-    /// the bytes to write — the event as it was when nothing changed it — or null when a hook dropped it.
+    /// Runs each onEvent that wants it on one complete event of the stream (with its blank line), then each v2 onText on
+    /// the event's text delta. Returns the bytes to write — the event as it was when nothing changed it — or null when a
+    /// hook dropped it.
     /// </summary>
     public byte[]? Event(byte[] ev)
     {
@@ -263,18 +333,120 @@ public sealed class MiddlewareRun : IDisposable
         for (var i = 0; i < _set.Modules.Count; i++)
         {
             var m = _set.Modules[i];
-            if (!m.HasEvent || (m.Events is not null && !m.Events.Contains(name))) continue;
+            if (!_wants[i] || !m.HasEvent || (m.Events is not null && !m.Events.Contains(name))) continue;
             var (output, error) = Apply(i, Hook.Event, MiddlewareEngine.EventLimit, data ?? ev[start..end], null);
-            if (error == Dropped) return null;
-            if (error is not null) m.Fail("onEvent", error);
-            else if (output is not null) data = output;
+            if (error == Dropped)
+            {
+                if (m.CanRewriteResponse) return null;
+                m.Fail("onEvent", "dropped an event without the permission gateway.response:rewrite");
+            }
+            else if (error is not null) m.Fail("onEvent", error);
+            else if (output is not null)
+            {
+                if (m.CanRewriteResponse) data = output;
+                else m.Fail("onEvent", "changed an event without the permission gateway.response:rewrite");
+            }
         }
-        if (data is null) return ev;
-        var result = new byte[start + data.Length + (ev.Length - end)];
+        string? prefix = null;
+        if (Active.Any(x => x.HasText)) (data, prefix) = Text(name, data ?? ev[start..end], ev, start, end);
+        if (data is null && prefix is null) return ev;
+        var body = data ?? ev[start..end];
+        var result = new byte[start + body.Length + (ev.Length - end)];
         ev.AsSpan(0, start).CopyTo(result);
-        data.CopyTo(result, start);
-        ev.AsSpan(end).CopyTo(result.AsSpan(start + data.Length));
-        return result;
+        body.CopyTo(result, start);
+        ev.AsSpan(end).CopyTo(result.AsSpan(start + body.Length));
+        return prefix is null ? result : [.. Encoding.UTF8.GetBytes(prefix), .. result];
+    }
+
+    // onText: the event's text delta through each v2 hook set that has one, with what each held back put in front of
+    // its next delta; at the end of the text, held text goes out (in this event, or a copy of the last text event before it).
+    private (byte[]? Data, string? Prefix) Text(string name, byte[] json, byte[] ev, int start, int end)
+    {
+        JsonObject? obj;
+        try
+        {
+            obj = JsonNode.Parse(json) as JsonObject;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return (null, null);
+        }
+        if (obj is null) return (null, null);
+        var protocol = _infoRecord.Protocol;
+        var text = TextDeltas.Get(protocol, name, obj);
+        var changed = false;
+        if (text is not null)
+        {
+            for (var i = 0; i < _set.Modules.Count; i++)
+            {
+                var m = _set.Modules[i];
+                if (!_wants[i] || !m.HasText) continue;
+                var input = _held[i] + text;
+                _held[i] = "";
+                var output = CallText(i, input);
+                if (output is null) output = input;
+                else if (!m.CanRewriteResponse)
+                {
+                    m.Fail("onText", "changed the reply without the permission gateway.response:rewrite");
+                    output = input;
+                }
+                if (_holdBack[i] > 0 && output.Length > 0)
+                {
+                    var keep = Math.Min(_holdBack[i], output.Length);
+                    _held[i] = output[^keep..];
+                    output = output[..^keep];
+                }
+                if (output != text) changed = true;
+                text = output;
+            }
+            _lastTextEvent = ev;
+        }
+        string? prefix = null;
+        if (TextDeltas.Ends(protocol, name, obj) && _held.Any(h => h.Length > 0))
+        {
+            var rest = string.Concat(_held);
+            for (var i = 0; i < _held.Length; i++) _held[i] = "";
+            if (text is not null)
+            {
+                text += rest;
+                changed = true;
+            }
+            else if (_lastTextEvent is { } template && SseEventFramer.TrySplit(template, out var tname, out var ts, out var te)
+                     && JsonNode.Parse(template.AsSpan(ts, te - ts)) is JsonObject tobj && TextDeltas.Set(protocol, tname, tobj, rest))
+                prefix = Encoding.UTF8.GetString(template.AsSpan(0, ts)) + tobj.ToJsonString() + Encoding.UTF8.GetString(template.AsSpan(te));
+        }
+        if (!changed) return (null, prefix);
+        TextDeltas.Set(protocol, name, obj, text!);
+        return (Encoding.UTF8.GetBytes(obj.ToJsonString()), prefix);
+    }
+
+    private string? CallText(int i, string text)
+    {
+        var m = _set.Modules[i];
+        var started = Stopwatch.GetTimestamp();
+        MiddlewareInstance? held = null;
+        try
+        {
+            var (instance, ctx) = Acquire(i);
+            held = instance;
+            _current = i;
+            var result = instance.Runtime.Call(instance.OnText, MiddlewareEngine.EventLimit, text, ctx);
+            if (result.IsUndefined) return null;
+            if (result.IsString) return result.AsString();
+            m.Fail("onText", "returned neither a string nor undefined");
+            return null;
+        }
+        catch (JsHookException e)
+        {
+            m.Fail("onText", e.Message);
+            return null;
+        }
+        finally
+        {
+            _current = -1;
+            Release(i, held);
+            m.Count(Stopwatch.GetElapsedTime(started).Ticks * 100);
+        }
     }
 
     /// <summary>Runs each onResponse on a whole JSON reply, with <c>ctx.status</c> set; returns the body to write.</summary>
@@ -283,13 +455,37 @@ public sealed class MiddlewareRun : IDisposable
         for (var i = 0; i < _set.Modules.Count; i++)
         {
             var m = _set.Modules[i];
-            if (!m.HasResponse) continue;
-            var (output, error) = Apply(i, Hook.Response, MiddlewareEngine.RequestLimit, body, status);
+            if (!_wants[i] || !m.HasResponse) continue;
+            var (output, error) = ApplyView(i, Hook.Response, MiddlewareEngine.RequestLimit, body, status, _infoRecord.Protocol, request: false);
             if (error == Dropped) m.Fail("onResponse", "returned null; a whole reply can't be dropped");
             else if (error is not null) m.Fail("onResponse", error);
-            else if (output is not null) body = output;
+            else if (output is not null)
+            {
+                if (m.CanRewriteResponse) body = output;
+                else m.Fail("onResponse", "changed the reply without the permission gateway.response:rewrite");
+            }
         }
         return body;
+    }
+
+    /// <summary>
+    /// Tells each v2 onComplete how the request ended: status, usage (the reply's usage object, when known), duration and
+    /// the error text. Read-only: what the hooks return is ignored.
+    /// </summary>
+    public void Complete(int status, JsonObject? usage, long durationMs, string? error)
+    {
+        if (!WantsComplete) return;
+        var info = new JsonObject { ["status"] = status, ["durationMs"] = durationMs };
+        if (usage is not null) info["usage"] = usage.DeepClone();
+        if (error is not null) info["error"] = error;
+        var json = Encoding.UTF8.GetBytes(info.ToJsonString());
+        for (var i = 0; i < _set.Modules.Count; i++)
+        {
+            var m = _set.Modules[i];
+            if (!_wants[i] || !m.HasComplete) continue;
+            var (_, err) = Apply(i, Hook.Complete, MiddlewareEngine.RequestLimit, json, status);
+            if (err is not null && err != Dropped) m.Fail("onComplete", err);
+        }
     }
 
     /// <summary>Gives the engines back to their pools.</summary>
@@ -311,6 +507,21 @@ public sealed class MiddlewareRun : IDisposable
         Event,
         Response,
         Upstream,
+        Complete,
+    }
+
+    // A hook on the view its module asked for: an ir set gets the protocol-free view, and its changes are written back
+    // into the protocol's JSON; without views (the relay) or for a body that has none, it gets the JSON itself.
+    private (byte[]? Output, string? Error) ApplyView(int i, Hook hook, TimeSpan limit, byte[] data, int? status, string protocol, bool request)
+    {
+        var m = _set.Modules[i];
+        if (!m.IrView || _views is null) return Apply(i, hook, limit, data, status);
+        var view = request ? _views.RequestView(data, protocol) : _views.ResponseView(data, protocol);
+        if (view is null) return Apply(i, hook, limit, data, status);
+        var (output, error) = Apply(i, hook, limit, view, status);
+        if (error is not null || output is null) return (null, error);
+        var applied = request ? _views.ApplyRequestView(data, protocol, view, output) : _views.ApplyResponseView(data, protocol, view, output);
+        return (applied, null);
     }
 
     // Calls a hook on JSON data: the JSON it returned, null for undefined (keep), or an error — Dropped
@@ -336,12 +547,13 @@ public sealed class MiddlewareRun : IDisposable
                 Hook.Request => instance.OnRequest,
                 Hook.Event => instance.OnEvent,
                 Hook.Upstream => instance.OnUpstream,
+                Hook.Complete => instance.OnComplete,
                 _ => instance.OnResponse,
             };
             _current = i;
             // a JSON.parse of the data itself fails as a SyntaxError (it was not JSON after all)
             var result = rt.Call(fn, limit, rt.ParseJson(data), ctx);
-            if (result.IsUndefined) return (null, null);
+            if (hook == Hook.Complete || result.IsUndefined) return (null, null);
             if (result.IsNull) return (null, Dropped);
             if (!result.IsObject) return (null, "returned neither an object, null nor undefined");
             return (rt.ToJsonBytes(result), null);
@@ -353,19 +565,25 @@ public sealed class MiddlewareRun : IDisposable
         finally
         {
             _current = -1;
-            if (held is { Runtime.IsFaulted: true })
-            {
-                // a limit stopped it: Jaunt can't run that engine again
-                _instances[i] = null;
-                _contexts[i] = default;
-                m.Put(held);
-            }
+            Release(i, held);
             m.Count(Stopwatch.GetElapsedTime(started).Ticks * 100);
         }
     }
 
+    private void Release(int i, MiddlewareInstance? held)
+    {
+        if (held is { Runtime.IsFaulted: true })
+        {
+            // a limit stopped it: Jaunt can't run that engine again
+            _instances[i] = null;
+            _contexts[i] = default;
+            _set.Modules[i].Put(held);
+        }
+    }
+
     // Middleware i's engine for this request and its ctx: the request's info, the plugin's options, a
-    // state of its own, reject, sha256, and the header setters onUpstream uses.
+    // state of its own, reject, sha256, and the header setters onUpstream uses. A v2 hook set's ctx also has the
+    // client, the token, the request id, ctx.shared and emit / count / holdBack.
     private (MiddlewareInstance, JsValue) Acquire(int i)
     {
         if (_instances[i] is { } existing) return (existing, _contexts[i]);
@@ -374,14 +592,58 @@ public sealed class MiddlewareRun : IDisposable
         instance.Run = this;
         _instances[i] = instance;
         var rt = instance.Runtime;
-        var json = new StringBuilder(_info).Append(",\"options\":").Append(Encoding.UTF8.GetString(m.Options)).Append(",\"state\":{}}").ToString();
-        var ctx = rt.ParseJson(json);
+        var json = new StringBuilder(_info).Append(",\"options\":").Append(Encoding.UTF8.GetString(m.Options)).Append(",\"state\":{}");
+        if (m.V2Plugin is not null)
+        {
+            json.Append(",\"client\":").Append(_infoRecord.Agent is { } agent ? Quote(agent) : "null");
+            json.Append(",\"token\":").Append(_infoRecord.TokenId is { } tid
+                ? "{\"id\":" + Quote(tid) + ",\"name\":" + Quote(_infoRecord.TokenName ?? "") + "}" : "null");
+            if (_infoRecord.RequestId is { } rid) json.Append(",\"requestId\":").Append(Quote(rid));
+            json.Append(",\"shared\":").Append(m.SharedJson);
+        }
+        var ctx = rt.ParseJson(json.Append('}').ToString());
         rt.Set(ctx, "reject", instance.Reject);
         rt.Set(ctx, "sha256", instance.Sha256);
         rt.Set(ctx, "setHeader", instance.SetHeader);
         rt.Set(ctx, "removeHeader", instance.RemoveHeader);
+        if (m.V2Plugin is not null)
+        {
+            rt.Set(ctx, "emit", instance.Emit);
+            rt.Set(ctx, "count", instance.CountFn);
+            rt.Set(ctx, "holdBack", instance.HoldBack);
+        }
         _contexts[i] = ctx;
         return (instance, ctx);
+    }
+
+    // ctx.emit(name, payload): a v2 plugin's declared event, delivered to its subscribers after this call.
+    internal JsValue Emit(HostArgs args)
+    {
+        if (_current < 0 || _set.Modules[_current] is not { V2Plugin: { } plugin, Gateway: { } gateway } m) return JsValue.Undefined;
+        var name = args[0].IsString ? args[0].AsString() : "";
+        var payload = args.Length > 1 && !args[1].IsUndefined ? _instances[_current]?.Runtime.ToJson(args[1]) : null;
+        gateway.Emit(plugin, name, payload);
+        _ = m;
+        return JsValue.Undefined;
+    }
+
+    // ctx.count(name, n = 1): a counter on the plugin page.
+    internal JsValue CountMetric(HostArgs args)
+    {
+        if (_current < 0 || _set.Modules[_current] is not { V2Plugin: { } plugin, Gateway: { } gateway }) return JsValue.Undefined;
+        var name = args[0].IsString ? args[0].AsString() : "";
+        if (name.Length is 0 or > 64) return JsValue.Undefined;
+        var n = args.Length > 1 && args[1].IsNumber ? (long)Math.Clamp(args[1].AsNumber(), -1e9, 1e9) : 1;
+        gateway.Count(plugin.Id, name, n);
+        return JsValue.Undefined;
+    }
+
+    // ctx.holdBack(n): onText keeps the last n characters of what it returned for the next delta (to match across deltas).
+    internal JsValue HoldBack(HostArgs args)
+    {
+        if (_current < 0) return JsValue.Undefined;
+        _holdBack[_current] = args[0].IsNumber ? (int)Math.Clamp(args[0].AsNumber(), 0, 4096) : 0;
+        return JsValue.Undefined;
     }
 
     // ctx.reject(status, message): onRequest turns the request away. Only the first call counts.
@@ -390,6 +652,11 @@ public sealed class MiddlewareRun : IDisposable
         var status = 403;
         if (args[0].IsNumber && args[0].AsNumber() is var n && n >= 400 && n <= 599) status = (int)n;
         var message = args[1].IsString ? args[1].AsString() : "turned away by a gateway middleware";
+        if (_current >= 0 && !_set.Modules[_current].CanReject)
+        {
+            _set.Modules[_current].Say("warn", "ctx.reject ignored: it needs the permission gateway.request:reject");
+            return JsValue.Undefined;
+        }
         _rejected ??= new MiddlewareReject(status, message);
         return JsValue.Undefined;
     }
@@ -428,6 +695,8 @@ public sealed class MiddlewareRun : IDisposable
             m?.Say("warn", $"ctx.{verb} works in onUpstream only");
         else if (!remove && value is null)
             m?.Say("warn", $"ctx.setHeader({name}) without a value; use ctx.removeHeader");
+        else if (m is { CanSetHeaders: false })
+            m.Say("warn", $"ctx.{verb}({name}) ignored: it needs the permission gateway.upstream:headers");
         else if (MiddlewareHeader.Refusal(name, value) is { } why)
             m?.Say("warn", $"ctx.{verb}({name}) ignored: {why}");
         else

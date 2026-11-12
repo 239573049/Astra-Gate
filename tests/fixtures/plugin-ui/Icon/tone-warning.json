@@ -1,0 +1,13 @@
+{
+  "id": "Icon/tone-warning",
+  "component": "Icon",
+  "state": "tone-warning",
+  "tree": {
+    "type": "Icon",
+    "props": {
+      "name": "shield-check",
+      "size": "md",
+      "tone": "warning"
+    }
+  }
+}

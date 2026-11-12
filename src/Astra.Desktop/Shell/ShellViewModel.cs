@@ -32,7 +32,8 @@ public sealed partial class ShellViewModel : ObservableObject
             Navigator,
             () => IsSidebarCollapsed = !IsSidebarCollapsed,
             () => Context.Queries.Invalidate(),
-            command => Navigator.Current.OnMenuCommand(command),
+            // the palette belongs to the shell, not to the page (web AppShell: case 'palette')
+            command => command == Astra.Desktop.Core.Shell.MenuCommands.Palette ? OpenPalette() : Navigator.Current.OnMenuCommand(command),
             () => Navigator.Current.Route.ToString());
         // Menu items and shortcuts reach the page host through the desktop host (web: onMenuCommand).
         Context.Host.MenuCommandReceived += command => Context.Queries.Dispatcher.Post(() => _commands.Handle(command));
@@ -47,6 +48,15 @@ public sealed partial class ShellViewModel : ObservableObject
 
     /// <summary>What every page of this shell is built with.</summary>
     public PageContext Context { get; }
+
+    /// <summary>Raised when the command palette should open (Ctrl/⌘+K or the View menu).</summary>
+    public event Action? PaletteRequested;
+
+    private bool OpenPalette()
+    {
+        PaletteRequested?.Invoke();
+        return PaletteRequested is not null;
+    }
 
     /// <summary>Runs a menu / shortcut command as if it came from the host (<see cref="Astra.Desktop.Core.Shell.MenuCommands"/>); false when nothing took it.</summary>
     public bool RunCommand(string command) => _commands.Handle(command);

@@ -1,0 +1,12 @@
+{
+  "id": "Spinner/size-sm",
+  "component": "Spinner",
+  "state": "size-sm",
+  "tree": {
+    "type": "Spinner",
+    "props": {
+      "size": "sm",
+      "label": "Loading"
+    }
+  }
+}

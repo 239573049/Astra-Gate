@@ -1,0 +1,12 @@
+{
+  "id": "RequestLink/default",
+  "component": "RequestLink",
+  "state": "default",
+  "tree": {
+    "type": "RequestLink",
+    "props": {
+      "id": "req_123",
+      "label": "Open the request"
+    }
+  }
+}

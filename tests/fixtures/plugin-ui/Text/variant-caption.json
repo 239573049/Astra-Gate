@@ -1,0 +1,12 @@
+{
+  "id": "Text/variant-caption",
+  "component": "Text",
+  "state": "variant-caption",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "variant": "caption"
+    }
+  }
+}

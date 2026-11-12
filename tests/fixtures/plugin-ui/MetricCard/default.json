@@ -1,0 +1,24 @@
+{
+  "id": "MetricCard/default",
+  "component": "MetricCard",
+  "state": "default",
+  "tree": {
+    "type": "MetricCard",
+    "props": {
+      "label": "Requests today",
+      "value": 1204,
+      "format": "number",
+      "delta": 0.12,
+      "trend": [
+        120,
+        180,
+        150,
+        210,
+        260,
+        240,
+        300
+      ],
+      "icon": "activity"
+    }
+  }
+}

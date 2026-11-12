@@ -1,0 +1,13 @@
+{
+  "id": "Avatar/default",
+  "component": "Avatar",
+  "state": "default",
+  "tree": {
+    "type": "Avatar",
+    "props": {
+      "name": "Ada Lovelace",
+      "size": "md",
+      "status": "success"
+    }
+  }
+}

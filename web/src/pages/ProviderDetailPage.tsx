@@ -45,6 +45,8 @@ import { formatContext, priceSummary, pretty } from '../lib/format';
 import { modelMapOf, type ModelMap } from '../lib/modelMap';
 import { AUTH_OPTIONS, PROTOCOL_OPTIONS } from './ProvidersPage';
 import type { ClientKind } from '../api/types';
+import { PluginSlot } from '../plugin-ui/PluginPage';
+import { usePluginMenuItems } from '../plugin-ui/menus';
 
 type Tab = 'models' | 'accounts' | 'settings';
 
@@ -102,6 +104,11 @@ export function ProviderDetailPage() {
           <ProviderModelSheet provider={p} pm={tab === 'models' ? pm : null} onClose={() => setSelectedPm(null)} />
         </Tabs>
       )}
+      {p && (
+        <div className="mt-6">
+          <PluginSlot name="provider.detail.tabs" params={{ providerId: p.id }} />
+        </div>
+      )}
     </Page>
   );
 }
@@ -116,6 +123,7 @@ function BackButton({ onClick }: { onClick: () => void }) {
 }
 
 function HeaderActions({ p }: { p: Provider }) {
+  const pluginItems = usePluginMenuItems('provider.row', { providerId: p.id });
   const { t } = useI18n();
   const navigate = useNavigate();
   const { toast, confirm } = useFeedback();
@@ -126,7 +134,10 @@ function HeaderActions({ p }: { p: Provider }) {
   const [testOpen, setTestOpen] = useState(false);
 
   const remove = async () => {
-    if (!(await confirm({ title: t('providers.deleteConfirm', { name: p.name }), detail: t('providers.deleteDetail'), destructive: true, confirmLabel: t('common.delete') }))) return;
+    // the server unbinds the clients using it (one left with none is disabled), so say which before asking
+    const bound = p.boundClients.map((k) => CLIENT_META[k as ClientKind]?.name ?? k).join(', ');
+    const detail = bound ? t('providers.deleteDetailBound', { clients: bound }) : t('providers.deleteDetail');
+    if (!(await confirm({ title: t('providers.deleteConfirm', { name: p.name }), detail, destructive: true, confirmLabel: t('common.delete') }))) return;
     del.mutate(p.id, {
       onSuccess: () => {
         toast(t('providers.deleted'));
@@ -156,6 +167,7 @@ function HeaderActions({ p }: { p: Provider }) {
             },
             { id: 'tpl', label: t('providers.templateUpdate'), icon: <Sparkles className="size-3.5" />, disabled: !p.templateId, onSelect: () => setUpdateOpen(true) },
             { id: 'switch', label: t('providers.templateSwitch'), icon: <ArrowLeftRight className="size-3.5" />, disabled: !canSwitchTemplate(p), onSelect: () => setSwitchOpen(true) },
+            ...pluginItems,
             { id: 'del', label: t('common.delete'), icon: <Trash2 className="size-3.5" />, destructive: true, separatorBefore: true, onSelect: () => void remove() },
           ]}
         />

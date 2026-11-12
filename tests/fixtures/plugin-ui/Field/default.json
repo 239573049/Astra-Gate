@@ -1,0 +1,21 @@
+{
+  "id": "Field/default",
+  "component": "Field",
+  "state": "default",
+  "tree": {
+    "type": "Field",
+    "props": {
+      "label": "API key",
+      "hint": "Stored encrypted",
+      "required": true
+    },
+    "children": [
+      {
+        "type": "PasswordField",
+        "props": {
+          "name": "key"
+        }
+      }
+    ]
+  }
+}

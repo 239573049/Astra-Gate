@@ -1,0 +1,23 @@
+{
+  "id": "Stepper/default",
+  "component": "Stepper",
+  "state": "default",
+  "tree": {
+    "type": "Stepper",
+    "props": {
+      "steps": [
+        {
+          "title": "Install"
+        },
+        {
+          "title": "Grant",
+          "description": "3 permissions"
+        },
+        {
+          "title": "Configure"
+        }
+      ],
+      "current": 1
+    }
+  }
+}

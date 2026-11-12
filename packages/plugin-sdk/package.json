@@ -1,0 +1,53 @@
+{
+  "name": "@astragate/plugin-sdk",
+  "version": "2.0.0",
+  "description": "SDK for Astra v2 plugins: typings of the astra module and the UI 1.0 components, a test harness that runs plugin views and hooks in Node, and the astra-plugin tool (validate, pack, init).",
+  "license": "MIT",
+  "type": "module",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./runtime/astra.mjs"
+    },
+    "./runtime": "./runtime/astra.mjs",
+    "./jsx-runtime": {
+      "types": "./src/jsx-runtime.d.ts",
+      "default": "./runtime/jsx-runtime.mjs"
+    },
+    "./testing": {
+      "types": "./src/testing.d.mts",
+      "default": "./src/testing.mjs"
+    },
+    "./patterns": {
+      "types": "./src/patterns.d.mts",
+      "default": "./src/patterns.mjs"
+    },
+    "./validate-tree": {
+      "types": "./src/validate-tree.d.mts",
+      "default": "./src/validate-tree.mjs"
+    }
+  },
+  "bin": {
+    "astra-plugin": "./bin/astra-plugin.mjs"
+  },
+  "files": [
+    "bin",
+    "runtime",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "gen": "node scripts/gen.mjs",
+    "test": "node scripts/gen.mjs --check && vitest run",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.0"
+  },
+  "dependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

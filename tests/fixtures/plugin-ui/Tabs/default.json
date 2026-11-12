@@ -1,0 +1,71 @@
+{
+  "id": "Tabs/default",
+  "component": "Tabs",
+  "state": "default",
+  "tree": {
+    "type": "Tabs",
+    "props": {
+      "value": "a",
+      "items": [
+        {
+          "value": "a",
+          "label": "Overview"
+        },
+        {
+          "value": "b",
+          "label": "Hits",
+          "badge": "3"
+        },
+        {
+          "value": "c",
+          "label": "Settings"
+        }
+      ],
+      "onChange": "tab"
+    },
+    "children": [
+      {
+        "type": "Tab",
+        "props": {
+          "value": "a"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Overview tab"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Tab",
+        "props": {
+          "value": "b"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Hits tab"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Tab",
+        "props": {
+          "value": "c"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Settings tab"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

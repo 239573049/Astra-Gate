@@ -44,7 +44,8 @@ internal sealed class InstalledTabView : LiveView
 
     private Control List(Astra.Api.Contracts.PluginsDto data)
     {
-        var plugins = data.Plugins;
+        // v2 plugins are listed by their own section above (PluginsV2Section)
+        var plugins = data.Plugins.Where(p => !p.Kinds.Contains("v2")).ToList();
         var stack = new StackPanel { Spacing = 16 };
         if (PluginRows.ImportableCount(_model.Api.MagpiePreview.Data) is { } count) stack.Children.Add(ImportBanner(count));
 

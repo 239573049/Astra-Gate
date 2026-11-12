@@ -1,0 +1,13 @@
+{
+  "id": "Progress/tone-accent",
+  "component": "Progress",
+  "state": "tone-accent",
+  "tree": {
+    "type": "Progress",
+    "props": {
+      "value": 0.62,
+      "label": "Syncing",
+      "tone": "accent"
+    }
+  }
+}

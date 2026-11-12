@@ -1,0 +1,12 @@
+{
+  "id": "ProviderPicker/invalid",
+  "component": "ProviderPicker",
+  "state": "invalid",
+  "tree": {
+    "type": "ProviderPicker",
+    "props": {
+      "name": "provider",
+      "invalid": true
+    }
+  }
+}

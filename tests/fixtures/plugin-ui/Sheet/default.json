@@ -1,0 +1,21 @@
+{
+  "id": "Sheet/default",
+  "component": "Sheet",
+  "state": "default",
+  "tree": {
+    "type": "Sheet",
+    "props": {
+      "open": false,
+      "title": "Edit rule",
+      "size": "md"
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Sheet body"
+        }
+      }
+    ]
+  }
+}

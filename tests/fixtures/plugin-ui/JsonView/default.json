@@ -1,0 +1,21 @@
+{
+  "id": "JsonView/default",
+  "component": "JsonView",
+  "state": "default",
+  "tree": {
+    "type": "JsonView",
+    "props": {
+      "value": {
+        "model": "claude-sonnet-4",
+        "stream": true,
+        "messages": [
+          {
+            "role": "user",
+            "content": "hi"
+          }
+        ]
+      },
+      "expandDepth": 2
+    }
+  }
+}

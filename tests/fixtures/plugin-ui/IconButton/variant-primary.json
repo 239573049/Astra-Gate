@@ -1,0 +1,14 @@
+{
+  "id": "IconButton/variant-primary",
+  "component": "IconButton",
+  "state": "variant-primary",
+  "tree": {
+    "type": "IconButton",
+    "props": {
+      "icon": "trash-2",
+      "variant": "primary",
+      "a11yLabel": "Delete",
+      "onPress": "delete"
+    }
+  }
+}

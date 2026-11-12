@@ -1,0 +1,14 @@
+{
+  "id": "IconButton/variant-danger",
+  "component": "IconButton",
+  "state": "variant-danger",
+  "tree": {
+    "type": "IconButton",
+    "props": {
+      "icon": "trash-2",
+      "variant": "danger",
+      "a11yLabel": "Delete",
+      "onPress": "delete"
+    }
+  }
+}

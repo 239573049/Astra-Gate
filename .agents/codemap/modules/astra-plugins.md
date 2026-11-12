@@ -125,7 +125,7 @@ client config writes for agent-plugin clients (`astra-clients`), plugin contract
   (`src/Astra.Plugins/Host/host.js:2155`).
 - To add a market field: `PluginMarket.ToListing`/`ToTarball` (`src/Astra.Plugins/Market/PluginMarket.cs:234`),
   the record `MarketListing` (`:20`), `web/src/api/types.ts`, `cli/src/commands/plugin.ts` and
-  `docs/content/docs/advanced/plugin-market.mdx` — the registry, client and docs are one contract (AGENTS.md
+  `astra-gate-web/content/docs/advanced/plugin-market.mdx` — the registry, client and docs are one contract (AGENTS.md
   linked update 10); missing the client side silently drops the field.
 - To add an agent descriptor field: `AgentPluginDescriptor` (astra-core), `AgentPluginCatalog.Check`'s
   validation, `PluginClientAdapter`'s plan, and the snapshot the client row keeps — `restore-all` reads only
@@ -178,6 +178,30 @@ client config writes for agent-plugin clients (`astra-clients`), plugin contract
   whole `~/.astra/plugins/` folder is owner-only (`src/Astra.Core/AstraPaths.cs:35`, `:60`).
 - Agent plugins write every key through `ClientConfigApplier`; disabling is planned from recorded state alone,
   so `restore-all` works with no plugin code at all (`src/Astra.Clients/Adapters/PluginClientAdapter.cs:11`).
+
+## v2 plugins (`V2/`)
+Astra's own plugin format (`design/plugin-v2/`), beside the magpie-compatible v1 kinds above; AGENTS.md linked update 27
+lists what moves together.
+- `PluginV2Manifest` reads and checks `astra.plugin.json`; `ExtensionPoints` holds the contribution points, slot / menu /
+  nav names, `HookMatch`, `Cron`; `PluginPermissions` the permission strings and `Holds`.
+- `PluginV2Host` keeps one `PluginV2Instance` per installed v2 plugin (refreshed from `PluginCatalog`), starts it only
+  when its grants cover its permissions, and runs its jobs, events and permission requests. `Runtime/PluginMain.cs`
+  drives one Jaunt engine as an actor; `Runtime/boot.js` + `astra.js` are the JS side (the virtual `astra` module);
+  `Runtime/HostCalls.cs` is the only door to the host (permission check + activity log; `http.fetch` checks `net:`).
+- `V2/Ui`: `components.json` (the UI 1.0 schema), `UiTree` (normalize + `UiDiff`), `MarkdownUi`, `UiSessions` (state
+  snapshot per view session, patches out over SSE from `src/Astra.Server/PluginsV2/PluginV2Endpoints.cs`).
+- `V2/Runtime`: `boot.js` + `astra.js` (the `astra` module) run after `globals.js` (V2Assets composes them: TextEncoder/Decoder, atob/btoa, URL, structuredClone … polyfills built on `encoding.*` host calls); `CryptoCalls.cs` answers `crypto.*` / `encoding.*` (sync, permission-free, also in hooks); `HostCalls.FetchAsync` owns `redirect` / `Cookie` / `setCookies` and the no-credentials-across-origins rule. The SDK copy is `packages/plugin-sdk/runtime` (`gen.mjs`; its Node `node-crypto.mjs` mirrors CryptoCalls).
+- `V2ProviderTransport` sends a v2 provider's requests (plugin `prepare`, then the host sends); a provider with a manifest `reply` block gets its response wrapped by `V2/Reply/V2ReplyTransform` (frames from `FrameReaders.cs`, per-frame `provider.response.start|frame|end` ops in `Runtime/boot.js`, re-encoded as SSE / one JSON body; design 08 §2.2).
+- `V2Gateway` gives the middleware engine each plugin's hook sets (`MiddlewareModule.LoadV2`), the `reads` snapshot
+  and counters. Storage goes through `IPluginDataStore` (`PluginDataRepository`, migration 0024).
+- Tests: `tests/Astra.Plugins.Tests/V2/` (`V2TestHost`), `PluginV2ApiTests` in the integration suite; the AOT binary's
+  `plugin-selftest` runs the v2 checks in `Diagnostics/PluginSelfTestV2.cs` (load + grant, a view patch, a command, a hook).
+- The author SDK `packages/plugin-sdk` copies `boot.js` / `astra.js` / `components.json`; rerun its `gen` after changing them.
+- Dev tools: `PluginV2Host` reloads a folder plugin on save (watcher + `UiSessions.ReloadAsync`), `UiSessions.InspectAsync`
+  (inspector), `UiGallery` (scenes.json), `PluginV2TestRunner` (`astra plugin test`: isolated host, `vitest.js` / `testing.js`).
+- 2.1 (`design/plugin-v2/08-…`): `ProvidersPoint` / `ClientsPoint` / `FlowsPoint`; `V2ProviderTransport` (via `PluginFetchHandler.V2`),
+  `V2AgentCatalog` (v1 + v2 agents), streamed `http.fetch` (`HostCalls` http.read / http.close), provider accounts through
+  `IPluginProviderAccounts` (server: `PluginV2ProviderSync`).
 
 ## Tests
 `tests/Astra.Plugins.Tests/**` — xunit, one class per file named `<Thing>Tests.cs`, `[Fact]`/`[Theory]`;

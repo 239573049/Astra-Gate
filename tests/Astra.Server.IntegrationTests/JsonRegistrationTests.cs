@@ -91,8 +91,14 @@ public sealed class JsonRegistrationTests
             var remote = await host.SendAsync(HttpMethod.Get, $"/api/providers/{probed.Body!["id"]!.GetValue<string>()}/remote-models");
             Assert.Equal(expected, remote.Status);
         }
-        // Deleting a provider a client is bound to: the conflict and its details.
-        Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Delete, $"/api/providers/{quotaId}")).Status);
+        // Binding a switched-off provider: the conflict and its details.
+        await host.Db.Providers.InsertAsync(new Astra.Core.Models.Provider
+        {
+            Id = "guard-off", Name = "Off", Enabled = false, Endpoints = [new Astra.Core.Models.ProviderEndpoint { BaseUrl = "https://off.test/v1" }],
+        });
+        Assert.Equal(HttpStatusCode.Conflict, (await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = "guard-off" })).Status);
+        // Deleting a provider a client is bound to unbinds it first.
+        Assert.Equal(HttpStatusCode.NoContent, (await host.SendAsync(HttpMethod.Delete, $"/api/providers/{quotaId}")).Status);
         var guardToken = (await host.SendAsync(HttpMethod.Post, "/api/tokens", new { name = "Guard" })).Body!["id"]!.GetValue<string>();
         // A provider pool (issue #2): its input DTO and the members' health in the token DTO.
         foreach (var id in new[] { "guard-pool-a", "guard-pool-b" })

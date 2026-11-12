@@ -1,0 +1,12 @@
+{
+  "id": "Text/tone-danger",
+  "component": "Text",
+  "state": "tone-danger",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "tone": "danger"
+    }
+  }
+}

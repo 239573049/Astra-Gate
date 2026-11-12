@@ -1,0 +1,28 @@
+{
+  "id": "LogView/default",
+  "component": "LogView",
+  "state": "default",
+  "tree": {
+    "type": "LogView",
+    "props": {
+      "lines": [
+        {
+          "at": "2026-11-11T09:00:01Z",
+          "level": "info",
+          "text": "activated startup"
+        },
+        {
+          "at": "2026-11-11T09:00:02Z",
+          "level": "warn",
+          "text": "words list is empty"
+        },
+        {
+          "at": "2026-11-11T09:00:03Z",
+          "level": "error",
+          "text": "fetch failed: 503"
+        }
+      ],
+      "height": "xs"
+    }
+  }
+}

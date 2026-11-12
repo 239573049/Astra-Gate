@@ -1,0 +1,16 @@
+{
+  "id": "TextField/invalid",
+  "component": "TextField",
+  "state": "invalid",
+  "tree": {
+    "type": "TextField",
+    "props": {
+      "name": "endpoint",
+      "value": "https://api.acme.example",
+      "placeholder": "https://…",
+      "type": "url",
+      "clearable": true,
+      "invalid": true
+    }
+  }
+}

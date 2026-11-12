@@ -1,0 +1,76 @@
+{
+  "id": "Table/loading",
+  "component": "Table",
+  "state": "loading",
+  "tree": {
+    "type": "Table",
+    "props": {
+      "columns": [
+        {
+          "key": "model",
+          "title": "Model",
+          "sortable": true
+        },
+        {
+          "key": "status",
+          "title": "Status",
+          "cell": {
+            "type": "badge",
+            "toneBy": {
+              "ok": "success",
+              "error": "danger"
+            }
+          }
+        },
+        {
+          "key": "tokens",
+          "title": "Tokens",
+          "format": "tokens",
+          "align": "end",
+          "sortable": true
+        },
+        {
+          "key": "cost",
+          "title": "Cost",
+          "format": "money",
+          "align": "end"
+        }
+      ],
+      "rows": [
+        {
+          "id": "r1",
+          "model": "claude-sonnet-4",
+          "status": "ok",
+          "tokens": 18234,
+          "cost": 42000000
+        },
+        {
+          "id": "r2",
+          "model": "gpt-5",
+          "status": "error",
+          "tokens": 912,
+          "cost": 3000000
+        },
+        {
+          "id": "r3",
+          "model": "gemini-2.5-pro",
+          "status": "ok",
+          "tokens": 50211,
+          "cost": 118000000
+        }
+      ],
+      "rowKey": "id",
+      "total": 3,
+      "page": 1,
+      "pageSize": 20,
+      "sort": {
+        "key": "tokens",
+        "dir": "desc"
+      },
+      "onSort": "sort",
+      "onPage": "page",
+      "onRowPress": "open",
+      "loading": true
+    }
+  }
+}

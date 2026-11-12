@@ -833,6 +833,13 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     // not an upstream /models — the vendor behind it may have none.
     private async Task<IReadOnlyList<RemoteModelDto>> PluginModelsAsync(Provider p, CancellationToken ct)
     {
+        if (Gateway.Pipeline.GatewayPipeline.V2PluginOf(p) is not null)
+        {
+            // a v2 provider (design/plugin-v2 08 §2): PluginV2ProviderSync keeps its models current (manifest + the code's models())
+            var rows = await db.Providers.ListModelsAsync(p.Id, ct);
+            return rows.OrderBy(m => m.ModelId, StringComparer.Ordinal)
+                .Select(m => new RemoteModelDto(m.ModelId, m.Overrides?.DisplayName, m.SystemModelId, true, m.UpstreamProtocols ?? [])).ToList();
+        }
         List<Astra.Plugins.Host.PluginProviderInfo> listed;
         try
         {

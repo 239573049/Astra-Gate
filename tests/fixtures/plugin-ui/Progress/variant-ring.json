@@ -1,0 +1,13 @@
+{
+  "id": "Progress/variant-ring",
+  "component": "Progress",
+  "state": "variant-ring",
+  "tree": {
+    "type": "Progress",
+    "props": {
+      "value": 0.62,
+      "label": "Syncing",
+      "variant": "ring"
+    }
+  }
+}

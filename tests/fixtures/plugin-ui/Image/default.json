@@ -1,0 +1,15 @@
+{
+  "id": "Image/default",
+  "component": "Image",
+  "state": "default",
+  "tree": {
+    "type": "Image",
+    "props": {
+      "src": "https://astra-gate.si/logo.png",
+      "alt": "Astra logo",
+      "ratio": 1,
+      "fit": "contain",
+      "width": "xs"
+    }
+  }
+}

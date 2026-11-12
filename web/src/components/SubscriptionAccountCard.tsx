@@ -8,6 +8,7 @@ import { Menu, type MenuItem } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
 import { cn } from '../lib/cn';
 import { formatDateTime } from '../lib/format';
+import { usePluginMenuItems } from '../plugin-ui/menus';
 
 /** Where an account stands for the gateway right now (drives the card's accent and the status filter). */
 export type AccountState = 'usable' | 'cooling' | 'dead' | 'disabled';
@@ -90,6 +91,7 @@ export function SubscriptionAccountCard({
   usage?: ProviderAccountUsage;
 }) {
   const { t, locale } = useI18n();
+  const pluginItems = usePluginMenuItems('provider.account.row', { providerId: account.providerId, accountId: account.id });
   const state = accountState(account);
   const name = account.displayName || account.accountEmail || account.keyMasked || account.id;
   const isKey = account.kind === 'api_key';
@@ -147,6 +149,7 @@ export function SubscriptionAccountCard({
           },
           { id: 'relogin', label: t('providers.subscription.relogin'), disabled: account.status === 'active', onSelect: () => actions.relogin(account) },
         ]),
+    ...pluginItems,
     {
       id: 'remove',
       label: t('providers.subscription.logout'),

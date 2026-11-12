@@ -1,0 +1,15 @@
+{
+  "id": "Button/size-sm",
+  "component": "Button",
+  "state": "size-sm",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "primary",
+      "icon": "check",
+      "onPress": "save",
+      "size": "sm"
+    }
+  }
+}

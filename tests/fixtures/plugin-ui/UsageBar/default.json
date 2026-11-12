@@ -1,0 +1,14 @@
+{
+  "id": "UsageBar/default",
+  "component": "UsageBar",
+  "state": "default",
+  "tree": {
+    "type": "UsageBar",
+    "props": {
+      "used": 7300,
+      "limit": 10000,
+      "label": "Tokens this month",
+      "format": "tokens"
+    }
+  }
+}

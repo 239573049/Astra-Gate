@@ -1,0 +1,19 @@
+{
+  "id": "TagInput/default",
+  "component": "TagInput",
+  "state": "default",
+  "tree": {
+    "type": "TagInput",
+    "props": {
+      "name": "words",
+      "value": [
+        "secret",
+        "password"
+      ],
+      "suggestions": [
+        "token",
+        "api key"
+      ]
+    }
+  }
+}

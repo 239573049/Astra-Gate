@@ -139,7 +139,8 @@ public static class AstraApp
         builder.Services.AddSingleton<IUpstreamAuthResolver>(sp => sp.GetRequiredService<UpstreamAuthResolver>());
         builder.Services.AddSingleton<IEffectiveModelResolver>(sp => sp.GetRequiredService<EffectiveModelResolver>());
         builder.Services.AddSingleton<IGatewaySettings>(sp => sp.GetRequiredService<SettingsService>());
-        builder.Services.AddSingleton<IRequestSink>(sp => sp.GetRequiredService<UsageWriter>());
+        builder.Services.AddSingleton<IRequestSink>(sp => new Astra.Server.PluginsV2.PluginEventSink(
+            sp.GetRequiredService<UsageWriter>(), sp.GetRequiredService<Astra.Plugins.V2.PluginV2Host>()));
         builder.Services.AddSingleton<ISmartRouter>(sp => sp.GetRequiredService<SmartRouter>());
         builder.Services.AddSingleton<GatewayPipeline>();
         builder.Services.AddSingleton<GatewayAuxiliary>();
@@ -186,15 +187,33 @@ public static class AstraApp
         {
             var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Astra.Plugins");
             return new Astra.Plugins.Middleware.MiddlewareEngine(sp.GetRequiredService<PluginCatalog>(), (level, line) =>
-                log.Log(level switch { "error" => LogLevel.Warning, "warn" => LogLevel.Warning, "debug" => LogLevel.Debug, _ => LogLevel.Information }, "{Line}", line));
+                log.Log(level switch { "error" => LogLevel.Warning, "warn" => LogLevel.Warning, "debug" => LogLevel.Debug, _ => LogLevel.Information }, "{Line}", line))
+            {
+                // v2 hook sets run in the same chain; ir hook sets get the codecs' protocol-free view (design/plugin-v2 02 §3)
+                V2Host = sp.GetRequiredService<Astra.Plugins.V2.PluginV2Host>(),
+                Views = new Astra.Gateway.Plugins.GatewayHookViews(sp.GetRequiredService<CodecRegistry>()),
+            };
         });
+        // Plugins v2 (design/plugin-v2): the host (main contexts, view sessions, events, jobs) and its admin side.
+        builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2HostServices>(sp => new Astra.Server.PluginsV2.PluginV2HostServices(
+            database, sp.GetRequiredService<Astra.Core.Clients.ISecretProtector>(), sp.GetRequiredService<ILoggerFactory>()));
+        builder.Services.AddSingleton(sp =>
+        {
+            var host = new Astra.Plugins.V2.PluginV2Host(sp.GetRequiredService<PluginCatalog>(),
+                sp.GetRequiredService<Astra.Server.PluginsV2.PluginV2HostServices>());
+            sp.GetRequiredService<SettingsService>().Changed += _ => host.Publish("settings.changed", null);
+            return host;
+        });
+        builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2Service>();
         builder.Services.AddSingleton(sp =>
         {
             var log = sp.GetRequiredService<ILoggerFactory>().CreateLogger("Astra.Plugins");
             return new Astra.Plugins.Agents.AgentPluginCatalog(sp.GetRequiredService<PluginCatalog>(), (level, line) =>
                 log.Log(level == "warn" ? LogLevel.Warning : LogLevel.Information, "{Line}", line));
         });
-        builder.Services.AddSingleton<Astra.Core.Plugins.IAgentPluginCatalog>(sp => sp.GetRequiredService<Astra.Plugins.Agents.AgentPluginCatalog>());
+        // v1 agent plugins plus the clients v2 plugins declare (design/plugin-v2 08 §3)
+        builder.Services.AddSingleton<Astra.Core.Plugins.IAgentPluginCatalog>(sp => new Astra.Plugins.V2.V2AgentCatalog(
+            sp.GetRequiredService<Astra.Plugins.Agents.AgentPluginCatalog>(), sp.GetRequiredService<Astra.Plugins.V2.PluginV2Host>()));
         builder.Services.AddSingleton<PluginService>();
         // Provider plugins: the Bun host (magpie's host.js), its providers, the gateway's transport to them, and the sync
         // that mirrors them into providers / models / accounts.
@@ -207,13 +226,19 @@ public static class AstraApp
                 new ModelsDevCatalog(paths, () => sp.GetRequiredService<IHttpClientFactory>().CreateClient(PluginService.HttpClientName)));
         });
         builder.Services.AddSingleton<Astra.Plugins.Host.PluginProviders>();
-        builder.Services.AddSingleton<Astra.Plugins.Host.PluginFetchHandler>();
+        builder.Services.AddSingleton(sp => new Astra.Plugins.Host.PluginFetchHandler(sp.GetRequiredService<Astra.Plugins.Host.PluginProviders>())
+        {
+            V2 = new Astra.Plugins.V2.V2ProviderTransport(sp.GetRequiredService<Astra.Plugins.V2.PluginV2Host>()),
+        });
         builder.Services.AddSingleton<PluginProviderSync>();
         builder.Services.AddSingleton<PluginSignInService>();
         builder.Services.AddSingleton<PluginCheckinService>();
         builder.Services.AddSingleton<MagpieImportService>();
         builder.Services.AddHostedService<PluginCheckinWorker>();
         builder.Services.AddHostedService<PluginProviderWorker>();
+        // v2 providers (design/plugin-v2 08 §2): their rows, their accounts, and the transport that asks the plugin's prepare
+        builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2ProviderSync>();
+        builder.Services.AddHostedService<Astra.Server.PluginsV2.PluginV2ProviderWorker>();
         builder.Services.AddSingleton<UpdateCheckService>();
         builder.Services.AddHostedService<UpdateCheckWorker>();
         builder.Services.AddSingleton<RuntimeFile>();
@@ -336,6 +361,7 @@ public static class AstraApp
         app.MapSubscriptionEndpoints();
         app.MapUpdateEndpoints();
         app.MapPluginEndpoints();
+        Astra.Server.PluginsV2.PluginV2Endpoints.MapPluginV2Endpoints(app);
         app.MapGatewayEndpoints();
         app.MapKeyInfoEndpoints();
         app.MapAlertEndpoints();

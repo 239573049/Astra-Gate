@@ -3,7 +3,8 @@ namespace Astra.Desktop.Core;
 /// <summary>
 /// Version ordering for the desktop client: semver precedence, build metadata ignored, a release above its
 /// prereleases. One of the places that must agree (AGENTS.md linked update 13): scripts/release-channel.mjs,
-/// <c>UpdateCheckService.IsNewer</c>, packages/update-core/src/version.ts, docs/lib/releases.ts and this.
+/// <c>UpdateCheckService.IsNewer</c>, packages/update-core/src/version.ts, lib/releases.ts in the website repository
+/// (astra-gate-web) and this.
 /// </summary>
 public static class ReleaseVersion
 {

@@ -98,7 +98,7 @@ export default gateway.defineHooks({
 - 多个插件按用户排的顺序执行；v1 中间件和 v2 钩子在同一条链里按列表顺序排（07 §2）。
 
 `gateway` 上下文可用的 API 只有：`ctx` 上的方法、`ctx.shared`（清单 `reads` 声明的 `storage` 键和设置的同步只读快照，
-01 §3）、`ctx.emit` / `ctx.count`（异步投递，不等待）、`log`、`crypto`。没有 `http`、没有 `ui`、没有异步的 `storage`——
+01 §3）、`ctx.emit` / `ctx.count`（异步投递，不等待）、`log`、`crypto` / `encoding` 以及 §11.2 的沙箱全局。没有 `http`、没有 `ui`、没有异步的 `storage`——
 热路径上不允许不可控的等待，钩子因此可以是同步函数。需要外部数据的钩子在 `main` 里后台拉取、写进 `storage`，钩子从
 `ctx.shared` 读。
 
@@ -129,13 +129,22 @@ config.onChange(fn)
 const res = await http.fetch('https://api.acme.example/v1/x', {
   method: 'POST', headers: { … }, body: JSON.stringify(payload), timeoutMs: 10000,
 });
-res.status; res.headers; await res.json(); await res.text(); await res.bytes();
+res.status; res.headers; res.setCookies; await res.json(); await res.text(); await res.bytes();
 ```
 
-- 只能访问 `net:` 权限里列出的源；重定向到列表外的源算失败。只有 https（开发模式下允许本机 http）。
+- 只能访问 `net:` 权限里列出的源；重定向到列表外的源算失败（`permission_denied`）。只有 https（开发模式下允许本机 http）。
 - 请求由宿主的 `HttpClient` 发出，走 Astra 的代理设置；不带任何 Astra 的头或凭据。
 - 响应体有大小上限；流式读取（`res.stream()`）放在 2.1，随 `providers` 一起做。
-- 不允许访问 loopback、链路本地和内网地址（解析后检查），防止把插件当成访问本机服务的跳板。
+- 不允许访问 loopback、链路本地和内网地址（解析后检查），防止把插件当成访问本机服务的跳板；重定向的每一跳都重新检查。
+- `redirect`：`'follow'`（默认，最多 5 跳，每一跳都要过 `net:` 和内网检查）、`'manual'`（不跟随：直接返回 3xx 的 `status`、
+  `headers.location` 和 `setCookies`，`Location` 不检查也不请求，由插件自己决定下一步）、`'error'`（遇到重定向就失败，
+  `redirect_refused`）。Mimo 一类的 SSO 登录用 `manual` 一跳一跳走，自己带上 `cookie`。
+- Cookie：请求头 `cookie` 可以发（只发到插件持有 `net:` 的源，本来任意请求头就可以带）；响应的每一行 `Set-Cookie` 原样放在
+  `res.setCookies`（字符串数组；`res.headers` 里没有 `set-cookie`，因为它不能用逗号拼起来）。宿主**没有** cookie jar，
+  不替插件保存、也不随请求自动带：要用的值自己放进 `storage` / 下一次请求头。`follow` 时中间跳的 `Set-Cookie` 看不到，
+  需要它们就用 `manual`。
+- 凭据不跨源：`cookie`、`authorization`、`proxy-authorization` 只发给最初请求的源；重定向一旦离开那个源，这三个头就从这一跳起
+  永久丢弃（即使之后又绕回原来的源）。其他头（插件自己写的）照常带。同源重定向保留它们。
 
 ## 6. `commands`
 
@@ -211,11 +220,60 @@ await jobs.runNow('sync');
 | `log` | `log.debug/info/warn/error(message, fields?)`；限流；在插件页的日志里可见 |
 | `t` / `i18n` | `t(key, params)`；`i18n.locale` |
 | `notifications` | `notifications.send({ title, body, tone })`：没有打开界面时也能到达（控制台通知、桌面系统通知） |
-| `crypto` | `sha256`、`hmac`、`randomUUID`、`randomBytes`（沙箱里没有 Web Crypto） |
+| `crypto` / `encoding` | 摘要、HMAC、AES、RSA、ECDSA、PBKDF2、HKDF 和 base64 / hex 编码，见 §11.1；沙箱里没有 Web Crypto |
 | `env` | `{ platform, astraVersion, plugin: { id, version }, dev }` |
 | `timers` | `setTimeout` / `setInterval`（只在 `main`，受最小间隔限制） |
 | `permissions` | `permissions.has(p)`、`permissions.request([…])`（运行时申请，01 §6） |
 | `ui.files` | `ui.files.read(ref)`：读用户通过 `pickFile` / `FileDrop` 交来的文件内容（04 §5） |
+
+### 11.1 `crypto` 与 `encoding`
+
+纯计算，在宿主里用 `System.Security.Cryptography` 做（不用反射，AOT 安全）。**不需要任何权限**，网关钩子里也能调用。输入上限
+8 MiB；密钥或尺寸不对抛 `AstraError('invalid_argument')`。数据参数可以是字符串（UTF-8）、`Uint8Array` / `ArrayBuffer`，或
+`{ base64 }` / `{ hex }`；结果由 `encoding` 选：`'hex'` | `'base64'` | `'base64url'` | `'utf8'`（仅解密）| `'bytes'`（`Uint8Array`）。
+默认：摘要 / HMAC / PBKDF2 / HKDF 为 hex，加密和签名为 base64，解密为 bytes。
+
+```js
+crypto.digest('md5' | 'sha1' | 'sha256' | 'sha384' | 'sha512', data, { encoding })   // sha256(data) 仍是 hex
+crypto.hmac(key, data, { algorithm: 'sha256', encoding })                            // hmac(key, data, 'sha1') 仍可用
+crypto.aes.encrypt({ mode: 'cbc' | 'ecb' | 'gcm', key, iv, data, aad?, padding?: 'pkcs7' | 'none' })  // gcm：密文后附 16 字节 tag
+crypto.aes.decrypt({ mode, key, iv, data, aad?, tag?, encoding: 'utf8' })
+crypto.rsa.encrypt({ key: pem, data, padding: 'pkcs1' | 'oaep', hash? })              // 公钥：PEM（SPKI / PKCS#1）或 base64 DER，512–8192 位
+crypto.sign({ algorithm: 'rsa-sha256' | 'ecdsa-p256-sha256' | …, key: pem, data, format?: 'der' | 'raw' })  // 私钥：PKCS#8 / PKCS#1 / SEC1
+crypto.verify({ algorithm, key: publicPem, data, signature: { base64 } })
+crypto.pbkdf2({ password, salt, iterations, length, hash })    // iterations ≤ 1,000,000，length ≤ 1024
+crypto.hkdf({ key, salt?, info?, length, hash })
+encoding.base64 | base64url | hex   // .encode(bytes | string) → string，.decode(text) → Uint8Array
+encoding.utf8.encode(text) / .decode(bytes)
+```
+
+- AES 密钥 16 / 24 / 32 字节；CBC 的 iv 16 字节，GCM 的 iv 12 字节；`ecb` 只为对接老接口而留。`key` / `iv` 给字符串时按 UTF-8 取字节
+  （Qoder 一类把 16 个字符的字符串直接当密钥和 iv 用）。
+- RSA 签名：`rsa-sha1|256|384|512`（PKCS#1 v1.5）、`rsa-pss-sha256`（盐长 = 摘要长度）；ECDSA：`ecdsa-p256-sha256`、
+  `ecdsa-p384-sha384`，输出默认 DER，`format: 'raw'` 给 r‖s。
+- **MD5 和 SHA-1 只为对接仍在使用它们的厂商接口**，不要用于新的安全设计。
+- 没有 `Buffer`（它不是 Web 全局）：字节与文本互转用 `encoding`，bytes 用 `Uint8Array`。
+- Node 测试环境（`@astragate/plugin-sdk`）用 `node:crypto` 实现同一组调用、同样的默认值和错误码，测试里与真实沙箱算出同样的字节
+  （同一批已知答案向量在 xunit 与 vitest 里各跑一遍）。
+
+### 11.2 沙箱全局
+
+Jaunt 引擎本身带 ECMAScript 内建（`Map`/`Set`/`Proxy`/`Reflect`/`BigInt`/`Intl`/`Atomics`、`Uint8Array.prototype.toHex` 等、
+`escape`/`encodeURIComponent`）和 `console`、`setTimeout`。探测（真实引擎）显示它**没有** `TextEncoder` / `TextDecoder`、`atob` /
+`btoa`、`URL` / `URLSearchParams`、`structuredClone`、`queueMicrotask`、`AbortController`、`Headers`、`fetch`、`Buffer`、`crypto`。
+`V2/Runtime/globals.js` 在 boot 之前补上下面这些（引擎已有的全局不会被覆盖）；UTF-8 和 base64 这两条热路径走宿主调用
+（`encoding.*`，同步、无权限、钩子里也能用），不用 JS 循环：
+
+| 全局 | 说明 |
+|---|---|
+| `TextEncoder` | `encode`、`encodeInto`；只有 UTF-8 |
+| `TextDecoder` | `new TextDecoder('utf-8' \| 'utf8', { fatal, ignoreBOM })`、`decode(bytes, { stream })`；`fatal` 时坏序列抛 `TypeError`，否则换成 U+FFFD；其他编码 `RangeError` |
+| `atob` / `btoa` | 按规范，错误抛 `DOMException`（`InvalidCharacterError`）；`DOMException` 也一并提供 |
+| `URL` / `URLSearchParams` | WHATWG 基本行为：解析、相对解析、特殊协议默认端口、IPv4 / IPv6 / 国际化域名（punycode）、各百分号编码集、`searchParams` 与 `search` 双向联动、`canParse` / `parse`、各 setter；没有 `blob:` 对象 URL 的创建 |
+| `structuredClone` | 基本类型、`Date`、`RegExp`、`Map`、`Set`、数组、对象、`ArrayBuffer` / 类型化数组、`Error`、循环引用；函数和 `Symbol` 抛 `DOMException('DataCloneError')`；不支持 transfer |
+| `queueMicrotask` | 用 `Promise` 实现 |
+
+仍然没有：`Buffer`、`fetch`（用 `http.fetch`）、`AbortController`、`Headers`、`Web Crypto`（用 `crypto`）。
 
 ## 12. `providers` 与 `clients`（2.1，方向）
 

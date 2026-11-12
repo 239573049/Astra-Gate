@@ -1,0 +1,12 @@
+{
+  "id": "ModelPicker/default",
+  "component": "ModelPicker",
+  "state": "default",
+  "tree": {
+    "type": "ModelPicker",
+    "props": {
+      "name": "model",
+      "value": "claude-sonnet-4"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "DatePicker/default",
+  "component": "DatePicker",
+  "state": "default",
+  "tree": {
+    "type": "DatePicker",
+    "props": {
+      "name": "day",
+      "value": "2026-11-11"
+    }
+  }
+}

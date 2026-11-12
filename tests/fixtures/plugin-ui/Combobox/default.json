@@ -1,0 +1,23 @@
+{
+  "id": "Combobox/default",
+  "component": "Combobox",
+  "state": "default",
+  "tree": {
+    "type": "Combobox",
+    "props": {
+      "name": "model",
+      "value": "gpt-5",
+      "options": [
+        {
+          "value": "gpt-5",
+          "label": "gpt-5"
+        },
+        {
+          "value": "claude-sonnet-4",
+          "label": "claude-sonnet-4"
+        }
+      ],
+      "allowCustom": true
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "Switch/disabled",
+  "component": "Switch",
+  "state": "disabled",
+  "tree": {
+    "type": "Switch",
+    "props": {
+      "name": "enabled",
+      "checked": true,
+      "label": "Enabled",
+      "disabled": true
+    }
+  }
+}

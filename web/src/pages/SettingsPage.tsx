@@ -21,6 +21,7 @@ import { useI18n, type Locale } from '../i18n';
 import { ACCENT_PRESETS, useAppearance } from '../shell/appearance';
 import { getBridge, isDesktop } from '../shell/bridge';
 import { systemActions } from '../shell/systemActions';
+import { PluginSlot } from '../plugin-ui/PluginPage';
 
 const TABS = ['general', 'notifications', 'remote', 'tray'] as const;
 type SettingsTab = (typeof TABS)[number];
@@ -86,6 +87,9 @@ export function SettingsPage() {
           </TabsContent>
         )}
       </Tabs>
+      <div className="mt-6">
+        <PluginSlot name="settings.sections" />
+      </div>
     </Page>
   );
 }

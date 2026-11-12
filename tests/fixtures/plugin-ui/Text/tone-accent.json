@@ -1,0 +1,12 @@
+{
+  "id": "Text/tone-accent",
+  "component": "Text",
+  "state": "tone-accent",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "tone": "accent"
+    }
+  }
+}

@@ -7,6 +7,7 @@ import { Spinner } from './components/ui/controls';
 import { LoginPage } from './pages/LoginPage';
 import { OverviewPage } from './pages/OverviewPage';
 import { isDesktop } from './shell/bridge';
+import { PluginGalleryPage } from './pages/PluginGalleryPage';
 
 // The overview (the window's first screen) and the login page ship in the entry chunk; every other page is
 // its own chunk, so the first paint — and the tray panel's hidden window — parse only what they show.
@@ -14,6 +15,7 @@ const ClientsPage = lazy(() => import('./pages/ClientsPage').then((m) => ({ defa
 const ModelDetailPage = lazy(() => import('./pages/ModelDetailPage').then((m) => ({ default: m.ModelDetailPage })));
 const ModelsPage = lazy(() => import('./pages/ModelsPage').then((m) => ({ default: m.ModelsPage })));
 const PluginsPage = lazy(() => import('./pages/PluginsPage').then((m) => ({ default: m.PluginsPage })));
+const PluginPage = lazy(() => import('./plugin-ui/PluginPage').then((m) => ({ default: m.PluginPage })));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage').then((m) => ({ default: m.PrivacyPage })));
 const ProviderDetailPage = lazy(() =>
   import('./pages/ProviderDetailPage').then((m) => ({ default: m.ProviderDetailPage })),
@@ -77,6 +79,8 @@ function AdminApp() {
             <Route path="models" element={<ModelsPage />} />
             <Route path="models/:id" element={<ModelDetailPage />} />
             <Route path="plugins" element={<PluginsPage />} />
+            <Route path="plugins/dev/gallery" element={<PluginGalleryPage />} />
+            <Route path="plugins/v2/:plugin/:page/*" element={<PluginPage />} />
             <Route path="plugins/:tab" element={<PluginsPage />} />
             <Route path="privacy" element={<PrivacyPage />} />
             <Route path="privacy/:tab" element={<PrivacyPage />} />

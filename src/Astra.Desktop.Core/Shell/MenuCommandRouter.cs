@@ -58,7 +58,7 @@ public sealed class MenuCommandRouter(INavigator navigator, Action toggleSidebar
 
 /// <summary>
 /// Keyboard shortcuts of Windows / Linux, a port of web/src/shell/commands.ts <c>commandForKey</c> for the desktop (non-mac) case:
-/// Ctrl+1..6 pages, Ctrl+F find, Ctrl+R refresh, Ctrl+N new provider, Ctrl+, settings, Ctrl+Alt+S toggle the sidebar. On macOS the
+/// Ctrl+1..6 pages, Ctrl+F find, Ctrl+R refresh, Ctrl+N new provider, Ctrl+K command palette, Ctrl+, settings, Ctrl+Alt+S toggle the sidebar. On macOS the
 /// native menu owns the same accelerators with Cmd (<see cref="MenuLabels"/>, the app's menu builder).
 /// </summary>
 public static class ShortcutMap
@@ -79,6 +79,7 @@ public static class ShortcutMap
             "KeyF" => MenuCommands.Find,
             "KeyR" => MenuCommands.Refresh,
             "KeyN" => MenuCommands.NewProvider,
+            "KeyK" => MenuCommands.Palette,
             "Comma" => MenuCommands.Nav("settings"),
             _ => null,
         };
@@ -88,7 +89,7 @@ public static class ShortcutMap
 /// <summary>The native menu's labels (desktop/src/shared/chrome.ts <c>menuLabels</c>): Chinese when the language is zh.</summary>
 public sealed record MenuLabels(
     string File, string View, string Help, string Settings, string NewProvider, string Find, string Refresh, string ToggleSidebar, string OpenLogs,
-    IReadOnlyDictionary<string, string> Nav)
+    IReadOnlyDictionary<string, string> Nav, string Palette)
 {
     /// <summary>Labels for "zh" or any other language code (English).</summary>
     public static MenuLabels For(string? language)
@@ -98,7 +99,7 @@ public sealed record MenuLabels(
         return new MenuLabels(
             File: T("文件", "File"), View: T("显示", "View"), Help: T("帮助", "Help"), Settings: T("设置…", "Settings…"), NewProvider: T("新建提供商…", "New Provider…"),
             Find: T("搜索", "Find"), Refresh: T("刷新数据", "Reload Data"), ToggleSidebar: T("显示/隐藏侧边栏", "Toggle Sidebar"),
-            OpenLogs: T("打开日志目录", "Open Logs Folder"),
+            OpenLogs: T("打开日志目录", "Open Logs Folder"), Palette: T("命令面板…", "Command Palette…"),
             Nav: new Dictionary<string, string>
             {
                 ["overview"] = T("概览", "Overview"),

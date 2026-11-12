@@ -1,0 +1,13 @@
+{
+  "id": "StatusDot/default",
+  "component": "StatusDot",
+  "state": "default",
+  "tree": {
+    "type": "StatusDot",
+    "props": {
+      "tone": "success",
+      "label": "Running",
+      "pulse": true
+    }
+  }
+}

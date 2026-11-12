@@ -1,0 +1,14 @@
+{
+  "id": "SearchField/invalid",
+  "component": "SearchField",
+  "state": "invalid",
+  "tree": {
+    "type": "SearchField",
+    "props": {
+      "name": "q",
+      "placeholder": "Search hits",
+      "onSearch": "search",
+      "invalid": true
+    }
+  }
+}

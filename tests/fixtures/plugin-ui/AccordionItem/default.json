@@ -1,0 +1,20 @@
+{
+  "id": "AccordionItem/default",
+  "component": "AccordionItem",
+  "state": "default",
+  "tree": {
+    "type": "AccordionItem",
+    "props": {
+      "title": "One item",
+      "defaultOpen": true
+    },
+    "children": [
+      {
+        "type": "Text",
+        "props": {
+          "value": "Its body"
+        }
+      }
+    ]
+  }
+}

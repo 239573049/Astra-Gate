@@ -13,7 +13,7 @@ namespace Astra.Server.Tunnel;
 /// The cloudflared remote access runs on: <c>ASTRA_CLOUDFLARED</c> when set, else the installed one the tunnel settings
 /// name (<see cref="TunnelSettings.CloudflaredPath"/>), else the pinned release Astra downloads into
 /// <see cref="AstraPaths.ToolsDir"/> the first time the tunnel starts. Downloads come from GitHub, the Astra site's
-/// mirror (docs/app/api/tools/cloudflared) or a custom base, per <see cref="TunnelSettings.DownloadSource"/>; a source
+/// mirror (app/api/tools/cloudflared in the website repository, astra-gate-web) or a custom base, per <see cref="TunnelSettings.DownloadSource"/>; a source
 /// that fails or stalls hands over to the next, and whatever arrives is checked against the release's SHA-256 digests.
 /// </summary>
 public sealed partial class CloudflaredRuntime

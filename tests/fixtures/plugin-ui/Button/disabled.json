@@ -1,0 +1,15 @@
+{
+  "id": "Button/disabled",
+  "component": "Button",
+  "state": "disabled",
+  "tree": {
+    "type": "Button",
+    "props": {
+      "label": "Save",
+      "variant": "primary",
+      "icon": "check",
+      "onPress": "save",
+      "disabled": true
+    }
+  }
+}

@@ -372,16 +372,13 @@ public class ProviderApiTests
     }
 
     [Fact]
-    public async Task Bound_Provider_Deletion_Is_Blocked_And_Duplicate_Has_Independent_Models()
+    public async Task Deleting_A_Bound_Provider_Unbinds_It_And_Duplicate_Has_Independent_Models()
     {
         await using var host = await TestHost.StartAsync();
         var id = await Create(host);
         await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/models", new { modelIds = new[] { "gpt-5" } });
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = id });
-        var (status, error) = await host.SendAsync(HttpMethod.Delete, $"/api/providers/{id}");
-        Assert.Equal(HttpStatusCode.Conflict, status);
-        Assert.Equal("codex", error!["details"]!["boundClients"]![0]!.GetValue<string>());
-        (status, var copy) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/duplicate");
+        var (status, copy) = await host.SendAsync(HttpMethod.Post, $"/api/providers/{id}/duplicate");
         Assert.Equal(HttpStatusCode.OK, status);
         var copyId = copy!["id"]!.GetValue<string>();
         Assert.NotEqual(id, copyId);
@@ -391,6 +388,13 @@ public class ProviderApiTests
         (status, _) = await host.SendAsync(HttpMethod.Delete, $"/api/providers/{copyId}");
         Assert.Equal(HttpStatusCode.NoContent, status);
         Assert.NotNull(await host.Db.Providers.GetAsync(id));
+
+        // a client that is bound but not enabled just loses the binding; nothing is disabled or written
+        (status, _) = await host.SendAsync(HttpMethod.Delete, $"/api/providers/{id}");
+        Assert.Equal(HttpStatusCode.NoContent, status);
+        Assert.Null(await host.Db.Providers.GetAsync(id));
+        Assert.Empty(await host.Db.Clients.ListBindingsAsync("codex"));
+        Assert.False((await host.Db.Clients.GetAsync("codex"))?.Enabled ?? false);
     }
 
     [Fact]

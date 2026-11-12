@@ -1,0 +1,55 @@
+{
+  "id": "_patterns/form-validation",
+  "component": null,
+  "state": "form-validation",
+  "tree": {
+    "type": "Form",
+    "props": {
+      "onSubmit": "save"
+    },
+    "children": [
+      {
+        "type": "Field",
+        "props": {
+          "label": "Endpoint",
+          "error": "Must be an https address",
+          "required": true
+        },
+        "children": [
+          {
+            "type": "TextField",
+            "props": {
+              "name": "endpoint",
+              "value": "http://insecure",
+              "invalid": true
+            }
+          }
+        ]
+      },
+      {
+        "type": "Field",
+        "props": {
+          "label": "Limit",
+          "hint": "1 – 100"
+        },
+        "children": [
+          {
+            "type": "NumberField",
+            "props": {
+              "name": "limit",
+              "value": 25
+            }
+          }
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {
+          "label": "Save",
+          "variant": "primary",
+          "submit": true
+        }
+      }
+    ]
+  }
+}

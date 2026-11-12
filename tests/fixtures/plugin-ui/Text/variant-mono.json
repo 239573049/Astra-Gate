@@ -1,0 +1,12 @@
+{
+  "id": "Text/variant-mono",
+  "component": "Text",
+  "state": "variant-mono",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "variant": "mono"
+    }
+  }
+}

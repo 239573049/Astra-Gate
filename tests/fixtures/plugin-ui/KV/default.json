@@ -1,0 +1,27 @@
+{
+  "id": "KV/default",
+  "component": "KV",
+  "state": "default",
+  "tree": {
+    "type": "KV",
+    "props": {
+      "items": [
+        {
+          "label": "Version",
+          "value": "2.1.0"
+        },
+        {
+          "label": "Publisher",
+          "value": "acme"
+        },
+        {
+          "label": "Id",
+          "value": "acme.word-guard",
+          "mono": true,
+          "copy": true
+        }
+      ],
+      "columns": 1
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "Alert/tone-accent",
+  "component": "Alert",
+  "state": "tone-accent",
+  "tree": {
+    "type": "Alert",
+    "props": {
+      "tone": "accent",
+      "title": "Words list is empty",
+      "message": "Nothing will be checked until you add a word."
+    }
+  }
+}

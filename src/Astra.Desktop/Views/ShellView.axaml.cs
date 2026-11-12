@@ -67,6 +67,7 @@ public partial class ShellView : UserControl
             if (args.PropertyName == nameof(ShellViewModel.IsSidebarCollapsed)) SyncCollapsed();
             if (args.PropertyName == nameof(ShellViewModel.CollapseToggleTooltip)) ApplyTexts();
         };
+        WatchPluginPages(vm);
         SyncCollapsed();
         SyncSelection();
         SyncPageMode();
@@ -130,12 +131,38 @@ public partial class ShellView : UserControl
         PageFixed.IsVisible = !scrolls;
     }
 
+    private Astra.Desktop.Core.Plugins.V2.PluginV2Api? _pluginApi;
+
+    // The v2 plugins' pages in the sidebar, kept current with the plugin list (polled while the app runs).
+    private void WatchPluginPages(ShellViewModel vm)
+    {
+        if (_pluginApi is not null) return;
+        var api = new Astra.Desktop.Core.Plugins.V2.PluginV2Api(vm.Context.Api, vm.Context.Queries,
+            () => Loc.Language.StartsWith("zh", StringComparison.Ordinal) ? "zh" : "en");
+        _pluginApi = api;
+        Astra.Desktop.PluginUi.PluginShell.Attach(this, api, vm.Context);
+        vm.PaletteRequested += () => _ = Astra.Desktop.PluginUi.CommandPaletteView.ShowAsync(this, vm.Navigator, vm.Context.Feedback);
+        AddHandler(KeyDownEvent, (_, e) => Astra.Desktop.PluginUi.CommandPaletteView.OnKeyDown(e, vm.Navigator, vm.Context.Feedback),
+            Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        _pluginWatch = api.List.Activate();
+        api.List.PropertyChanged += (_, e) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (e.PropertyName != nameof(api.List.Data)) return;
+            var pages = api.List.Data?.Contributions.Pages ?? [];
+            Nav.SetPluginEntries([.. pages.Select(p => new NavEntry(AppRoute.PluginPage, $"plugin:{p.Plugin}/{p.Id}", "nav.plugins",
+                Astra.Desktop.PluginUi.PluginShell.IconKind(p.Icon), $"{p.Plugin}/{p.Id}", p.Title))]);
+            SyncSelection();
+        });
+    }
+
+    private IDisposable? _pluginWatch;
+
     private void BuildSidebar()
     {
         Nav.Footer = _status;
         Nav.ItemInvoked += (_, entry) =>
         {
-            if (!_syncing) _vm?.Navigator.Navigate(entry.Route);
+            if (!_syncing) _vm?.Navigator.Navigate(entry.Route, entry.Param);
         };
     }
 
@@ -152,11 +179,14 @@ public partial class ShellView : UserControl
     private void SyncSelection()
     {
         if (_vm is null) return;
-        var nav = NavTable.ForRoute(RouteInfo.Of(_vm.Navigator.Current.Route).NavRoute);
+        var current = _vm.Navigator.Current;
+        var nav = NavTable.ForRoute(RouteInfo.Of(current.Route).NavRoute);
         _syncing = true;
         try
         {
-            Nav.SelectedKey = nav?.Key;
+            Nav.SelectedKey = current.Route == AppRoute.PluginPage && current.Param is { } param
+                ? "plugin:" + string.Join('/', param.Split('/').Take(2))
+                : nav?.Key;
         }
         finally
         {

@@ -17,11 +17,16 @@ namespace Astra.Plugins.Market;
 /// <param name="Origin">astra (published on the docs site) or upstream (the community registry, astragate-community/astra-gate-plugins).</param>
 /// <param name="MinAstraVersion">The oldest Astra that can run it; null = any.</param>
 /// <param name="Tarballs">The versions the market hosts itself, newest first; empty = installed from npm (or <paramref name="Spec"/>).</param>
+/// <param name="ApiVersion">1 for a magpie-compatible plugin (the registry's <c>plugins</c>), 2 for a v2 one (<c>pluginsV2</c>).</param>
+/// <param name="Permissions">A v2 plugin's permissions, shown before it is installed.</param>
+/// <param name="ReplacesV1">The v1 plugins (package names or specs) a v2 plugin takes over from: what the update reminder matches.</param>
+/// <param name="Notes">What changed for users coming from the v1 plugin (the upgrade card shows it), by language.</param>
 public sealed record MarketListing(
     string Package, string Name, string? Icon, string Kind, List<string> Providers, string? Replaces,
     Dictionary<string, string> Summary, string? Latest, string? Description, string? License,
     string? Spec, string Origin, string? Author, string? Homepage, string? Repository, List<string> Tags,
-    string? MinAstraVersion, List<MarketTarball> Tarballs);
+    string? MinAstraVersion, List<MarketTarball> Tarballs, int ApiVersion = 1, List<string>? Permissions = null,
+    List<string>? ReplacesV1 = null, Dictionary<string, string>? Notes = null);
 
 /// <summary>One version of a plugin the market hosts: where to fetch it and the hash it must have.</summary>
 /// <param name="Url">Absolute (resolved against the registry's address).</param>
@@ -216,14 +221,22 @@ public sealed class PluginMarket(
 
     // Each entry a valid npm package. Whatever the host lists is taken (it chose what to list); hosted tarballs need a
     // usable address (https, or http on this machine) and a sha256, or the version isn't offered.
+    // v2 plugins are in their own array (pluginsV2), so an Astra that predates v2 never offers one as a v1 plugin.
     internal static List<MarketListing>? Parse(string text, Uri? baseUri)
     {
         try
         {
-            return (JsonNode.Parse(text)?["plugins"] as JsonArray)?.OfType<JsonObject>()
+            var root = JsonNode.Parse(text);
+            if (root?["plugins"] is not JsonArray v1) return null;
+            var list = v1.OfType<JsonObject>()
                 .Where(e => Str(e, "package") is { } pkg && PluginSpec.IsPackageName(pkg))
                 .Select(e => ToListing(e, baseUri))
                 .ToList();
+            if (root["pluginsV2"] is JsonArray v2)
+                list.AddRange(v2.OfType<JsonObject>()
+                    .Where(e => (Str(e, "package") ?? Str(e, "id")) is { } pkg && PluginSpec.IsPackageName(pkg) && e["tarballs"] is JsonArray)
+                    .Select(e => ToV2Listing(e, baseUri)));
+            return list;
         }
         catch (JsonException)
         {
@@ -245,6 +258,23 @@ public sealed class PluginMarket(
             Str(e, "spec") is { } spec && PluginSpec.IsGit(spec) ? spec : null,
             Str(e, "origin") == "astra" ? "astra" : "upstream", Str(e, "author"), HttpUrl(Str(e, "homepage")), HttpUrl(Str(e, "repository")),
             StringList(e["tags"]), Str(e, "minAstraVersion"), tarballs);
+    }
+
+    private static MarketListing ToV2Listing(JsonObject e, Uri? baseUri)
+    {
+        if (Str(e, "package") is null && Str(e, "id") is { } id) e["package"] = id;
+        var listing = ToListing(e, baseUri);
+        var notes = new Dictionary<string, string>();
+        if (e["notes"] is JsonObject n)
+            foreach (var (lang, text) in n)
+                if (text is JsonValue v && v.TryGetValue<string>(out var t)) notes[lang] = t;
+        var replaces = (e["replaces"] as JsonArray)?
+            .Select(r => r is JsonObject o ? Str(o, "v1") : r is JsonValue v && v.TryGetValue<string>(out var s) ? s : null)
+            .OfType<string>().ToList() ?? [];
+        return listing with
+        {
+            Kind = "v2", ApiVersion = 2, Replaces = null, Permissions = StringList(e["permissions"]), ReplacesV1 = replaces, Notes = notes,
+        };
     }
 
     private static MarketTarball? ToTarball(JsonObject t, Uri? baseUri)

@@ -1,0 +1,21 @@
+{
+  "id": "Sparkline/tone-neutral",
+  "component": "Sparkline",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "Sparkline",
+    "props": {
+      "data": [
+        120,
+        180,
+        150,
+        210,
+        260,
+        240,
+        300
+      ],
+      "tone": "neutral",
+      "area": true
+    }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "id": "Markdown/default",
+  "component": "Markdown",
+  "state": "default",
+  "tree": {
+    "type": "Markdown",
+    "props": {
+      "value": "## Markdown\n\nSome **bold**, *italic*, `code` and a [link](https://astra-gate.si).\n\n- one\n- two\n\n| a | b |\n|---|---|\n| 1 | 2 |"
+    }
+  }
+}

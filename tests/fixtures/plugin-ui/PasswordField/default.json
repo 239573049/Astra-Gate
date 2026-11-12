@@ -1,0 +1,13 @@
+{
+  "id": "PasswordField/default",
+  "component": "PasswordField",
+  "state": "default",
+  "tree": {
+    "type": "PasswordField",
+    "props": {
+      "name": "apiKey",
+      "placeholder": "sk-…",
+      "hasValue": true
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "Icon/tone-neutral",
+  "component": "Icon",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "Icon",
+    "props": {
+      "name": "shield-check",
+      "size": "md",
+      "tone": "neutral"
+    }
+  }
+}

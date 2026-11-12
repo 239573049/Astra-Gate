@@ -1,0 +1,15 @@
+{
+  "id": "TextField/default",
+  "component": "TextField",
+  "state": "default",
+  "tree": {
+    "type": "TextField",
+    "props": {
+      "name": "endpoint",
+      "value": "https://api.acme.example",
+      "placeholder": "https://…",
+      "type": "url",
+      "clearable": true
+    }
+  }
+}

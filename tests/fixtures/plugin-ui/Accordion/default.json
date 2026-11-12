@@ -1,0 +1,42 @@
+{
+  "id": "Accordion/default",
+  "component": "Accordion",
+  "state": "default",
+  "tree": {
+    "type": "Accordion",
+    "props": {
+      "mode": "single"
+    },
+    "children": [
+      {
+        "type": "AccordionItem",
+        "props": {
+          "title": "What is checked?",
+          "defaultOpen": true
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Every user message."
+            }
+          }
+        ]
+      },
+      {
+        "type": "AccordionItem",
+        "props": {
+          "title": "Is anything stored?"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Only counts."
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

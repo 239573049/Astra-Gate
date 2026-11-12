@@ -1,0 +1,12 @@
+{
+  "id": "Badge/tone-danger",
+  "component": "Badge",
+  "state": "tone-danger",
+  "tree": {
+    "type": "Badge",
+    "props": {
+      "label": "beta",
+      "tone": "danger"
+    }
+  }
+}

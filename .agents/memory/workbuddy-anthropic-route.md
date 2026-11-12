@@ -25,6 +25,6 @@ throwaway `ASTRA_HOME` (request log: `hy3 anthropic -> anthropic`, deepseek stil
 no longer have thinking switched off or tuned (so the plugin gives them no reasoning variants), and OpenAI-shaped clients are
 now translated chat → Anthropic for them. A model's protocol is one per provider model, so this applies to every client.
 **How to apply:** to add a model, POST it to `/v1/messages` with `{"model","max_tokens","stream":true,"messages"}` and look for
-200 `text/event-stream`; then change `speaksAnthropic`'s pattern in the plugin and `docs/lib/plugin-market` / `Market/market.json`
+200 `text/event-stream`; then change `speaksAnthropic`'s pattern in the plugin and `astra-gate-web/lib/plugin-market` / `Market/market.json`
 (linked update 10) only after a plugin release. If the thinking-off loss matters more, drop the two ids from that pattern.
 See also [[client-protocols-not-used]] (the client side of WorkBuddy, which stays Chat).

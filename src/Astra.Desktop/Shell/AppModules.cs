@@ -38,5 +38,7 @@ public static class AppModules
         new SmartRoutingModule(),
         new TokensModule(),
         new TracesModule(),
+        new Astra.Desktop.PluginUi.PluginPageModule(),
+        new Astra.Desktop.PluginUi.PluginGalleryModule(),
     ];
 }

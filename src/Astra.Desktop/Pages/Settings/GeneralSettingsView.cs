@@ -37,6 +37,7 @@ public sealed class GeneralSettingsView : LiveView
         var root = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
         root.Children.Add(BuildAppearance());
         root.Children.Add(new StartupGroupView(Context, _api));
+        root.Children.Add(Astra.Desktop.PluginUi.PluginShell.Slot("settings.sections"));
         Content = root;
     }
 

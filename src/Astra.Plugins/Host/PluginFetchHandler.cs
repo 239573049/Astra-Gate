@@ -43,10 +43,21 @@ public sealed class PluginFetchHandler(PluginProviders providers) : HttpMessageH
         _ => $"{Scheme}://{providerId}/v1",
     };
 
+    /// <summary>Told when a v2 provider's refresh had its say on an account: (provider row id, account key, said, status).</summary>
+    public event Action<string, string, string, int>? V2SignInSaid;
+
+    /// <summary>Reports a v2 provider's word on an account's sign-in (the gateway, after the plugin's refresh).</summary>
+    public void V2SignIn(string providerRowId, string key, string said, int status) => V2SignInSaid?.Invoke(providerRowId, key, said, status);
+
+    /// <summary>v2 providers (design/plugin-v2 08 §2): addresses <c>plugin://v2.…</c> go here; null on a host without v2.</summary>
+    public V2.V2ProviderTransport? V2 { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var uri = request.RequestUri ?? throw new ArgumentException("no request URI");
         if (uri.Scheme != Scheme) throw new ArgumentException($"{uri} isn't a plugin provider's address");
+        if (uri.Host.StartsWith(Astra.Plugins.V2.V2ProviderTransport.HostPrefix, StringComparison.Ordinal))
+            return await (V2 ?? throw new HttpRequestException("v2 providers aren't served by this host")).SendAsync(request, ct);
         var providerId = uri.Host;
         var rest = uri.PathAndQuery;
         var body = request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(ct);

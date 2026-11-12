@@ -37,14 +37,15 @@ public class AppMenuTests
 
         var view = menu.Items.OfType<NativeMenuItem>().Single(i => i.Header == "View").Menu!;
         var items = view.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();
-        Assert.Equal(["Overview", "Requests", "Clients", "Providers", "Models", "Settings", "Find", "Reload Data", "Toggle Sidebar"], items.Select(i => i.Header));
+        Assert.Equal(["Overview", "Requests", "Clients", "Providers", "Models", "Settings", "Find", "Reload Data", "Toggle Sidebar", "Command Palette…"], items.Select(i => i.Header));
         Assert.Equal(new KeyGesture(Key.D1, KeyModifiers.Meta), items[0].Gesture);
         Assert.Equal(new KeyGesture(Key.D6, KeyModifiers.Meta), items[5].Gesture);
-        Assert.Equal(new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Alt), items[^1].Gesture);
+        Assert.Equal(new KeyGesture(Key.S, KeyModifiers.Meta | KeyModifiers.Alt), items[^2].Gesture);
+        Assert.Equal(new KeyGesture(Key.K, KeyModifiers.Meta), items[^1].Gesture);
 
         foreach (var item in items) ((INativeMenuItemExporterEventsImplBridge)item).RaiseClicked();
         Assert.Equal(
-            ["nav:overview", "nav:requests", "nav:clients", "nav:providers", "nav:models", "nav:settings", "find", "refresh", "toggle-sidebar"],
+            ["nav:overview", "nav:requests", "nav:clients", "nav:providers", "nav:models", "nav:settings", "find", "refresh", "toggle-sidebar", "palette"],
             sent);
 
         var file = menu.Items.OfType<NativeMenuItem>().Single(i => i.Header == "File").Menu!.Items.OfType<NativeMenuItem>().Where(i => i is not NativeMenuItemSeparator).ToList();

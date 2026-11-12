@@ -96,6 +96,16 @@ public sealed record InstalledPlugin(PluginEntry Entry, string Target, PackageMa
         get
         {
             var kinds = new List<string>();
+            if (Manifest.IsV2)
+            {
+                kinds.Add(PluginKinds.V2);
+                if (Manifest.V2 is { } v2)
+                {
+                    if (v2.Pages.Count > 0 || v2.Slots.Count > 0 || v2.SettingsView is not null) kinds.Add(PluginKinds.Ui);
+                    if (v2.Hooks.Count > 0) kinds.Add(PluginKinds.Hooks);
+                }
+                return kinds;
+            }
             if (Manifest.IsPi) kinds.Add(PluginKinds.Pi);
             else if (!Manifest.InProcessOnly && Manifest.HasEntry) kinds.Add(PluginKinds.Provider);
             if (Manifest.MiddlewareFile is not null) kinds.Add(PluginKinds.Middleware);

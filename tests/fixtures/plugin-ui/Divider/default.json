@@ -1,0 +1,11 @@
+{
+  "id": "Divider/default",
+  "component": "Divider",
+  "state": "default",
+  "tree": {
+    "type": "Divider",
+    "props": {
+      "label": "or"
+    }
+  }
+}

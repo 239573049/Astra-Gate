@@ -1,0 +1,13 @@
+{
+  "id": "ClientPicker/invalid",
+  "component": "ClientPicker",
+  "state": "invalid",
+  "tree": {
+    "type": "ClientPicker",
+    "props": {
+      "name": "client",
+      "value": "claude-code",
+      "invalid": true
+    }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "id": "Banner/tone-danger",
+  "component": "Banner",
+  "state": "tone-danger",
+  "tree": {
+    "type": "Banner",
+    "props": {
+      "tone": "danger",
+      "message": "A new version of this plugin is available."
+    }
+  }
+}

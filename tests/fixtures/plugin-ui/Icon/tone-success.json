@@ -1,0 +1,13 @@
+{
+  "id": "Icon/tone-success",
+  "component": "Icon",
+  "state": "tone-success",
+  "tree": {
+    "type": "Icon",
+    "props": {
+      "name": "shield-check",
+      "size": "md",
+      "tone": "success"
+    }
+  }
+}

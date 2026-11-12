@@ -1,0 +1,13 @@
+{
+  "id": "Alert/tone-neutral",
+  "component": "Alert",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "Alert",
+    "props": {
+      "tone": "neutral",
+      "title": "Words list is empty",
+      "message": "Nothing will be checked until you add a word."
+    }
+  }
+}

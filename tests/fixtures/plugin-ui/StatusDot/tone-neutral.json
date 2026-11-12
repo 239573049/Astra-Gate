@@ -1,0 +1,13 @@
+{
+  "id": "StatusDot/tone-neutral",
+  "component": "StatusDot",
+  "state": "tone-neutral",
+  "tree": {
+    "type": "StatusDot",
+    "props": {
+      "tone": "neutral",
+      "label": "Running",
+      "pulse": true
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "id": "Alert/default",
+  "component": "Alert",
+  "state": "default",
+  "tree": {
+    "type": "Alert",
+    "props": {
+      "tone": "warning",
+      "title": "Words list is empty",
+      "message": "Nothing will be checked until you add a word."
+    }
+  }
+}

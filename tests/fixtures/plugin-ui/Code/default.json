@@ -1,0 +1,14 @@
+{
+  "id": "Code/default",
+  "component": "Code",
+  "state": "default",
+  "tree": {
+    "type": "Code",
+    "props": {
+      "value": "export default {\n  onRequest(req) {\n    return req;\n  },\n};",
+      "language": "js",
+      "filename": "gateway.js",
+      "copy": true
+    }
+  }
+}

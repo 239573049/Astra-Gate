@@ -1,0 +1,14 @@
+{
+  "id": "Pagination/default",
+  "component": "Pagination",
+  "state": "default",
+  "tree": {
+    "type": "Pagination",
+    "props": {
+      "page": 2,
+      "pageSize": 20,
+      "total": 135,
+      "onPage": "page"
+    }
+  }
+}

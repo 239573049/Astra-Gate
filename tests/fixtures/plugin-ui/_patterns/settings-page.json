@@ -1,0 +1,80 @@
+{
+  "id": "_patterns/settings-page",
+  "component": null,
+  "state": "settings-page",
+  "tree": {
+    "type": "Page",
+    "props": {
+      "title": "Settings"
+    },
+    "children": [
+      {
+        "type": "Group",
+        "props": {
+          "title": "General"
+        },
+        "children": [
+          {
+            "type": "Row",
+            "props": {
+              "label": "Enabled"
+            },
+            "children": [
+              {
+                "type": "Switch",
+                "props": {
+                  "name": "on",
+                  "checked": true
+                }
+              }
+            ]
+          },
+          {
+            "type": "Row",
+            "props": {
+              "label": "Mode",
+              "detail": "What happens on a hit"
+            },
+            "children": [
+              {
+                "type": "Select",
+                "props": {
+                  "name": "mode",
+                  "value": "mask",
+                  "options": [
+                    {
+                      "value": "mask",
+                      "label": "Mask"
+                    },
+                    {
+                      "value": "reject",
+                      "label": "Reject"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Group",
+        "props": {
+          "title": "Words"
+        },
+        "children": [
+          {
+            "type": "TagInput",
+            "props": {
+              "name": "words",
+              "value": [
+                "secret",
+                "password"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

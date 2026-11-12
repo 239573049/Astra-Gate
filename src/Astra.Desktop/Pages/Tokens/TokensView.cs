@@ -283,6 +283,7 @@ public sealed class TokensView : UserControl
         menu.Items.Add(Entry(Loc.T("tokens.settings"), LucideIconKind.Pencil, () => _page.BeginEdit(token)));
         menu.Items.Add(Entry(token.Enabled ? Loc.T("tokens.disable") : Loc.T("tokens.enable"), LucideIconKind.Power, () => _ = _page.Actions.ToggleAsync(token)));
         menu.Items.Add(Entry(Loc.T("tokens.reset"), LucideIconKind.RotateCcw, () => _ = _page.Actions.ResetAsync(token)));
+        Astra.Desktop.PluginUi.PluginShell.AddMenuEntries(menu, "token.row", () => new System.Text.Json.Nodes.JsonObject { ["tokenId"] = token.Id });
         if (!token.IsDefault) menu.Items.Add(Entry(Loc.T("tokens.delete"), LucideIconKind.Trash2, () => _ = _page.Actions.DeleteAsync(token), destructive: true, separator: true));
         return menu;
     }

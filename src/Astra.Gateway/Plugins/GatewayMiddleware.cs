@@ -24,10 +24,11 @@ public static class GatewayMiddleware
     };
 
     /// <summary>The request's info: its model and stream flag read from the body (Gemini's from its URL).</summary>
-    public static MiddlewareInfo Info(ApiProtocol protocol, ReadOnlySpan<byte> body, string path, string? agent, string? pathModel, bool? pathStream)
+    public static MiddlewareInfo Info(ApiProtocol protocol, ReadOnlySpan<byte> body, string path, string? agent, string? pathModel, bool? pathStream,
+        string? tokenId = null, string? tokenName = null, string? requestId = null)
     {
         var (model, stream) = protocol == ApiProtocol.Gemini ? (pathModel, pathStream ?? false) : Peek(body);
-        return new MiddlewareInfo(ProtocolName(protocol), model, stream, path, agent);
+        return new MiddlewareInfo(ProtocolName(protocol), model, stream, path, agent, tokenId, tokenName, requestId);
     }
 
     /// <summary>A middleware's reject as the error the agent gets.</summary>

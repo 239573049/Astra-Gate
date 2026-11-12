@@ -1,0 +1,11 @@
+{
+  "id": "ClientLabel/default",
+  "component": "ClientLabel",
+  "state": "default",
+  "tree": {
+    "type": "ClientLabel",
+    "props": {
+      "id": "claude-code"
+    }
+  }
+}

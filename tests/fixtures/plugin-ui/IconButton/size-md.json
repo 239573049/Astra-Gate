@@ -1,0 +1,15 @@
+{
+  "id": "IconButton/size-md",
+  "component": "IconButton",
+  "state": "size-md",
+  "tree": {
+    "type": "IconButton",
+    "props": {
+      "icon": "trash-2",
+      "variant": "ghost",
+      "a11yLabel": "Delete",
+      "onPress": "delete",
+      "size": "md"
+    }
+  }
+}

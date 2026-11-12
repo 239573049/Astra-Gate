@@ -1,0 +1,14 @@
+{
+  "id": "Checkbox/invalid",
+  "component": "Checkbox",
+  "state": "invalid",
+  "tree": {
+    "type": "Checkbox",
+    "props": {
+      "name": "agree",
+      "checked": true,
+      "label": "Mask instead of reject",
+      "invalid": true
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "Sparkline/default",
+  "component": "Sparkline",
+  "state": "default",
+  "tree": {
+    "type": "Sparkline",
+    "props": {
+      "data": [
+        120,
+        180,
+        150,
+        210,
+        260,
+        240,
+        300
+      ],
+      "tone": "accent",
+      "area": true
+    }
+  }
+}

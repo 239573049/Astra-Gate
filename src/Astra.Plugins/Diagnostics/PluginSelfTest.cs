@@ -13,7 +13,7 @@ namespace Astra.Plugins.Diagnostics;
 /// runs on a published binary, because Native AOT can break at run time what the JIT build (and the
 /// unit tests) never see. Each check writes its own small plugin into a temporary folder.
 /// </summary>
-public static class PluginSelfTest
+public static partial class PluginSelfTest
 {
     /// <summary>One check's outcome.</summary>
     public sealed record Result(string Name, bool Ok, string Detail);
@@ -195,6 +195,7 @@ public static class PluginSelfTest
                 // interpreter path gone slow under AOT), not a busy CI machine
                 return perEvent <= 100 && perRequest <= 20 ? detail : throw Fail(detail + " (budget 100µs / 20ms)");
             });
+            V2Checks(dir, Check);
         }
         finally
         {

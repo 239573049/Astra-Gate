@@ -1,0 +1,12 @@
+{
+  "id": "Skeleton/default",
+  "component": "Skeleton",
+  "state": "default",
+  "tree": {
+    "type": "Skeleton",
+    "props": {
+      "shape": "text",
+      "lines": 3
+    }
+  }
+}

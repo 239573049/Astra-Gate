@@ -1,0 +1,12 @@
+{
+  "id": "Text/tone-success",
+  "component": "Text",
+  "state": "tone-success",
+  "tree": {
+    "type": "Text",
+    "props": {
+      "value": "The quick brown fox jumps over the lazy dog.",
+      "tone": "success"
+    }
+  }
+}

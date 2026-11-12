@@ -1,0 +1,21 @@
+{
+  "id": "Breadcrumb/default",
+  "component": "Breadcrumb",
+  "state": "default",
+  "tree": {
+    "type": "Breadcrumb",
+    "props": {
+      "items": [
+        {
+          "label": "Plugins"
+        },
+        {
+          "label": "Word guard"
+        },
+        {
+          "label": "Rules"
+        }
+      ]
+    }
+  }
+}

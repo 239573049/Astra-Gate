@@ -49,6 +49,9 @@ public sealed class ClientPanelView : UserControl
     private readonly QueryWatch _watch;
     private readonly StackPanel _head = new();
     private readonly StackPanel _body = new();
+    // v2 plugins' client.detail.sections, outside _body so a rebuild doesn't reopen their views; replaced per client
+    private readonly ContentControl _pluginSlot = new() { Margin = new Thickness(16, 0, 16, 20), MaxWidth = 1040 };
+    private string? _pluginSlotKind;
     private readonly ScrollViewer _scroll;
     private readonly Border _pending = new();
     private readonly Border _card;
@@ -80,7 +83,7 @@ public sealed class ClientPanelView : UserControl
         // in a narrow strip with the rest of the panel empty (issue #31). The cap keeps rows readable on a very wide window.
         _body.MaxWidth = 1040;
         _body.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _scroll = new ScrollViewer { Content = _body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        _scroll = new ScrollViewer { Content = new StackPanel { Children = { _body, _pluginSlot } }, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
         grid.Children.Add(_head);
         Grid.SetRow(_scroll, 1);
@@ -231,6 +234,20 @@ public sealed class ClientPanelView : UserControl
                 if (client.Install is { } inst) AddVersionGroup(client, inst);
                 if (!isDirect) AddMaintenance(client);
                 break;
+        }
+
+        if (_pluginSlotKind != client.Kind)
+        {
+            var kind = _pluginSlotKind = client.Kind;
+            _pluginSlot.Content = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    Astra.Desktop.PluginUi.PluginShell.Menu("client.row", () => new System.Text.Json.Nodes.JsonObject { ["clientKind"] = kind }),
+                    Astra.Desktop.PluginUi.PluginShell.Slot("client.detail.sections", () => new System.Text.Json.Nodes.JsonObject { ["clientKind"] = kind }),
+                },
+            };
         }
 
         UpdatePending(client, draft, isDirect);

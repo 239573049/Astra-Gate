@@ -1,0 +1,14 @@
+{
+  "id": "CodeField/default",
+  "component": "CodeField",
+  "state": "default",
+  "tree": {
+    "type": "CodeField",
+    "props": {
+      "name": "rules",
+      "value": "{\n  \"words\": [\"secret\"]\n}",
+      "language": "json",
+      "rows": 5
+    }
+  }
+}

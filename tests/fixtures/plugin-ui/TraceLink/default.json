@@ -1,0 +1,12 @@
+{
+  "id": "TraceLink/default",
+  "component": "TraceLink",
+  "state": "default",
+  "tree": {
+    "type": "TraceLink",
+    "props": {
+      "id": "trace_123",
+      "label": "Open the trace"
+    }
+  }
+}

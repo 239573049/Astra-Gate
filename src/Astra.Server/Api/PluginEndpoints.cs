@@ -14,7 +14,15 @@ public static class PluginEndpoints
         var g = app.MapGroup("/api/plugins").AddEndpointFilter<AdminApiErrorFilter>();
 
         g.MapGet("", async (PluginService plugins, CancellationToken ct) => Results.Ok(await plugins.ListAsync(ct)));
-        g.MapPost("", (PluginAddInput body, PluginService plugins) => Results.Ok(plugins.Add(body).ToDto()));
+        g.MapPost("", (PluginAddInput body, PluginService plugins, HttpContext ctx) =>
+        {
+            // a v2 plugin in a folder runs as a dev plugin (reloaded on save, loopback http): mounting one is for this machine
+            // only, like the other calls that make Astra run code of the caller's choosing (design/plugin-v2 06 §2)
+            if (body.Spec is { } spec && Astra.Plugins.Store.PluginSpec.IsPath(spec)
+                && Astra.Plugins.V2.PluginV2Manifest.IsV2(Astra.Plugins.Store.PluginSpec.ExpandPath(spec)) && !Astra.Gateway.Http.RequestOrigin.IsLocal(ctx))
+                throw new AdminApiException(403, "a v2 plugin folder can only be mounted from this machine");
+            return Results.Ok(plugins.Add(body).ToDto());
+        });
         g.MapPatch("", async (string spec, JsonObject body, PluginService plugins, CancellationToken ct) =>
             Results.Ok(await plugins.PatchAsync(spec, body, ct)));
         g.MapDelete("", async (string spec, PluginService plugins, CancellationToken ct) =>

@@ -1,0 +1,104 @@
+{
+  "id": "Grid/default",
+  "component": "Grid",
+  "state": "default",
+  "tree": {
+    "type": "Grid",
+    "props": {
+      "columns": 3,
+      "gap": "3"
+    },
+    "children": [
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Cell 1"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Cell 2"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Cell 3"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Cell 4"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Cell 5"
+            }
+          }
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {
+          "surface": "card",
+          "padding": "3"
+        },
+        "children": [
+          {
+            "type": "Text",
+            "props": {
+              "value": "Cell 6"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

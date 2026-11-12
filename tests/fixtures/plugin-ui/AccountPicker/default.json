@@ -1,0 +1,11 @@
+{
+  "id": "AccountPicker/default",
+  "component": "AccountPicker",
+  "state": "default",
+  "tree": {
+    "type": "AccountPicker",
+    "props": {
+      "name": "account"
+    }
+  }
+}

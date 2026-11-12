@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using System.ComponentModel;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Accounts;
@@ -41,7 +42,8 @@ public sealed class ProviderDetailView : UserControl
         page.View = this;
         _updateSheet = new TemplateUpdateSheet(page.Ctx, page.Api);
         _switchSheet = new TemplateSwitchSheet(page.Ctx, page.Api);
-        Content = new Panel { Children = { _host, _updateSheet, _switchSheet } };
+        var column = new StackPanel { Children = { _host, Astra.Desktop.PluginUi.PluginShell.Slot("provider.detail.tabs", () => new JsonObject { ["providerId"] = page.Id }) } };
+        Content = new Panel { Children = { column, _updateSheet, _switchSheet } };
         Rebuild(force: true);
     }
 

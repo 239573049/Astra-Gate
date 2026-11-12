@@ -72,6 +72,9 @@ public sealed class PluginAccountsModel : ModelBase
     public Query<PluginCheckinStateDto> Checkin { get; }
 
     /// <summary>The plugin tells each account's allowance (<c>settings.plugin.usage</c>): rows offer a "usage" button.</summary>
+    /// <summary>A v2 provider's row (settings.plugin.v2): its plugin id, provider id and sign-in flow.</summary>
+    public bool IsV2 => Provider.Settings["plugin"] is JsonObject p && p["v2"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+
     public bool UsageTold => Provider.Settings["plugin"] is JsonObject p && AccountQuota.Bool(p["usage"]) == true;
 
     /// <summary>The method whose sign-in sheet is open.</summary>
@@ -83,7 +86,10 @@ public sealed class PluginAccountsModel : ModelBase
     /// <summary>Observes the queries while the view is shown; dispose to stop.</summary>
     public IDisposable Activate()
     {
-        var tokens = new[] { Accounts.Activate(), Usage.Activate(), Methods.Activate(), Policy.Activate(), Checkin.Activate() };
+        // a v2 provider signs in through its plugin's flow (design/plugin-v2 08 §4): the Bun host's methods aren't asked
+        var tokens = IsV2
+            ? new[] { Accounts.Activate(), Usage.Activate(), Policy.Activate() }
+            : new[] { Accounts.Activate(), Usage.Activate(), Methods.Activate(), Policy.Activate(), Checkin.Activate() };
         return Disposer(() =>
         {
             foreach (var t in tokens) t.Dispose();

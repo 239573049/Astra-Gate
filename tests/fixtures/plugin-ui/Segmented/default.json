@@ -1,0 +1,26 @@
+{
+  "id": "Segmented/default",
+  "component": "Segmented",
+  "state": "default",
+  "tree": {
+    "type": "Segmented",
+    "props": {
+      "name": "range",
+      "value": "week",
+      "options": [
+        {
+          "value": "day",
+          "label": "Day"
+        },
+        {
+          "value": "week",
+          "label": "Week"
+        },
+        {
+          "value": "month",
+          "label": "Month"
+        }
+      ]
+    }
+  }
+}
