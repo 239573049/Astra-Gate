@@ -1,5 +1,5 @@
 # Context for the server image (./Dockerfile): only the staged artifacts.
-# BuildKit prefers <Dockerfile>.dockerignore over the root .dockerignore (which belongs to docs/Dockerfile).
+# BuildKit reads <Dockerfile>.dockerignore for this Dockerfile (there is no root .dockerignore).
 *
 !docker-bin
 !docker/data
