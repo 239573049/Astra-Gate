@@ -453,7 +453,14 @@ public sealed partial class YamlEditor
         if (rest.Length > 0) throw new EditorException($"Cannot set '{path}': no row matches '{segments[0]}'; create the whole row first.");
         newRow = value as JsonObject ?? throw new EditorException($"'{path}' must be set to a whole mapping.");
         expected.Add(newRow.DeepClone());
-        if (root is YamlSequenceNode { Style: SequenceStyle.Flow }) throw new EditorException("A flow-style YAML root sequence is not supported.");
+        if (root is YamlSequenceNode { Style: SequenceStyle.Flow } flowRoot)
+        {
+            // Harness creates a profile's patch file as "[]": the empty sequence is replaced by the first row.
+            if (flowRoot.Children.Count > 0) throw new EditorException("A flow-style YAML root sequence is not supported.");
+            var from = Idx(flowRoot.Start);
+            var to = Text.IndexOf(']', from) + 1; // an empty sequence holds nothing else
+            return Verify(TextTool.Splice(Text, from, to, RenderRow(newRow, "", nl)), expected, $"set '{path}'");
+        }
         var indent = root is YamlSequenceNode { Children.Count: > 0 } seq ? RowIndent(Text, (YamlMappingNode)seq.Children[0]) : "";
         var rendered = RenderRow(newRow, indent, nl) + nl;
         string updated;

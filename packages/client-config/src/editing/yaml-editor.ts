@@ -821,8 +821,16 @@ export class YamlEditor {
     if (!isObj(value)) throw new EditorException(`'${path}' must be set to a whole mapping.`);
     newRow = value;
     expected.push(clone(newRow));
-    if (isSeq(root) && root.flow)
-      throw new EditorException('A flow-style YAML root sequence is not supported.');
+    if (isSeq(root) && root.flow) {
+      // Harness creates a profile's patch file as "[]": the empty sequence is replaced by the first row.
+      if ((root.items as YNode[]).length > 0)
+        throw new EditorException('A flow-style YAML root sequence is not supported.');
+      return verify(
+        splice(text, start(root), text.indexOf(']', start(root)) + 1, renderRow(newRow, '', nl)),
+        expected,
+        `set '${path}'`,
+      );
+    }
     const items = isSeq(root) ? (root.items as YNode[]) : [];
     const indent = items.length > 0 ? rowIndent(text, items[0]!) : '';
     const rendered = renderRow(newRow, indent, nl) + nl;
