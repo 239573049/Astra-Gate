@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Billing;
@@ -11,6 +12,9 @@ namespace Astra.Gateway.Protocol.Responses;
 /// block on <c>response.output_item.added</c>, message text blocks open on <c>response.content_part.added</c>
 /// (one per (output_index, content_index)). After <c>response.failed</c> or an <c>error</c> event the
 /// stream is terminal — <see cref="Complete"/> emits nothing further.
+/// A call's arguments normally stream as <c>response.function_call_arguments.delta</c>; some upstreams send none and
+/// give the whole string only in <c>response.function_call_arguments.done</c> / the item of
+/// <c>response.output_item.done</c> — those carry whatever the deltas did not (see <see cref="CompleteToolArgs"/>).
 /// </summary>
 public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IResponseDecoder
 {
@@ -36,6 +40,9 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
 
     /// <summary>output_index → the blocks opened for that item, in order.</summary>
     private readonly Dictionary<int, List<(int Index, BlockKind Kind, string Key)>> _byOutput = new();
+
+    /// <summary>IR tool-call block → the argument text already sent for it (dropped when its item is done).</summary>
+    private readonly Dictionary<int, StringBuilder> _toolArgs = new();
 
     public IEnumerable<UnifiedStreamEvent> DecodeSse(SseEvent sse)
     {
@@ -203,9 +210,14 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
             case "response.function_call_arguments.delta":
             {
                 var index = EnsureItemBlock(data, BlockKind.ToolCall, events);
-                events.Add(new ToolArgsDeltaEvent(index, ResponsesCodec.Str(data, "delta") ?? ""));
+                SendToolArgs(index, ResponsesCodec.Str(data, "delta") ?? "", events);
                 break;
             }
+
+            case "response.function_call_arguments.done":
+                if (_blocks.TryGetValue($"o{ResponsesCodec.Int(data, "output_index") ?? -1}", out var argsIndex))
+                    CompleteToolArgs(argsIndex, ResponsesCodec.Str(data, "arguments"), events);
+                break;
 
             case "response.custom_tool_call_input.delta":
                 if (ResponsesCodec.Str(data, "delta") is { Length: > 0 }) ReportOutputActivity(events);
@@ -226,7 +238,7 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
 
             case "response.reasoning_summary_part.added" or "response.reasoning_summary_part.done"
                 or "response.reasoning_summary_text.done" or "response.reasoning_text.done"
-                or "response.function_call_arguments.done" or "response.output_text.annotations.added"
+                or "response.output_text.annotations.added"
                 or "response.output_text.annotations.done":
                 break;
 
@@ -300,6 +312,13 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
             ReportOutputActivity(events);
         var outputIndex = ResponsesCodec.Int(data, "output_index") ?? -1;
         var itemKey = $"o{outputIndex}";
+        if (data["item"] is JsonObject call
+            && ResponsesCodec.Str(call, "type") == "function_call"
+            && _blocks.TryGetValue(itemKey, out var callIndex))
+        {
+            CompleteToolArgs(callIndex, ResponsesCodec.Str(call, "arguments"), events);
+            _toolArgs.Remove(callIndex);
+        }
         if (data["item"] is JsonObject item
             && ResponsesCodec.Str(item, "type") == "reasoning"
             && ResponsesCodec.Str(item, "encrypted_content") is { } encrypted
@@ -378,6 +397,35 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
         events.Add(new OutputActivityEvent());
     }
 
+    // ---------------------------------------------------------------- tool arguments
+
+    private void SendToolArgs(int index, string fragment, List<UnifiedStreamEvent> events)
+    {
+        events.Add(new ToolArgsDeltaEvent(index, fragment));
+        if (fragment.Length == 0)
+            return;
+        if (!_toolArgs.TryGetValue(index, out var sent))
+            _toolArgs[index] = sent = new StringBuilder();
+        sent.Append(fragment);
+    }
+
+    /// <summary>
+    /// The upstream's own full copy of a call's arguments (<c>function_call_arguments.done</c>, then the item of
+    /// <c>output_item.done</c>): sends what the deltas did not carry. Nothing sent yet → all of it; deltas that were a
+    /// prefix of it → the rest; the same text → nothing, so a stream that sends both is never doubled. Text that does
+    /// not continue what was sent cannot be mended in a stream already on its way, so it is left alone.
+    /// </summary>
+    private void CompleteToolArgs(int index, string? full, List<UnifiedStreamEvent> events)
+    {
+        if (string.IsNullOrEmpty(full))
+            return;
+        var sent = _toolArgs.TryGetValue(index, out var sb) ? sb : null;
+        if (sent is null || sent.Length == 0)
+            SendToolArgs(index, full, events);
+        else if (full.Length > sent.Length && full.StartsWith(sent.ToString(), StringComparison.Ordinal))
+            SendToolArgs(index, full[sent.Length..], events);
+    }
+
     // ---------------------------------------------------------------- block bookkeeping
 
     private void CloseOpenBlocks(List<UnifiedStreamEvent> events)
@@ -387,6 +435,7 @@ public sealed class ResponsesResponseDecoder(ResponseDecodeContext ctx) : IRespo
             if (_blocks.Remove(key))
                 events.Add(new BlockStopEvent(index));
         _byOutput.Clear();
+        _toolArgs.Clear();
     }
 
     private string BlockKey(JsonObject data)

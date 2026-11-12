@@ -1,0 +1,26 @@
+event: response.created
+data: {"type":"response.created","sequence_number":1,"response":{"id":"resp_par","object":"response","status":"in_progress","model":"gpt-5.1","output":[]}}
+
+event: response.in_progress
+data: {"type":"response.in_progress","sequence_number":2,"response":{"id":"resp_par","object":"response","status":"in_progress","model":"gpt-5.1","output":[]}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":3,"output_index":0,"item":{"id":"fc_0","type":"function_call","status":"in_progress","call_id":"call_a","name":"transport_alpha","arguments":""}}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","sequence_number":4,"item_id":"fc_0","output_index":0,"arguments":"{\"marker\":\"A\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"id":"fc_0","type":"function_call","status":"completed","call_id":"call_a","name":"transport_alpha","arguments":"{\"marker\":\"A\"}"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":6,"output_index":1,"item":{"id":"fc_1","type":"function_call","status":"in_progress","call_id":"call_b","name":"transport_beta","arguments":""}}
+
+event: response.function_call_arguments.done
+data: {"type":"response.function_call_arguments.done","sequence_number":7,"item_id":"fc_1","output_index":1,"arguments":"{\"marker\":\"B\"}"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":8,"output_index":1,"item":{"id":"fc_1","type":"function_call","status":"completed","call_id":"call_b","name":"transport_beta","arguments":"{\"marker\":\"B\"}"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":9,"response":{"id":"resp_par","object":"response","status":"completed","model":"gpt-5.1","output":[{"id":"fc_0","type":"function_call","status":"completed","call_id":"call_a","name":"transport_alpha","arguments":"{\"marker\":\"A\"}"},{"id":"fc_1","type":"function_call","status":"completed","call_id":"call_b","name":"transport_beta","arguments":"{\"marker\":\"B\"}"}],"usage":{"input_tokens":20,"input_tokens_details":{"cached_tokens":0},"output_tokens":10,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":30}}}

@@ -2,6 +2,7 @@ using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Billing;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Protocol.Chat;
 using Astra.Gateway.Protocol.Responses;
 
 namespace Astra.Gateway.Tests.Codecs;
@@ -192,5 +193,157 @@ public class ResponsesJsonDecodeTests
         Assert.Equal(2, events.Count);
         Assert.Equal(new MessageStartEvent(null, "gpt-5.1"), events[0]);
         Assert.Equal(new MessageStopEvent(FinishReason.Stop), events[1]);
+    }
+}
+
+/// <summary>
+/// A tool call's arguments reach the IR whichever way the upstream sends them: as deltas, only in
+/// <c>function_call_arguments.done</c>, or only in the item of <c>output_item.done</c> (GitHub issue #38).
+/// </summary>
+public class ResponsesToolArgumentsTests
+{
+    private static List<UnifiedStreamEvent> Decode(string sse)
+    {
+        var decoder = new ResponsesCodec().CreateResponseDecoder(new ResponseDecodeContext { Stream = true, Model = "gpt-5.1" });
+        var events = new List<UnifiedStreamEvent>();
+        foreach (var e in SseParser.ParseAll(sse))
+            events.AddRange(decoder.DecodeSse(e));
+        events.AddRange(decoder.Complete());
+        return events;
+    }
+
+    private static string Fixture(string name) =>
+        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Fixtures", "responses", name));
+
+    private static string Event(string type, JsonObject data)
+    {
+        data["type"] = type;
+        return $"event: {type}\ndata: {data.ToJsonString()}\n\n";
+    }
+
+    private static JsonObject Call(string call, string name, string arguments) =>
+        new() { ["type"] = "function_call", ["call_id"] = call, ["name"] = name, ["arguments"] = arguments };
+
+    private static string Added(int index, string call, string name) =>
+        Event("response.output_item.added", new() { ["output_index"] = index, ["item"] = Call(call, name, "") });
+
+    private static string Delta(int index, string delta) =>
+        Event("response.function_call_arguments.delta", new() { ["output_index"] = index, ["delta"] = delta });
+
+    private static string ArgsDone(int index, string arguments) =>
+        Event("response.function_call_arguments.done", new() { ["output_index"] = index, ["arguments"] = arguments });
+
+    private static string ItemDone(int index, string call, string name, string arguments) =>
+        Event("response.output_item.done", new() { ["output_index"] = index, ["item"] = Call(call, name, arguments) });
+
+    private static string Completed() =>
+        Event("response.completed", new()
+        {
+            ["response"] = new JsonObject
+            {
+                ["id"] = "resp_x",
+                ["status"] = "completed",
+                ["model"] = "gpt-5.1",
+                ["output"] = new JsonArray(new JsonObject { ["type"] = "function_call" }),
+            },
+        });
+
+    /// <summary>The arguments each tool-call block was sent, in block order.</summary>
+    private static Dictionary<int, string> ArgsByBlock(IEnumerable<UnifiedStreamEvent> events) =>
+        events.OfType<ToolArgsDeltaEvent>().GroupBy(e => e.Index).ToDictionary(g => g.Key, g => string.Concat(g.Select(e => e.JsonFragment)));
+
+    [Fact]
+    public void Arguments_Only_In_The_Done_Events_Are_Not_Lost_For_Parallel_Calls()
+    {
+        var events = Decode(Fixture("stream-parallel-args-done-only.sse"));
+
+        Assert.Collection(events.Where(e => e is not UsageEvent),
+            e => Assert.Equal(new MessageStartEvent("resp_par", "gpt-5.1"), e),
+            e => Assert.Equal(new BlockStartEvent(0, BlockKind.ToolCall, "call_a", "transport_alpha"), e),
+            e => Assert.Equal(new ToolArgsDeltaEvent(0, """{"marker":"A"}"""), e),
+            e => Assert.Equal(new BlockStopEvent(0), e),
+            e => Assert.Equal(new BlockStartEvent(1, BlockKind.ToolCall, "call_b", "transport_beta"), e),
+            e => Assert.Equal(new ToolArgsDeltaEvent(1, """{"marker":"B"}"""), e),
+            e => Assert.Equal(new BlockStopEvent(1), e),
+            e => Assert.Equal(new MessageStopEvent(FinishReason.ToolCalls, "completed"), e));
+    }
+
+    [Fact]
+    public void Chat_Client_Receives_Each_Calls_Own_Arguments()
+    {
+        var encoder = new ChatCodec().CreateResponseEncoder(new ResponseEncodeContext
+        {
+            Stream = true,
+            Model = "gpt-5.1",
+            ResponseId = "01JTEST",
+            Created = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+        });
+        var frames = Decode(Fixture("stream-parallel-args-done-only.sse")).SelectMany(e => encoder.OnEvent(e));
+
+        // What a Chat client assembles: arguments per tool_calls[].index.
+        var byIndex = new SortedDictionary<int, System.Text.StringBuilder>();
+        foreach (var frame in frames.Where(f => f.Data != "[DONE]"))
+            foreach (var call in (JsonNode.Parse(frame.Data!)!["choices"] as JsonArray)?.FirstOrDefault()?["delta"]?["tool_calls"] as JsonArray ?? [])
+            {
+                var i = call!["index"]!.GetValue<int>();
+                if (!byIndex.TryGetValue(i, out var sb)) byIndex[i] = sb = new();
+                sb.Append(call["function"]?["arguments"]?.GetValue<string>());
+            }
+
+        Assert.Equal(["""{"marker":"A"}""", """{"marker":"B"}"""], byIndex.Values.Select(v => v.ToString()));
+    }
+
+    [Fact]
+    public void Calls_Whose_Done_Events_Interleave_Keep_Their_Own_Arguments()
+    {
+        var events = Decode(
+            Added(0, "call_a", "alpha") + Added(1, "call_b", "beta")
+            + ArgsDone(1, """{"marker":"B"}""") + ArgsDone(0, """{"marker":"A"}""")
+            + ItemDone(1, "call_b", "beta", """{"marker":"B"}""") + ItemDone(0, "call_a", "alpha", """{"marker":"A"}""")
+            + Completed());
+
+        Assert.Equal("""{"marker":"A"}""", ArgsByBlock(events)[0]);
+        Assert.Equal("""{"marker":"B"}""", ArgsByBlock(events)[1]);
+    }
+
+    [Fact]
+    public void Arguments_Only_On_The_Finished_Item_Are_Sent()
+    {
+        var events = Decode(Added(0, "call_a", "alpha") + ItemDone(0, "call_a", "alpha", """{"marker":"A"}""") + Completed());
+
+        Assert.Equal("""{"marker":"A"}""", ArgsByBlock(events)[0]);
+        Assert.Single(events.OfType<ToolArgsDeltaEvent>());
+    }
+
+    [Fact]
+    public void Deltas_And_Both_Done_Events_Are_Not_Doubled()
+    {
+        var events = Decode(
+            Added(0, "call_a", "alpha") + Delta(0, """{"marker":""") + Delta(0, "\"A\"}")
+            + ArgsDone(0, """{"marker":"A"}""") + ItemDone(0, "call_a", "alpha", """{"marker":"A"}""") + Completed());
+
+        Assert.Equal("""{"marker":"A"}""", ArgsByBlock(events)[0]);
+        Assert.Equal(2, events.OfType<ToolArgsDeltaEvent>().Count());
+    }
+
+    [Fact]
+    public void A_Done_Event_Sends_Only_The_Part_The_Deltas_Missed()
+    {
+        var events = Decode(
+            Added(0, "call_a", "alpha") + Delta(0, """{"marker":""")
+            + ArgsDone(0, """{"marker":"A"}""") + ItemDone(0, "call_a", "alpha", """{"marker":"A"}""") + Completed());
+
+        Assert.Equal("""{"marker":"A"}""", ArgsByBlock(events)[0]);
+    }
+
+    [Fact]
+    public void Done_Text_That_Does_Not_Continue_The_Deltas_Is_Not_Appended()
+    {
+        // The stream is already on its way: appending text that disagrees with it would corrupt the JSON.
+        var events = Decode(
+            Added(0, "call_a", "alpha") + Delta(0, """{"marker":"A"}""")
+            + ArgsDone(0, """{"marker": "A", "other": 1}""") + Completed());
+
+        Assert.Equal("""{"marker":"A"}""", ArgsByBlock(events)[0]);
     }
 }
