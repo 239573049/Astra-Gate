@@ -39,6 +39,8 @@ vi.stubGlobal('ResizeObserver', NoopResizeObserver);
 
 // the per-client entries have their own test (client-mcp.test.tsx); this page test is about the page itself
 vi.mock('../components/ClientMcpEntries', () => ({ ClientMcpEntries: () => null }));
+// likewise the own-servers section (local-mcp-servers.test.tsx)
+vi.mock('../components/LocalMcpServers', () => ({ LocalMcpServers: () => null }));
 
 vi.mock('motion/react', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
