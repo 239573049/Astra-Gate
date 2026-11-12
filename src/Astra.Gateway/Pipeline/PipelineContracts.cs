@@ -77,4 +77,8 @@ public interface ISmartRouter
 public sealed record RequestBodyLimits(long MaxBytes, TimeSpan? ReadTimeout = null)
 {
     public static RequestBodyLimits Default { get; } = new(GatewayPipeline.MaxRequestBytes);
+
+    /// <summary>The limit to enforce now: the host's own when it set one, else the <c>MaxRequestBodyMb</c> setting.</summary>
+    public long Effective(AppSettings settings) =>
+        ReferenceEquals(this, Default) ? Math.Clamp(settings.MaxRequestBodyMb, 1, 1024) * 1024L * 1024 : MaxBytes;
 }

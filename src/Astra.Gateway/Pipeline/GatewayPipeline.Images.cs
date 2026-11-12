@@ -104,7 +104,7 @@ public sealed partial class GatewayPipeline
             string requestedModel;
             if (boundary is null)
             {
-                requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.MaxBytes, ct, _bodyLimits.ReadTimeout);
+                requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.Effective(settings.Current), ct, _bodyLimits.ReadTimeout);
                 bodySpan.Set("astra.body.bytes", requestBody.Utf8.Length).Ok().End();
                 if (requestBody.Parse() is not (var root, var tree))
                     throw new ProtocolException("图像接口的请求体必须是 JSON 对象或 multipart/form-data 表单。");
@@ -115,7 +115,7 @@ public sealed partial class GatewayPipeline
             else if (privacy?.Settings.Enabled == true || _bodyLimits.ReadTimeout is not null
                      || RequestBody.ContentEncodings(ctx.Request.Headers.ContentEncoding.ToString()).Count > 0)
             {
-                requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.MaxBytes, ct, _bodyLimits.ReadTimeout);
+                requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.Effective(settings.Current), ct, _bodyLimits.ReadTimeout);
                 bodySpan.Set("astra.body.bytes", requestBody.Utf8.Length).Ok().End();
                 parts = MultipartForm.Parse(requestBody.Utf8, boundary);
                 modelPart = TextField(parts, "model");
@@ -124,7 +124,7 @@ public sealed partial class GatewayPipeline
             }
             else
             {
-                (head, modelPart) = await MultipartForm.ReadUntilFieldAsync(ctx.Request.Body, boundary, "model", _bodyLimits.MaxBytes, ct);
+                (head, modelPart) = await MultipartForm.ReadUntilFieldAsync(ctx.Request.Body, boundary, "model", _bodyLimits.Effective(settings.Current), ct);
                 owned = head;
                 bodySpan.Set("astra.body.bytes", head.Length).Set("astra.body.streamed", true).Ok().End();
                 requestedModel = modelPart?.Text(head.Span) ?? "";
@@ -321,8 +321,9 @@ public sealed partial class GatewayPipeline
             record.Status = RequestStatus.UpstreamError;
             record.HttpStatus ??= 502;
             record.ErrorType = "upstream_unreachable";
-            record.ErrorMessage = Truncate(e.Message, 2000);
-            await WriteErrorAsync(ctx, ApiProtocol.OpenAIChat, null, 502, "api_error", $"无法连接上游 {provider?.Name}：{e.Message}");
+            var cause = UpstreamFailure.Describe(e);
+            record.ErrorMessage = Truncate(cause, 2000);
+            await WriteErrorAsync(ctx, ApiProtocol.OpenAIChat, null, 502, "api_error", $"无法连接上游 {provider?.Name}：{cause}");
         }
         catch (IOException) when (ctx.Response.HasStarted)
         {

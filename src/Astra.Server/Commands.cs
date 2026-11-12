@@ -70,6 +70,21 @@ public static class Commands
             Console.Error.WriteLine($"MCP gateway entries: restore failed: {ex.Message}");
             incomplete = true;
         }
+        // Local (stdio) MCP servers Astra wrote into Claude Code and Codex (issue #34).
+        try
+        {
+            foreach (var (kind, report) in new ClientMcpServerApplier(env, db.ClientConfigState, applier).RemoveAll())
+            {
+                var drifted = report.Keys.Where(k => k.Outcome == RestoreKeyOutcome.Drifted).ToList();
+                foreach (var key in drifted) Console.Error.WriteLine($"  Left modified key untouched: {key.FilePath}:{key.KeyPath}");
+                incomplete |= drifted.Count > 0;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Astra.Clients.Editing.EditorException)
+        {
+            Console.Error.WriteLine($"Local MCP entries: restore failed: {ex.Message}");
+            incomplete = true;
+        }
         var skillsIncomplete = false;
         // Skills are the user's content, not gateway settings: they are given back (links become real directories) whatever --purge says.
         try

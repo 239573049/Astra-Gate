@@ -195,6 +195,9 @@ public sealed class RequestBody : IDisposable
 
     private static async Task<RequestBody> ReadCoreAsync(HttpRequest request, long maxBytes, CancellationToken ct)
     {
+        // Kestrel's own cap (30 MB by default) would refuse a body the limit allows: lift it for this request.
+        var cap = request.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+        if (cap is { IsReadOnly: false } && (cap.MaxRequestBodySize is null || cap.MaxRequestBodySize < maxBytes)) cap.MaxRequestBodySize = maxBytes;
         var encodings = ContentEncodings(request.Headers.ContentEncoding.ToString());
         var declared = request.ContentLength;
         if (declared > maxBytes) throw TooLarge(maxBytes);

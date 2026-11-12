@@ -181,7 +181,7 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             // With a single provider the policy is known before the body is read; several wait for the model below.
             if (route.Targets.Count < 2) SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
             // Same body handling as the generation pipeline: read once (pooled), parsed once, guarded in place.
-            using var requestBody = await RequestBody.ReadAsync(ctx.Request, GatewayPipeline.MaxRequestBytes, ct);
+            using var requestBody = await RequestBody.ReadAsync(ctx.Request, RequestBodyLimits.Default.Effective(settings.Current), ct);
             var parsed = requestBody.Parse();
 
             // 隐私护栏（plan §6.7）：count_tokens 的请求体同样发往上游，必须先过护栏。
@@ -294,7 +294,7 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
         }
         catch (HttpRequestException e)
         {
-            await WriteErrorAsync(ctx, protocol, 502, "api_error", e.Message);
+            await WriteErrorAsync(ctx, protocol, 502, "api_error", $"无法连接上游：{UpstreamFailure.Describe(e)}");
         }
     }
 

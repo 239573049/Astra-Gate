@@ -327,6 +327,30 @@ put('mcp/calls.json', [
 ]);
 route('/api/mcp/calls', 'mcp/calls.json');
 
+// client MCP entries (issue #34): the gateway entry in two clients, the user's own servers, and what clients already have
+put('mcp/client-entries.json', [
+  { kind: 'claude-code', state: 'applied', file: '/Users/dev/.claude.json', url: 'http://127.0.0.1:17321/mcp', tokenId: 'tok_pool', tokenName: 'team-shared', gatewayEnabled: true, gatewayUrl: 'http://127.0.0.1:17321/mcp', error: null },
+  { kind: 'codex', state: 'missing', file: '/Users/dev/.codex/config.toml', url: null, tokenId: null, tokenName: null, gatewayEnabled: true, gatewayUrl: 'http://127.0.0.1:17321/mcp', error: null },
+]);
+route('/api/clients/mcp', 'mcp/client-entries.json');
+put('mcp/local.json', [
+  {
+    id: 'loc_files', name: 'filesystem', transport: 'stdio', command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/dev/docs'], envNames: ['API_KEY'],
+    url: '', headerNames: [], enabled: true, clients: ['claude-code', 'codex'],
+    placements: [
+      { kind: 'claude-code', wanted: true, state: 'applied', file: '/Users/dev/.claude.json', error: null },
+      { kind: 'codex', wanted: true, state: 'drifted', file: '/Users/dev/.codex/config.toml', error: null },
+      { kind: 'gemini-cli', wanted: false, state: 'missing', file: '/Users/dev/.gemini/settings.json', error: null },
+    ],
+  },
+]);
+route('/api/mcp/local', 'mcp/local.json');
+put('mcp/local-import.json', [
+  { kind: 'claude-code', name: 'memory', transport: 'stdio', summary: 'npx -y @modelcontextprotocol/server-memory', importable: true, reason: null, taken: false },
+  { kind: 'claude-code', name: 'legacy', transport: 'http', summary: '', importable: false, reason: 'sse transport', taken: false },
+]);
+route('/api/mcp/local/import', 'mcp/local-import.json');
+
 // resource library: Skills (.plan/resources-library.md)
 const skillTarget = (kind, readsShared, alsoReads = [], detected = true) => ({ kind, supported: true, detected, dir: `/Users/demo/.${kind}/skills`, readsShared, alsoReads });
 const skillClients = (views) => ['claude-code', 'codex', 'gemini-cli', 'opencode', 'copilot-cli', 'droid', 'grok-build'].map((kind) => ({ kind, state: 'off', how: null, modified: false, ...(views[kind] ?? {}) }));

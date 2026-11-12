@@ -31,6 +31,8 @@ public class McpPageTests
         Assert.True(page.Api.Settings.Data!.Enabled);
         Assert.Equal(["github", "docs", "notion"], page.Api.Servers.Data!.Select(s => s.Slug));
         Assert.Equal(4, page.Api.Calls.Data!.Count);
+        Assert.Equal(["claude-code", "codex"], page.ClientApi.Entries.Data!.Select(e => e.Kind));
+        Assert.Equal(["filesystem"], page.ClientApi.Servers.Data!.Select(e => e.Name));
         Assert.Empty(fx.Unmatched);
         // The OAuth state keeps the name the web uses: the contract pins it, not the C# property name.
         Assert.True(page.Api.Servers.Data![0].OAuth!.Authorized);
@@ -57,6 +59,14 @@ public class McpPageTests
         Assert.Contains(Loc.T("mcp.status.needs_auth"), texts.Concat(BadgeTexts(window)));
         Assert.Contains("github/search_issues", texts);                        // the calls: server and the upstream's own tool name
         Assert.Contains("docs/search", texts);
+        // "apply to clients" and the user's own servers
+        Assert.Contains(Loc.T("mcp.clients.title"), texts);
+        Assert.Contains("Claude Code", texts);
+        Assert.Contains(Loc.T("mcp.clients.usesToken", ("name", "team-shared")), texts);
+        Assert.Contains(Loc.T("mcp.local.title"), texts);
+        Assert.Contains("filesystem", texts);
+        Assert.Contains("npx -y @modelcontextprotocol/server-filesystem /Users/dev/docs · " + Loc.T("mcp.local.envCount", ("count", 1)), texts);
+        Assert.Contains(Loc.T("mcp.local.rewrite"), window.GetVisualDescendants().OfType<TKCode.Arc.Button>().Select(b => b.Content?.ToString() ?? ""));
         window.Close();
     }
 

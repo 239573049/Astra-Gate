@@ -992,6 +992,8 @@ export interface Settings {
   preventSleep?: boolean;
   /** A client bound to several providers retries a failed request on the next bound provider serving the model (default on). */
   clientProviderFailover?: boolean;
+  /** Largest request body the gateway accepts, in MiB (1-1024, default 64). */
+  maxRequestBodyMb?: number;
   /** Provider-qualified model ids (`model@alias`): model lists tell providers apart and a qualified id goes to that provider (off by default). */
   providerQualifiedModels?: boolean;
   /** Sidebar entries hidden from the menu (the pages still open by address); Settings cannot be hidden. */
@@ -1659,6 +1661,26 @@ export interface ClientMcpEntry {
   kind: ClientKind; state: ClientMcpState; file: string; url?: string | null; tokenId?: string | null; tokenName?: string | null;
   gatewayEnabled: boolean; gatewayUrl: string; error?: string | null;
 }
+
+/** Where an MCP server definition stands in one client; `wanted` = it is meant to be there. */
+export interface LocalMcpPlacement { kind: ClientKind; wanted: boolean; state: ClientMcpState; file: string; error?: string | null }
+export type LocalMcpTransport = 'stdio' | 'http';
+/**
+ * An MCP server Astra writes into clients' own MCP lists (a local stdio command or a remote address); Astra never runs or proxies it.
+ * Environment and header values never come back, only their names.
+ */
+export interface LocalMcpServer {
+  id: string; name: string; transport: LocalMcpTransport; command: string; args: string[]; envNames: string[]; url: string; headerNames: string[];
+  enabled: boolean; clients: ClientKind[]; placements: LocalMcpPlacement[];
+}
+/** `env` / `headers`: omitted keeps the stored values on update; an empty object clears them. */
+export interface LocalMcpServerInput {
+  name: string; transport?: LocalMcpTransport; command?: string; args?: string[]; env?: Record<string, string>; url?: string;
+  headers?: Record<string, string>; enabled?: boolean; clients?: ClientKind[];
+}
+/** An entry already in a client's MCP list that Astra did not write. */
+export interface LocalMcpCandidate { kind: ClientKind; name: string; transport: LocalMcpTransport; summary: string; importable: boolean; reason?: string | null; taken: boolean }
+export interface LocalMcpImportResult { imported: LocalMcpServer[]; skipped: { kind: ClientKind; name: string; reason: string }[] }
 
 // ---------- the resource library: Skills (.plan/resources-library.md) ----------
 export interface SkillTarget { kind: ClientKind; supported: boolean; detected: boolean; dir?: string | null; readsShared: boolean; alsoReads: ClientKind[] }

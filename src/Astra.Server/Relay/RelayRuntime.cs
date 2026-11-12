@@ -71,8 +71,14 @@ internal sealed class RelayRuntime(IHttpContextAccessor accessor, RelayCatalog c
 
     public ValueTask EnqueueAsync(RequestRecord record)
     {
-        logger.LogInformation("Request {Id}: status={Status} http={HttpStatus} inbound={Inbound} upstream={Upstream}",
-            record.Id, record.Status, record.HttpStatus, record.InboundProtocol, record.UpstreamProtocol);
+        // The cause of a failed upstream call is logged (issue #39): UpstreamFailure.Describe names no address. Other error
+        // messages are not — they may quote an upstream's answer.
+        if (record.ErrorType is "upstream_unreachable" or RelayCatalog.ModelListUnreachable)
+            logger.LogWarning("Request {Id}: status={Status} http={HttpStatus} inbound={Inbound} upstream={Upstream} error={ErrorType} cause={Cause}",
+                record.Id, record.Status, record.HttpStatus, record.InboundProtocol, record.UpstreamProtocol, record.ErrorType, record.ErrorMessage);
+        else
+            logger.LogInformation("Request {Id}: status={Status} http={HttpStatus} inbound={Inbound} upstream={Upstream} error={ErrorType}",
+                record.Id, record.Status, record.HttpStatus, record.InboundProtocol, record.UpstreamProtocol, record.ErrorType);
         return ValueTask.CompletedTask;
     }
 

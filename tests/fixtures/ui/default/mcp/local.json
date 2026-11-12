@@ -1,0 +1,46 @@
+[
+  {
+    "id": "loc_files",
+    "name": "filesystem",
+    "transport": "stdio",
+    "command": "npx",
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem",
+      "/Users/dev/docs"
+    ],
+    "envNames": [
+      "API_KEY"
+    ],
+    "url": "",
+    "headerNames": [],
+    "enabled": true,
+    "clients": [
+      "claude-code",
+      "codex"
+    ],
+    "placements": [
+      {
+        "kind": "claude-code",
+        "wanted": true,
+        "state": "applied",
+        "file": "/Users/dev/.claude.json",
+        "error": null
+      },
+      {
+        "kind": "codex",
+        "wanted": true,
+        "state": "drifted",
+        "file": "/Users/dev/.codex/config.toml",
+        "error": null
+      },
+      {
+        "kind": "gemini-cli",
+        "wanted": false,
+        "state": "missing",
+        "file": "/Users/dev/.gemini/settings.json",
+        "error": null
+      }
+    ]
+  }
+]

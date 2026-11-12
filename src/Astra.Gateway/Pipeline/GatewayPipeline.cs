@@ -163,7 +163,7 @@ public sealed partial class GatewayPipeline(
             routeSpan.Set("astra.client.kind", route.ClientKind).Set("astra.token.id", route.Token.Id).Set("astra.provider.id", provider.Id).Ok().End();
             // Read once into a pooled UTF-8 buffer; from here on the body is these bytes and one tree over them.
             var bodySpan = trace.Start(TraceSpanNames.Body);
-            requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.MaxBytes, ct, _bodyLimits.ReadTimeout);
+            requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.Effective(settings.Current), ct, _bodyLimits.ReadTimeout);
             bodySpan.Set("astra.body.bytes", requestBody.Utf8.Length).Ok().End();
             capture?.Set(BodyStore.ClientRequest, requestBody.Utf8);
 
@@ -774,8 +774,9 @@ public sealed partial class GatewayPipeline(
             record.Status = RequestStatus.UpstreamError;
             record.HttpStatus ??= 502;
             record.ErrorType = "upstream_unreachable";
-            record.ErrorMessage = Truncate(e.Message, 2000);
-            await WriteErrorAsync(ctx, inbound, encoder, 502, "api_error", $"无法连接上游 {provider?.Name}：{e.Message}");
+            var cause = UpstreamFailure.Describe(e);
+            record.ErrorMessage = Truncate(cause, 2000);
+            await WriteErrorAsync(ctx, inbound, encoder, 502, "api_error", $"无法连接上游 {provider?.Name}：{cause}");
         }
         catch (IOException) when (ct.IsCancellationRequested || ctx.Response.HasStarted)
         {

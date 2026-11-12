@@ -312,6 +312,21 @@
     },
     {
       "method": "GET",
+      "path": "/api/clients/mcp",
+      "file": "mcp/client-entries.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/local",
+      "file": "mcp/local.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/mcp/local/import",
+      "file": "mcp/local-import.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/library/skills",
       "file": "library/skills.json"
     },

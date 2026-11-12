@@ -1802,6 +1802,45 @@ public class ProviderApiTests
         Assert.Contains("key=gk%2B1%2F2%3D%26q", sent[1].Query);
     }
 
+    /// <summary>
+    /// The Codex subscription's list is the Codex CLI's own endpoint (issue #35): <c>{"models":[{"slug","display_name",…}]}</c>,
+    /// asked for with <c>client_version</c> and the CLI's identity. It used to fail with "invalid model list" because rows
+    /// were only read by <c>id</c> / <c>name</c>.
+    /// </summary>
+    [Fact]
+    public async Task Remote_Models_Read_The_Codex_Backends_Slug_Rows()
+    {
+        var sent = new List<(string Url, string? UserAgent, string? Originator, string? Authorization)>();
+        await using var host = await TestHost.StartAsync(builder => builder.Services.AddHttpClient(ProviderProbe.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new StubHandler(request =>
+            {
+                string? Header(string name) => request.Headers.TryGetValues(name, out var values) ? string.Join(",", values) : null;
+                lock (sent) sent.Add((request.RequestUri!.AbsoluteUri, Header("User-Agent"), Header("originator"), Header("Authorization")));
+                return Task.FromResult(JsonResponse(
+                    """{"models":[{"slug":"gpt-6-luna","display_name":"GPT-6-Luna","visibility":"list"},{"slug":"gpt-5.6-terra","display_name":"GPT-5.6-Terra","visibility":"list"},{"slug":"codex-auto-review","display_name":"Codex Auto Review","visibility":"hide"}]}"""));
+            })));
+
+        var (status, created) = await host.SendAsync(HttpMethod.Post, "/api/providers", new { templateId = "openai-subscription" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var id = created!["id"]!.GetValue<string>();
+        var protector = host.App.Services.GetRequiredService<ISecretProtector>();
+        await host.Db.Accounts.InsertAsync(new ProviderAccount
+        {
+            Id = "acc-codex", ProviderId = id, DisplayName = "me", Status = AccountStatus.Active,
+            AccessTokenEnc = protector.Protect("codex-access"), ExpiresAtUtc = DateTimeOffset.UtcNow.AddHours(1),
+        });
+
+        var remote = (await host.GetJsonAsync($"/api/providers/{id}/remote-models")).AsArray();
+
+        Assert.Equal(["codex-auto-review", "gpt-5.6-terra", "gpt-6-luna"], remote.Select(m => m!["id"]!.GetValue<string>()).ToList());
+        Assert.Equal("GPT-6-Luna", remote.Single(m => m!["id"]!.GetValue<string>() == "gpt-6-luna")!["displayName"]!.GetValue<string>());
+        var request = Assert.Single(sent);
+        Assert.Equal($"https://chatgpt.com/backend-api/codex/models?client_version={ProviderProbe.CodexModelListClientVersion}", request.Url);
+        Assert.Equal(SubscriptionQuotaService.CodexClientUserAgent, request.UserAgent);
+        Assert.Equal("codex_cli_rs", request.Originator);
+        Assert.Equal("Bearer codex-access", request.Authorization);
+    }
+
     [Fact]
     public async Task Remote_Models_Paginate_Anthropic_With_After_Id()
     {

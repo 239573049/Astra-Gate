@@ -208,6 +208,9 @@ function GeneralSettings() {
             <Row label={t('settings.streamIdle')} detail={t('settings.streamIdleHint')}>
               <DeferredNumber label={t('settings.streamIdle')} value={s.streamIdleTimeoutSec} onCommit={(v) => patch({ streamIdleTimeoutSec: v ?? 300 })} suffix=" s" />
             </Row>
+            <Row label={t('settings.maxBody')} detail={t('settings.maxBodyHint')}>
+              <DeferredNumber label={t('settings.maxBody')} value={s.maxRequestBodyMb ?? 64} onCommit={(v) => patch({ maxRequestBodyMb: v ?? 64 })} suffix=" MiB" />
+            </Row>
             <Row label={t('settings.requestCompression')} detail={t('settings.requestCompressionHint')}>
               <Select
                 className="w-40"

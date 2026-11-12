@@ -64,6 +64,8 @@ public sealed class GatewaySettingsView : SettingsSectionView
             }));
         var idle = RowBuilder.Hinted(Loc.T("settings.streamIdle"), Loc.T("settings.streamIdleHint"),
             Number(Loc.T("settings.streamIdle"), x => x.StreamIdleTimeoutSec, v => JsonPatch.Of(("streamIdleTimeoutSec", (int?)v)), " s"));
+        var maxBody = RowBuilder.Hinted(Loc.T("settings.maxBody"), Loc.T("settings.maxBodyHint"),
+            Number(Loc.T("settings.maxBody"), x => x.MaxRequestBodyMb, v => JsonPatch.Of(("maxRequestBodyMb", (int?)v)), " MiB"));
         var compression = new ControlledSelect(GeneralLogic.Compressions.Select(c => (c, GeneralLogic.CompressionLabel(c))), s.RequestCompression, 160);
         Avalonia.Automation.AutomationProperties.SetName(compression, Loc.T("settings.requestCompression"));
         compression.Chose += v => _ = PatchAsync(JsonPatch.Of(("requestCompression", v)));
@@ -77,6 +79,7 @@ public sealed class GatewaySettingsView : SettingsSectionView
         stack.Children.Add(RowBuilder.Group(null, null,
             _requireRow,
             idle,
+            maxBody,
             RowBuilder.Hinted(Loc.T("settings.requestCompression"), Loc.T("settings.requestCompressionHint"), compression),
             awake,
             failover));

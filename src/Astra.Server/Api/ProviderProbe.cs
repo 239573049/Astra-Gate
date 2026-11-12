@@ -63,6 +63,13 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
 {
     public const string HttpClientName = "astra-provider-probe";
 
+    /// <summary>
+    /// The <c>client_version</c> the Codex CLI puts on its <c>/models</c> request (what it sent when the model cache was last
+    /// refreshed). The ChatGPT backend answers with the models that client version may use, so the list asks as the official
+    /// client does instead of as an unversioned one.
+    /// </summary>
+    internal const string CodexModelListClientVersion = "0.164.0";
+
     private readonly ConcurrentDictionary<(string ProviderId, string? AccountId), SemaphoreSlim> _modelProtocolGates = new();
     private readonly ConcurrentDictionary<(string ProviderId, string? AccountId), ModelProtocolSnapshot> _modelProtocolCache = new();
     private sealed record ModelProtocolSnapshot(DateTimeOffset ExpiresAtUtc, IReadOnlyList<RemoteModelDto> Models);
@@ -768,6 +775,10 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         var suffix = spec?.Protocol == endpoint.Protocol ? spec.Path :
             endpoint.Protocol == ApiProtocol.Anthropic && !new Uri(endpoint.BaseUrl).AbsolutePath.TrimEnd('/').EndsWith("/v1", StringComparison.Ordinal) ? "/v1/models" : "/models";
         var url = AppendPath(endpoint.BaseUrl, suffix);
+        // The Codex subscription's list is the Codex CLI's own endpoint: it is asked for by client_version, and chatgpt.com
+        // lets through only requests that carry the CLI's identity (the quota queries send the same User-Agent).
+        var codex = SubscriptionSupport.ProviderKeyOf(p) == "openai-subscription";
+        if (codex) url = WithQuery(url, "client_version", CodexModelListClientVersion);
         var found = new Dictionary<string, string?>(StringComparer.Ordinal);
         var foundProtocols = new Dictionary<string, List<ApiProtocol>>(StringComparer.Ordinal);
         var cursors = new HashSet<string>(StringComparer.Ordinal);
@@ -780,6 +791,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             {
                 using var request = await RequestAsync(p, HttpMethod.Get, url, endpoint.Protocol, false, deadline.Token, accountId);
                 if (spec?.Protocol == endpoint.Protocol) spec.ApplyHeaders(request);
+                if (codex) request.Headers.TryAddWithoutValidation("User-Agent", SubscriptionQuotaService.CodexClientUserAgent);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
                 var body = TryObject(await ReadResponseAsync(response, deadline.Token));
                 if (!response.IsSuccessStatusCode) throw new AdminApiException(502, ErrorMessage(body, response.StatusCode, p, request), new UpstreamStatusDetailsDto((int)response.StatusCode));
@@ -788,7 +800,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 foreach (var row in rows)
                 {
                     if (row is not JsonObject item) throw InvalidList();
-                    var id = Text(item["id"]) ?? Text(item["name"]);
+                    // OpenAI / Anthropic rows say id, Gemini's name, and the Codex backend's slug ({"models":[{"slug","display_name",…}]}).
+                    var id = Text(item["id"]) ?? Text(item["slug"]) ?? Text(item["name"]);
                     if (string.IsNullOrWhiteSpace(id) || id.Length > 512 || id.Any(char.IsControl)) throw InvalidList();
                     if (endpoint.Protocol == ApiProtocol.Gemini && id.StartsWith("models/", StringComparison.Ordinal)) id = id[7..];
                     if (id.Length == 0) throw InvalidList();

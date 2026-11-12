@@ -96,6 +96,7 @@ public static class AstraApp
         builder.Services.AddSingleton<ProviderProbe>();
         builder.Services.AddSingleton<ImportService>();
         builder.Services.AddSingleton<ClientMcpService>();
+        builder.Services.AddSingleton<LocalMcpService>();
         builder.Services.AddSingleton<LibraryService>();
         builder.Services.AddSingleton<ProviderBackupService>();
         builder.Services.AddSingleton<WebDavBackupService>();
@@ -353,6 +354,7 @@ public static class AstraApp
         app.MapTokenEndpoints();
         app.MapJoinEndpoints();
         app.MapMcpEndpoints();
+        app.MapLocalMcpEndpoints();
         app.MapMcpGatewayEndpoints();
         app.MapConnectEndpoints();
         app.MapProviderEndpoints();

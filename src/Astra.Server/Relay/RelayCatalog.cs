@@ -21,6 +21,9 @@ internal sealed class RelayCatalog(RelayOptions options, GatewayHttpClients http
     private const int MaxBytes = 4 * 1024 * 1024;
     private const int MaxModels = 2000;
 
+    /// <summary>The request's <c>error_type</c> when the model list could not be fetched at all.</summary>
+    internal const string ModelListUnreachable = "model_list_unreachable";
+
     private static readonly IReadOnlyDictionary<string, ProviderModel> NoModels = new Dictionary<string, ProviderModel>();
 
     private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = options.ModelCacheEntries });
@@ -75,7 +78,24 @@ internal sealed class RelayCatalog(RelayOptions options, GatewayHttpClients http
     {
         using var request = caller.Request(HttpMethod.Get, url, perRequest: false);
         caller.ModelList?.ApplyHeaders(request);
-        using var response = await http.For(caller.Provider).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
+        HttpResponseMessage sent;
+        try
+        {
+            sent = await http.For(caller.Provider).SendAsync(request, HttpCompletionOption.ResponseHeadersRead, CancellationToken.None);
+        }
+        // Said apart from the generation request's own failure (issue #39): a request after the list expired asks for it first.
+        catch (HttpRequestException e)
+        {
+            throw new GatewayException(502, "api_error", $"无法获取上游模型列表：{UpstreamFailure.Describe(e)}")
+            {
+                RecordErrorType = ModelListUnreachable,
+            };
+        }
+        catch (GatewayException e) when (e.Status == 504)
+        {
+            throw new GatewayException(504, e.Type, $"获取上游模型列表时{e.Message}") { RecordErrorType = e.RecordErrorType };
+        }
+        using var response = sent;
         if (!response.IsSuccessStatusCode)
             throw new GatewayException((int)response.StatusCode,
                 response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ? "authentication_error" : "api_error",

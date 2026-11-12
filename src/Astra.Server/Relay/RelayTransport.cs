@@ -23,6 +23,13 @@ internal sealed class RelayTransport(RelayOptions options, IHttpContextAccessor 
         AutomaticDecompression = DecompressionMethods.All,
         ConnectTimeout = TimeSpan.FromSeconds(30),
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+        // Issue #39: past the upstream's stream limit on one HTTP/2 connection, requests waited in the handler holding their
+        // slots; open another connection instead. Pings during a request find a dead connection in ~45 s, not after the
+        // 1800 s idle timeout, so a stream on a connection a middlebox dropped gives its slot back.
+        EnableMultipleHttp2Connections = true,
+        KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+        KeepAlivePingTimeout = TimeSpan.FromSeconds(15),
+        KeepAlivePingPolicy = HttpKeepAlivePingPolicy.WithActiveRequests,
         Proxy = SystemProxy.Dynamic,
         ActivityHeadersPropagator = DistributedContextPropagator.CreateNoOutputPropagator(),
     };

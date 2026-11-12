@@ -1,0 +1,24 @@
+[
+  {
+    "kind": "claude-code",
+    "state": "applied",
+    "file": "/Users/dev/.claude.json",
+    "url": "http://127.0.0.1:17321/mcp",
+    "tokenId": "tok_pool",
+    "tokenName": "team-shared",
+    "gatewayEnabled": true,
+    "gatewayUrl": "http://127.0.0.1:17321/mcp",
+    "error": null
+  },
+  {
+    "kind": "codex",
+    "state": "missing",
+    "file": "/Users/dev/.codex/config.toml",
+    "url": null,
+    "tokenId": null,
+    "tokenName": null,
+    "gatewayEnabled": true,
+    "gatewayUrl": "http://127.0.0.1:17321/mcp",
+    "error": null
+  }
+]

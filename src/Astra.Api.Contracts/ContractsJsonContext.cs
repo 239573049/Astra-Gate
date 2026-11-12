@@ -52,6 +52,17 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(ClientMcpDto))]
 [JsonSerializable(typeof(List<ClientMcpDto>))]
 [JsonSerializable(typeof(ClientMcpApplyDto))]
+// local (stdio) MCP servers
+[JsonSerializable(typeof(LocalMcpServerDto))]
+[JsonSerializable(typeof(List<LocalMcpServerDto>))]
+[JsonSerializable(typeof(LocalMcpServerInputDto))]
+[JsonSerializable(typeof(LocalMcpPlacementDto))]
+[JsonSerializable(typeof(LocalMcpCandidateDto))]
+[JsonSerializable(typeof(List<LocalMcpCandidateDto>))]
+[JsonSerializable(typeof(LocalMcpImportDto))]
+[JsonSerializable(typeof(LocalMcpImportResultDto))]
+[JsonSerializable(typeof(List<string>))]
+[JsonSerializable(typeof(Dictionary<string, string>))]
 // resource library (Skills)
 [JsonSerializable(typeof(SkillTargetDto))]
 [JsonSerializable(typeof(SkillClientDto))]

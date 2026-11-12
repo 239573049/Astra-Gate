@@ -62,6 +62,14 @@ public sealed class RelayOptions
         ASTRA_RELAY_HEADERS_TIMEOUT_SECONDS, ASTRA_RELAY_UPSTREAM_IDLE_TIMEOUT_SECONDS,
         ASTRA_RELAY_DOWNSTREAM_WRITE_TIMEOUT_SECONDS, ASTRA_RELAY_SHUTDOWN_TIMEOUT_SECONDS, ASTRA_RELAY_MODEL_CACHE_SECONDS,
         ASTRA_RELAY_MODEL_CACHE_ENTRIES.
+
+        Concurrency: ASTRA_RELAY_MAX_CONCURRENT_REQUESTS (default 64) requests are served at once, and one more is refused
+        at once with 503 (never queued). Every route but /healthz and /readyz holds a slot — the model list, embeddings and
+        images too — from the moment it arrives until its whole answer has been sent, a stream to its last event. An upstream
+        that is slow to answer holds its slot up to ASTRA_RELAY_HEADERS_TIMEOUT_SECONDS (default 1800) and a stream that
+        stalls up to ASTRA_RELAY_UPSTREAM_IDLE_TIMEOUT_SECONDS (default 1800), so a few long streams or one stuck upstream
+        can fill the slots; each refusal logs the requests in flight, the limit and the age of the oldest one.
+        Other defaults: request body 64 MiB within 300 s, model list cached 300 s per credential (256 lists).
         """;
 
     /// <exception cref="ArgumentException">A value is missing, malformed or out of range.</exception>

@@ -1790,6 +1790,8 @@ internal static class Messages
         "settings.openFolder",
         "settings.streamIdle",
         "settings.streamIdleHint",
+        "settings.maxBody",
+        "settings.maxBodyHint",
         "settings.requestCompression",
         "settings.requestCompressionHint",
         "settings.requestCompression.default",
@@ -2835,6 +2837,58 @@ internal static class Messages
         "mcp.clients.applied",
         "mcp.clients.removed",
         "mcp.clients.stdio",
+        "mcp.local.title",
+        "mcp.local.hint",
+        "mcp.local.add",
+        "mcp.local.emptyTitle",
+        "mcp.local.emptyDetail",
+        "mcp.local.footer",
+        "mcp.local.off",
+        "mcp.local.envCount",
+        "mcp.local.rewrite",
+        "mcp.local.state.missing",
+        "mcp.local.state.applied",
+        "mcp.local.state.drifted",
+        "mcp.local.state.conflict",
+        "mcp.local.addTitle",
+        "mcp.local.editTitle",
+        "mcp.local.name",
+        "mcp.local.nameHint",
+        "mcp.local.command",
+        "mcp.local.args",
+        "mcp.local.argsHint",
+        "mcp.local.env",
+        "mcp.local.envHint",
+        "mcp.local.envKept",
+        "mcp.local.envInvalid",
+        "mcp.local.clients",
+        "mcp.local.clientsHint",
+        "mcp.local.enabled",
+        "mcp.local.created",
+        "mcp.local.saved",
+        "mcp.local.applied",
+        "mcp.local.deleteTitle",
+        "mcp.local.deleteDetail",
+        "mcp.local.deleted",
+        "mcp.local.transport",
+        "mcp.local.transport.stdio",
+        "mcp.local.transport.http",
+        "mcp.local.url",
+        "mcp.local.urlHint",
+        "mcp.local.headers",
+        "mcp.local.headersHint",
+        "mcp.local.headersKept",
+        "mcp.local.headersInvalid",
+        "mcp.local.headerCount",
+        "mcp.local.import",
+        "mcp.local.importTitle",
+        "mcp.local.importHint",
+        "mcp.local.importEmpty",
+        "mcp.local.importRun",
+        "mcp.local.importTaken",
+        "mcp.local.importDone",
+        "mcp.local.importSkipped",
+        "mcp.local.importSecrets",
         "mcp.gateway.enable",
         "mcp.gateway.enableHint",
         "mcp.gateway.endpoint",
@@ -4865,6 +4919,8 @@ internal static class Messages
             case "settings.openFolder": return "打开目录";
             case "settings.streamIdle": return "流式空闲超时";
             case "settings.streamIdleHint": return "上游超过该时间无数据则断开";
+            case "settings.maxBody": return "请求体大小上限";
+            case "settings.maxBodyHint": return "网关接受的单个请求体最大大小（1–1024 MiB，默认 64），含解压后的大小；超过返回 413。长会话带大量图片或文件时可调大。";
             case "settings.requestCompression": return "上游请求压缩";
             case "settings.requestCompressionHint": return "需要压缩请求体的提供商（如 ChatGPT 订阅默认用 zstd）使用的格式；其他提供商始终发原文";
             case "settings.requestCompression.default": return "按提供商默认";
@@ -5909,7 +5965,59 @@ internal static class Messages
             case "mcp.clients.forceRemove": return "强制移除";
             case "mcp.clients.applied": return "已写入 {client}，重启客户端后生效。";
             case "mcp.clients.removed": return "已从 {client} 移除。";
-            case "mcp.clients.stdio": return "网关只转发 http 类型的 MCP 服务器；本机上的 stdio 服务器不在其中。";
+            case "mcp.clients.stdio": return "网关只转发 http 类型的 MCP 服务器；本机上的 stdio 服务器请在下面的「本地 MCP 服务器」里添加。";
+            case "mcp.local.title": return "自有 MCP 服务器";
+            case "mcp.local.hint": return "把本机命令（stdio）或远程地址定义一次，选择写入哪些客户端。Astra 只把条目写进客户端自己的 MCP 配置，进程由客户端启动，也不经过上面的网关。";
+            case "mcp.local.add": return "添加";
+            case "mcp.local.emptyTitle": return "还没有本地 MCP 服务器";
+            case "mcp.local.emptyDetail": return "例如用 npx 或 uvx 启动的 stdio 服务器，或一个远程 MCP 地址。添加后可一次写入多个客户端，也可以导入客户端里已有的配置。";
+            case "mcp.local.footer": return "环境变量和请求头（常含密钥）加密保存，只会写进客户端的配置文件，不会再返回给浏览器。只能在本机修改。";
+            case "mcp.local.off": return "已停用";
+            case "mcp.local.envCount": return "{count} 个环境变量";
+            case "mcp.local.rewrite": return "重新写入";
+            case "mcp.local.state.missing": return "未写入";
+            case "mcp.local.state.applied": return "已写入";
+            case "mcp.local.state.drifted": return "已被改动";
+            case "mcp.local.state.conflict": return "冲突";
+            case "mcp.local.addTitle": return "添加本地 MCP 服务器";
+            case "mcp.local.editTitle": return "编辑 {name}";
+            case "mcp.local.name": return "名称";
+            case "mcp.local.nameHint": return "客户端里的条目名：小写字母、数字、下划线或连字符，最多 32 个字符，不能叫 astra。";
+            case "mcp.local.command": return "命令";
+            case "mcp.local.args": return "参数";
+            case "mcp.local.argsHint": return "每行一个参数。";
+            case "mcp.local.env": return "环境变量";
+            case "mcp.local.envHint": return "每行一个 NAME=值。";
+            case "mcp.local.envKept": return "已保存：{names}。留空保持不变；填写则整体替换。";
+            case "mcp.local.envInvalid": return "环境变量每行应为 NAME=值。";
+            case "mcp.local.clients": return "写入的客户端";
+            case "mcp.local.clientsHint": return "取消选择会把条目从该客户端移除。";
+            case "mcp.local.enabled": return "启用";
+            case "mcp.local.created": return "已添加 {name}。";
+            case "mcp.local.saved": return "已保存 {name}。";
+            case "mcp.local.applied": return "已重新写入 {name}，重启客户端后生效。";
+            case "mcp.local.deleteTitle": return "删除 {name}？";
+            case "mcp.local.deleteDetail": return "会同时从已写入的客户端移除这个条目。";
+            case "mcp.local.deleted": return "已删除 {name}。";
+            case "mcp.local.transport": return "类型";
+            case "mcp.local.transport.stdio": return "本机命令（stdio）";
+            case "mcp.local.transport.http": return "远程地址（http）";
+            case "mcp.local.url": return "地址";
+            case "mcp.local.urlHint": return "远程 MCP 服务器的 http(s) 地址，客户端直接连接它，不经过 Astra 网关。";
+            case "mcp.local.headers": return "请求头";
+            case "mcp.local.headersHint": return "每行一个 名称: 值，例如 Authorization: Bearer …。";
+            case "mcp.local.headersKept": return "已保存：{names}。留空保持不变；填写则整体替换。";
+            case "mcp.local.headersInvalid": return "请求头每行应为 名称: 值。";
+            case "mcp.local.headerCount": return "{count} 个请求头";
+            case "mcp.local.import": return "导入已有";
+            case "mcp.local.importTitle": return "导入客户端里已有的 MCP 配置";
+            case "mcp.local.importHint": return "这些条目已经在客户端的配置里，不是 Astra 写的。导入后由 Astra 统一管理；从 Astra 删除它时，会恢复成导入前的样子。";
+            case "mcp.local.importEmpty": return "客户端里没有可以导入的条目。";
+            case "mcp.local.importRun": return "导入所选";
+            case "mcp.local.importTaken": return "Astra 里已有同名服务器";
+            case "mcp.local.importDone": return "已导入 {count} 个。";
+            case "mcp.local.importSkipped": return "{count} 个没有导入：{reasons}";
+            case "mcp.local.importSecrets": return "环境变量和请求头会被读取并加密保存，值不会显示。";
             case "mcp.gateway.enable": return "启用 MCP 网关";
             case "mcp.gateway.enableHint": return "关闭时 /mcp 不响应（404），不会暴露任何新入口。";
             case "mcp.gateway.endpoint": return "聚合地址";
@@ -7942,6 +8050,8 @@ internal static class Messages
             case "settings.openFolder": return "Open folder";
             case "settings.streamIdle": return "Stream idle timeout";
             case "settings.streamIdleHint": return "Disconnect when the upstream sends nothing for this long";
+            case "settings.maxBody": return "Max request body size";
+            case "settings.maxBodyHint": return "Largest request body the gateway accepts (1–1024 MiB, default 64), counted again after decompression; a bigger one gets a 413. Raise it for long sessions carrying many images or files.";
             case "settings.requestCompression": return "Upstream request compression";
             case "settings.requestCompressionHint": return "Format for providers that compress request bodies (ChatGPT subscription defaults to zstd); other providers always get plain bodies";
             case "settings.requestCompression.default": return "Provider default";
@@ -8986,7 +9096,59 @@ internal static class Messages
             case "mcp.clients.forceRemove": return "Force remove";
             case "mcp.clients.applied": return "Written to {client}. Restart the client for it to take effect.";
             case "mcp.clients.removed": return "Removed from {client}.";
-            case "mcp.clients.stdio": return "The gateway only forwards http MCP servers; stdio servers on this machine are not part of it.";
+            case "mcp.clients.stdio": return "The gateway only forwards http MCP servers; add stdio servers that run on this machine under \"Local MCP servers\" below.";
+            case "mcp.local.title": return "Your own MCP servers";
+            case "mcp.local.hint": return "Define a local command (stdio) or a remote address once and choose which clients get it. Astra only writes the entry into each client's own MCP settings; the client starts or reaches it, and it does not go through the gateway above.";
+            case "mcp.local.add": return "Add";
+            case "mcp.local.emptyTitle": return "No local MCP servers yet";
+            case "mcp.local.emptyDetail": return "For example a stdio server started with npx or uvx, or a remote MCP address. Add it once and write it to several clients, or import what the clients already have.";
+            case "mcp.local.footer": return "Environment variables and headers (often keys) are stored encrypted and go only into the clients' files, never back to the browser. They can only be changed on this machine.";
+            case "mcp.local.off": return "Disabled";
+            case "mcp.local.envCount": return "{count} environment variables";
+            case "mcp.local.rewrite": return "Write again";
+            case "mcp.local.state.missing": return "Not written";
+            case "mcp.local.state.applied": return "Written";
+            case "mcp.local.state.drifted": return "Changed";
+            case "mcp.local.state.conflict": return "Conflict";
+            case "mcp.local.addTitle": return "Add a local MCP server";
+            case "mcp.local.editTitle": return "Edit {name}";
+            case "mcp.local.name": return "Name";
+            case "mcp.local.nameHint": return "The entry name in the clients: lower-case letters, digits, _ or -, up to 32 characters, and not \"astra\".";
+            case "mcp.local.command": return "Command";
+            case "mcp.local.args": return "Arguments";
+            case "mcp.local.argsHint": return "One argument per line.";
+            case "mcp.local.env": return "Environment variables";
+            case "mcp.local.envHint": return "One NAME=value per line.";
+            case "mcp.local.envKept": return "Stored: {names}. Leave blank to keep them; anything typed replaces them all.";
+            case "mcp.local.envInvalid": return "Each environment line must be NAME=value.";
+            case "mcp.local.clients": return "Write into";
+            case "mcp.local.clientsHint": return "Turning a client off removes the entry from it.";
+            case "mcp.local.enabled": return "Enabled";
+            case "mcp.local.created": return "Added {name}.";
+            case "mcp.local.saved": return "Saved {name}.";
+            case "mcp.local.applied": return "Wrote {name} again; restart the client to pick it up.";
+            case "mcp.local.deleteTitle": return "Delete {name}?";
+            case "mcp.local.deleteDetail": return "The entry is also removed from the clients it was written into.";
+            case "mcp.local.deleted": return "Deleted {name}.";
+            case "mcp.local.transport": return "Type";
+            case "mcp.local.transport.stdio": return "Local command (stdio)";
+            case "mcp.local.transport.http": return "Remote address (http)";
+            case "mcp.local.url": return "Address";
+            case "mcp.local.urlHint": return "The remote MCP server's http(s) address. The client connects to it directly, not through Astra's gateway.";
+            case "mcp.local.headers": return "Request headers";
+            case "mcp.local.headersHint": return "One Name: value per line, for example Authorization: Bearer ...";
+            case "mcp.local.headersKept": return "Stored: {names}. Leave blank to keep them; anything typed replaces them all.";
+            case "mcp.local.headersInvalid": return "Each header line must be Name: value.";
+            case "mcp.local.headerCount": return "{count} headers";
+            case "mcp.local.import": return "Import existing";
+            case "mcp.local.importTitle": return "Import the MCP servers clients already have";
+            case "mcp.local.importHint": return "These entries are already in the clients' files and were not written by Astra. After importing, Astra manages them; deleting one from Astra puts it back the way it was before.";
+            case "mcp.local.importEmpty": return "No entries in the clients to import.";
+            case "mcp.local.importRun": return "Import selected";
+            case "mcp.local.importTaken": return "Astra already has a server with this name";
+            case "mcp.local.importDone": return "Imported {count}.";
+            case "mcp.local.importSkipped": return "{count} not imported: {reasons}";
+            case "mcp.local.importSecrets": return "Environment variables and headers are read and stored encrypted; their values are never shown.";
             case "mcp.gateway.enable": return "Enable the MCP gateway";
             case "mcp.gateway.enableHint": return "While off, /mcp answers 404 and exposes nothing new.";
             case "mcp.gateway.endpoint": return "Aggregate address";

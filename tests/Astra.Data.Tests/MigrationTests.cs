@@ -18,7 +18,7 @@ public class MigrationTests
 
         await using var conn = await factory.OpenAsync();
         var versions = (await conn.QueryAsync<long>("SELECT version FROM schema_version")).AsList();
-        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L, 21L, 22L, 23L, 24L], versions.Order());
+        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L, 21L, 22L, 23L, 24L, 25L], versions.Order());
 
         var appliedAt = await conn.ExecuteScalarAsync<string>("SELECT applied_at FROM schema_version ORDER BY version LIMIT 1");
         Assert.NotNull(appliedAt);
@@ -35,6 +35,8 @@ public class MigrationTests
                      "plugins", "plugin_provider_prefs", "trace_spans", "provider_account_usage_totals",
                      // 0024_plugins_v2
                      "plugin_kv", "plugin_secrets", "plugin_grants", "plugin_activity", "plugin_successor_dismissals",
+                     // 0025_mcp_local
+                     "mcp_local_servers",
                  })
         {
             Assert.Contains(expected, tables);

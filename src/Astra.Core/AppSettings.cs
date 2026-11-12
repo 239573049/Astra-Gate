@@ -95,6 +95,12 @@ public sealed class AppSettings
     public string RequestCompression { get; set; } = "default";
 
     /// <summary>
+    /// Largest request body the gateway accepts, in MiB (issue #37), as sent and once its Content-Encoding is undone; a
+    /// bigger one is a 413. 1-1024, default 64. (The relay has its own, <c>ASTRA_RELAY_MAX_REQUEST_BODY_BYTES</c>.)
+    /// </summary>
+    public int MaxRequestBodyMb { get; set; } = 64;
+
+    /// <summary>
     /// Provider fallback for clients (issue #28): a client bound to several providers retries a request that failed before
     /// anything reached it — rate limit, rejected credentials, 5xx, network error — on the next bound provider that serves the
     /// model, in binding order. On by default; off = the first provider serving the model answers, whatever it returns.

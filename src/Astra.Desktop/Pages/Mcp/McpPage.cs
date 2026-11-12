@@ -1,6 +1,7 @@
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Layout;
 using Astra.Desktop.Components.Settings;
+using Astra.Desktop.Core.Api;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.Mcp;
 using Astra.Desktop.Core.Shell;
@@ -20,15 +21,26 @@ public sealed class McpPage : PageViewModel
     public McpPage(PageContext context, string? param) : base(AppRoute.Mcp, param, context)
     {
         Api = new McpApi(context.Api, context.Queries);
+        ClientApi = new ClientMcpApi(context.Api, context.Queries);
+        Tokens = context.Tokens.Tokens;
         Observe(Api.Settings);
         Observe(Api.Servers);
         Observe(Api.Calls);
+        Observe(ClientApi.Entries);
+        Observe(ClientApi.Servers);
+        Observe(Tokens);
         var add = Ui.Button(Loc.T("mcp.servers.add"), () => EditRequested?.Invoke(null), ButtonVariant.Primary, LucideIconKind.Plus);
         SetHeaderActions(new ActionGroup(8, add));
     }
 
     /// <summary>The MCP gateway's API (queries and commands).</summary>
     public McpApi Api { get; }
+
+    /// <summary>What the page writes into clients: the gateway entry and the user's own servers (issue #34).</summary>
+    public ClientMcpApi ClientApi { get; }
+
+    /// <summary>The tokens, for the "apply to clients" token picker.</summary>
+    public Query<List<TokenDto>> Tokens { get; }
 
     /// <summary>The feedback surface (toasts, confirmations).</summary>
     public IFeedback Feedback => Context!.Feedback;

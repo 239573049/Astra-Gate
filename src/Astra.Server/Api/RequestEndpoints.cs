@@ -290,6 +290,7 @@ public static class RequestEndpoints
                             if (value is not null) s.EffortBudgets = Json.DeserializeApi<EffortBudgets>(value) ?? s.EffortBudgets;
                             break;
                         case "streamIdleTimeoutSec": s.StreamIdleTimeoutSec = Math.Clamp(value?.GetValue<int>() ?? 300, 10, 3600); break;
+                        case "maxRequestBodyMb": s.MaxRequestBodyMb = Math.Clamp(value?.GetValue<int>() ?? 64, 1, 1024); break;
                         case "clientProviderFailover": s.ClientProviderFailover = value?.GetValue<bool>() ?? true; break;
                         case "providerQualifiedModels": s.ProviderQualifiedModels = value?.GetValue<bool>() ?? false; break;
                         case "modelProviderSeparator":
@@ -412,7 +413,7 @@ public static class RequestEndpoints
         s.ProxyMode, s.ProxyUrl, s.ProxyUsername, !string.IsNullOrEmpty(s.ProxyPasswordProtected), s.ProxyBypass,
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
         UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent, s.PreventSleep,
-        s.ProviderQualifiedModels, s.ModelProviderSeparator, s.HiddenNav.ToList(), s.ModelQualifyScope, s.ClientProviderFailover);
+        s.ProviderQualifiedModels, s.ModelProviderSeparator, s.HiddenNav.ToList(), s.ModelQualifyScope, s.ClientProviderFailover, s.MaxRequestBodyMb);
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:

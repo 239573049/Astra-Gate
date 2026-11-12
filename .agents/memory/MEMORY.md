@@ -58,6 +58,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [CI UI test cleanup flake](ci-ui-test-cleanup-flake.md) — one random SceneCaptureTests case fails after 1 ms with "Test Case Cleanup Failure" on ubuntu; an Avalonia headless race, not the scene; does not gate release.yml
 - [Claude Code identity plugin](claude-code-identity-plugin.md) — issue #24: a community middleware on Astra's own onUpstream hook (user decision 2026-11-09); the identity now lives in C# and in the plugin, move them together
 - [Website moved to astra-gate-web](website-moved-to-astra-gate-web.md) — 2026-11-11: docs/ site → ~/code/astra-gate-web, rewritten on Arc (Pro via Astra's MCP gateway), Pet removed, market redesigned; docs/ removed here the same day, gen-docs writes into the website
+- [Codex model list shape](codex-model-list-slug.md) — issue #35: chatgpt.com's `/codex/models` rows say `slug`, not `id`; client_version / UA sent as the CLI does (unverified with a real account); keep the relay in step before giving the template a `modelListEndpoint`
 - [Four-digit patch versions](four-digit-patch-versions.md) — from 0.14.3100 on the patch number stays four digits on purpose; still x.y.z, not a typo
 - [dotnet-install kills the host on macOS](dotnet-install-macos-sigkill.md) — installing an SDK over ~/.dotnet leaves `dotnet` exiting 137; replace the host with a fresh copy; rollForward picks a new SDK at once
 

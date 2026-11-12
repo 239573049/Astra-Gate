@@ -103,7 +103,7 @@ import type {
   ModelOverrides,
 } from './types';
 import type { PrivacyEvent } from './types';
-import type { ClientMcpEntry } from './types';
+import type { ClientMcpEntry, LocalMcpCandidate, LocalMcpImportResult, LocalMcpServer, LocalMcpServerInput } from './types';
 import type {
   SkillLibrary,
   SkillMigrateItem,
@@ -1288,6 +1288,42 @@ export function useRemoveClientMcp() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['client-mcp'] }),
   });
 }
+
+/** Local (stdio) MCP servers written into clients (issue #34). Changing them is refused off this machine. */
+export const useLocalMcpServers = () =>
+  useQuery({ queryKey: ['local-mcp'], queryFn: () => api<LocalMcpServer[]>('GET', '/api/mcp/local') });
+
+function useLocalMcpMutation<V, R>(fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => void qc.invalidateQueries({ queryKey: ['local-mcp'] }) });
+}
+
+export const useLocalMcpCandidates = (enabled: boolean) =>
+  useQuery({ queryKey: ['local-mcp-import'], queryFn: () => api<LocalMcpCandidate[]>('GET', '/api/mcp/local/import'), enabled });
+
+export function useImportLocalMcp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (items: { kind: string; name: string }[]) => api<LocalMcpImportResult>('POST', '/api/mcp/local/import', { items }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['local-mcp'] });
+      void qc.invalidateQueries({ queryKey: ['local-mcp-import'] });
+    },
+  });
+}
+
+export const useCreateLocalMcp = () => useLocalMcpMutation((body: LocalMcpServerInput) => api<LocalMcpServer>('POST', '/api/mcp/local', body));
+
+export const useUpdateLocalMcp = () =>
+  useLocalMcpMutation((v: { id: string; body: LocalMcpServerInput; force?: boolean }) =>
+    api<LocalMcpServer>('PUT', `/api/mcp/local/${enc(v.id)}${v.force ? '?force=true' : ''}`, v.body));
+
+export const useApplyLocalMcp = () =>
+  useLocalMcpMutation((v: { id: string; force?: boolean }) =>
+    api<LocalMcpServer>('POST', `/api/mcp/local/${enc(v.id)}/apply${v.force ? '?force=true' : ''}`));
+
+export const useDeleteLocalMcp = () =>
+  useLocalMcpMutation((v: { id: string; force?: boolean }) => api<void>('DELETE', `/api/mcp/local/${enc(v.id)}${v.force ? '?force=true' : ''}`));
 
 export const useMcpServers = () =>
   useQuery({

@@ -81,6 +81,8 @@ public static class RelayApp
         // In flight at once: one more is refused at once rather than queued; health checks are never counted.
         var slots = new SemaphoreSlim(options.MaxConcurrentRequests, options.MaxConcurrentRequests);
         app.Lifetime.ApplicationStopped.Register(slots.Dispose);
+        // Who holds the slots, so a refusal can tell load from slots held by long streams or a stalled upstream (issue #39).
+        var holders = new System.Collections.Concurrent.ConcurrentDictionary<HttpContext, long>();
         app.Use(async (context, next) =>
         {
             try
@@ -106,7 +108,7 @@ public static class RelayApp
             catch (HttpRequestException e)
             {
                 await ErrorAsync(context, logger, 502, "api_error",
-                    $"无法连接上游：{e.Message}{(e.InnerException is { } inner ? " " + inner.Message : "")}");
+                    $"无法连接上游：{UpstreamFailure.Describe(e)}");
             }
             catch (IOException)
             {
@@ -141,7 +143,12 @@ public static class RelayApp
             context.Features.Set(new Inbound(protocol));
             var caller = target.Caller(context.Request);
             if (!await slots.WaitAsync(0, context.RequestAborted))
-                throw new GatewayException(503, "overloaded_error", "中转的并发请求已满，请稍后重试。");
+            {
+                LogOverloaded(context);
+                await ErrorAsync(context, logger, 503, "overloaded_error", "中转的并发请求已满，请稍后重试。", log: false);
+                return;
+            }
+            holders[context] = System.Diagnostics.Stopwatch.GetTimestamp();
             context.Features.Set(caller);
             context.Response.Headers.CacheControl = "no-store";
             try
@@ -173,8 +180,21 @@ public static class RelayApp
             finally
             {
                 context.Features.Set<RelayCaller>(null);
+                holders.TryRemove(context, out _);
                 slots.Release();
             }
+        }
+
+        // In flight, the limit, and the oldest holder's age and route; the ages say whether slots turn over or are stuck.
+        void LogOverloaded(HttpContext refused)
+        {
+            var now = System.Diagnostics.Stopwatch.GetTimestamp();
+            var ages = holders.Select(h => (Seconds: (int)System.Diagnostics.Stopwatch.GetElapsedTime(h.Value, now).TotalSeconds, h.Key.Request.Path))
+                .ToList();
+            var oldest = ages.Count == 0 ? default : ages.MaxBy(a => a.Seconds);
+            logger.LogWarning(
+                "Request refused: status=503 type=overloaded_error path={Path} in_flight={InFlight} limit={Limit} over_60s={Over60} oldest_s={Oldest} oldest_path={OldestPath}",
+                refused.Request.Path, ages.Count, options.MaxConcurrentRequests, ages.Count(a => a.Seconds >= 60), oldest.Seconds, oldest.Path);
         }
     }
 
@@ -277,9 +297,9 @@ public static class RelayApp
     }
 
     /// <summary>An error in the inbound protocol's shape; once the answer has started, the connection is cut instead.</summary>
-    private static async Task ErrorAsync(HttpContext context, ILogger logger, int status, string type, string message)
+    private static async Task ErrorAsync(HttpContext context, ILogger logger, int status, string type, string message, bool log = true)
     {
-        logger.LogWarning("Request failed: status={Status} type={Type}", status, type);
+        if (log) logger.LogWarning("Request failed: status={Status} type={Type}", status, type);
         if (context.Response.HasStarted)
         {
             context.Abort();

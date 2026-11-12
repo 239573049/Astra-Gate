@@ -1,0 +1,20 @@
+[
+  {
+    "kind": "claude-code",
+    "name": "memory",
+    "transport": "stdio",
+    "summary": "npx -y @modelcontextprotocol/server-memory",
+    "importable": true,
+    "reason": null,
+    "taken": false
+  },
+  {
+    "kind": "claude-code",
+    "name": "legacy",
+    "transport": "http",
+    "summary": "",
+    "importable": false,
+    "reason": "sse transport",
+    "taken": false
+  }
+]

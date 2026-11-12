@@ -30,6 +30,8 @@ public sealed class McpView : UserControl
     private readonly QueryHost<McpSettingsDto> _gateway;
     private readonly QueryHost<List<McpServerDto>> _servers;
     private readonly QueryHost<List<McpCallDto>> _calls;
+    private readonly QueryHost<List<ClientMcpDto>> _clients;
+    private readonly QueryHost<List<LocalMcpServerDto>> _local;
     private string? _originsDraft;
     private bool _wired;
 
@@ -40,9 +42,15 @@ public sealed class McpView : UserControl
         _gateway = new QueryHost<McpSettingsDto>(page.Api.Settings, RenderGateway);
         _servers = new QueryHost<List<McpServerDto>>(page.Api.Servers, RenderServers);
         _calls = new QueryHost<List<McpCallDto>>(page.Api.Calls, RenderCalls);
+        var panel = new ClientMcpPanel(page.ClientApi, page.Feedback, () => page.Tokens.Data);
+        _clients = new QueryHost<List<ClientMcpDto>>(page.ClientApi.Entries, panel.Render);
+        var section = new LocalMcpSection(page.ClientApi, page.Feedback, () => this);
+        _local = new QueryHost<List<LocalMcpServerDto>>(page.ClientApi.Servers, section.Render);
         var column = new StackPanel { Spacing = 20, MaxWidth = 1100, HorizontalAlignment = HorizontalAlignment.Stretch };
         column.Children.Add(_gateway);
         column.Children.Add(_servers);
+        column.Children.Add(_clients);
+        column.Children.Add(_local);
         column.Children.Add(_calls);
         Content = column;
     }
@@ -54,6 +62,7 @@ public sealed class McpView : UserControl
         if (_wired) return;
         _wired = true;
         _page.EditRequested += ShowSheet;
+        _page.Tokens.PropertyChanged += OnTokens;
         Loc.LanguageChanged += OnLanguage;
     }
 
@@ -64,14 +73,21 @@ public sealed class McpView : UserControl
         if (!_wired) return;
         _wired = false;
         _page.EditRequested -= ShowSheet;
+        _page.Tokens.PropertyChanged -= OnTokens;
         Loc.LanguageChanged -= OnLanguage;
     }
+
+    // the token picker of "apply to clients" reads the tokens as they stand: draw it again when they arrive or change
+    private void OnTokens(object? sender, System.ComponentModel.PropertyChangedEventArgs e) =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(_clients.Rebuild);
 
     private void OnLanguage() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
     {
         _gateway.Rebuild();
         _servers.Rebuild();
         _calls.Rebuild();
+        _clients.Rebuild();
+        _local.Rebuild();
     });
 
     private void ShowSheet(McpServerDto? server) => McpServerSheet.Show(this, _page.Api, _page.Feedback, server);
