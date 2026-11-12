@@ -4,6 +4,25 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.14.3105] - 2026-11-13
+
+### 新增
+
+- **自有 MCP 服务器**：「MCP 网关」页新增「自有 MCP 服务器」，把本机命令（stdio，如 `npx` / `uvx` 启动的服务器）或远程地址定义一次，选择写入 Claude Code、Codex、Gemini CLI、Qwen Code、OpenCode 的 MCP 配置。进程由客户端自己启动、远程地址由客户端直连，Astra 不运行也不代理；环境变量与请求头加密保存，不会再返回给浏览器。沿用网关条目的规则：首次写入前备份、不覆盖同名的非 Astra 条目、被改动的条目需确认才覆盖，`astra-server restore-all` 会一并移除（数据库迁移 0025，`/api/mcp/local`，网页控制台与桌面端都有；#34）。
+- **导入客户端里已有的 MCP 配置**：列出各客户端里不是 Astra 写的 MCP 条目，选择后由 Astra 统一管理；从 Astra 删除时，会把条目恢复成导入前的样子。
+- **桌面端「应用到客户端」**：桌面端的 MCP 页现在也能把网关的 `/mcp` 写入 Claude Code 和 Codex。
+- **请求体大小上限可调**：设置里新增「最大请求体」（1–1024 MiB，默认 64），超过的请求返回 413；中转模式用 `ASTRA_RELAY_MAX_REQUEST_BODY_BYTES`（#37）。
+
+### 改进
+
+- **上游连接失败给出原因**：无法连接上游时，错误里写明具体原因（连接被重置、响应提前结束、TLS、HTTP/2 GOAWAY 等），不再只有「An error occurred while sending the request.」，也不会带出上游地址（#39）。
+
+### 修复
+
+- **启用 DeepSeek Harness 报「A flow-style YAML root sequence is not supported」**：Harness 新建的配置文件内容是空的 `[]`，Astra 之前无法往里写入；现在可以直接启用（#36）。
+- **Codex 订阅的模型列表为空或不全**：获取列表时带上 Codex CLI 的标识与版本，并识别 ChatGPT 后端返回的 `slug` 字段。
+- **Responses 流里只在 done 事件里给出的工具参数丢失**：上游若只在 `function_call_arguments.done` / `output_item.done` 里一次给出参数，现在会保留，不再得到空参数。
+
 ## [0.14.3104] - 2026-11-12
 
 ### 新增
