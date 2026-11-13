@@ -125,7 +125,7 @@ public class MigrationTests
         Assert.True(new FileInfo(backup).Length > 0);
 
         await using var check = await factory.OpenAsync();
-        Assert.Equal(19, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
+        Assert.Equal(22, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
         Assert.Equal("true",
             await check.ExecuteScalarAsync<string>("SELECT value_json FROM settings WHERE key = 'marker'"));
         // 0005 was re-applied after the rollback: the reasoning columns are back.
@@ -166,7 +166,7 @@ public class MigrationTests
         var backup = Assert.Single(Directory.GetFiles(paths.DbBackupsDir));
         Assert.Contains("-v4", Path.GetFileName(backup));
         await using var check = await factory.OpenAsync();
-        Assert.Equal(22, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
+        Assert.Equal(25, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
         var record = await check.QuerySingleAsync<Astra.Core.Requests.RequestRecord>("""
             SELECT requested_model, reasoning_effort, reasoning_mode, reasoning_budget_tokens
             FROM requests WHERE id = 'r-v4'
@@ -179,9 +179,20 @@ public class MigrationTests
 
     /// <summary>
     /// Rolls a fully migrated database back to its v13 shape (what 0014_alerts, 0015_webhook_format,
-    /// 0016_request_origin, 0017_tracing, 0018_token_pool, 0019_provider_account_usage, 0020_request_routing, 0021_token_invites and 0022_mcp_gateway add is removed).
+    /// 0016_request_origin, 0017_tracing, 0018_token_pool, 0019_provider_account_usage, 0020_request_routing, 0021_token_invites, 0022_mcp_gateway, 0023_library_skills, 0024_plugins_v2 and 0025_mcp_local add is removed).
     /// </summary>
     private const string UndoAlertsMigration = """
+        DROP TABLE mcp_local_servers;
+        DELETE FROM schema_version WHERE version = 25;
+        DROP TABLE plugin_successor_dismissals;
+        DROP TABLE plugin_activity;
+        DROP TABLE plugin_grants;
+        DROP TABLE plugin_secrets;
+        DROP TABLE plugin_kv;
+        DELETE FROM schema_version WHERE version = 24;
+        DROP TABLE library_placements;
+        DROP TABLE library_skills;
+        DELETE FROM schema_version WHERE version = 23;
         DROP TABLE mcp_calls;
         DROP TABLE mcp_oauth;
         DROP TABLE mcp_servers;
