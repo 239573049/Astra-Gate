@@ -143,6 +143,32 @@ public sealed class ProviderQueries
         return ProviderBackupLogic.ParseResult(result);
     }
 
+    /// <summary>GET /api/backup/webdav (<c>useWebDav</c>): the saved address and login, without the password.</summary>
+    public async Task<WebDavStatus> WebDavStatusAsync(CancellationToken ct = default)
+        => ProviderBackupLogic.ParseWebDavStatus(await _api.GetAsync<JsonObject>("/api/backup/webdav", ct));
+
+    /// <summary>PUT /api/backup/webdav (<c>useSaveWebDav</c>); an empty <paramref name="password"/> keeps the stored one. This machine only.</summary>
+    public async Task<WebDavStatus> SaveWebDavAsync(string url, string username, string folder, string password, CancellationToken ct = default)
+        => ProviderBackupLogic.ParseWebDavStatus(await _api.PutAsync<JsonObject, JsonObject>("/api/backup/webdav", ProviderBackupLogic.WebDavSettingsRequest(url, username, folder, password), ct));
+
+    /// <summary>DELETE /api/backup/webdav (<c>useForgetWebDav</c>): drops the address and login.</summary>
+    public async Task<WebDavStatus> ForgetWebDavAsync(CancellationToken ct = default)
+        => ProviderBackupLogic.ParseWebDavStatus(await _api.DeleteAsync<JsonObject>("/api/backup/webdav", ct));
+
+    /// <summary>POST /api/backup/webdav/test: the server writes and reads a probe file; it throws when that fails.</summary>
+    public async Task TestWebDavAsync(CancellationToken ct = default) => await _api.PostAsync<JsonObject>("/api/backup/webdav/test", ct);
+
+    /// <summary>POST /api/backup/webdav/upload: backs the providers up to the cloud; returns how many were uploaded.</summary>
+    public async Task<int> UploadWebDavAsync(string secrets, string passphrase, CancellationToken ct = default)
+    {
+        var result = await _api.PostAsync<JsonObject, JsonObject>("/api/backup/webdav/upload", ProviderBackupLogic.WebDavUploadRequest(secrets, passphrase), ct);
+        return (int?)result?["uploaded"] ?? 0;
+    }
+
+    /// <summary>POST /api/backup/webdav/restore: the latest cloud backup as a file for the ordinary preview; nothing is imported.</summary>
+    public async Task<JsonObject> RestoreWebDavAsync(CancellationToken ct = default)
+        => await _api.PostAsync<JsonObject>("/api/backup/webdav/restore", ct) ?? new JsonObject();
+
     /// <summary>POST /api/providers/{id}/quota: runs the balance query now (the card's gauge button).</summary>
     public async Task FetchQuotaAsync(string id, CancellationToken ct = default)
     {

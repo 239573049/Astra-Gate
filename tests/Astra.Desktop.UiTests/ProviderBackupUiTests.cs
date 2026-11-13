@@ -31,13 +31,18 @@ public class ProviderBackupUiTests
     {
         public List<(string Path, string Body)> Posts { get; } = [];
 
+        /// <summary>The answered requests that are not POSTs (an answer is keyed "PUT /path"; a POST is keyed by its path alone).</summary>
+        public List<(string Method, string Path, string Body)> Calls { get; } = [];
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             var path = request.RequestUri!.AbsolutePath;
-            if (request.Method == HttpMethod.Post && answers.TryGetValue(path, out var json))
+            var isPost = request.Method == HttpMethod.Post;
+            if ((isPost && answers.TryGetValue(path, out var json)) || (answers.TryGetValue(request.Method + " " + path, out json) && json is not null))
             {
                 var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
-                lock (Posts) Posts.Add((path, body));
+                if (isPost) lock (Posts) Posts.Add((path, body));
+                else lock (Calls) Calls.Add((request.Method.Method, path, body));
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
             }
             return await base.SendAsync(request, cancellationToken);
@@ -128,14 +133,16 @@ public class ProviderBackupUiTests
         window.Close();
     }
 
-    private static (ProvidersViewModel Vm, ProviderBackupSheet Sheet, Tap Tap, FakeFiles Files) Backup(string? fileToRead = null)
+    private static (ProvidersViewModel Vm, ProviderBackupSheet Sheet, Tap Tap, FakeFiles Files) Backup(string? fileToRead = null, Dictionary<string, string>? more = null)
     {
-        var (ctx, tap) = Context(new()
+        var answers = new Dictionary<string, string>
         {
             ["/api/providers/backup/export"] = """{"format":"astra-providers","version":1,"secrets":"passphrase","providers":[{"name":"Alpha"}]}""",
             ["/api/providers/backup/preview"] = Preview,
             ["/api/providers/backup/import"] = """{"added":[{"id":"n1","name":"Alpha"}],"skipped":[{"index":1,"reason":"same"}]}""",
-        });
+        };
+        foreach (var (k, v) in more ?? []) answers[k] = v;
+        var (ctx, tap) = Context(answers);
         var vm = new ProvidersViewModel(ctx, null);
         var files = new FakeFiles(fileToRead);
         var sheet = new ProviderBackupSheet(vm, files);
@@ -211,6 +218,115 @@ public class ProviderBackupUiTests
         Assert.StartsWith("astra-providers-", files.SavedName);
         Assert.EndsWith(".json", files.SavedName);
         Assert.Equal("astra-providers", (string?)JsonNode.Parse(files.Saved!)!["format"]);
+    }
+
+    /// <summary>Waits for a sheet action and checks that it succeeded.</summary>
+    private static void Run(Task<bool> action)
+    {
+        SceneCapture.Await(action, TimeSpan.FromSeconds(10));
+        Assert.True(action.Result);
+    }
+
+    private const string DavSaved = """{"configured":true,"url":"https://dav.example.com/dav","username":"me","hasPassword":true,"folder":"astra"}""";
+
+    private static Dictionary<string, string> Dav() => new()
+    {
+        ["GET /api/backup/webdav"] = DavSaved,
+        ["PUT /api/backup/webdav"] = DavSaved,
+        ["DELETE /api/backup/webdav"] = """{"configured":false,"url":"","username":"","hasPassword":false,"folder":"astra"}""",
+        ["/api/backup/webdav/test"] = """{"ok":true}""",
+        ["/api/backup/webdav/upload"] = """{"uploaded":3,"name":"providers-20261113T000000Z.json"}""",
+        ["/api/backup/webdav/restore"] = PlainFile,
+    };
+
+    [AvaloniaFact]
+    public void Opening_the_sheet_loads_the_saved_webdav_settings()
+    {
+        var (_, sheet, _, _) = Backup(more: Dav());
+        sheet.Open();
+        SceneCapture.Await(sheet.LoadDavAsync(), TimeSpan.FromSeconds(10));
+
+        Assert.True(sheet.DavStatus.Configured);
+        Assert.Equal("https://dav.example.com/dav", sheet.DavStatus.Url);
+        Assert.True(sheet.DavStatus.HasPassword);
+        Assert.Null(sheet.DavError);
+    }
+
+    [AvaloniaFact]
+    public void Saving_sends_the_form_and_leaves_an_empty_password_out()
+    {
+        var (_, sheet, tap, _) = Backup(more: Dav());
+        sheet.Open();
+        sheet.TypeDavSettings("https://dav.example.com/dav", "me", "", "astra");
+
+        var saved = sheet.SaveDavAsync();
+        SceneCapture.Await(saved, TimeSpan.FromSeconds(10));
+
+        Assert.True(saved.Result);
+        var put = Assert.Single(tap.Calls, c => c.Method == "PUT");
+        Assert.Equal("/api/backup/webdav", put.Path);
+        Assert.Equal("""{"url":"https://dav.example.com/dav","username":"me","folder":"astra"}""", put.Body);
+
+        sheet.TypeDavSettings("https://dav.example.com/dav", "me", "s3cret", "astra");
+        SceneCapture.Await(sheet.SaveDavAsync(), TimeSpan.FromSeconds(10));
+        Assert.Equal("s3cret", (string?)JsonNode.Parse(tap.Calls.Last(c => c.Method == "PUT").Body)!["password"]);
+    }
+
+    [AvaloniaFact]
+    public void Testing_forgetting_and_uploading_call_the_servers_webdav_routes()
+    {
+        var (_, sheet, tap, _) = Backup(more: Dav());
+        sheet.Open();
+        SceneCapture.Await(sheet.LoadDavAsync(), TimeSpan.FromSeconds(10));
+
+        Run(sheet.TestDavAsync());
+        sheet.SetDavMode(ProviderBackupLogic.Passphrase);
+        sheet.TypeDavPassphrase("correct horse battery");
+        Run(sheet.UploadDavAsync());
+        var upload = tap.Posts.Single(p => p.Path == "/api/backup/webdav/upload");
+        Assert.Equal("""{"secrets":"passphrase","passphrase":"correct horse battery"}""", upload.Body);
+
+        Run(sheet.ForgetDavAsync());
+        Assert.False(sheet.DavStatus.Configured);
+        Assert.Contains(tap.Calls, c => c.Method == "DELETE");
+    }
+
+    [AvaloniaFact]
+    public void The_cloud_copy_never_offers_plaintext_keys()
+    {
+        Assert.DoesNotContain(ProviderBackupLogic.Plaintext, ProviderBackupLogic.WebDavModes);
+        Assert.Equal("""{"secrets":"none"}""", ProviderBackupLogic.WebDavUploadRequest("none", "ignored").ToJsonString());
+    }
+
+    [AvaloniaFact]
+    public void Restoring_from_the_cloud_previews_the_file_and_imports_nothing()
+    {
+        var (_, sheet, tap, _) = Backup(more: Dav());
+        sheet.Open();
+        SceneCapture.Await(sheet.LoadDavAsync(), TimeSpan.FromSeconds(10));
+
+        Run(sheet.RestoreDavAsync());
+
+        Assert.Equal(2, sheet.Preview!.Items.Count);
+        Assert.Equal([0], sheet.Ticked);
+        Assert.Contains(tap.Posts, p => p.Path == "/api/providers/backup/preview");
+        Assert.DoesNotContain(tap.Posts, p => p.Path == "/api/providers/backup/import");
+    }
+
+    [AvaloniaFact]
+    public void An_encrypted_cloud_backup_waits_for_its_passphrase()
+    {
+        var encrypted = """{"format":"astra-providers","version":1,"secrets":"passphrase","providers":[{"name":"Alpha"}]}""";
+        var more = Dav();
+        more["/api/backup/webdav/restore"] = encrypted;
+        var (_, sheet, tap, _) = Backup(more: more);
+        sheet.Open();
+        SceneCapture.Await(sheet.LoadDavAsync(), TimeSpan.FromSeconds(10));
+
+        SceneCapture.Await(sheet.RestoreDavAsync(), TimeSpan.FromSeconds(10));
+
+        Assert.Null(sheet.Preview);
+        Assert.DoesNotContain(tap.Posts, p => p.Path == "/api/providers/backup/preview");
     }
 
     [AvaloniaFact]

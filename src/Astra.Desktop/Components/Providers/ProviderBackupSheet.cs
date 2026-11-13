@@ -82,6 +82,26 @@ internal sealed class ProviderBackupSheet : UserControl
     private string? _importError;
     private bool _busy;
 
+    // WebDAV copy (issue #41): the form's inputs are built once (typing must not rebuild them); what follows "configured" is rebuilt.
+    private readonly StackPanel _davArea = new() { Spacing = 12 };
+    private Input? _davUrlBox;
+    private Input? _davUserBox;
+    private PasswordField? _davPassBox;
+    private Input? _davFolderBox;
+    private ArcButton? _davSave;
+    private ArcButton? _davTest;
+    private ArcButton? _davForget;
+    private ArcButton? _davUpload;
+    private WebDavStatus _davStatus = new(false, "", "", false, ProviderBackupLogic.DefaultWebDavFolder);
+    private string _davUrl = "";
+    private string _davUser = "";
+    private string _davPass = "";
+    private string _davFolder = ProviderBackupLogic.DefaultWebDavFolder;
+    private string _davMode = ProviderBackupLogic.None;
+    private string _davPassphrase = "";
+    private string? _davError;
+    private bool _davBusy;
+
     /// <summary>Builds the (closed) sheet; <paramref name="files"/> null uses the OS dialogs.</summary>
     public ProviderBackupSheet(IProviderSheetHost host, IBackupFiles? files = null)
     {
@@ -108,6 +128,12 @@ internal sealed class ProviderBackupSheet : UserControl
     /// <summary>The message shown under the export button, or null.</summary>
     public string? ExportError => _exportError;
 
+    /// <summary>The saved WebDAV settings as the server last reported them.</summary>
+    internal WebDavStatus DavStatus => _davStatus;
+
+    /// <summary>The message shown in the WebDAV section, or null.</summary>
+    internal string? DavError => _davError;
+
     /// <summary>Opens the sheet with nothing chosen.</summary>
     public void Open()
     {
@@ -119,9 +145,14 @@ internal sealed class ProviderBackupSheet : UserControl
         _preview = null;
         _importError = null;
         _ticked.Clear();
+        _davMode = ProviderBackupLogic.None;
+        _davPassphrase = "";
+        _davError = null;
         RenderExport();
         RenderImport();
+        RenderDav();
         _sheet.IsOpen = true;
+        _ = LoadDavAsync();
     }
 
     private void Build()
@@ -135,14 +166,16 @@ internal sealed class ProviderBackupSheet : UserControl
         var importHead = KitStyle.Text(Loc.T("backup.import.title"), ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium);
         var choose = ProviderUi.Button(Loc.T("backup.import.choose"), LucideIconKind.Upload, onClick: () => _ = ChooseAsync());
         var importSection = new StackPanel { Spacing = 12, Children = { importHead, choose, _importArea } };
+        var davSection = BuildDav();
 
         _sheet.Content = new ScrollViewer
         {
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            Content = new StackPanel { Spacing = 24, Margin = new Thickness(0, 0, 14, 0), Children = { exportSection, importSection } },
+            Content = new StackPanel { Spacing = 24, Margin = new Thickness(0, 0, 14, 0), Children = { exportSection, importSection, davSection } },
         };
         RenderExport();
         RenderImport();
+        RenderDav();
     }
 
     // ------------------------------------------------------------------ export
@@ -247,6 +280,17 @@ internal sealed class ProviderBackupSheet : UserControl
         RenderImport();
     }
 
+    /// <summary>A file from somewhere other than the file chooser (the WebDAV restore): previewed exactly like a chosen one (web <c>adopt</c>).</summary>
+    internal async Task AdoptAsync(JsonObject file)
+    {
+        _preview = null;
+        _importError = null;
+        _ticked.Clear();
+        _file = file;
+        if (!ProviderBackupLogic.NeedsPassphrase(file)) await PreviewAsync();
+        RenderImport();
+    }
+
     /// <summary>Types the passphrase of an encrypted file (tests).</summary>
     internal void TypeImportPassphrase(string text) => _importPass = text;
 
@@ -333,6 +377,176 @@ internal sealed class ProviderBackupSheet : UserControl
     }
 
     private ArcButton? _runImport;
+
+    // ------------------------------------------------------------------ WebDAV
+
+    private Control BuildDav()
+    {
+        var head = KitStyle.Text(Loc.T("backup.webdav.title"), ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, FontWeight.Medium);
+        _davUrlBox = PdUi.TextBox(_davUrl, v => { _davUrl = v; UpdateDavButtons(); }, null, true, Loc.T("backup.webdav.url"), "https://dav.example.com/remote.php/dav/files/me");
+        _davUserBox = PdUi.TextBox(_davUser, v => _davUser = v, null, false, Loc.T("backup.webdav.username"), Loc.T("backup.webdav.username"));
+        _davPassBox = PdUi.Secret(_davPass, v => _davPass = v, 0, Loc.T("backup.webdav.password"), Loc.T("backup.webdav.password"));
+        _davPassBox.Width = double.NaN;
+        _davFolderBox = PdUi.TextBox(_davFolder, v => _davFolder = v, null, true, Loc.T("backup.webdav.folder"), Loc.T("backup.webdav.folder"));
+        var login = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
+        login.Children.Add(_davUserBox);
+        Grid.SetColumn(_davPassBox, 1);
+        login.Children.Add(_davPassBox);
+
+        _davSave = ProviderUi.Button(Loc.T("backup.webdav.save"), null, ButtonVariant.Primary, onClick: () => _ = SaveDavAsync());
+        _davTest = ProviderUi.Button(Loc.T("backup.webdav.test"), onClick: () => _ = TestDavAsync());
+        _davForget = ProviderUi.Button(Loc.T("backup.webdav.forget"), onClick: () => _ = ForgetDavAsync());
+        var buttons = PdUi.Inline(8, _davSave, _davTest, _davForget);
+
+        UpdateDavButtons();
+        return new StackPanel
+        {
+            Spacing = 12,
+            Children = { head, ProviderUi.Hint(Loc.T("backup.webdav.hint")), _davUrlBox, login, _davFolderBox, buttons, _davArea },
+        };
+    }
+
+    private void UpdateDavButtons()
+    {
+        if (_davSave is not null) _davSave.IsEnabled = !_davBusy && _davUrl.Trim().Length > 0;
+        if (_davTest is not null) _davTest.IsEnabled = !_davBusy && _davStatus.Configured;
+        if (_davForget is not null)
+        {
+            _davForget.IsVisible = _davStatus.Configured;
+            _davForget.IsEnabled = !_davBusy;
+        }
+        if (_davUpload is not null) _davUpload.IsEnabled = !_davBusy && ProviderBackupLogic.CanExport(_davMode, _davPassphrase);
+    }
+
+    // The part that exists once the settings are saved: the key policy, "back up now" and "restore from the cloud", then the error.
+    private void RenderDav()
+    {
+        _davArea.Children.Clear();
+        _davUpload = null;
+        if (_davStatus.Configured)
+        {
+            var mode = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            mode.Children.Add(PdUi.Text(Loc.T("backup.export.secrets"), 12.5, ArcDesignTokenKind.TextMuted));
+            mode.Children.Add(PdUi.Choice(ProviderBackupLogic.WebDavModes.Select(m => (m, ProviderBackupLogic.ModeLabel(m))), _davMode, v => SetDavMode(v), 260, Loc.T("backup.export.secrets")));
+            _davArea.Children.Add(mode);
+            if (_davMode == ProviderBackupLogic.Passphrase)
+            {
+                var name = $"{Loc.T("backup.webdav.title")} {Loc.T("backup.passphrase")}";
+                _davArea.Children.Add(PdUi.Secret(_davPassphrase, v => { _davPassphrase = v; UpdateDavButtons(); }, 320, name, Loc.T("backup.passphrase")));
+            }
+            _davUpload = ProviderUi.Button(Loc.T("backup.webdav.upload"), LucideIconKind.CloudUpload, ButtonVariant.Primary, onClick: () => _ = UploadDavAsync());
+            var restore = ProviderUi.Button(Loc.T("backup.webdav.restore"), LucideIconKind.CloudDownload, onClick: () => _ = RestoreDavAsync());
+            restore.IsEnabled = !_davBusy;
+            _davArea.Children.Add(PdUi.Inline(8, _davUpload, restore));
+        }
+        if (_davError is not null) _davArea.Children.Add(new Alert { Tone = AlertTone.Danger, Title = Loc.T("common.error"), Content = _davError });
+        UpdateDavButtons();
+    }
+
+    /// <summary>Picks the key policy of the next cloud backup (the select calls this).</summary>
+    internal void SetDavMode(string mode)
+    {
+        _davMode = mode;
+        _davError = null;
+        RenderDav();
+    }
+
+    /// <summary>Types the cloud backup's passphrase (tests).</summary>
+    internal void TypeDavPassphrase(string text)
+    {
+        _davPassphrase = text;
+        RenderDav();
+    }
+
+    /// <summary>Fills the settings form as if typed (tests).</summary>
+    internal void TypeDavSettings(string url, string username, string password, string folder)
+    {
+        (_davUrl, _davUser, _davPass, _davFolder) = (url, username, password, folder);
+        if (_davUrlBox is not null) _davUrlBox.Text = url;
+        if (_davUserBox is not null) _davUserBox.Text = username;
+        if (_davPassBox is not null) _davPassBox.Text = password;
+        if (_davFolderBox is not null) _davFolderBox.Text = folder;
+        UpdateDavButtons();
+    }
+
+    // Takes what the server reports as the form's content; the password box is emptied (the server keeps the stored one).
+    private void ApplyDavStatus(WebDavStatus status)
+    {
+        _davStatus = status;
+        _davPass = "";
+        TypeDavSettings(status.Url, status.Username, "", status.Folder);
+        if (_davPassBox is not null) _davPassBox.Placeholder = Loc.T(status.HasPassword ? "backup.webdav.passwordKept" : "backup.webdav.password");
+    }
+
+    /// <summary>Reads the saved WebDAV settings (when the sheet opens). A failure is shown, not thrown.</summary>
+    internal async Task LoadDavAsync()
+    {
+        try
+        {
+            ApplyDavStatus(await _host.Queries.WebDavStatusAsync());
+        }
+        catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            _davError = e.Message;
+        }
+        RenderDav();
+    }
+
+    private async Task<bool> RunDavAsync(Func<Task> work)
+    {
+        _davError = null;
+        _davBusy = true;
+        UpdateDavButtons();
+        try
+        {
+            await work();
+            return true;
+        }
+        catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            _davError = e.Message;
+            return false;
+        }
+        finally
+        {
+            _davBusy = false;
+            RenderDav();
+        }
+    }
+
+    /// <summary>Saves the address, login and folder (the save button).</summary>
+    internal Task<bool> SaveDavAsync() => RunDavAsync(async () =>
+    {
+        ApplyDavStatus(await _host.Queries.SaveWebDavAsync(_davUrl, _davUser, _davFolder, _davPass));
+        _host.Feedback.Success(Loc.T("backup.webdav.saved"));
+    });
+
+    /// <summary>Checks the connection (the test button).</summary>
+    internal Task<bool> TestDavAsync() => RunDavAsync(async () =>
+    {
+        await _host.Queries.TestWebDavAsync();
+        _host.Feedback.Success(Loc.T("backup.webdav.testOk"));
+    });
+
+    /// <summary>Drops the saved settings (the remove button).</summary>
+    internal Task<bool> ForgetDavAsync() => RunDavAsync(async () => ApplyDavStatus(await _host.Queries.ForgetWebDavAsync()));
+
+    /// <summary>Backs the providers up to the cloud (the back-up button).</summary>
+    internal Task<bool> UploadDavAsync() => RunDavAsync(async () =>
+    {
+        var count = await _host.Queries.UploadWebDavAsync(_davMode, _davPassphrase);
+        _host.Feedback.Success(Loc.T("backup.webdav.uploadDone", ("count", count)));
+        _davPassphrase = "";
+    });
+
+    /// <summary>Fetches the latest cloud backup and previews it like a chosen file; nothing is imported until the person confirms.</summary>
+    internal async Task<bool> RestoreDavAsync()
+    {
+        JsonObject? file = null;
+        var ok = await RunDavAsync(async () => file = await _host.Queries.RestoreWebDavAsync());
+        if (ok && file is not null) await AdoptAsync(file);
+        return ok;
+    }
 
     private Control Row(BackupItem item)
     {

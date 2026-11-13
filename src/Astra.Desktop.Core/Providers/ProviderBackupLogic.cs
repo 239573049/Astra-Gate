@@ -14,6 +14,9 @@ public sealed record BackupPreview(string Secrets, IReadOnlyList<BackupItem> Ite
 /// <summary>The outcome of an import: how many providers were created and how many entries were skipped.</summary>
 public sealed record BackupResult(int Added, int Skipped);
 
+/// <summary>The saved WebDAV copy settings (web <c>WebDavStatus</c>); the password is never sent back, only whether one is stored.</summary>
+public sealed record WebDavStatus(bool Configured, string Url, string Username, bool HasPassword, string Folder);
+
 /// <summary>
 /// Rules of the provider backup sheet (web <c>ProviderBackupSheet</c>, <c>.plan/provider-backup.md</c>): the three ways to store keys, which
 /// entries can be ticked (only new ones start ticked), and how the server's JSON is read. The file itself stays a <see cref="JsonObject"/>: the
@@ -35,6 +38,12 @@ public static class ProviderBackupLogic
 
     /// <summary>The key policies in the order the picker lists them.</summary>
     public static readonly IReadOnlyList<string> Modes = [None, Passphrase, Plaintext];
+
+    /// <summary>The key policies the WebDAV copy offers: the server never uploads plaintext keys.</summary>
+    public static readonly IReadOnlyList<string> WebDavModes = [None, Passphrase];
+
+    /// <summary>The folder the server uses when none is given.</summary>
+    public const string DefaultWebDavFolder = "astra";
 
     /// <summary>Picker label of a key policy.</summary>
     public static string ModeLabel(string mode) => Loc.T("backup.secrets." + mode);
@@ -91,6 +100,27 @@ public static class ProviderBackupLogic
                 (o["ignored"] as JsonArray ?? []).Select(i => (string?)i ?? "").Where(i => i.Length > 0).ToList()));
         }
         return new BackupPreview((string?)json?["secrets"] ?? None, items);
+    }
+
+    /// <summary>Decodes <c>GET|PUT|DELETE /api/backup/webdav</c>.</summary>
+    public static WebDavStatus ParseWebDavStatus(JsonObject? json)
+        => new((bool?)json?["configured"] ?? false, (string?)json?["url"] ?? "", (string?)json?["username"] ?? "", (bool?)json?["hasPassword"] ?? false,
+            (string?)json?["folder"] is { Length: > 0 } folder ? folder : DefaultWebDavFolder);
+
+    /// <summary>The body of <c>PUT /api/backup/webdav</c>; an empty password is left out, which keeps the stored one.</summary>
+    public static JsonObject WebDavSettingsRequest(string url, string username, string folder, string password)
+    {
+        var body = new JsonObject { ["url"] = url, ["username"] = username, ["folder"] = folder };
+        if (password.Length > 0) body["password"] = password;
+        return body;
+    }
+
+    /// <summary>The body of <c>POST /api/backup/webdav/upload</c>.</summary>
+    public static JsonObject WebDavUploadRequest(string secrets, string passphrase)
+    {
+        var body = new JsonObject { ["secrets"] = secrets };
+        if (secrets == Passphrase) body["passphrase"] = passphrase;
+        return body;
     }
 
     /// <summary>Decodes the server's import answer.</summary>
