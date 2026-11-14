@@ -1,0 +1,40 @@
+{
+  // Personal Claude Code settings. Astra edits only the env keys it owns.
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(dotnet build:*)",
+      "Edit(src/**)",
+      "WebFetch(domain:docs.claude.com)"
+    ],
+    "deny": []
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/usr/local/bin/format-changed.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "EDITOR": "vim",
+    // The user's own subagent default comes back on disable
+    "CLAUDE_CODE_SUBAGENT_MODEL": "gpt-6-luna",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    // Custom variables must survive untouched
+    "MY_TEAM_ENDPOINT": "https://internal.example.com",
+    "ANTHROPIC_BASE_URL": "https://astra.corp.com",
+    "ANTHROPIC_AUTH_TOKEN": "sk-astra-enterprise-key",
+    "ANTHROPIC_MODEL": "gpt-6.1-terra[1m]",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5[1m]",
+    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "1"
+  },
+  "includeCoAuthoredBy": false,
+}

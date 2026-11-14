@@ -12,11 +12,20 @@ public static class ClaudeCodeModels
 {
     public const string ExtrasKey = "models";
 
-    /// <summary>Slot env var names, in UI order: the default model, then the fable / opus / sonnet / haiku tiers.</summary>
+    /// <summary>
+    /// Claude Code's default subagent model (issue #42): used by subagents whose definition or spawn names no model, instead of
+    /// the main session's. A frontmatter alias such as <c>model: haiku</c> still resolves through the tier slots.
+    /// </summary>
+    public const string SubagentSlot = "CLAUDE_CODE_SUBAGENT_MODEL";
+
+    /// <summary>
+    /// Slot env var names, in UI order: the default model, then the fable / opus / sonnet / haiku tiers, then the default
+    /// subagent model.
+    /// </summary>
     public static readonly IReadOnlyList<string> Slots =
     [
         "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL",
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL", SubagentSlot,
     ];
 
     /// <summary>The non-empty slot → model entries of an extras object, in <see cref="Slots"/> order.</summary>
@@ -37,10 +46,12 @@ public static class ClaudeCodeModels
 
     /// <summary>
     /// The model with the <c>[1m]</c> suffix (Claude Code then sends the 1M-context beta header itself); unchanged when it
-    /// already has it. The Haiku tier never gets it — Haiku has no 1M variant; the Fable tier gets it like Opus and Sonnet.
+    /// already has it. Every tier gets it, Haiku included (Haiku 5.5 is natively 1M); whether a model's window allows it is
+    /// the caller's check (<c>EnableContext.ModelsWithoutContext1M</c>). The subagent slot's <c>inherit</c> (lowercase, Claude
+    /// Code's "no subagent default") is a keyword, not a model, and stays as it is.
     /// </summary>
     public static string With1M(string slot, string model) =>
-        slot == "ANTHROPIC_DEFAULT_HAIKU_MODEL" || model.EndsWith(OneMillionSuffix, StringComparison.OrdinalIgnoreCase)
+        (slot == SubagentSlot && model == "inherit") || model.EndsWith(OneMillionSuffix, StringComparison.OrdinalIgnoreCase)
             ? model
             : model + OneMillionSuffix;
 

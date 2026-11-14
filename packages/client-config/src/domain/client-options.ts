@@ -18,6 +18,7 @@ export const ClientOptionKeys = {
   maxThinkingTokens: 'maxThinkingTokens',
   disablePromptCaching: 'disablePromptCaching',
   autoModeServerOff: 'autoModeServerOff',
+  subagentModelForce: 'subagentModelForce',
   contextWindow: 'contextWindow',
   autoCompactTokenLimit: 'autoCompactTokenLimit',
   reasoningEffort: 'reasoningEffort',
@@ -30,6 +31,7 @@ const CLAUDE_CODE_OPTIONS: ClientOptionDescriptor[] = [
   { key: 'maxThinkingTokens', type: 'int', default: '', scope: 'config' },
   { key: 'disablePromptCaching', type: 'bool', default: 'false', scope: 'config' },
   { key: 'autoModeServerOff', type: 'bool', default: 'false', scope: 'config' },
+  { key: 'subagentModelForce', type: 'bool', default: 'false', scope: 'config' },
 ];
 
 const CODEX_OPTIONS: ClientOptionDescriptor[] = [
@@ -61,7 +63,12 @@ export function clientOptionsFor(kind: string): ClientOptionDescriptor[] {
 export function clientOptionConfigKeyPaths(kind: string): string[] {
   switch (kind) {
     case ClientKinds.ClaudeCode:
-      return ['env.MAX_THINKING_TOKENS', 'env.DISABLE_PROMPT_CACHING', 'env.CLAUDE_CODE_AUTO_MODE_SERVER'];
+      return [
+        'env.MAX_THINKING_TOKENS',
+        'env.DISABLE_PROMPT_CACHING',
+        'env.CLAUDE_CODE_AUTO_MODE_SERVER',
+        'env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE',
+      ];
     case ClientKinds.Codex:
       // "models" is the key of the Astra-owned model catalog file (CodexClientAdapter), not of config.toml.
       return [

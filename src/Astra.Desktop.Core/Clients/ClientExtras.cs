@@ -181,7 +181,8 @@ public static class ClientExtras
 
     /// <summary>Claude Code model slots the console writes into ~/.claude/settings.json (plan §7.3, web <c>CLAUDE_CODE_MODELS</c>).</summary>
     public static readonly IReadOnlyList<string> ClaudeCodeModels =
-        ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"];
+        ["ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_FABLE_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+         "CLAUDE_CODE_SUBAGENT_MODEL"];
 
     /// <summary>The non-empty, known slots of <c>extras.models</c>, trimmed (web <c>modelSlotsOf</c>).</summary>
     public static Dictionary<string, string> SlotsOf(JsonObject? extras) => StringMap(extras?["models"] as JsonObject, ClaudeCodeModels);

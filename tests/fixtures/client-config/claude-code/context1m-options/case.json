@@ -15,7 +15,9 @@
       "disablePromptCaching": true
     }
   },
-  "modelsWithoutContext1M": [],
+  "modelsWithoutContext1M": [
+    "claude-haiku-4-5"
+  ],
   "steps": [
     {
       "op": "enable"

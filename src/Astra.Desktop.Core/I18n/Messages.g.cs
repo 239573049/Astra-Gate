@@ -498,6 +498,8 @@ internal static class Messages
         "clients.option.disablePromptCaching.hint",
         "clients.option.autoModeServerOff",
         "clients.option.autoModeServerOff.hint",
+        "clients.option.subagentModelForce",
+        "clients.option.subagentModelForce.hint",
         "clients.option.contextWindow",
         "clients.option.contextWindow.hint",
         "clients.option.autoCompactTokenLimit",
@@ -518,6 +520,7 @@ internal static class Messages
         "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_SONNET_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "clients.modelSlot.CLAUDE_CODE_SUBAGENT_MODEL",
         "clients.defaultModel",
         "clients.modelPlaceholder",
         "clients.modelUnset",
@@ -3604,7 +3607,7 @@ internal static class Messages
             case "clients.modelTitle": return "模型";
             case "clients.modelFooter": return "启用时写入客户端配置的默认模型；不设置则使用客户端自己的默认值。";
             case "clients.modelFooterEnabled": return "修改默认模型需要重新写入客户端配置。";
-            case "clients.modelSlotsFooter": return "选中的模型会写进 Claude Code 的配置（默认模型 ANTHROPIC_MODEL，各档位 ANTHROPIC_DEFAULT_*_MODEL）；留空就不写入，配置文件里已有的同名设置也不会被改动。";
+            case "clients.modelSlotsFooter": return "选中的模型会写进 Claude Code 的配置（默认模型 ANTHROPIC_MODEL，各档位 ANTHROPIC_DEFAULT_*_MODEL，子代理 CLAUDE_CODE_SUBAGENT_MODEL）；留空就不写入，配置文件里已有的同名设置也不会被改动。";
             case "clients.modelSlotsFooterEnabled": return "修改后需要重新写入客户端配置。";
             case "clients.options.title": return "专属设置";
             case "clients.options.footer": return "这些设置只对当前客户端生效；写入客户端配置的项目会在启用时一并写入，“网关”类的项目由 Astra 在转发该客户端请求时处理。";
@@ -3618,7 +3621,7 @@ internal static class Messages
             case "clients.protocols.native": return "原生协议：{protocols}";
             case "clients.protocols.noNative": return "没有这个客户端能用的原生协议，由网关转换";
             case "clients.option.context1m": return "1M 上下文";
-            case "clients.option.context1m.hint": return "给 Claude Code 的模型名自动加 [1m] 后缀（Haiku 档和已知窗口不足 1M 的模型除外）。需要上游支持 1M 上下文。";
+            case "clients.option.context1m.hint": return "给 Claude Code 的模型名自动加 [1m] 后缀（已知窗口不足 1M 的模型除外）。需要上游支持 1M 上下文。";
             case "clients.option.cacheTtl": return "缓存时长";
             case "clients.option.cacheTtl.hint": return "给客户端已有的 cache_control 补上 5 分钟或 1 小时的 ttl，不增删缓存断点。1 小时的写入价更高，适合长会话。";
             case "clients.option.maxThinkingTokens": return "思考 token 上限";
@@ -3627,6 +3630,8 @@ internal static class Messages
             case "clients.option.disablePromptCaching.hint": return "写入 DISABLE_PROMPT_CACHING=1，客户端不再发送缓存断点。";
             case "clients.option.autoModeServerOff": return "关闭 auto 模式的服务端审查";
             case "clients.option.autoModeServerOff.hint": return "写入 CLAUDE_CODE_AUTO_MODE_SERVER=0：auto 模式不再向服务端请求审查，改用 Claude Code 自带的分类器。上游不支持服务端审查、auto 模式反复要求手动确认时打开。";
+            case "clients.option.subagentModelForce": return "所有子代理使用子代理模型";
+            case "clients.option.subagentModelForce.hint": return "写入 CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1：忽略子代理定义（frontmatter）和单次调用里指定的模型，所有子代理统一用「子代理模型」，没选时用主模型。";
             case "clients.option.contextWindow": return "上下文窗口";
             case "clients.option.contextWindow.hint": return "写入 model_context_window；留空则用 Codex 默认值。";
             case "clients.option.autoCompactTokenLimit": return "自动压缩阈值";
@@ -3647,6 +3652,7 @@ internal static class Messages
             case "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL": return "Opus 档位";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_SONNET_MODEL": return "Sonnet 档位";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_HAIKU_MODEL": return "Haiku 档位（快速/后台）";
+            case "clients.modelSlot.CLAUDE_CODE_SUBAGENT_MODEL": return "子代理模型";
             case "clients.defaultModel": return "默认模型";
             case "clients.modelPlaceholder": return "选择模型";
             case "clients.modelUnset": return "不设置";
@@ -6735,7 +6741,7 @@ internal static class Messages
             case "clients.modelTitle": return "Model";
             case "clients.modelFooter": return "Default model written to the client config when enabling; leave unset to keep the client default.";
             case "clients.modelFooterEnabled": return "Changing the default model rewrites the client config.";
-            case "clients.modelSlotsFooter": return "A chosen model is written into the Claude Code config (default model ANTHROPIC_MODEL, tiers ANTHROPIC_DEFAULT_*_MODEL); a slot left empty is never written, and an existing setting of the same name in the file is left alone.";
+            case "clients.modelSlotsFooter": return "A chosen model is written into the Claude Code config (default model ANTHROPIC_MODEL, tiers ANTHROPIC_DEFAULT_*_MODEL, subagents CLAUDE_CODE_SUBAGENT_MODEL); a slot left empty is never written, and an existing setting of the same name in the file is left alone.";
             case "clients.modelSlotsFooterEnabled": return "Changing a model rewrites the client config.";
             case "clients.options.title": return "Client options";
             case "clients.options.footer": return "These apply to this client only: options written to the client config are written when you enable it, and gateway options are handled by Astra when forwarding this client's requests.";
@@ -6749,7 +6755,7 @@ internal static class Messages
             case "clients.protocols.native": return "Native protocol: {protocols}";
             case "clients.protocols.noNative": return "No native protocol this client speaks; the gateway translates";
             case "clients.option.context1m": return "1M context";
-            case "clients.option.context1m.hint": return "Appends [1m] to Claude Code's model names (not the Haiku tier, nor models known to have a smaller window). The upstream must support 1M context.";
+            case "clients.option.context1m.hint": return "Appends [1m] to Claude Code's model names (except models known to have a smaller window). The upstream must support 1M context.";
             case "clients.option.cacheTtl": return "Cache TTL";
             case "clients.option.cacheTtl.hint": return "Fills in a 5-minute or 1-hour ttl on the cache_control blocks the client already sends; never adds or removes breakpoints. 1-hour writes cost more and suit long sessions.";
             case "clients.option.maxThinkingTokens": return "Max thinking tokens";
@@ -6758,6 +6764,8 @@ internal static class Messages
             case "clients.option.disablePromptCaching.hint": return "Writes DISABLE_PROMPT_CACHING=1 so the client stops sending cache breakpoints.";
             case "clients.option.autoModeServerOff": return "Turn off auto mode server review";
             case "clients.option.autoModeServerOff.hint": return "Writes CLAUDE_CODE_AUTO_MODE_SERVER=0 so auto mode stops asking the server to review actions and uses Claude Code's own classifier. Turn it on when the upstream cannot answer the server review and auto mode keeps asking you to confirm.";
+            case "clients.option.subagentModelForce": return "Use the subagent model for every subagent";
+            case "clients.option.subagentModelForce.hint": return "Writes CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1: the model a subagent definition (frontmatter) or a single spawn names is ignored, and every subagent uses the subagent model, or the main model when none is chosen.";
             case "clients.option.contextWindow": return "Context window";
             case "clients.option.contextWindow.hint": return "Writes model_context_window; leave empty to use Codex's default.";
             case "clients.option.autoCompactTokenLimit": return "Auto-compact threshold";
@@ -6778,6 +6786,7 @@ internal static class Messages
             case "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL": return "Opus tier";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_SONNET_MODEL": return "Sonnet tier";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_HAIKU_MODEL": return "Haiku tier (fast/background)";
+            case "clients.modelSlot.CLAUDE_CODE_SUBAGENT_MODEL": return "Subagent model";
             case "clients.defaultModel": return "Default model";
             case "clients.modelPlaceholder": return "Choose a model";
             case "clients.modelUnset": return "Not set";

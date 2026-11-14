@@ -669,7 +669,8 @@ public class ClientApiTests
         var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable", body);
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("gpt-6.1-sol[1m]", EnvOf(settings)["ANTHROPIC_DEFAULT_FABLE_MODEL"]!.GetValue<string>());
-        Assert.Equal("gpt-6-luna", EnvOf(settings)["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>()); // Haiku: no [1m]
+        // Haiku gets [1m] like the other tiers (issue #42); only a model known to have a smaller window goes without.
+        Assert.Equal("gpt-6-luna[1m]", EnvOf(settings)["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
 
         (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable",
             EnableBody(null, new JsonObject { ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "gpt-6-luna" }));
@@ -679,6 +680,39 @@ public class ClientApiTests
     }
 
     /// <summary>An enable body; the Claude Code model slots keep their exact env-var names, so they go in as JSON.</summary>
+    /// <summary>The subagent model (issue #42) is a slot like the tiers and its force switch an env option: both replace
+    /// hand-written values, and clearing them puts the user's own values back.</summary>
+    [Fact]
+    public async Task Claude_Code_Subagent_Model_And_Force_Are_Written_And_Clearing_Them_Restores_The_Users_Values()
+    {
+        await using var host = await TestHost.StartAsync();
+        var provider = await AddProvider(host);
+        var settings = Path.Combine(host.ClientHome, ".claude", "settings.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(settings)!);
+        await File.WriteAllTextAsync(settings, """
+            {
+              "env": {
+                "CLAUDE_CODE_SUBAGENT_MODEL": "inherit",
+                "CLAUDE_CODE_SUBAGENT_MODEL_FORCE": "0"
+              }
+            }
+            """);
+
+        var body = EnableBody(provider.Id, new JsonObject { ["CLAUDE_CODE_SUBAGENT_MODEL"] = "gpt-5" });
+        body["extras"]!["options"] = new JsonObject { ["subagentModelForce"] = true };
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable", body);
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("gpt-5", EnvOf(settings)["CLAUDE_CODE_SUBAGENT_MODEL"]!.GetValue<string>());
+        Assert.Equal("1", EnvOf(settings)["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"]!.GetValue<string>());
+
+        var cleared = EnableBody(null, new JsonObject());
+        cleared["extras"]!["options"] = new JsonObject();
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/clients/claude-code/enable", cleared);
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("inherit", EnvOf(settings)["CLAUDE_CODE_SUBAGENT_MODEL"]!.GetValue<string>());
+        Assert.Equal("0", EnvOf(settings)["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"]!.GetValue<string>());
+    }
+
     private static JsonObject EnableBody(string? providerId, JsonObject models)
     {
         var body = new JsonObject { ["extras"] = new JsonObject { ["models"] = models } };

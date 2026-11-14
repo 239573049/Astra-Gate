@@ -26,7 +26,7 @@ public class ClientOptionsTests : IDisposable
     }
 
     [Fact]
-    public void ClaudeCode_Context1M_AppendsSuffix_ExceptHaikuAndKnownSmallWindows()
+    public void ClaudeCode_Context1M_AppendsSuffix_ExceptKnownSmallWindows()
     {
         var adapter = new ClaudeCodeClientAdapter(_home.Env, _store);
         var models = new JsonObject
@@ -35,13 +35,15 @@ public class ClientOptionsTests : IDisposable
             ["ANTHROPIC_DEFAULT_FABLE_MODEL"] = "claude-fable-5",
             ["ANTHROPIC_DEFAULT_OPUS_MODEL"] = "glm-small[1m]",
             ["ANTHROPIC_DEFAULT_SONNET_MODEL"] = "claude-sonnet-4-5[1m]",
-            ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-haiku-4-5",
+            ["ANTHROPIC_DEFAULT_HAIKU_MODEL"] = "claude-haiku-5-5",
+            ["CLAUDE_CODE_SUBAGENT_MODEL"] = "claude-haiku-4-5",
         };
         var ctx = new EnableContext
         {
             GatewayBaseUrl = TestGateway.BaseUrl, LocalKey = "astra-claude-x",
             Extras = Extras(new JsonObject { ["context1m"] = true }, models),
-            ModelsWithoutContext1M = new HashSet<string> { "glm-small[1m]" },
+            // what ClientService reports for a 200K window (Haiku 4.5)
+            ModelsWithoutContext1M = new HashSet<string> { "glm-small[1m]", "claude-haiku-4-5" },
         };
 
         _applier.Apply(adapter.PlanEnable(ctx));
@@ -51,7 +53,8 @@ public class ClientOptionsTests : IDisposable
         Assert.Equal("claude-fable-5[1m]", env["ANTHROPIC_DEFAULT_FABLE_MODEL"]!.GetValue<string>()); // like Opus, not Haiku
         Assert.Equal("glm-small[1m]", env["ANTHROPIC_DEFAULT_OPUS_MODEL"]!.GetValue<string>()); // untouched, not doubled
         Assert.Equal("claude-sonnet-4-5[1m]", env["ANTHROPIC_DEFAULT_SONNET_MODEL"]!.GetValue<string>()); // already has it
-        Assert.Equal("claude-haiku-4-5", env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>());
+        Assert.Equal("claude-haiku-5-5[1m]", env["ANTHROPIC_DEFAULT_HAIKU_MODEL"]!.GetValue<string>()); // a 1M Haiku gets it (issue #42)
+        Assert.Equal("claude-haiku-4-5", env["CLAUDE_CODE_SUBAGENT_MODEL"]!.GetValue<string>()); // window below 1M
     }
 
     [Fact]
@@ -72,13 +75,18 @@ public class ClientOptionsTests : IDisposable
     public void ClaudeCode_EnvOptions_AreWrittenAndRemovedOnDisable()
     {
         var adapter = new ClaudeCodeClientAdapter(_home.Env, _store);
-        var options = new JsonObject { ["maxThinkingTokens"] = 16000, ["disablePromptCaching"] = true, ["autoModeServerOff"] = true };
+        var options = new JsonObject
+        {
+            ["maxThinkingTokens"] = 16000, ["disablePromptCaching"] = true, ["autoModeServerOff"] = true, ["subagentModelForce"] = true,
+        };
 
-        _applier.Apply(adapter.PlanEnable(TestGateway.Context("astra-claude-x", null, Extras(options))));
+        _applier.Apply(adapter.PlanEnable(TestGateway.Context("astra-claude-x", null, Extras(options, new JsonObject { ["CLAUDE_CODE_SUBAGENT_MODEL"] = "gpt-6-luna" }))));
         var env = ClaudeEnv();
         Assert.Equal("16000", env["MAX_THINKING_TOKENS"]!.GetValue<string>());
         Assert.Equal("1", env["DISABLE_PROMPT_CACHING"]!.GetValue<string>());
         Assert.Equal("0", env["CLAUDE_CODE_AUTO_MODE_SERVER"]!.GetValue<string>());
+        Assert.Equal("gpt-6-luna", env["CLAUDE_CODE_SUBAGENT_MODEL"]!.GetValue<string>());
+        Assert.Equal("1", env["CLAUDE_CODE_SUBAGENT_MODEL_FORCE"]!.GetValue<string>());
 
         // The settings file did not exist before the takeover, so restoring removes it again.
         _applier.Disable(adapter.PlanDisable());

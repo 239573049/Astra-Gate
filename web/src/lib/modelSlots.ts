@@ -5,6 +5,7 @@ export const CLAUDE_CODE_MODELS = [
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
   'ANTHROPIC_DEFAULT_SONNET_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'CLAUDE_CODE_SUBAGENT_MODEL',
 ] as const;
 export type ClaudeCodeModel = (typeof CLAUDE_CODE_MODELS)[number];
 export type ModelSlots = Partial<Record<ClaudeCodeModel, string>>;

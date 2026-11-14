@@ -9,6 +9,6 @@
     "ANTHROPIC_AUTH_TOKEN": "sk-astra-enterprise-key",
     "ANTHROPIC_MODEL": "gpt-6.1-terra[1m]",
     "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.6",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-6-luna"
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-6-luna[1m]"
   }
 }

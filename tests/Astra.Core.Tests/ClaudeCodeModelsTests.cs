@@ -31,9 +31,24 @@ public class ClaudeCodeModelsTests
     [InlineData("ANTHROPIC_DEFAULT_FABLE_MODEL", "gpt-6-astra[1M]", "gpt-6-astra[1M]")]
     [InlineData("ANTHROPIC_DEFAULT_OPUS_MODEL", "gpt-6.1-sol", "gpt-6.1-sol[1m]")]
     [InlineData("ANTHROPIC_DEFAULT_SONNET_MODEL", "gpt-6.1-terra", "gpt-6.1-terra[1m]")]
-    [InlineData("ANTHROPIC_DEFAULT_HAIKU_MODEL", "gpt-6-luna", "gpt-6-luna")]
-    public void With1M_Suffixes_Every_Tier_But_Haiku(string slot, string model, string expected) =>
+    // Haiku is a tier like the others (issue #42: Haiku 5.5 is natively 1M); a smaller window is the caller's check.
+    [InlineData("ANTHROPIC_DEFAULT_HAIKU_MODEL", "claude-haiku-5-5", "claude-haiku-5-5[1m]")]
+    [InlineData("CLAUDE_CODE_SUBAGENT_MODEL", "gpt-6-luna", "gpt-6-luna[1m]")]
+    // Lowercase inherit is Claude Code's "no subagent default", not a model; any other casing is a model name to it.
+    [InlineData("CLAUDE_CODE_SUBAGENT_MODEL", "inherit", "inherit")]
+    [InlineData("CLAUDE_CODE_SUBAGENT_MODEL", "Inherit", "Inherit[1m]")]
+    public void With1M_Suffixes_Every_Slot_But_The_Subagent_Inherit_Keyword(string slot, string model, string expected) =>
         Assert.Equal(expected, ClaudeCodeModels.With1M(slot, model));
+
+    [Fact]
+    public void Parse_Puts_The_Subagent_Model_After_The_Haiku_Tier()
+    {
+        var slots = ClaudeCodeModels.Parse("""
+            {"models":{"CLAUDE_CODE_SUBAGENT_MODEL":" gpt-6-luna ","ANTHROPIC_DEFAULT_HAIKU_MODEL":"glm-4.5-air"}}
+            """);
+        Assert.Equal(["ANTHROPIC_DEFAULT_HAIKU_MODEL", "CLAUDE_CODE_SUBAGENT_MODEL"], slots.Select(s => s.Key));
+        Assert.Equal("gpt-6-luna", slots[1].Value);
+    }
 
     [Theory]
     [InlineData(null)]

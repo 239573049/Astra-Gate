@@ -55,7 +55,12 @@ describe('modelSlotsOf (Claude Code model slots)', () => {
 
   it('knows the Fable tier', () => {
     expect(modelSlotsOf({ models: { ANTHROPIC_DEFAULT_FABLE_MODEL: ' gpt-6-astra ' } })).toEqual({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra' });
-    expect(modelSlotsKey({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra' })).toBe('\ngpt-6-astra\n\n\n');
+    expect(modelSlotsKey({ ANTHROPIC_DEFAULT_FABLE_MODEL: 'gpt-6-astra' })).toBe('\ngpt-6-astra\n\n\n\n');
+  });
+
+  it('knows the subagent model, after the Haiku tier (issue #42)', () => {
+    expect(modelSlotsOf({ models: { CLAUDE_CODE_SUBAGENT_MODEL: ' gpt-6-luna ' } })).toEqual({ CLAUDE_CODE_SUBAGENT_MODEL: 'gpt-6-luna' });
+    expect(modelSlotsKey({ CLAUDE_CODE_SUBAGENT_MODEL: 'gpt-6-luna' })).toBe('\n\n\n\n\ngpt-6-luna');
   });
 
   it('tolerates missing or malformed extras', () => {

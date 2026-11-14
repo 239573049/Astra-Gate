@@ -53,6 +53,6 @@
     "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
     "kind": "key",
     "before": null,
-    "after": "\"gpt-6-luna\""
+    "after": "\"gpt-6-luna[1m]\""
   }
 ]

@@ -74,6 +74,9 @@ export class ClaudeCodeClientAdapter extends ClientAdapterBase {
     // auto mode's server-side safety review needs an upstream that answers it; 0 makes Claude Code use its own classifier
     if (getBoolOption(ctx.extras, ClientOptionKeys.autoModeServerOff))
       changes.push(this.envKey(file, 'CLAUDE_CODE_AUTO_MODE_SERVER', '0'));
+    // every subagent uses CLAUDE_CODE_SUBAGENT_MODEL (or the main model), whatever its definition or spawn asks for
+    if (getBoolOption(ctx.extras, ClientOptionKeys.subagentModelForce))
+      changes.push(this.envKey(file, 'CLAUDE_CODE_SUBAGENT_MODEL_FORCE', '1'));
 
     // An existing ANTHROPIC_API_KEY would fight the gateway auth token: remove it (recorded, restored on disable).
     const apiKeyBefore = this.currentValue(file, 'json', API_KEY_PATH);

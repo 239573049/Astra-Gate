@@ -9,8 +9,9 @@ namespace Astra.Clients.Adapters;
 /// <c>~/.claude/settings.json</c> (honoring CLAUDE_CONFIG_DIR), temporarily removes a present
 /// <c>env.ANTHROPIC_API_KEY</c> (recorded), and optionally pins the model selection env vars
 /// (<see cref="ClaudeCodeModels.Slots"/>, extras key "models"; the older "smallFastModel" extra still works).
-/// The "options" extras (<see cref="ClientOptions"/>) add the <c>[1m]</c> model suffix, <c>MAX_THINKING_TOKENS</c> and
-/// <c>DISABLE_PROMPT_CACHING</c>; the cache TTL option is applied by the gateway, not written here.
+/// The "options" extras (<see cref="ClientOptions"/>) add the <c>[1m]</c> model suffix, <c>MAX_THINKING_TOKENS</c>,
+/// <c>DISABLE_PROMPT_CACHING</c>, <c>CLAUDE_CODE_AUTO_MODE_SERVER</c> and <c>CLAUDE_CODE_SUBAGENT_MODEL_FORCE</c>; the cache TTL
+/// option is applied by the gateway, not written here.
 /// Warns on <c>apiKeyHelper</c>. Everything else is untouched.
 /// </summary>
 public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
@@ -75,6 +76,9 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
         // auto mode's server-side safety review needs an upstream that answers it; 0 makes Claude Code use its own classifier
         if (ClientOptions.GetBool(ctx.Extras, ClientOptions.AutoModeServerOff))
             changes.Add(EnvKey(file, "CLAUDE_CODE_AUTO_MODE_SERVER", "0"));
+        // every subagent uses CLAUDE_CODE_SUBAGENT_MODEL (or the main model), whatever its definition or spawn asks for
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.SubagentModelForce))
+            changes.Add(EnvKey(file, "CLAUDE_CODE_SUBAGENT_MODEL_FORCE", "1"));
 
         // An existing ANTHROPIC_API_KEY would fight the gateway auth token: remove it (recorded, restored on disable).
         var apiKeyBefore = CurrentValue(file, ConfigFileFormat.Json, ApiKeyPath);

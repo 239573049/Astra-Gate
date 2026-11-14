@@ -1,0 +1,29 @@
+{
+  "client": "claude-code",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": null,
+  "extras": {
+    "models": {
+      "ANTHROPIC_MODEL": "gpt-6.1-terra",
+      "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-5-5",
+      "CLAUDE_CODE_SUBAGENT_MODEL": "gpt-6-luna"
+    },
+    "options": {
+      "context1m": true,
+      "subagentModelForce": true
+    }
+  },
+  "modelsWithoutContext1M": [
+    "gpt-6-luna"
+  ],
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

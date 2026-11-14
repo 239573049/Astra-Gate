@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_BASE_URL",
+    "kind": "key",
+    "before": null,
+    "after": "\"https://astra.corp.com\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_AUTH_TOKEN",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_MODEL",
+    "kind": "key",
+    "before": null,
+    "after": "\"gpt-6.1-terra[1m]\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    "kind": "key",
+    "before": null,
+    "after": "\"claude-haiku-5-5[1m]\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.CLAUDE_CODE_SUBAGENT_MODEL",
+    "kind": "key",
+    "before": "\"inherit\"",
+    "after": "\"gpt-6-luna\""
+  },
+  {
+    "file": "$HOME/.claude/settings.json",
+    "format": "json",
+    "keyPath": "env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+    "kind": "key",
+    "before": null,
+    "after": "\"1\""
+  }
+]

@@ -25,7 +25,7 @@
     "keyPath": "env.ANTHROPIC_DEFAULT_HAIKU_MODEL",
     "originalAbsent": true,
     "original": null,
-    "applied": "\"gpt-6-luna\""
+    "applied": "\"gpt-6-luna[1m]\""
   },
   {
     "file": "$HOME/.claude/settings.json",
