@@ -61,7 +61,8 @@ public static class ErrorToasts
         };
         // The overlay is a canvas: a host sized to it lets the column hang from the window's bottom edge (as Arc's ToastHost does).
         // No background, so only the alerts take clicks.
-        var host = new Panel { Children = { column } };
+        // Above open sheets and dialogs, like the success toasts (issue #41).
+        var host = new Panel { Children = { column }, ZIndex = ToastPresenter.AboveModals };
         void Fit(Rect b)
         {
             host.Width = b.Width > 0 ? b.Width : top.ClientSize.Width;
