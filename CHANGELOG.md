@@ -4,6 +4,12 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.14.3108] - 2026-11-15
+
+### 修复
+
+- **DeepSeek 的 Responses 协议报 `unknown field "reasoning_effort"`**：有的客户端在 `/v1/responses` 请求里写了 Chat Completions 风格的顶层 `reasoning_effort`，网关透传时原样发给上游，DeepSeek 这类严格校验字段的上游会直接返回 400。现在透传 Responses 请求时，会把它改写成 Responses 的标准写法 `reasoning.effort`（请求里已有 `reasoning.effort` 时以它为准），请求不再被拒绝。
+
 ## [0.14.3107] - 2026-11-14
 
 ### 新增
