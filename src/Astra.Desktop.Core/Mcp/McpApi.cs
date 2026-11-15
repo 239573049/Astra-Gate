@@ -36,11 +36,12 @@ public sealed class McpApi
     /// <summary>['mcp-calls']: the newest tool calls (who, which tool, how long, how it ended; never the arguments).</summary>
     public Query<List<McpCallDto>> Calls { get; }
 
-    /// <summary>PUT /api/mcp/settings: the switch and / or the allowed origins (null = leave as is).</summary>
-    public async Task<McpSettingsDto> UpdateSettingsAsync(bool? enabled, IReadOnlyList<string>? allowedOrigins, CancellationToken ct = default)
+    /// <summary>PUT /api/mcp/settings: the switch, the allowed origins and / or "manage from other machines" (null = leave as is).</summary>
+    public async Task<McpSettingsDto> UpdateSettingsAsync(bool? enabled, IReadOnlyList<string>? allowedOrigins, bool? allowRemoteAdmin = null, CancellationToken ct = default)
     {
         var body = new JsonObject();
         if (enabled is { } e) body["enabled"] = e;
+        if (allowRemoteAdmin is { } r) body["allowRemoteAdmin"] = r;
         if (allowedOrigins is not null)
         {
             var origins = new JsonArray();

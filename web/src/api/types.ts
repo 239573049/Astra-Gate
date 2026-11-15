@@ -1630,7 +1630,7 @@ export interface McpServerInput {
 }
 
 export interface McpTestResult { ok: boolean; status: McpServerStatus; message?: string | null; protocolVersion?: string | null; toolCount: number; tools: string[] }
-export interface McpGatewaySettings { enabled: boolean; allowedOrigins: string[]; endpoint: string }
+export interface McpGatewaySettings { enabled: boolean; allowedOrigins: string[]; endpoint: string; allowRemoteAdmin: boolean }
 /** Where to authorize Astra at an upstream; null `authorizationUrl` = nothing to do (`message` says why). */
 export interface McpOAuthStart { authorizationUrl?: string | null; message?: string | null }
 export type McpErrorCategory = 'tool' | 'needs_auth' | 'unreachable' | 'timeout' | 'needs_input' | 'protocol';

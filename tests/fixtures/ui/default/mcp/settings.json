@@ -1,5 +1,6 @@
 {
   "enabled": true,
   "allowedOrigins": [],
-  "endpoint": "http://127.0.0.1:17321/mcp"
+  "endpoint": "http://127.0.0.1:17321/mcp",
+  "allowRemoteAdmin": false
 }

@@ -15,15 +15,16 @@ public static class McpEndpoints
         group.MapPut("/settings", async (JsonObject body, McpService mcp, CancellationToken ct) => Results.Ok(await mcp.UpdateSettingsAsync(body, ct)));
         group.MapGet("/servers", async (McpService mcp, CancellationToken ct) => Results.Ok(await mcp.ListAsync(ct)));
         group.MapGet("/servers/{id}", async (string id, McpService mcp, CancellationToken ct) => Results.Ok(await mcp.GetAsync(id, ct)));
-        // Whoever creates, changes or tests a server makes Astra connect to an address of their choosing: this machine only.
+        // Whoever creates, changes or tests a server makes Astra connect to an address of their choosing: this machine only,
+        // unless the admin turned on McpGatewaySettings.AllowRemoteAdmin (the session the rest of /api needs still applies).
         group.MapPost("/servers", async (HttpContext ctx, JsonObject body, McpService mcp, CancellationToken ct) =>
         {
-            RequireLocal(ctx);
+            RequireAdminOrigin(ctx, mcp);
             return Results.Ok(await mcp.CreateAsync(body, ct));
         });
         group.MapPatch("/servers/{id}", async (HttpContext ctx, string id, JsonObject body, McpService mcp, CancellationToken ct) =>
         {
-            RequireLocal(ctx);
+            RequireAdminOrigin(ctx, mcp);
             return Results.Ok(await mcp.UpdateAsync(id, body, ct));
         });
         group.MapDelete("/servers/{id}", async (string id, McpService mcp, CancellationToken ct) =>
@@ -33,12 +34,12 @@ public static class McpEndpoints
         });
         group.MapPost("/servers/{id}/test", async (HttpContext ctx, string id, McpService mcp, CancellationToken ct) =>
         {
-            RequireLocal(ctx);
+            RequireAdminOrigin(ctx, mcp);
             return Results.Ok(await mcp.TestAsync(id, ct));
         });
         group.MapPost("/servers/{id}/oauth/start", async (HttpContext ctx, string id, McpService mcp, McpOAuthService oauth, CancellationToken ct) =>
         {
-            RequireLocal(ctx);
+            RequireAdminOrigin(ctx, mcp);
             return Results.Ok(await oauth.StartAsync(await mcp.RequireAsync(id, ct), ct));
         });
         group.MapDelete("/servers/{id}/oauth", async (string id, McpService mcp, CancellationToken ct) => Results.Ok(await mcp.ForgetOAuthAsync(id, ct)));
@@ -71,8 +72,9 @@ public static class McpEndpoints
         "body{font:16px system-ui,sans-serif;max-width:32rem;margin:15vh auto;padding:0 1rem;color:#222}h1{font-size:1.4rem}"
         + "@media(prefers-color-scheme:dark){body{background:#161616;color:#eee}}";
 
-    private static void RequireLocal(HttpContext ctx)
+    private static void RequireAdminOrigin(HttpContext ctx, McpService mcp)
     {
-        if (!RequestOrigin.IsLocal(ctx)) throw new AdminApiException(403, "MCP servers can only be added, changed or tested on this machine");
+        if (!RequestOrigin.IsLocal(ctx) && !mcp.AllowRemoteAdmin)
+            throw new AdminApiException(403, "MCP servers can only be added, changed or tested on this machine (or turn on \"allow remote admin\" in the MCP gateway settings)");
     }
 }

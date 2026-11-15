@@ -2894,6 +2894,8 @@ internal static class Messages
         "mcp.local.importSecrets",
         "mcp.gateway.enable",
         "mcp.gateway.enableHint",
+        "mcp.gateway.remoteAdmin",
+        "mcp.gateway.remoteAdminHint",
         "mcp.gateway.endpoint",
         "mcp.gateway.endpointHint",
         "mcp.gateway.origins",
@@ -6026,6 +6028,8 @@ internal static class Messages
             case "mcp.local.importSecrets": return "环境变量和请求头会被读取并加密保存，值不会显示。";
             case "mcp.gateway.enable": return "启用 MCP 网关";
             case "mcp.gateway.enableHint": return "关闭时 /mcp 不响应（404），不会暴露任何新入口。";
+            case "mcp.gateway.remoteAdmin": return "允许从其他机器管理 MCP 服务器";
+            case "mcp.gateway.remoteAdminHint": return "默认只能在运行 Astra 的这台机器上添加、修改、测试和授权服务器（Docker 部署时宿主机也算其他机器）。开启后，已登录管理会话的其他机器也可以，Astra 会连接到管理员填写的地址；OAuth 授权的回调地址取自 ASTRA_PUBLIC_URL。客户端写入和本地 MCP 服务器仍只限本机。";
             case "mcp.gateway.endpoint": return "聚合地址";
             case "mcp.gateway.endpointHint": return "客户端把它当作一个 MCP 服务器，用 Astra 令牌作为 Bearer 凭据；每个服务器还有自己的 /mcp/<标识> 地址（工具名不带前缀）。";
             case "mcp.gateway.origins": return "允许的浏览器来源";
@@ -6037,7 +6041,7 @@ internal static class Messages
             case "mcp.servers.add": return "添加服务器";
             case "mcp.servers.emptyTitle": return "还没有 MCP 服务器";
             case "mcp.servers.emptyDetail": return "添加远程的 MCP 服务器（Streamable HTTP 或旧版 SSE），再在令牌里选择它能用哪些。";
-            case "mcp.servers.localOnly": return "添加、修改、测试和授权服务器只能在运行 Astra 的这台机器上操作。";
+            case "mcp.servers.localOnly": return "添加、修改、测试和授权服务器默认只能在运行 Astra 的这台机器上操作（可在上方网关设置中放开）。";
             case "mcp.server.addTitle": return "添加 MCP 服务器";
             case "mcp.server.editTitle": return "编辑 {name}";
             case "mcp.server.name": return "名称";
@@ -9160,6 +9164,8 @@ internal static class Messages
             case "mcp.local.importSecrets": return "Environment variables and headers are read and stored encrypted; their values are never shown.";
             case "mcp.gateway.enable": return "Enable the MCP gateway";
             case "mcp.gateway.enableHint": return "While off, /mcp answers 404 and exposes nothing new.";
+            case "mcp.gateway.remoteAdmin": return "Allow managing MCP servers from other machines";
+            case "mcp.gateway.remoteAdminHint": return "By default servers can only be added, changed, tested and authorized on the machine running Astra (with Docker, the host counts as another machine). When on, a signed-in admin session from another machine may too, and Astra connects to the address they enter; the OAuth callback address comes from ASTRA_PUBLIC_URL. Writing clients and own local MCP servers stay local-only.";
             case "mcp.gateway.endpoint": return "Aggregate address";
             case "mcp.gateway.endpointHint": return "Clients use it as one MCP server with an Astra token as the bearer credential. Each server also has its own /mcp/<slug> address (tool names without the prefix).";
             case "mcp.gateway.origins": return "Allowed browser origins";
@@ -9171,7 +9177,7 @@ internal static class Messages
             case "mcp.servers.add": return "Add server";
             case "mcp.servers.emptyTitle": return "No MCP servers yet";
             case "mcp.servers.emptyDetail": return "Add a remote MCP server (Streamable HTTP or the older SSE) and choose, per token, which servers it may use.";
-            case "mcp.servers.localOnly": return "Servers can only be added, changed, tested and authorized on the machine running Astra.";
+            case "mcp.servers.localOnly": return "By default servers can only be added, changed, tested and authorized on the machine running Astra (change it in the gateway settings above).";
             case "mcp.server.addTitle": return "Add an MCP server";
             case "mcp.server.editTitle": return "Edit {name}";
             case "mcp.server.name": return "Name";

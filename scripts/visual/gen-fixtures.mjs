@@ -317,7 +317,7 @@ const mcpServers = [
 put('mcp/servers.json', mcpServers);
 route('/api/mcp/servers', 'mcp/servers.json');
 for (const m of mcpServers) { put(`mcp/servers/${m.id}.json`, m); route(`/api/mcp/servers/${m.id}`, `mcp/servers/${m.id}.json`); }
-put('mcp/settings.json', { enabled: true, allowedOrigins: [], endpoint: 'http://127.0.0.1:17321/mcp' });
+put('mcp/settings.json', { enabled: true, allowedOrigins: [], endpoint: 'http://127.0.0.1:17321/mcp', allowRemoteAdmin: false });
 route('/api/mcp/settings', 'mcp/settings.json');
 put('mcp/calls.json', [
   { id: 4, at: ago(3 * 60_000), tokenId: 'tok_pool', tokenName: 'team-shared', serverId: 'mcp_github', serverSlug: 'github', tool: 'search_issues', durationMs: 412, ok: true, errorCategory: null, frontEra: 'modern' },

@@ -59,13 +59,21 @@ function GatewaySettings() {
 
   if (!settings.data) return <Spinner />;
   const gw = settings.data;
-  const save = (body: { enabled?: boolean; allowedOrigins?: string[] }) =>
+  const save = (body: { enabled?: boolean; allowedOrigins?: string[]; allowRemoteAdmin?: boolean }) =>
     update.mutate(body, { onSuccess: () => toast(t('common.saved'), 'success'), onError: (e) => toast(errorText(e), 'error') });
 
   return (
     <Group title={t('mcp.gateway.title')}>
       <Row label={t('mcp.gateway.enable')} detail={t('mcp.gateway.enableHint')}>
         <Switch checked={gw.enabled} disabled={update.isPending} label={t('mcp.gateway.enable')} onChange={(enabled) => save({ enabled })} />
+      </Row>
+      <Row label={t('mcp.gateway.remoteAdmin')} detail={t('mcp.gateway.remoteAdminHint')}>
+        <Switch
+          checked={gw.allowRemoteAdmin}
+          disabled={update.isPending}
+          label={t('mcp.gateway.remoteAdmin')}
+          onChange={(allowRemoteAdmin) => save({ allowRemoteAdmin })}
+        />
       </Row>
       <Row label={t('mcp.gateway.endpoint')} detail={<span className="block whitespace-normal">{t('mcp.gateway.endpointHint')}</span>}>
         <code className="max-w-[22rem] truncate rounded bg-[var(--surface-muted,transparent)] px-1.5 py-0.5 font-mono text-[12px]" title={gw.endpoint}>

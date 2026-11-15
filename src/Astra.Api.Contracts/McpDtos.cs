@@ -28,7 +28,8 @@ public sealed record McpTestResultDto(bool Ok, string Status, string? Message, s
 /// <param name="Enabled">Whether <c>/mcp</c> answers (it is a 404 otherwise).</param>
 /// <param name="AllowedOrigins">Browser origins allowed to call it; a request without an <c>Origin</c> header is not affected.</param>
 /// <param name="Endpoint">The address clients use for the aggregate endpoint.</param>
-public sealed record McpSettingsDto(bool Enabled, List<string> AllowedOrigins, string Endpoint);
+/// <param name="AllowRemoteAdmin">Whether MCP servers may be added, changed, tested and authorized from another machine (a signed-in admin session); otherwise only from the machine running Astra.</param>
+public sealed record McpSettingsDto(bool Enabled, List<string> AllowedOrigins, string Endpoint, bool AllowRemoteAdmin);
 
 /// <summary>Where the admin goes to authorize Astra at an upstream (open it in a browser).</summary>
 /// <param name="AuthorizationUrl">The address to open; null when no authorization is needed (the upstream accepted the tokens Astra already holds, or asks for none).</param>

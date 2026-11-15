@@ -125,6 +125,7 @@ public sealed class McpView : UserControl
         if (q.Data is not { } s)
             return q.IsError ? ClientUi.Alert(AlertTone.Danger, Loc.T("common.error"), q.Error?.Message ?? "") : new LoadingState(2);
         var enable = PdUi.Toggle(s.Enabled, on => _ = GuardAsync(() => _page.Api.UpdateSettingsAsync(on, null)), Loc.T("mcp.gateway.enable"));
+        var remoteAdmin = PdUi.Toggle(s.AllowRemoteAdmin, on => _ = GuardAsync(() => _page.Api.UpdateSettingsAsync(null, null, on)), Loc.T("mcp.gateway.remoteAdmin"));
         var endpoint = ClientUi.HRow(6,
             PdUi.Text(s.Endpoint, 12, ArcDesignTokenKind.TextSecondary, mono: true),
             Ui.IconButton(LucideIconKind.Copy, Loc.T("mcp.gateway.copyEndpoint"), () => _ = CopyAsync(s.Endpoint).ContinueWith(async t =>
@@ -142,6 +143,7 @@ public sealed class McpView : UserControl
         }));
         return RowBuilder.Group(Loc.T("mcp.gateway.title"), null,
             RowBuilder.Hinted(Loc.T("mcp.gateway.enable"), Loc.T("mcp.gateway.enableHint"), enable),
+            RowBuilder.Hinted(Loc.T("mcp.gateway.remoteAdmin"), Loc.T("mcp.gateway.remoteAdminHint"), remoteAdmin),
             RowBuilder.Hinted(Loc.T("mcp.gateway.endpoint"), Loc.T("mcp.gateway.endpointHint"), endpoint),
             Ui.GroupLine(PdUi.Stack(8, PdUi.Field(Loc.T("mcp.gateway.origins"), origins, Loc.T("mcp.gateway.originsHint")), saveOrigins), 12, 12));
     }

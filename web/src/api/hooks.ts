@@ -1262,7 +1262,7 @@ export const useMcpSettings = () =>
 export const useUpdateMcpSettings = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { enabled?: boolean; allowedOrigins?: string[] }) => api<McpGatewaySettings>('PUT', '/api/mcp/settings', body),
+    mutationFn: (body: { enabled?: boolean; allowedOrigins?: string[]; allowRemoteAdmin?: boolean }) => api<McpGatewaySettings>('PUT', '/api/mcp/settings', body),
     onSuccess: (data) => qc.setQueryData(['mcp-settings'], data),
   });
 };

@@ -43,6 +43,9 @@ public sealed partial class McpService(
     {
         bool? enabled = null;
         List<string>? origins = null;
+        bool? allowRemoteAdmin = null;
+        if (body.ContainsKey("allowRemoteAdmin"))
+            allowRemoteAdmin = body["allowRemoteAdmin"] is JsonValue r && r.TryGetValue<bool>(out var rb) ? rb : throw new AdminApiException(400, "allowRemoteAdmin must be a boolean");
         if (body.ContainsKey("enabled"))
             enabled = body["enabled"] is JsonValue v && v.TryGetValue<bool>(out var b) ? b : throw new AdminApiException(400, "enabled must be a boolean");
         if (body.ContainsKey("allowedOrigins"))
@@ -51,11 +54,15 @@ public sealed partial class McpService(
         {
             if (enabled is { } e) s.McpGateway.Enabled = e;
             if (origins is not null) s.McpGateway.AllowedOrigins = origins;
+            if (allowRemoteAdmin is { } remote) s.McpGateway.AllowRemoteAdmin = remote;
         }, ct);
         return ToSettingsDto(updated.McpGateway);
     }
 
-    private McpSettingsDto ToSettingsDto(McpGatewaySettings s) => new(s.Enabled, [.. s.AllowedOrigins], server.GatewayBaseUrl.TrimEnd('/') + "/mcp");
+    /// <summary>Whether a request from another machine may add, change, test or authorize a server (<see cref="McpGatewaySettings.AllowRemoteAdmin"/>).</summary>
+    public bool AllowRemoteAdmin => settings.Current.McpGateway.AllowRemoteAdmin;
+
+    private McpSettingsDto ToSettingsDto(McpGatewaySettings s) => new(s.Enabled, [.. s.AllowedOrigins], server.GatewayBaseUrl.TrimEnd('/') + "/mcp", s.AllowRemoteAdmin);
 
     /// <summary>Origins as the browser sends them (<c>scheme://host[:port]</c>, no path), de-duplicated.</summary>
     private static List<string> ReadOrigins(JsonNode? node)

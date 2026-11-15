@@ -623,7 +623,7 @@ runtime needed on the target).
     server's tool-call failures never name its address. Rules to keep: the token is read from `Authorization: Bearer` / `x-api-key` only (never
     the query string); an unlisted browser `Origin` is a 403 (`AppSettings.McpGateway`, off by default, 404 while off); a token reaches no MCP
     server until `tokens.mcp_json` binds it (`PATCH /api/tokens/{id}` `mcpServers`), and an unbound tool looks exactly like an unknown one;
-    creating, changing, testing or authorizing a server is local-origin only (it makes Astra connect to an address of the admin's choosing); the
+    creating, changing, testing or authorizing a server is local-origin only (it makes Astra connect to an address of the admin's choosing) unless `AppSettings.McpGateway.AllowRemoteAdmin` (default off, issue #40: a Docker host or LAN browser) lets a signed-in admin session from another machine do it — the client apply and own-server writes below stay local either way; the
     data plane never starts an interactive OAuth flow and never even connects to an OAuth server that holds no tokens (the SDK would register a
     client at the authorization server first); one OAuth identity is shared by every token bound to the server; a tool call that may have had
     its effect is never retried. The callback is `GET /api/mcp/oauth/callback` (`McpOAuthService`: single-use in-memory `state`, `iss` checked by

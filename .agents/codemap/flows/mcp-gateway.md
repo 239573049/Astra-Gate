@@ -15,12 +15,13 @@ duration, outcome — never arguments or results). Design and decisions: `.plan/
 
 ## Steps
 
-1. **Configuration.** `AppSettings.McpGateway` (`Enabled`, default off; `AllowedOrigins`) in `src/Astra.Core/AppSettings.cs`;
+1. **Configuration.** `AppSettings.McpGateway` (`Enabled`, default off; `AllowedOrigins`; `AllowRemoteAdmin`, default off) in `src/Astra.Core/AppSettings.cs`;
    servers are rows of `mcp_servers` (`src/Astra.Data/Migrations/0022_mcp_gateway.sql`, `McpServerRecord` in
    `src/Astra.Core/Mcp/McpServerRecord.cs`, `McpRepository`), static header values encrypted into `headers_enc` through
    `ISecretProtector`. Admin API: `src/Astra.Server/Api/McpEndpoints.cs` → `McpService`. Creating, changing, testing and
-   starting an OAuth authorization are refused off this machine (`RequireLocal`, 403): they make Astra connect to an address
-   the admin chose. A token reaches a server only through `tokens.mcp_json` (`PATCH /api/tokens/{id}` `mcpServers` →
+   starting an OAuth authorization are refused off this machine (`RequireAdminOrigin`, 403): they make Astra connect to an address
+   the admin chose — unless `McpGatewaySettings.AllowRemoteAdmin` (default off, issue #40) is on; the admin session `/api` already needs off
+   this machine still applies. A token reaches a server only through `tokens.mcp_json` (`PATCH /api/tokens/{id}` `mcpServers` →
    `TokenService.ReadMcpServersAsync`, read back with `TokenRecord.McpServerIds()`).
 2. **Door.** `src/Astra.Gateway/Http/McpGatewayEndpoints.cs:McpGatewayEndpoints.HandleAsync` checks in this order: 404 while the
    gateway is off; 403 for a browser `Origin` that is not listed; 405 for anything but POST (no event stream, no session to

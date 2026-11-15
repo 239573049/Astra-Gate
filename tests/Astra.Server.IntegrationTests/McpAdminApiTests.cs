@@ -1,6 +1,12 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json.Nodes;
+using Astra.Core;
 using Astra.Core.Clients;
+using Astra.Server.Hosting;
+using Astra.Server.Security;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Astra.Server.IntegrationTests;
@@ -111,6 +117,49 @@ public class McpAdminApiTests
     }
 
     [Fact]
+    public async Task Servers_Are_Managed_From_Another_Machine_Only_When_Remote_Admin_Is_On()
+    {
+        // The server listens beyond loopback (a container's published port, the LAN switch): the caller is a signed-in admin on another machine.
+        await using var host = await TestHost.StartAsync(b => b.Services.AddSingleton<IStartupFilter, PeerFromHeader>());
+        var options = host.App.Services.GetRequiredService<ServerOptions>();
+        options.Host = "0.0.0.0";
+        options.AdminPasswordHash = PasswordHasher.Hash("correct-horse");
+        string? cookie = null;
+        async Task<(HttpStatusCode Status, JsonNode? Body)> Remote(HttpMethod method, string path, object? body = null)
+        {
+            using var req = new HttpRequestMessage(method, path);
+            req.Headers.Host = "192.168.1.10:17321";
+            req.Headers.Add(PeerHeader, "192.168.1.20");
+            req.Headers.Add("X-Astra-Admin", "1");
+            if (cookie is not null) req.Headers.Add("Cookie", cookie);
+            if (body is not null) req.Content = JsonContent.Create(body, options: TestHost.JsonOptions);
+            using var res = await host.Client.SendAsync(req);
+            if (res.Headers.TryGetValues("Set-Cookie", out var set)) cookie = set.Single().Split(';')[0];
+            var text = await res.Content.ReadAsStringAsync();
+            return (res.StatusCode, string.IsNullOrEmpty(text) ? null : JsonNode.Parse(text));
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await Remote(HttpMethod.Post, "/api/auth/login", new { password = "correct-horse" })).Status);
+        Assert.False((await Remote(HttpMethod.Get, "/api/mcp/settings")).Body!["allowRemoteAdmin"]!.GetValue<bool>()); // off by default
+        var create = new { name = "Remote", url = "https://mcp.example.com/mcp" };
+        Assert.Equal(HttpStatusCode.Forbidden, (await Remote(HttpMethod.Post, "/api/mcp/servers", create)).Status);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Remote(HttpMethod.Put, "/api/mcp/settings", new { allowRemoteAdmin = "yes" })).Status);
+        var (status, updated) = await Remote(HttpMethod.Put, "/api/mcp/settings", new { allowRemoteAdmin = true });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(updated!["allowRemoteAdmin"]!.GetValue<bool>());
+
+        var (created, server) = await Remote(HttpMethod.Post, "/api/mcp/servers", create);
+        Assert.Equal(HttpStatusCode.OK, created);
+        var id = server!["id"]!.GetValue<string>();
+        Assert.Equal(HttpStatusCode.OK, (await Remote(HttpMethod.Patch, $"/api/mcp/servers/{id}", new { name = "Renamed" })).Status);
+
+        await Remote(HttpMethod.Put, "/api/mcp/settings", new { allowRemoteAdmin = false });
+        Assert.Equal(HttpStatusCode.Forbidden, (await Remote(HttpMethod.Patch, $"/api/mcp/servers/{id}", new { name = "Again" })).Status);
+        Assert.Equal(HttpStatusCode.Forbidden, (await Remote(HttpMethod.Post, $"/api/mcp/servers/{id}/test")).Status);
+    }
+
+    [Fact]
     public async Task The_Gateway_Settings_Are_Validated_And_Origins_Are_Normalized()
     {
         await using var host = await TestHost.StartAsync();
@@ -165,5 +214,21 @@ public class McpAdminApiTests
         await f.Host.SendAsync(HttpMethod.Patch, $"/api/mcp/servers/{f.ModernId}", new { url = f.Legacy.Url });
         var (_, test) = await f.Host.SendAsync(HttpMethod.Post, $"/api/mcp/servers/{f.ModernId}/test");
         Assert.Equal("2025-11-25", test!["protocolVersion"]!.GetValue<string>());
+    }
+
+    private const string PeerHeader = "X-Test-Peer";
+
+    /// <summary>TestServer connections have no peer address: this sets it from a test-only header, ahead of the security middleware.</summary>
+    private sealed class PeerFromHeader : IStartupFilter
+    {
+        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next) => app =>
+        {
+            app.Use((ctx, inner) =>
+            {
+                if (IPAddress.TryParse(ctx.Request.Headers[PeerHeader].ToString(), out var peer)) ctx.Connection.RemoteIpAddress = peer;
+                return inner(ctx);
+            });
+            next(app);
+        };
     }
 }

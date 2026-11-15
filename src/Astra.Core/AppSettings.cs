@@ -153,6 +153,14 @@ public sealed class McpGatewaySettings
     /// client — is not affected. Empty = no browser origin is allowed.
     /// </summary>
     public List<string> AllowedOrigins { get; set; } = [];
+
+    /// <summary>
+    /// Whether an admin signed in from another machine (a LAN browser, the host of a container) may add, change, test and authorize
+    /// MCP servers. Off by default: those actions make Astra connect to an address the admin chose, so they answer 403 off this
+    /// machine. The session the rest of <c>/api</c> needs still applies, and the actions that touch this machine's files
+    /// (clients, own stdio servers) stay local either way.
+    /// </summary>
+    public bool AllowRemoteAdmin { get; set; }
 }
 
 /// <summary>

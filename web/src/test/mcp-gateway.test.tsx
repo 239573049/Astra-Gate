@@ -16,7 +16,7 @@ const spies = vi.hoisted(() => ({
 }));
 
 vi.mock('../api/hooks', () => ({
-  useMcpSettings: () => ({ data: { enabled: false, allowedOrigins: [], endpoint: 'http://127.0.0.1:17321/mcp' } }),
+  useMcpSettings: () => ({ data: { enabled: false, allowedOrigins: [], endpoint: 'http://127.0.0.1:17321/mcp', allowRemoteAdmin: false } }),
   useUpdateMcpSettings: () => ({ mutate: spies.updateSettings, isPending: false }),
   useMcpServers: () => ({ data: spies.servers }),
   useCreateMcpServer: () => ({ mutate: spies.create, isPending: false }),
@@ -84,6 +84,12 @@ describe('MCP gateway page', () => {
     expect(screen.getByText('http://127.0.0.1:17321/mcp')).toBeTruthy();
     fireEvent.click(screen.getByRole('switch', { name: t('mcp.gateway.enable') }));
     expect(spies.updateSettings).toHaveBeenCalledWith({ enabled: true }, expect.anything());
+  });
+
+  it('lets the admin allow managing servers from other machines', () => {
+    show();
+    fireEvent.click(screen.getByRole('switch', { name: t('mcp.gateway.remoteAdmin') }));
+    expect(spies.updateSettings).toHaveBeenCalledWith({ allowRemoteAdmin: true }, expect.anything());
   });
 
   it('lists each server with what it last showed', () => {
