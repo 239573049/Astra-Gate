@@ -445,7 +445,8 @@ public sealed partial class GatewayPipeline(
                                      || (upstreamProtocol == ApiProtocol.OpenAIChat && stream && !clientWantsChatUsage)
                                      || forceResponsesStream || claudeMimic || claudeMode == ClaudeHeaderMode.Relay
                                      || (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
-                                     || (upstreamProtocol == ApiProtocol.Anthropic && AnthropicToolSchemas.NeedsNormalizingTools(body));
+                                     || (upstreamProtocol == ApiProtocol.Anthropic && AnthropicToolSchemas.NeedsNormalizingTools(body))
+                                     || (upstreamProtocol == ApiProtocol.OpenAIResponses && body.ContainsKey("reasoning_effort"));
                     upstreamTree = mayRetry && mayRewrite ? (JsonObject)body.DeepClone() : body;
                     var rewritten = false;
                     if (upstreamModel != model && inbound != ApiProtocol.Gemini)
@@ -453,6 +454,9 @@ public sealed partial class GatewayPipeline(
                         upstreamTree["model"] = upstreamModel; // Gemini carries the model in the URL instead.
                         rewritten = true;
                     }
+                    // Responses upstreams refuse Chat's top-level reasoning_effort; it goes where Responses reads it.
+                    if (upstreamProtocol == ApiProtocol.OpenAIResponses && ResponsesChatSpelling.MoveReasoningEffort(upstreamTree))
+                        rewritten = true;
                     // Anthropic rejects a tool schema with oneOf/allOf/anyOf at the top level; only such bodies are touched.
                     if (upstreamProtocol == ApiProtocol.Anthropic && AnthropicToolSchemas.NormalizeTools(upstreamTree))
                         rewritten = true;

@@ -683,6 +683,19 @@ public class GatewayPipelineTests
         Assert.Equal("actual-final-model", record.ResponseModel);
     }
 
+    [Fact]
+    public async Task Responses_Passthrough_Moves_Chat_Reasoning_Effort_To_Reasoning()
+    {
+        // A client that spells the effort the Chat way on /v1/responses: strict upstreams (DeepSeek) refuse the field.
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIResponses,
+            _ => FakeUpstream.Json("""{"id":"r1","object":"response","model":"requested-alias","status":"completed","output":[]}"""));
+        var response = await gw.PostAsync("/v1/responses", """{"model":"requested-alias","input":"hi","reasoning_effort":"high"}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var sent = JsonNode.Parse(Assert.Single(gw.Upstream.Requests).Body)!.AsObject();
+        Assert.False(sent.ContainsKey("reasoning_effort"));
+        Assert.Equal("high", (string?)sent["reasoning"]!["effort"]);
+    }
+
     // ---------- reasoning configuration in the request log ----------
 
     /// <summary>Pass-through captures exactly what the client sent, on every protocol, verbatim.</summary>
