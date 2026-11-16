@@ -24,6 +24,9 @@ public static class ClientEndpoints
         });
         group.MapPut("/{kind}/bindings", async (string kind, BindingsInput body, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.SetBindingsAsync(kind, body.Bindings ?? [], ct)));
+        // The models the client should see (ModelShortlist); empty clears it.
+        group.MapPut("/{kind}/shortlist", async (string kind, ShortlistInput body, ClientService clients, CancellationToken ct) =>
+            Results.Ok(await clients.SetShortlistAsync(kind, body.Models ?? [], ct)));
         group.MapPost("/{kind}/preview-enable", async (string kind, JsonObject body, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.PreviewAsync(kind, body, ct)));
         group.MapPost("/{kind}/enable", async (string kind, JsonObject body, ClientService clients, CancellationToken ct) =>
@@ -40,8 +43,9 @@ public static class ClientEndpoints
         group.MapPost("/{kind}/backups/{backupId}/restore", async (string kind, string backupId, ClientService clients, CancellationToken ct) =>
             Results.Ok(await clients.RestoreBackupAsync(kind, backupId, ct)));
         // Materialized to List<string>: an interface-typed root makes the serializer probe the interface graph.
-        group.MapGet("/{kind}/models", async (string kind, ClientService clients, CancellationToken ct) =>
-            Results.Ok((await clients.ModelsAsync(kind, ct)).ToList()));
+        // ?all=true: every model the client can reach, ignoring its shortlist (what the shortlist editor picks from).
+        group.MapGet("/{kind}/models", async (string kind, bool? all, ClientService clients, CancellationToken ct) =>
+            Results.Ok((await clients.ModelsAsync(kind, ct, all ?? false)).ToList()));
 
         // Versions, update checks, installs and uninstalls (ClientInstallService). check-updates fetches the latest versions
         // from the npm registry (cached for six hours unless forced) and returns the refreshed client list.

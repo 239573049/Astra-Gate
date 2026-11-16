@@ -48,6 +48,15 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Post, "/api/library/skills/migrate", new { items = Array.Empty<object>() });
         await host.SendAsync(HttpMethod.Put, "/api/library/skills/none/clients/claude-code", new { on = true });
         await host.SendAsync(HttpMethod.Post, "/api/library/skills/return-all");
+        // Profiles and the model shortlist: save, list, preview, apply, rename, delete.
+        var profile = await host.SendAsync(HttpMethod.Post, "/api/profiles", new { name = "guard" });
+        await host.GetJsonAsync("/api/profiles");
+        await host.GetJsonAsync("/api/profiles/guard/preview");
+        await host.SendAsync(HttpMethod.Post, "/api/profiles/guard/apply");
+        await host.SendAsync(HttpMethod.Put, "/api/profiles/guard", new { name = "guard 2", overwrite = true });
+        await host.SendAsync(HttpMethod.Put, "/api/clients/codex/shortlist", new { models = new[] { "gpt-5" } });
+        await host.SendAsync(HttpMethod.Put, "/api/clients/codex/shortlist", new { models = Array.Empty<string>() });
+        await host.SendAsync(HttpMethod.Delete, $"/api/profiles/{profile.Body!["id"]!.GetValue<string>()}");
 
         // A model round trip: create, patch, read detail, reset a field, delete.
         var created = await host.SendAsync(HttpMethod.Post, "/api/models",

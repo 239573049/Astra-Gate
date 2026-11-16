@@ -538,6 +538,54 @@ internal static class Messages
         "clients.copyConfigPath",
         "clients.backups",
         "clients.backupsDetail",
+        "clients.shortlist.title",
+        "clients.shortlist.footer",
+        "clients.shortlist.footerEnabled",
+        "clients.shortlist.summary",
+        "clients.shortlist.empty",
+        "clients.shortlist.clear",
+        "clients.shortlist.missing",
+        "clients.shortlist.filter",
+        "profiles.title",
+        "profiles.subtitle",
+        "profiles.none",
+        "profiles.pick",
+        "profiles.active",
+        "profiles.drifted",
+        "profiles.driftedHint",
+        "profiles.clientCount",
+        "profiles.save",
+        "profiles.saveTitle",
+        "profiles.name",
+        "profiles.saved",
+        "profiles.apply",
+        "profiles.applied",
+        "profiles.appliedPartial",
+        "profiles.overwrite",
+        "profiles.overwriteConfirm",
+        "profiles.rename",
+        "profiles.delete",
+        "profiles.deleteConfirm",
+        "profiles.previewTitle",
+        "profiles.previewDetail",
+        "profiles.nothing",
+        "profiles.action.enable",
+        "profiles.action.update",
+        "profiles.action.disable",
+        "profiles.action.store",
+        "profiles.action.unchanged",
+        "profiles.action.skipped",
+        "profiles.action.failed",
+        "profiles.reason.not-installed",
+        "profiles.reason.unavailable",
+        "profiles.reason.unknown-client",
+        "profiles.reason.no-provider",
+        "profiles.drift",
+        "profiles.drop.provider.missing",
+        "profiles.drop.provider.disabled",
+        "profiles.drop.account",
+        "profiles.drop.token",
+        "profiles.dropped",
         "clients.noBackups",
         "clients.firstWrite",
         "clients.restore",
@@ -3715,6 +3763,54 @@ internal static class Messages
             case "clients.copyConfigPath": return "复制配置文件路径";
             case "clients.backups": return "配置备份";
             case "clients.backupsDetail": return "每次修改前自动备份，可随时恢复。";
+            case "clients.shortlist.title": return "常用模型短名单";
+            case "clients.shortlist.footer": return "只勾选的模型会出现在这个客户端的模型列表里（含写进它配置的列表）；一个都不勾 = 不限制。";
+            case "clients.shortlist.footerEnabled": return "修改后会立即重写该客户端配置里的模型列表（配置被手动改过时不会动它）。";
+            case "clients.shortlist.summary": return "已选 {count} / {total}";
+            case "clients.shortlist.empty": return "不限制，客户端能看到全部模型";
+            case "clients.shortlist.clear": return "清空（不限制）";
+            case "clients.shortlist.missing": return "当前已不可用";
+            case "clients.shortlist.filter": return "筛选模型";
+            case "profiles.title": return "方案";
+            case "profiles.subtitle": return "把所有客户端的当前配置存成一个方案，一次切换：是否接管、提供商顺序、模型、选项和短名单。";
+            case "profiles.none": return "还没有方案";
+            case "profiles.pick": return "选择方案";
+            case "profiles.active": return "当前方案";
+            case "profiles.drifted": return "已偏离";
+            case "profiles.driftedHint": return "客户端自应用以来被改动过，和方案不再一致。";
+            case "profiles.clientCount": return "{count} 个客户端";
+            case "profiles.save": return "保存当前为方案";
+            case "profiles.saveTitle": return "保存为方案";
+            case "profiles.name": return "方案名称";
+            case "profiles.saved": return "已保存方案“{name}”";
+            case "profiles.apply": return "应用方案";
+            case "profiles.applied": return "已应用方案“{name}”";
+            case "profiles.appliedPartial": return "方案“{name}”已应用，{count} 个客户端被跳过";
+            case "profiles.overwrite": return "用当前状态覆盖";
+            case "profiles.overwriteConfirm": return "用客户端当前状态覆盖方案“{name}”？";
+            case "profiles.rename": return "重命名";
+            case "profiles.delete": return "删除方案";
+            case "profiles.deleteConfirm": return "删除方案“{name}”？客户端的配置不会改变。";
+            case "profiles.previewTitle": return "应用方案“{name}”";
+            case "profiles.previewDetail": return "将通过正常的启用 / 停用流程逐个切换客户端，原配置照常备份与恢复。";
+            case "profiles.nothing": return "没有需要改动的客户端。";
+            case "profiles.action.enable": return "启用";
+            case "profiles.action.update": return "更新";
+            case "profiles.action.disable": return "停用并恢复";
+            case "profiles.action.store": return "仅记录设置";
+            case "profiles.action.unchanged": return "无变化";
+            case "profiles.action.skipped": return "跳过";
+            case "profiles.action.failed": return "失败";
+            case "profiles.reason.not-installed": return "这台机器上没有安装";
+            case "profiles.reason.unavailable": return "暂不支持";
+            case "profiles.reason.unknown-client": return "客户端不存在";
+            case "profiles.reason.no-provider": return "方案里的提供商都已不存在";
+            case "profiles.drift": return "已被手动修改，保持原样：{key}";
+            case "profiles.drop.provider.missing": return "提供商已删除：{id}";
+            case "profiles.drop.provider.disabled": return "提供商已停用：{id}";
+            case "profiles.drop.account": return "订阅账号已不存在：{id}";
+            case "profiles.drop.token": return "令牌不可用，改用默认令牌：{id}";
+            case "profiles.dropped": return "已从方案中忽略";
             case "clients.noBackups": return "还没有备份";
             case "clients.firstWrite": return "首次修改前";
             case "clients.restore": return "恢复";
@@ -6894,6 +6990,54 @@ internal static class Messages
             case "clients.copyConfigPath": return "Copy config file path";
             case "clients.backups": return "Config backups";
             case "clients.backupsDetail": return "Taken automatically before every change; restore any time.";
+            case "clients.shortlist.title": return "Model shortlist";
+            case "clients.shortlist.footer": return "Only the ticked models appear in this client’s model list (including the list written into its config); none ticked = no limit.";
+            case "clients.shortlist.footerEnabled": return "Changing it rewrites the model list in the client’s config right away (a config you edited by hand is left alone).";
+            case "clients.shortlist.summary": return "{count} of {total} selected";
+            case "clients.shortlist.empty": return "No limit: the client sees every model";
+            case "clients.shortlist.clear": return "Clear (no limit)";
+            case "clients.shortlist.missing": return "no longer available";
+            case "clients.shortlist.filter": return "Filter models";
+            case "profiles.title": return "Profiles";
+            case "profiles.subtitle": return "Save every client’s current setup as a profile and switch them all at once: enabled or not, provider order, models, options and shortlist.";
+            case "profiles.none": return "No profiles yet";
+            case "profiles.pick": return "Choose a profile";
+            case "profiles.active": return "Active profile";
+            case "profiles.drifted": return "Changed since";
+            case "profiles.driftedHint": return "A client was changed after the profile was applied, so they no longer match.";
+            case "profiles.clientCount": return "{count} clients";
+            case "profiles.save": return "Save current as profile";
+            case "profiles.saveTitle": return "Save as profile";
+            case "profiles.name": return "Profile name";
+            case "profiles.saved": return "Saved profile “{name}”";
+            case "profiles.apply": return "Apply profile";
+            case "profiles.applied": return "Applied profile “{name}”";
+            case "profiles.appliedPartial": return "Applied profile “{name}”; {count} clients were skipped";
+            case "profiles.overwrite": return "Overwrite with current state";
+            case "profiles.overwriteConfirm": return "Overwrite profile “{name}” with the clients’ current state?";
+            case "profiles.rename": return "Rename";
+            case "profiles.delete": return "Delete profile";
+            case "profiles.deleteConfirm": return "Delete profile “{name}”? The clients’ configs do not change.";
+            case "profiles.previewTitle": return "Apply profile “{name}”";
+            case "profiles.previewDetail": return "Clients are switched one by one through the normal enable / disable path; original configs are backed up and restored as usual.";
+            case "profiles.nothing": return "No client needs changing.";
+            case "profiles.action.enable": return "Enable";
+            case "profiles.action.update": return "Update";
+            case "profiles.action.disable": return "Disable and restore";
+            case "profiles.action.store": return "Settings only";
+            case "profiles.action.unchanged": return "No change";
+            case "profiles.action.skipped": return "Skipped";
+            case "profiles.action.failed": return "Failed";
+            case "profiles.reason.not-installed": return "not installed on this machine";
+            case "profiles.reason.unavailable": return "not supported yet";
+            case "profiles.reason.unknown-client": return "no such client";
+            case "profiles.reason.no-provider": return "every provider in the profile is gone";
+            case "profiles.drift": return "Changed by hand, left as it is: {key}";
+            case "profiles.drop.provider.missing": return "Provider was deleted: {id}";
+            case "profiles.drop.provider.disabled": return "Provider is switched off: {id}";
+            case "profiles.drop.account": return "Subscription account no longer exists: {id}";
+            case "profiles.drop.token": return "Token unavailable, using the default token: {id}";
+            case "profiles.dropped": return "Ignored from the profile";
             case "clients.noBackups": return "No backups yet";
             case "clients.firstWrite": return "Before first change";
             case "clients.restore": return "Restore";

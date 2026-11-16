@@ -29,6 +29,8 @@ import type {
   BillingSimulateRequest,
   ClientBinding,
   ClientInfo,
+  Profile,
+  ProfilePlan,
   ClientInstallJob,
   ClientKind,
   ClaudeDirectRequest,
@@ -148,7 +150,8 @@ export const keys = {
   alertEvents: ['alert-events'] as const,
   alertRules: ['alert-rules'] as const,
   alertStates: ['alert-states'] as const,
-  clientModels: (kind: string) => ['client-models', kind] as const,
+  clientModels: (kind: string, all = false) => (all ? ['client-models', kind, 'all'] : ['client-models', kind]) as QueryKey,
+  profiles: ['profiles'] as const,
   backups: (kind: string) => ['backups', kind] as const,
   clientInstallJob: (kind: string) => ['client-install-job', kind] as const,
   privacy: ['privacy'] as const,
@@ -1011,10 +1014,11 @@ export const useClients = () =>
 export const useReapplyClients = () =>
   useClientMutation(() => api<{ updated: ClientKind[] }>('POST', '/api/clients/reapply', {}));
 
-export const useClientModels = (kind: ClientKind | undefined, enabled = true) =>
+/** `all`: every model the client can reach, ignoring its shortlist (what the shortlist editor picks from). */
+export const useClientModels = (kind: ClientKind | undefined, enabled = true, all = false) =>
   useQuery({
-    queryKey: keys.clientModels(kind ?? ''),
-    queryFn: () => api<string[]>('GET', `/api/clients/${kind}/models`),
+    queryKey: keys.clientModels(kind ?? '', all),
+    queryFn: () => api<string[]>('GET', `/api/clients/${kind}/models${all ? '?all=true' : ''}`),
     enabled: Boolean(kind) && enabled,
     retry: false,
   });
@@ -1054,6 +1058,13 @@ export const useSetBindings = () =>
     (v: { kind: ClientKind; bindings: ClientBinding[] }) =>
       api<ClientInfo>('PUT', `/api/clients/${v.kind}/bindings`, { bindings: v.bindings }),
     (v) => [keys.clientModels(v.kind)],
+  );
+
+/** Sets the models the client should see (its shortlist); an empty list clears it. */
+export const useSetShortlist = () =>
+  useClientMutation(
+    (v: { kind: ClientKind; models: string[] }) => api<ClientInfo>('PUT', `/api/clients/${v.kind}/shortlist`, { models: v.models }),
+    () => [keys.profiles],
   );
 
 export const usePreviewEnable = () =>
@@ -1965,3 +1976,44 @@ export const usePluginNotifications = (after: number, enabled: boolean) =>
     enabled,
     refetchInterval: 20_000,
   });
+
+
+// ---------- profiles ----------
+
+export const useProfiles = () =>
+  useQuery({ queryKey: keys.profiles, queryFn: () => api<Profile[]>('GET', '/api/profiles') });
+
+/** What applying the profile would change, per client; read-only. */
+export const useProfilePreview = (id: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: ['profile-preview', id],
+    queryFn: () => api<ProfilePlan>('GET', `/api/profiles/${enc(id ?? '')}/preview`),
+    enabled: Boolean(id) && enabled,
+    gcTime: 0,
+  });
+
+function useProfileMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.profiles });
+      void qc.invalidateQueries({ queryKey: keys.clients });
+      void qc.invalidateQueries({ queryKey: ['client-models'] });
+    },
+  });
+}
+
+/** Saves the clients' current state as a new profile (which becomes the active one). */
+export const useSaveProfile = () => useProfileMutation((name: string) => api<Profile>('POST', '/api/profiles', { name }));
+
+/** Renames a profile and / or replaces its snapshot with the clients' current state. */
+export const useUpdateProfile = () =>
+  useProfileMutation((v: { id: string; name?: string; overwrite?: boolean }) =>
+    api<Profile>('PUT', `/api/profiles/${enc(v.id)}`, { name: v.name, overwrite: v.overwrite }));
+
+export const useDeleteProfile = () => useProfileMutation((id: string) => api<void>('DELETE', `/api/profiles/${enc(id)}`));
+
+/** Switches every client the profile covers, through the regular enable / disable path. */
+export const useApplyProfile = () =>
+  useProfileMutation((id: string) => api<ProfilePlan>('POST', `/api/profiles/${enc(id)}/apply`));

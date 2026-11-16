@@ -18,6 +18,7 @@ namespace Astra.Core;
 /// but collections and dictionaries used as roots (a JSON column holding a list, say) are listed too.
 /// </summary>
 [JsonSerializable(typeof(AppSettings))]
+[JsonSerializable(typeof(ClientProfiles))]
 [JsonSerializable(typeof(Astra.Core.Plugins.AgentPluginDescriptor))]
 [JsonSerializable(typeof(EffortBudgets))]
 [JsonSerializable(typeof(TunnelSettings))]

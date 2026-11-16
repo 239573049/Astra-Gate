@@ -33,6 +33,8 @@ import { Alert } from '../components/arc/alert/alert';
 import { ClaudeDirectPanel } from '../components/ClaudeDirectPanel';
 import { ClientOptionsGroup } from '../components/ClientOptionsGroup';
 import { ClientProtocolsGroup } from '../components/ClientProtocolsGroup';
+import { ClientShortlistGroup } from '../components/ClientShortlistGroup';
+import { ProfilesBar } from '../components/ProfilesBar';
 import { clientName, CLIENT_ORDER, ClientIcon, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, Dot, EmptyState, Group, Row, Spinner } from '../components/ui/controls';
@@ -87,6 +89,7 @@ export function ClientsPage() {
           breakpoint the list folds into a horizontal strip above the panel. The panel is capped so rows stay
           readable on wide windows, and centers in whatever space the list leaves. */}
       <div className="@container mx-auto max-w-[1200px]">
+        <ProfilesBar />
         <div className="flex flex-col gap-4 @3xl:flex-row @3xl:items-start @3xl:gap-5">
           <ClientList clients={clients.data} loading={clients.isLoading} selected={kind} onSelect={(k) => navigate(`/clients/${k}`, { replace: true })} />
           <div className="mx-auto w-full max-w-[760px] min-w-0 flex-1">
@@ -593,6 +596,8 @@ function ClientPanel({ client }: { client: ClientInfo }) {
           )}
         </Group>
       )}
+
+      {!soon && !isDirectMode && client.providerId && !isDesktopClient && <ClientShortlistGroup client={client} />}
 
       {!soon && !isDirectMode && optionDescriptors.length > 0 && (
         <>
