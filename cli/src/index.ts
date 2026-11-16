@@ -41,6 +41,19 @@ import {
   runProviderKeysSwitch,
   runTokenList,
 } from './commands/admin.js';
+import {
+  runBackupAuto,
+  runBackupCreate,
+  runBackupList,
+  runBackupRestore,
+  runSyncClearConflicts,
+  runSyncEnable,
+  runSyncNow,
+  runSyncSetup,
+  runSyncStatus,
+  runSyncTest,
+  type SyncSetupOptions,
+} from './commands/backup.js';
 import { runSetPassword } from './commands/config.js';
 import {
   runPluginAdd,
@@ -468,6 +481,87 @@ program
   .option('--account <id>', 'Subscription account id (default: the account selected in Astra)')
   .option('--status', 'Show the account and token lifetime without starting Claude Code')
   .action((opts: { account?: string; status?: boolean }) => runClaude(opts));
+
+const backup = program.command('backup').description('Back up and restore the whole Astra setup (providers, tokens, clients, settings ...)');
+backup
+  .command('create')
+  .description('Write a backup file; API keys are included, encrypted with a passphrase, unless --no-keys')
+  .option('--no-keys', 'No API keys and no passphrase: a plain file without secrets')
+  .option('-o, --out <file>', 'File to write (default: the name the server suggests, in the current directory)')
+  .option('--sections <list>', 'Comma-separated sections to include (default: all)')
+  .option('--include-usage', 'Also include usage history')
+  .option('--passphrase-stdin', 'Read the passphrase from stdin (or ASTRA_BACKUP_PASSPHRASE)')
+  .action((opts: { keys?: boolean; out?: string; sections?: string; includeUsage?: boolean; passphraseStdin?: boolean }) =>
+    runBackupCreate(opts),
+  );
+backup
+  .command('restore <file>')
+  .description('Preview a backup file, then restore it (asks first; a safety copy is kept)')
+  .option('--sections <list>', 'Comma-separated sections to restore (default: all in the file)')
+  .option('--replace', 'Make this Astra match the backup: remove what the backup does not have')
+  .option('--dry-run', 'Only show what would change')
+  .option('--yes', 'Do not ask for confirmation')
+  .action((file: string, opts: { sections?: string; replace?: boolean; dryRun?: boolean; yes?: boolean }) =>
+    runBackupRestore(file, opts),
+  );
+backup
+  .command('list')
+  .description('List the automatic backups')
+  .action(() => runBackupList());
+backup
+  .command('auto')
+  .description('Show or change the automatic backups')
+  .option('--on', 'Turn them on')
+  .option('--off', 'Turn them off')
+  .option('--hours <n>', 'Hours between backups')
+  .option('--keep <n>', 'How many to keep')
+  .option('--run', 'Make a backup now')
+  .action((opts: { on?: boolean; off?: boolean; hours?: string; keep?: string; run?: boolean }) => runBackupAuto(opts));
+
+const sync = program.command('sync').description('Keep several machines in step through a folder, WebDAV, S3 or GitHub');
+sync
+  .command('status')
+  .description('Show the sync configuration, state and conflicts')
+  .action(() => runSyncStatus());
+sync
+  .command('now')
+  .description('Sync now')
+  .option('--dry-run', 'Only show what would be pushed and pulled')
+  .action((opts: { dryRun?: boolean }) => runSyncNow(opts));
+sync
+  .command('enable')
+  .description('Turn periodic sync on')
+  .action(() => runSyncEnable(true));
+sync
+  .command('disable')
+  .description('Turn periodic sync off')
+  .action(() => runSyncEnable(false));
+sync
+  .command('test')
+  .description('Check that the sync target is reachable')
+  .action(() => runSyncTest());
+sync
+  .command('clear-conflicts')
+  .description('Clear the list of settled conflicts')
+  .action(() => runSyncClearConflicts());
+sync
+  .command('setup')
+  .description('Set the sync target (secret and passphrase: ASTRA_SYNC_SECRET / ASTRA_SYNC_PASSPHRASE, --...-stdin, or a prompt; never argv)')
+  .requiredOption('--kind <kind>', 'folder | webdav | s3 | github')
+  .option('--url <url>', 'Folder path, WebDAV address, S3 endpoint or GitHub repository')
+  .option('--username <name>', 'User name (WebDAV) or access key id (S3)')
+  .option('--folder <name>', 'Folder inside the target (default astra)')
+  .option('--bucket <name>', 'S3 bucket')
+  .option('--region <region>', 'S3 region')
+  .option('--path-style', 'S3 path-style addressing')
+  .option('--branch <name>', 'GitHub branch')
+  .option('--interval <minutes>', 'Minutes between syncs')
+  .option('--sections <list>', 'Comma-separated sections to sync')
+  .option('--no-keys', 'Do not sync API keys')
+  .option('--signins', 'Also sync plugin sign-ins')
+  .option('--secret-stdin', 'Read the target password / token from stdin')
+  .option('--passphrase-stdin', 'Read the sync passphrase from stdin (the line after the secret when both)')
+  .action((opts: SyncSetupOptions) => runSyncSetup(opts));
 
 program
   .command('restore-all')

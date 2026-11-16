@@ -1,10 +1,11 @@
-import { Bell, Copy, Download, FolderOpen, Globe, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Archive, Bell, Copy, Download, FolderOpen, Globe, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useTunnel, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
 import type { ProxyMode, QualifyScope, RequestCompression, Settings } from '../api/types';
+import { BackupSyncSettings } from '../components/backup/BackupSyncSettings';
 import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
@@ -25,7 +26,7 @@ import { getBridge, isDesktop } from '../shell/bridge';
 import { systemActions } from '../shell/systemActions';
 import { PluginSlot } from '../plugin-ui/PluginPage';
 
-const TABS = ['general', 'notifications', 'remote', 'tray'] as const;
+const TABS = ['general', 'notifications', 'remote', 'backup', 'tray'] as const;
 type SettingsTab = (typeof TABS)[number];
 
 /** Zones offered for token limits besides the server's own (any IANA id the server knows is accepted). */
@@ -65,6 +66,12 @@ export function SettingsPage() {
               {t('settings.tab.remote')}
             </span>
           </TabsTrigger>
+          <TabsTrigger value="backup">
+            <span className="inline-flex items-center gap-1.5">
+              <Archive className="size-3.5" />
+              {t('settings.tab.backup')}
+            </span>
+          </TabsTrigger>
           {trayAvailable && (
             <TabsTrigger value="tray">
               <span className="inline-flex items-center gap-1.5">
@@ -82,6 +89,9 @@ export function SettingsPage() {
         </TabsContent>
         <TabsContent value="remote" className="pt-5">
           <RemoteAccessSettings />
+        </TabsContent>
+        <TabsContent value="backup" className="pt-5">
+          <BackupSyncSettings />
         </TabsContent>
         {trayAvailable && (
           <TabsContent value="tray" className="pt-5">

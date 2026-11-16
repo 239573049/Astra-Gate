@@ -2335,9 +2335,13 @@ const fullBackupKeys = { info: ['full-backup', 'info'], auto: ['full-backup', 'a
 export const useFullBackupInfo = () => useQuery({ queryKey: fullBackupKeys.info, queryFn: () => api<FullBackupInfo>('GET', '/api/backup/info') });
 export const useAutoBackup = (enabled = true) =>
   useQuery({ queryKey: fullBackupKeys.auto, queryFn: () => api<AutoBackup>('GET', '/api/backup/auto'), enabled });
-/** Polls every ~5 s while `poll` is on (the section is visible and sync is set up). */
-export const useSyncStatus = (poll = false) =>
-  useQuery({ queryKey: fullBackupKeys.sync, queryFn: () => api<SyncStatus>('GET', '/api/sync/status'), refetchInterval: poll ? 5000 : false });
+/** Polls every ~5 s while sync is enabled (react-query pauses it in a hidden tab). */
+export const useSyncStatus = () =>
+  useQuery({
+    queryKey: fullBackupKeys.sync,
+    queryFn: () => api<SyncStatus>('GET', '/api/sync/status'),
+    refetchInterval: (q) => (q.state.data?.enabled ? 5000 : false),
+  });
 
 export const useExportFullBackup = () =>
   useMutation({ mutationFn: (v: FullBackupExportInput) => api<FullBackupExport>('POST', '/api/backup/export', v) });

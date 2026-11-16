@@ -73,6 +73,7 @@ public sealed class SettingsView : UserControl
         yield return (SettingsTab.Logging, LucideIconKind.ScrollText, "settings.logging");
         yield return (SettingsTab.Notifications, LucideIconKind.Bell, "settings.tab.notifications");
         yield return (SettingsTab.Remote, LucideIconKind.Earth, "settings.tab.remote");
+        yield return (SettingsTab.Backup, LucideIconKind.Archive, "settings.tab.backup");
         if (_page.TrayAvailable) yield return (SettingsTab.Tray, LucideIconKind.PanelTop, "settings.tab.tray");
         yield return (SettingsTab.About, LucideIconKind.Info, "settings.about");
     }
@@ -161,6 +162,7 @@ public sealed class SettingsView : UserControl
         SettingsTab.About => new AboutSettingsView(_page),
         SettingsTab.Notifications => new NotificationSettingsView(_page.Context!, _page.Api),
         SettingsTab.Remote => new RemoteAccessView(_page.Context!, _page.Api),
+        SettingsTab.Backup => new BackupSyncView(_page.Context!),
         SettingsTab.Tray => new TraySettingsView(_page.Context!),
         _ => new GeneralSettingsView(_page),
     };
