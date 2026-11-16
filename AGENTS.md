@@ -699,6 +699,21 @@ runtime needed on the target).
     plugins in their own `pluginsV2` array (never `plugins`, so an older Astra never installs one as v1): `PluginMarket.ToV2Listing`,
     the website's `lib/plugin-market` (`toV2`, `metaFromAstraManifest`, `readManifests`), and linked update 10 applies.
 
+28. **Broader gateway surface** (magpie parity; `.agents/codemap/flows/gateway-request.md`): beside the four chat protocols and
+    images, `GatewayPipeline.HandleForwardedAsync` forwards `/v1/embeddings`, `/v1/rerank` and `/v1/audio/{transcriptions,translations,speech}`
+    untranslated (a `ForwardedCall` in `Pipeline/ForwardedCalls.cs` per kind: its request-log protocol id — never an `ApiProtocol` —,
+    path, usage reader, reply mode; a new kind is one more `ForwardedCall`, its route in `MapGatewayEndpoints` and, where the relay should
+    serve it, in `RelayApp`; embeddings stay raw-relayed there). `GET /v1/responses` with an upgrade is the Responses WebSocket (Codex's
+    mode: `Http/ResponsesSocket.cs`, `UseWebSockets()` in `AstraApp`) and `/ollama/api/*` the Ollama face (`Http/OllamaEndpoints.cs`):
+    both serve each turn as the HTTP request it stands for through `InternalCall`, so token, caps, routing, failover, request log and
+    bill are the HTTP route's own — keep it so, never call a service directly from them. The Ollama routes sit under `/ollama`, not
+    `/api`: `/api` is the admin API's namespace and `SecurityMiddleware` guards it (admin header, session); `/ollama` is a gateway
+    path like `/v1` (Host allowlist, token off this machine). The WebSocket refuses a request with a foreign `Origin` and an
+    unauthenticated off-machine caller before the upgrade. `/v1/astra/native/{provider}/{path}` (`GatewayPipeline.Native.cs`) forwards a
+    provider's own API: only providers the token routes to, API-key schemes only, the provider's own origin + `NativePath`-checked path
+    (never a request-named address), the caller's credentials never forwarded, tokens with cost / token budgets refused. Docs: the
+    website's `content/docs/guide/` gateway pages and `content/docs/cli`/client pages that list gateway paths.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

@@ -38,11 +38,18 @@ public sealed partial class GatewayPipeline
     /// The request log's protocol of an Images API call. Not an <see cref="ApiProtocol"/>: no codec translates it, so no
     /// provider endpoint, client config or protocol choice has to know about it.
     /// </summary>
-    public const string ImagesProtocol = "openai-images";
+    public const string ImagesProtocol = ForwardedCall.ImagesProtocol;
 
     /// <summary>Forwards one Images API call to the provider its model routes to, and logs and bills it.</summary>
-    public async Task HandleImagesAsync(HttpContext ctx, ImageOperation operation)
+    public Task HandleImagesAsync(HttpContext ctx, ImageOperation operation) => HandleForwardedAsync(ctx, ForwardedCall.Of(operation));
+
+    /// <summary>
+    /// Forwards one OpenAI-shaped call beside chat — images, embeddings, rerank, audio (<see cref="ForwardedCall"/>) — to the
+    /// provider its model routes to, and logs and bills it. See the notes at the top of this file; every call kind shares them.
+    /// </summary>
+    public async Task HandleForwardedAsync(HttpContext ctx, ForwardedCall call)
     {
+        var operation = call.Operation;
         var sw = Stopwatch.StartNew();
         var ct = ctx.RequestAborted;
         var s = settings.Current;
@@ -50,8 +57,8 @@ public sealed partial class GatewayPipeline
         {
             Id = Ulid.NewUlid(),
             StartedAtUtc = DateTimeOffset.UtcNow,
-            InboundProtocol = ImagesProtocol,
-            UpstreamProtocol = ImagesProtocol,
+            InboundProtocol = call.Protocol,
+            UpstreamProtocol = call.Protocol,
             Passthrough = true,
             UserAgent = Truncate(ctx.Request.Headers.UserAgent.ToString(), 300),
             Remote = Http.RequestOrigin.IsRemote(ctx),
@@ -102,15 +109,17 @@ public sealed partial class GatewayPipeline
             PooledBuffer? head = null;
             var wantsStream = false;
             string requestedModel;
+            if (boundary is not null && !call.Form)
+                throw new ProtocolException($"{call.Noun}的请求体必须是 JSON 对象。");
             if (boundary is null)
             {
                 requestBody = await RequestBody.ReadAsync(ctx.Request, _bodyLimits.Effective(settings.Current), ct, _bodyLimits.ReadTimeout);
                 bodySpan.Set("astra.body.bytes", requestBody.Utf8.Length).Ok().End();
                 if (requestBody.Parse() is not (var root, var tree))
-                    throw new ProtocolException("图像接口的请求体必须是 JSON 对象或 multipart/form-data 表单。");
+                    throw new ProtocolException($"{call.Noun}的请求体必须是 JSON 对象{(call.Form ? " 或 multipart/form-data 表单" : "")}。");
                 (jsonRoot, json) = (root, tree);
                 requestedModel = Str(json, "model") ?? "";
-                wantsStream = json["stream"] is JsonValue v && v.TryGetValue<bool>(out var b) && b;
+                wantsStream = json["stream"] is JsonValue v && v.TryGetValue<bool>(out var b) && b || Str(json, "stream_format") == "sse";
             }
             else if (privacy?.Settings.Enabled == true || _bodyLimits.ReadTimeout is not null
                      || RequestBody.ContentEncodings(ctx.Request.Headers.ContentEncoding.ToString()).Count > 0)
@@ -154,10 +163,10 @@ public sealed partial class GatewayPipeline
             }
 
             if (requestedModel.Length == 0)
-                throw new ProtocolException("请求缺少 model。Astra 按模型选择提供商，图像接口需要指定模型（例如 gpt-image-1）。");
+                throw new ProtocolException($"请求缺少 model。Astra 按模型选择提供商，{call.Noun}需要指定模型（例如 {call.ExampleModel}）。");
             record.RequestedModel = requestedModel;
             if (smartRouter.IsVirtual(requestedModel))
-                throw new GatewayException(400, "invalid_request_error", $"智能路由的虚拟模型 {requestedModel} 只用于对话接口；图像接口请指定图像模型（例如 gpt-image-1）。");
+                throw new GatewayException(400, "invalid_request_error", $"智能路由的虚拟模型 {requestedModel} 只用于对话接口；{call.Noun}请指定对应的模型（例如 {call.ExampleModel}）。");
 
             // Where it goes: the provider serving the model among the client's bindings, or the member the token's pool
             // picks (its rotation advances; an image is not failed over to the next member), as for a generation request.
@@ -175,17 +184,19 @@ public sealed partial class GatewayPipeline
             record.ProviderName = provider.Name;
             live.Update(record);
             SubscriptionSupport.EnforceClientPolicy(provider, false);
-            var endpoint = ImagesEndpoint(provider);
-            var url = UpstreamUrls.Images(endpoint, ImagesPath(provider, operation))
+            var endpoint = ForwardedEndpoint(provider, call);
+            // Embeddings of a provider that speaks only Gemini are translated; every other call is the client's own bytes.
+            var gemini = call.IsEmbeddings && endpoint.Protocol == ApiProtocol.Gemini;
+            var url = gemini ? "" : UpstreamUrls.Images(endpoint, ForwardedPath(provider, call))
                       ?? throw new GatewayException(501, "api_error",
-                          $"提供商 {provider.Name} 的 OpenAI 接口填的是完整地址，无法由它得出图像接口的地址。请改填基础地址（例如 https://api.openai.com/v1）。");
+                          $"提供商 {provider.Name} 的 OpenAI 接口填的是完整地址，无法由它得出{call.Noun}的地址。请改填基础地址（例如 https://api.openai.com/v1）。");
             var upstreamModel = route.UpstreamModelFor(requestedModel);
             record.UpstreamModel = upstreamModel;
             (_, effective) = await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
             record.SystemModelId = effective.SystemModelId;
             live.Update(record);
             resolveSpan.Set("astra.provider.id", provider.Id).Set("astra.provider.name", provider.Name)
-                .Set("gen_ai.request.model", requestedModel).Set("astra.protocol.upstream", ImagesProtocol).Set("astra.passthrough", true).Ok().End();
+                .Set("gen_ai.request.model", requestedModel).Set("astra.protocol.upstream", gemini ? ApiProtocol.Gemini.ToId() : call.Protocol).Set("astra.passthrough", !gemini).Ok().End();
 
             // What goes upstream: the client's bytes, unless the model mapping or the guard changed a value.
             var encodeSpan = trace.Start(TraceSpanNames.Encode);
@@ -194,10 +205,20 @@ public sealed partial class GatewayPipeline
             Func<HttpContent>? content = null;
             var resendable = true;
             var rewritten = false;
+            var geminiBase64 = false;
             if (json is not null)
             {
                 if (mapped) json["model"] = upstreamModel;
                 rewritten = mapped || guard.Rewritten;
+                if (gemini)
+                {
+                    geminiBase64 = Str(json, "encoding_format") == "base64";
+                    var (path, translated) = GeminiEmbeddings.Encode(json, upstreamModel);
+                    url = UpstreamUrls.Beside(endpoint, path)
+                          ?? throw new GatewayException(501, "api_error", $"提供商 {provider.Name} 的 Gemini 接口填的是完整地址，无法得出 embeddings 的地址。请改填基础地址（例如 https://generativelanguage.googleapis.com/v1beta）。");
+                    json = translated;
+                    rewritten = true;
+                }
                 if (rewritten)
                 {
                     owned = payload = new PooledBuffer(requestBody!.Buffer.Length + 256);
@@ -234,7 +255,7 @@ public sealed partial class GatewayPipeline
                     return whole;
                 };
             }
-            encodeSpan.Set("astra.protocol.inbound", ImagesProtocol).Set("astra.protocol.upstream", ImagesProtocol).Set("astra.passthrough", true)
+            encodeSpan.Set("astra.protocol.inbound", call.Protocol).Set("astra.protocol.upstream", gemini ? ApiProtocol.Gemini.ToId() : call.Protocol).Set("astra.passthrough", !gemini)
                 .Set("astra.encode.rewritten", rewritten).Set("gen_ai.request.model", requestedModel).Set("astra.upstream.model", upstreamModel)
                 .Set("astra.stream", wantsStream).Set("astra.body.bytes", payload.Length).Ok().End();
 
@@ -252,7 +273,8 @@ public sealed partial class GatewayPipeline
             try
             {
                 sent = await SendAsync(route, endpoint, url, payload, json ?? new JsonObject(), wantsStream, passthrough: true, ClaudeHeaderMode.None,
-                    upstreamModel, null, ctx.Request, null, trace, attempts, ct, content, resendable);
+                    upstreamModel, null, ctx.Request, null, trace, attempts, ct, content, resendable,
+                    accept: call.Reply == ForwardedReply.Binary && !wantsStream ? "*/*" : null);
             }
             catch (Exception e) when (ReportFailure(provider, e, ct))
             {
@@ -275,7 +297,8 @@ public sealed partial class GatewayPipeline
                 await ForwardErrorAsync(ctx, response, record, ApiProtocol.OpenAIChat, passthrough: true, null, codecs.Get(ApiProtocol.OpenAIChat), null, ct);
                 return;
             }
-            await ForwardImagesAsync(ctx, response, record, observer, sw, guard.RestoreMap, s.StreamIdleTimeoutSec, ct);
+            await ForwardAnswerAsync(ctx, response, record, observer, sw, guard.RestoreMap, s.StreamIdleTimeoutSec, call,
+                gemini ? new GeminiReply(upstreamModel, geminiBase64) : null, ct);
         }
         catch (GatewayException e)
         {
@@ -344,8 +367,7 @@ public sealed partial class GatewayPipeline
             poolLease?.Dispose();
             poolPlan?.Dispose();
             Finish(record, observer, sw, effective, provider, s.Locale);
-            FinishTrace(record, trace, null, inboundTraceId, observer, responseSpan, false, restorable,
-                operation == ImageOperation.Generations ? "image_generation" : "image_edit");
+            FinishTrace(record, trace, null, inboundTraceId, observer, responseSpan, false, restorable, operation);
             // A send still in flight holds its own reference to the bytes.
             owned?.Release();
             requestBody?.Dispose();
@@ -366,13 +388,22 @@ public sealed partial class GatewayPipeline
         return CopilotCliHeaders.Applies(provider) ? "v1/" + path : path;
     }
 
-    private static ProviderEndpoint ImagesEndpoint(Provider provider)
+    private static string ForwardedPath(Provider provider, ForwardedCall call) =>
+        call.IsImages ? ImagesPath(provider, call == ForwardedCall.ImageGenerations ? ImageOperation.Generations : ImageOperation.Edits) : call.Path;
+
+    /// <summary>
+    /// The endpoint a forwarded call goes beside: the provider's OpenAI one; a provider without one cannot serve it, except
+    /// that embeddings are translated for a Gemini-only provider.
+    /// </summary>
+    private static ProviderEndpoint ForwardedEndpoint(Provider provider, ForwardedCall call)
     {
         if (provider.AuthScheme == AuthSchemes.Plugin)
-            throw new GatewayException(501, "api_error", $"提供商 {provider.Name} 由插件提供，不支持 OpenAI 图像接口。");
-        return provider.EndpointFor(ApiProtocol.OpenAIChat) ?? provider.EndpointFor(ApiProtocol.OpenAIResponses)
-               ?? throw new GatewayException(501, "api_error",
-                   $"提供商 {provider.Name} 没有 OpenAI 兼容的接口（openai-chat / openai-responses），无法转发 OpenAI 图像接口。请让这个模型路由到 OpenAI 兼容的提供商。");
+            throw new GatewayException(501, "api_error", $"提供商 {provider.Name} 由插件提供，不支持{call.Noun}。");
+        var openAi = provider.EndpointFor(ApiProtocol.OpenAIChat) ?? provider.EndpointFor(ApiProtocol.OpenAIResponses);
+        if (openAi is not null) return openAi;
+        if (call.IsEmbeddings && provider.EndpointFor(ApiProtocol.Gemini) is { } gemini) return gemini;
+        throw new GatewayException(501, "api_error",
+            $"提供商 {provider.Name} 没有 OpenAI 兼容的接口（openai-chat / openai-responses），无法转发{call.Noun}。请让这个模型路由到 OpenAI 兼容的提供商。");
     }
 
     private static MultipartForm.Part? TextField(List<MultipartForm.Part> parts, string name)
@@ -427,17 +458,23 @@ public sealed partial class GatewayPipeline
         return false;
     }
 
+    /// <summary>How a Gemini embeddings answer is written back as OpenAI's (<see cref="GeminiEmbeddings.Decode"/>).</summary>
+    private sealed record GeminiReply(string Model, bool Base64);
+
     /// <summary>
     /// The provider's answer as it wrote it: a JSON body (read whole, then written — placeholders the guard put into the
-    /// prompt restored), or an event stream (partial images, written as they arrive). Only <c>usage</c> is read from it —
-    /// from the body, or from the event that completes the image — never the images.
+    /// prompt restored), an event stream (partial images, a speech stream; written as they arrive), or audio / other bytes
+    /// of a <see cref="ForwardedReply.Binary"/> call (copied through, never buffered). Only <c>usage</c> is read from it —
+    /// from the body, or from the event that completes the call — never the images or the audio. A Gemini embeddings answer
+    /// is rewritten into OpenAI's list.
     /// </summary>
-    private static async Task ForwardImagesAsync(HttpContext ctx, HttpResponseMessage response, RequestRecord record, ResponseObserver observer,
-        Stopwatch sw, IReadOnlyDictionary<string, string> restore, int idleTimeoutSec, CancellationToken ct)
+    private static async Task ForwardAnswerAsync(HttpContext ctx, HttpResponseMessage response, RequestRecord record, ResponseObserver observer,
+        Stopwatch sw, IReadOnlyDictionary<string, string> restore, int idleTimeoutSec, ForwardedCall call, GeminiReply? gemini, CancellationToken ct)
     {
-        record.Stream = string.Equals(response.Content.Headers.ContentType?.MediaType, "text/event-stream", StringComparison.OrdinalIgnoreCase);
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+        record.Stream = string.Equals(mediaType, "text/event-stream", StringComparison.OrdinalIgnoreCase);
         ctx.Response.StatusCode = (int)response.StatusCode;
-        ctx.Response.ContentType = response.Content.Headers.ContentType?.ToString() ?? "application/json";
+        ctx.Response.ContentType = gemini is not null ? "application/json" : response.Content.Headers.ContentType?.ToString() ?? "application/json";
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
         using var reader = new IdleTimeoutReader(stream, idleTimeoutSec, ct, observer);
         if (record.Stream)
@@ -464,6 +501,27 @@ public sealed partial class GatewayPipeline
             return;
         }
 
+        if (gemini is null && call.Reply == ForwardedReply.Binary && !IsTextual(mediaType))
+        {
+            // Audio: no placeholder to restore, no usage to read — handed on in the chunks it comes in.
+            if (response.Content.Headers.ContentLength is { } length) ctx.Response.ContentLength = length;
+            var chunk = ArrayPool<byte>.Shared.Rent(32 * 1024);
+            try
+            {
+                int read;
+                while ((read = await reader.ReadAsync(chunk)) > 0)
+                {
+                    await ctx.Response.Body.WriteAsync(chunk.AsMemory(0, read), ct);
+                    await ctx.Response.Body.FlushAsync(ct);
+                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(chunk);
+            }
+            return;
+        }
+
         var declared = response.Content.Headers.ContentLength;
         var known = declared is > 0 and < int.MaxValue;
         var body = new PooledBuffer(known ? (int)declared!.Value + 1 : 64 * 1024);
@@ -471,7 +529,17 @@ public sealed partial class GatewayPipeline
         {
             int read;
             while ((read = await reader.ReadAsync(body.GetMemory(known ? 1 : 16 * 1024))) > 0) body.Advance(read);
-            Observe(ImageUsageOf(body.Span));
+            if (gemini is not null)
+            {
+                // Gemini reports no token count for an embedding: the call is logged, not billed.
+                var translated = JsonNode.Parse(body.Span) is JsonObject answer ? GeminiEmbeddings.Decode(answer, gemini.Model, gemini.Base64) : null;
+                if (translated is not null)
+                {
+                    await ctx.Response.WriteAsync(translated.ToJsonString(GatewayJson.Options), ct);
+                    return;
+                }
+            }
+            else Observe(ImageUsageOf(body.Span));
             if (restore.Count == 0) await ctx.Response.Body.WriteAsync(body.Memory, ct);
             else await ctx.Response.WriteAsync(PrivacyGuardService.Restore(Encoding.UTF8.GetString(body.Span), restore), ct);
         }
@@ -488,13 +556,21 @@ public sealed partial class GatewayPipeline
         void Observe(JsonObject? usage)
         {
             if (usage is not null)
-                observer.Observe(new UsageEvent(ApiProtocol.OpenAIResponses, usage, UsageNormalizer.FromOpenAIImages(usage)), sw.ElapsedMilliseconds, wholeBody: true);
+                observer.Observe(new UsageEvent(ApiProtocol.OpenAIResponses, usage, call.Usage(usage)), sw.ElapsedMilliseconds, wholeBody: true);
         }
     }
 
-    /// <summary>The top-level <c>usage</c> object of an Images API body or event, read without materializing the images.</summary>
+    private static bool IsTextual(string? mediaType) =>
+        mediaType is not null && (mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase)
+                                  || mediaType.Contains("json", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The top-level <c>usage</c> object of a forwarded call's body or event (Cohere's rerank: <c>meta</c>), read without
+    /// materializing the images or vectors beside it.
+    /// </summary>
     public static JsonObject? ImageUsageOf(ReadOnlySpan<byte> json)
     {
+        JsonObject? meta = null;
         try
         {
             var reader = new Utf8JsonReader(json);
@@ -502,15 +578,20 @@ public sealed partial class GatewayPipeline
             while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
             {
                 var isUsage = reader.ValueTextEquals("usage"u8);
+                var isMeta = reader.ValueTextEquals("meta"u8);
                 if (!reader.Read()) return null;
                 if (isUsage) return JsonNode.Parse(ref reader) as JsonObject;
-                reader.Skip();
+                // Cohere's rerank reports under meta; any other body's meta is ignored (it may hold anything).
+                if (isMeta && reader.TokenType == JsonTokenType.StartObject)
+                    meta = JsonNode.Parse(ref reader) as JsonObject is { } found && (found.ContainsKey("billed_units") || found.ContainsKey("tokens")) ? found : meta;
+                else reader.Skip();
             }
         }
         catch (JsonException)
         {
-            // Not JSON (a proxy's page with a 200): nothing to bill.
+            // Not JSON (a proxy's page with a 200, a subtitle file): nothing to bill.
+            return null;
         }
-        return null;
+        return meta;
     }
 }

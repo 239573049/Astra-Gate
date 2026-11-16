@@ -15,6 +15,19 @@ restored, and a request row, its span tree and usage counters were queued for pe
 of this flow with no codec, middleware or smart routing: the body goes to the provider's OpenAI endpoint as sent (model
 mapping and redactions spliced in; a form is streamed on once its `model` field is read, `MultipartForm`, so `SendAsync`
 gets a send-once `content` and skips renewal/failover), the answer comes back as written, and only its `usage` is read.
+**Embeddings, rerank and audio** (`/v1/embeddings`, `/v1/rerank`, `/v1/audio/transcriptions|translations|speech`): the same
+handler, generalized — `HandleForwardedAsync(ctx, ForwardedCall)` (`Pipeline/ForwardedCalls.cs`; `HandleImagesAsync` is its
+images wrapper). Each call kind has its own request-log protocol id (`openai-images`, `openai-embeddings`, `rerank`,
+`openai-audio`), path beside the OpenAI endpoint, usage reader (`UsageNormalizer.FromOpenAIImages` / `FromForwarded`) and
+reply mode (a speech answer is copied through as bytes). A Gemini-only provider gets embeddings translated
+(`GeminiEmbeddings`: `embedContent` / `batchEmbedContents`, answered as OpenAI's list; Gemini reports no tokens, so unbilled).
+**Native passthrough** (`/v1/astra/native/{provider}/{path}`, any of GET/POST/PUT/PATCH/DELETE): `HandleNativeAsync`
+(`Pipeline/GatewayPipeline.Native.cs`) — only a provider the token can route to, API-key providers only, the provider's own
+origin plus a checked path (`NativePath`), the caller's credentials never forwarded, logged as protocol `native`.
+**Responses over WebSocket** (`GET /v1/responses` with an upgrade, `Http/ResponsesSocket.cs`) and the **Ollama face**
+(`/ollama/api/{version,tags,show,chat,generate}`, `Http/OllamaEndpoints.cs`) both run each turn through `HandleAsync` as the
+HTTP request it stands for (`Http/InternalCall.cs`: the original's headers, a new body, the answer read back), so steps 3–16
+are the HTTP route's own; the socket keeps its last two replies to rebuild `previous_response_id` conversations.
 **Hosts:** the server reaches the pipeline through `MapGatewayEndpoints`; `astra-server relay`
 (`src/Astra.Server/Relay/RelayApp.cs`) maps its own routes onto the same `HandleAsync` and answers the pipeline's
 contracts (`src/Astra.Gateway/Pipeline/PipelineContracts.cs`) per request — the caller's own credential, one template's

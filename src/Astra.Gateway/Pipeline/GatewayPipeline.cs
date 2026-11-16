@@ -864,7 +864,7 @@ public sealed partial class GatewayPipeline(
         GatewayRoute route, ProviderEndpoint endpoint, string url, PooledBuffer body, JsonObject bodyTree, bool stream, bool passthrough,
         ClaudeHeaderMode claudeMode, string upstreamModel, string? stickyKey, HttpRequest clientRequest, BodyCapture? capture, RequestTrace trace,
         AttemptTrace attempts, CancellationToken ct, Func<HttpContent>? content = null, bool resendable = true,
-        IReadOnlyList<MiddlewareHeader>? headerEdits = null)
+        IReadOnlyList<MiddlewareHeader>? headerEdits = null, string? accept = null)
     {
         var provider = route.Provider;
         var plugin = provider.AuthScheme == AuthSchemes.Plugin;
@@ -1201,7 +1201,7 @@ public sealed partial class GatewayPipeline(
                 a.Apply(request);
                 return request;
             }
-            request.Headers.TryAddWithoutValidation("Accept", stream ? "text/event-stream" : "application/json");
+            request.Headers.TryAddWithoutValidation("Accept", accept ?? (stream ? "text/event-stream" : "application/json"));
             request.Headers.TryAddWithoutValidation("User-Agent",
                 passthrough && clientRequest.Headers.UserAgent.Count > 0 ? clientRequest.Headers.UserAgent.ToString() : UserAgent);
             if (endpoint.Protocol == ApiProtocol.Anthropic)

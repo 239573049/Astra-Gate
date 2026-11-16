@@ -125,6 +125,31 @@ public static class UsageNormalizer
         return usage;
     }
 
+    /// <summary>
+    /// The usage of the OpenAI-shaped calls the gateway forwards without translating beside chat: embeddings
+    /// (<c>prompt_tokens</c> / <c>total_tokens</c>), rerank (Jina / Voyage <c>usage.total_tokens</c>; Cohere's <c>meta</c> with
+    /// <c>billed_units</c> or <c>tokens</c>) and audio (gpt-4o-transcribe's <c>input_tokens</c> with <c>input_token_details</c>,
+    /// a speech stream's final event). Anything that is not a token count (a rerank's <c>search_units</c>, a transcription's
+    /// duration in seconds) is not billed. The shapes follow magpie's retrieval and audio routes (MIT).
+    /// </summary>
+    public static NormalizedUsage FromForwarded(JsonObject u)
+    {
+        foreach (var inner in new[] { "billed_units", "tokens" })
+        {
+            if (u[inner] is JsonObject meta && FromForwarded(meta) is { IsEmpty: false } found) return found;
+        }
+        var usage = new NormalizedUsage();
+        var input = Math.Max(L(u, "input_tokens"), L(u, "prompt_tokens"));
+        var output = Math.Max(L(u, "output_tokens"), L(u, "completion_tokens"));
+        if (input == 0 && output == 0) input = L(u, "total_tokens");
+        var details = u["input_token_details"] as JsonObject ?? u["input_tokens_details"] as JsonObject;
+        var audio = Math.Clamp(L(details, "audio_tokens"), 0, input);
+        usage.Add(TokenTypes.InputAudio, audio);
+        usage.Add(TokenTypes.Input, input - audio);
+        usage.Add(TokenTypes.Output, output);
+        return usage;
+    }
+
     public static NormalizedUsage FromAnthropic(JsonObject u)
     {
         var usage = new NormalizedUsage();

@@ -11,6 +11,7 @@ using Astra.Gateway.Routing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 
 namespace Astra.Gateway.Http;
 
@@ -27,6 +28,20 @@ public static class GatewayEndpoints
         // OpenAI Images API (issue #17): forwarded to an OpenAI-compatible provider, not translated.
         app.MapPost("/v1/images/generations", (HttpContext c, GatewayPipeline p) => p.HandleImagesAsync(c, ImageOperation.Generations)).ExcludeFromDescription();
         app.MapPost("/v1/images/edits", (HttpContext c, GatewayPipeline p) => p.HandleImagesAsync(c, ImageOperation.Edits)).ExcludeFromDescription();
+        // Embeddings, rerank and audio (speech to text, text to speech): the same forwarding, not translated (GatewayPipeline.HandleForwardedAsync).
+        app.MapPost("/v1/embeddings", (HttpContext c, GatewayPipeline p) => p.HandleForwardedAsync(c, ForwardedCall.Embeddings)).ExcludeFromDescription();
+        app.MapPost("/v1/rerank", (HttpContext c, GatewayPipeline p) => p.HandleForwardedAsync(c, ForwardedCall.Rerank)).ExcludeFromDescription();
+        app.MapPost("/v1/audio/transcriptions", (HttpContext c, GatewayPipeline p) => p.HandleForwardedAsync(c, ForwardedCall.Transcriptions)).ExcludeFromDescription();
+        app.MapPost("/v1/audio/translations", (HttpContext c, GatewayPipeline p) => p.HandleForwardedAsync(c, ForwardedCall.Translations)).ExcludeFromDescription();
+        app.MapPost("/v1/audio/speech", (HttpContext c, GatewayPipeline p) => p.HandleForwardedAsync(c, ForwardedCall.Speech)).ExcludeFromDescription();
+
+        // Vendor-native passthrough: a provider's own API as it is (GatewayPipeline.Native.cs).
+        app.MapMethods("/v1/astra/native/{provider}/{**path}", [HttpMethods.Get, HttpMethods.Post, HttpMethods.Put, HttpMethods.Patch, HttpMethods.Delete],
+            (HttpContext c, string provider, GatewayPipeline p) => p.HandleNativeAsync(c, provider)).ExcludeFromDescription();
+
+        // Responses over a WebSocket, as Codex speaks it (GET with an upgrade; ResponsesSocket).
+        app.MapGet("/v1/responses", (HttpContext c, GatewayPipeline p, IGatewayRouter r, GatewayAuxiliary a, IGatewaySettings s, ILoggerFactory f) =>
+            ResponsesSocket.ServeAsync(c, p, r, a, s, f.CreateLogger("Astra.Gateway.ResponsesSocket"))).ExcludeFromDescription();
 
         // /v1beta/models/{model}:{generateContent|streamGenerateContent|countTokens}
         app.MapPost("/v1beta/models/{*modelAction}", (HttpContext c, string modelAction, GatewayPipeline p, GatewayAuxiliary a) =>
@@ -111,6 +126,14 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
         };
         ctx.Response.ContentType = "application/json";
         await ctx.Response.WriteAsync(body.ToJsonString(GatewayJson.Options), ctx.RequestAborted);
+    }
+
+    /// <summary>The models the caller can reach as routable entries (the Ollama face reads their capabilities and windows).</summary>
+    public async Task<List<RoutableModel>> ListRoutableAsync(HttpContext ctx)
+    {
+        var route = await router.ResolveAsync(ctx.Request, ctx.RequestAborted);
+        var targets = route.Targets.Count > 0 ? route.Targets : [new RouteTarget(route.Provider, route.AccountId)];
+        return await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ctx.RequestAborted);
     }
 
     private async Task<List<(string Id, string Name, Provider Provider)>> ModelListAsync(HttpContext ctx)
