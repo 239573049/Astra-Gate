@@ -55,7 +55,7 @@ internal static class BrandCatalog
         "command-code" => Lobe("CommandCode.Mono", "CommandCode"),
         "fx" => Lobe("Vercel.Mono", "Vercel", LucideIconKind.SquareTerminal),
         "deveco-code" or "antigravity-cli" => Initials(LucideIconKind.SquareTerminal),
-        "aside" or "omo" or "prime-agent" or "mu" or "mothx" or "penguin-harness" or "dim" or "goose" => Initials(),
+        "aside" or "omo" or "prime-agent" or "mu" or "mothx" or "penguin-harness" or "dim" or "goose" or "liveagent" or "openmausbot" or "astrbot" or "qwenpaw" or "openclaw" or "openbot" => Initials(),
         _ => null,
     };
 

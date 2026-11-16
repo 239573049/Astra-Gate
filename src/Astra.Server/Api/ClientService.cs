@@ -543,7 +543,10 @@ public sealed partial class ClientService(
         ClientKinds.GeminiCli => "GEMINI_MODEL",
         ClientKinds.GrokBuild => "model.astra.model",
         ClientKinds.Pi or ClientKinds.MiniMaxCode or ClientKinds.StepCode or ClientKinds.Aside or ClientKinds.OmO or ClientKinds.PrimeAgent
-            or ClientKinds.Mu or ClientKinds.MothX => "defaultModel",
+            or ClientKinds.Mu or ClientKinds.MothX or ClientKinds.LiveAgent => "defaultModel",
+        ClientKinds.AstrBot => "agent_runner.config.model.provider_id",
+        ClientKinds.QwenPaw => "active_model",
+        ClientKinds.OpenClaw => "agents.defaults.model",
         ClientKinds.Fx => "models.astra",
         ClientKinds.Goose => "GOOSE_MODEL",
         ClientKinds.OpenChamber => "fields.defaultModel.value",
@@ -792,6 +795,7 @@ public sealed partial class ClientService(
         ClientKinds.OmO => "OmO", ClientKinds.PrimeAgent => "Prime Agent", ClientKinds.Mu => "mu", ClientKinds.MothX => "MothX",
         ClientKinds.PenguinHarness => "PenguinHarness", ClientKinds.AntigravityCli => "Antigravity CLI", ClientKinds.Dim => "Dim",
         ClientKinds.CommandCode => "Command Code", ClientKinds.Fx => "fx", ClientKinds.Goose => "Goose",
+        ClientKinds.LiveAgent => "LiveAgent", ClientKinds.OpenMausBot => "OpenMausBot", ClientKinds.AstrBot => "AstrBot", ClientKinds.QwenPaw => "QwenPaw", ClientKinds.OpenClaw => "OpenClaw", ClientKinds.OpenBot => "OpenBot",
         _ => kind,
     };
 }

@@ -79,6 +79,12 @@ public static partial class RoutingTexts
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["liveagent"] = "LiveAgent",
+        ["openmausbot"] = "OpenMausBot",
+        ["astrbot"] = "AstrBot",
+        ["qwenpaw"] = "QwenPaw",
+        ["openclaw"] = "OpenClaw",
+        ["openbot"] = "OpenBot",
     };
 
     /// <summary>A client's display name (web <c>clientName</c>); an agent plugin's client shows its plugin id.</summary>

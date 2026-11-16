@@ -1,0 +1,34 @@
+{
+  "provider_sources": [
+    {
+      "id": "mine",
+      "provider": "openai",
+      "type": "openai_chat_completion",
+      "provider_type": "chat_completion",
+      "enable": true,
+      "key": [
+        "sk-mine"
+      ],
+      "api_base": "https://api.openai.com/v1"
+    }
+  ],
+  "provider": [
+    {
+      "id": "mine/gpt-4o",
+      "enable": true,
+      "provider_source_id": "mine",
+      "model": "gpt-4o"
+    }
+  ],
+  "agent_runner": {
+    "runner_type": "local",
+    "config": {
+      "model": {
+        "provider_id": "mine/gpt-4o"
+      }
+    }
+  },
+  "dashboard": {
+    "enable": true
+  }
+}

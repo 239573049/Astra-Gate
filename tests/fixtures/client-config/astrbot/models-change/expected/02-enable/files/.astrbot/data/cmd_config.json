@@ -1,0 +1,37 @@
+{
+  "provider_sources": [
+    {
+      "id": "mine",
+      "provider": "openai",
+      "type": "openai_chat_completion",
+      "provider_type": "chat_completion",
+      "enable": true,
+      "key": [
+        "sk-mine"
+      ],
+      "api_base": "https://api.openai.com/v1"
+    },
+    {"id":"astra","provider":"openai","type":"openai_chat_completion","provider_type":"chat_completion","enable":true,"key":["sk-astra-enterprise-key"],"api_base":"https://astra.corp.com/v1","timeout":120,"proxy":"","custom_headers":{}}
+  ],
+  "provider": [
+    {
+      "id": "mine/gpt-4o",
+      "enable": true,
+      "provider_source_id": "mine",
+      "model": "gpt-4o"
+    },
+    {"id":"astra/gpt-5","enable":true,"provider_source_id":"astra","model":"gpt-5","modalities":["text","image","tool_use"],"custom_extra_body":{},"max_context_tokens":400000},
+    {"id":"astra/deepseek-chat","enable":true,"provider_source_id":"astra","model":"deepseek-chat","modalities":["text","tool_use"],"custom_extra_body":{},"max_context_tokens":64000}
+  ],
+  "agent_runner": {
+    "runner_type": "local",
+    "config": {
+      "model": {
+        "provider_id": "astra/deepseek-chat"
+      }
+    }
+  },
+  "dashboard": {
+    "enable": true
+  }
+}

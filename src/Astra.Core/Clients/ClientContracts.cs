@@ -45,6 +45,12 @@ public static class ClientKinds
     public const string CommandCode = "command-code";
     public const string Fx = "fx";
     public const string Goose = "goose";
+    public const string LiveAgent = "liveagent";
+    public const string OpenMausBot = "openmausbot";
+    public const string AstrBot = "astrbot";
+    public const string QwenPaw = "qwenpaw";
+    public const string OpenClaw = "openclaw";
+    public const string OpenBot = "openbot";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -52,6 +58,7 @@ public static class ClientKinds
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
         DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo, ZCode, TKCode,
         OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
+        LiveAgent, OpenMausBot, AstrBot, QwenPaw, OpenClaw, OpenBot,
     ];
 
     /// <summary>
@@ -66,6 +73,7 @@ public static class ClientKinds
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, WorkBuddyAi, NextCoWork,
         Paseo, ZCode, TKCode, MuseCode, Codex, GrokBuild, HermesAgent,
         OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
+        LiveAgent, OpenMausBot, AstrBot, QwenPaw, OpenClaw, OpenBot,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>
@@ -98,7 +106,7 @@ public static class ClientKinds
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
         Codex or GrokBuild or MuseCode or PenguinHarness => ApiProtocol.OpenAIResponses,
-        ClaudeCode or ClaudeDesktop or Paseo => ApiProtocol.Anthropic,
+        ClaudeCode or ClaudeDesktop or Paseo or OpenMausBot => ApiProtocol.Anthropic,
         GeminiCli or AntigravityCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,
     };

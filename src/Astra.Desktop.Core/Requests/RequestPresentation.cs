@@ -85,6 +85,12 @@ public static class RequestPresentation
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["liveagent"] = "LiveAgent",
+        ["openmausbot"] = "OpenMausBot",
+        ["astrbot"] = "AstrBot",
+        ["qwenpaw"] = "QwenPaw",
+        ["openclaw"] = "OpenClaw",
+        ["openbot"] = "OpenBot",
     };
 
     /// <summary>The settings categories the privacy hits of a detail are named by (web <c>PRIVACY_CATEGORY_KEY</c>).</summary>

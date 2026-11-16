@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.openmausbot/config.json",
+      "keyPath": "instances",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.openmausbot/config.json"
+  ],
+  "warnings": []
+}

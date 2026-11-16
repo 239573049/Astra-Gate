@@ -71,6 +71,12 @@ public sealed class ClientAdapterRegistry
         new CommandCodeClientAdapter(env, store),
         new FxClientAdapter(env, store),
         new GooseClientAdapter(env, store),
+        new LiveAgentClientAdapter(env, store),
+        new OpenMausBotClientAdapter(env, store),
+        new AstrBotClientAdapter(env, store),
+        new QwenPawClientAdapter(env, store),
+        new OpenClawClientAdapter(env, store),
+        new OpenBotClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

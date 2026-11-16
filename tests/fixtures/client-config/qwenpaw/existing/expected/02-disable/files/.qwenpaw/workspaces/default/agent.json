@@ -1,0 +1,16 @@
+{
+  "id": "default",
+  "name": "Default agent",
+  "backend": "qwenpaw",
+  "active_model": {
+    "provider_id": "openai",
+    "model": "gpt-4o"
+  },
+  "fallback_models": [
+    {
+      "provider_id": "openai",
+      "model": "gpt-4o-mini"
+    }
+  ],
+  "thinking_level": "inherit"
+}

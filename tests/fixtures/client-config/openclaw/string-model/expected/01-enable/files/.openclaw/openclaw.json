@@ -1,0 +1,8 @@
+{
+  "agents": {
+    "defaults": {
+      "model": "astra/gpt-5"
+    }
+  },
+  "models": { "providers": { "astra": {"baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","api":"openai-completions","models":[{"id":"gpt-5","name":"gpt-5","reasoning":true,"input":["text","image"],"contextWindow":400000},{"id":"claude-sonnet-4-5","name":"claude-sonnet-4-5","reasoning":true,"input":["text","image"],"contextWindow":200000},{"id":"deepseek-chat","name":"deepseek-chat","reasoning":false,"input":["text"],"contextWindow":64000}]} } }
+}

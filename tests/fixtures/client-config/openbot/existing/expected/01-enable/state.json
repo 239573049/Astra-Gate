@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/OpenBot/openbot-custom-providers-v1.json",
+    "keyPath": "providers.[id=astra]",
+    "originalAbsent": false,
+    "original": "{\"id\":\"astra\",\"name\":\"My Astra\",\"baseUrl\":\"http://old\",\"models\":[],\"secret\":\"enc:def\",\"harness\":\"opencode\"}",
+    "applied": "{\"id\":\"astra\",\"name\":\"My Astra\",\"baseUrl\":\"https://astra.corp.com/v1\",\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"contextWindow\":400000},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"contextWindow\":200000},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"contextWindow\":64000}],\"secret\":\"enc:def\",\"harness\":\"opencode\"}"
+  }
+]

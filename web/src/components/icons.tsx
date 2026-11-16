@@ -68,6 +68,12 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'command-code': { name: 'Command Code' },
   'fx': { name: 'fx' },
   'goose': { name: 'Goose' },
+  'liveagent': { name: 'LiveAgent' },
+  'openmausbot': { name: 'OpenMausBot' },
+  'astrbot': { name: 'AstrBot' },
+  'qwenpaw': { name: 'QwenPaw' },
+  'openclaw': { name: 'OpenClaw' },
+  'openbot': { name: 'OpenBot' },
 };
 
 /**
@@ -84,6 +90,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
   'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode', 'tkcode',
   'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
+  'liveagent', 'openmausbot', 'astrbot', 'qwenpaw', 'openclaw', 'openbot',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -186,6 +193,12 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   // fx.sh is a Vercel Labs project: the Vercel mark with a terminal badge
   fx: { Mark: Vercel, Avatar: Vercel.Avatar, badge: SquareTerminal },
   goose: { Mark: Goose, Avatar: Goose.Avatar },
+  liveagent: monogram('L', 'liveagent'),
+  openmausbot: monogram('O', 'openmausbot'),
+  astrbot: monogram('A', 'astrbot'),
+  qwenpaw: monogram('Q', 'qwenpaw'),
+  openclaw: monogram('C', 'openclaw'),
+  openbot: monogram('B', 'openbot'),
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

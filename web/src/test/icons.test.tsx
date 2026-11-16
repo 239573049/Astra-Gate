@@ -137,6 +137,12 @@ describe('client brand icons', () => {
     'command-code': { brand: 'commandcode', mark: 'mono', badge: false },
     fx: { brand: 'vercel', mark: 'mono', badge: true },
     goose: { brand: 'goose', mark: 'mono', badge: false },
+    liveagent: { brand: 'monogram', mark: 'monogram', badge: false },
+    openmausbot: { brand: 'monogram', mark: 'monogram', badge: false },
+    astrbot: { brand: 'monogram', mark: 'monogram', badge: false },
+    qwenpaw: { brand: 'monogram', mark: 'monogram', badge: false },
+    openclaw: { brand: 'monogram', mark: 'monogram', badge: false },
+    openbot: { brand: 'monogram', mark: 'monogram', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

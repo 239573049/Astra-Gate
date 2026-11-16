@@ -1,0 +1,107 @@
+[
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "api_key",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "base_url",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "chat_model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"OpenAIChatModel\""
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "custom_headers",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{}"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "enabled",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "true"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "extra_models",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"source\":\"user\",\"supports_image\":true,\"supports_multimodal\":true,\"supports_tool_calling\":true,\"max_input_length\":400000,\"max_input_length_configured\":true,\"max_output_length\":128000},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"source\":\"user\",\"supports_image\":true,\"supports_multimodal\":true,\"supports_tool_calling\":true,\"max_input_length\":200000,\"max_input_length_configured\":true,\"max_output_length\":64000},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"source\":\"user\",\"supports_image\":false,\"supports_multimodal\":false,\"supports_tool_calling\":true,\"max_input_length\":64000,\"max_input_length_configured\":true,\"max_output_length\":8000}]"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "generate_kwargs",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{}"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "id",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "is_custom",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "true"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "models",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "[]"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "name",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"Astra\""
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "snapshot_schema_version",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "2"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "support_connection_check",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "false"
+  },
+  {
+    "file": "$HOME/qp-secret/providers/custom/astra.json",
+    "keyPath": "support_model_discovery",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "false"
+  },
+  {
+    "file": "$HOME/qp/workspaces/default/agent.json",
+    "keyPath": "active_model",
+    "originalAbsent": false,
+    "original": "{\"provider_id\":\"openai\",\"model\":\"gpt-4o\"}",
+    "applied": "{\"provider_id\":\"astra\",\"model\":\"gpt-5\"}"
+  }
+]

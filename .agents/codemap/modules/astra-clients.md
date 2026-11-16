@@ -69,7 +69,10 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 `ZCodeClientAdapter.cs`, `TKCodeClientAdapter.cs`,
 `MothXClientAdapter.cs`, `PenguinHarnessClientAdapter.cs` (its `[[models]]` rows through `TomlArrayEntries`, selector `models[provider=astra]`),
 `GooseClientAdapter.cs`, `CommandCodeClientAdapter.cs`, `FxClientAdapter.cs` (these two keyless), `DimClientAdapter.cs` and
-`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`), plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`),
+`LiveAgentClientAdapter.cs`, `OpenMausBotClientAdapter.cs` (writes OpenMausBot's default fleet when its file saves no `instances`), `AstrBotClientAdapter.cs`
+(array elements by `[id=…]` selector), `QwenPawClientAdapter.cs` (provider file in the secret folder + the default agent's `agent.json`),
+`OpenClawClientAdapter.cs` and `OpenBotClientAdapter.cs` (keyless: its key is sealed by the keychain), plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

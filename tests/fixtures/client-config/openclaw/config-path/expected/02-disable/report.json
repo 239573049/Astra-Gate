@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/cfg/oc.json",
+      "keyPath": "agents.defaults.model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cfg/oc.json",
+      "keyPath": "agents.defaults.modelPolicy.allow",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cfg/oc.json",
+      "keyPath": "models.providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

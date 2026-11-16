@@ -1,0 +1,16 @@
+// k-brain configuration — JSONC: comments and trailing commas are allowed.
+{
+  "defaultModel": "model1",
+  "defaultProvider": "demo",
+  "providers": {
+    "demo": {
+      "name": "demo",
+      "type": "codex",
+      "baseUrl": "",
+      "api": "openai-completions",
+      "apiKey": "",
+      "activeModels": null,
+      "models": [{ "id": "model1" }],
+    },
+  },
+}

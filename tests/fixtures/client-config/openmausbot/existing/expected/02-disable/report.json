@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.openmausbot/config.json",
+      "keyPath": "instances.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

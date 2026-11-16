@@ -1,0 +1,38 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.astrbot/data/cmd_config.json",
+      "keyPath": "provider.[id=astra/claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.astrbot/data/cmd_config.json",
+      "keyPath": "provider.[id=astra/deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.astrbot/data/cmd_config.json",
+      "keyPath": "provider.[id=astra/gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.astrbot/data/cmd_config.json",
+      "keyPath": "provider_settings.default_provider_id",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.astrbot/data/cmd_config.json",
+      "keyPath": "provider_sources.[id=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.astrbot/data/cmd_config.json"
+  ],
+  "warnings": []
+}
