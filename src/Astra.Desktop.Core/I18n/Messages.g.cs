@@ -1539,6 +1539,83 @@ internal static class Messages
         "providers.accounts.bulkDone",
         "providers.accounts.kind.oauth",
         "providers.accounts.kind.api_key",
+        "providers.accounts.kind.claude_bridge",
+        "claudeBridge.title",
+        "claudeBridge.hint",
+        "claudeBridge.found",
+        "claudeBridge.foundNoVersion",
+        "claudeBridge.notFound",
+        "claudeBridge.path",
+        "claudeBridge.source.settings",
+        "claudeBridge.source.path",
+        "claudeBridge.source.installer",
+        "claudeBridge.runs",
+        "claudeBridge.run.busy",
+        "claudeBridge.run.idle",
+        "claudeBridge.run.parked",
+        "claudeBridge.settings",
+        "claudeBridge.binaryPath",
+        "claudeBridge.binaryPathPlaceholder",
+        "claudeBridge.maxRuns",
+        "claudeBridge.idleMinutes",
+        "claudeBridge.saved",
+        "claudeBridge.add",
+        "claudeBridge.add.name",
+        "claudeBridge.add.configDir",
+        "claudeBridge.add.configDirHint",
+        "claudeBridge.add.proxy",
+        "claudeBridge.added",
+        "claudeBridge.dir",
+        "claudeBridge.defaultDir",
+        "claudeBridge.signin.check",
+        "claudeBridge.signin.ok",
+        "claudeBridge.signin.out",
+        "claudeBridge.signin.unknown",
+        "claudeBridge.login",
+        "claudeBridge.login.waiting",
+        "claudeBridge.login.open",
+        "claudeBridge.login.done",
+        "claudeBridge.login.failed",
+        "claudeBridge.clientPolicy",
+        "claudeBridge.cost",
+        "claudeBridge.localOnly",
+        "warmup.title",
+        "warmup.hint",
+        "warmup.enabled",
+        "warmup.mode",
+        "warmup.mode.daily",
+        "warmup.mode.auto",
+        "warmup.mode.off",
+        "warmup.mode.inherit",
+        "warmup.times",
+        "warmup.addTime",
+        "warmup.removeTime",
+        "warmup.timesInvalid",
+        "warmup.weekdays",
+        "warmup.everyDay",
+        "warmup.day.0",
+        "warmup.day.1",
+        "warmup.day.2",
+        "warmup.day.3",
+        "warmup.day.4",
+        "warmup.day.5",
+        "warmup.day.6",
+        "warmup.claude",
+        "warmup.codex",
+        "warmup.zone",
+        "warmup.accounts",
+        "warmup.accounts.empty",
+        "warmup.result.ok",
+        "warmup.result.skipped",
+        "warmup.result.failed",
+        "warmup.last",
+        "warmup.next",
+        "warmup.notWarmed",
+        "warmup.runNow",
+        "warmup.ran",
+        "warmup.saved",
+        "warmup.ownTimes",
+        "warmup.ownTimesHint",
         "providers.accounts.source.login",
         "providers.accounts.source.local",
         "providers.accounts.source.token",
@@ -4814,6 +4891,83 @@ internal static class Messages
             case "providers.accounts.bulkDone": return "已处理 {n} 个账户";
             case "providers.accounts.kind.oauth": return "OAuth";
             case "providers.accounts.kind.api_key": return "API Key";
+            case "providers.accounts.kind.claude_bridge": return "claude 程序";
+            case "claudeBridge.title": return "经由 claude 程序";
+            case "claudeBridge.hint": return "让 Astra 用本机安装的 claude（Claude Code）回答请求，而不是用订阅的 OAuth 令牌直接调用 Anthropic 接口。调用方的工具会通过 MCP 交给 claude，并在调用方的下一次请求里带回结果。默认关闭，只对下面添加的“claude 程序账号”生效。";
+            case "claudeBridge.found": return "已找到 claude {version}";
+            case "claudeBridge.foundNoVersion": return "已找到 claude";
+            case "claudeBridge.notFound": return "没有找到 claude 程序。请先安装 Claude Code 并登录，或在下面指定它的路径。";
+            case "claudeBridge.path": return "路径：{path}（{source}）";
+            case "claudeBridge.source.settings": return "来自设置";
+            case "claudeBridge.source.path": return "PATH";
+            case "claudeBridge.source.installer": return "安装位置";
+            case "claudeBridge.runs": return "{n} 个 claude 进程在运行";
+            case "claudeBridge.run.busy": return "回答中";
+            case "claudeBridge.run.idle": return "空闲";
+            case "claudeBridge.run.parked": return "等待工具结果";
+            case "claudeBridge.settings": return "运行设置";
+            case "claudeBridge.binaryPath": return "claude 程序路径";
+            case "claudeBridge.binaryPathPlaceholder": return "留空 = 自动查找";
+            case "claudeBridge.maxRuns": return "同时运行的进程数";
+            case "claudeBridge.idleMinutes": return "空闲保留（分钟）";
+            case "claudeBridge.saved": return "已保存";
+            case "claudeBridge.add": return "添加 claude 程序账号";
+            case "claudeBridge.add.name": return "账号名称";
+            case "claudeBridge.add.configDir": return "登录目录（CLAUDE_CONFIG_DIR）";
+            case "claudeBridge.add.configDirHint": return "留空 = claude 默认的登录。要用多个账号，请各用一个目录，并分别在下面登录。";
+            case "claudeBridge.add.proxy": return "代理（仅 http:// 或 https://）";
+            case "claudeBridge.added": return "已添加 claude 程序账号";
+            case "claudeBridge.dir": return "目录：{dir}";
+            case "claudeBridge.defaultDir": return "claude 默认登录";
+            case "claudeBridge.signin.check": return "检查登录";
+            case "claudeBridge.signin.ok": return "已登录：{who}";
+            case "claudeBridge.signin.out": return "未登录";
+            case "claudeBridge.signin.unknown": return "无法确认：{error}";
+            case "claudeBridge.login": return "登录…";
+            case "claudeBridge.login.waiting": return "等待在浏览器里完成登录…";
+            case "claudeBridge.login.open": return "打开登录页面";
+            case "claudeBridge.login.done": return "登录完成";
+            case "claudeBridge.login.failed": return "登录失败：{message}";
+            case "claudeBridge.clientPolicy": return "该提供商目前只允许 Claude Code 使用。要让 Codex、Gemini CLI 等其他客户端也能用，请在订阅策略里关闭“仅限 Claude Code”。";
+            case "claudeBridge.cost": return "注意：这里运行的是 claude -p。Anthropic 对这类请求的计量可能与交互式 Claude Code 不同；Astra 不使用 Claude Code 的交互（终端）模式。";
+            case "claudeBridge.localOnly": return "只能在运行 Astra 的这台机器上设置。";
+            case "warmup.title": return "窗口预热";
+            case "warmup.hint": return "订阅的 5 小时窗口从账号在重置后的第一次请求开始计时。预热会在你选定的时间，用账号自己的凭据和代理发一条最便宜的请求，让每天的窗口对齐你的作息。默认关闭。令牌已过期的账号会被跳过（Astra 不在后台刷新令牌），预热记录会以“预热”标记出现在请求日志里。";
+            case "warmup.enabled": return "启用预热";
+            case "warmup.mode": return "方式";
+            case "warmup.mode.daily": return "每天定时";
+            case "warmup.mode.auto": return "窗口重置后立即";
+            case "warmup.mode.off": return "关闭";
+            case "warmup.mode.inherit": return "跟随全局";
+            case "warmup.times": return "时间";
+            case "warmup.addTime": return "添加时间";
+            case "warmup.removeTime": return "删除 {time}";
+            case "warmup.timesInvalid": return "时间的格式应为 06:00, 11:05";
+            case "warmup.weekdays": return "星期";
+            case "warmup.everyDay": return "每天";
+            case "warmup.day.0": return "日";
+            case "warmup.day.1": return "一";
+            case "warmup.day.2": return "二";
+            case "warmup.day.3": return "三";
+            case "warmup.day.4": return "四";
+            case "warmup.day.5": return "五";
+            case "warmup.day.6": return "六";
+            case "warmup.claude": return "Claude 订阅账号";
+            case "warmup.codex": return "ChatGPT（Codex）订阅账号";
+            case "warmup.zone": return "时区：{zone}（使用统计时区设置，否则为本机时区）";
+            case "warmup.accounts": return "账号";
+            case "warmup.accounts.empty": return "还没有 Claude 或 ChatGPT 订阅账号。";
+            case "warmup.result.ok": return "已预热";
+            case "warmup.result.skipped": return "已跳过";
+            case "warmup.result.failed": return "失败";
+            case "warmup.last": return "上次：{result} · {when}";
+            case "warmup.next": return "下次：{when}";
+            case "warmup.notWarmed": return "不预热";
+            case "warmup.runNow": return "立即预热";
+            case "warmup.ran": return "{name}：{result}";
+            case "warmup.saved": return "已保存";
+            case "warmup.ownTimes": return "自己的时间";
+            case "warmup.ownTimesHint": return "留空 = 跟随全局时间";
             case "providers.accounts.source.login": return "浏览器登录";
             case "providers.accounts.source.local": return "本机导入";
             case "providers.accounts.source.token": return "粘贴导入";
@@ -8091,6 +8245,83 @@ internal static class Messages
             case "providers.accounts.bulkDone": return "{n} accounts updated";
             case "providers.accounts.kind.oauth": return "OAuth";
             case "providers.accounts.kind.api_key": return "API key";
+            case "providers.accounts.kind.claude_bridge": return "claude program";
+            case "claudeBridge.title": return "Through the claude program";
+            case "claudeBridge.hint": return "Answer requests with the claude program (Claude Code) installed on this machine instead of calling Anthropic's API with the subscription's OAuth token. The caller's tools are handed to claude over MCP and their results come back with the caller's next request. Off by default: it only applies to the \"claude program\" accounts you add below.";
+            case "claudeBridge.found": return "Found claude {version}";
+            case "claudeBridge.foundNoVersion": return "Found claude";
+            case "claudeBridge.notFound": return "No claude program was found. Install Claude Code and sign in, or give its path below.";
+            case "claudeBridge.path": return "Path: {path} ({source})";
+            case "claudeBridge.source.settings": return "from the settings";
+            case "claudeBridge.source.path": return "PATH";
+            case "claudeBridge.source.installer": return "install location";
+            case "claudeBridge.runs": return "{n} claude process(es) running";
+            case "claudeBridge.run.busy": return "answering";
+            case "claudeBridge.run.idle": return "idle";
+            case "claudeBridge.run.parked": return "waiting for tool results";
+            case "claudeBridge.settings": return "Run settings";
+            case "claudeBridge.binaryPath": return "Path of the claude program";
+            case "claudeBridge.binaryPathPlaceholder": return "Empty = look for it";
+            case "claudeBridge.maxRuns": return "Processes at once";
+            case "claudeBridge.idleMinutes": return "Keep idle (minutes)";
+            case "claudeBridge.saved": return "Saved";
+            case "claudeBridge.add": return "Add a claude program account";
+            case "claudeBridge.add.name": return "Account name";
+            case "claudeBridge.add.configDir": return "Sign-in directory (CLAUDE_CONFIG_DIR)";
+            case "claudeBridge.add.configDirHint": return "Empty = the sign-in claude has by default. For several accounts give each its own directory and sign in to each below.";
+            case "claudeBridge.add.proxy": return "Proxy (http:// or https:// only)";
+            case "claudeBridge.added": return "claude program account added";
+            case "claudeBridge.dir": return "Directory: {dir}";
+            case "claudeBridge.defaultDir": return "claude's default sign-in";
+            case "claudeBridge.signin.check": return "Check sign-in";
+            case "claudeBridge.signin.ok": return "Signed in: {who}";
+            case "claudeBridge.signin.out": return "Not signed in";
+            case "claudeBridge.signin.unknown": return "Could not tell: {error}";
+            case "claudeBridge.login": return "Sign in…";
+            case "claudeBridge.login.waiting": return "Waiting for the sign-in in the browser…";
+            case "claudeBridge.login.open": return "Open the sign-in page";
+            case "claudeBridge.login.done": return "Signed in";
+            case "claudeBridge.login.failed": return "Sign-in failed: {message}";
+            case "claudeBridge.clientPolicy": return "This provider currently serves only Claude Code. To let Codex, Gemini CLI and other clients use it too, turn off \"Claude Code only\" in the subscription policy.";
+            case "claudeBridge.cost": return "Note: this runs claude -p. Anthropic may meter such requests differently from interactive Claude Code; Astra does not use Claude Code's interactive (terminal) mode.";
+            case "claudeBridge.localOnly": return "Can only be set on the machine running Astra.";
+            case "warmup.title": return "Window warm-up";
+            case "warmup.hint": return "A subscription's 5-hour window starts at the account's first request after it resets. Warm-up sends the cheapest request at the time you pick, with the account's own credentials and proxy, so the day's windows line up with your routine. Off by default. An account whose token has lapsed is skipped (Astra does not renew tokens in the background); warm-ups show in the request log marked as such.";
+            case "warmup.enabled": return "Enable warm-up";
+            case "warmup.mode": return "When";
+            case "warmup.mode.daily": return "At set times each day";
+            case "warmup.mode.auto": return "Right after a window resets";
+            case "warmup.mode.off": return "Off";
+            case "warmup.mode.inherit": return "Follow the global setting";
+            case "warmup.times": return "Times";
+            case "warmup.addTime": return "Add a time";
+            case "warmup.removeTime": return "Remove {time}";
+            case "warmup.timesInvalid": return "Times must look like 06:00, 11:05";
+            case "warmup.weekdays": return "Days";
+            case "warmup.everyDay": return "Every day";
+            case "warmup.day.0": return "Sun";
+            case "warmup.day.1": return "Mon";
+            case "warmup.day.2": return "Tue";
+            case "warmup.day.3": return "Wed";
+            case "warmup.day.4": return "Thu";
+            case "warmup.day.5": return "Fri";
+            case "warmup.day.6": return "Sat";
+            case "warmup.claude": return "Claude subscription accounts";
+            case "warmup.codex": return "ChatGPT (Codex) subscription accounts";
+            case "warmup.zone": return "Time zone: {zone} (the usage time zone setting, else this machine's)";
+            case "warmup.accounts": return "Accounts";
+            case "warmup.accounts.empty": return "No Claude or ChatGPT subscription accounts yet.";
+            case "warmup.result.ok": return "warmed";
+            case "warmup.result.skipped": return "skipped";
+            case "warmup.result.failed": return "failed";
+            case "warmup.last": return "Last: {result} · {when}";
+            case "warmup.next": return "Next: {when}";
+            case "warmup.notWarmed": return "Not warmed";
+            case "warmup.runNow": return "Warm up now";
+            case "warmup.ran": return "{name}: {result}";
+            case "warmup.saved": return "Saved";
+            case "warmup.ownTimes": return "Own times";
+            case "warmup.ownTimesHint": return "Empty = follow the global times";
             case "providers.accounts.source.login": return "Browser sign-in";
             case "providers.accounts.source.local": return "Local import";
             case "providers.accounts.source.token": return "Pasted";

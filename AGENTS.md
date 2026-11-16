@@ -824,6 +824,32 @@ runtime needed on the target).
     "Profiles" submenu (`TrayProfile`, `TrayMenuVerb.ApplyProfile`), zh/en `profiles.*` / `clients.shortlist.*` (+ `gen-desktop-i18n`), and the
     website's `content/docs/console/clients.mdx` + `cli` pages. Tests: `ProfileApiTests`, `tray` / `ClientExtrasTests`, `cli/test/profile.test.ts`.
 
+36. **Claude bridge and window warm-up** (magpie's Claude subscription bridge and daily warm-up, MIT; memory `claude-bridge-decisions`,
+    `.agents/codemap/flows/claude-bridge.md`): a Claude subscription **account** of kind `claude_bridge` (`AccountKinds.ClaudeBridge`, no token; `extra.claude_bridge.config_dir`
+    = the `claude` sign-in's `CLAUDE_CONFIG_DIR`, empty = its default) is answered by the local `claude -p --input-format stream-json` program instead of a call to Anthropic with an
+    OAuth token. It is opt-in per account — the OAuth accounts, direct mode, mimicry (off by default) and the client policy are untouched. `UpstreamAuthResolver` gives such an account
+    `UpstreamAuth.Bridge`; `GatewayPipeline` sends that attempt through `ClaudeBridgeHandler` (an `HttpMessageHandler`, like `PluginFetchHandler`; `astra.transport = claude_bridge`) and
+    gets an Anthropic reply (SSE or JSON) back, so every caller protocol, routing, pools, failover (429 + `anthropic-ratelimit-unified-reset` / 401 / 503), usage and the request log work as
+    for the API. **Rules to keep:** a run has none of `claude`'s tools, no user settings (`--setting-sources ""`), no session file (`--no-session-persistence`) and a clean environment
+    (`ClaudeProcess.ApplyEnvironment`: no `ANTHROPIC_*` / `CLAUDE_CODE_OAUTH_TOKEN` of the machine, the account's own `CLAUDE_CONFIG_DIR` and http(s) proxy — a SOCKS proxy is refused);
+    the caller's tools are an MCP server named `astra` that is this binary's hidden `claude-mcp-helper` subcommand (`ClaudeMcpHelper`; tool names `mcp__astra__<ClaudeNames.BridgeName>`, schemas
+    folded to an object root), whose calls reach `ClaudeCallbackServer` (a loopback listener of its own, a 24-byte token per run in a 0600 file, never on a command line); a reply that calls a tool ends
+    `stop_reason: tool_use` and its run is *parked* with the MCP call held until the caller's next request carries the `tool_result`; a next turn finds its run by message digests
+    (`ClaudeRequest.Digests`: words and call ids, not whitespace or thinking) and is told only the new messages, else a new run is told the whole conversation. Never log the callback token
+    or a tool's arguments/results; the bridge writes none of `claude`'s files (so magpie's `claudelock`, `claudeseal` and `bridgesid` are not ported: nothing here takes `claude`'s locks, replays
+    signed thinking, or keeps a session). Not ported, on purpose or not yet: magpie's interactive (pty / ConPTY) mode and Bun tap, `claude-code install`, shelved sessions and branches, the
+    user's words beside tool results, `/advisor`. Settings: `AppSettings.ClaudeBridge` (`BinaryPath`, `MaxRuns`, `IdleMinutes`), admin `/api/claude-bridge` (`ClaudeBridgeAdmin`; whatever names a program
+    or directory is local-origin only). The relay refuses it (no bridge handler: 501). **Warm-up:** `AppSettings.Warmup` (off by default: `Enabled`, `Mode` daily|auto, `Times`, `Weekdays`,
+    `Claude`, `Codex`), per account `extra.warmup` (`mode` inherit|off|daily|auto, `times`, `weekdays`, `last`); `WarmupSchedule` (pure: slot within a 30 min grace, 30 min spacing),
+    `WarmupService` (every minute by `WarmupWorker`; skips disabled / revoked / cooling accounts and — memory `subscription-refresh-on-use` — an OAuth account whose token is not fresh, never
+    renewing one), `WarmupSender` (a bridge account asks `claude` one "hi" at Haiku; others send `ProviderProbe.WarmAsync` through the account's own proxy), requests logged with
+    `ClientKind = warmup` (not excluded from stats: labelled). Mirrors: `Astra.Api.Contracts/ClaudeBridgeDtos.cs` (+ `ProviderAccountDto.ClaudeConfigDir` / `Warmup`), `web/src/api`
+    (`useClaudeBridge`, `useWarmup*` …) and `components/ClaudeBridgePanel.tsx` / `WarmupSettings.tsx`, the Avalonia `ClaudeBridgeApi` / `WarmupApi`, `Components/Accounts/ClaudeBridgeGroupView.cs`,
+    `Components/Settings/WarmupGroupView.cs`, zh/en `claudeBridge.*` / `warmup.*` / `providers.accounts.kind.claude_bridge` (+ `gen-desktop-i18n`), and the website's
+    `content/docs/console/providers.mdx` / `settings.mdx`. A `claude_bridge` account has no token: `SubscriptionTokenService.IsFresh` is false and `SubscriptionQuotaService.CanProbe`
+    false for it, so no background round touches it. Tests: `ClaudeBridgeUnitTests`, `ClaudeBridgeTests` (a fake `claude` script + the real helper subcommand, needs Node), `ClaudeBridgeApiTests`,
+    `WarmupTests`, `WarmupLogicTests`, web `warmup-bridge.test.tsx`. Never verified against a real `claude` binary or subscription.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
@@ -941,6 +967,7 @@ they disagree, trust the code and fix the page). Read the matching page before y
 - installing or running a plugin → `.agents/codemap/flows/plugin-install-and-run.md`
 - the MCP gateway (`/mcp`, its upstream servers or their OAuth) → `.agents/codemap/flows/mcp-gateway.md`
 - Skills, the library or their links into a client → `.agents/codemap/flows/skill-library.md`
+- the Claude subscription through the local `claude` program, or the window warm-up → `.agents/codemap/flows/claude-bridge.md`
 - a release, the update feed or the desktop/CLI updater → `.agents/codemap/flows/release-and-update.md`
 - unsure where new code belongs → `.agents/codemap/architecture.md` (ownership table)
 - a business term you do not recognise → `.agents/codemap/domain.md`

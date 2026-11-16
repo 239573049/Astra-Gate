@@ -49,6 +49,12 @@ public sealed class ClaudeBridgeHandler(ClaudeBridgeService service) : HttpMessa
             await events.DisposeAsync();
             return Error(e, request);
         }
+        catch (Exception e) when (e is IOException or InvalidOperationException)
+        {
+            // the program went away between the turn's start and its first word
+            await events.DisposeAsync();
+            return Error(new ClaudeBridgeException(502, "api_error", "claude 进程异常结束：" + e.Message), request);
+        }
         catch
         {
             await events.DisposeAsync();

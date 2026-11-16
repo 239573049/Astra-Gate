@@ -881,6 +881,10 @@ export interface ProviderAccount {
   protocol?: ApiProtocol | null;
   /** api_key accounts: the user's note. */
   notes?: string | null;
+  /** claude_bridge accounts: the claude sign-in's config directory ("" = claude's default one). */
+  claudeConfigDir?: string | null;
+  /** The account's own warm-up setting (mode / times / weekdays) and the last warm-up; absent = follows the global one. */
+  warmup?: { mode?: string; times?: string[]; weekdays?: number[]; last?: { at: string; result: string; message?: string } } | null;
 }
 
 /** POST /api/providers/{id}/keys: a provider's key list (settings.key_pool is true once it exists). Every write answers with the whole list. */
@@ -918,8 +922,29 @@ export interface ProviderUsage {
   accounts: ProviderAccountUsage[];
 }
 
-export type AccountKind = "oauth" | "api_key" | "plugin";
-export type AccountSource = "login" | "local" | "token" | "batch" | "plugin";
+export type AccountKind = "oauth" | "api_key" | "plugin" | "claude_bridge";
+export type AccountSource = "login" | "local" | "token" | "batch" | "plugin" | "claude_bridge";
+
+// ---------- Claude bridge and window warm-up (linked update 36) ----------
+/** GET|PUT /api/claude-bridge[/settings]: how the claude program is run. */
+export interface ClaudeBridgeSettings { binaryPath?: string | null; maxRuns: number; idleMinutes: number }
+export interface ClaudeRun { id: string; pid?: number | null; model: string; state: 'busy' | 'idle' | 'parked'; since: string; configDir: string }
+export interface ClaudeBridgeStatus {
+  found: boolean; path?: string | null; version?: string | null; source?: 'settings' | 'path' | 'installer' | null;
+  settings: ClaudeBridgeSettings; runs: ClaudeRun[]; claudeProviderId?: string | null; clientPolicy?: 'claude-code-only' | 'any' | null;
+}
+/** GET /api/claude-bridge/accounts/{id}/signin — who `claude auth status` says is signed in. */
+export interface ClaudeSignIn { known: boolean; loggedIn: boolean; email?: string | null; plan?: string | null; method?: string | null; organization?: string | null; error?: string | null }
+export interface ClaudeBridgeLogin { url?: string | null; state: 'waiting' | 'done' | 'failed' | 'none'; message?: string | null }
+export type WarmupMode = 'daily' | 'auto' | 'off';
+/** GET|PUT /api/warmup. Weekdays: 0 = Sunday … 6 = Saturday, empty = every day. */
+export interface WarmupSettings { enabled: boolean; mode: WarmupMode; times: string[]; weekdays: number[]; claude: boolean; codex: boolean; timeZone: string }
+export interface WarmupAccount {
+  providerId: string; providerName: string; accountId: string; accountName: string; family: 'claude' | 'codex';
+  mode: 'inherit' | WarmupMode; times?: string[] | null; weekdays?: number[] | null;
+  lastAt?: string | null; lastResult?: 'ok' | 'skipped' | 'failed' | null; lastMessage?: string | null; nextAt?: string | null; warmed: boolean;
+}
+export interface WarmupRun { accountId: string; result: 'ok' | 'skipped' | 'failed'; message?: string | null; at: string }
 /** Who may use a subscription provider and how its accounts switch. */
 export interface SubscriptionPolicy {
   clientPolicy: 'claude-code-only' | 'any';

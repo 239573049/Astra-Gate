@@ -139,11 +139,13 @@ public sealed class SubscriptionAccountsView : LiveView
         // web: card sticky bottom-3 z-10 — stays at the viewport's bottom while the list runs past it
         var bulkHost = new Astra.Desktop.Components.ProviderDetail.StickyBottom { Offset = 12, Child = _bulk };
         var policy = new SubscriptionPolicyView(_model.Api, _model.Feedback, _model.Provider) { Margin = new Thickness(0, 20, 0, 0) };
+        // "through the claude program" (linked update 36): the view shows itself for the Claude subscription only
+        var bridge = new ClaudeBridgeGroupView(Context, _model.Provider);
 
         var sheets = new Panel { Children = { _detail, _import, _proxyLogin, _login } };
         Content = new StackPanel
         {
-            Children = { _poolCard, _modeDetail, toolbar, _localNote, _body, _usageError, _hint, _footer, bulkHost, policy, sheets },
+            Children = { _poolCard, _modeDetail, toolbar, _localNote, _body, _usageError, _hint, _footer, bulkHost, policy, bridge, sheets },
         };
     }
 

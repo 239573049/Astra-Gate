@@ -23,7 +23,9 @@ public static class WarmupSchedule
     public static readonly TimeSpan MinSpacing = TimeSpan.FromMinutes(30);
 
     public static bool TryParseTime(string text, out TimeOnly time) =>
-        TimeOnly.TryParseExact(text, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out time);
+        TimeOnly.TryParseExact(text, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out time)
+        // "24:00" parses as midnight: a time of day is 00:00..23:59 as written
+        && time.ToString("HH:mm", CultureInfo.InvariantCulture) == text;
 
     public static WarmupPlan PlanOf(string mode, IEnumerable<string> times, IEnumerable<int> weekdays) =>
         new(mode, times.Select(t => TryParseTime(t, out var parsed) ? (TimeOnly?)parsed : null).OfType<TimeOnly>().Distinct().Order().ToList(),
