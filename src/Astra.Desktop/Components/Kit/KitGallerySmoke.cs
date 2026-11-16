@@ -28,7 +28,8 @@ public static class KitGallerySmoke
         "codex", "claude-code", "gemini-cli", "opencode", "claude-desktop", "grok-build", "pi", "hermes-agent", "minimax-code",
         "copilot-cli", "vscode-copilot", "crush", "qwen-code", "droid", "kimi-code", "zed", "vscode-insiders", "vscodium", "omp",
         "mimo-code", "deepseek-harness", "workbuddy", "workbuddy-ai", "muse-code", "nextcowork", "paseo", "zcode", "tkcode",
-        "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose", "plugin-demo",
+        "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
+        "reasonix", "morph", "jcode", "vibe", "empryo", "nanobot", "miniq", "paimon", "cline", "grok-app", "atomcode", "snow", "ante", "craft-agents", "tuanjie-cowork", "plugin-demo",
     ];
 
     private static readonly string[] Models =

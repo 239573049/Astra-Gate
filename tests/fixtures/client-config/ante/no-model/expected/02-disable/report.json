@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.ante/catalog.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.ante/catalog.json"
+  ],
+  "warnings": []
+}

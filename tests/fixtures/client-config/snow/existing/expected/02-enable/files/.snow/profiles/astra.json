@@ -1,0 +1,1 @@
+{ "snowcfg": {"baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","requestMethod":"chat","advancedModel":"deepseek-chat","basicModel":"deepseek-chat","maxTokens":8000,"maxContextTokens":64000,"supportsVision":false,"baseUrlMode":"base"} }

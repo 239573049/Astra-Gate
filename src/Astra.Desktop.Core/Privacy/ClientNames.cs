@@ -47,6 +47,21 @@ public static class ClientNames
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["reasonix"] = "Reasonix Studio",
+        ["morph"] = "Mister Morph",
+        ["jcode"] = "jcode",
+        ["vibe"] = "Mistral Vibe",
+        ["empryo"] = "Empryo",
+        ["nanobot"] = "nanobot",
+        ["miniq"] = "miniQ",
+        ["paimon"] = "Paimon",
+        ["cline"] = "Cline",
+        ["grok-app"] = "Grok App",
+        ["atomcode"] = "AtomCode",
+        ["snow"] = "Snow CLI",
+        ["ante"] = "Ante",
+        ["craft-agents"] = "Craft Agents",
+        ["tuanjie-cowork"] = "Tuanjie Cowork",
     };
 
     /// <summary>The name of a client kind; "—" for none.</summary>

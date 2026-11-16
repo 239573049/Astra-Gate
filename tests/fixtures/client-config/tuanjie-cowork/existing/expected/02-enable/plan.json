@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.codely/settings.json",
+    "format": "json",
+    "keyPath": "customModelProviders.[id=astra]",
+    "kind": "key",
+    "before": "{\"id\":\"astra\",\"name\":\"Astra\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"authType\":\"openai\"}",
+    "after": "{\"id\":\"astra\",\"name\":\"Astra\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"authType\":\"openai\"}"
+  },
+  {
+    "file": "$HOME/.codely/settings.json",
+    "format": "json",
+    "keyPath": "customModels.[id=astra-gpt-5]",
+    "kind": "key",
+    "before": "{\"id\":\"astra-gpt-5\",\"providerId\":\"astra\",\"model\":\"gpt-5\",\"displayName\":\"gpt-5\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":true}",
+    "after": "{\"id\":\"astra-gpt-5\",\"providerId\":\"astra\",\"model\":\"gpt-5\",\"displayName\":\"gpt-5\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":true}"
+  },
+  {
+    "file": "$HOME/.codely/settings.json",
+    "format": "json",
+    "keyPath": "customModels.[id=astra-deepseek-chat]",
+    "kind": "key",
+    "before": "{\"id\":\"astra-deepseek-chat\",\"providerId\":\"astra\",\"model\":\"deepseek-chat\",\"displayName\":\"deepseek-chat\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":false}",
+    "after": "{\"id\":\"astra-deepseek-chat\",\"providerId\":\"astra\",\"model\":\"deepseek-chat\",\"displayName\":\"deepseek-chat\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":false}"
+  },
+  {
+    "file": "$HOME/.codely/settings.json",
+    "format": "json",
+    "keyPath": "customModels.[id=astra-claude-sonnet-4-5]",
+    "kind": "key",
+    "before": "{\"id\":\"astra-claude-sonnet-4-5\",\"providerId\":\"astra\",\"model\":\"claude-sonnet-4-5\",\"displayName\":\"claude-sonnet-4-5\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":true}",
+    "after": null
+  }
+]

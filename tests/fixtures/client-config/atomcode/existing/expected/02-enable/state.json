@@ -1,0 +1,37 @@
+[
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine\\u0022\"",
+    "applied": "\"\\u0022astra-deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "keyPath": "default_provider",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine\\u0022\"",
+    "applied": "\"\\u0022astra-deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "keyPath": "models.astra-deepseek-chat",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "keyPath": "models.astra-gpt-5",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "keyPath": "provider_accounts.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

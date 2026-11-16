@@ -1,0 +1,5 @@
+{
+  "model": "litellm:gpt-5",
+  "providers": { "litellm": {"api_base":"https://astra.corp.com/v1","api_key":"sk-astra-enterprise-key"}, "openai": { "api_key": "sk-o" } },
+  "compaction": { "context_window": 400000, "ratio": 0.8 }
+}

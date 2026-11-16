@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.vibe/config.toml",
+    "format": "toml",
+    "keyPath": "providers[name=astra]",
+    "kind": "table",
+    "before": null,
+    "after": "[{\"name\":\"\\u0022astra\\u0022\",\"api_base\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"api_style\":\"\\u0022openai\\u0022\",\"backend\":\"\\u0022generic\\u0022\",\"extra_headers\":\"{ Authorization = \\u0022Bearer sk-astra-enterprise-key\\u0022 }\"}]"
+  },
+  {
+    "file": "$HOME/.vibe/config.toml",
+    "format": "toml",
+    "keyPath": "models[provider=astra]",
+    "kind": "table",
+    "before": null,
+    "after": "[{\"name\":\"\\u0022gpt-5\\u0022\",\"provider\":\"\\u0022astra\\u0022\",\"alias\":\"\\u0022astra/gpt-5\\u0022\",\"thinking_levels\":\"[\\u0022off\\u0022, \\u0022low\\u0022, \\u0022medium\\u0022, \\u0022high\\u0022]\",\"supports_images\":\"true\",\"max_context_length\":\"400000\"},{\"name\":\"\\u0022claude-sonnet-4-5\\u0022\",\"provider\":\"\\u0022astra\\u0022\",\"alias\":\"\\u0022astra/claude-sonnet-4-5\\u0022\",\"thinking_levels\":\"[\\u0022off\\u0022, \\u0022low\\u0022, \\u0022medium\\u0022, \\u0022high\\u0022]\",\"supports_images\":\"true\",\"max_context_length\":\"200000\"},{\"name\":\"\\u0022deepseek-chat\\u0022\",\"provider\":\"\\u0022astra\\u0022\",\"alias\":\"\\u0022astra/deepseek-chat\\u0022\",\"thinking_levels\":\"[\\u0022off\\u0022]\",\"supports_images\":\"false\",\"max_context_length\":\"64000\"}]"
+  },
+  {
+    "file": "$HOME/.vibe/config.toml",
+    "format": "toml",
+    "keyPath": "active_model",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra/gpt-5\\u0022\""
+  }
+]

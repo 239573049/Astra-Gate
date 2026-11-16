@@ -85,6 +85,21 @@ export const CLIENT_KINDS = [
   'command-code',
   'fx',
   'goose',
+  'reasonix',
+  'morph',
+  'jcode',
+  'vibe',
+  'empryo',
+  'nanobot',
+  'miniq',
+  'paimon',
+  'cline',
+  'grok-app',
+  'atomcode',
+  'snow',
+  'ante',
+  'craft-agents',
+  'tuanjie-cowork',
 ] as const;
 
 /** A client a plugin adds (a magpie agent plugin): "plugin-" and magpie's agent id. */

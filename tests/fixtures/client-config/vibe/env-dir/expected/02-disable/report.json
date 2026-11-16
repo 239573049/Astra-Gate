@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/vb/config.toml",
+      "keyPath": "active_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/vb/config.toml",
+      "keyPath": "models[provider=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/vb/config.toml",
+      "keyPath": "providers[name=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

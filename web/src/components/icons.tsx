@@ -68,6 +68,21 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'command-code': { name: 'Command Code' },
   'fx': { name: 'fx' },
   'goose': { name: 'Goose' },
+  'reasonix': { name: 'Reasonix Studio' },
+  'morph': { name: 'Mister Morph' },
+  'jcode': { name: 'jcode' },
+  'vibe': { name: 'Mistral Vibe' },
+  'empryo': { name: 'Empryo' },
+  'nanobot': { name: 'nanobot' },
+  'miniq': { name: 'miniQ' },
+  'paimon': { name: 'Paimon' },
+  'cline': { name: 'Cline' },
+  'grok-app': { name: 'Grok App' },
+  'atomcode': { name: 'AtomCode' },
+  'snow': { name: 'Snow CLI' },
+  'ante': { name: 'Ante' },
+  'craft-agents': { name: 'Craft Agents' },
+  'tuanjie-cowork': { name: 'Tuanjie Cowork' },
 };
 
 /**
@@ -84,6 +99,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
   'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode', 'tkcode',
   'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
+  'reasonix', 'morph', 'jcode', 'vibe', 'empryo', 'nanobot', 'miniq', 'paimon', 'cline', 'grok-app', 'atomcode', 'snow', 'ante', 'craft-agents', 'tuanjie-cowork',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -186,6 +202,21 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   // fx.sh is a Vercel Labs project: the Vercel mark with a terminal badge
   fx: { Mark: Vercel, Avatar: Vercel.Avatar, badge: SquareTerminal },
   goose: { Mark: Goose, Avatar: Goose.Avatar },
+  'reasonix': monogram('R', 'reasonix'),
+  'morph': monogram('M', 'morph'),
+  'jcode': monogram('J', 'jcode'),
+  vibe: { Mark: Mistral.Color, Avatar: Mistral.Avatar, badge: SquareTerminal },
+  'empryo': monogram('E', 'empryo'),
+  'nanobot': monogram('N', 'nanobot'),
+  'miniq': monogram('Q', 'miniq'),
+  'paimon': monogram('P', 'paimon'),
+  cline: { Mark: Cline, Avatar: Cline.Avatar, badge: SquareTerminal },
+  'grok-app': { Mark: Grok, Avatar: Grok.Avatar, badge: Monitor },
+  'atomcode': monogram('A', 'atomcode'),
+  'snow': monogram('S', 'snow'),
+  'ante': monogram('A', 'ante'),
+  'craft-agents': monogram('C', 'craft-agents'),
+  'tuanjie-cowork': monogram('T', 'tuanjie-cowork'),
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

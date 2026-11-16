@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-claude-sonnet-4-5",
+    "kind": "table",
+    "before": "true",
+    "after": null
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "default_provider",
+    "kind": "key",
+    "before": "\"astra-gpt-5\"",
+    "after": "\"\\u0022astra-deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": "\"astra-gpt-5\"",
+    "after": "\"\\u0022astra-deepseek-chat\\u0022\""
+  }
+]

@@ -1,0 +1,28 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/sn/active-profile.json",
+      "keyPath": "activeProfile",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/sn/config.json",
+      "keyPath": "snowcfg",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/sn/profiles/astra.json",
+      "keyPath": "snowcfg",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/sn/active-profile.json",
+    "$HOME/sn/config.json",
+    "$HOME/sn/profiles/astra.json"
+  ],
+  "warnings": []
+}

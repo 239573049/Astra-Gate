@@ -1,0 +1,3 @@
+{
+  "snowcfg": {"baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","requestMethod":"chat","advancedModel":"gpt-5","basicModel":"gpt-5","maxTokens":128000,"maxContextTokens":400000,"supportsVision":true,"baseUrlMode":"base"}
+}

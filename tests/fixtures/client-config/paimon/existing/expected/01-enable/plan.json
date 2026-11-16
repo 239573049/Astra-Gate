@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.config/paimon/config.json",
+    "format": "json",
+    "keyPath": "providers.litellm",
+    "kind": "key",
+    "before": "{\"api_base\":\"http://localhost:4000\",\"api_key\":\"sk-mine\"}",
+    "after": "{\"api_base\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.config/paimon/config.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"openai:gpt-4o\"",
+    "after": "\"litellm:gpt-5\""
+  },
+  {
+    "file": "$HOME/.config/paimon/config.json",
+    "format": "json",
+    "keyPath": "compaction.context_window",
+    "kind": "key",
+    "before": "50000",
+    "after": "400000"
+  }
+]

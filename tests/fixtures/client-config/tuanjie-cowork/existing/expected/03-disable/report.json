@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.codely/settings.json",
+      "keyPath": "customModelProviders.[id=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codely/settings.json",
+      "keyPath": "customModels.[id=astra-deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codely/settings.json",
+      "keyPath": "customModels.[id=astra-gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

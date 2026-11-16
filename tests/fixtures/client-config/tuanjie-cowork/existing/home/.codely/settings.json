@@ -1,0 +1,9 @@
+{
+  "theme": "dark",
+  "customModelProviders": [
+    { "id": "mine", "name": "Mine", "baseUrl": "http://localhost:1/v1", "apiKey": "k", "authType": "openai" }
+  ],
+  "customModels": [
+    { "id": "mine-1", "model": "foo", "providerId": "mine", "displayName": "foo", "roles": ["model"], "wireApi": "chat" }
+  ]
+}

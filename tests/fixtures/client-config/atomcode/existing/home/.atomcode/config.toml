@@ -1,0 +1,12 @@
+default_provider = "mine"
+default_model = "mine"
+
+[provider_accounts.mine]
+provider = "openai-compatible"
+base_url = "http://localhost:1/v1"
+api_key = "k"
+
+[models.mine]
+account = "mine"
+model = "foo"
+context_window = 32000

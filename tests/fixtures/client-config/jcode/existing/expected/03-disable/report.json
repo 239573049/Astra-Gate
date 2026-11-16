@@ -1,0 +1,36 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.jcode/config.toml",
+      "keyPath": "provider.default_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jcode/config.toml",
+      "keyPath": "provider.default_provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jcode/config.toml",
+      "keyPath": "providers.astra.default_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jcode/config.toml",
+      "keyPath": "providers.astra.models",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jcode/config.toml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

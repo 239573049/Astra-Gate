@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.config/paimon/config.json",
+    "keyPath": "compaction.context_window",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "400000"
+  },
+  {
+    "file": "$HOME/.config/paimon/config.json",
+    "keyPath": "model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"litellm:gpt-5\""
+  },
+  {
+    "file": "$HOME/.config/paimon/config.json",
+    "keyPath": "providers.litellm",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"api_base\":\"https://astra.corp.com/v1\",\"api_key\":\"sk-astra-enterprise-key\"}"
+  }
+]

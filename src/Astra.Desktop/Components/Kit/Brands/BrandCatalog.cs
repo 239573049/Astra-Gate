@@ -56,6 +56,11 @@ internal static class BrandCatalog
         "fx" => Lobe("Vercel.Mono", "Vercel", LucideIconKind.SquareTerminal),
         "deveco-code" or "antigravity-cli" => Initials(LucideIconKind.SquareTerminal),
         "aside" or "omo" or "prime-agent" or "mu" or "mothx" or "penguin-harness" or "dim" or "goose" => Initials(),
+        "vibe" => Lobe("Mistral.Color", "Mistral", LucideIconKind.SquareTerminal),
+        "cline" => Lobe("Cline.Mono", "Cline", LucideIconKind.SquareTerminal),
+        "grok-app" => Lobe("Grok.Mono", "Grok", LucideIconKind.Monitor),
+        "reasonix" or "morph" or "jcode" or "empryo" or "nanobot" or "miniq" or "paimon" or "atomcode" or "snow" or "ante"
+            or "craft-agents" or "tuanjie-cowork" => Initials(),
         _ => null,
     };
 

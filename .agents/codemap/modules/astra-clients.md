@@ -69,7 +69,10 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 `ZCodeClientAdapter.cs`, `TKCodeClientAdapter.cs`,
 `MothXClientAdapter.cs`, `PenguinHarnessClientAdapter.cs` (its `[[models]]` rows through `TomlArrayEntries`, selector `models[provider=astra]`),
 `GooseClientAdapter.cs`, `CommandCodeClientAdapter.cs`, `FxClientAdapter.cs` (these two keyless), `DimClientAdapter.cs` and
-`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`), plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`),
+`FileClientAdapter.cs` (base of the batch-3 file-backed agents: the disable plan is "give back everything the state store recorded") with `ReasonixClientAdapter.cs`, `MorphClientAdapter.cs`, `JcodeClientAdapter.cs`, `VibeClientAdapter.cs`, `EmpryoClientAdapter.cs`,
+`NanobotClientAdapter.cs`, `MiniQClientAdapter.cs`, `PaimonClientAdapter.cs`, `ClineClientAdapter.cs`, `GrokAppClientAdapter.cs`, `AtomCodeClientAdapter.cs`, `SnowClientAdapter.cs`, `AnteClientAdapter.cs`,
+`CraftAgentsClientAdapter.cs` and `TuanjieCoworkClientAdapter.cs`, plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

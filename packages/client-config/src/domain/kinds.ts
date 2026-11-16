@@ -44,6 +44,21 @@ export const ClientKinds = {
   CommandCode: 'command-code',
   Fx: 'fx',
   Goose: 'goose',
+  Reasonix: 'reasonix',
+  Morph: 'morph',
+  Jcode: 'jcode',
+  Vibe: 'vibe',
+  Empryo: 'empryo',
+  Nanobot: 'nanobot',
+  MiniQ: 'miniq',
+  Paimon: 'paimon',
+  Cline: 'cline',
+  GrokApp: 'grok-app',
+  AtomCode: 'atomcode',
+  Snow: 'snow',
+  Ante: 'ante',
+  CraftAgents: 'craft-agents',
+  TuanjieCowork: 'tuanjie-cowork',
 } as const;
 
 export const ALL_CLIENT_KINDS: readonly string[] = [
@@ -89,6 +104,21 @@ export const ALL_CLIENT_KINDS: readonly string[] = [
   ClientKinds.CommandCode,
   ClientKinds.Fx,
   ClientKinds.Goose,
+  ClientKinds.Reasonix,
+  ClientKinds.Morph,
+  ClientKinds.Jcode,
+  ClientKinds.Vibe,
+  ClientKinds.Empryo,
+  ClientKinds.Nanobot,
+  ClientKinds.MiniQ,
+  ClientKinds.Paimon,
+  ClientKinds.Cline,
+  ClientKinds.GrokApp,
+  ClientKinds.AtomCode,
+  ClientKinds.Snow,
+  ClientKinds.Ante,
+  ClientKinds.CraftAgents,
+  ClientKinds.TuanjieCowork,
 ];
 
 /** Clients whose configuration lists the bound provider's models (ClientKinds.WithModelList). */
@@ -132,6 +162,21 @@ export const CLIENTS_WITH_MODEL_LIST: readonly string[] = [
   ClientKinds.CommandCode,
   ClientKinds.Fx,
   ClientKinds.Goose,
+  ClientKinds.Reasonix,
+  ClientKinds.Morph,
+  ClientKinds.Jcode,
+  ClientKinds.Vibe,
+  ClientKinds.Empryo,
+  ClientKinds.Nanobot,
+  ClientKinds.MiniQ,
+  ClientKinds.Paimon,
+  ClientKinds.Cline,
+  ClientKinds.GrokApp,
+  ClientKinds.AtomCode,
+  ClientKinds.Snow,
+  ClientKinds.Ante,
+  ClientKinds.CraftAgents,
+  ClientKinds.TuanjieCowork,
 ];
 
 /** The inbound protocol each client speaks to the gateway. */
@@ -141,6 +186,7 @@ export function protocolOf(kind: string): ApiProtocol {
     case ClientKinds.GrokBuild:
     case ClientKinds.MuseCode:
     case ClientKinds.PenguinHarness:
+    case ClientKinds.Morph:
       return 'openai-responses';
     case ClientKinds.ClaudeCode:
     case ClientKinds.ClaudeDesktop:

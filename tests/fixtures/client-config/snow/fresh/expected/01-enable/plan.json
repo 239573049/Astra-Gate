@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.snow/profiles/astra.json",
+    "format": "json",
+    "keyPath": "snowcfg",
+    "kind": "key",
+    "before": null,
+    "after": "{\"maxContextTokens\":400000,\"maxTokens\":128000,\"supportsVision\":true,\"baseUrl\":\"https://astra.corp.com/v1\",\"baseUrlMode\":\"base\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"gpt-5\",\"basicModel\":\"gpt-5\"}"
+  },
+  {
+    "file": "$HOME/.snow/active-profile.json",
+    "format": "json",
+    "keyPath": "activeProfile",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.snow/config.json",
+    "format": "json",
+    "keyPath": "snowcfg",
+    "kind": "key",
+    "before": null,
+    "after": "{\"maxContextTokens\":400000,\"maxTokens\":128000,\"supportsVision\":true,\"baseUrl\":\"https://astra.corp.com/v1\",\"baseUrlMode\":\"base\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"gpt-5\",\"basicModel\":\"gpt-5\"}"
+  }
+]

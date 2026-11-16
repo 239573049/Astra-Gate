@@ -1,0 +1,26 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/rx/.env",
+      "keyPath": "ASTRA_REASONIX_API_KEY",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/rx/config.toml",
+      "keyPath": "default_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/rx/config.toml",
+      "keyPath": "providers[name=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/rx/.env"
+  ],
+  "warnings": []
+}

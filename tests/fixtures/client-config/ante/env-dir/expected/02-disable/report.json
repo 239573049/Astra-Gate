@@ -1,0 +1,26 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/an/catalog.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/an/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/an/settings.json",
+      "keyPath": "provider",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/an/catalog.json"
+  ],
+  "warnings": []
+}

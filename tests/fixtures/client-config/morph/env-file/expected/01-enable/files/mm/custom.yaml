@@ -1,0 +1,8 @@
+llm:
+  model: "gpt-5"
+  inference_provider: "openai_response_compatible"
+  endpoint: "https://astra.corp.com/v1"
+  api_key: "sk-astra-enterprise-key"
+  context_window_tokens: 400000
+  headers:
+    User-Agent: "mistermorph"

@@ -79,6 +79,21 @@ public static partial class RoutingTexts
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["reasonix"] = "Reasonix Studio",
+        ["morph"] = "Mister Morph",
+        ["jcode"] = "jcode",
+        ["vibe"] = "Mistral Vibe",
+        ["empryo"] = "Empryo",
+        ["nanobot"] = "nanobot",
+        ["miniq"] = "miniQ",
+        ["paimon"] = "Paimon",
+        ["cline"] = "Cline",
+        ["grok-app"] = "Grok App",
+        ["atomcode"] = "AtomCode",
+        ["snow"] = "Snow CLI",
+        ["ante"] = "Ante",
+        ["craft-agents"] = "Craft Agents",
+        ["tuanjie-cowork"] = "Tuanjie Cowork",
     };
 
     /// <summary>A client's display name (web <c>clientName</c>); an agent plugin's client shows its plugin id.</summary>

@@ -9,6 +9,7 @@ import { group4 } from './adapters/group-4.js';
 import { group5 } from './adapters/group-5.js';
 import { group6 } from './adapters/group-6.js';
 import { group7 } from './adapters/group-7.js';
+import { group9 } from './adapters/group-9.js';
 
 /** The client adapters ported so far, in ClientKinds order (see the golden coverage test). */
 export class ClientAdapterRegistry {
@@ -24,6 +25,7 @@ export class ClientAdapterRegistry {
       ...group5(env, store),
       ...group6(env, store),
       ...group7(env, store),
+      ...group9(env, store),
     ];
     const order = (kind: string) => ALL_CLIENT_KINDS.indexOf(kind);
     return new ClientAdapterRegistry(adapters.sort((a, b) => order(a.kind) - order(b.kind)));

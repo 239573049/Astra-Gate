@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "lastUsedProvider": "anthropic",
+  "modes": {},
+  "providers": {
+    "anthropic": { "settings": { "provider": "anthropic", "apiKey": "sk-ant", "model": "claude-sonnet-4-5" }, "tokenSource": "manual" },
+    "openai-compatible": { "settings": { "provider": "openai-compatible", "apiKey": "k", "model": "m", "baseUrl": "http://localhost:1/v1" }, "tokenSource": "manual" }
+  }
+}

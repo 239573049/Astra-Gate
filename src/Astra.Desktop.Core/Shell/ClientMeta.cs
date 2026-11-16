@@ -52,6 +52,21 @@ public static class ClientMeta
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["reasonix"] = "Reasonix Studio",
+        ["morph"] = "Mister Morph",
+        ["jcode"] = "jcode",
+        ["vibe"] = "Mistral Vibe",
+        ["empryo"] = "Empryo",
+        ["nanobot"] = "nanobot",
+        ["miniq"] = "miniQ",
+        ["paimon"] = "Paimon",
+        ["cline"] = "Cline",
+        ["grok-app"] = "Grok App",
+        ["atomcode"] = "AtomCode",
+        ["snow"] = "Snow CLI",
+        ["ante"] = "Ante",
+        ["craft-agents"] = "Craft Agents",
+        ["tuanjie-cowork"] = "Tuanjie Cowork",
     };
 
     /// <summary>The order clients are listed in (web <c>CLIENT_ORDER</c>).</summary>
@@ -62,6 +77,7 @@ public static class ClientMeta
         "crush", "qwen-code", "droid", "kimi-code", "zed",
         "vscode-insiders", "vscodium", "omp", "mimo-code", "deepseek-harness", "workbuddy", "workbuddy-ai", "muse-code", "nextcowork", "paseo", "zcode", "tkcode",
         "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
+        "reasonix", "morph", "jcode", "vibe", "empryo", "nanobot", "miniq", "paimon", "cline", "grok-app", "atomcode", "snow", "ante", "craft-agents", "tuanjie-cowork",
     ];
 
     /// <summary>

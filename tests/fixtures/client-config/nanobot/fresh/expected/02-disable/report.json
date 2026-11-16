@@ -1,0 +1,32 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.nanobot/config.json",
+      "keyPath": "agents.defaults.contextWindowTokens",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.nanobot/config.json",
+      "keyPath": "agents.defaults.model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.nanobot/config.json",
+      "keyPath": "agents.defaults.provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.nanobot/config.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.nanobot/config.json"
+  ],
+  "warnings": []
+}

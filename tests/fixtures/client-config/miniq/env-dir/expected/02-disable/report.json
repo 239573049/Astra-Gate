@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/mq/settings.json",
+      "keyPath": "provider",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

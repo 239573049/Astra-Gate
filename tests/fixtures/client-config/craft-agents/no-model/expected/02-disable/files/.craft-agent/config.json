@@ -1,0 +1,7 @@
+{
+  "workspaces": [{ "id": "w1" }],
+  "defaultLlmConnection": "claude",
+  "llmConnections": [
+    { "slug": "claude", "name": "Claude", "providerType": "anthropic", "authType": "oauth" }
+  ]
+}

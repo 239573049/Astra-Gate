@@ -52,6 +52,21 @@ const NAMES: Record<string, string> = {
   [ClientKinds.CommandCode]: 'Command Code',
   [ClientKinds.Fx]: 'fx',
   [ClientKinds.Goose]: 'Goose',
+  [ClientKinds.Reasonix]: 'Reasonix Studio',
+  [ClientKinds.Morph]: 'Mister Morph',
+  [ClientKinds.Jcode]: 'jcode',
+  [ClientKinds.Vibe]: 'Mistral Vibe',
+  [ClientKinds.Empryo]: 'Empryo',
+  [ClientKinds.Nanobot]: 'nanobot',
+  [ClientKinds.MiniQ]: 'miniQ',
+  [ClientKinds.Paimon]: 'Paimon',
+  [ClientKinds.Cline]: 'Cline',
+  [ClientKinds.GrokApp]: 'Grok App',
+  [ClientKinds.AtomCode]: 'AtomCode',
+  [ClientKinds.Snow]: 'Snow CLI',
+  [ClientKinds.Ante]: 'Ante',
+  [ClientKinds.CraftAgents]: 'Craft Agents',
+  [ClientKinds.TuanjieCowork]: 'Tuanjie Cowork',
 };
 
 export const clientName = (kind: string): string => NAMES[kind] ?? kind;

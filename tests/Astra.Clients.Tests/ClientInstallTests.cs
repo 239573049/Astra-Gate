@@ -301,6 +301,9 @@ public class ClientInstallPlannerTests
     [InlineData(ClientKinds.PenguinHarness, "@prismshadow/penguin-cli")]
     [InlineData(ClientKinds.OmO, "omo-ai")]
     [InlineData(ClientKinds.Dim, "dimcode-alpha")]
+    [InlineData(ClientKinds.Cline, "cline")]
+    [InlineData(ClientKinds.AtomCode, "@atomgit.com/atomcode")]
+    [InlineData(ClientKinds.Snow, "snow-ai")]
     public void New_Npm_Clients_Install_And_Update_With_Npm_Whether_Scoped_Or_Not(string kind, string package)
     {
         var spec = ClientInstallCatalog.Get(kind)!;

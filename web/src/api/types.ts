@@ -352,7 +352,8 @@ export type ClientKind =
   | "pi" | "hermes-agent" | "minimax-code" | "copilot-cli" | "vscode-copilot"
   | "crush" | "qwen-code" | "droid" | "kimi-code" | "zed"
   | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo" | "zcode" | "tkcode"
-  | "openchamber" | "deveco-code" | "stepcode" | "aside" | "omo" | "prime-agent" | "mu" | "mothx" | "penguin-harness" | "antigravity-cli" | "dim" | "command-code" | "fx" | "goose";
+  | "openchamber" | "deveco-code" | "stepcode" | "aside" | "omo" | "prime-agent" | "mu" | "mothx" | "penguin-harness" | "antigravity-cli" | "dim" | "command-code" | "fx" | "goose"
+  | "reasonix" | "morph" | "jcode" | "vibe" | "empryo" | "nanobot" | "miniq" | "paimon" | "cline" | "grok-app" | "atomcode" | "snow" | "ante" | "craft-agents" | "tuanjie-cowork";
 /** One provider bound to a client; the list order is the routing order (first = primary). */
 export interface ClientBinding { providerId: string; accountId?: string | null }
 /**

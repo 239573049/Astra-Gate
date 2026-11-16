@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"apiKey\":\"sk-astra-enterprise-key\",\"apiBase\":\"https://astra.corp.com/v1\",\"extraHeaders\":{\"User-Agent\":\"nanobot\"}}"
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.modelPreset",
+    "kind": "key",
+    "before": "\"fast\"",
+    "after": null
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.context_window_tokens",
+    "kind": "key",
+    "before": "100000",
+    "after": null
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.provider",
+    "kind": "key",
+    "before": "\"auto\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.model",
+    "kind": "key",
+    "before": "\"anthropic/claude-opus-4\"",
+    "after": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.contextWindowTokens",
+    "kind": "key",
+    "before": null,
+    "after": "400000"
+  }
+]

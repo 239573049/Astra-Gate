@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.model",
+    "kind": "key",
+    "before": "\"gpt-5\"",
+    "after": "\"\\u0022deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.app_models",
+    "kind": "key",
+    "before": "\"[{\\\"id\\\":\\\"gpt-5\\\",\\\"name\\\":\\\"GPT-5\\\",\\\"contextWindow\\\":400000,\\\"supportsVision\\\":true},{\\\"id\\\":\\\"claude-sonnet-4-5\\\",\\\"name\\\":\\\"Claude Sonnet 4.5\\\",\\\"contextWindow\\\":200000,\\\"supportsVision\\\":true},{\\\"id\\\":\\\"deepseek-chat\\\",\\\"name\\\":\\\"DeepSeek Chat\\\",\\\"contextWindow\\\":64000}]\"",
+    "after": "\"\\u0022[{\\\\\\u0022id\\\\\\u0022:\\\\\\u0022gpt-5\\\\\\u0022,\\\\\\u0022name\\\\\\u0022:\\\\\\u0022GPT-5\\\\\\u0022,\\\\\\u0022contextWindow\\\\\\u0022:400000,\\\\\\u0022supportsVision\\\\\\u0022:true},{\\\\\\u0022id\\\\\\u0022:\\\\\\u0022deepseek-chat\\\\\\u0022,\\\\\\u0022name\\\\\\u0022:\\\\\\u0022DeepSeek Chat\\\\\\u0022,\\\\\\u0022contextWindow\\\\\\u0022:64000}]\\u0022\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.app_supports_vision",
+    "kind": "key",
+    "before": "true",
+    "after": null
+  },
+  {
+    "file": "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra.context_window",
+    "kind": "key",
+    "before": "400000",
+    "after": "\"64000\""
+  }
+]

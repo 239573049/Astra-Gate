@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.snow/profiles/astra.json",
+    "format": "json",
+    "keyPath": "snowcfg",
+    "kind": "key",
+    "before": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"gpt-5\",\"basicModel\":\"gpt-5\",\"maxTokens\":128000,\"maxContextTokens\":400000,\"supportsVision\":true,\"baseUrlMode\":\"base\"}",
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"deepseek-chat\",\"basicModel\":\"deepseek-chat\",\"maxTokens\":8000,\"maxContextTokens\":64000,\"supportsVision\":false,\"baseUrlMode\":\"base\"}"
+  },
+  {
+    "file": "$HOME/.snow/active-profile.json",
+    "format": "json",
+    "keyPath": "activeProfile",
+    "kind": "key",
+    "before": "\"astra\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.snow/config.json",
+    "format": "json",
+    "keyPath": "snowcfg",
+    "kind": "key",
+    "before": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"gpt-5\",\"basicModel\":\"gpt-5\",\"maxTokens\":128000,\"maxContextTokens\":400000,\"supportsVision\":true,\"baseUrlMode\":\"base\"}",
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"deepseek-chat\",\"basicModel\":\"deepseek-chat\",\"maxTokens\":8000,\"maxContextTokens\":64000,\"supportsVision\":false,\"baseUrlMode\":\"base\"}"
+  }
+]

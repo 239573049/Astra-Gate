@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.empryo/config.json",
+    "keyPath": "defaultModel",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/.empryo/config.json",
+    "keyPath": "providers.[id=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"astra\",\"name\":\"Astra\",\"baseURL\":\"https://astra.corp.com/v1\",\"modelsAPI\":\"https://astra.corp.com/v1/models\"}"
+  }
+]

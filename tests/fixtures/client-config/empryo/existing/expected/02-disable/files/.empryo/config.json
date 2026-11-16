@@ -1,0 +1,6 @@
+{
+  "defaultModel": "mine/foo",
+  "providers": [
+    { "id": "mine", "name": "Mine", "baseURL": "http://localhost:1/v1" }
+  ]
+}

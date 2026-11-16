@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "provider.default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022foo\\u0022\"",
+    "applied": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "provider.default_provider",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine\\u0022\"",
+    "applied": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]
