@@ -54,6 +54,7 @@ import {
   runPluginTest,
   runPluginV2List,
 } from './commands/plugin.js';
+import { runGroupAdd, runGroupList, runGroupRemove, runGroupSet, runGroupShow } from './commands/group.js';
 import { runRestoreAll } from './commands/restore-all.js';
 import { runClaude } from './commands/claude.js';
 import { VERSION } from './version.js';
@@ -268,6 +269,38 @@ provider
   .description('Remove a provider')
   .argument('<id>', 'Provider id')
   .action((id: string) => runProviderRemove(id));
+
+const group = program
+  .command('group')
+  .alias('groups')
+  .description('Routing groups: virtual models group/<slug> over several providers (smart, order, rotate, usage, pace, weight)');
+group
+  .command('list')
+  .description('List the routing groups')
+  .action(() => runGroupList());
+group
+  .command('show')
+  .description("Show a group's members with their live state")
+  .argument('<group>', 'Group id, slug or name')
+  .action((ref: string) => runGroupShow(ref));
+group
+  .command('add')
+  .description('Create a group: astra group add "Opus anywhere" models=claude/claude-opus-5-5,copilot/claude-opus-5.5 routing=smart')
+  .argument('<name>', 'Display name; the model id is group/<slug of the name>')
+  .argument('[settings...]', 'models=provider/model,… routing=smart|order|rotate|usage|pace|weight stays=auto|session|turn|off|strict weight=member=n,… listed=yes|no slug=…')
+  .action((name: string, words: string[]) => runGroupAdd(name, words));
+group
+  .command('set')
+  .description('Change a group: models=… (replace), models+=… (add), models-=… (remove), routing=…, stays=…, weight=…, listed=…, enabled=…, name=…')
+  .argument('<group>', 'Group id, slug or name')
+  .argument('<settings...>', 'key=value words')
+  .action((ref: string, words: string[]) => runGroupSet(ref, words));
+group
+  .command('rm')
+  .alias('remove')
+  .description('Delete a group (one another group contains cannot be deleted)')
+  .argument('<group>', 'Group id, slug or name')
+  .action((ref: string) => runGroupRemove(ref));
 
 const plugin = program
   .command('plugin')

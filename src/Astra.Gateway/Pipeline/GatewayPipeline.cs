@@ -333,7 +333,14 @@ public sealed partial class GatewayPipeline(
                 resolveSpan.Set("astra.group.id", requestedGroup.Slug).Set("astra.group.mode", requestedGroup.Mode)
                     .Set("astra.group.candidates", candidates.Count).Set("astra.group.reason", groupPlan.Order[0].Reason)
                     .Set("astra.pool.max_attempts", maxAttempts);
-                record.RoutingJson ??= Json.Serialize(GroupReport(requestedGroup, groupPlan.Order[0], 0));
+                // Without a smart-routing decision of its own the group's choice is the route decision the trace views and the log show
+                // (astra.route.*, source "group"; the group's mode and the reason its first member stands first).
+                if (record.RoutingJson is null)
+                {
+                    record.RoutingJson = Json.Serialize(GroupReport(requestedGroup, groupPlan.Order[0], 0));
+                    resolveSpan.Set("astra.route.grade", requestedGroup.ModelId).Set("astra.route.source", "group").Set("astra.route.mode", requestedGroup.Mode)
+                        .Set("astra.route.model", groupPlan.Order[0].Model).Set("astra.route.reason", groupPlan.Order[0].Reason);
+                }
             }
             else if (route.Pool is { } pool && pools is not null)
             {

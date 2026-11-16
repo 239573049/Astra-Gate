@@ -78,7 +78,7 @@ public static class RequestPresentation
 
     private static readonly string[] PrivacyActions = ["warn", "block", "redact"];
 
-    private static readonly string[] RouteSources = ["judge", "pin", "turn", "fallback", "breaker"];
+    private static readonly string[] RouteSources = ["judge", "pin", "turn", "fallback", "breaker", "group"];
 
     private static readonly string[] RouteModes = ["session", "turn"];
 
@@ -158,7 +158,16 @@ public static class RequestPresentation
     public static string RouteSource(string source, TraceText t) => RouteSourceText(source, t);
 
     /// <summary>How a routing decision was made: per session or per turn (web <c>routeModeText</c>).</summary>
-    public static string RouteMode(string mode, TraceText t) => RouteModes.Contains(mode) ? t("traces.route.mode." + mode) : mode;
+    public static string RouteMode(string mode, TraceText t)
+        => RouteModes.Contains(mode) ? t("traces.route.mode." + mode) : Loc.Has("routingGroups.mode." + mode) ? t("routingGroups.mode." + mode) : mode;
+
+    /// <summary>Why a routing group put the member that served first (a <c>RankReasons</c> code), in the groups page's words (web <c>groupReasonText</c>).</summary>
+    public static string GroupReason(string? reason, TraceText t, Func<string, bool>? has = null)
+    {
+        has ??= Loc.Has;
+        var key = "routingGroups.reason." + reason;
+        return !string.IsNullOrEmpty(reason) && has(key) ? t(key) : reason ?? TraceFormat.Dash;
+    }
 
     /// <summary>Why the caller could not use the grade decided first, in the smart-routing page's words (web <c>unusableText</c>).</summary>
     public static string Unusable(string? reason, TraceText t, Func<string, bool>? has = null)
@@ -187,7 +196,15 @@ public static class RequestPresentation
         bool ok;
         string text;
         string title;
-        if (!string.IsNullOrEmpty(routing.FallbackReason))
+        if (routing.Source == "group")
+        {
+            // A routing group: orange when the member before it failed and this one took over.
+            var reason = GroupReason(routing.Reason, t, has);
+            ok = routing.Reason != "failover";
+            text = ok ? t("requests.routing.group", [.. vars, ("reason", reason)]) : t("requests.routing.groupFailover", vars);
+            title = ok ? t("requests.routing.hint.group", [.. vars, ("reason", reason)]) : t("requests.routing.hint.groupFailover", vars);
+        }
+        else if (!string.IsNullOrEmpty(routing.FallbackReason))
         {
             var reason = RouteReason(routing.FallbackReason, t, has);
             ok = false;

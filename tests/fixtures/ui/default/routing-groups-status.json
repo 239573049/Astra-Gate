@@ -1,0 +1,86 @@
+[
+  {
+    "id": "rg-opus",
+    "slug": "opus-anywhere",
+    "lastDecisionAt": "2026-10-26T11:56:00Z",
+    "lastReason": "soonest_reset",
+    "members": [
+      {
+        "key": "prov_anthropic/claude-opus-4-1",
+        "providerId": "prov_anthropic",
+        "providerName": "Anthropic",
+        "model": "claude-opus-4-1",
+        "group": null,
+        "weight": 1,
+        "health": "healthy",
+        "coolingUntil": null,
+        "usedPercent": 42,
+        "window": "weekly",
+        "resetsAt": "2026-10-28T12:00:00Z",
+        "pace": 1.1,
+        "lastUsed": "2026-10-26T11:56:00Z",
+        "recent": 7,
+        "problem": null
+      },
+      {
+        "key": "prov_openai/gpt-5",
+        "providerId": "prov_openai",
+        "providerName": "OpenAI",
+        "model": "gpt-5",
+        "group": null,
+        "weight": 1,
+        "health": "cooling",
+        "coolingUntil": "2026-10-26T12:03:00Z",
+        "usedPercent": null,
+        "window": null,
+        "resetsAt": null,
+        "pace": null,
+        "lastUsed": "2026-10-26T11:00:00Z",
+        "recent": 1,
+        "problem": null
+      }
+    ]
+  },
+  {
+    "id": "rg-fast",
+    "slug": "fast",
+    "lastDecisionAt": null,
+    "lastReason": null,
+    "members": [
+      {
+        "key": "prov_openai/gpt-4.1-mini",
+        "providerId": "prov_openai",
+        "providerName": "OpenAI",
+        "model": "gpt-4.1-mini",
+        "group": null,
+        "weight": 3,
+        "health": "healthy",
+        "coolingUntil": null,
+        "usedPercent": null,
+        "window": null,
+        "resetsAt": null,
+        "pace": null,
+        "lastUsed": null,
+        "recent": 0,
+        "problem": null
+      },
+      {
+        "key": "prov_anthropic/claude-haiku-4-5",
+        "providerId": "prov_anthropic",
+        "providerName": "Anthropic",
+        "model": "claude-haiku-4-5",
+        "group": null,
+        "weight": 1,
+        "health": "healthy",
+        "coolingUntil": null,
+        "usedPercent": null,
+        "window": null,
+        "resetsAt": null,
+        "pace": null,
+        "lastUsed": null,
+        "recent": 0,
+        "problem": null
+      }
+    ]
+  }
+]

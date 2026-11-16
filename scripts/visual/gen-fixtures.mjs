@@ -403,6 +403,25 @@ put('library/skills.json', {
 });
 route('/api/library/skills', 'library/skills.json');
 
+// ---------------------------------------------------------------- routing groups (virtual models group/<slug>)
+const groupMember = (provider, model, weight = 1) => ({ provider, model, group: null, weight });
+put('routing-groups.json', [
+  { id: 'rg-opus', slug: 'opus-anywhere', modelId: 'group/opus-anywhere', name: 'Opus anywhere', mode: 'smart', stays: 'auto', enabled: true, listed: true, members: [groupMember(providers[1].id, 'claude-opus-4-1'), groupMember(providers[0].id, 'gpt-5')], createdAt: ago(9 * DAY), updatedAt: ago(2 * DAY) },
+  { id: 'rg-fast', slug: 'fast', modelId: 'group/fast', name: 'Fast and cheap', mode: 'weight', stays: 'session', enabled: true, listed: false, members: [groupMember(providers[0].id, 'gpt-4.1-mini', 3), groupMember(providers[1].id, 'claude-haiku-4-5')], createdAt: ago(5 * DAY), updatedAt: ago(5 * DAY) },
+]);
+put('routing-groups-status.json', [
+  { id: 'rg-opus', slug: 'opus-anywhere', lastDecisionAt: ago(4 * MIN), lastReason: 'soonest_reset', members: [
+    { key: `${providers[1].id}/claude-opus-4-1`, providerId: providers[1].id, providerName: providers[1].name, model: 'claude-opus-4-1', group: null, weight: 1, health: 'healthy', coolingUntil: null, usedPercent: 42, window: 'weekly', resetsAt: iso(new Date(NOW.getTime() + 2 * DAY)), pace: 1.1, lastUsed: ago(4 * MIN), recent: 7, problem: null },
+    { key: `${providers[0].id}/gpt-5`, providerId: providers[0].id, providerName: providers[0].name, model: 'gpt-5', group: null, weight: 1, health: 'cooling', coolingUntil: iso(new Date(NOW.getTime() + 3 * MIN)), usedPercent: null, window: null, resetsAt: null, pace: null, lastUsed: ago(HOUR), recent: 1, problem: null },
+  ] },
+  { id: 'rg-fast', slug: 'fast', lastDecisionAt: null, lastReason: null, members: [
+    { key: `${providers[0].id}/gpt-4.1-mini`, providerId: providers[0].id, providerName: providers[0].name, model: 'gpt-4.1-mini', group: null, weight: 3, health: 'healthy', coolingUntil: null, usedPercent: null, window: null, resetsAt: null, pace: null, lastUsed: null, recent: 0, problem: null },
+    { key: `${providers[1].id}/claude-haiku-4-5`, providerId: providers[1].id, providerName: providers[1].name, model: 'claude-haiku-4-5', group: null, weight: 1, health: 'healthy', coolingUntil: null, usedPercent: null, window: null, resetsAt: null, pace: null, lastUsed: null, recent: 0, problem: null },
+  ] },
+]);
+route('/api/routing/groups/status', 'routing-groups-status.json');
+route('/api/routing/groups', 'routing-groups.json');
+
 // shell-level singletons
 for (const [path, file] of [['/api/health', 'health.json'], ['/api/version', 'version.json'], ['/api/auth/status', 'auth-status.json'], ['/api/settings', 'settings.json'], ['/api/update/status', 'update-status.json'], ['/api/tunnel', 'tunnel.json'], ['/api/server/listen', 'listen.json'], ['/api/server/autostart', 'autostart.json']]) route(path, file);
 

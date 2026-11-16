@@ -683,6 +683,8 @@ export interface RequestRouting {
   judgeMs?: number | null;
   /** Why the caller could not use adjustedFrom (a GradeProblem). */
   adjustedReason?: string | null;
+  /** A routing group's decision (source 'group'; grade is group/<slug>): why the member that served it stood first. */
+  reason?: string | null;
 }
 export interface RequestUsageItem {
   tokenType: string; tokens: number; isPerCall: boolean; unitPrice: string; baseUnitPrice?: string | null;
@@ -897,10 +899,12 @@ export interface ProviderUsage {
 
 export type AccountKind = "oauth" | "api_key" | "plugin";
 export type AccountSource = "login" | "local" | "token" | "batch" | "plugin";
+/** How a provider's accounts (logins, plugin sign-ins, API keys) are chosen; smart / pace / usage look at the quota each has left. */
+export type SwitchMode = 'manual' | 'failover' | 'balanced' | 'smart' | 'pace' | 'usage';
 /** Who may use a subscription provider and how its accounts switch. */
 export interface SubscriptionPolicy {
   clientPolicy: 'claude-code-only' | 'any';
-  switchMode: 'manual' | 'failover' | 'balanced';
+  switchMode: SwitchMode;
   /** Claude Pro/Max subscription: the client policy is shown (and defaults to Claude Code only). */
   claudeSubscription: boolean;
   /** Non-Claude-Code callers present a Claude Code identity (see the gateway's ClaudeCodeMimicry). */
@@ -1617,6 +1621,70 @@ export interface RoutingProblem {
   code: string;
   message: string;
   field?: string | null;
+}
+
+// ---------- routing groups (magpie parity): virtual models group/<slug> ----------
+
+export type RoutingGroupMode = 'smart' | 'order' | 'rotate' | 'usage' | 'pace' | 'weight';
+export type RoutingGroupStays = 'auto' | 'session' | 'turn' | 'off' | 'strict';
+/** A provider/model target (provider is a provider id on read; id, alias or name on write) or another group (its slug). */
+export interface RoutingGroupMember {
+  provider?: string | null;
+  model?: string | null;
+  group?: string | null;
+  weight: number;
+}
+export interface RoutingGroup {
+  id: string;
+  slug: string;
+  /** The model id clients use: group/<slug>. */
+  modelId: string;
+  name: string;
+  mode: RoutingGroupMode;
+  stays: RoutingGroupStays;
+  enabled: boolean;
+  listed: boolean;
+  members: RoutingGroupMember[];
+  createdAt: string;
+  updatedAt: string;
+}
+/** POST (name required) / PATCH body; omitted fields stay, members replaces the list; the slug never changes. */
+export interface RoutingGroupWrite {
+  name?: string;
+  slug?: string;
+  mode?: RoutingGroupMode;
+  stays?: RoutingGroupStays;
+  enabled?: boolean;
+  listed?: boolean;
+  members?: RoutingGroupMember[];
+}
+export type RoutingGroupHealth = 'healthy' | 'cooling' | 'open' | 'half_open' | 'no_account' | 'off' | 'missing' | 'group';
+export interface RoutingGroupMemberStatus {
+  key: string;
+  providerId?: string | null;
+  providerName?: string | null;
+  model?: string | null;
+  group?: string | null;
+  weight: number;
+  health: RoutingGroupHealth;
+  coolingUntil?: string | null;
+  /** The fullest quota window's used share; null when no figure is known (or it is stale). */
+  usedPercent?: number | null;
+  window?: string | null;
+  resetsAt?: string | null;
+  /** Share of that window left per hour until it renews. */
+  pace?: number | null;
+  lastUsed?: string | null;
+  recent: number;
+  /** model_missing | provider_missing | provider_off | group_missing */
+  problem?: string | null;
+}
+export interface RoutingGroupStatus {
+  id: string;
+  slug: string;
+  lastDecisionAt?: string | null;
+  lastReason?: string | null;
+  members: RoutingGroupMemberStatus[];
 }
 
 /** One tool call a response made; arguments (JSON text, cut at 4 KB) only while the traceContent setting was on. */

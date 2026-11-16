@@ -14,6 +14,7 @@ import type {
   TraceTopology,
 } from '../../api/types';
 import type { TFunction } from '../../i18n';
+import { zh } from '../../i18n/messages';
 import { formatMs, formatTokens } from '../../lib/format';
 
 // Pure builders behind the trace views (.plan/observability.md §5): API payloads → React Flow nodes / edges and
@@ -161,7 +162,7 @@ export const attrStr = (span: TraceSpan | undefined, key: string): string | unde
   return typeof v === 'string' ? v : undefined;
 };
 
-const ROUTE_SOURCES = ['judge', 'pin', 'turn', 'fallback', 'breaker'] as const;
+const ROUTE_SOURCES = ['judge', 'pin', 'turn', 'fallback', 'breaker', 'group'] as const;
 const ROUTE_MODES = ['session', 'turn'] as const;
 const ROUTE_REASONS = [
   'timeout', 'network', 'auth', 'rate_limited', 'overloaded', 'bad_request', 'bad_response',
@@ -218,7 +219,9 @@ export function routeSourceLabel(source: string | undefined, t: TFunction): stri
 }
 
 export function routeModeLabel(mode: string | undefined, t: TFunction): string {
-  return isOneOf(mode, ROUTE_MODES) ? t(`traces.route.mode.${mode}`) : (mode ?? '—');
+  if (isOneOf(mode, ROUTE_MODES)) return t(`traces.route.mode.${mode}`);
+  // A routing group's mode (smart, order, rotate, usage, pace, weight).
+  return mode && `routingGroups.mode.${mode}` in zh ? t(`routingGroups.mode.${mode}` as keyof typeof zh) : (mode ?? '—');
 }
 
 /** A fallback reason in the words the smart-routing page already uses; the raw reason when it is a new one. */

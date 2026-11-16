@@ -121,11 +121,15 @@ public sealed class ProviderKeyListView : UserControl
         var group = new SettingsGroup
         {
             Title = Loc.T("providers.keys.title"),
-            Footer = Loc.T(mode switch { "balanced" => "providers.keys.modeBalanced", "failover" => "providers.keys.modeFailover", _ => "providers.keys.modeManual" }),
+            Footer = Loc.T(mode switch
+            {
+                "balanced" => "providers.keys.modeBalanced", "failover" => "providers.keys.modeFailover", "smart" => "providers.keys.modeSmart",
+                "pace" => "providers.keys.modePace", "usage" => "providers.keys.modeUsage", _ => "providers.keys.modeManual",
+            }),
         };
         var picker = PdUi.Choice(
-            [("manual", Loc.T("providers.subscription.policy.manual")), ("failover", Loc.T("providers.subscription.policy.failover")), ("balanced", Loc.T("providers.subscription.policy.balanced"))],
-            mode, m => _ = RunAsync(() => _accounts.UpdatePolicyAsync(_provider.Id, new SubscriptionPolicyPatch(null, m, null))), 140, Loc.T("providers.subscription.policy.switchMode"));
+            Astra.Desktop.Core.Accounts.SubscriptionAccountsModel.SwitchModeOptions(),
+            mode, m => _ = RunAsync(() => _accounts.UpdatePolicyAsync(_provider.Id, new SubscriptionPolicyPatch(null, m, null))), 170, Loc.T("providers.subscription.policy.switchMode"));
         var add = PdUi.Button(Loc.T("providers.keys.add"), PdUi.Look.Primary, LucideIconKind.Plus, click: () => OpenSheet(null));
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(16, 12) };
         header.Children.Add(picker);

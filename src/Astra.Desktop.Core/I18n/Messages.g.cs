@@ -2814,6 +2814,120 @@ internal static class Messages
         "traces.error.unsupportedTitle",
         "traces.error.unsupported",
         "nav.smartRouting",
+        "nav.routingGroups",
+        "routingGroups.subtitle",
+        "routingGroups.intro",
+        "routingGroups.add",
+        "routingGroups.addTitle",
+        "routingGroups.editTitle",
+        "routingGroups.empty",
+        "routingGroups.emptyDetail",
+        "routingGroups.disabled",
+        "routingGroups.unlisted",
+        "routingGroups.enabled",
+        "routingGroups.deleteTitle",
+        "routingGroups.deleteDetail",
+        "routingGroups.name",
+        "routingGroups.slug",
+        "routingGroups.slugHint",
+        "routingGroups.slugLocked",
+        "routingGroups.modeLabel",
+        "routingGroups.mode.smart",
+        "routingGroups.mode.order",
+        "routingGroups.mode.rotate",
+        "routingGroups.mode.usage",
+        "routingGroups.mode.pace",
+        "routingGroups.mode.weight",
+        "routingGroups.mode.smart.hint",
+        "routingGroups.mode.order.hint",
+        "routingGroups.mode.rotate.hint",
+        "routingGroups.mode.usage.hint",
+        "routingGroups.mode.pace.hint",
+        "routingGroups.mode.weight.hint",
+        "routingGroups.staysLabel",
+        "routingGroups.stays.auto",
+        "routingGroups.stays.session",
+        "routingGroups.stays.turn",
+        "routingGroups.stays.off",
+        "routingGroups.stays.strict",
+        "routingGroups.stays.auto.hint",
+        "routingGroups.stays.session.hint",
+        "routingGroups.stays.turn.hint",
+        "routingGroups.stays.off.hint",
+        "routingGroups.stays.strict.hint",
+        "routingGroups.membersTitle",
+        "routingGroups.membersHint",
+        "routingGroups.noMembers",
+        "routingGroups.addModel",
+        "routingGroups.addGroup",
+        "routingGroups.weight",
+        "routingGroups.moveUp",
+        "routingGroups.moveDown",
+        "routingGroups.weightN",
+        "routingGroups.remove",
+        "routingGroups.listed",
+        "routingGroups.listedHint",
+        "routingGroups.refused",
+        "routingGroups.lastDecision",
+        "routingGroups.quotaUsed",
+        "routingGroups.resets",
+        "routingGroups.quotaUnknown",
+        "routingGroups.lastUsed",
+        "routingGroups.health.healthy",
+        "routingGroups.health.cooling",
+        "routingGroups.health.open",
+        "routingGroups.health.half_open",
+        "routingGroups.health.no_account",
+        "routingGroups.health.off",
+        "routingGroups.health.missing",
+        "routingGroups.health.group",
+        "routingGroups.memberProblem.model_missing",
+        "routingGroups.memberProblem.provider_missing",
+        "routingGroups.memberProblem.provider_off",
+        "routingGroups.memberProblem.group_missing",
+        "routingGroups.reason.order",
+        "routingGroups.reason.soonest_reset",
+        "routingGroups.reason.pace",
+        "routingGroups.reason.least_used",
+        "routingGroups.reason.quota_unknown",
+        "routingGroups.reason.near_limit",
+        "routingGroups.reason.affinity",
+        "routingGroups.reason.rotate",
+        "routingGroups.reason.weight",
+        "routingGroups.reason.only_one",
+        "routingGroups.reason.failover",
+        "routingGroups.problem.slug_invalid",
+        "routingGroups.problem.slug_duplicate",
+        "routingGroups.problem.name_missing",
+        "routingGroups.problem.too_long",
+        "routingGroups.problem.mode_invalid",
+        "routingGroups.problem.stays_invalid",
+        "routingGroups.problem.members_empty",
+        "routingGroups.problem.members_too_many",
+        "routingGroups.problem.member_invalid",
+        "routingGroups.problem.member_provider_missing",
+        "routingGroups.problem.member_group_missing",
+        "routingGroups.problem.member_duplicate",
+        "routingGroups.problem.member_self",
+        "routingGroups.problem.member_cycle",
+        "routingGroups.problem.member_depth",
+        "routingGroups.problem.weight_range",
+        "routingGroups.problem.group_in_use",
+        "traces.route.source.group",
+        "requests.routing.group",
+        "requests.routing.groupFailover",
+        "requests.routing.hint.group",
+        "requests.routing.hint.groupFailover",
+        "requests.routing.reason",
+        "providers.subscription.policy.smart",
+        "providers.subscription.policy.pace",
+        "providers.subscription.policy.usage",
+        "providers.subscription.policy.smartDetail",
+        "providers.subscription.policy.paceDetail",
+        "providers.subscription.policy.usageDetail",
+        "providers.keys.modeSmart",
+        "providers.keys.modePace",
+        "providers.keys.modeUsage",
         "nav.mcp",
         "nav.group.resources",
         "nav.skills",
@@ -6041,6 +6155,120 @@ internal static class Messages
             case "traces.error.unsupportedTitle": return "当前连接的 Astra 服务不支持链路追踪";
             case "traces.error.unsupported": return "这个端口上运行的是还没有链路追踪功能的旧版本 astra-server。停掉旧服务（例如退出 Astra 桌面版），再用新版本重新启动。";
             case "nav.smartRouting": return "智能路由";
+            case "nav.routingGroups": return "路由分组";
+            case "routingGroups.subtitle": return "把几个模型合成一个「group/名称」，客户端像选普通模型一样选它；网关按所选方式在成员之间分配，失败时换下一个";
+            case "routingGroups.intro": return "分组的成员可以是不同提供商的模型，也可以是别的分组。同一个模型有多个来源（订阅、中转站、官方 Key）时，用分组按额度、顺序、轮换或权重分配请求。";
+            case "routingGroups.add": return "新建分组";
+            case "routingGroups.addTitle": return "新建路由分组";
+            case "routingGroups.editTitle": return "编辑分组 {name}";
+            case "routingGroups.empty": return "还没有路由分组";
+            case "routingGroups.emptyDetail": return "分组把同一个模型的多个来源合成一个模型 id，例如 group/opus；在客户端里选它即可。";
+            case "routingGroups.disabled": return "已停用";
+            case "routingGroups.unlisted": return "不在模型列表";
+            case "routingGroups.enabled": return "启用";
+            case "routingGroups.deleteTitle": return "删除分组 {name}？";
+            case "routingGroups.deleteDetail": return "客户端再请求 {model} 会得到“模型不存在”。被别的分组包含的分组不能删除。";
+            case "routingGroups.name": return "名称";
+            case "routingGroups.slug": return "模型 id 后缀";
+            case "routingGroups.slugHint": return "客户端使用的模型 id 是 {model}；小写字母、数字和短横线。";
+            case "routingGroups.slugLocked": return "创建后不能修改，免得已经在用它的客户端和别的分组失效。";
+            case "routingGroups.modeLabel": return "分配方式";
+            case "routingGroups.mode.smart": return "智能";
+            case "routingGroups.mode.order": return "按顺序";
+            case "routingGroups.mode.rotate": return "轮换";
+            case "routingGroups.mode.usage": return "最少使用";
+            case "routingGroups.mode.pace": return "按节奏";
+            case "routingGroups.mode.weight": return "按权重";
+            case "routingGroups.mode.smart.hint": return "额度还有富余的成员里，额度重置最早的优先——它剩下的额度马上就要作废。";
+            case "routingGroups.mode.order.hint": return "总是先用第一个成员，它失败了再用下一个。";
+            case "routingGroups.mode.rotate.hint": return "每一轮对话换下一个成员。";
+            case "routingGroups.mode.usage.hint": return "已用额度最少的成员优先。";
+            case "routingGroups.mode.pace.hint": return "本周剩余额度除以距重置的小时数最大的成员优先，让一周的额度尽量不浪费。";
+            case "routingGroups.mode.weight.hint": return "每个成员按权重分担请求，穿插均匀：权重 3 的成员每接 3 个请求，权重 1 的成员接 1 个。";
+            case "routingGroups.staysLabel": return "对话停留";
+            case "routingGroups.stays.auto": return "自动";
+            case "routingGroups.stays.session": return "整个会话";
+            case "routingGroups.stays.turn": return "本轮";
+            case "routingGroups.stays.off": return "不停留";
+            case "routingGroups.stays.strict": return "严格";
+            case "routingGroups.stays.auto.hint": return "一轮之内总是留在原成员；跨轮只在提供商的提示缓存还值得保留时留下（5 分钟内、缓存了至少 1024 个 token），否则可以换。";
+            case "routingGroups.stays.session.hint": return "一个会话固定在同一个成员上（成员用尽额度时才换）。";
+            case "routingGroups.stays.turn.hint": return "只在一轮对话之内留在原成员，下一轮重新挑选。";
+            case "routingGroups.stays.off.hint": return "每个请求都重新挑选。";
+            case "routingGroups.stays.strict.hint": return "会话固定在原成员上，即使它冷却或额度已满也不换，错误直接返回给客户端。";
+            case "routingGroups.membersTitle": return "成员";
+            case "routingGroups.membersHint": return "拖动排序：“按顺序”方式按这个顺序用，失败时也按这个顺序换下一个。";
+            case "routingGroups.noMembers": return "还没有成员，从下面添加。";
+            case "routingGroups.addModel": return "添加模型…";
+            case "routingGroups.addGroup": return "添加分组…";
+            case "routingGroups.weight": return "权重";
+            case "routingGroups.moveUp": return "上移";
+            case "routingGroups.moveDown": return "下移";
+            case "routingGroups.weightN": return "权重 {n}";
+            case "routingGroups.remove": return "移除 {name}";
+            case "routingGroups.listed": return "出现在模型列表里";
+            case "routingGroups.listedHint": return "关掉后客户端的模型列表里看不到它，但按名字请求仍然可用。";
+            case "routingGroups.refused": return "保存失败";
+            case "routingGroups.lastDecision": return "上次选择：{reason}（{time}）";
+            case "routingGroups.quotaUsed": return "额度已用 {percent}%";
+            case "routingGroups.resets": return "{time} 重置";
+            case "routingGroups.quotaUnknown": return "额度未知";
+            case "routingGroups.lastUsed": return "最近使用 {time}";
+            case "routingGroups.health.healthy": return "正常";
+            case "routingGroups.health.cooling": return "冷却中，{time} 恢复";
+            case "routingGroups.health.open": return "暂停中，{time} 再试";
+            case "routingGroups.health.half_open": return "试探中";
+            case "routingGroups.health.no_account": return "没有可用账号";
+            case "routingGroups.health.off": return "提供商已停用";
+            case "routingGroups.health.missing": return "提供商已删除";
+            case "routingGroups.health.group": return "分组";
+            case "routingGroups.memberProblem.model_missing": return "提供商不提供这个模型";
+            case "routingGroups.memberProblem.provider_missing": return "提供商不存在";
+            case "routingGroups.memberProblem.provider_off": return "提供商已停用";
+            case "routingGroups.memberProblem.group_missing": return "分组不存在";
+            case "routingGroups.reason.order": return "按顺序";
+            case "routingGroups.reason.soonest_reset": return "额度最早重置";
+            case "routingGroups.reason.pace": return "节奏最快";
+            case "routingGroups.reason.least_used": return "用得最少";
+            case "routingGroups.reason.quota_unknown": return "额度未知";
+            case "routingGroups.reason.near_limit": return "额度将满，排在后面";
+            case "routingGroups.reason.affinity": return "会话停留在原成员";
+            case "routingGroups.reason.rotate": return "轮换";
+            case "routingGroups.reason.weight": return "按权重";
+            case "routingGroups.reason.only_one": return "只有一个成员可用";
+            case "routingGroups.reason.failover": return "上一个成员失败后接手";
+            case "routingGroups.problem.slug_invalid": return "模型 id 后缀要以字母或数字开头，只能用小写字母、数字和短横线（最多 48 个字符）";
+            case "routingGroups.problem.slug_duplicate": return "已经有同名的分组";
+            case "routingGroups.problem.name_missing": return "分组需要一个名称";
+            case "routingGroups.problem.too_long": return "有字段太长了";
+            case "routingGroups.problem.mode_invalid": return "分配方式无效";
+            case "routingGroups.problem.stays_invalid": return "对话停留方式无效";
+            case "routingGroups.problem.members_empty": return "至少要有一个成员";
+            case "routingGroups.problem.members_too_many": return "成员太多了（最多 32 个）";
+            case "routingGroups.problem.member_invalid": return "成员要么是“提供商 + 模型”，要么是一个分组";
+            case "routingGroups.problem.member_provider_missing": return "有成员的提供商不存在";
+            case "routingGroups.problem.member_group_missing": return "有成员的分组不存在";
+            case "routingGroups.problem.member_duplicate": return "有成员重复了";
+            case "routingGroups.problem.member_self": return "分组不能包含它自己";
+            case "routingGroups.problem.member_cycle": return "这样会让分组绕回到它自己";
+            case "routingGroups.problem.member_depth": return "分组最多嵌套 3 层";
+            case "routingGroups.problem.weight_range": return "权重要在 1 到 1000 之间";
+            case "routingGroups.problem.group_in_use": return "这个分组还是别的分组的成员，先从那里移除";
+            case "traces.route.source.group": return "路由分组";
+            case "requests.routing.group": return "{grade} · {reason}";
+            case "requests.routing.groupFailover": return "{grade} · 改用 {model}";
+            case "requests.routing.hint.group": return "路由分组「{grade}」：{reason}，发往 {model}";
+            case "requests.routing.hint.groupFailover": return "路由分组「{grade}」里前一个成员失败了，由 {model} 接手";
+            case "requests.routing.reason": return "选择原因";
+            case "providers.subscription.policy.smart": return "智能";
+            case "providers.subscription.policy.pace": return "按节奏";
+            case "providers.subscription.policy.usage": return "最少使用";
+            case "providers.subscription.policy.smartDetail": return "看各账号的额度：额度还有富余的里，重置最早的优先（它剩下的快作废了）；用到 90% 的排到后面，98% 的最后；对话在提示缓存还值得保留时留在原账号。额度未知时按故障转移顺序。";
+            case "providers.subscription.policy.paceDetail": return "本周剩余额度除以距重置的小时数最大的账号优先，让一周的额度尽量不浪费；额度未知时按故障转移顺序。";
+            case "providers.subscription.policy.usageDetail": return "已用额度最少的账号优先（用到 90% 以上的排到后面）；额度未知时按故障转移顺序。";
+            case "providers.keys.modeSmart": return "智能：看各 Key 的额度，额度重置最早的优先；用到 90% 的排到后面；额度未知时按列表顺序。";
+            case "providers.keys.modePace": return "按节奏：剩余额度除以距重置小时数最大的 Key 优先；额度未知时按列表顺序。";
+            case "providers.keys.modeUsage": return "最少使用：已用额度最少的 Key 优先；额度未知时按列表顺序。";
             case "nav.mcp": return "MCP 网关";
             case "nav.group.resources": return "资源";
             case "nav.skills": return "Skills";
@@ -9270,6 +9498,120 @@ internal static class Messages
             case "traces.error.unsupportedTitle": return "The connected Astra server has no tracing";
             case "traces.error.unsupported": return "The astra-server on this port is an older version without tracing. Stop it (for example, quit Astra Desktop) and start the new version.";
             case "nav.smartRouting": return "Smart routing";
+            case "nav.routingGroups": return "Routing groups";
+            case "routingGroups.subtitle": return "Combine several models into one “group/name” that clients pick like any model; the gateway spreads requests over the members and moves on when one fails";
+            case "routingGroups.intro": return "A group’s members can be models from different providers, or other groups. When one model has several sources (subscriptions, relays, official keys), a group shares requests by quota, order, rotation or weight.";
+            case "routingGroups.add": return "New group";
+            case "routingGroups.addTitle": return "New routing group";
+            case "routingGroups.editTitle": return "Edit group {name}";
+            case "routingGroups.empty": return "No routing groups yet";
+            case "routingGroups.emptyDetail": return "A group turns several sources of one model into a single model id, such as group/opus; pick it in a client.";
+            case "routingGroups.disabled": return "Off";
+            case "routingGroups.unlisted": return "Not in model lists";
+            case "routingGroups.enabled": return "Enabled";
+            case "routingGroups.deleteTitle": return "Delete group {name}?";
+            case "routingGroups.deleteDetail": return "Clients asking for {model} will get “model not found”. A group another group contains cannot be deleted.";
+            case "routingGroups.name": return "Name";
+            case "routingGroups.slug": return "Model id suffix";
+            case "routingGroups.slugHint": return "Clients use the model id {model}; lower-case letters, digits and dashes.";
+            case "routingGroups.slugLocked": return "It cannot change once saved, so clients and groups already using it keep working.";
+            case "routingGroups.modeLabel": return "Routing";
+            case "routingGroups.mode.smart": return "Smart";
+            case "routingGroups.mode.order": return "In order";
+            case "routingGroups.mode.rotate": return "In turn";
+            case "routingGroups.mode.usage": return "Least used first";
+            case "routingGroups.mode.pace": return "Pace";
+            case "routingGroups.mode.weight": return "Weighted";
+            case "routingGroups.mode.smart.hint": return "Of the members with quota to spare, the one whose allowance renews soonest goes first: what it has left is lost at the reset.";
+            case "routingGroups.mode.order.hint": return "The first member takes every request until it cannot answer, then the next.";
+            case "routingGroups.mode.rotate.hint": return "Each turn of a conversation goes to the next member.";
+            case "routingGroups.mode.usage.hint": return "The member with the least quota used goes first.";
+            case "routingGroups.mode.pace.hint": return "The member with the most of its week left per hour until it renews goes first, so less of a week is lost at its reset.";
+            case "routingGroups.mode.weight.hint": return "Each member takes its share by weight, smoothly interleaved: a weight-3 member takes three requests for every one a weight-1 member takes.";
+            case "routingGroups.staysLabel": return "Conversation stays";
+            case "routingGroups.stays.auto": return "Auto";
+            case "routingGroups.stays.session": return "Session";
+            case "routingGroups.stays.turn": return "Turn";
+            case "routingGroups.stays.off": return "Off";
+            case "routingGroups.stays.strict": return "Strict";
+            case "routingGroups.stays.auto.hint": return "Within a turn the conversation stays with its member; across turns only while the provider’s prompt cache is worth keeping (answered in the last 5 minutes, at least 1,024 tokens cached), otherwise it may move.";
+            case "routingGroups.stays.session.hint": return "A conversation stays on one member (it moves only when that member is spent).";
+            case "routingGroups.stays.turn.hint": return "Stays only within one turn; the next turn is placed afresh.";
+            case "routingGroups.stays.off.hint": return "Every request is placed afresh.";
+            case "routingGroups.stays.strict.hint": return "The conversation stays on its member even when it is cooling or spent; its errors go to the client.";
+            case "routingGroups.membersTitle": return "Members";
+            case "routingGroups.membersHint": return "Drag to reorder: “In order” uses this order, and a failure moves on in it.";
+            case "routingGroups.noMembers": return "No members yet; add some below.";
+            case "routingGroups.addModel": return "Add a model…";
+            case "routingGroups.addGroup": return "Add a group…";
+            case "routingGroups.weight": return "Weight";
+            case "routingGroups.moveUp": return "Move up";
+            case "routingGroups.moveDown": return "Move down";
+            case "routingGroups.weightN": return "weight {n}";
+            case "routingGroups.remove": return "Remove {name}";
+            case "routingGroups.listed": return "Show in model lists";
+            case "routingGroups.listedHint": return "Off keeps it out of clients’ model lists; asking for it by name still works.";
+            case "routingGroups.refused": return "Could not save";
+            case "routingGroups.lastDecision": return "Last choice: {reason} ({time})";
+            case "routingGroups.quotaUsed": return "{percent}% of quota used";
+            case "routingGroups.resets": return "renews {time}";
+            case "routingGroups.quotaUnknown": return "quota unknown";
+            case "routingGroups.lastUsed": return "last used {time}";
+            case "routingGroups.health.healthy": return "Healthy";
+            case "routingGroups.health.cooling": return "Cooling until {time}";
+            case "routingGroups.health.open": return "Paused, retry {time}";
+            case "routingGroups.health.half_open": return "Probing";
+            case "routingGroups.health.no_account": return "No usable account";
+            case "routingGroups.health.off": return "Provider off";
+            case "routingGroups.health.missing": return "Provider deleted";
+            case "routingGroups.health.group": return "Group";
+            case "routingGroups.memberProblem.model_missing": return "provider does not serve this model";
+            case "routingGroups.memberProblem.provider_missing": return "provider is gone";
+            case "routingGroups.memberProblem.provider_off": return "provider is off";
+            case "routingGroups.memberProblem.group_missing": return "group is gone";
+            case "routingGroups.reason.order": return "in order";
+            case "routingGroups.reason.soonest_reset": return "allowance renews soonest";
+            case "routingGroups.reason.pace": return "best pace";
+            case "routingGroups.reason.least_used": return "least used";
+            case "routingGroups.reason.quota_unknown": return "quota unknown";
+            case "routingGroups.reason.near_limit": return "nearly spent, goes behind";
+            case "routingGroups.reason.affinity": return "conversation stays on its member";
+            case "routingGroups.reason.rotate": return "in turn";
+            case "routingGroups.reason.weight": return "by weight";
+            case "routingGroups.reason.only_one": return "the only member available";
+            case "routingGroups.reason.failover": return "took over after the one before failed";
+            case "routingGroups.problem.slug_invalid": return "The id suffix must start with a letter or digit and use only lower-case letters, digits and dashes (at most 48 characters)";
+            case "routingGroups.problem.slug_duplicate": return "A group with that id already exists";
+            case "routingGroups.problem.name_missing": return "A group needs a name";
+            case "routingGroups.problem.too_long": return "A field is too long";
+            case "routingGroups.problem.mode_invalid": return "The routing is not valid";
+            case "routingGroups.problem.stays_invalid": return "The stays setting is not valid";
+            case "routingGroups.problem.members_empty": return "A group needs at least one member";
+            case "routingGroups.problem.members_too_many": return "Too many members (at most 32)";
+            case "routingGroups.problem.member_invalid": return "A member is either a provider and a model, or a group";
+            case "routingGroups.problem.member_provider_missing": return "A member’s provider does not exist";
+            case "routingGroups.problem.member_group_missing": return "A member’s group does not exist";
+            case "routingGroups.problem.member_duplicate": return "A member is listed twice";
+            case "routingGroups.problem.member_self": return "A group cannot contain itself";
+            case "routingGroups.problem.member_cycle": return "That would make a group contain itself";
+            case "routingGroups.problem.member_depth": return "Groups nest at most 3 deep";
+            case "routingGroups.problem.weight_range": return "A weight is 1 to 1000";
+            case "routingGroups.problem.group_in_use": return "Another group still contains this one; remove it there first";
+            case "traces.route.source.group": return "Routing group";
+            case "requests.routing.group": return "{grade} · {reason}";
+            case "requests.routing.groupFailover": return "{grade} · moved to {model}";
+            case "requests.routing.hint.group": return "Routing group “{grade}”: {reason}, sent to {model}";
+            case "requests.routing.hint.groupFailover": return "The member before failed in routing group “{grade}”; {model} took over";
+            case "requests.routing.reason": return "Reason";
+            case "providers.subscription.policy.smart": return "Smart";
+            case "providers.subscription.policy.pace": return "Pace";
+            case "providers.subscription.policy.usage": return "Least used";
+            case "providers.subscription.policy.smartDetail": return "Looks at each account’s quota: of those with room, the allowance renewing soonest goes first (what it has left is about to be lost); 90% used goes behind, 98% last; a conversation stays on its account while the prompt cache is worth keeping. Unknown quota falls back to the failover order.";
+            case "providers.subscription.policy.paceDetail": return "The account with the most of its week left per hour until it renews goes first, so less of a week is lost; unknown quota falls back to the failover order.";
+            case "providers.subscription.policy.usageDetail": return "The least used account goes first (past 90% goes behind); unknown quota falls back to the failover order.";
+            case "providers.keys.modeSmart": return "Smart: looks at each key’s quota, the allowance renewing soonest goes first; 90% used goes behind; unknown quota follows the list order.";
+            case "providers.keys.modePace": return "Pace: the key with the most left per hour until it renews goes first; unknown quota follows the list order.";
+            case "providers.keys.modeUsage": return "Least used: the key with the least quota used goes first; unknown quota follows the list order.";
             case "nav.mcp": return "MCP gateway";
             case "nav.group.resources": return "Resources";
             case "nav.skills": return "Skills";

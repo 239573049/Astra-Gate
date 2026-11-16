@@ -38,7 +38,7 @@ public sealed class SubscriptionAccountsView : LiveView
     private ImportMode? _shownImport;
 
     private SearchField _search = null!;
-    private ControlledSegmented _mode = null!;
+    private ControlledSelect _mode = null!;
     private Border _poolCard = null!;
     private WrapPanel _stats = null!;
     private TextBlock _modeDetail = null!;
@@ -91,9 +91,7 @@ public sealed class SubscriptionAccountsView : LiveView
         }
         // Pool line: counts + provider proxy on the left, the switching mode on the right (web card mb-3 px-3 py-2).
         _stats = new WrapPanel { ItemSpacing = 12, LineSpacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        _mode = new ControlledSegmented(
-            [("manual", Loc.T("providers.subscription.policy.manual")), ("failover", Loc.T("providers.subscription.policy.failover")), ("balanced", Loc.T("providers.subscription.policy.balanced"))],
-            null);
+        _mode = new ControlledSelect(SubscriptionAccountsModel.SwitchModeOptions(), null, 170);
         Avalonia.Automation.AutomationProperties.SetName(_mode, Loc.T("providers.subscription.policy.switchMode"));
         _mode.Chose += mode => _ = _model.SetSwitchModeAsync(mode);
         _mode.VerticalAlignment = VerticalAlignment.Center;

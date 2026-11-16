@@ -7,6 +7,7 @@ using Astra.Desktop.Pages.Privacy;
 using Astra.Desktop.Pages.ProviderDetail;
 using Astra.Desktop.Pages.Providers;
 using Astra.Desktop.Pages.Requests;
+using Astra.Desktop.Pages.RoutingGroups;
 using Astra.Desktop.Pages.Settings;
 using Astra.Desktop.Pages.Skills;
 using Astra.Desktop.Pages.SmartRouting;
@@ -36,6 +37,7 @@ public static class AppModules
         new SettingsModule(),
         new SkillsModule(),
         new SmartRoutingModule(),
+        new RoutingGroupsModule(),
         new TokensModule(),
         new TracesModule(),
         new Astra.Desktop.PluginUi.PluginPageModule(),

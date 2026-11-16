@@ -13,7 +13,7 @@ namespace Astra.Desktop.Core.Traces;
 public static class TraceAnalysis
 {
     /// <summary>Values the web accepts for <c>astra.route.source</c>; others show raw.</summary>
-    public static readonly string[] RouteSources = ["judge", "pin", "turn", "fallback", "breaker"];
+    public static readonly string[] RouteSources = ["judge", "pin", "turn", "fallback", "breaker", "group"];
     /// <summary>Values the web accepts for <c>astra.route.mode</c>.</summary>
     public static readonly string[] RouteModes = ["session", "turn"];
     /// <summary>Fallback reasons the smart-routing page has words for.</summary>
@@ -153,7 +153,9 @@ public static class TraceAnalysis
 
     /// <summary>The routing mode in the page's words (<c>routeModeLabel</c>).</summary>
     public static string RouteModeLabel(string? mode, TraceText t) =>
-        mode is not null && RouteModes.Contains(mode) ? t("traces.route.mode." + mode) : mode ?? TraceFormat.Dash;
+        mode is not null && RouteModes.Contains(mode) ? t("traces.route.mode." + mode)
+        // A routing group's mode (smart, order, rotate, usage, pace, weight).
+        : mode is not null && Astra.Desktop.Core.I18n.Loc.Has("routingGroups.mode." + mode) ? t("routingGroups.mode." + mode) : mode ?? TraceFormat.Dash;
 
     /// <summary>A fallback reason in the smart-routing page's words (<c>routeReasonLabel</c>).</summary>
     public static string? RouteReasonLabel(string? reason, TraceText t) =>

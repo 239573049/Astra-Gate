@@ -803,6 +803,36 @@ runtime needed on the target).
     `api_key` / `api_key_sealed`); version 1 files restore as before. Not touched: the quota query (`ProviderQuotaManager`) reads the mirrored key.
     Tests: `ProviderKeysTests` (integration), `AccountSchedulerTests`, `ImportReaderTests`, web `provider-keys.test.tsx`, cli `provider-keys.test.ts`.
 
+35. **Quota-aware account selection and routing groups** (magpie parity, MIT; `.agents/memory/routing-groups-decisions.md`): what each account has
+    left is read from the snapshots Astra already keeps (`QuotaStanding.Of` over `ProviderAccount.Extra["quota"]` — session / weekly / credits windows — or
+    `Provider.Quota.plans`; a snapshot older than 6 h or a window that renewed since is *unknown*, and unknown never errors: it ranks behind known
+    candidates and with nothing known at all the given order stands). `QuotaRanking.Rank` (`Astra.Core/Routing`) is the one ordering both features use: ranks
+    `<90%` known / unknown / `90–98%` / `>=98%`, then **smart** (the deciding window — the week, else the session — renewing soonest, compared by the hour),
+    **pace** (share of the week left per hour until reset, candidates within 10% alike go by recent sends) or **usage** (least used). Account level:
+    `SwitchModes` gained `smart` / `pace` / `usage` (`SwitchModes.UsesScheduler` = balanced + those three; `AccountScheduler.Pick(…, mode)`; the reason lands on
+    the attempt span as `astra.account.pick`, a `RankReasons` code). Affinity is cache-aware (`ConversationStays.Holds`: stays while the conversation answered
+    within 5 min and its last request read+wrote >= 1,024 cached tokens — `AccountScheduler.NoteCache` / `GroupRouter.NoteCache` from `GatewayPipeline`'s
+    `finally`; a first answer reports nothing yet and stays; a bound account at >= 98% is left) — balanced keeps its hour-long sticky binding untouched.
+    **Routing groups**: `group/<slug>` is a virtual model (`routing_groups`, migration 0032; `RoutingGroupRepository` with a `RowCache`, `ListCachedAsync` is
+    read-only; members are `GroupMember` = `provider/model` or a nested group, `Weight`; `RoutingGroupValidator` has the problem codes, cycle and depth (3) checks).
+    The routing seam is `GroupRouter.PlanAsync` in `GatewayPipeline`, after smart routing and before the pool / bindings branch: members are judged for the caller
+    with `IGatewayRouter.GradeUseAsync` exactly like a smart-routing grade (a limited token skips members it cannot reach; none left = a 404 that names no
+    provider), cooling ones are dropped by `PoolRouting.AdmitAsync`, `GroupScheduler.Order` orders by mode (smart / order / rotate / usage / pace / weight)
+    then moves the conversation's member first, and each candidate becomes a route whose own `GatewayRoute.Routed` carries *its* model (`GroupRouter.RouteFor`;
+    never `body["model"]`) — the pool failover loop (`GroupPlan.Pool`, `ProviderFailover.Classify`, `ProviderHealth`) walks them, protocol translated per member.
+    The relay passes no `GroupRouter` (optional feature, linked update 21). A smart-routing grade may name `group/<slug>` (no provider; `SmartRoutingService.CheckAgainst`).
+    Trace: `astra.group.*` on the resolve span, `astra.route.*` with source `group` (so every trace view reads it as a routing decision), `requests.routing_json`
+    (`RoutingReport.Reason`; `failover` when a later member served). Lists: `GatewayAuxiliary.ModelListAsync`, `ClientService.ModelsAsync` / `ContextAsync`,
+    `KeyInfoEndpoints.ConnectContextAsync` (id and name only, never members) via `GroupRouter.AdvertisedAsync`; count_tokens takes `PreviewAsync`. Admin API
+    `/api/routing/groups` (CRUD + `/status`; provider named by id, alias or name, stored as the id; the slug never changes; a group another contains cannot be
+    deleted). Mirrors: `Astra.Api.Contracts/RoutingGroupDtos.cs` (+ `ContractsJsonContext.RoutingGroups.cs`), `web/src/api` (`useRoutingGroups` …) +
+    `components/RoutingGroups.tsx` + `SwitchModePicker` (now a select), the Avalonia `Pages/RoutingGroups` + `Components/RoutingGroups/RoutingGroupSheet.cs` +
+    `Astra.Desktop.Core/RoutingGroups` (arrow buttons where the web drags), zh/en `routingGroups.*` / `providers.subscription.policy.{smart,pace,usage}[Detail]` /
+    `providers.keys.mode{Smart,Pace,Usage}` (+ `gen-desktop-i18n`), UI fixtures (`gen-fixtures.mjs`), `astra group add|list|show|set|rm`
+    (`cli/src/commands/group.ts`) and the website's `content/docs/console/smart-routing.mdx` / a new routing-groups page (linked update 14). Tests:
+    `QuotaRankingTests`, `RoutingGroupTests`, `QuotaSchedulingTests`, `RoutingGroupRepositoryTests`, `RoutingGroupGatewayTests`, `BalancedGatewayTests`
+    (smart / usage / pace), `RoutingGroupDraftTests`, web `routing-groups.test.tsx`, cli `group.test.ts`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

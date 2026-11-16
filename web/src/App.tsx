@@ -26,6 +26,7 @@ const RequestsPage = lazy(() => import('./pages/RequestsPage').then((m) => ({ de
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const McpPage = lazy(() => import('./pages/McpPage').then((m) => ({ default: m.McpPage })));
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then((m) => ({ default: m.SkillsPage })));
+const RoutingGroupsPage = lazy(() => import('./pages/RoutingGroupsPage').then((m) => ({ default: m.RoutingGroupsPage })));
 const SmartRoutingPage = lazy(() => import('./pages/SmartRoutingPage').then((m) => ({ default: m.SmartRoutingPage })));
 const TokensPage = lazy(() => import('./pages/TokensPage').then((m) => ({ default: m.TokensPage })));
 const TokenDetailPage = lazy(() => import('./pages/TokenDetailPage').then((m) => ({ default: m.TokenDetailPage })));
@@ -87,6 +88,7 @@ function AdminApp() {
               <Route path="privacy" element={<PrivacyPage />} />
               <Route path="privacy/:tab" element={<PrivacyPage />} />
               <Route path="smart-routing" element={<SmartRoutingPage />} />
+              <Route path="routing-groups" element={<RoutingGroupsPage />} />
               <Route path="mcp" element={<McpPage />} />
               <Route path="skills" element={<SkillsPage />} />
               <Route path="settings" element={<SettingsPage />} />
