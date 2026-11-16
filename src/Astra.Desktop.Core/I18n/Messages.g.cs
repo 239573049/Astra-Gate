@@ -2865,6 +2865,134 @@ internal static class Messages
         "nav.mcp",
         "nav.group.resources",
         "nav.skills",
+        "nav.library",
+        "library.subtitle",
+        "library.tab.instruction",
+        "library.tab.agent",
+        "library.tab.command",
+        "library.tab.hook",
+        "library.tab.env",
+        "library.tab.projects",
+        "library.hint.instruction",
+        "library.hint.agent",
+        "library.hint.command",
+        "library.hint.hook",
+        "library.hint.env",
+        "library.add",
+        "library.addTitle.instruction",
+        "library.addTitle.agent",
+        "library.addTitle.command",
+        "library.addTitle.hook",
+        "library.addTitle.env",
+        "library.editTitle",
+        "library.empty.title",
+        "library.empty.instruction",
+        "library.empty.agent",
+        "library.empty.command",
+        "library.empty.hook",
+        "library.empty.env",
+        "library.error.load",
+        "library.localOnly",
+        "library.noTargets",
+        "library.field.name",
+        "library.nameHint.instruction",
+        "library.nameHint.agent",
+        "library.nameHint.command",
+        "library.nameHint.hook",
+        "library.nameHint.env",
+        "library.field.description",
+        "library.field.body.instruction",
+        "library.field.body.agent",
+        "library.field.body.command",
+        "library.field.body.hook",
+        "library.field.body.env",
+        "library.field.event",
+        "library.field.eventHint",
+        "library.field.matcher",
+        "library.field.matcherTools",
+        "library.field.matcherStarts",
+        "library.field.timeout",
+        "library.field.commandArgsHint",
+        "library.field.model",
+        "library.field.modelHint",
+        "library.event.turn-end",
+        "library.event.after-tool",
+        "library.event.before-tool",
+        "library.event.prompt",
+        "library.event.session-start",
+        "library.event.own",
+        "library.matcher.all",
+        "library.matcher.shell",
+        "library.matcher.edit",
+        "library.targets",
+        "library.targetsHint",
+        "library.targetsHintNoProjects",
+        "library.userWide",
+        "library.undetected",
+        "library.enabled",
+        "library.state.applied",
+        "library.state.drifted",
+        "library.state.missing",
+        "library.state.conflict",
+        "library.state.project-missing",
+        "library.state.unsupported",
+        "library.state.pending",
+        "library.state.off",
+        "library.rewrite",
+        "library.rewriteForce",
+        "library.confirm.force.title",
+        "library.confirm.force.detail",
+        "library.confirm.delete.title",
+        "library.confirm.delete.detail",
+        "library.confirm.deleteForce.title",
+        "library.confirm.deleteForce.detail",
+        "library.toast.saved",
+        "library.toast.savedWithProblems",
+        "library.toast.applied",
+        "library.toast.deleted",
+        "library.projects.hint",
+        "library.projects.path",
+        "library.projects.add",
+        "library.projects.added",
+        "library.projects.empty",
+        "library.projects.forget",
+        "library.projects.forget.title",
+        "library.projects.forget.detail",
+        "mcp.local.state.project-missing",
+        "mcp.local.projects",
+        "mcp.local.projectsHint",
+        "skills.tab.market",
+        "skills.market.thirdParty",
+        "skills.market.search",
+        "skills.market.hint",
+        "skills.market.none",
+        "skills.market.error",
+        "skills.market.registry",
+        "skills.market.registryHint",
+        "skills.market.registryReset",
+        "skills.market.install",
+        "skills.market.installed",
+        "skills.market.installs",
+        "skills.updates.check",
+        "skills.updates.found",
+        "skills.updates.none",
+        "skills.updates.behind",
+        "skills.updates.current",
+        "skills.updates.error",
+        "skills.updates.update",
+        "skills.confirm.update.title",
+        "skills.confirm.update.detail",
+        "skills.toast.updated",
+        "skills.router.title",
+        "skills.router.hint",
+        "skills.router.listed",
+        "skills.router.why.shared",
+        "skills.router.why.own",
+        "skills.project.menu",
+        "skills.project.title",
+        "skills.project.hint",
+        "skills.project.none",
+        "skills.badge.project",
         "nav.tools",
         "tools.subtitle",
         "tools.onBehalf.title",
@@ -6215,6 +6343,134 @@ internal static class Messages
             case "nav.mcp": return "MCP 网关";
             case "nav.group.resources": return "资源";
             case "nav.skills": return "Skills";
+            case "nav.library": return "资源库";
+            case "library.subtitle": return "指令、子代理、斜杠命令、钩子和环境变量：只存一份，写进各客户端自己的文件。Astra 只收回自己写下且未被改动的内容。";
+            case "library.tab.instruction": return "指令";
+            case "library.tab.agent": return "子代理";
+            case "library.tab.command": return "斜杠命令";
+            case "library.tab.hook": return "钩子";
+            case "library.tab.env": return "环境变量";
+            case "library.tab.projects": return "项目";
+            case "library.hint.instruction": return "一段文字，写进客户端指令文件（如 CLAUDE.md、AGENTS.md）里 Astra 专属的标记段落；段落之外的内容不会被碰。";
+            case "library.hint.agent": return "一个子代理的定义，按各客户端的格式写成它自己的子代理文件。";
+            case "library.hint.command": return "一条斜杠命令，在客户端里以 /名称 输入；$ARGUMENTS 是命令后输入的全部内容，$1、$2… 是第几个词。";
+            case "library.hint.hook": return "客户端在回合的某个时刻运行的命令；作为条目加进它的 hooks 配置，你自己的钩子保持原样。";
+            case "library.hint.env": return "客户端为它运行的内容设置的环境变量；你已有的同名变量不会被覆盖。";
+            case "library.add": return "添加";
+            case "library.addTitle.instruction": return "添加指令";
+            case "library.addTitle.agent": return "添加子代理";
+            case "library.addTitle.command": return "添加斜杠命令";
+            case "library.addTitle.hook": return "添加钩子";
+            case "library.addTitle.env": return "添加环境变量";
+            case "library.editTitle": return "编辑 {name}";
+            case "library.empty.title": return "还没有内容";
+            case "library.empty.instruction": return "添加一段指令，选择写进哪些客户端。";
+            case "library.empty.agent": return "添加一个子代理，选择写进哪些客户端。";
+            case "library.empty.command": return "添加一条斜杠命令，选择写进哪些客户端。";
+            case "library.empty.hook": return "添加一个钩子，选择写进哪些客户端。";
+            case "library.empty.env": return "添加一个环境变量，选择写进哪些客户端。";
+            case "library.error.load": return "无法加载";
+            case "library.localOnly": return "写入客户端文件只能在本机进行；这里只能查看。";
+            case "library.noTargets": return "还没有选择目标";
+            case "library.field.name": return "名称";
+            case "library.nameHint.instruction": return "小写字母、数字、_ 或 -；用作段落标记。";
+            case "library.nameHint.agent": return "2-50 个小写字母、数字或 -。";
+            case "library.nameHint.command": return "小写字母、数字、_ 或 -；输入时为 /名称。";
+            case "library.nameHint.hook": return "字母、数字、_ 或 -。";
+            case "library.nameHint.env": return "字母、数字和 _，不以数字开头。";
+            case "library.field.description": return "说明";
+            case "library.field.body.instruction": return "指令文本";
+            case "library.field.body.agent": return "提示词";
+            case "library.field.body.command": return "提示词";
+            case "library.field.body.hook": return "命令";
+            case "library.field.body.env": return "值";
+            case "library.field.event": return "事件";
+            case "library.field.eventHint": return "通用事件在每个客户端都对应同一时刻；也可以写某个客户端自己的事件。";
+            case "library.field.matcher": return "范围";
+            case "library.field.matcherTools": return "只在这类工具上运行；留空为所有工具。";
+            case "library.field.matcherStarts": return "只在这些会话开始方式运行，用 | 连接：startup、resume、clear、compact、fork。";
+            case "library.field.timeout": return "超时（秒）";
+            case "library.field.commandArgsHint": return "$1、$2… 在不支持按位置取词的客户端（Gemini CLI、Qwen Code、Droid）上不会写入。";
+            case "library.field.model": return "模型";
+            case "library.field.modelHint": return "只写进 Codex 的角色文件。";
+            case "library.event.turn-end": return "回合结束";
+            case "library.event.after-tool": return "工具运行后";
+            case "library.event.before-tool": return "工具运行前";
+            case "library.event.prompt": return "提交提示词时";
+            case "library.event.session-start": return "会话开始";
+            case "library.event.own": return "客户端自己的事件…";
+            case "library.matcher.all": return "所有工具";
+            case "library.matcher.shell": return "命令行工具";
+            case "library.matcher.edit": return "编辑文件的工具";
+            case "library.targets": return "写入哪里";
+            case "library.targetsHint": return "每个客户端可写进它自己的全局文件，也可写进已添加项目里的文件。";
+            case "library.targetsHintNoProjects": return "每个客户端写进它自己的全局文件；在“项目”页添加项目后还可写进项目目录。";
+            case "library.userWide": return "全局";
+            case "library.undetected": return "未检测到";
+            case "library.enabled": return "启用";
+            case "library.state.applied": return "已写入";
+            case "library.state.drifted": return "已被改动";
+            case "library.state.missing": return "已被移除";
+            case "library.state.conflict": return "冲突";
+            case "library.state.project-missing": return "项目已不存在";
+            case "library.state.unsupported": return "不支持";
+            case "library.state.pending": return "待写入";
+            case "library.state.off": return "已关闭";
+            case "library.rewrite": return "重新写入";
+            case "library.rewriteForce": return "覆盖我的改动";
+            case "library.confirm.force.title": return "覆盖 {name} 里被改动的内容？";
+            case "library.confirm.force.detail": return "你改过的内容会被 Astra 的版本替换（原文件会先备份）。";
+            case "library.confirm.delete.title": return "删除 {name}？";
+            case "library.confirm.delete.detail": return "Astra 写进客户端的内容会被取走；你改过的部分保持原样。";
+            case "library.confirm.deleteForce.title": return "{name} 有被你改动的内容";
+            case "library.confirm.deleteForce.detail": return "仍然删除并移除这些改动吗？（原文件会先备份）";
+            case "library.toast.saved": return "已保存 {name}";
+            case "library.toast.savedWithProblems": return "已保存，但有些目标没有写入，见各目标的状态";
+            case "library.toast.applied": return "已重新写入";
+            case "library.toast.deleted": return "已删除";
+            case "library.projects.hint": return "可以写入指令、子代理、斜杠命令、Skills 和 MCP 服务器的项目目录。目录被删除后只会显示“项目已不存在”，不会报错。";
+            case "library.projects.path": return "项目目录";
+            case "library.projects.add": return "添加项目";
+            case "library.projects.added": return "已添加 {name}";
+            case "library.projects.empty": return "还没有项目";
+            case "library.projects.forget": return "忘记项目";
+            case "library.projects.forget.title": return "忘记项目 {name}？";
+            case "library.projects.forget.detail": return "只是从列表中去掉；项目里仍有 Astra 写入的内容时会被拒绝。";
+            case "mcp.local.state.project-missing": return "项目已不存在";
+            case "mcp.local.projects": return "项目";
+            case "mcp.local.projectsHint": return "同时写进这些项目里各客户端的项目 MCP 文件（{clients}）。";
+            case "skills.tab.market": return "市场";
+            case "skills.market.thirdParty": return "市场来自第三方注册表 {url}；可在“注册表”里改成自己的地址。";
+            case "skills.market.search": return "搜索 Skills（至少 2 个字符）";
+            case "skills.market.hint": return "输入关键字搜索市场";
+            case "skills.market.none": return "没有找到";
+            case "skills.market.error": return "无法访问注册表";
+            case "skills.market.registry": return "注册表";
+            case "skills.market.registryHint": return "提供 GET /api/search?q= 的地址；留空用默认的 {url}。";
+            case "skills.market.registryReset": return "恢复默认";
+            case "skills.market.install": return "安装";
+            case "skills.market.installed": return "已安装";
+            case "skills.market.installs": return "{n} 次安装";
+            case "skills.updates.check": return "检查更新";
+            case "skills.updates.found": return "{n} 个 Skill 有更新";
+            case "skills.updates.none": return "没有可用更新";
+            case "skills.updates.behind": return "有更新";
+            case "skills.updates.current": return "最新";
+            case "skills.updates.error": return "检查失败";
+            case "skills.updates.update": return "更新";
+            case "skills.confirm.update.title": return "更新 {skill}？";
+            case "skills.confirm.update.detail": return "安装后你在这里改过它，更新会替换这些改动（旧版本会先备份）。";
+            case "skills.toast.updated": return "{skill} 已更新";
+            case "skills.router.title": return "Skill 路由";
+            case "skills.router.hint": return "开启后，客户端只多一个 astra-skills：它列出该客户端没有链接的 Skills，需要时再打开对应的 SKILL.md。";
+            case "skills.router.listed": return "列出 {n} 个";
+            case "skills.router.why.shared": return "它读取共享的 Skills 目录，路由会出现在所有读取它的客户端里";
+            case "skills.router.why.own": return "该目录里已有你自己的 astra-skills";
+            case "skills.project.menu": return "放入项目…";
+            case "skills.project.title": return "把 {skill} 放入项目";
+            case "skills.project.hint": return "在项目的 Skills 目录里放一个链接；关闭只会移除这个链接。";
+            case "skills.project.none": return "先在“资源库 → 项目”里添加项目。";
+            case "skills.badge.project": return "项目 {name}";
             case "nav.tools": return "工具";
             case "tools.subtitle": return "Astra 自带的工具：联网搜索（让不会搜索的模型也能搜）、网页读取、图片生成，以及插件提供的工具。通过 MCP 网关的 astra 服务器交给客户端。";
             case "tools.onBehalf.title": return "替模型联网搜索";
@@ -9567,6 +9823,134 @@ internal static class Messages
             case "nav.mcp": return "MCP gateway";
             case "nav.group.resources": return "Resources";
             case "nav.skills": return "Skills";
+            case "nav.library": return "Library";
+            case "library.subtitle": return "Instructions, sub-agents, slash commands, hooks and environment variables: kept once, written into each client's own files. Astra takes back only what it wrote and what is still as it wrote it.";
+            case "library.tab.instruction": return "Instructions";
+            case "library.tab.agent": return "Sub-agents";
+            case "library.tab.command": return "Commands";
+            case "library.tab.hook": return "Hooks";
+            case "library.tab.env": return "Environment";
+            case "library.tab.projects": return "Projects";
+            case "library.hint.instruction": return "A text placed into a client's instruction file (CLAUDE.md, AGENTS.md …) as a marked section of Astra's own; the rest of the file is never touched.";
+            case "library.hint.agent": return "A sub-agent definition, written as each client's own sub-agent file in its format.";
+            case "library.hint.command": return "A slash command typed as /name in the client; $ARGUMENTS is everything typed after it and $1, $2… the first, second… word.";
+            case "library.hint.hook": return "A command a client runs at a point of its turn; added as an entry of its hooks setting, your own hooks stay as they are.";
+            case "library.hint.env": return "A variable a client sets for what it runs; a variable of the same name you already have is never overwritten.";
+            case "library.add": return "Add";
+            case "library.addTitle.instruction": return "Add an instruction";
+            case "library.addTitle.agent": return "Add a sub-agent";
+            case "library.addTitle.command": return "Add a slash command";
+            case "library.addTitle.hook": return "Add a hook";
+            case "library.addTitle.env": return "Add a variable";
+            case "library.editTitle": return "Edit {name}";
+            case "library.empty.title": return "Nothing here yet";
+            case "library.empty.instruction": return "Add an instruction and choose which clients get it.";
+            case "library.empty.agent": return "Add a sub-agent and choose which clients get it.";
+            case "library.empty.command": return "Add a slash command and choose which clients get it.";
+            case "library.empty.hook": return "Add a hook and choose which clients get it.";
+            case "library.empty.env": return "Add a variable and choose which clients get it.";
+            case "library.error.load": return "Could not load";
+            case "library.localOnly": return "Writing client files is only possible on this machine; you can only look here.";
+            case "library.noTargets": return "No target chosen yet";
+            case "library.field.name": return "Name";
+            case "library.nameHint.instruction": return "Lower-case letters, digits, _ or -; used as the section marker.";
+            case "library.nameHint.agent": return "2-50 lower-case letters, digits or -.";
+            case "library.nameHint.command": return "Lower-case letters, digits, _ or -; typed as /name.";
+            case "library.nameHint.hook": return "Letters, digits, _ or -.";
+            case "library.nameHint.env": return "Letters, digits and _, not starting with a digit.";
+            case "library.field.description": return "Description";
+            case "library.field.body.instruction": return "Instruction text";
+            case "library.field.body.agent": return "Prompt";
+            case "library.field.body.command": return "Prompt";
+            case "library.field.body.hook": return "Command";
+            case "library.field.body.env": return "Value";
+            case "library.field.event": return "Event";
+            case "library.field.eventHint": return "A portable event is the same moment in every client; you can also name a client's own event.";
+            case "library.field.matcher": return "Narrow to";
+            case "library.field.matcherTools": return "Runs only for this kind of tool; empty is every tool.";
+            case "library.field.matcherStarts": return "Runs only at these session starts, joined by |: startup, resume, clear, compact, fork.";
+            case "library.field.timeout": return "Timeout (seconds)";
+            case "library.field.commandArgsHint": return "$1, $2… are not written for clients that take no words by place (Gemini CLI, Qwen Code, Droid).";
+            case "library.field.model": return "Model";
+            case "library.field.modelHint": return "Written into Codex's role file only.";
+            case "library.event.turn-end": return "Turn ends";
+            case "library.event.after-tool": return "After a tool runs";
+            case "library.event.before-tool": return "Before a tool runs";
+            case "library.event.prompt": return "When a prompt is submitted";
+            case "library.event.session-start": return "Session starts";
+            case "library.event.own": return "A client's own event…";
+            case "library.matcher.all": return "Every tool";
+            case "library.matcher.shell": return "Shell tools";
+            case "library.matcher.edit": return "File-edit tools";
+            case "library.targets": return "Written into";
+            case "library.targetsHint": return "Each client gets it in its own user-wide file, and in files inside the projects you added.";
+            case "library.targetsHintNoProjects": return "Each client gets it in its own user-wide file; add a project under Projects to write into a project directory too.";
+            case "library.userWide": return "User-wide";
+            case "library.undetected": return "Not detected";
+            case "library.enabled": return "Enabled";
+            case "library.state.applied": return "Written";
+            case "library.state.drifted": return "Changed";
+            case "library.state.missing": return "Removed";
+            case "library.state.conflict": return "Conflict";
+            case "library.state.project-missing": return "Project is gone";
+            case "library.state.unsupported": return "Not supported";
+            case "library.state.pending": return "Not written yet";
+            case "library.state.off": return "Off";
+            case "library.rewrite": return "Write again";
+            case "library.rewriteForce": return "Overwrite my changes";
+            case "library.confirm.force.title": return "Overwrite what was changed in {name}?";
+            case "library.confirm.force.detail": return "What you changed is replaced by Astra's version (the file is backed up first).";
+            case "library.confirm.delete.title": return "Delete {name}?";
+            case "library.confirm.delete.detail": return "What Astra wrote into the clients is taken out; anything you changed stays as it is.";
+            case "library.confirm.deleteForce.title": return "{name} has content you changed";
+            case "library.confirm.deleteForce.detail": return "Delete anyway and remove those changes too? (The file is backed up first.)";
+            case "library.toast.saved": return "Saved {name}";
+            case "library.toast.savedWithProblems": return "Saved, but some targets were not written; see each target's state";
+            case "library.toast.applied": return "Written again";
+            case "library.toast.deleted": return "Deleted";
+            case "library.projects.hint": return "Project directories the library can write instructions, sub-agents, slash commands, Skills and MCP servers into. A directory that was deleted is shown as gone, never as an error.";
+            case "library.projects.path": return "Project directory";
+            case "library.projects.add": return "Add project";
+            case "library.projects.added": return "Added {name}";
+            case "library.projects.empty": return "No projects yet";
+            case "library.projects.forget": return "Forget project";
+            case "library.projects.forget.title": return "Forget project {name}?";
+            case "library.projects.forget.detail": return "It only leaves this list; refused while something Astra wrote is still placed in it.";
+            case "mcp.local.state.project-missing": return "Project is gone";
+            case "mcp.local.projects": return "Projects";
+            case "mcp.local.projectsHint": return "Also write it into each client's project MCP file in these projects ({clients}).";
+            case "skills.tab.market": return "Market";
+            case "skills.market.thirdParty": return "The market comes from a third-party registry, {url}; change it under Registry to use your own.";
+            case "skills.market.search": return "Search Skills (2+ characters)";
+            case "skills.market.hint": return "Type a keyword to search the market";
+            case "skills.market.none": return "Nothing found";
+            case "skills.market.error": return "The registry could not be reached";
+            case "skills.market.registry": return "Registry";
+            case "skills.market.registryHint": return "An address that answers GET /api/search?q=; empty uses the default {url}.";
+            case "skills.market.registryReset": return "Use the default";
+            case "skills.market.install": return "Install";
+            case "skills.market.installed": return "Installed";
+            case "skills.market.installs": return "{n} installs";
+            case "skills.updates.check": return "Check for updates";
+            case "skills.updates.found": return "{n} Skill(s) have an update";
+            case "skills.updates.none": return "Everything is up to date";
+            case "skills.updates.behind": return "Update available";
+            case "skills.updates.current": return "Latest";
+            case "skills.updates.error": return "Check failed";
+            case "skills.updates.update": return "Update";
+            case "skills.confirm.update.title": return "Update {skill}?";
+            case "skills.confirm.update.detail": return "You edited it here since it was installed; updating replaces those edits (the old version is backed up first).";
+            case "skills.toast.updated": return "{skill} updated";
+            case "skills.router.title": return "Skill router";
+            case "skills.router.hint": return "With it on, the client gets one extra Skill, astra-skills, that lists the Skills it has no link for and opens a SKILL.md only when a task fits.";
+            case "skills.router.listed": return "{n} listed";
+            case "skills.router.why.shared": return "It reads the shared Skills directory, so the router would appear for every client that reads it";
+            case "skills.router.why.own": return "The directory already has an astra-skills of your own";
+            case "skills.project.menu": return "Place in a project…";
+            case "skills.project.title": return "Place {skill} in a project";
+            case "skills.project.hint": return "Puts a link in the project's Skills directory; switching it off removes only that link.";
+            case "skills.project.none": return "Add a project under Library → Projects first.";
+            case "skills.badge.project": return "project {name}";
             case "nav.tools": return "Tools";
             case "tools.subtitle": return "Astra's own tools: web search (so a model that cannot search still can), web fetch, image generation and the tools plugins give. Clients get them through the astra server of the MCP gateway.";
             case "tools.onBehalf.title": return "Search on behalf of models";

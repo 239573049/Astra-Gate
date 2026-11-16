@@ -115,6 +115,15 @@ import type {
   SkillOutcome,
   SkillProbeRequest,
   SkillProbeResult,
+  SkillUpdate,
+  SkillMarketResult,
+  SkillMarketSource,
+  SkillRouterClient,
+  ResourceInput,
+  ResourceItem,
+  ResourceLibrary,
+  ResourceSegment,
+  LibraryProject,
   SkillSwitchResult,
 } from './types';
 import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebDavStatus } from './types';
@@ -1910,6 +1919,95 @@ export const useReturnSkills = () =>
   );
 
 export const useDeleteSkill = () => useSkillMutation((name: string) => api<void>('DELETE', `/api/library/skills/${enc(name)}`));
+
+export const useSkillUpdates = () => useMutation({ mutationFn: () => api<SkillUpdate[]>('GET', '/api/library/skills/updates') });
+
+export const useUpdateSkill = () =>
+  useSkillMutation((v: { name: string; force?: boolean }) =>
+    api<SkillOutcome>('POST', `/api/library/skills/${enc(v.name)}/update${v.force ? '?force=true' : ''}`),
+  );
+
+export const useSwitchSkillProject = () =>
+  useSkillMutation((v: { name: string; project: string; dir: string; on: boolean }) =>
+    api<SkillSwitchResult>('PUT', `/api/library/skills/${enc(v.name)}/projects`, { project: v.project, dir: v.dir, on: v.on }),
+  );
+
+export const useSkillMarket = (q: string) =>
+  useQuery({
+    queryKey: ['library-market', q],
+    queryFn: () => api<SkillMarketResult>('GET', `/api/library/skills/market?q=${encodeURIComponent(q)}`),
+    enabled: q.trim().length >= 2,
+    staleTime: 60_000,
+  });
+
+export const useInstallMarketSkill = () =>
+  useSkillMutation((v: { source: string; skillId: string; clients: string[] }) => api<SkillOutcome[]>('POST', '/api/library/skills/market/install', v));
+
+export const useSkillMarketSource = () => useQuery({ queryKey: ['library-market-source'], queryFn: () => api<SkillMarketSource>('GET', '/api/library/skills/market/source') });
+
+export const useSetSkillMarketSource = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => api<SkillMarketSource>('PUT', '/api/library/skills/market/source', { url }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['library-market-source'] }).then(() => qc.invalidateQueries({ queryKey: ['library-market'] })),
+  });
+};
+
+export const useSkillRouter = () => useQuery({ queryKey: ['library-router'], queryFn: () => api<SkillRouterClient[]>('GET', '/api/library/skills/router') });
+
+export const useSetSkillRouter = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { client: string; on: boolean }) => api<SkillRouterClient[]>('PUT', `/api/library/skills/router/${enc(v.client)}`, { on: v.on }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['library-router'] }).then(() => qc.invalidateQueries({ queryKey: SKILLS_KEY })),
+  });
+};
+
+// ---------- the resource library: instructions, sub-agents, commands, hooks, environment variables, projects
+
+const resourceKey = (segment: ResourceSegment) => ['library-resource', segment] as const;
+
+export const useResourceLibrary = (segment: ResourceSegment) =>
+  useQuery({ queryKey: resourceKey(segment), queryFn: () => api<ResourceLibrary>('GET', `/api/library/${segment}`), refetchInterval: 20_000 });
+
+function useResourceMutation<V, R>(segment: ResourceSegment, fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSettled: () => void qc.invalidateQueries({ queryKey: resourceKey(segment) }) });
+}
+
+export const useSaveResource = (segment: ResourceSegment) =>
+  useResourceMutation(segment, (v: { id?: string; body: ResourceInput; force?: boolean }) =>
+    v.id
+      ? api<ResourceItem>('PUT', `/api/library/${segment}/${enc(v.id)}${v.force ? '?force=true' : ''}`, v.body)
+      : api<ResourceItem>('POST', `/api/library/${segment}${v.force ? '?force=true' : ''}`, v.body),
+  );
+
+/** Writes the item into its targets again; `force` overwrites what the user changed. */
+export const useApplyResource = (segment: ResourceSegment) =>
+  useResourceMutation(segment, (v: { id: string; force?: boolean }) =>
+    api<ResourceItem>('POST', `/api/library/${segment}/${enc(v.id)}/apply${v.force ? '?force=true' : ''}`),
+  );
+
+export const useDeleteResource = (segment: ResourceSegment) =>
+  useResourceMutation(segment, (v: { id: string; force?: boolean }) => api<void>('DELETE', `/api/library/${segment}/${enc(v.id)}${v.force ? '?force=true' : ''}`));
+
+export const useLibraryProjects = () => useQuery({ queryKey: ['library-projects'], queryFn: () => api<LibraryProject[]>('GET', '/api/library/projects') });
+
+export const useAddLibraryProject = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { path: string; name?: string }) => api<LibraryProject>('POST', '/api/library/projects', v),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['library-projects'] }).then(() => qc.invalidateQueries({ queryKey: ['library-resource'] })),
+  });
+};
+
+export const useRemoveLibraryProject = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (path: string) => api<void>('DELETE', `/api/library/projects?path=${encodeURIComponent(path)}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['library-projects'] }).then(() => qc.invalidateQueries({ queryKey: ['library-resource'] })),
+  });
+};
 
 export const useSkillCopyAction = () =>
   useSkillMutation((v: { name: string; action: 'take-edits' | 'overwrite-copy' }) =>

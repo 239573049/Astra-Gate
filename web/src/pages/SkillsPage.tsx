@@ -1,8 +1,11 @@
-import { Ellipsis, Plus, Sparkles } from 'lucide-react';
+import { Ellipsis, Plus, RefreshCw, Sparkles } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
-import { useSkillLibrary } from '../api/hooks';
-import type { FoundSkill, Skill, SkillTarget } from '../api/types';
+import { useSkillLibrary, useSkillUpdates } from '../api/hooks';
+import type { FoundSkill, Skill, SkillTarget, SkillUpdate } from '../api/types';
+import { SkillMarketTab } from '../components/skills/SkillMarketTab';
+import { SkillProjectSheet } from '../components/skills/SkillProjectSheet';
+import { SkillRouterPanel } from '../components/skills/SkillRouterPanel';
 import { SkillMigrateSheet } from '../components/skills/SkillMigrateSheet';
 import { SkillInstallSheet } from '../components/skills/SkillInstallSheet';
 import { SkillBadges } from '../components/skills/SkillBadges';
@@ -11,10 +14,10 @@ import { Alert } from '../components/arc/alert/alert';
 import { Checkbox } from '../components/arc/checkbox/checkbox';
 import { Page } from '../components/layout/Page';
 import { Badge, Button, EmptyState, Row, SearchField, Segmented, Spinner } from '../components/ui/controls';
-import { errorText, Menu } from '../components/ui/overlays';
+import { errorText, Menu, useFeedback } from '../components/ui/overlays';
 import { useI18n } from '../i18n';
 
-type Tab = 'managed' | 'found';
+type Tab = 'managed' | 'market' | 'found';
 
 /** Skills (/skills): the library Astra keeps, and which clients see each Skill through a link (plan resources-library). */
 export function SkillsPage() {
@@ -26,6 +29,10 @@ export function SkillsPage() {
   const [migrateOpen, setMigrateOpen] = useState(false);
   const [preselect, setPreselect] = useState<string[] | undefined>(undefined);
   const actions = useSkillActions();
+  const check = useSkillUpdates();
+  const { toast } = useFeedback();
+  const [projectSkill, setProjectSkill] = useState<Skill | null>(null);
+  const updates = useMemo(() => new Map((check.data ?? []).map((u) => [u.name, u] as const)), [check.data]);
 
   const data = library.data;
   const unmanaged = (data?.found ?? []).filter((f) => f.kind === 'unmanaged');
@@ -41,6 +48,20 @@ export function SkillsPage() {
       subtitle={t('skills.subtitle')}
       actions={
         <>
+          <Button
+            variant="glass"
+            icon={<RefreshCw className="size-4" />}
+            loading={check.isPending}
+            disabled={!data || data.canCreate === false || !data.skills.some((s) => s.sourceKind === 'git')}
+            onClick={() =>
+              check.mutate(undefined, {
+                onSuccess: (r) => toast(r.some((u) => u.behind) ? t('skills.updates.found', { n: r.filter((u) => u.behind).length }) : t('skills.updates.none'), 'success'),
+                onError: (e) => toast(errorText(e), 'error'),
+              })
+            }
+          >
+            {t('skills.updates.check')}
+          </Button>
           <Button variant="glass" onClick={() => void actions.returnAll()} disabled={!data || data.skills.length === 0}>
             {t('skills.returnAll')}
           </Button>
@@ -69,6 +90,7 @@ export function SkillsPage() {
             onChange={setTab}
             items={[
               { value: 'managed', label: `${t('skills.tab.managed')} · ${data.skills.length}` },
+              { value: 'market', label: t('skills.tab.market') },
               { value: 'found', label: `${t('skills.tab.found')} · ${data.found.length}` },
             ]}
           />
@@ -94,13 +116,16 @@ export function SkillsPage() {
           ) : (
             <div className="card divide-y divide-[var(--border)]">
               {skills.map((s) => (
-                <SkillRow key={s.name} skill={s} targets={data.targets} actions={actions} />
+                <SkillRow key={s.name} skill={s} targets={data.targets} actions={actions} update={updates.get(s.name)} canPlace={data.canCreate && (data.projectDirs ?? []).length > 0} onPlace={() => setProjectSkill(s)} />
               ))}
             </div>
           )}
           <Legend />
+          <SkillRouterPanel canChange={data.canCreate} />
         </>
       )}
+
+      {data && tab === 'market' && <SkillMarketTab library={data} />}
 
       {data && tab === 'found' && (
         <FoundList
@@ -114,16 +139,32 @@ export function SkillsPage() {
       )}
 
       {data && <SkillInstallSheet open={installOpen} onOpenChange={setInstallOpen} library={data} />}
+      {data && <SkillProjectSheet skill={projectSkill} library={data} onClose={() => setProjectSkill(null)} />}
       {data && <SkillMigrateSheet open={migrateOpen} onOpenChange={setMigrateOpen} names={preselect} libraryDir={data.libraryDir} />}
     </Page>
   );
 }
 
-function SkillRow({ skill, targets, actions }: { skill: Skill; targets: SkillTarget[]; actions: ReturnType<typeof useSkillActions> }) {
+function SkillRow({
+  skill,
+  targets,
+  actions,
+  update,
+  canPlace,
+  onPlace,
+}: {
+  skill: Skill;
+  targets: SkillTarget[];
+  actions: ReturnType<typeof useSkillActions>;
+  update?: SkillUpdate;
+  canPlace: boolean;
+  onPlace: () => void;
+}) {
   const { t } = useI18n();
   const modified = skill.placements.some((p) => p.modified);
   const sourceTone = skill.sourceKind === 'git' ? 'green' : 'neutral';
   const source = skill.sourceJson ? sourceText(skill.sourceJson) : '';
+  const inProjects = skill.placements.filter((p) => p.target === 'project');
   return (
     <Row
       label={
@@ -131,6 +172,9 @@ function SkillRow({ skill, targets, actions }: { skill: Skill; targets: SkillTar
           <span className="font-medium">{skill.name}</span>
           <Badge tone={sourceTone}>{t(`skills.source.${skill.sourceKind}` as const)}</Badge>
           {modified && <Badge tone="orange">{t('skills.copyModified')}</Badge>}
+          {update?.behind && <Badge tone="orange">{t('skills.updates.behind')}</Badge>}
+          {update && !update.behind && !update.error && <Badge tone="green">{t('skills.updates.current')}</Badge>}
+          {update?.error && <Badge tone="red" title={update.error}>{t('skills.updates.error')}</Badge>}
         </span>
       }
       detail={
@@ -138,6 +182,11 @@ function SkillRow({ skill, targets, actions }: { skill: Skill; targets: SkillTar
           <span>{skill.description || '—'}</span>
           {source && <span className="ml-2 text-[var(--text-muted)]">{source}</span>}
           {skill.placements.length === 0 && <span className="ml-2 text-[var(--text-muted)]">· {t('skills.noPlacements')}</span>}
+          {inProjects.map((p) => (
+            <span key={p.path} className="ml-2 text-[var(--text-muted)]" title={p.path}>
+              · {t('skills.badge.project', { name: (p.project ?? '').split(/[\\/]/).filter(Boolean).pop() ?? '' })}{p.projectMissing ? ` (${t('library.state.project-missing')})` : ''}
+            </span>
+          ))}
         </>
       }
       className="items-start py-3"
@@ -148,6 +197,8 @@ function SkillRow({ skill, targets, actions }: { skill: Skill; targets: SkillTar
         iconOnly
         icon={<Ellipsis className="size-4" />}
         items={[
+          ...(update?.behind ? [{ id: 'update', label: t('skills.updates.update'), onSelect: () => void actions.update(skill.name, update.edited) }] : []),
+          ...(canPlace ? [{ id: 'project', label: t('skills.project.menu'), onSelect: onPlace }] : []),
           ...(modified
             ? [
                 { id: 'take', label: t('skills.menu.take'), onSelect: () => void actions.takeEdits(skill.name) },

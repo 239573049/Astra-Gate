@@ -1727,7 +1727,8 @@ export interface ClientMcpEntry {
 }
 
 /** Where an MCP server definition stands in one client; `wanted` = it is meant to be there. */
-export interface LocalMcpPlacement { kind: ClientKind; wanted: boolean; state: ClientMcpState; file: string; error?: string | null }
+/** `project` is the project directory the entry is in (empty for the client's own file); `state` is `project-missing` when that directory is gone. */
+export interface LocalMcpPlacement { kind: ClientKind; wanted: boolean; state: ClientMcpState | 'project-missing'; file: string; error?: string | null; project?: string }
 export type LocalMcpTransport = 'stdio' | 'http';
 /**
  * An MCP server Astra writes into clients' own MCP lists (a local stdio command or a remote address); Astra never runs or proxies it.
@@ -1735,12 +1736,12 @@ export type LocalMcpTransport = 'stdio' | 'http';
  */
 export interface LocalMcpServer {
   id: string; name: string; transport: LocalMcpTransport; command: string; args: string[]; envNames: string[]; url: string; headerNames: string[];
-  enabled: boolean; clients: ClientKind[]; placements: LocalMcpPlacement[];
+  enabled: boolean; clients: ClientKind[]; placements: LocalMcpPlacement[]; projects?: string[] | null;
 }
 /** `env` / `headers`: omitted keeps the stored values on update; an empty object clears them. */
 export interface LocalMcpServerInput {
   name: string; transport?: LocalMcpTransport; command?: string; args?: string[]; env?: Record<string, string>; url?: string;
-  headers?: Record<string, string>; enabled?: boolean; clients?: ClientKind[];
+  headers?: Record<string, string>; enabled?: boolean; clients?: ClientKind[]; projects?: string[];
 }
 /** An entry already in a client's MCP list that Astra did not write. */
 export interface LocalMcpCandidate { kind: ClientKind; name: string; transport: LocalMcpTransport; summary: string; importable: boolean; reason?: string | null; taken: boolean }
@@ -1750,7 +1751,8 @@ export interface LocalMcpImportResult { imported: LocalMcpServer[]; skipped: { k
 export interface SkillTarget { kind: ClientKind; supported: boolean; detected: boolean; dir?: string | null; readsShared: boolean; alsoReads: ClientKind[] }
 /** `own`, `via-shared`, `via-<kind>` (through another client's folder) or `off`. */
 export interface SkillClient { kind: ClientKind; state: string; how?: 'symlink' | 'junction' | 'copy' | null; modified: boolean }
-export interface SkillPlacement { path: string; target: string; how: string; origin: string; modified: boolean; missing: boolean }
+/** `target` is `shared`, a client kind or `project` (a link inside `project`, whose directory may be gone: `projectMissing`). */
+export interface SkillPlacement { path: string; target: string; how: string; origin: string; modified: boolean; missing: boolean; project?: string; projectMissing?: boolean }
 export interface Skill {
   name: string; description: string; sourceKind: 'migrated' | 'local' | 'git'; sourceJson?: string | null; updatedAt: string;
   clients: SkillClient[]; placements: SkillPlacement[];
@@ -1760,7 +1762,8 @@ export interface FoundSkillLocation { path: string; target: string; hash: string
 export interface FoundSkill {
   name: string; kind: 'unmanaged' | 'external'; locations: FoundSkillLocation[]; conflict: boolean; inLibrary: boolean; skillsCli: boolean; linkTarget?: string | null;
 }
-export interface SkillLibrary { targets: SkillTarget[]; skills: Skill[]; found: FoundSkill[]; libraryDir: string; sharedDir: string; canCreate: boolean }
+export interface SkillProjectDir { dir: string; clients: ClientKind[] }
+export interface SkillLibrary { targets: SkillTarget[]; skills: Skill[]; found: FoundSkill[]; libraryDir: string; sharedDir: string; canCreate: boolean; projectDirs?: SkillProjectDir[] | null }
 export interface SkillSwitchResult { done: boolean; needsConfirm: boolean; affected: ClientKind[] }
 export interface SkillOutcome { name: string; ok: boolean; reason?: string | null }
 export interface SkillMigratePreviewItem { name: string; locations: FoundSkillLocation[]; conflict: boolean; inLibrary: boolean; skip?: string | null }
@@ -1769,6 +1772,31 @@ export type SkillCandidateStatus = 'new' | 'exists' | 'differs' | 'invalid';
 export interface SkillCandidate { name: string; description: string; status: SkillCandidateStatus; reason?: string | null }
 export interface SkillProbeResult { probeId: string; skills: SkillCandidate[] }
 export interface SkillProbeRequest { kind: 'git' | 'local'; source: string; ref?: string }
+export interface SkillUpdate { name: string; url: string; ref?: string | null; current?: string | null; latest?: string | null; behind: boolean; edited: boolean; error?: string | null }
+export interface SkillMarketEntry { source: string; skillId: string; name: string; installs: number; installed: boolean }
+export interface SkillMarketResult { skills: SkillMarketEntry[]; registry: string; error?: string | null }
+export interface SkillMarketSource { url: string; default: string }
+/** `why` is `shared` (reads the shared directory) or `own` (the user's own astra-skills entry is there) when the router cannot be turned on. */
+export interface SkillRouterClient { kind: ClientKind; supported: boolean; enabled: boolean; why?: 'shared' | 'own' | null; listed: number; entry?: string | null }
+
+// ---------- the resource library: instructions, sub-agents, commands, hooks, environment variables (migration 0033) ----------
+export type ResourceKind = 'instruction' | 'agent' | 'command' | 'hook' | 'env';
+/** URL segment of each kind: /api/library/<segment>. */
+export type ResourceSegment = 'instructions' | 'agents' | 'commands' | 'hooks' | 'env';
+export interface ResourceTarget { client: ClientKind; project: string }
+/** `applied`, `drifted` (changed since Astra wrote it), `missing`, `conflict`, `project-missing`, `unsupported`, `pending` or `off`. */
+export type ResourceState = 'applied' | 'drifted' | 'missing' | 'conflict' | 'project-missing' | 'unsupported' | 'pending' | 'off';
+export interface ResourceTargetState { client: ClientKind; project: string; state: ResourceState; path?: string | null; message?: string | null }
+export interface ResourceItem {
+  id: string; kind: ResourceKind; name: string; description: string; body: string; event?: string | null; matcher?: string | null; timeout: number;
+  model?: string | null; enabled: boolean; targets: ResourceTargetState[]; updatedAt: string; lastError?: Record<string, string> | null;
+}
+export interface ResourceClient { kind: ClientKind; detected: boolean; path?: string | null; project: boolean }
+export interface LibraryProject { path: string; name: string; exists: boolean }
+export interface ResourceLibrary { kind: ResourceKind; clients: ResourceClient[]; items: ResourceItem[]; projects: LibraryProject[]; canWrite: boolean }
+export interface ResourceInput {
+  name: string; description?: string; body?: string; event?: string; matcher?: string; timeout?: number; model?: string; enabled?: boolean; targets?: ResourceTarget[];
+}
 
 // ---------- plugins v2 (design/plugin-v2): /api/plugins/v2 ----------
 export interface PluginV2Route { path: string; view: string }
