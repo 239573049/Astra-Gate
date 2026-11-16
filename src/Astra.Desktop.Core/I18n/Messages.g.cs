@@ -1447,6 +1447,145 @@ internal static class Messages
         "backup.webdav.upload",
         "backup.webdav.uploadDone",
         "backup.webdav.restore",
+        "settings.tab.backup",
+        "backup.all.sections",
+        "backup.all.localOnly",
+        "backup.all.localOnly.keys",
+        "backup.all.truncated",
+        "backup.all.counts",
+        "backup.all.status.added",
+        "backup.all.status.changed",
+        "backup.all.status.removed",
+        "backup.all.status.unchanged",
+        "backup.all.section.settings",
+        "backup.all.section.prices",
+        "backup.all.section.providers",
+        "backup.all.section.signins",
+        "backup.all.section.tokens",
+        "backup.all.section.routing",
+        "backup.all.section.privacy",
+        "backup.all.section.tools",
+        "backup.all.section.profiles",
+        "backup.all.section.mcp",
+        "backup.all.section.alerts",
+        "backup.all.section.plugins",
+        "backup.all.section.library",
+        "backup.all.section.clients",
+        "backup.all.section.usage",
+        "backup.all.passphrase",
+        "backup.all.passphrase.warn",
+        "backup.all.passphrase.short",
+        "backup.all.export.title",
+        "backup.all.export.hint",
+        "backup.all.export.keys",
+        "backup.all.export.noKeys",
+        "backup.all.export.run",
+        "backup.all.export.done",
+        "backup.all.restore.title",
+        "backup.all.restore.source.file",
+        "backup.all.restore.source.auto",
+        "backup.all.restore.source.remote",
+        "backup.all.restore.choose",
+        "backup.all.restore.pickAuto",
+        "backup.all.restore.remoteHint",
+        "backup.all.restore.passphrase",
+        "backup.all.restore.mode",
+        "backup.all.restore.mode.merge",
+        "backup.all.restore.mode.replace",
+        "backup.all.restore.mode.mergeHint",
+        "backup.all.restore.mode.replaceHint",
+        "backup.all.restore.preview",
+        "backup.all.restore.created",
+        "backup.all.restore.hasKeys",
+        "backup.all.restore.noKeys",
+        "backup.all.restore.legacy",
+        "backup.all.restore.run",
+        "backup.all.restore.replaceConfirm",
+        "backup.all.restore.replaceDetail",
+        "backup.all.restore.done",
+        "backup.all.restore.safety",
+        "backup.all.restore.skipped",
+        "backup.all.restore.errors",
+        "backup.all.auto.title",
+        "backup.all.auto.hint",
+        "backup.all.auto.enabled",
+        "backup.all.auto.every",
+        "backup.all.auto.hours",
+        "backup.all.auto.keep",
+        "backup.all.auto.passphrase",
+        "backup.all.auto.passphraseSet",
+        "backup.all.auto.setPassphrase",
+        "backup.all.auto.clearPassphrase",
+        "backup.all.auto.passphraseHint",
+        "backup.all.auto.run",
+        "backup.all.auto.ran",
+        "backup.all.auto.empty",
+        "backup.all.auto.kind.auto",
+        "backup.all.auto.kind.restore",
+        "backup.all.auto.kind.update",
+        "backup.all.auto.encrypted",
+        "backup.all.auto.restoreFrom",
+        "backup.all.auto.deleteConfirm",
+        "sync.title",
+        "sync.hint",
+        "sync.kind",
+        "sync.kind.folder",
+        "sync.kind.webdav",
+        "sync.kind.s3",
+        "sync.kind.github",
+        "sync.url.webdav",
+        "sync.url.s3",
+        "sync.url.github",
+        "sync.bucket",
+        "sync.region",
+        "sync.accessKey",
+        "sync.username",
+        "sync.secret",
+        "sync.secret.saved",
+        "sync.secret.webdav",
+        "sync.secret.s3",
+        "sync.secret.github",
+        "sync.branch",
+        "sync.github.private",
+        "sync.pathStyle",
+        "sync.folder",
+        "sync.folder.folder",
+        "sync.folder.webdav",
+        "sync.folder.s3",
+        "sync.folder.github",
+        "sync.passphrase",
+        "sync.passphrase.saved",
+        "sync.passphrase.warn",
+        "sync.interval",
+        "sync.minutes",
+        "sync.includeSignins",
+        "sync.includeKeys",
+        "sync.includeKeys.hint",
+        "sync.test",
+        "sync.test.ok",
+        "sync.saved",
+        "sync.now",
+        "sync.preview",
+        "sync.upload",
+        "sync.upload.done",
+        "sync.forget",
+        "sync.forget.confirm",
+        "sync.forget.detail",
+        "sync.enabled",
+        "sync.notConfigured",
+        "sync.run.preview",
+        "sync.run.done",
+        "sync.run.first",
+        "sync.conflicts",
+        "sync.conflicts.clear",
+        "sync.winner.local",
+        "sync.winner.remote",
+        "sync.status.last",
+        "sync.status.never",
+        "sync.status.running",
+        "sync.status.counts",
+        "sync.status.device",
+        "sync.status.error",
         "providers.section.basic",
         "providers.section.auth",
         "providers.section.endpoints",
@@ -5117,6 +5256,145 @@ internal static class Messages
             case "backup.webdav.upload": return "立即备份";
             case "backup.webdav.uploadDone": return "已上传 {count} 个提供商";
             case "backup.webdav.restore": return "从云端恢复";
+            case "settings.tab.backup": return "备份与同步";
+            case "backup.all.sections": return "备份内容";
+            case "backup.all.localOnly": return "备份、恢复和同步只能在运行 Astra 的这台机器上操作。当前是只读视图。";
+            case "backup.all.localOnly.keys": return "包含密钥的备份只能在这台机器上创建。";
+            case "backup.all.truncated": return "仅显示部分条目……";
+            case "backup.all.counts": return "新增 {added} · 变更 {changed} · 删除 {removed} · 未变 {unchanged}";
+            case "backup.all.status.added": return "新增";
+            case "backup.all.status.changed": return "变更";
+            case "backup.all.status.removed": return "删除";
+            case "backup.all.status.unchanged": return "未变";
+            case "backup.all.section.settings": return "设置";
+            case "backup.all.section.prices": return "价格";
+            case "backup.all.section.providers": return "提供商与模型";
+            case "backup.all.section.signins": return "登录凭据（OAuth 账号）";
+            case "backup.all.section.tokens": return "令牌";
+            case "backup.all.section.routing": return "路由与智能路由";
+            case "backup.all.section.privacy": return "隐私防护";
+            case "backup.all.section.tools": return "工具";
+            case "backup.all.section.profiles": return "配置档案";
+            case "backup.all.section.mcp": return "MCP 服务器";
+            case "backup.all.section.alerts": return "告警与 Webhook";
+            case "backup.all.section.plugins": return "插件";
+            case "backup.all.section.library": return "资源库（Skills）";
+            case "backup.all.section.clients": return "客户端绑定";
+            case "backup.all.section.usage": return "用量记录（可选）";
+            case "backup.all.passphrase": return "口令（至少 8 个字符）";
+            case "backup.all.passphrase.warn": return "口令无法找回。忘记口令后，加密的备份和其中的密钥将永远无法读取。";
+            case "backup.all.passphrase.short": return "口令至少需要 {min} 个字符。";
+            case "backup.all.export.title": return "备份";
+            case "backup.all.export.hint": return "把整个 Astra 配置导出成一个文件。";
+            case "backup.all.export.keys": return "包含密钥（用口令加密）";
+            case "backup.all.export.noKeys": return "不设口令时，文件里不含任何密钥或凭据。";
+            case "backup.all.export.run": return "导出备份";
+            case "backup.all.export.done": return "已导出 {count} 项";
+            case "backup.all.restore.title": return "恢复";
+            case "backup.all.restore.source.file": return "文件";
+            case "backup.all.restore.source.auto": return "本地自动备份";
+            case "backup.all.restore.source.remote": return "同步目标上的最新备份";
+            case "backup.all.restore.choose": return "选择备份文件";
+            case "backup.all.restore.pickAuto": return "选择一个自动备份";
+            case "backup.all.restore.remoteHint": return "读取同步目标上最近一次手动上传的备份。";
+            case "backup.all.restore.passphrase": return "口令（文件已加密时填写）";
+            case "backup.all.restore.mode": return "方式";
+            case "backup.all.restore.mode.merge": return "合并";
+            case "backup.all.restore.mode.replace": return "替换";
+            case "backup.all.restore.mode.mergeHint": return "合并：添加和更新备份中的内容，保留其余现有内容。";
+            case "backup.all.restore.mode.replaceHint": return "替换：让所选部分与备份完全一致，备份里没有的现有内容会被删除。";
+            case "backup.all.restore.preview": return "预览";
+            case "backup.all.restore.created": return "创建于 {time}，Astra {version}";
+            case "backup.all.restore.hasKeys": return "含密钥";
+            case "backup.all.restore.noKeys": return "不含密钥";
+            case "backup.all.restore.legacy": return "这是只含提供商的旧版备份，恢复时会按旧方式导入提供商。";
+            case "backup.all.restore.run": return "恢复";
+            case "backup.all.restore.replaceConfirm": return "用备份替换当前内容？";
+            case "backup.all.restore.replaceDetail": return "所选部分中备份里没有的内容会被删除。恢复前会自动保存一份当前配置的安全备份。";
+            case "backup.all.restore.done": return "已恢复：写入 {written} 项，删除 {removed} 项";
+            case "backup.all.restore.safety": return "恢复前的安全备份：{name}";
+            case "backup.all.restore.skipped": return "已跳过 {count} 项";
+            case "backup.all.restore.errors": return "{count} 项出错";
+            case "backup.all.auto.title": return "自动备份";
+            case "backup.all.auto.hint": return "备份保存在 {dir}。";
+            case "backup.all.auto.enabled": return "启用自动备份";
+            case "backup.all.auto.every": return "每";
+            case "backup.all.auto.hours": return "小时";
+            case "backup.all.auto.keep": return "保留份数";
+            case "backup.all.auto.passphrase": return "加密口令（至少 8 个字符）";
+            case "backup.all.auto.passphraseSet": return "口令已保存";
+            case "backup.all.auto.setPassphrase": return "设置口令";
+            case "backup.all.auto.clearPassphrase": return "清除口令";
+            case "backup.all.auto.passphraseHint": return "设置口令后，自动备份会加密并包含密钥；不设则文件不含密钥。口令无法找回。";
+            case "backup.all.auto.run": return "立即备份";
+            case "backup.all.auto.ran": return "备份完成";
+            case "backup.all.auto.empty": return "还没有自动备份。";
+            case "backup.all.auto.kind.auto": return "自动";
+            case "backup.all.auto.kind.restore": return "恢复前";
+            case "backup.all.auto.kind.update": return "更新前";
+            case "backup.all.auto.encrypted": return "已加密";
+            case "backup.all.auto.restoreFrom": return "从此恢复";
+            case "backup.all.auto.deleteConfirm": return "删除备份 {name}？";
+            case "sync.title": return "多机同步";
+            case "sync.hint": return "通过文件夹、WebDAV、S3 或私有 GitHub 仓库，让多台机器保持一致。同步内容用口令加密。";
+            case "sync.kind": return "同步目标";
+            case "sync.kind.folder": return "本地文件夹";
+            case "sync.kind.webdav": return "WebDAV";
+            case "sync.kind.s3": return "S3";
+            case "sync.kind.github": return "GitHub 仓库";
+            case "sync.url.webdav": return "WebDAV 地址";
+            case "sync.url.s3": return "S3 端点地址（可留空使用 AWS）";
+            case "sync.url.github": return "仓库（owner/repo）";
+            case "sync.bucket": return "存储桶";
+            case "sync.region": return "区域";
+            case "sync.accessKey": return "Access Key ID";
+            case "sync.username": return "用户名";
+            case "sync.secret": return "密钥";
+            case "sync.secret.saved": return "已保存（留空则不变）";
+            case "sync.secret.webdav": return "密码";
+            case "sync.secret.s3": return "Secret Access Key";
+            case "sync.secret.github": return "个人访问令牌";
+            case "sync.branch": return "分支（可留空）";
+            case "sync.github.private": return "仓库必须是私有的。";
+            case "sync.pathStyle": return "使用路径风格地址";
+            case "sync.folder": return "目录前缀";
+            case "sync.folder.folder": return "文件夹路径";
+            case "sync.folder.webdav": return "目录前缀（可留空）";
+            case "sync.folder.s3": return "对象前缀（可留空）";
+            case "sync.folder.github": return "仓库内目录（可留空）";
+            case "sync.passphrase": return "同步口令（至少 8 个字符）";
+            case "sync.passphrase.saved": return "口令已保存（留空则不变）";
+            case "sync.passphrase.warn": return "每台机器必须使用相同的口令，且口令无法找回。";
+            case "sync.interval": return "同步间隔";
+            case "sync.minutes": return "分钟";
+            case "sync.includeSignins": return "同步登录凭据（OAuth 账号）";
+            case "sync.includeKeys": return "同步密钥";
+            case "sync.includeKeys.hint": return "开启后，API 密钥也会（加密后）出现在同步目标上。";
+            case "sync.test": return "测试连接";
+            case "sync.test.ok": return "连接正常";
+            case "sync.saved": return "已保存";
+            case "sync.now": return "立即同步";
+            case "sync.preview": return "预览同步";
+            case "sync.upload": return "上传备份到目标";
+            case "sync.upload.done": return "已上传：{name}";
+            case "sync.forget": return "忘记同步";
+            case "sync.forget.confirm": return "清除同步设置？";
+            case "sync.forget.detail": return "目标、口令和同步记录都会从这台机器上删除，目标上的文件不受影响。";
+            case "sync.enabled": return "启用同步";
+            case "sync.notConfigured": return "先保存同步目标";
+            case "sync.run.preview": return "预览：将推送 {pushed} 项，拉取 {pulled} 项";
+            case "sync.run.done": return "已推送 {pushed} 项，拉取 {pulled} 项";
+            case "sync.run.first": return "这是首次同步。";
+            case "sync.conflicts": return "{count} 个冲突";
+            case "sync.conflicts.clear": return "清除";
+            case "sync.winner.local": return "保留本地";
+            case "sync.winner.remote": return "保留远端";
+            case "sync.status.last": return "上次同步";
+            case "sync.status.never": return "从未";
+            case "sync.status.running": return "同步中";
+            case "sync.status.counts": return "推送 {pushed} · 拉取 {pulled} · 跟踪 {tracked} 项";
+            case "sync.status.device": return "设备 ID";
+            case "sync.status.error": return "上次同步出错";
             case "providers.section.basic": return "基本信息";
             case "providers.section.auth": return "认证";
             case "providers.section.endpoints": return "接口";
@@ -8789,6 +9067,145 @@ internal static class Messages
             case "backup.webdav.upload": return "Back up now";
             case "backup.webdav.uploadDone": return "Uploaded {count} providers";
             case "backup.webdav.restore": return "Restore from the cloud";
+            case "settings.tab.backup": return "Backup & sync";
+            case "backup.all.sections": return "What to back up";
+            case "backup.all.localOnly": return "Backup, restore and sync can only be used on the machine running Astra. This is a read-only view.";
+            case "backup.all.localOnly.keys": return "A backup with keys can only be made on this machine.";
+            case "backup.all.truncated": return "Only some items are shown…";
+            case "backup.all.counts": return "{added} added · {changed} changed · {removed} removed · {unchanged} unchanged";
+            case "backup.all.status.added": return "Added";
+            case "backup.all.status.changed": return "Changed";
+            case "backup.all.status.removed": return "Removed";
+            case "backup.all.status.unchanged": return "Unchanged";
+            case "backup.all.section.settings": return "Settings";
+            case "backup.all.section.prices": return "Prices";
+            case "backup.all.section.providers": return "Providers and models";
+            case "backup.all.section.signins": return "Sign-ins (OAuth accounts)";
+            case "backup.all.section.tokens": return "Tokens";
+            case "backup.all.section.routing": return "Routing and smart routing";
+            case "backup.all.section.privacy": return "Privacy guard";
+            case "backup.all.section.tools": return "Tools";
+            case "backup.all.section.profiles": return "Profiles";
+            case "backup.all.section.mcp": return "MCP servers";
+            case "backup.all.section.alerts": return "Alerts and webhooks";
+            case "backup.all.section.plugins": return "Plugins";
+            case "backup.all.section.library": return "Library (Skills)";
+            case "backup.all.section.clients": return "Client bindings";
+            case "backup.all.section.usage": return "Usage history (optional)";
+            case "backup.all.passphrase": return "Passphrase (at least 8 characters)";
+            case "backup.all.passphrase.warn": return "The passphrase cannot be recovered. If you forget it, the encrypted backup and the keys in it can never be read.";
+            case "backup.all.passphrase.short": return "The passphrase needs at least {min} characters.";
+            case "backup.all.export.title": return "Back up";
+            case "backup.all.export.hint": return "Export the whole Astra setup as one file.";
+            case "backup.all.export.keys": return "Include keys (encrypted with a passphrase)";
+            case "backup.all.export.noKeys": return "Without a passphrase the file holds no keys or credentials at all.";
+            case "backup.all.export.run": return "Export backup";
+            case "backup.all.export.done": return "Exported {count} items";
+            case "backup.all.restore.title": return "Restore";
+            case "backup.all.restore.source.file": return "File";
+            case "backup.all.restore.source.auto": return "Local automatic backup";
+            case "backup.all.restore.source.remote": return "Latest backup on the sync target";
+            case "backup.all.restore.choose": return "Choose a backup file";
+            case "backup.all.restore.pickAuto": return "Choose an automatic backup";
+            case "backup.all.restore.remoteHint": return "Reads the backup most recently uploaded to the sync target by hand.";
+            case "backup.all.restore.passphrase": return "Passphrase (if the file is encrypted)";
+            case "backup.all.restore.mode": return "Mode";
+            case "backup.all.restore.mode.merge": return "Merge";
+            case "backup.all.restore.mode.replace": return "Replace";
+            case "backup.all.restore.mode.mergeHint": return "Merge: add and update what the backup holds, keep everything else.";
+            case "backup.all.restore.mode.replaceHint": return "Replace: make the chosen sections match the backup exactly; anything not in it is deleted.";
+            case "backup.all.restore.preview": return "Preview";
+            case "backup.all.restore.created": return "Created {time}, Astra {version}";
+            case "backup.all.restore.hasKeys": return "Has keys";
+            case "backup.all.restore.noKeys": return "No keys";
+            case "backup.all.restore.legacy": return "This is an older providers-only backup; restoring imports its providers the old way.";
+            case "backup.all.restore.run": return "Restore";
+            case "backup.all.restore.replaceConfirm": return "Replace what you have with this backup?";
+            case "backup.all.restore.replaceDetail": return "In the chosen sections, anything the backup does not hold is deleted. A safety copy of the current setup is saved first.";
+            case "backup.all.restore.done": return "Restored: {written} written, {removed} removed";
+            case "backup.all.restore.safety": return "Safety backup of the previous setup: {name}";
+            case "backup.all.restore.skipped": return "{count} skipped";
+            case "backup.all.restore.errors": return "{count} errors";
+            case "backup.all.auto.title": return "Automatic backups";
+            case "backup.all.auto.hint": return "Backups are kept in {dir}.";
+            case "backup.all.auto.enabled": return "Back up automatically";
+            case "backup.all.auto.every": return "Every";
+            case "backup.all.auto.hours": return "hours";
+            case "backup.all.auto.keep": return "Keep";
+            case "backup.all.auto.passphrase": return "Encryption passphrase (at least 8 characters)";
+            case "backup.all.auto.passphraseSet": return "Passphrase saved";
+            case "backup.all.auto.setPassphrase": return "Set passphrase";
+            case "backup.all.auto.clearPassphrase": return "Clear passphrase";
+            case "backup.all.auto.passphraseHint": return "With a passphrase, automatic backups are encrypted and include keys; without one they hold no keys. The passphrase cannot be recovered.";
+            case "backup.all.auto.run": return "Back up now";
+            case "backup.all.auto.ran": return "Backup made";
+            case "backup.all.auto.empty": return "No automatic backups yet.";
+            case "backup.all.auto.kind.auto": return "Automatic";
+            case "backup.all.auto.kind.restore": return "Before restore";
+            case "backup.all.auto.kind.update": return "Before update";
+            case "backup.all.auto.encrypted": return "Encrypted";
+            case "backup.all.auto.restoreFrom": return "Restore from this";
+            case "backup.all.auto.deleteConfirm": return "Delete backup {name}?";
+            case "sync.title": return "Multi-machine sync";
+            case "sync.hint": return "Keep several machines in step through a folder, WebDAV, S3 or a private GitHub repository. What is synced is encrypted with the passphrase.";
+            case "sync.kind": return "Sync target";
+            case "sync.kind.folder": return "Local folder";
+            case "sync.kind.webdav": return "WebDAV";
+            case "sync.kind.s3": return "S3";
+            case "sync.kind.github": return "GitHub repository";
+            case "sync.url.webdav": return "WebDAV address";
+            case "sync.url.s3": return "S3 endpoint URL (empty for AWS)";
+            case "sync.url.github": return "Repository (owner/repo)";
+            case "sync.bucket": return "Bucket";
+            case "sync.region": return "Region";
+            case "sync.accessKey": return "Access key ID";
+            case "sync.username": return "Username";
+            case "sync.secret": return "Secret";
+            case "sync.secret.saved": return "Saved (leave empty to keep)";
+            case "sync.secret.webdav": return "Password";
+            case "sync.secret.s3": return "Secret access key";
+            case "sync.secret.github": return "Personal access token";
+            case "sync.branch": return "Branch (optional)";
+            case "sync.github.private": return "The repository must be private.";
+            case "sync.pathStyle": return "Use path-style addressing";
+            case "sync.folder": return "Folder prefix";
+            case "sync.folder.folder": return "Folder path";
+            case "sync.folder.webdav": return "Folder prefix (optional)";
+            case "sync.folder.s3": return "Object prefix (optional)";
+            case "sync.folder.github": return "Folder in the repository (optional)";
+            case "sync.passphrase": return "Sync passphrase (at least 8 characters)";
+            case "sync.passphrase.saved": return "Passphrase saved (leave empty to keep)";
+            case "sync.passphrase.warn": return "Every machine must use the same passphrase, and it cannot be recovered.";
+            case "sync.interval": return "Sync every";
+            case "sync.minutes": return "minutes";
+            case "sync.includeSignins": return "Sync sign-ins (OAuth accounts)";
+            case "sync.includeKeys": return "Sync keys";
+            case "sync.includeKeys.hint": return "When on, API keys also appear (encrypted) on the sync target.";
+            case "sync.test": return "Test connection";
+            case "sync.test.ok": return "Connection works";
+            case "sync.saved": return "Saved";
+            case "sync.now": return "Sync now";
+            case "sync.preview": return "Preview sync";
+            case "sync.upload": return "Upload a backup to the target";
+            case "sync.upload.done": return "Uploaded: {name}";
+            case "sync.forget": return "Forget sync";
+            case "sync.forget.confirm": return "Clear the sync settings?";
+            case "sync.forget.detail": return "The target, passphrase and sync records are removed from this machine; the files on the target stay.";
+            case "sync.enabled": return "Sync enabled";
+            case "sync.notConfigured": return "Save a sync target first";
+            case "sync.run.preview": return "Preview: would push {pushed}, pull {pulled}";
+            case "sync.run.done": return "Pushed {pushed}, pulled {pulled}";
+            case "sync.run.first": return "This is the first sync.";
+            case "sync.conflicts": return "{count} conflicts";
+            case "sync.conflicts.clear": return "Clear";
+            case "sync.winner.local": return "Kept local";
+            case "sync.winner.remote": return "Kept remote";
+            case "sync.status.last": return "Last sync";
+            case "sync.status.never": return "never";
+            case "sync.status.running": return "running";
+            case "sync.status.counts": return "Pushed {pushed} · pulled {pulled} · {tracked} tracked";
+            case "sync.status.device": return "Device ID";
+            case "sync.status.error": return "Last sync failed";
             case "providers.section.basic": return "Basics";
             case "providers.section.auth": return "Authentication";
             case "providers.section.endpoints": return "Endpoints";

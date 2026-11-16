@@ -8,7 +8,7 @@ namespace Astra.Desktop.Pages.Settings;
 /// The categories of the Settings page's side navigation (the URL segment is the lower-case name). The web keeps General as one long tab;
 /// the desktop splits it into General, Gateway, Models, Network, Usage, Logging and About so each page is short (compact layout).
 /// </summary>
-public enum SettingsTab { General, Gateway, Models, Network, Usage, Logging, Notifications, Remote, Tray, About }
+public enum SettingsTab { General, Gateway, Models, Network, Usage, Logging, Notifications, Remote, Backup, Tray, About }
 
 /// <summary>
 /// Settings (web/src/pages/SettingsPage.tsx): the web's General tab split into categories, Notifications and Remote access, plus Tray panel
@@ -67,6 +67,7 @@ public sealed class SettingsPageViewModel : PageViewModel
         "about" => SettingsTab.About,
         "notifications" => SettingsTab.Notifications,
         "remote" => SettingsTab.Remote,
+        "backup" => SettingsTab.Backup,
         "tray" when trayAvailable => SettingsTab.Tray,
         _ => SettingsTab.General,
     };
@@ -82,6 +83,7 @@ public sealed class SettingsPageViewModel : PageViewModel
         SettingsTab.About => "about",
         SettingsTab.Notifications => "notifications",
         SettingsTab.Remote => "remote",
+        SettingsTab.Backup => "backup",
         SettingsTab.Tray => "tray",
         _ => null,
     };

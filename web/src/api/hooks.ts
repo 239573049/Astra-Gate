@@ -127,6 +127,10 @@ import type {
   SkillSwitchResult,
 } from './types';
 import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebDavStatus } from './types';
+import type {
+  AutoBackup, AutoBackupInput, FullBackupExport, FullBackupExportInput, FullBackupInfo, FullBackupPlan, FullBackupRestore, FullBackupSource,
+  RemoteBackupInput, SyncConfigInput, SyncRun, SyncStatus,
+} from './types';
 import type { ClaudeBridgeLogin, ClaudeBridgeSettings, ClaudeBridgeStatus, ClaudeSignIn, WarmupAccount, WarmupRun, WarmupSettings } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
@@ -2323,3 +2327,88 @@ export function useTestSearchApi() {
 /** What each key of a Tavily API has used of its limit (the server asks Tavily; kept two minutes). */
 export const useSearchQuota = (vendor: string, enabled: boolean) =>
   useQuery({ queryKey: ['tools-quota', vendor], queryFn: () => api<Record<string, SearchKeyQuota>>('GET', `/api/tools/search/apis/${enc(vendor)}/quota`), enabled, staleTime: 60_000 });
+
+// ---------- whole-installation backup / restore / sync (all but the reads are for this machine only) ----------
+
+const fullBackupKeys = { info: ['full-backup', 'info'], auto: ['full-backup', 'auto'], sync: ['sync', 'status'] } as const;
+
+export const useFullBackupInfo = () => useQuery({ queryKey: fullBackupKeys.info, queryFn: () => api<FullBackupInfo>('GET', '/api/backup/info') });
+export const useAutoBackup = (enabled = true) =>
+  useQuery({ queryKey: fullBackupKeys.auto, queryFn: () => api<AutoBackup>('GET', '/api/backup/auto'), enabled });
+/** Polls every ~5 s while sync is enabled (react-query pauses it in a hidden tab). */
+export const useSyncStatus = () =>
+  useQuery({
+    queryKey: fullBackupKeys.sync,
+    queryFn: () => api<SyncStatus>('GET', '/api/sync/status'),
+    refetchInterval: (q) => (q.state.data?.enabled ? 5000 : false),
+  });
+
+export const useExportFullBackup = () =>
+  useMutation({ mutationFn: (v: FullBackupExportInput) => api<FullBackupExport>('POST', '/api/backup/export', v) });
+export const usePreviewFullBackup = () =>
+  useMutation({ mutationFn: (v: FullBackupSource) => api<FullBackupPlan>('POST', '/api/backup/preview', v) });
+export function useRestoreFullBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: FullBackupSource) => api<FullBackupRestore>('POST', '/api/backup/restore', v),
+    // a restore can change anything the console shows
+    onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
+export function useSaveAutoBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: AutoBackupInput) => api<AutoBackup>('PUT', '/api/backup/auto', v),
+    onSuccess: (d) => qc.setQueryData(fullBackupKeys.auto, d),
+  });
+}
+export function useRunAutoBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<AutoBackup>('POST', '/api/backup/auto/run'),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: fullBackupKeys.auto }),
+  });
+}
+export function useDeleteAutoBackup() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api<AutoBackup>('DELETE', `/api/backup/auto/${encodeURIComponent(name)}`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: fullBackupKeys.auto }),
+  });
+}
+
+export function useSaveSyncConfig() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: SyncConfigInput) => api<SyncStatus>('PUT', '/api/sync/config', v),
+    onSuccess: (d) => qc.setQueryData(fullBackupKeys.sync, d),
+  });
+}
+export function useForgetSync() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<SyncStatus>('DELETE', '/api/sync/config'),
+    onSuccess: (d) => qc.setQueryData(fullBackupKeys.sync, d),
+  });
+}
+export const useTestSync = () => useMutation({ mutationFn: () => api<{ ok: boolean }>('POST', '/api/sync/test') });
+export function useSyncNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (dryRun: boolean) => api<SyncRun>('POST', `/api/sync/now${dryRun ? '?dryRun=true' : ''}`),
+    onSuccess: (_d, dryRun) => {
+      void qc.invalidateQueries({ queryKey: fullBackupKeys.sync });
+      if (!dryRun) void qc.invalidateQueries();
+    },
+  });
+}
+export function useClearSyncConflicts() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<SyncStatus>('DELETE', '/api/sync/conflicts'),
+    onSuccess: (d) => qc.setQueryData(fullBackupKeys.sync, d),
+  });
+}
+export const useUploadRemoteBackup = () =>
+  useMutation({ mutationFn: (v: RemoteBackupInput) => api<{ name: string }>('POST', '/api/sync/backup', v) });

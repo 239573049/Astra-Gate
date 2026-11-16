@@ -947,6 +947,34 @@ runtime needed on the target).
     desktop `LibraryApiTests`. Not done on purpose: magpie's MCP router (it runs stdio servers locally — linked update 25 says Astra never does), cross-agent
     memory, session handoff, the Claude plugins marketplace, RTK / billion-context / Pi extensions.
 
+38. **Whole-installation backup, restore and multi-machine sync** (magpie parity #10, `internal/backup` / `internal/davsync` ported in part, MIT; memory `backup-and-sync`,
+    `.agents/codemap/flows/backup-and-sync.md`): the unit is a **document** (`BackupDoc`, `Astra.Data/Backup`): a row of a config table with its child rows inside (a provider with
+    its models and API-key list), or one `settings` value, or a client / Skill / the plugin sign-in file. `BackupCatalog` (`Astra.Data/Backup/BackupCatalog.cs`) classifies **every**
+    table (`TableClass`: config / usage / data / machine-local / internal) and every `settings` key (a section, or `null` = this machine's own); a config table is carried by a
+    `TableSpec` (`SELECT *` minus its `Skip` columns, so a column a migration adds travels by itself) or a special handler (`HandledSpecially`: settings, clients, library skills).
+    **`BackupCatalogTests` fails when a migration adds a table, or a source file names a `settings` key (`*StorageKey` / `*SettingsKey` / `*StateKey` / …), that is not classified** — so a table
+    another change adds is decided at merge time, not silently skipped. When you add one: classify it, add its `TableSpec` (secret columns = every `*_enc` / `*_protected`, the guard checks),
+    seed a row for it in `BackupRestoreApiTests.SeedAsync`, and keep machine-local fields out (the proxy / tunnel / listen / paths / retention fields of the `app` document are
+    `BackupCatalog.AppMachineFields`; paths of a machine — library projects, placements, client file ledger — are machine-local tables). **Secrets are DataProtection-bound to this machine**: they are
+    unprotected into `$secrets` only with keys requested and only inside an AES-256-GCM envelope (`BackupEnvelope`: PBKDF2-SHA256 600k, magpie's envelope and AAD, format `astra-backup`;
+    the test opens a real magpie envelope), and protected again by whoever restores; an unencrypted file (`kdf: none`) cannot hold keys (`Seal` refuses) and omits every secret and the columns derived from one
+    (a token's hash / prefix). Restore (`BackupService.PlanAsync` + `RestoreService`) previews per section (added / changed / removed / unchanged), merges or replaces (clients are never removed),
+    keeps the current setup first (`backups/auto/astra-*-restore.astra-backup` + `backups/db/pre-restore-*.db` by `VACUUM INTO`) and applies the database part in one transaction
+    (`BackupStore.ApplyAsync`: an FK to a row that is not here is cleared or the row skipped; `plugins` rows only update installed plugins). **Never write client files or links directly**: clients go
+    through `ClientService.ApplyProfileAsync` (the enable flow, linked update 6; `enabled` is this machine's in sync), Skills through the `SkillLibrary` engine (`LibraryService.Engine`, linked update 26),
+    `plugin-auth.json` is merged key by key. Old `astra-providers` files still restore (`BackupAccess` hands them to `ProviderBackupService`). Automatic backups (`AutoBackupService` / `AutoBackupWorker`,
+    settings key `backup_auto`): daily, keep 10 per kind (auto / restore / update), `AstraPaths.AutoBackupsDir` = `~/.astra/backups/auto` (a path of linked update 5: C#, `cli/src/lib/paths.ts`, `desktop/src/shared/paths.ts`);
+    without a passphrase a file has no secret; a changed Astra version earns an `update` backup (the database itself is copied before migrations by `MigrationRunner`, as before). **Sync** (`SyncService`,
+    `SyncMerger`, `SyncWorker`, keys `backup_sync` / `backup_sync_state`, no migration): every few minutes each machine reads one sealed file (`astra-sync.astra-backup`) from a target (`SyncTargets`: folder,
+    WebDAV, S3 with `S3Signer` — hand-written SigV4 over `AwsSigV4.SigningKey`, vectors from AWS —, private GitHub repo through the contents API), merges per document three-way against the last agreed state
+    (`SyncMerger`: one side changed -> it wins; both -> the later change wins, a local change counting from when it was first seen, tie -> larger device id; deletes are tombstones; a document the remote lost
+    without a tombstone is put back), pushes with a conditional write (ETag / blob sha, retried up to 3 times), then applies what others changed. Same passphrase and the same "include keys" on every machine;
+    sign-ins sync only when asked. Conflicts are reported (`SyncState.Conflicts`). The merge knows nothing of I/O, so `SyncMergerTests` runs two devices against one remote. Admin API `/api/backup/*` and
+    `/api/sync/*` (`BackupEndpoints`; everything that writes, reads a file or names an address is **local-origin only**; a keyless export may come from anywhere); DTOs `Astra.Api.Contracts/BackupDtos.cs`
+    (+ `ContractsJsonContext.Backup.cs`; the settings documents are in `ServerJsonContext.Backup.cs`). Mirrors: `web/src/api` + `types.ts`, the web Settings "Backup & sync" components, zh/en `backup.*` / `sync.*` keys
+    (+ `gen-desktop-i18n`), `astra backup …` / `astra sync …` (`cli`), the Avalonia settings group, and the website's `content/docs/console/settings.mdx` (+ a `backup.mdx` page, linked update 14). Tests:
+    `BackupCatalogTests` (Data), `BackupFormatTests`, `SyncMergerTests`, `SyncTargetsTests`, `BackupRestoreApiTests`, `SyncApiTests`, `JsonRegistrationTests`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
@@ -1064,6 +1092,7 @@ they disagree, trust the code and fix the page). Read the matching page before y
 - installing or running a plugin → `.agents/codemap/flows/plugin-install-and-run.md`
 - the MCP gateway (`/mcp`, its upstream servers or their OAuth) → `.agents/codemap/flows/mcp-gateway.md`
 - Skills, the library or their links into a client → `.agents/codemap/flows/skill-library.md`
+- a whole-installation backup, a restore, automatic backups or multi-machine sync → `.agents/codemap/flows/backup-and-sync.md`
 - the Claude subscription through the local `claude` program, or the window warm-up → `.agents/codemap/flows/claude-bridge.md`
 - a release, the update feed or the desktop/CLI updater → `.agents/codemap/flows/release-and-update.md`
 - unsure where new code belongs → `.agents/codemap/architecture.md` (ownership table)
