@@ -27,3 +27,6 @@ docker-bin/
 
 # Visual-regression captures (scripts/visual, tests/Astra.Desktop.UiTests)
 artifacts/
+
+# client-config golden homes hold fake executables under bin/
+!tests/fixtures/client-config/**/bin/
