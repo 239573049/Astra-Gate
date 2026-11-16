@@ -4,6 +4,31 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [Unreleased]
+
+### 新增
+
+- **路由分组**：在「路由分组」页（或 `astra group add`）把多个提供商的模型合成一个虚拟模型 `group/名称`，客户端像选普通模型一样选它。支持智能、按顺序、轮换、最少使用、按节奏、按权重六种方式，可以嵌套；一个成员失败自动换下一个，对话在提示缓存还有价值时留在同一个成员上。智能路由的档位也可以指向分组。数据库迁移 0027。
+- **按剩余额度选账号**：订阅账号、插件账号和 API Key 列表的切换方式新增「智能」「按节奏」「最少使用」，按各账号剩余额度和重置时间挑选，用量超过 90% / 98% 的账号自动排到后面；没有额度数据时按原来的顺序，不会报错。
+- **一个提供商多个 API Key**：在提供商页的 Key 列表里添加、排序、启用 / 停用 Key，可为每个 Key 设置权重、限定协议、独立代理和备注；Key 被拒绝（401/403）或被限流（429）时自动冷却并换下一个，客户端无感，并按 Key 统计请求、tokens 和费用。从 magpie、CC Switch 导入时多 Key 合并为一个提供商；提供商备份带上全部 Key，旧备份仍可恢复；新增 `astra provider keys` 命令。
+- **方案（Profile）**：把所有客户端的当前配置存成命名方案，一键切换（应用前可预览，走正常的启用 / 停用流程，原配置照常备份与恢复）。Clients 页顶部和桌面托盘都能切换；命令行 `astra profile save/use/list/rm`，以及 `astra client use <客户端> <提供商/模型>`。
+- **常用模型短名单**：每个客户端可以只看到你勾选的模型，包括写进它配置里的模型列表和它看到的 `/v1/models`。
+- **内置工具**：在「工具」页配置 Tavily、Brave、Exa、Firecrawl、You.com、DeepSeek、豆包、元宝、TinyFish、SearXNG 以及插件提供的搜索 API（多个 Key、顺序与轮换）。上游不会联网搜索时，网关可以替模型搜索（默认关闭，支持 Anthropic、Responses、Chat、Gemini）。内置 MCP 服务器 `astra` 提供 `web_search`、`web_fetch`（拒绝内网地址）、`generate_image` 和插件工具；新增 `astra tool` 命令。
+- **经由 claude 程序使用 Claude 订阅**：Claude 订阅账号可以选择「经由 claude 程序」，用本机安装的 Claude Code 回答任意客户端的请求，调用方的工具通过 MCP 往返。按账号开启，默认关闭；这种方式没有在真实订阅上做过长期验证，额度消耗可能高于直接调用。
+- **5 小时窗口预热**：设置里打开「窗口预热」后，每天在设定的时间（或上一个窗口刚重置时），用每个 Claude 和 ChatGPT（Codex）订阅账号自己的凭据发一条最便宜的请求，提前开启 5 小时窗口；令牌已过期的账号会跳过，不会为预热续令牌。请求日志里标为「预热」。
+- **资源库**：新增「资源库」页，指令、子代理、斜杠命令、钩子和环境变量只写一次，按各客户端的格式写进它的文件；Astra 只收回自己写入且未被改动的内容。指令、子代理、命令、Skills 和自有 MCP 服务器可以放进某个项目目录。Skills 新增市场搜索与安装、Git 更新检查、可选的 Skill 路由，并覆盖更多客户端。数据库迁移 0028。
+- **整机备份、恢复与多机同步**：设置页新增「备份与同步」。一次备份覆盖提供商、令牌、客户端、方案、路由、隐私、工具、MCP、告警、插件数据和 Skill 库，密钥只存在于口令加密的备份里；恢复前可以按分区预览并自动保存当前状态；每天自动做一份本地备份；可以经文件夹、WebDAV、S3（含兼容服务）或 GitHub 私有仓库在多台机器之间按记录合并同步。命令行 `astra backup`、`astra sync`。
+- **47 个新客户端**：OpenChamber、DevEco Code、StepCode、Aside、OmO、Prime Agent、mu、MothX、PenguinHarness、Antigravity CLI、Dim、Command Code、fx、Goose、Zoo Code、JetBrains Air、Air（JetBrains IDE）、Copilot（JetBrains）、CodeBuddy、Qoder、Qoder CN、T3 Code、Pencil、OpenPencil、Raycast、Obsidian（Copilot for Obsidian）、Reasonix Studio、Mister Morph、jcode、Mistral Vibe、Empryo、nanobot、miniQ、Paimon、Cline（CLI）、Grok App、AtomCode、Snow CLI、Ante、Craft Agents、Tuanjie Cowork、LiveAgent、OpenMausBot、AstrBot、QwenPaw、OpenClaw、OpenBot。fx、Command Code、Empryo、Ante、Craft Agents、Obsidian、OpenBot 不能把密钥写进配置，使用前需要在设置里关闭「本地网关需要密钥」。
+- **35 个新内置提供商**：Mistral、Groq、Together、Fireworks、NVIDIA NIM、魔搭、阶跃星辰、LongCat、百度千帆、腾讯云、华为云、小米 MiMo、Azure OpenAI、Vercel AI Gateway 等（套餐和区域作为版本）；支持 Amazon Bedrock（API Key、IAM 访问密钥 SigV4 签名、Mantle）和 Google Vertex AI（服务账号 JSON，自动换取访问令牌）。
+- **更多网关接口**：`/v1/embeddings`、`/v1/rerank`、`/v1/audio/*`（转写、翻译、语音合成）、Codex 使用的 Responses WebSocket、Ollama 兼容接口（客户端里填 `http://127.0.0.1:<端口>/ollama`）和提供商原生接口透传 `/v1/astra/native/<提供商>/…`；都走令牌鉴权、路由、请求日志和计费，Gemini 提供商的 embeddings 自动转换。
+- **显示币种**：在设置里手动填写汇率后，可以把费用、价格和图表换成人民币、欧元、日元等 15 种货币显示（Astra 不会联网获取汇率，底层仍按美元记账）；令牌的费用上限和自定义价格也按显示币种填写。
+- **上下文窗口占用**：请求日志新增「上下文」列，请求详情显示这次请求用了多少上下文窗口、多少来自缓存、输出离上限还有多远，以及提示词大致由系统提示、工具、历史和最新一轮各占多少。数据库迁移 0026。
+
+### 改进
+
+- **隐私脱敏**：占位符改为稳定的 `{{类别_哈希}}`，同一个值在整个对话的所有请求里都用同一个占位符，提示缓存不再因为脱敏失效；一个值脱敏过一次，之后出现在任何地方都会脱敏（只存在内存里）。新增护照号、IBAN、MAC、公网 IP、出生日期、序列号、家目录用户名（公网 IP 和家目录用户名默认关闭）；银行卡、身份证、IBAN、SSN 会检查校验位，减少误判；示例域名下的邮箱不再脱敏。流式回复里工具调用参数中的占位符（包括被拆到多个片段、原值带引号或换行的情况）现在能正确还原。护栏打开但无法运行时，请求会被拒绝（503），不会未脱敏就发出。「试一试」会显示真正发给模型的文本。
+- **插件**：内置的 magpie 插件宿主更新到最新版本；取消的插件调用会通知宿主停止；插件拒绝发起登录时会显示它给出的原因。
+
 ## [0.14.3110] - 2026-11-16
 
 ### 修复
