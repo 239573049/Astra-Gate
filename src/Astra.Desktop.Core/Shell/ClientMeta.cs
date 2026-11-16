@@ -97,7 +97,7 @@ public static class ClientMeta
         "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
         "zoo-code", "jetbrains-air", "air-ide", "copilot-jetbrains", "codebuddy", "qoder", "qoder-cn", "t3code", "pencil", "openpencil", "raycast", "obsidian",
         "reasonix", "morph", "jcode", "vibe", "empryo", "nanobot", "miniq", "paimon", "cline", "grok-app", "atomcode", "snow", "ante", "craft-agents", "tuanjie-cowork",
-        "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose", "liveagent", "openmausbot", "astrbot", "qwenpaw", "openclaw", "openbot",
+        "liveagent", "openmausbot", "astrbot", "qwenpaw", "openclaw", "openbot",
     ];
 
     /// <summary>
