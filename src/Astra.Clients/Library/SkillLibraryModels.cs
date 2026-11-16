@@ -26,7 +26,12 @@ public sealed record SkillTargetInfo(string Kind, bool Supported, bool Detected,
 /// <summary>How a client sees one Skill. <see cref="State"/>: <c>own</c>, <c>via-shared</c>, <c>via-&lt;kind&gt;</c>, <c>off</c>, <c>unsupported</c>.</summary>
 public sealed record SkillClientView(string Kind, string State, string? How, bool Modified);
 
-public sealed record SkillPlacementInfo(string Path, string Target, string How, string Origin, bool Modified, bool Missing);
+/// <param name="Project">The project directory of a project placement (<see cref="SkillTargets.Project"/>), empty for a user-wide one.</param>
+/// <param name="ProjectMissing">The project directory no longer exists (reported, not a failure).</param>
+public sealed record SkillPlacementInfo(string Path, string Target, string How, string Origin, bool Modified, bool Missing, string Project = "", bool ProjectMissing = false);
+
+/// <summary>A directory, relative to a project, that some clients read Skills from.</summary>
+public sealed record SkillProjectDirInfo(string Dir, IReadOnlyList<string> Clients);
 
 public sealed record SkillInfo(
     string Name, string Description, string SourceKind, string? SourceJson, DateTimeOffset UpdatedAt,
@@ -38,7 +43,9 @@ public sealed record FoundLocation(string Path, string Target, string Hash, Date
 public sealed record FoundSkill(
     string Name, string Kind, IReadOnlyList<FoundLocation> Locations, bool Conflict, bool InLibrary, bool SkillsCli, string? LinkTarget);
 
-public sealed record SkillLibraryState(IReadOnlyList<SkillTargetInfo> Targets, IReadOnlyList<SkillInfo> Skills, IReadOnlyList<FoundSkill> Found, string LibraryDir, string SharedDir);
+public sealed record SkillLibraryState(
+    IReadOnlyList<SkillTargetInfo> Targets, IReadOnlyList<SkillInfo> Skills, IReadOnlyList<FoundSkill> Found, string LibraryDir, string SharedDir,
+    IReadOnlyList<SkillProjectDirInfo> ProjectDirs);
 
 /// <summary>Result of switching a client on or off. <see cref="NeedsConfirm"/> lists the other clients a shared link also serves.</summary>
 public sealed record SkillSetResult(bool Done, IReadOnlyList<string> Affected)

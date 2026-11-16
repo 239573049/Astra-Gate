@@ -13,7 +13,11 @@ public sealed class LocalMcpDraft
     public static IReadOnlyList<(string Kind, string Name)> Clients { get; } =
     [
         ("claude-code", "Claude Code"), ("codex", "Codex"), ("gemini-cli", "Gemini CLI"), ("qwen-code", "Qwen Code"), ("opencode", "OpenCode"),
+        ("droid", "Droid"), ("crush", "Crush"), ("copilot-cli", "Copilot CLI"),
     ];
+
+    /// <summary>What a new definition is written into by default: the clients it first supported.</summary>
+    public static IReadOnlyList<string> DefaultClients { get; } = ["claude-code", "codex", "gemini-cli", "qwen-code", "opencode"];
 
     /// <summary>The display name of a client kind (the kind itself when unknown).</summary>
     public static string ClientName(string kind) => Clients.FirstOrDefault(c => c.Kind == kind).Name ?? kind;
@@ -21,7 +25,7 @@ public sealed class LocalMcpDraft
     /// <summary>A new definition's draft: stdio, every client chosen.</summary>
     public LocalMcpDraft()
     {
-        ChosenClients = [.. Clients.Select(c => c.Kind)];
+        ChosenClients = [.. DefaultClients];
     }
 
     /// <summary>A draft of an existing definition (values blank, names known).</summary>

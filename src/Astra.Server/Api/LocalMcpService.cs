@@ -60,9 +60,12 @@ public sealed class LocalMcpService(AstraDatabase db, ISecretProtector secrets, 
         var left = new List<string>();
         foreach (var kind in ClientMcpServerApplier.SupportedKinds)
         {
-            if (_applier.Inspect(kind, server.Name).State is ClientMcpState.Missing or ClientMcpState.Conflict) continue;
-            var report = _applier.Remove(kind, server.Name, force);
-            if (report.Keys.Any(k => k.Outcome == RestoreKeyOutcome.Drifted)) left.Add(kind);
+            foreach (var file in _applier.WrittenFiles(kind, server.Name))
+            {
+                if (!System.IO.File.Exists(file)) { _applier.Forget(kind, server.Name, file); continue; }   // a project that is gone
+                var report = _applier.RemoveAt(kind, server.Name, force, file);
+                if (report.Keys.Any(k => k.Outcome == RestoreKeyOutcome.Drifted)) left.Add(kind);
+            }
         }
         if (left.Count > 0) throw new AdminApiException(409, $"The entry in {string.Join(", ", left)} was changed since Astra wrote it; remove it by hand or delete with force");
         await db.McpLocal.DeleteAsync(id, ct);
@@ -74,15 +77,39 @@ public sealed class LocalMcpService(AstraDatabase db, ISecretProtector secrets, 
     {
         var errors = new Dictionary<string, string?>();
         var wanted = Clients(server);
+        var projects = Projects(server);
         foreach (var kind in ClientMcpServerApplier.SupportedKinds)
         {
+            // where it should be: the client's own file, and its file inside each project that exists (a project that is gone is reported, not failed)
+            var desired = new Dictionary<string, string?>(StringComparer.Ordinal);
+            if (server.Enabled && wanted.Contains(kind))
+            {
+                desired[_applier.File(kind)] = null;
+                if (McpClientTargets.SupportsProject(kind))
+                    foreach (var project in projects)
+                    {
+                        if (!Directory.Exists(project)) { errors[kind + "@" + project] = "The project directory no longer exists"; continue; }
+                        desired[_applier.File(kind, project)] = project;
+                    }
+            }
             try
             {
-                // a rename takes the old entry out first
-                if (previousName is not null && previousName != server.Name && _applier.Inspect(kind, previousName).State is ClientMcpState.Applied or ClientMcpState.Drifted)
-                    _applier.Remove(kind, previousName, force);
-                if (server.Enabled && wanted.Contains(kind)) _applier.Apply(kind, Spec(server), force);
-                else if (_applier.Inspect(kind, server.Name).State is ClientMcpState.Applied or ClientMcpState.Drifted) _applier.Remove(kind, server.Name, force);
+                // a rename takes the old entry out first; an entry in a file that is no longer wanted goes too
+                foreach (var name in previousName is not null && previousName != server.Name ? new[] { previousName, server.Name } : [server.Name])
+                    foreach (var file in _applier.WrittenFiles(kind, name))
+                        if (name != server.Name || !desired.ContainsKey(file))
+                            _applier.RemoveAt(kind, name, force, file);
+                foreach (var (_, project) in desired)
+                {
+                    try
+                    {
+                        _applier.Apply(kind, Spec(server), force, project);
+                    }
+                    catch (ClientMcpException e)
+                    {
+                        errors[project is null ? kind : kind + "@" + project] = e.Message;
+                    }
+                }
             }
             catch (ClientMcpException e)
             {
@@ -95,6 +122,9 @@ public sealed class LocalMcpService(AstraDatabase db, ISecretProtector secrets, 
         }
         return errors;
     }
+
+    private static List<string> Projects(LocalMcpServer s) =>
+        JsonSerializer.Deserialize(s.ProjectsJson, ContractsJsonContext.Default.ListString) ?? [];
 
     private LocalMcpSpec Spec(LocalMcpServer s) => s.Transport == LocalMcpTransports.Http
         ? new(s.Name, "", [], new Dictionary<string, string>(), s.Url, Secret(s.HeadersEnc))
@@ -150,20 +180,39 @@ public sealed class LocalMcpService(AstraDatabase db, ISecretProtector secrets, 
         s.Transport = transport;
         s.Enabled = input.Enabled ?? existing?.Enabled ?? true;
         s.ClientsJson = JsonSerializer.Serialize(clients, ContractsJsonContext.Default.ListString);
+        if (input.Projects is { } projects)
+        {
+            if (projects.Find(p => !Path.IsPathRooted(p)) is not null) throw new AdminApiException(400, "A project is a full directory path");
+            s.ProjectsJson = JsonSerializer.Serialize(projects.Select(p => Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar)).Distinct().ToList(), ContractsJsonContext.Default.ListString);
+        }
         s.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     private LocalMcpServerDto ToDto(LocalMcpServer s, Dictionary<string, string?>? errors)
     {
         var wanted = Clients(s);
-        var placements = ClientMcpServerApplier.SupportedKinds.Select(kind =>
+        var projects = Projects(s);
+        var placements = new List<LocalMcpPlacementDto>();
+        foreach (var kind in ClientMcpServerApplier.SupportedKinds)
         {
             var status = _applier.Inspect(kind, s.Name);
-            return new LocalMcpPlacementDto(kind, s.Enabled && wanted.Contains(kind), status.State.ToString().ToLowerInvariant(), status.File,
-                errors is not null && errors.TryGetValue(kind, out var err) ? err : status.Error);
-        }).ToList();
+            placements.Add(new LocalMcpPlacementDto(kind, s.Enabled && wanted.Contains(kind), status.State.ToString().ToLowerInvariant(), status.File,
+                errors is not null && errors.TryGetValue(kind, out var err) ? err : status.Error));
+            if (!McpClientTargets.SupportsProject(kind)) continue;
+            foreach (var project in projects)
+            {
+                var projectError = errors is not null && errors.TryGetValue(kind + "@" + project, out var perr) ? perr : null;
+                if (!Directory.Exists(project))
+                {
+                    placements.Add(new LocalMcpPlacementDto(kind, s.Enabled && wanted.Contains(kind), "project-missing", "", projectError ?? "The project directory no longer exists", project));
+                    continue;
+                }
+                var inProject = _applier.Inspect(kind, s.Name, project);
+                placements.Add(new LocalMcpPlacementDto(kind, s.Enabled && wanted.Contains(kind), inProject.State.ToString().ToLowerInvariant(), inProject.File, projectError ?? inProject.Error, project));
+            }
+        }
         return new LocalMcpServerDto(s.Id, s.Name, s.Transport, s.Command, Args(s), [.. Secret(s.EnvEnc).Keys.Order(StringComparer.Ordinal)], s.Url,
-            [.. Secret(s.HeadersEnc).Keys.Order(StringComparer.Ordinal)], s.Enabled, [.. wanted.Order(StringComparer.Ordinal)], placements);
+            [.. Secret(s.HeadersEnc).Keys.Order(StringComparer.Ordinal)], s.Enabled, [.. wanted.Order(StringComparer.Ordinal)], placements, projects);
     }
 
     // ---------------------------------------------------------------- import

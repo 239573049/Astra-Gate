@@ -451,6 +451,42 @@ put('routing-groups-status.json', [
 ]);
 route('/api/routing/groups/status', 'routing-groups-status.json');
 route('/api/routing/groups', 'routing-groups.json');
+// resource library, part 2: instructions, sub-agents, commands, hooks, environment variables, projects, Skill router / market (migration 0033)
+const resClients = (kinds, project = true) => kinds.map((kind, i) => ({ kind, detected: i !== 2, path: `/Users/demo/.${kind}/file`, project }));
+const resTarget = (client, state, project = '', message = null) => ({ client, project, state, path: `/Users/demo/.${client}/file`, message });
+const resItem = (over) => ({ id: 'item-' + over.name, description: '', body: '', event: null, matcher: null, timeout: 0, model: null, enabled: true, updatedAt: ago(DAY), lastError: null, ...over });
+const resProjects = [{ path: '/Users/demo/code/app', name: 'app', exists: true }, { path: '/Users/demo/code/old', name: 'old', exists: false }];
+const resLibrary = (kind, kinds, items, canWrite = true) => ({ kind, clients: resClients(kinds), items, projects: resProjects, canWrite });
+put('library/instructions.json', resLibrary('instruction', ['claude-code', 'codex', 'gemini-cli'], [
+  resItem({ kind: 'instruction', name: 'code-style', body: '缩进用两个空格；提交信息用中文。', targets: [resTarget('claude-code', 'applied'), resTarget('codex', 'applied', '/Users/demo/code/app')] }),
+  resItem({ kind: 'instruction', name: 'safety', body: '不要修改 .env 文件。', targets: [resTarget('claude-code', 'drifted'), resTarget('gemini-cli', 'conflict', '', '该文件里已有同名段落，不是 Astra 写入的')] }),
+]));
+put('library/agents.json', resLibrary('agent', ['claude-code', 'codex', 'opencode'], [
+  resItem({ kind: 'agent', name: 'reviewer', description: '审查代码变更', body: '你是一名严格的代码评审。', model: 'gpt-5', targets: [resTarget('claude-code', 'applied'), resTarget('codex', 'applied'), resTarget('opencode', 'project-missing', '/Users/demo/code/old')] }),
+]));
+put('library/commands.json', resLibrary('command', ['claude-code', 'gemini-cli', 'droid'], [
+  resItem({ kind: 'command', name: 'fix', description: '修复指定问题', body: '修复 $1，并运行测试。', targets: [resTarget('claude-code', 'applied'), resTarget('gemini-cli', 'unsupported', '', '不支持按位置取词（$1、$2）')] }),
+]));
+put('library/hooks.json', resLibrary('hook', ['claude-code', 'codex', 'gemini-cli'], [
+  resItem({ kind: 'hook', name: 'notify', description: '回合结束时提醒', body: 'say done', event: 'turn-end', timeout: 5, targets: [resTarget('claude-code', 'applied'), resTarget('codex', 'missing')] }),
+]));
+put('library/env.json', resLibrary('env', ['claude-code', 'codex'], [
+  resItem({ kind: 'env', name: 'DISABLE_TELEMETRY', body: '1', targets: [resTarget('claude-code', 'applied'), resTarget('codex', 'pending')] }),
+]));
+put('library/projects.json', resProjects);
+put('library/router.json', [
+  { kind: 'claude-code', supported: true, enabled: true, why: null, listed: 3, entry: '/Users/demo/.claude/skills/astra-skills' },
+  { kind: 'codex', supported: false, enabled: false, why: 'shared', listed: 0, entry: null },
+]);
+put('library/market-source.json', { url: 'https://www.skills.sh', default: 'https://www.skills.sh' });
+put('library/market.json', { registry: 'https://www.skills.sh', error: null, skills: [
+  { source: 'anthropics/skills', skillId: 'pdf', name: 'pdf', installs: 12400, installed: true },
+  { source: 'anthropics/skills', skillId: 'docx', name: 'docx', installs: 9800, installed: false },
+] });
+for (const [seg, file] of [['instructions', 'instructions'], ['agents', 'agents'], ['commands', 'commands'], ['hooks', 'hooks'], ['env', 'env'], ['projects', 'projects']]) route('/api/library/' + seg, `library/${file}.json`);
+route('/api/library/skills/router', 'library/router.json');
+route('/api/library/skills/market/source', 'library/market-source.json');
+route('/api/library/skills/market', 'library/market.json');
 
 // shell-level singletons
 for (const [path, file] of [['/api/health', 'health.json'], ['/api/version', 'version.json'], ['/api/auth/status', 'auth-status.json'], ['/api/settings', 'settings.json'], ['/api/update/status', 'update-status.json'], ['/api/tunnel', 'tunnel.json'], ['/api/server/listen', 'listen.json'], ['/api/server/autostart', 'autostart.json']]) route(path, file);

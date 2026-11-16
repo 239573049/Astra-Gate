@@ -1,4 +1,4 @@
-import { useDeleteSkill, useReturnSkills, useSkillCopyAction, useSwitchSkill } from '../../api/hooks';
+import { useDeleteSkill, useReturnSkills, useSkillCopyAction, useSwitchSkill, useUpdateSkill } from '../../api/hooks';
 import type { SkillOutcome } from '../../api/types';
 import { useI18n } from '../../i18n';
 import { errorText, useFeedback } from '../ui/overlays';
@@ -12,6 +12,7 @@ export function useSkillActions() {
   const giveBackMut = useReturnSkills();
   const removeMut = useDeleteSkill();
   const copyAction = useSkillCopyAction();
+  const updateMut = useUpdateSkill();
 
   const report = (outcomes: SkillOutcome[], successKey: 'skills.toast.returned' | 'skills.toast.done' = 'skills.toast.returned') => {
     const failed = outcomes.filter((o) => !o.ok);
@@ -42,6 +43,14 @@ export function useSkillActions() {
           if (!ok) return;
           result = await switchSkill.mutateAsync({ name: skill, client, on, confirm: true });
         }
+      });
+    },
+    /** Updates a Git-installed Skill to its branch's newest commit; one edited here since it was installed asks first (the old one is backed up). */
+    async update(name: string, edited: boolean) {
+      if (edited && !(await confirm({ title: t('skills.confirm.update.title', { skill: name }), detail: t('skills.confirm.update.detail'), confirmLabel: t('skills.updates.update'), destructive: true }))) return;
+      await attempt(async () => {
+        await updateMut.mutateAsync({ name, force: edited });
+        toast(t('skills.toast.updated', { skill: name }), 'success');
       });
     },
     async giveBack(name: string) {

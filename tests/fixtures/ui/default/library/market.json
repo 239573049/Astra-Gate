@@ -1,0 +1,20 @@
+{
+  "registry": "https://www.skills.sh",
+  "error": null,
+  "skills": [
+    {
+      "source": "anthropics/skills",
+      "skillId": "pdf",
+      "name": "pdf",
+      "installs": 12400,
+      "installed": true
+    },
+    {
+      "source": "anthropics/skills",
+      "skillId": "docx",
+      "name": "docx",
+      "installs": 9800,
+      "installed": false
+    }
+  ]
+}

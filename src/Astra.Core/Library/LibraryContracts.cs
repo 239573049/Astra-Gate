@@ -59,6 +59,9 @@ public sealed class LibraryPlacementRecord
     public string How { get; set; } = PlacementHows.Symlink;
     public string? CopyHash { get; set; }
     public string Origin { get; set; } = PlacementOrigins.Applied;
+
+    /// <summary>The project directory the link is in; empty for a client's own user-wide directory.</summary>
+    public string Project { get; set; } = "";
     public DateTimeOffset PlacedAt { get; set; }
 }
 
@@ -66,6 +69,9 @@ public sealed class LibraryPlacementRecord
 public static class SkillTargets
 {
     public const string Shared = "shared";
+
+    /// <summary>The pseudo target of a link inside a project directory (<see cref="LibraryPlacementRecord.Project"/> names the project).</summary>
+    public const string Project = "project";
 }
 
 /// <summary>The library's ledger, so the engine (<c>Astra.Clients</c>) needs no reference to the database assembly.</summary>

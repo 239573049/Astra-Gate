@@ -7,7 +7,7 @@ namespace Astra.Data.Repositories;
 public sealed class LibraryRepository : Astra.Core.Library.ILibraryLedger
 {
     private const string SkillSelect = "SELECT name, description, source_kind, source_json, hash, created_at, updated_at FROM library_skills";
-    private const string PlacementSelect = "SELECT path, skill_name, target, how, copy_hash, origin, placed_at FROM library_placements";
+    private const string PlacementSelect = "SELECT path, skill_name, target, how, copy_hash, origin, placed_at, project FROM library_placements";
 
     private readonly SqliteConnectionFactory _factory;
 
@@ -70,10 +70,10 @@ public sealed class LibraryRepository : Astra.Core.Library.ILibraryLedger
     {
         await using var conn = await _factory.OpenAsync(ct);
         await conn.ExecuteAsync("""
-            INSERT INTO library_placements(path, skill_name, target, how, copy_hash, origin, placed_at)
-            VALUES (@path, @skill_name, @target, @how, @copy_hash, @origin, @placed_at)
+            INSERT INTO library_placements(path, skill_name, target, how, copy_hash, origin, placed_at, project)
+            VALUES (@path, @skill_name, @target, @how, @copy_hash, @origin, @placed_at, @project)
             ON CONFLICT(path) DO UPDATE SET skill_name = excluded.skill_name, target = excluded.target, how = excluded.how,
-                copy_hash = excluded.copy_hash, origin = excluded.origin, placed_at = excluded.placed_at
+                copy_hash = excluded.copy_hash, origin = excluded.origin, placed_at = excluded.placed_at, project = excluded.project
             """, new
         {
             path = p.Path,
@@ -83,6 +83,7 @@ public sealed class LibraryRepository : Astra.Core.Library.ILibraryLedger
             copy_hash = p.CopyHash,
             origin = p.Origin,
             placed_at = DateTimeOffsetHandler.ToStorage(p.PlacedAt),
+            project = p.Project,
         });
     }
 

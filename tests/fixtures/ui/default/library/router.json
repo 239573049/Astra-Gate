@@ -1,0 +1,18 @@
+[
+  {
+    "kind": "claude-code",
+    "supported": true,
+    "enabled": true,
+    "why": null,
+    "listed": 3,
+    "entry": "/Users/demo/.claude/skills/astra-skills"
+  },
+  {
+    "kind": "codex",
+    "supported": false,
+    "enabled": false,
+    "why": "shared",
+    "listed": 0,
+    "entry": null
+  }
+]

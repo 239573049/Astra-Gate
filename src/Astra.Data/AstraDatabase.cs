@@ -24,6 +24,7 @@ public sealed class AstraDatabase
         Mcp = new McpRepository(factory);
         McpLocal = new McpLocalRepository(factory);
         Library = new LibraryRepository(factory);
+        LibraryResources = new LibraryResourceRepository(factory);
         ClientConfigState = new ClientConfigStateStore(factory);
         Requests = new RequestRepository(factory);
         Traces = new TraceRepository(factory);
@@ -47,6 +48,7 @@ public sealed class AstraDatabase
     public McpRepository Mcp { get; }
     public McpLocalRepository McpLocal { get; }
     public LibraryRepository Library { get; }
+    public LibraryResourceRepository LibraryResources { get; }
     public ClientConfigStateStore ClientConfigState { get; }
     public RequestRepository Requests { get; }
     public TraceRepository Traces { get; }

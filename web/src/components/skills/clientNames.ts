@@ -7,6 +7,17 @@ const NAMES: Record<string, string> = {
   'copilot-cli': 'Copilot CLI',
   droid: 'Droid',
   'grok-build': 'Grok Build',
+  'qwen-code': 'Qwen Code',
+  pi: 'Pi',
+  omp: 'oh-my-pi',
+  'minimax-code': 'MiniMax Code',
+  'hermes-agent': 'Hermes Agent',
+  'deepseek-harness': 'DeepSeek Harness',
+  'command-code': 'Command Code',
+  crush: 'Crush',
+  zcode: 'ZCode',
+  'antigravity-cli': 'Antigravity CLI',
+  goose: 'Goose',
 };
 
 export const clientName = (kind: string): string => NAMES[kind] ?? kind;

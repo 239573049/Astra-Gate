@@ -19,6 +19,39 @@ public static class LibraryEndpoints
             Results.Ok(await lib.MigrateAsync(body, ct)));
         group.MapPut("/{name}/clients/{client}", async (string name, string client, SkillSwitchDto body, LibraryService lib, CancellationToken ct) =>
             Results.Ok(await lib.SwitchAsync(name, client, body, ct)));
+        group.MapPut("/{name}/projects", async (HttpContext ctx, string name, SkillProjectSwitchDto body, LibraryService lib, CancellationToken ct) =>
+        {
+            RequireLocal(ctx, "Skills can only be placed into a project on this machine");
+            return Results.Ok(await lib.SwitchProjectAsync(name, body, ct));
+        });
+        group.MapGet("/updates", async (HttpContext ctx, LibraryService lib, CancellationToken ct) =>
+        {
+            RequireLocal(ctx, "Checking for updates runs git on this machine");
+            return Results.Ok(await lib.CheckUpdatesAsync(ct));
+        });
+        group.MapPost("/{name}/update", async (HttpContext ctx, string name, bool? force, LibraryService lib, CancellationToken ct) =>
+        {
+            RequireLocal(ctx, "Skills can only be updated on this machine");
+            return Results.Ok(await lib.UpdateSkillAsync(name, force == true, ct));
+        });
+        group.MapGet("/router", async (LibraryService lib, CancellationToken ct) => Results.Ok(await lib.RouterAsync(ct)));
+        group.MapPut("/router/{client}", async (HttpContext ctx, string client, SkillRouterSwitchDto body, LibraryService lib, CancellationToken ct) =>
+        {
+            RequireLocal(ctx, "The skill router can only be changed on this machine");
+            return Results.Ok(await lib.SetRouterAsync(client, body.On, ct));
+        });
+        group.MapGet("/market", async (string? q, LibraryService lib, CancellationToken ct) => Results.Ok(await lib.MarketSearchAsync(q, ct)));
+        group.MapGet("/market/source", async (LibraryService lib, CancellationToken ct) => Results.Ok(await lib.MarketSettingsAsync(ct)));
+        group.MapPut("/market/source", async (HttpContext ctx, SkillMarketSettingsInputDto body, LibraryService lib, CancellationToken ct) =>
+        {
+            RequireLocal(ctx, "The registry address can only be changed on this machine");
+            return Results.Ok(await lib.SetMarketSettingsAsync(body, ct));
+        });
+        group.MapPost("/market/install", async (HttpContext ctx, SkillMarketInstallDto body, LibraryService lib, CancellationToken ct) =>
+        {
+            RequireLocal(ctx);
+            return Results.Ok(await lib.MarketInstallAsync(body, ct));
+        });
         group.MapPost("/probe", async (HttpContext ctx, SkillProbeRequestDto body, LibraryService lib, CancellationToken ct) =>
         {
             RequireLocal(ctx);
@@ -48,8 +81,8 @@ public static class LibraryEndpoints
         });
     }
 
-    private static void RequireLocal(HttpContext ctx)
+    private static void RequireLocal(HttpContext ctx, string message = "Skills can only be installed on this machine")
     {
-        if (!RequestOrigin.IsLocal(ctx)) throw new AdminApiException(403, "Skills can only be installed on this machine");
+        if (!RequestOrigin.IsLocal(ctx)) throw new AdminApiException(403, message);
     }
 }

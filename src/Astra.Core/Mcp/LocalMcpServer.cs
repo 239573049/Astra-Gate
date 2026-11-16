@@ -31,6 +31,9 @@ public sealed class LocalMcpServer
     /// <summary>A JSON array of client kinds the server should be written into.</summary>
     public string ClientsJson { get; set; } = "[]";
 
+    /// <summary>A JSON array of project directories the server is also written into (each client's project MCP file); empty = user-wide only.</summary>
+    public string ProjectsJson { get; set; } = "[]";
+
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
