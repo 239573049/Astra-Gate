@@ -241,6 +241,12 @@ function GeneralSettings() {
             </Row>
           </Group>
 
+          <Group footer={t('settings.stripStaleReasoningHint')}>
+            <Row label={t('settings.stripStaleReasoning')}>
+              <Switch checked={s.stripStaleReasoning ?? true} label={t('settings.stripStaleReasoning')} onChange={(stripStaleReasoning) => patch({ stripStaleReasoning })} />
+            </Row>
+          </Group>
+
           <QualifiedModelsSettings settings={s} />
 
           <SidebarSettings settings={s} />

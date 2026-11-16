@@ -108,6 +108,14 @@ public sealed class AppSettings
     public bool ClientProviderFailover { get; set; } = true;
 
     /// <summary>
+    /// GitHub Copilot refuses a Responses request whose reasoning items came from an earlier session (401 "input item does not
+    /// belong to this connection"). On (default), the gateway then drops those items' <c>encrypted_content</c> and sends the
+    /// request once more on the same account; off, or refused again, the client gets a 400 saying why. Requests are never
+    /// changed before such a refusal.
+    /// </summary>
+    public bool StripStaleReasoning { get; set; } = true;
+
+    /// <summary>
     /// Provider-qualified model ids (issue #21): the model lists clients see carry each provider's alias after the
     /// <see cref="ModelProviderSeparator"/> (<c>glm-5.3@zcode</c>), so providers serving the same model id can be told apart, and a
     /// request for such an id goes to that provider. Off = ids as they are, the first provider serving one wins.

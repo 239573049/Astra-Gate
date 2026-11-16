@@ -68,6 +68,9 @@ public sealed partial class GatewayPipeline(
 
     /// <summary><c>astra.attempt.retry</c> of an attempt whose failure handed the request to the next pool member.</summary>
     public const string ProviderFailoverRetry = "provider_failover";
+
+    /// <summary><c>astra.attempt.retry</c> of an attempt Copilot refused for stale reasoning, resent without its encrypted content.</summary>
+    public const string StaleReasoningRetry = "stale_reasoning";
     private static readonly string UserAgent = $"Astra/{typeof(GatewayPipeline).Assembly.GetName().Version?.ToString(3) ?? "0"}";
 
     // Top-level Responses fields the ChatGPT (Codex) backend rejects with 400 "Unsupported parameter".
@@ -888,6 +891,8 @@ public sealed partial class GatewayPipeline(
         var tried = new List<string>();
         AccountScheduler.Lease? lease = null;
         var handedOver = false;
+        // The body resent without stale reasoning (AnswerStaleInputItemsAsync): this send owns it, and drops it once only.
+        PooledBuffer? strippedBody = null;
         try
         {
             while (true)
@@ -947,6 +952,30 @@ public sealed partial class GatewayPipeline(
                     }
                 }
                 var request = Build(credentials);
+                // Copilot refuses reasoning from an earlier session (IsStaleInputItemAsync). With the setting on, the reasoning's
+                // encrypted content is dropped once and the request sent again on the same credentials — the conversation goes
+                // on without that earlier reasoning; refused again, or with the setting off, the client gets a 400 saying why.
+                async Task<HttpResponseMessage> AnswerStaleInputItemsAsync(HttpResponseMessage refused)
+                {
+                    if (!await IsStaleInputItemAsync(refused)) return refused;
+                    var stripped = strippedBody is null && resendable && content is null && settings.Current.StripStaleReasoning
+                        ? ResponsesReasoningItems.WithoutEncryptedContent(bodyTree) : null;
+                    if (stripped is null) throw StaleInputItem(attempt, refused, strippedBody is not null);
+                    attempt = Retry(attempt, refused, StaleReasoningRetry, credentials.AccountId ?? accountId);
+                    refused.Dispose();
+                    bodyTree = stripped;
+                    strippedBody = new PooledBuffer(body.Length);
+                    GatewayJson.WriteTo(stripped, strippedBody);
+                    body = strippedBody;
+                    if (compressed is not null) compressed = UpstreamCompression.Compress(body.Span, compression!);
+                    capture?.Set(BodyStore.UpstreamRequest, body.Span);
+                    logger.LogInformation("Upstream {Provider} refused stale reasoning; resending without encrypted_content", provider.Name);
+                    request = Build(credentials);
+                    capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
+                    var resent = await SendWithDeadlineAsync(client, request);
+                    if (await IsStaleInputItemAsync(resent)) throw StaleInputItem(attempt, resent, true);
+                    return resent;
+                }
                 // 调试捕获（plan §6.5）：记录发给提供商的**最终请求头**（凭据脱敏）。排查
                 // "Request not allowed" 这类身份判定问题需要看到实际出去的头，体捕获不包含它们。
                 capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
@@ -961,7 +990,7 @@ public sealed partial class GatewayPipeline(
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await SendWithDeadlineAsync(client, request);
                 }
-                await RejectStaleInputItemsAsync(attempt, response);
+                response = await AnswerStaleInputItemsAsync(response);
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden && subscription && credentials.CanRefresh && resendable)
                 {
                     // Plan §5.4: renew a grant once before switching accounts. Direct tokens / API keys cannot be renewed.
@@ -1004,7 +1033,7 @@ public sealed partial class GatewayPipeline(
                     request = Build(credentials);
                     capture?.Set(BodyStore.UpstreamRequestHeaders, DescribeRequest(request));
                     response = await SendWithDeadlineAsync(client, request);
-                    await RejectStaleInputItemsAsync(attempt, response);
+                    response = await AnswerStaleInputItemsAsync(response);
                 }
                 if (failover && resendable && response.StatusCode is (HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                     && credentials.AccountId is { } rejected)
@@ -1045,14 +1074,17 @@ public sealed partial class GatewayPipeline(
         {
             // Failures must not leak an in-flight slot; on success the caller owns the lease.
             if (!handedOver) lease?.Dispose();
+            // An in-flight send holds its own reference (PooledContent).
+            strippedBody?.Release();
         }
 
         // Copilot answers 401 for Responses input items it no longer accepts (.agents/memory/copilot-responses-item-ids.md).
-        // The request is at fault, not the credential: renewing or switching accounts cannot help, so the client gets a 400 saying why.
-        async Task RejectStaleInputItemsAsync(TraceSpanBuilder span, HttpResponseMessage response)
+        // The request is at fault, not the credential: renewing or switching accounts cannot help. True = that refusal (its
+        // body is read and kept for the debug capture); any other response comes back readable as it was.
+        async Task<bool> IsStaleInputItemAsync(HttpResponseMessage response)
         {
             if (response.StatusCode != HttpStatusCode.Unauthorized || endpoint.Protocol != ApiProtocol.OpenAIResponses
-                || !CopilotModelIds.IsCopilot(provider)) return;
+                || !CopilotModelIds.IsCopilot(provider)) return false;
             var text = await ReadLimitedAsync(response, MaxErrorBodyBytes, ct);
             if (!text.Contains(CopilotStaleInputItemMarker, StringComparison.OrdinalIgnoreCase))
             {
@@ -1060,14 +1092,25 @@ public sealed partial class GatewayPipeline(
                 var read = response.Content;
                 response.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(text)) { Headers = { ContentType = read.Headers.ContentType } };
                 read.Dispose();
-                return;
+                return false;
             }
             capture?.Set(BodyStore.UpstreamResponse, text);
+            return true;
+        }
+
+        // The client gets a 400: the upstream refused the request's reasoning, whether or not the gateway already dropped it once.
+        GatewayException StaleInputItem(TraceSpanBuilder span, HttpResponseMessage response, bool stripped)
+        {
             EndAttempt(span, response, null);
             response.Dispose();
-            throw new GatewayException(400, "invalid_request_error",
+            return new GatewayException(400, "invalid_request_error",
                 "上游拒绝了请求里的 input：其中的 reasoning 条目（encrypted_content 或条目 ID）已不被上游接受，通常是因为它们来自较早的会话"
-                + "（上游返回 401：input item does not belong to this connection）。这是请求内容的问题，与账号和令牌无关。请新开一个会话，或从 input 中去掉这些 reasoning 条目后重试。");
+                + "（上游返回 401：input item does not belong to this connection）。这是请求内容的问题，与账号和令牌无关。"
+                + (stripped
+                    ? "网关已去掉这些 reasoning 条目的 encrypted_content 重试过一次，上游仍然拒绝。请新开一个会话后重试。"
+                    : settings.Current.StripStaleReasoning
+                        ? "请新开一个会话，或从 input 中去掉这些 reasoning 条目后重试。"
+                        : "请新开一个会话，或从 input 中去掉这些 reasoning 条目后重试；也可以在设置里打开「自动丢弃过期的推理内容」。"));
         }
 
         TraceSpanBuilder Retry(TraceSpanBuilder span, HttpResponseMessage response, string reason, string? account)

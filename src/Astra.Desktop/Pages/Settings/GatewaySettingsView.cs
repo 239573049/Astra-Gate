@@ -76,13 +76,17 @@ public sealed class GatewaySettingsView : SettingsSectionView
         // Clients bound to several providers fall back along their bindings (issue #28).
         var failover = RowBuilder.Hinted(Loc.T("settings.clientFailover"), Loc.T("settings.clientFailoverHint"),
             Switch(Loc.T("settings.clientFailover"), x => x.ClientProviderFailover, on => PatchAsync(JsonPatch.Of(("clientProviderFailover", on)))));
+        // Copilot's refusal of reasoning from an earlier session: resend once without its encrypted content.
+        var staleReasoning = RowBuilder.Hinted(Loc.T("settings.stripStaleReasoning"), Loc.T("settings.stripStaleReasoningHint"),
+            Switch(Loc.T("settings.stripStaleReasoning"), x => x.StripStaleReasoning, on => PatchAsync(JsonPatch.Of(("stripStaleReasoning", on)))));
         stack.Children.Add(RowBuilder.Group(null, null,
             _requireRow,
             idle,
             maxBody,
             RowBuilder.Hinted(Loc.T("settings.requestCompression"), Loc.T("settings.requestCompressionHint"), compression),
             awake,
-            failover));
+            failover,
+            staleReasoning));
     }
 
     /// <inheritdoc />

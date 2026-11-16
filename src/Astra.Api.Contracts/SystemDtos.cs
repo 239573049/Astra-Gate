@@ -132,7 +132,8 @@ public sealed record SettingsDto(
     bool RequireGatewayKey, string? PluginMarketUrl, string PluginMarketDefaultUrl, string? UsageTimeZone,
     string EffectiveUsageTimeZone, string RequestCompression, bool TraceContent = false, bool PreventSleep = false,
     bool ProviderQualifiedModels = false, string ModelProviderSeparator = "@", List<string>? HiddenNav = null,
-    string ModelQualifyScope = "shared", bool ClientProviderFailover = true, int MaxRequestBodyMb = 64);
+    string ModelQualifyScope = "shared", bool ClientProviderFailover = true, int MaxRequestBodyMb = 64,
+    bool StripStaleReasoning = true);
 
 /// <summary>
 /// <c>POST /api/connect/join</c> body: connect this machine to a unified gateway (a company's Astra server) as a provider. Either a

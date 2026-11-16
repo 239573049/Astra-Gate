@@ -265,6 +265,79 @@ public class CopilotGatewayTests
         Assert.Equal(401, (await AttemptsAsync(gw, response)).Single()["http.response.status_code"]!.GetValue<int>());
     }
 
+    // A resumed Codex turn: reasoning from an earlier session (encrypted), then the new user message.
+    private const string ResumedRequest = """
+        {"model":"gpt-5","stream":false,"input":[
+          {"type":"reasoning","id":"rs_old","summary":[],"encrypted_content":"gAAAA-old"},
+          {"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]},
+          {"type":"message","role":"user","content":[{"type":"input_text","text":"next"}]}]}
+        """;
+
+    private static List<JsonObject> GenerationBodies(GatewayFixture gw) => gw.Upstream.Requests
+        .Where(r => r.Url.AbsolutePath == "/v1/responses").Select(r => r.Json).ToList();
+
+    private static bool CarriesEncryptedReasoning(JsonObject body) =>
+        body["input"]!.AsArray().Any(i => i!["type"]!.GetValue<string>() == "reasoning" && i.AsObject().ContainsKey("encrypted_content"));
+
+    [Theory]
+    [InlineData("balanced")]
+    [InlineData("manual")]
+    public async Task Stale_Reasoning_Is_Dropped_And_The_Request_Sent_Once_More(string mode)
+    {
+        await using var gw = await StartAsync(mode, true, seen => CarriesEncryptedReasoning(seen.Json)
+            ? FakeUpstream.Json(StaleItem("input item does not belong to this connection"), HttpStatusCode.Unauthorized)
+            : FakeUpstream.Json(Completed));
+
+        using var response = await gw.PostAsync("/v1/responses", ResumedRequest);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        // Same account, no refresh; the resend keeps every item and only loses the encrypted content.
+        Assert.Equal(["Bearer " + TokenA, "Bearer " + TokenA], GenerationTokens(gw));
+        var bodies = GenerationBodies(gw);
+        Assert.True(CarriesEncryptedReasoning(bodies[0]));
+        var resent = bodies[1]["input"]!.AsArray();
+        Assert.Equal(3, resent.Count);
+        Assert.Equal("rs_old", resent[0]!["id"]!.GetValue<string>());
+        Assert.False(resent[0]!.AsObject().ContainsKey("encrypted_content"));
+        var account = (await gw.Host.Db.Accounts.GetAsync("acc-a"))!;
+        Assert.Equal(AccountStatus.Active, account.Status);
+        Assert.Null(account.CooldownUntilUtc);
+        Assert.Equal(0, gw.Host.App.Services.GetRequiredService<AccountScheduler>().InFlight("acc-a"));
+        var attempts = await AttemptsAsync(gw, response);
+        Assert.Equal(2, attempts.Count);
+        Assert.Equal(GatewayPipeline.StaleReasoningRetry, attempts[0]["astra.attempt.retry"]!.GetValue<string>());
+        Assert.Equal(401, attempts[0]["http.response.status_code"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Stale_Reasoning_Refused_Again_Is_A_Bad_Request()
+    {
+        await using var gw = await StartAsync("balanced", true,
+            _ => FakeUpstream.Json(StaleItem("input item does not belong to this connection"), HttpStatusCode.Unauthorized));
+
+        using var response = await gw.PostAsync("/v1/responses", ResumedRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("重试过一次", JsonNode.Parse(await response.Content.ReadAsStringAsync())!["error"]!["message"]!.GetValue<string>());
+        Assert.Equal(["Bearer " + TokenA, "Bearer " + TokenA], GenerationTokens(gw));
+        Assert.Null((await gw.Host.Db.Accounts.GetAsync("acc-a"))!.CooldownUntilUtc);
+    }
+
+    [Fact]
+    public async Task Stale_Reasoning_Is_Left_Alone_When_The_Setting_Is_Off()
+    {
+        await using var gw = await StartAsync("balanced", true, seen => CarriesEncryptedReasoning(seen.Json)
+            ? FakeUpstream.Json(StaleItem("input item does not belong to this connection"), HttpStatusCode.Unauthorized)
+            : FakeUpstream.Json(Completed));
+        await gw.Host.App.Services.GetRequiredService<SettingsService>().UpdateAsync(s => s.StripStaleReasoning = false);
+
+        using var response = await gw.PostAsync("/v1/responses", ResumedRequest);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("自动丢弃过期的推理内容", JsonNode.Parse(await response.Content.ReadAsStringAsync())!["error"]!["message"]!.GetValue<string>());
+        Assert.Single(GenerationBodies(gw));
+    }
+
     [Fact]
     public async Task A_Stale_Input_Item_Is_Recognised_After_A_Refresh_Too()
     {

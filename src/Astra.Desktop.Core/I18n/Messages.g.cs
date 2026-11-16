@@ -1803,6 +1803,8 @@ internal static class Messages
         "settings.preventSleepHint",
         "settings.clientFailover",
         "settings.clientFailoverHint",
+        "settings.stripStaleReasoning",
+        "settings.stripStaleReasoningHint",
         "settings.sidebar",
         "settings.sidebar.footer",
         "settings.qualifiedModels",
@@ -2549,6 +2551,7 @@ internal static class Messages
         "traces.switch.auth_refresh",
         "traces.switch.provider_failover",
         "traces.switch.compression_rejected",
+        "traces.switch.stale_reasoning",
         "traces.cause.user",
         "traces.cause.tool_result",
         "traces.cause.results",
@@ -2584,6 +2587,7 @@ internal static class Messages
         "traces.link.session",
         "traces.link.inferred",
         "traces.retry.compression_rejected",
+        "traces.retry.stale_reasoning",
         "traces.retry.auth_refresh",
         "traces.retry.rate_limited_failover",
         "traces.retry.auth_failover",
@@ -4937,6 +4941,8 @@ internal static class Messages
             case "settings.preventSleepHint": return "网关有请求在处理（包括流式输出）时，阻止系统因闲置而睡眠，最后一个请求结束约 30 秒后解除；关闭开关或退出服务立即解除。显示器照常熄灭，合盖仍会睡眠。默认关闭；Linux 需要 systemd（systemd-inhibit），容器里不起作用。";
             case "settings.clientFailover": return "提供商失败时自动切换";
             case "settings.clientFailoverHint": return "客户端绑定了多个提供商时，请求遇到限流、认证被拒、5xx 或网络错误，且还没有任何内容返回给客户端，网关会按绑定顺序换下一个能服务该模型的提供商重试，所有提供商都失败才把错误返回给客户端。默认开启；关闭后只使用第一个能服务该模型的提供商。失败的提供商会短暂冷却，期间被跳过。";
+            case "settings.stripStaleReasoning": return "自动丢弃过期的推理内容";
+            case "settings.stripStaleReasoningHint": return "GitHub Copilot 不接受来自较早会话的 reasoning 条目（Responses 接口返回 401：input item does not belong to this connection），常见于长时间续用或恢复的会话。开启后，遇到这个拒绝时网关会去掉这些条目的 encrypted_content，用同一个账号重发一次，对话继续，只是丢掉了那几轮的推理上下文。请求在被拒绝之前不会被改动。默认开启；关闭后直接把错误返回给客户端，由用户新开会话。";
             case "settings.sidebar": return "侧边栏菜单";
             case "settings.sidebar.footer": return "关闭后该项从左侧菜单隐藏，页面仍可通过地址或命令面板打开。设置不可隐藏。";
             case "settings.qualifiedModels": return "按提供商区分同名模型";
@@ -5683,6 +5689,7 @@ internal static class Messages
             case "traces.switch.auth_refresh": return "刷新登录后重试";
             case "traces.switch.provider_failover": return "切换提供商";
             case "traces.switch.compression_rejected": return "改发未压缩的请求";
+            case "traces.switch.stale_reasoning": return "丢弃过期推理后重发";
             case "traces.cause.user": return "用户提问";
             case "traces.cause.tool_result": return "工具结果";
             case "traces.cause.results": return "工具结果 ×{count}";
@@ -5718,6 +5725,7 @@ internal static class Messages
             case "traces.link.session": return "按会话兜底";
             case "traces.link.inferred": return "推断";
             case "traces.retry.compression_rejected": return "上游不收压缩的请求体";
+            case "traces.retry.stale_reasoning": return "上游不接受较早会话的 reasoning，去掉 encrypted_content 重发";
             case "traces.retry.auth_refresh": return "401/403 后刷新令牌重试";
             case "traces.retry.rate_limited_failover": return "429 限流，切换账号";
             case "traces.retry.auth_failover": return "账号不可用或认证被拒绝，切换账号";
@@ -8073,6 +8081,8 @@ internal static class Messages
             case "settings.preventSleepHint": return "While the gateway is handling requests (streams included), the system does not go to sleep when idle; it may again about 30 seconds after the last one finishes, or at once when you turn this off or the server stops. The display still turns off and closing the lid still sleeps. Off by default; on Linux it needs systemd (systemd-inhibit) and has no effect in containers.";
             case "settings.clientFailover": return "Switch provider automatically when one fails";
             case "settings.clientFailoverHint": return "When a client is bound to several providers and a request hits a rate limit, rejected credentials, a 5xx or a network error before anything reached the client, the gateway retries it on the next bound provider that serves the model, in binding order; the client sees an error only when every one failed. On by default; off = only the first provider serving the model is used. A failing provider cools down briefly and is skipped meanwhile.";
+            case "settings.stripStaleReasoning": return "Drop stale reasoning automatically";
+            case "settings.stripStaleReasoningHint": return "GitHub Copilot refuses reasoning items from an earlier session (the Responses API answers 401 \"input item does not belong to this connection\"), which happens in long-running or resumed sessions. When on, the gateway then removes those items' encrypted_content and sends the request once more on the same account: the conversation goes on, without the reasoning context of those earlier turns. Requests are never changed before such a refusal. On by default; off = the error goes back to the client and the user starts a new session.";
             case "settings.sidebar": return "Sidebar menu";
             case "settings.sidebar.footer": return "A hidden entry leaves the left menu; its page still opens by address or from the command palette. Settings cannot be hidden.";
             case "settings.qualifiedModels": return "Tell providers apart by model id";
@@ -8819,6 +8829,7 @@ internal static class Messages
             case "traces.switch.auth_refresh": return "Refreshed sign-in, retrying";
             case "traces.switch.provider_failover": return "Next provider";
             case "traces.switch.compression_rejected": return "Resending uncompressed";
+            case "traces.switch.stale_reasoning": return "Resending without stale reasoning";
             case "traces.cause.user": return "User prompt";
             case "traces.cause.tool_result": return "Tool result";
             case "traces.cause.results": return "{count} tool results";
@@ -8854,6 +8865,7 @@ internal static class Messages
             case "traces.link.session": return "Session fallback";
             case "traces.link.inferred": return "Inferred";
             case "traces.retry.compression_rejected": return "Upstream rejected the compressed body";
+            case "traces.retry.stale_reasoning": return "Upstream refused reasoning from an earlier session; resent without encrypted_content";
             case "traces.retry.auth_refresh": return "Retried after refreshing the token (401/403)";
             case "traces.retry.rate_limited_failover": return "Rate limited (429), switched account";
             case "traces.retry.auth_failover": return "Account unavailable or authentication rejected, switched account";

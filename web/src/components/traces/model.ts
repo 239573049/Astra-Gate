@@ -272,7 +272,7 @@ export const NOTE_SHOW_MS = 2600;
 export const currentAttempt = (r: Pick<RequestSummary, 'attempts'>): RequestAttempt | null => r.attempts?.at(-1) ?? null;
 
 /** Retry reasons (astra.attempt.retry) with a short traces.switch.* label; another one shows no label rather than a raw key. */
-const SWITCH_REASONS = new Set(['rate_limited_failover', 'auth_failover', 'auth_refresh', 'provider_failover', 'compression_rejected']);
+const SWITCH_REASONS = new Set(['rate_limited_failover', 'auth_failover', 'auth_refresh', 'provider_failover', 'compression_rejected', 'stale_reasoning']);
 
 /** "限流，换账号" for a retry reason; null for none or one without a label. */
 export const switchReason = (retry: string | null | undefined, t: TFunction): string | null =>

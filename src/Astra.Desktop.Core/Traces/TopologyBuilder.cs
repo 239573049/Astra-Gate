@@ -50,7 +50,7 @@ public static class TopologyBuilder
     /// <summary>The attempt a live request is on now (its last one); null for a feed without attempts (<c>currentAttempt</c>).</summary>
     public static RequestAttempt? CurrentAttempt(RequestSummaryDto r) => r.Attempts is { Count: > 0 } a ? a[^1] : null;
 
-    private static readonly HashSet<string> SwitchReasons = ["rate_limited_failover", "auth_failover", "auth_refresh", "provider_failover", "compression_rejected"];
+    private static readonly HashSet<string> SwitchReasons = ["rate_limited_failover", "auth_failover", "auth_refresh", "provider_failover", "compression_rejected", "stale_reasoning"];
 
     /// <summary>The short <c>traces.switch.*</c> label of a retry reason (<c>switchReason</c>); null for none or one without a label.</summary>
     public static string? SwitchReason(string? retry, TraceText t) => retry is not null && SwitchReasons.Contains(retry) ? t("traces.switch." + retry) : null;

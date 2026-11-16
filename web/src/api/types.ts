@@ -625,7 +625,7 @@ export interface RequestSummary {
 }
 /**
  * One upstream send of a request (an upstream.attempt span): the provider and account it went to, its status, why another
- * attempt followed (rate_limited_failover | auth_failover | auth_refresh | provider_failover | compression_rejected), and
+ * attempt followed (rate_limited_failover | auth_failover | auth_refresh | provider_failover | compression_rejected | stale_reasoning), and
  * when it ran (ms from the request's arrival; no endMs while in flight).
  */
 export interface RequestAttempt {
@@ -992,6 +992,8 @@ export interface Settings {
   preventSleep?: boolean;
   /** A client bound to several providers retries a failed request on the next bound provider serving the model (default on). */
   clientProviderFailover?: boolean;
+  /** Copilot refused a Responses request's reasoning from an earlier session: resend once without its encrypted content (default on). */
+  stripStaleReasoning?: boolean;
   /** Largest request body the gateway accepts, in MiB (1-1024, default 64). */
   maxRequestBodyMb?: number;
   /** Provider-qualified model ids (`model@alias`): model lists tell providers apart and a qualified id goes to that provider (off by default). */
