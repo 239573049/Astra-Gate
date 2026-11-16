@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.ante/catalog.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"display_name\":\"Astra\",\"base_url\":\"https://astra.corp.com/v1\",\"wire_style\":\"OpenAiCompatible\",\"preferred_models\":[{\"id\":\"gpt-5\",\"display_name\":\"GPT-5\",\"context_limit\":400000,\"max_tokens\":128000},{\"id\":\"claude-sonnet-4-5\",\"display_name\":\"Claude Sonnet 4.5\",\"context_limit\":200000,\"max_tokens\":64000},{\"id\":\"deepseek-chat\",\"display_name\":\"DeepSeek Chat\",\"context_limit\":64000,\"max_tokens\":8000}]}"
+  },
+  {
+    "file": "$HOME/.ante/settings.json",
+    "format": "json",
+    "keyPath": "provider",
+    "kind": "key",
+    "before": "\"mine\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.ante/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"foo\"",
+    "after": "\"gpt-5\""
+  }
+]

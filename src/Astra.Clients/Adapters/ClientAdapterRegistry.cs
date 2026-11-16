@@ -83,6 +83,21 @@ public sealed class ClientAdapterRegistry
         new OpenPencilClientAdapter(env, store),
         new RaycastClientAdapter(env, store),
         new ObsidianClientAdapter(env, store),
+        new ReasonixClientAdapter(env, store),
+        new MorphClientAdapter(env, store),
+        new JcodeClientAdapter(env, store),
+        new VibeClientAdapter(env, store),
+        new EmpryoClientAdapter(env, store),
+        new NanobotClientAdapter(env, store),
+        new MiniQClientAdapter(env, store),
+        new PaimonClientAdapter(env, store),
+        new ClineClientAdapter(env, store),
+        new GrokAppClientAdapter(env, store),
+        new AtomCodeClientAdapter(env, store),
+        new SnowClientAdapter(env, store),
+        new AnteClientAdapter(env, store),
+        new CraftAgentsClientAdapter(env, store),
+        new TuanjieCoworkClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

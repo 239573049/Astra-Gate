@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "keyPath": "agents.defaults.contextWindowTokens",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "64000"
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "keyPath": "agents.defaults.context_window_tokens",
+    "originalAbsent": false,
+    "original": "100000",
+    "applied": null
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "keyPath": "agents.defaults.model",
+    "originalAbsent": false,
+    "original": "\"anthropic/claude-opus-4\"",
+    "applied": "\"astra/deepseek-chat\""
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "keyPath": "agents.defaults.modelPreset",
+    "originalAbsent": false,
+    "original": "\"fast\"",
+    "applied": null
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "keyPath": "agents.defaults.provider",
+    "originalAbsent": false,
+    "original": "\"auto\"",
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"apiKey\":\"sk-astra-enterprise-key\",\"apiBase\":\"https://astra.corp.com/v1\",\"extraHeaders\":{\"User-Agent\":\"nanobot\"}}"
+  }
+]

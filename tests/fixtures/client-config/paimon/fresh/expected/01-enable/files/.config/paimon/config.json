@@ -1,0 +1,1 @@
+{ "providers": { "litellm": {"api_base":"https://astra.corp.com/v1","api_key":"sk-astra-enterprise-key"} }, "model": "litellm:gpt-5", "compaction": { "context_window": 400000 } }

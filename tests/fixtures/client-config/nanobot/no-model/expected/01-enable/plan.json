@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"apiKey\":\"sk-astra-enterprise-key\",\"apiBase\":\"https://astra.corp.com/v1\",\"extraHeaders\":{\"User-Agent\":\"nanobot\"}}"
+  }
+]

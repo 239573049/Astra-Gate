@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.empryo/config.json",
+    "format": "json",
+    "keyPath": "providers.[id=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"astra\",\"name\":\"Astra\",\"baseURL\":\"https://astra.corp.com/v1\",\"modelsAPI\":\"https://astra.corp.com/v1/models\"}"
+  },
+  {
+    "file": "$HOME/.empryo/config.json",
+    "format": "json",
+    "keyPath": "defaultModel",
+    "kind": "key",
+    "before": "\"mine/foo\"",
+    "after": "\"astra/gpt-5\""
+  }
+]

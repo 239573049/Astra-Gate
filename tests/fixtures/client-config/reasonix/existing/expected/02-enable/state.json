@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.reasonix/.env",
+    "keyPath": "ASTRA_REASONIX_API_KEY",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.reasonix/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine/foo\\u0022\"",
+    "applied": "\"\\u0022astra/deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.reasonix/config.toml",
+    "keyPath": "desktop.provider_access",
+    "originalAbsent": false,
+    "original": "\"[\\u0022mine\\u0022]\"",
+    "applied": "\"[\\u0022mine\\u0022, \\u0022astra\\u0022]\""
+  },
+  {
+    "file": "$HOME/.reasonix/config.toml",
+    "keyPath": "providers[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

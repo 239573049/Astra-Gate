@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.reasonix/config.toml",
+    "format": "toml",
+    "keyPath": "providers[name=astra]",
+    "kind": "table",
+    "before": null,
+    "after": "[{\"name\":\"\\u0022astra\\u0022\",\"kind\":\"\\u0022openai\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"api_key_env\":\"\\u0022ASTRA_REASONIX_API_KEY\\u0022\",\"models\":\"[\\u0022gpt-5\\u0022, \\u0022claude-sonnet-4-5\\u0022, \\u0022deepseek-chat\\u0022]\",\"default\":\"\\u0022gpt-5\\u0022\",\"reasoning_protocol\":\"\\u0022openai\\u0022\",\"no_proxy\":\"true\",\"model_overrides\":\"{ \\u0022gpt-5\\u0022 = { vision = true, context_window = 400000, max_output_tokens = 128000 }, \\u0022claude-sonnet-4-5\\u0022 = { vision = true, context_window = 200000, max_output_tokens = 64000 }, \\u0022deepseek-chat\\u0022 = { reasoning_protocol = \\u0022none\\u0022, vision = false, context_window = 64000, max_output_tokens = 8000 } }\"}]"
+  },
+  {
+    "file": "$HOME/.reasonix/.env",
+    "format": "env",
+    "keyPath": "ASTRA_REASONIX_API_KEY",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.reasonix/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": "\"mine/foo\"",
+    "after": "\"\\u0022astra/gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.reasonix/config.toml",
+    "format": "toml",
+    "keyPath": "desktop.provider_access",
+    "kind": "key",
+    "before": "[\"mine\"]",
+    "after": "\"[\\u0022mine\\u0022, \\u0022astra\\u0022]\""
+  }
+]

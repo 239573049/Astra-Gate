@@ -1,0 +1,1 @@
+{ "version": 1, "modes": {}, "providers": { "openai-compatible": {"settings":{"provider":"openai-compatible","apiKey":"sk-astra-enterprise-key","model":"gpt-5","baseUrl":"https://astra.corp.com/v1","headers":{"User-Agent":"cline"}},"tokenSource":"manual"} }, "lastUsedProvider": "openai-compatible" }

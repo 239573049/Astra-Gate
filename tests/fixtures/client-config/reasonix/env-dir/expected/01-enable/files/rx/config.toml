@@ -1,0 +1,14 @@
+# user config
+language = "en"
+default_model = "astra/gpt-5"
+
+[[providers]]
+name = "astra"
+kind = "openai"
+base_url = "https://astra.corp.com/v1"
+api_key_env = "ASTRA_REASONIX_API_KEY"
+models = ["gpt-5", "claude-sonnet-4-5", "deepseek-chat"]
+default = "gpt-5"
+reasoning_protocol = "openai"
+no_proxy = true
+model_overrides = { "gpt-5" = { vision = true, context_window = 400000, max_output_tokens = 128000 }, "claude-sonnet-4-5" = { vision = true, context_window = 200000, max_output_tokens = 64000 }, "deepseek-chat" = { reasoning_protocol = "none", vision = false, context_window = 64000, max_output_tokens = 8000 } }

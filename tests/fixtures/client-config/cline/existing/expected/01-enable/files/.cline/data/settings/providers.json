@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "lastUsedProvider": "openai-compatible",
+  "modes": {},
+  "providers": {
+    "anthropic": { "settings": { "provider": "anthropic", "apiKey": "sk-ant", "model": "claude-sonnet-4-5" }, "tokenSource": "manual" },
+    "openai-compatible": {"settings":{"provider":"openai-compatible","apiKey":"sk-astra-enterprise-key","model":"gpt-5","baseUrl":"https://astra.corp.com/v1","headers":{"User-Agent":"cline"}},"tokenSource":"manual"}
+  }
+}

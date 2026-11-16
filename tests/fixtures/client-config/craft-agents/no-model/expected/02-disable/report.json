@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.craft-agent/config.json",
+      "keyPath": "llmConnections.[slug=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

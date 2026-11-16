@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/rx/.env",
+    "keyPath": "ASTRA_REASONIX_API_KEY",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/rx/config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra/gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/rx/config.toml",
+    "keyPath": "providers[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

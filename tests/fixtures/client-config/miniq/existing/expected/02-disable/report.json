@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.local/share/miniq/settings.json",
+      "keyPath": "provider",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

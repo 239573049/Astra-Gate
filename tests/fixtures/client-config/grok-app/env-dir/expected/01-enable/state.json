@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/ga/agent-home/config.toml",
+    "keyPath": "model.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

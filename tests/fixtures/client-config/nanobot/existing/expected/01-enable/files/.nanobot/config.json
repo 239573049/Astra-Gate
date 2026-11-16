@@ -1,0 +1,11 @@
+{
+  "agents": {
+    "defaults": {
+      "provider": "astra",
+      "model": "astra/gpt-5",
+      "contextWindowTokens": 400000
+    }
+  },
+  "modelPresets": { "fast": { "model": "x" } },
+  "providers": { "mine": { "apiKey": "k", "apiBase": "http://localhost:1/v1" }, "astra": {"apiKey":"sk-astra-enterprise-key","apiBase":"https://astra.corp.com/v1","extraHeaders":{"User-Agent":"nanobot"}} }
+}

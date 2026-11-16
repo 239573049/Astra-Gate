@@ -1,0 +1,37 @@
+[
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "provider.default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022foo\\u0022\"",
+    "applied": "\"\\u0022deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "provider.default_provider",
+    "originalAbsent": false,
+    "original": "\"\\u0022mine\\u0022\"",
+    "applied": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "providers.astra.default_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022gpt-5\\u0022\"",
+    "applied": "\"\\u0022deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "keyPath": "providers.astra.models",
+    "originalAbsent": false,
+    "original": "\"[{ id = \\u0022gpt-5\\u0022, context_window = 400000, input = [\\u0022text\\u0022, \\u0022image\\u0022], reasoning = true }, { id = \\u0022claude-sonnet-4-5\\u0022, context_window = 200000, input = [\\u0022text\\u0022, \\u0022image\\u0022], reasoning = true }, { id = \\u0022deepseek-chat\\u0022, context_window = 64000, input = [\\u0022text\\u0022] }]\"",
+    "applied": "\"[{ id = \\u0022gpt-5\\u0022, context_window = 400000, input = [\\u0022text\\u0022, \\u0022image\\u0022], reasoning = true }, { id = \\u0022deepseek-chat\\u0022, context_window = 64000, input = [\\u0022text\\u0022] }]\""
+  }
+]

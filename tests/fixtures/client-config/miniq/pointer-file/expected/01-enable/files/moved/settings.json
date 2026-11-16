@@ -1,0 +1,1 @@
+{ "approvals": "ask", "provider": {"baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","model":"gpt-5","apiProtocol":"chat_completions"} }

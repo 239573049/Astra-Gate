@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/mq/settings.json",
+    "format": "json",
+    "keyPath": "provider",
+    "kind": "key",
+    "before": null,
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"model\":\"gpt-5\",\"apiProtocol\":\"chat_completions\"}"
+  }
+]

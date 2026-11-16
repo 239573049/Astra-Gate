@@ -1,0 +1,22 @@
+default_model = "astra/deepseek-chat"
+
+[[providers]]
+name = "mine"
+kind = "openai"
+base_url = "http://localhost:1/v1"
+api_key_env = "MINE_KEY"
+models = ["foo"]
+
+[desktop]
+provider_access = ["mine", "astra"]
+
+[[providers]]
+name = "astra"
+kind = "openai"
+base_url = "https://astra.corp.com/v1"
+api_key_env = "ASTRA_REASONIX_API_KEY"
+models = ["gpt-5", "deepseek-chat"]
+default = "deepseek-chat"
+reasoning_protocol = "openai"
+no_proxy = true
+model_overrides = { "gpt-5" = { vision = true, context_window = 400000, max_output_tokens = 128000 }, "deepseek-chat" = { reasoning_protocol = "none", vision = false, context_window = 64000, max_output_tokens = 8000 } }

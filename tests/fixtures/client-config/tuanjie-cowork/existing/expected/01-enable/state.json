@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.codely/settings.json",
+    "keyPath": "customModelProviders.[id=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"astra\",\"name\":\"Astra\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"authType\":\"openai\"}"
+  },
+  {
+    "file": "$HOME/.codely/settings.json",
+    "keyPath": "customModels.[id=astra-claude-sonnet-4-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"astra-claude-sonnet-4-5\",\"providerId\":\"astra\",\"model\":\"claude-sonnet-4-5\",\"displayName\":\"claude-sonnet-4-5\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":true}"
+  },
+  {
+    "file": "$HOME/.codely/settings.json",
+    "keyPath": "customModels.[id=astra-deepseek-chat]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"astra-deepseek-chat\",\"providerId\":\"astra\",\"model\":\"deepseek-chat\",\"displayName\":\"deepseek-chat\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":false}"
+  },
+  {
+    "file": "$HOME/.codely/settings.json",
+    "keyPath": "customModels.[id=astra-gpt-5]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"astra-gpt-5\",\"providerId\":\"astra\",\"model\":\"gpt-5\",\"displayName\":\"gpt-5\",\"roles\":[\"model\"],\"wireApi\":\"chat\",\"supportsMultimodal\":true}"
+  }
+]

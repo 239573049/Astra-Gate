@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "format": "yaml",
+    "keyPath": "llm.inference_provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"openai_response_compatible\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "format": "yaml",
+    "keyPath": "llm.endpoint",
+    "kind": "key",
+    "before": null,
+    "after": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "format": "yaml",
+    "keyPath": "llm.api_key",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "format": "yaml",
+    "keyPath": "llm.model",
+    "kind": "key",
+    "before": null,
+    "after": "\"gpt-5\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "format": "yaml",
+    "keyPath": "llm.context_window_tokens",
+    "kind": "key",
+    "before": null,
+    "after": "400000"
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "format": "yaml",
+    "keyPath": "llm.headers.User-Agent",
+    "kind": "key",
+    "before": null,
+    "after": "\"mistermorph\""
+  }
+]

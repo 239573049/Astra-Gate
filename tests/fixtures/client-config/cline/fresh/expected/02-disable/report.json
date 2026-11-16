@@ -1,0 +1,45 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.cline/data/settings/models.json",
+      "keyPath": "providers.openai-compatible",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.cline/data/settings/models.json",
+      "keyPath": "version",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.cline/data/settings/providers.json",
+      "keyPath": "lastUsedProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.cline/data/settings/providers.json",
+      "keyPath": "modes",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.cline/data/settings/providers.json",
+      "keyPath": "providers.openai-compatible",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.cline/data/settings/providers.json",
+      "keyPath": "version",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.cline/data/settings/models.json",
+    "$HOME/.cline/data/settings/providers.json"
+  ],
+  "warnings": []
+}

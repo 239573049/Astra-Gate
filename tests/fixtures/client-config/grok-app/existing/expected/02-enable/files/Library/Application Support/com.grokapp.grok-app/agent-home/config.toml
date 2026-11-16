@@ -1,0 +1,19 @@
+[models]
+default = "grok"
+
+[model.mine]
+model = "m"
+base_url = "http://localhost:1/v1"
+name = "mine"
+
+[model.astra]
+model = "deepseek-chat"
+base_url = "https://astra.corp.com/v1"
+name = "Astra"
+api_key = "sk-astra-enterprise-key"
+api_backend = "chat_completions"
+app_provider_mode = "generic"
+app_models = "[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"contextWindow\":400000,\"supportsVision\":true},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"contextWindow\":64000}]"
+app_efforts = "[]"
+supports_reasoning_effort = false
+context_window = 64000

@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/ga/agent-home/config.toml",
+      "keyPath": "model.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

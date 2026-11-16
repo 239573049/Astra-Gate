@@ -57,6 +57,21 @@ public static class ClientKinds
     public const string OpenPencil = "openpencil";
     public const string Raycast = "raycast";
     public const string Obsidian = "obsidian";
+    public const string Reasonix = "reasonix";
+    public const string Morph = "morph";
+    public const string Jcode = "jcode";
+    public const string Vibe = "vibe";
+    public const string Empryo = "empryo";
+    public const string Nanobot = "nanobot";
+    public const string MiniQ = "miniq";
+    public const string Paimon = "paimon";
+    public const string Cline = "cline";
+    public const string GrokApp = "grok-app";
+    public const string AtomCode = "atomcode";
+    public const string Snow = "snow";
+    public const string Ante = "ante";
+    public const string CraftAgents = "craft-agents";
+    public const string TuanjieCowork = "tuanjie-cowork";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -65,6 +80,7 @@ public static class ClientKinds
         DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo, ZCode, TKCode,
         OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
         ZooCode, JetBrainsAir, AirIde, CopilotJetBrains, CodeBuddy, Qoder, QoderCn, T3Code, Pencil, OpenPencil, Raycast, Obsidian,
+        Reasonix, Morph, Jcode, Vibe, Empryo, Nanobot, MiniQ, Paimon, Cline, GrokApp, AtomCode, Snow, Ante, CraftAgents, TuanjieCowork,
     ];
 
     /// <summary>
@@ -80,6 +96,7 @@ public static class ClientKinds
         Paseo, ZCode, TKCode, MuseCode, Codex, GrokBuild, HermesAgent,
         OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
         ZooCode, JetBrainsAir, AirIde, CopilotJetBrains, CodeBuddy, Qoder, QoderCn, T3Code, Pencil, OpenPencil, Raycast, Obsidian,
+        Reasonix, Morph, Jcode, Vibe, Empryo, Nanobot, MiniQ, Paimon, Cline, GrokApp, AtomCode, Snow, Ante, CraftAgents, TuanjieCowork,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>
@@ -111,7 +128,7 @@ public static class ClientKinds
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
-        Codex or GrokBuild or MuseCode or PenguinHarness => ApiProtocol.OpenAIResponses,
+        Codex or GrokBuild or MuseCode or PenguinHarness or Morph => ApiProtocol.OpenAIResponses,
         ClaudeCode or ClaudeDesktop or Paseo or T3Code => ApiProtocol.Anthropic,
         GeminiCli or AntigravityCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,

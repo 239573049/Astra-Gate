@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/ga/agent-home/config.toml",
+    "format": "toml",
+    "keyPath": "model.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"model\":\"\\u0022gpt-5\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"name\":\"\\u0022Astra\\u0022\",\"api_key\":\"\\u0022sk-astra-enterprise-key\\u0022\",\"api_backend\":\"\\u0022chat_completions\\u0022\",\"app_provider_mode\":\"\\u0022generic\\u0022\",\"app_models\":\"\\u0022[{\\\\\\u0022id\\\\\\u0022:\\\\\\u0022gpt-5\\\\\\u0022,\\\\\\u0022name\\\\\\u0022:\\\\\\u0022GPT-5\\\\\\u0022,\\\\\\u0022contextWindow\\\\\\u0022:400000,\\\\\\u0022supportsVision\\\\\\u0022:true},{\\\\\\u0022id\\\\\\u0022:\\\\\\u0022claude-sonnet-4-5\\\\\\u0022,\\\\\\u0022name\\\\\\u0022:\\\\\\u0022Claude Sonnet 4.5\\\\\\u0022,\\\\\\u0022contextWindow\\\\\\u0022:200000,\\\\\\u0022supportsVision\\\\\\u0022:true},{\\\\\\u0022id\\\\\\u0022:\\\\\\u0022deepseek-chat\\\\\\u0022,\\\\\\u0022name\\\\\\u0022:\\\\\\u0022DeepSeek Chat\\\\\\u0022,\\\\\\u0022contextWindow\\\\\\u0022:64000}]\\u0022\",\"app_efforts\":\"\\u0022[]\\u0022\",\"supports_reasoning_effort\":\"false\",\"app_supports_vision\":\"true\",\"context_window\":\"400000\"}"
+  }
+]

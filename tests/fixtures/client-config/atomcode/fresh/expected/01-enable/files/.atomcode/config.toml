@@ -1,0 +1,27 @@
+default_provider = "astra-gpt-5"
+default_model = "astra-gpt-5"
+[provider_accounts.astra]
+provider = "openai-compatible"
+base_url = "https://astra.corp.com/v1"
+api_key = "sk-astra-enterprise-key"
+
+[models.astra-gpt-5]
+account = "astra"
+model = "gpt-5"
+context_window = 400000
+max_tokens = 128000
+supports_vision = true
+
+[models.astra-claude-sonnet-4-5]
+account = "astra"
+model = "claude-sonnet-4-5"
+context_window = 200000
+max_tokens = 64000
+supports_vision = true
+
+[models.astra-deepseek-chat]
+account = "astra"
+model = "deepseek-chat"
+context_window = 64000
+max_tokens = 8000
+supports_vision = false

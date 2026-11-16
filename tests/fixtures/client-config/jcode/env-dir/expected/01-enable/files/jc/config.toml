@@ -1,0 +1,14 @@
+[display]
+theme = "dark"
+
+[providers.astra]
+type = "openai-compatible"
+base_url = "https://astra.corp.com/v1"
+api_key = "sk-astra-enterprise-key"
+requires_api_key = true
+default_model = "gpt-5"
+models = [{ id = "gpt-5", context_window = 400000, input = ["text", "image"], reasoning = true }, { id = "claude-sonnet-4-5", context_window = 200000, input = ["text", "image"], reasoning = true }, { id = "deepseek-chat", context_window = 64000, input = ["text"] }]
+
+[provider]
+default_provider = "astra"
+default_model = "gpt-5"

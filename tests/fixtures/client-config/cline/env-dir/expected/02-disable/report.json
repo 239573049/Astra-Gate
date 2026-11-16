@@ -1,0 +1,45 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/cldata/settings/models.json",
+      "keyPath": "providers.openai-compatible",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cldata/settings/models.json",
+      "keyPath": "version",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cldata/settings/providers.json",
+      "keyPath": "lastUsedProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cldata/settings/providers.json",
+      "keyPath": "modes",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cldata/settings/providers.json",
+      "keyPath": "providers.openai-compatible",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/cldata/settings/providers.json",
+      "keyPath": "version",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/cldata/settings/models.json",
+    "$HOME/cldata/settings/providers.json"
+  ],
+  "warnings": []
+}

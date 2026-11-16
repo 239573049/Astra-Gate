@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.vibe/config.toml",
+    "keyPath": "active_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022devstral\\u0022\"",
+    "applied": "\"\\u0022astra/deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.vibe/config.toml",
+    "keyPath": "models[provider=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.vibe/config.toml",
+    "keyPath": "providers[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

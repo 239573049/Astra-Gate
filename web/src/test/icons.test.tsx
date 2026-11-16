@@ -149,6 +149,21 @@ describe('client brand icons', () => {
     openpencil: { brand: 'monogram', mark: 'monogram', badge: false },
     raycast: { brand: 'monogram', mark: 'monogram', badge: false },
     obsidian: { brand: 'monogram', mark: 'monogram', badge: false },
+    'reasonix': { brand: 'monogram', mark: 'monogram', badge: false },
+    'morph': { brand: 'monogram', mark: 'monogram', badge: false },
+    'jcode': { brand: 'monogram', mark: 'monogram', badge: false },
+    vibe: { brand: 'mistral', mark: 'color', badge: true },
+    'empryo': { brand: 'monogram', mark: 'monogram', badge: false },
+    'nanobot': { brand: 'monogram', mark: 'monogram', badge: false },
+    'miniq': { brand: 'monogram', mark: 'monogram', badge: false },
+    'paimon': { brand: 'monogram', mark: 'monogram', badge: false },
+    cline: { brand: 'cline', mark: 'mono', badge: true },
+    'grok-app': { brand: 'grok', mark: 'mono', badge: true },
+    'atomcode': { brand: 'monogram', mark: 'monogram', badge: false },
+    'snow': { brand: 'monogram', mark: 'monogram', badge: false },
+    'ante': { brand: 'monogram', mark: 'monogram', badge: false },
+    'craft-agents': { brand: 'monogram', mark: 'monogram', badge: false },
+    'tuanjie-cowork': { brand: 'monogram', mark: 'monogram', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

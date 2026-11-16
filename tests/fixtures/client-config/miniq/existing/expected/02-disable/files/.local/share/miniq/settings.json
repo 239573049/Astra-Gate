@@ -1,0 +1,4 @@
+{
+  "provider": { "baseUrl": "https://api.openai.com/v1", "apiKey": "sk-mine", "model": "gpt-4o", "apiProtocol": "auto" },
+  "mcpServers": { "a": { "command": "x" } }
+}

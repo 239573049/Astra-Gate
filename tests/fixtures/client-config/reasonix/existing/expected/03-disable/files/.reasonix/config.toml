@@ -1,0 +1,11 @@
+default_model = "mine/foo"
+
+[[providers]]
+name = "mine"
+kind = "openai"
+base_url = "http://localhost:1/v1"
+api_key_env = "MINE_KEY"
+models = ["foo"]
+
+[desktop]
+provider_access = ["mine"]

@@ -60,6 +60,11 @@ internal static class BrandCatalog
         "copilot-jetbrains" => Lobe("GithubCopilot.Mono", "GithubCopilot", LucideIconKind.Monitor),
         "zoo-code" or "jetbrains-air" or "air-ide" or "codebuddy" or "t3code" or "pencil" or "openpencil" or "raycast" or "obsidian" => Initials(),
         "aside" or "omo" or "prime-agent" or "mu" or "mothx" or "penguin-harness" or "dim" or "goose" => Initials(),
+        "vibe" => Lobe("Mistral.Color", "Mistral", LucideIconKind.SquareTerminal),
+        "cline" => Lobe("Cline.Mono", "Cline", LucideIconKind.SquareTerminal),
+        "grok-app" => Lobe("Grok.Mono", "Grok", LucideIconKind.Monitor),
+        "reasonix" or "morph" or "jcode" or "empryo" or "nanobot" or "miniq" or "paimon" or "atomcode" or "snow" or "ante"
+            or "craft-agents" or "tuanjie-cowork" => Initials(),
         _ => null,
     };
 

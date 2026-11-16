@@ -1,0 +1,30 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.reasonix/.env",
+      "keyPath": "ASTRA_REASONIX_API_KEY",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.reasonix/config.toml",
+      "keyPath": "default_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.reasonix/config.toml",
+      "keyPath": "desktop.provider_access",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.reasonix/config.toml",
+      "keyPath": "providers[name=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

@@ -1,0 +1,7 @@
+[models]
+default = "grok"
+
+[model.mine]
+model = "m"
+base_url = "http://localhost:1/v1"
+name = "mine"

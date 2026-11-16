@@ -1,0 +1,5 @@
+{
+  "providers": {
+    "mine": { "display_name": "Mine", "base_url": "http://localhost:1/v1", "wire_style": "OpenAiCompatible" }
+  }
+}

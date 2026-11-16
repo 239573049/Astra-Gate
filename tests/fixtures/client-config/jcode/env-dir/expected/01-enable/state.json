@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/jc/config.toml",
+    "keyPath": "provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/jc/config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

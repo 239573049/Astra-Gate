@@ -1,0 +1,8 @@
+[provider]
+default_provider = "mine"
+default_model = "foo"
+
+[providers.mine]
+type = "openai-compatible"
+base_url = "http://localhost:1/v1"
+api_key = "k"

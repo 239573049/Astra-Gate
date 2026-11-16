@@ -1,0 +1,1 @@
+{ "providers": { "astra": {"apiKey":"sk-astra-enterprise-key","apiBase":"https://astra.corp.com/v1","extraHeaders":{"User-Agent":"nanobot"}} }, "agents": { "defaults": { "provider": "astra", "model": "astra/gpt-5", "contextWindowTokens": 400000 } } }

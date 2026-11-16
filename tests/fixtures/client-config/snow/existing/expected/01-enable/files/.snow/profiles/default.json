@@ -1,0 +1,11 @@
+{
+  "snowcfg": {
+    "baseUrl": "https://api.openai.com/v1",
+    "apiKey": "sk-mine",
+    "requestMethod": "responses",
+    "advancedModel": "gpt-4o",
+    "basicModel": "gpt-4o-mini",
+    "oauth": { "token": "t" },
+    "maxTokens": 4096
+  }
+}
