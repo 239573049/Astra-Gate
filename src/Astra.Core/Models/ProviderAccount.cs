@@ -23,6 +23,12 @@ public static class AccountKinds
 
     /// <summary>A plugin's sign-in: the credential stays in plugin-auth.json; <c>extra.plugin_key</c> names it there.</summary>
     public const string Plugin = "plugin";
+
+    /// <summary>
+    /// A Claude subscription answered by the local <c>claude</c> program (the Claude bridge): the account holds no token — the
+    /// sign-in is <c>claude</c>'s own, in the config directory <c>extra.claude_bridge.config_dir</c> names (empty = <c>claude</c>'s default).
+    /// </summary>
+    public const string ClaudeBridge = "claude_bridge";
 }
 
 /// <summary>How an account was added (column <c>source</c>; null for accounts older than the column).</summary>
@@ -38,6 +44,9 @@ public static class AccountSources
 
     /// <summary>Signed in through a provider plugin.</summary>
     public const string Plugin = "plugin";
+
+    /// <summary>Added as a Claude bridge account (the local <c>claude</c> program).</summary>
+    public const string ClaudeBridge = "claude_bridge";
 }
 
 /// <summary>
@@ -113,6 +122,13 @@ public sealed class ProviderAccount
     /// <summary>The only protocol this API key is used for (<c>extra.protocol</c>); null = every protocol of the provider.</summary>
     public ApiProtocol? KeyProtocol =>
         Extra["protocol"] is JsonValue v && v.TryGetValue<string>(out var id) && ApiProtocols.TryParse(id, out var p) ? p : null;
+
+    /// <summary>Whether the account is answered by the local <c>claude</c> program (<see cref="AccountKinds.ClaudeBridge"/>).</summary>
+    public bool IsClaudeBridge => Kind == AccountKinds.ClaudeBridge;
+
+    /// <summary>The config directory (<c>CLAUDE_CONFIG_DIR</c>) of a Claude bridge account's sign-in; empty = <c>claude</c>'s default one.</summary>
+    public string ClaudeBridgeConfigDir =>
+        Extra["claude_bridge"]?["config_dir"] is JsonValue v && v.TryGetValue<string>(out var d) ? d : "";
 
     /// <summary>Free-text note on an API key (<c>extra.notes</c>).</summary>
     public string? KeyNotes => Extra["notes"] is JsonValue v && v.TryGetValue<string>(out var n) && n.Length > 0 ? n : null;

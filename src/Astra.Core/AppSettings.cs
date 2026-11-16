@@ -155,7 +155,64 @@ public sealed class AppSettings
     /// <summary>The MCP gateway (<c>/mcp</c>, plan mcp-gateway, GitHub issue #29).</summary>
     public McpGatewaySettings McpGateway { get; set; } = new();
 
+    /// <summary>Answering Claude subscription requests through the local <c>claude</c> program (linked update 36).</summary>
+    public ClaudeBridgeSettings ClaudeBridge { get; set; } = new();
+
+    /// <summary>Starting the 5-hour windows of subscription accounts on a schedule (linked update 36).</summary>
+    public WarmupSettings Warmup { get; set; } = new();
+
     public AppSettings Clone() => Json.Deserialize<AppSettings>(Json.Serialize(this))!;
+}
+
+/// <summary>
+/// The Claude bridge (magpie's "Claude subscription bridge"): a Claude subscription account of kind
+/// <see cref="Models.AccountKinds.ClaudeBridge"/> is answered by the real <c>claude</c> program on this machine instead of by a
+/// call to Anthropic's API with an OAuth token. The accounts themselves are the opt-in; these settings only say how the program is run.
+/// </summary>
+public sealed class ClaudeBridgeSettings
+{
+    public const int MaxRunsLimit = 64;
+
+    /// <summary>The <c>claude</c> executable to run; null = look for one (the PATH, then where installers put it).</summary>
+    public string? BinaryPath { get; set; }
+
+    /// <summary>How many <c>claude</c> processes may run at once, busy, idle or waiting for a caller's tool results (1..<see cref="MaxRunsLimit"/>).</summary>
+    public int MaxRuns { get; set; } = 6;
+
+    /// <summary>How long a finished run waits for its conversation's next turn before it is ended, in minutes (1..120).</summary>
+    public int IdleMinutes { get; set; } = 10;
+}
+
+/// <summary>
+/// Warm-up of subscription windows (magpie's daily warm-up): a Claude or ChatGPT/Codex window starts at the account's first request after
+/// it resets, so a tiny request sent at a time of the user's choosing makes the day's windows line up. Off by default. The request is
+/// sent with the account's own credentials and proxy; an account whose token has lapsed is skipped (nothing renews tokens in the
+/// background), so is a disabled or revoked one.
+/// </summary>
+public sealed class WarmupSettings
+{
+    public const string ModeDaily = "daily";
+    public const string ModeAuto = "auto";
+    public const string ModeOff = "off";
+    public static readonly IReadOnlyList<string> Modes = [ModeDaily, ModeAuto, ModeOff];
+
+    /// <summary>The global switch; with it off no account is warmed, whatever its own setting says.</summary>
+    public bool Enabled { get; set; }
+
+    /// <summary>"daily" = at <see cref="Times"/> on <see cref="Weekdays"/>; "auto" = as soon as a window has reset (checked every few minutes).</summary>
+    public string Mode { get; set; } = ModeDaily;
+
+    /// <summary>Local times of day ("HH:mm"), earliest first. The time zone is <see cref="AppSettings.UsageTimeZone"/>, else the machine's.</summary>
+    public List<string> Times { get; set; } = ["06:00"];
+
+    /// <summary>Days of the week the daily start runs on (0 = Sunday … 6 = Saturday); empty = every day.</summary>
+    public List<int> Weekdays { get; set; } = [];
+
+    /// <summary>Warm Claude subscription accounts.</summary>
+    public bool Claude { get; set; } = true;
+
+    /// <summary>Warm ChatGPT (Codex) subscription accounts.</summary>
+    public bool Codex { get; set; } = true;
 }
 
 /// <summary>

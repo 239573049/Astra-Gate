@@ -6,6 +6,7 @@ NuGet and npm dependencies used elsewhere are listed by their own package metada
 | Component | Where | License |
 | --- | --- | --- |
 | magpie `host.js` / `pi.js` ([yetone/magpie](https://github.com/yetone/magpie)) | vendored unmodified in `src/Astra.Plugins/Host/` (commit and hashes in `VENDORED.md`), embedded in `astra-server` | MIT — full text in `src/Astra.Plugins/Host/LICENSE-magpie.txt` |
+| magpie's Claude subscription bridge and daily warm-up ([yetone/magpie](https://github.com/yetone/magpie): mechanism, naming rules, prompt and failure handling, ported and rewritten in C#) | `src/Astra.Gateway/ClaudeBridge/`, `src/Astra.Server/Api/Warmup*.cs` | MIT — same license file as above |
 | magpie plugin fixtures (`fake`, `word-guard`, `agent-aider`) | `tests/Astra.Plugins.Tests/Fixtures/magpie/` (tests only) | MIT — same license file beside them |
 | [Jint](https://github.com/sebastienros/jint) | NuGet, linked into `astra-server` | BSD-2-Clause |
 | [Acornima](https://github.com/adams85/acornima) (Jint's parser) | NuGet, linked into `astra-server` | BSD-3-Clause |

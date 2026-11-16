@@ -186,6 +186,12 @@ public sealed record UpstreamAuth(
     /// <summary>The account's own proxy (overrides the provider's); null = the provider's / system proxy.</summary>
     public string? Proxy { get; init; }
 
+    /// <summary>
+    /// A Claude bridge account (<see cref="AccountKinds.ClaudeBridge"/>): the request is answered by the local <c>claude</c> program, which
+    /// signs in by itself. Nothing is sent to the network with these credentials.
+    /// </summary>
+    public Astra.Gateway.ClaudeBridge.ClaudeTarget? Bridge { get; init; }
+
     /// <summary>A plugin provider's account as plugin-auth.json keys it (id, or id#slot); null for every other provider.</summary>
     public string? PluginKey { get; init; }
 
@@ -247,6 +253,12 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
             return await BuildStaticAsync(provider, ct);
 
         var (_, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
+        if (account.IsClaudeBridge)
+            return UpstreamAuth.None with
+            {
+                AccountId = account.Id, CanRefresh = false, Proxy = account.HttpProxy,
+                Bridge = new Astra.Gateway.ClaudeBridge.ClaudeTarget(account.ClaudeBridgeConfigDir, account.HttpProxy, account.Id),
+            };
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
         return Build(SubscriptionSupport.UpstreamSchemeOf(provider), token, ChatGptAccountHeader(token))
             with { AccountId = account.Id, CanRefresh = SubscriptionTokenService.CanRefresh(account), Proxy = account.HttpProxy };

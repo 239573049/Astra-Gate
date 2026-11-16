@@ -56,10 +56,13 @@ public sealed partial class GatewayPipeline(
     ISmartRouter smartRouter,
     ILogger<GatewayPipeline> logger,
     RequestBodyLimits? bodyLimits = null,
-    GroupRouter? groups = null)
+    GroupRouter? groups = null,
+    Astra.Gateway.ClaudeBridge.ClaudeBridgeHandler? claudeBridge = null)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
     private readonly HttpClient? _pluginClient = pluginTransport is null ? null : new(pluginTransport, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
+    // A Claude bridge account (linked update 36) is answered by the local claude program, not over the network.
+    private readonly HttpClient? _bridgeClient = claudeBridge is null ? null : new(claudeBridge, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
     private readonly RequestBodyLimits _bodyLimits = bodyLimits ?? RequestBodyLimits.Default;
 
     internal const long MaxRequestBytes = 64L * 1024 * 1024;
@@ -1015,11 +1018,14 @@ public sealed partial class GatewayPipeline(
                 // A subscription token close to expiry is refreshed here, on the network.
                 attempt.Set("astra.account.id", credentials.AccountId ?? accountId)
                     .Set("astra.credentials_us", RequestTrace.Micros(credentialsStart, Stopwatch.GetTimestamp()))
-                    .Set("astra.transport", plugin ? "plugin" : null);
+                    .Set("astra.transport", plugin ? "plugin" : credentials.Bridge is not null ? "claude_bridge" : null);
                 attempts.Changed?.Invoke();
 
                 // 账号自己的代理优先于提供商的（同一账号的 401 重试沿用这个出口）。
-                var client = plugin ? _pluginClient ?? throw NoPluginProviders()
+                if (credentials.Bridge is not null && _bridgeClient is null)
+                    throw new GatewayException(501, "api_error", "这个服务没有 claude 程序通道（中继不支持经由 claude 程序的 Claude 订阅账号）。");
+                var client = credentials.Bridge is not null ? _bridgeClient!
+                    : plugin ? _pluginClient ?? throw NoPluginProviders()
                     : credentials.Proxy is { Length: > 0 } accountProxy ? http.For(accountProxy) : http.For(provider);
                 // The provider's own first-byte timeout (issue #28): a hung upstream hands the request on instead of holding it.
                 async Task<HttpResponseMessage> SendWithDeadlineAsync(HttpClient c, HttpRequestMessage r)
@@ -1271,6 +1277,7 @@ public sealed partial class GatewayPipeline(
             {
                 Content = content?.Invoke() ?? (compressed is null ? new PooledContent(body) : UpstreamCompression.Content(compressed, compression!)),
             };
+            if (a.Bridge is { } bridge) request.Options.Set(Astra.Gateway.ClaudeBridge.ClaudeBridgeHandler.TargetOption, bridge);
             if (plugin)
             {
                 // which of the plugin's accounts, its own proxy, and the conversation (the plugin's session)

@@ -27,6 +27,7 @@ import {
 } from '../api/hooks';
 import type { Provider, ProviderAccount, SubscriptionLoginStart, SubscriptionPolicy as Policy } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
+import { ClaudeBridgePanel } from './ClaudeBridgePanel';
 import { AccountImportSheet, type ImportMode } from './AccountImportSheet';
 import { ProviderUsageHint } from './AccountUsageStats';
 import { Button, Input, SearchField, Spinner } from './ui/controls';
@@ -112,7 +113,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   useEffect(() => {
     if (!isSubscription) return;
     for (const a of list) {
-      if (a.status !== 'active' || quotaAttempted.current.has(a.id)) continue;
+      // a claude-program account has no token to query with: its allowance is claude's own
+      if (a.status !== 'active' || a.kind === 'claude_bridge' || quotaAttempted.current.has(a.id)) continue;
       const at = a.quota?.fetchedAtUtc ? new Date(a.quota.fetchedAtUtc).getTime() : 0;
       if (Number.isFinite(at) && Date.now() - at < QUOTA_FRESH_MS) continue;
       quotaAttempted.current.add(a.id);
@@ -429,6 +431,8 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
           {t(switchModeDetailKey(policy.data.switchMode))}
         </p>
       )}
+
+      {provider.templateId === 'claude-subscription' && <ClaudeBridgePanel provider={provider} accounts={list} />}
 
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <SearchField className="w-52" value={query} onChange={setQuery} placeholder={t('providers.accounts.search')} />

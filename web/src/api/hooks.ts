@@ -118,6 +118,7 @@ import type {
   SkillSwitchResult,
 } from './types';
 import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebDavStatus } from './types';
+import type { ClaudeBridgeLogin, ClaudeBridgeSettings, ClaudeBridgeStatus, ClaudeSignIn, WarmupAccount, WarmupRun, WarmupSettings } from './types';
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 import type { PluginSuccessor, PluginV2Detail, PluginV2List, PluginV2Notification } from './types';
@@ -1325,6 +1326,81 @@ export const useUpdateMcpSettings = () => {
     onSuccess: (data) => qc.setQueryData(['mcp-settings'], data),
   });
 };
+
+// ---------- Claude bridge and window warm-up (linked update 36) ----------
+
+export const useClaudeBridge = () =>
+  useQuery({ queryKey: ['claude-bridge'], queryFn: () => api<ClaudeBridgeStatus>('GET', '/api/claude-bridge'), refetchInterval: 10_000 });
+
+export function useUpdateClaudeBridgeSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { binaryPath?: string; maxRuns?: number; idleMinutes?: number }) => api<ClaudeBridgeSettings>('PUT', '/api/claude-bridge/settings', body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['claude-bridge'] }),
+  });
+}
+
+export const useClaudeSignIn = (accountId: string | null) =>
+  useQuery({
+    queryKey: ['claude-bridge-signin', accountId],
+    queryFn: () => api<ClaudeSignIn>('GET', `/api/claude-bridge/accounts/${accountId}/signin`),
+    enabled: !!accountId,
+    staleTime: 30_000,
+  });
+
+export function useAddClaudeBridgeAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { providerId?: string; displayName?: string; configDir?: string; httpProxy?: string }) => api<ProviderAccount>('POST', '/api/claude-bridge/accounts', body),
+    onSuccess: (a) => {
+      void qc.invalidateQueries({ queryKey: keys.providerAccounts(a.providerId) });
+      void qc.invalidateQueries({ queryKey: ['warmup-accounts'] });
+    },
+  });
+}
+
+export function useStartClaudeLogin() {
+  return useMutation({ mutationFn: (accountId: string) => api<ClaudeBridgeLogin>('POST', `/api/claude-bridge/accounts/${accountId}/login`) });
+}
+
+export const useClaudeLogin = (accountId: string | null) =>
+  useQuery({
+    queryKey: ['claude-bridge-login', accountId],
+    queryFn: () => api<ClaudeBridgeLogin>('GET', `/api/claude-bridge/accounts/${accountId}/login`),
+    enabled: !!accountId,
+    refetchInterval: 2000,
+  });
+
+export const useWarmupSettings = () => useQuery({ queryKey: ['warmup'], queryFn: () => api<WarmupSettings>('GET', '/api/warmup') });
+
+export function useUpdateWarmupSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Partial<Omit<WarmupSettings, 'timeZone'>>) => api<WarmupSettings>('PUT', '/api/warmup', body),
+    onSuccess: (data) => {
+      qc.setQueryData(['warmup'], data);
+      void qc.invalidateQueries({ queryKey: ['warmup-accounts'] });
+    },
+  });
+}
+
+export const useWarmupAccounts = () => useQuery({ queryKey: ['warmup-accounts'], queryFn: () => api<WarmupAccount[]>('GET', '/api/warmup/accounts') });
+
+export function usePatchWarmupAccount() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; mode?: string; times?: string[]; weekdays?: number[] }) => api<WarmupAccount>('PATCH', `/api/warmup/accounts/${id}`, body),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['warmup-accounts'] }),
+  });
+}
+
+export function useWarmNow() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api<WarmupRun>('POST', `/api/warmup/accounts/${id}/run`),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['warmup-accounts'] }),
+  });
+}
 
 /** The MCP gateway entry in Claude Code and Codex. Writing a client's file is refused off this machine. */
 export const useClientMcp = () =>

@@ -9,6 +9,7 @@ import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
 import { StartupSettings } from '../components/StartupSettings';
+import { WarmupSettings } from '../components/WarmupSettings';
 import { NAV_GROUPS } from '../components/layout/nav';
 import { Page } from '../components/layout/Page';
 import { NumberField } from '../components/arc/number-field/number-field';
@@ -170,6 +171,8 @@ function GeneralSettings() {
       </Group>
 
       <StartupSettings />
+
+      <WarmupSettings />
 
       {!s ? (
         settings.isError ? <div className="text-[12px] text-[var(--danger)]">{errorText(settings.error)}</div> : <Spinner className="mx-auto my-8" />

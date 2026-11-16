@@ -66,7 +66,7 @@ export function SubscriptionAccountDetail({
       open
       onOpenChange={(o) => !o && onClose()}
       title={account.displayName || account.keyMasked || account.id}
-      description={[account.plan, t(isKey ? 'providers.accounts.kind.api_key' : 'providers.accounts.kind.oauth')].filter(Boolean).join(' · ')}
+      description={[account.plan, t(isKey ? 'providers.accounts.kind.api_key' : account.kind === 'claude_bridge' ? 'providers.accounts.kind.claude_bridge' : 'providers.accounts.kind.oauth')].filter(Boolean).join(' · ')}
       width={520}
     >
       <div className="flex flex-col gap-4">

@@ -161,7 +161,7 @@ export function SubscriptionAccountCard({
   ];
 
   const statusText = state === 'disabled' ? t('providers.subscription.disabled') : t(STATUS_KEY[account.status]);
-  const kindText = t(isKey ? 'providers.accounts.kind.api_key' : 'providers.accounts.kind.oauth');
+  const kindText = t(isKey ? 'providers.accounts.kind.api_key' : account.kind === 'claude_bridge' ? 'providers.accounts.kind.claude_bridge' : 'providers.accounts.kind.oauth');
   const hasQuota = Boolean(account.quota?.session?.usedPercent != null || account.quota?.weekly?.usedPercent != null || account.quota?.credits?.usedPercent != null);
 
   return (

@@ -160,6 +160,23 @@ public static class AstraApp
         builder.Services.AddSingleton<IRequestSink>(sp => new Astra.Server.PluginsV2.PluginEventSink(
             sp.GetRequiredService<UsageWriter>(), sp.GetRequiredService<Astra.Plugins.V2.PluginV2Host>()));
         builder.Services.AddSingleton<ISmartRouter>(sp => sp.GetRequiredService<SmartRouter>());
+        // The Claude bridge (linked update 36): a Claude subscription account of kind claude_bridge is answered by the local claude program.
+        builder.Services.AddSingleton(sp =>
+        {
+            var env = sp.GetRequiredService<ClientEnvironment>();
+            return new Astra.Gateway.ClaudeBridge.ClaudeCodeLocator(() => env.ToolSearchPath(),
+                () => sp.GetRequiredService<IGatewaySettings>().Current.ClaudeBridge.BinaryPath, () => env.HomeDirectory);
+        });
+        builder.Services.AddSingleton(sp => new Astra.Gateway.ClaudeBridge.ClaudeBridgeService(sp.GetRequiredService<IGatewaySettings>(),
+            sp.GetRequiredService<Astra.Gateway.ClaudeBridge.ClaudeCodeLocator>(), Astra.Server.Api.ClaudeBridgeHost.HelperCommand,
+            sp.GetRequiredService<ILogger<Astra.Gateway.ClaudeBridge.ClaudeBridgeService>>()));
+        builder.Services.AddSingleton<Astra.Gateway.ClaudeBridge.ClaudeBridgeHandler>();
+        builder.Services.AddSingleton<ClaudeBridgeAdmin>();
+        // Warm-up of 5-hour windows (linked update 36)
+        builder.Services.AddSingleton<IWarmupSender, WarmupSender>();
+        builder.Services.AddSingleton(sp => new WarmupService(sp.GetRequiredService<AstraDatabase>(), sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<IWarmupSender>(), TimeProvider.System, sp.GetRequiredService<ILogger<WarmupService>>()));
+        builder.Services.AddHostedService<WarmupWorker>();
         builder.Services.AddSingleton<GatewayPipeline>();
         builder.Services.AddSingleton<GatewayAuxiliary>();
         builder.Services.AddSingleton<PendingSubscriptionLogins>();
@@ -375,6 +392,7 @@ public static class AstraApp
         app.MapTokenEndpoints();
         app.MapJoinEndpoints();
         app.MapMcpEndpoints();
+        app.MapClaudeBridgeEndpoints();
         app.MapLocalMcpEndpoints();
         app.MapProfileEndpoints();
         app.MapMcpGatewayEndpoints();
