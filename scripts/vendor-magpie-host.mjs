@@ -7,6 +7,8 @@
  * host.js runs every provider plugin with the user's privileges.
  *
  *   node scripts/vendor-magpie-host.mjs [<commit>]
+ *   node scripts/vendor-magpie-host.mjs --from <magpie clone>   (no network: copies the clone's checked-out files
+ *                                                                and records its HEAD commit)
  */
 import { execFileSync } from 'node:child_process';
 import crypto from 'node:crypto';
@@ -18,8 +20,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const dir = path.join(root, 'src', 'Astra.Plugins', 'Host');
 const gh = (...args) => execFileSync('gh', ['api', ...args], { encoding: 'utf8', maxBuffer: 64 << 20 });
 
-const commit = process.argv[2] ?? gh('repos/yetone/magpie/commits/main', '--jq', '.sha').trim();
-const raw = (file) => gh(`repos/yetone/magpie/contents/${file}?ref=${commit}`, '-H', 'Accept: application/vnd.github.raw');
+const args = process.argv.slice(2);
+const fromAt = args.indexOf('--from');
+const clone = fromAt >= 0 ? path.resolve(args[fromAt + 1] ?? '') : null;
+const commit = clone
+  ? execFileSync('git', ['-C', clone, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  : (args[0] ?? gh('repos/yetone/magpie/commits/main', '--jq', '.sha').trim());
+const raw = (file) =>
+  clone
+    ? fs.readFileSync(path.join(clone, file), 'utf8')
+    : gh(`repos/yetone/magpie/contents/${file}?ref=${commit}`, '-H', 'Accept: application/vnd.github.raw');
 
 const rows = [];
 for (const name of ['host.js', 'pi.js']) {

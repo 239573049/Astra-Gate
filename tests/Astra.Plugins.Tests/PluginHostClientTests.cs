@@ -204,6 +204,37 @@ public class PluginHostClientTests
     }
 
     [Fact]
+    public async Task Cancelling_an_rpc_tells_the_host_to_abort_it()
+    {
+        await using var host = new FakeHost();
+        using var cts = new CancellationTokenSource();
+        var call = host.Client.CallAsync("tool", new JsonObject(), cts.Token);
+        var id = (await host.ReadAsync())["id"]!.GetValue<long>();
+
+        await cts.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+        var abort = await host.ReadAsync();
+        Assert.Equal("abort", abort["method"]!.GetValue<string>());
+        Assert.Equal(id, abort["params"]!["id"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public async Task Cancelling_init_sends_no_abort()
+    {
+        await using var host = new FakeHost();
+        using var cts = new CancellationTokenSource();
+        var call = host.Client.CallAsync("init", new JsonObject(), cts.Token);
+        await host.ReadAsync();
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+
+        // the next line the host reads is the next call's: aborting init would only interrupt its own load
+        _ = host.Client.CallAsync("providers", new JsonObject());
+        Assert.Equal("providers", (await host.ReadAsync())["method"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task Events_and_a_host_that_goes_away()
     {
         await using var host = new FakeHost();

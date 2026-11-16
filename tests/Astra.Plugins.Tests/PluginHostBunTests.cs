@@ -184,6 +184,93 @@ public sealed class PluginHostBunTests : IAsyncDisposable
         return port;
     }
 
+    // A plugin with only a tool hook and a search hook (magpie's tools / search test data, in the shape the host reads).
+    private const string ToolsPluginJs = """
+        const ok = (data) => ({ success: true, data })
+        const no = (message) => ({ success: false, error: { issues: [{ path: [], message }] } })
+        const str = { _zod: { def: { type: "string" } }, safeParse: (v) => (typeof v === "string" ? ok(v) : no("expected string")), description: "What to say" }
+        export const ToolsExample = async () => ({
+          tool: {
+            shout: { description: "Says the text back in capitals.", args: { text: str },
+              execute: async (args, ctx) => args.text.toUpperCase() + ` (for ${ctx.agent || "nobody"})` },
+            add: { description: "Adds numbers.", args: { type: "object", properties: { xs: { type: "array", items: { type: "number" } } }, required: ["xs"] },
+              execute: async ({ xs }) => ({ sum: xs.reduce((a, b) => a + b, 0) }) },
+            sleepy: { description: "Never ends.", args: {}, execute: (_, ctx) => new Promise(() => {}) },
+            fail: { description: "Fails.", args: {}, execute: async () => { throw new Error("it broke") } },
+            "bad name!": { description: "x", args: {}, execute: async () => "x" },
+            noexec: { description: "x", args: {} },
+          },
+          search: {
+            fake: { name: "Fake Search", keysURL: "https://example.com/keys",
+              execute: async ({ query, count, key }) => key === "bad" ? Promise.reject(Object.assign(new Error("key refused"), { status: 401, retryAfter: "7" }))
+                : [{ title: `hit for ${query}`, url: "https://example.com/1", text: `count ${count} key ${key}` }] },
+            own: { name: "Own", url: true, execute: async ({ url }) => ({ results: [{ title: "t", url, content: "c", date: "today" }] }) },
+          },
+        })
+        """;
+
+    private async Task<PluginHost> ToolsHostAsync()
+    {
+        var dir = _plugins.Folder("tools-example", ("index.js", ToolsPluginJs), ("package.json", """{ "name": "tools-example", "main": "index.js" }"""));
+        await _plugins.AddAsync(dir);
+        var bun = new BunRuntime(_plugins.Paths, () => new HttpClient(), name => name == "ASTRA_BUN" ? BunFactAttribute.BunPath : null);
+        _host = new PluginHost(_plugins.Catalog, bun, new HostAssets(_plugins.Paths), _plugins.Paths, null, (_, _) => { });
+        return _host;
+    }
+
+    [BunFact]
+    public async Task Lists_and_runs_a_plugins_tools()
+    {
+        var host = await ToolsHostAsync();
+
+        var set = Assert.Single(await host.ToolsAsync());
+        Assert.Equal(["add", "fail", "shout", "sleepy"], set.Tools.Select(t => t.Name).Order());
+        var shout = set.Tools.Single(t => t.Name == "shout");
+        Assert.Equal("Says the text back in capitals.", shout.Description);
+        Assert.Equal("object", shout.Schema!["type"]!.GetValue<string>());
+        Assert.Equal("string", shout.Schema["properties"]!["text"]!["type"]!.GetValue<string>());
+
+        Assert.Equal("HI (for claude)", await host.RunToolAsync(set.Spec, "shout", new JsonObject { ["text"] = "hi" }, "claude"));
+        Assert.Equal("""{"sum":6}""", await host.RunToolAsync(set.Spec, "add", new JsonObject { ["xs"] = new JsonArray(1, 2, 3) }));
+        var broke = await Assert.ThrowsAsync<PluginHostException>(() => host.RunToolAsync(set.Spec, "fail"));
+        Assert.Contains("it broke", broke.Message);
+        var unknown = await Assert.ThrowsAsync<PluginHostException>(() => host.RunToolAsync(set.Spec, "nothing"));
+        Assert.Contains("has no tool nothing", unknown.Message);
+        var badArgs = await Assert.ThrowsAsync<PluginHostException>(() => host.RunToolAsync(set.Spec, "shout", new JsonObject { ["text"] = 5 }));
+        Assert.NotEmpty(badArgs.Message);
+
+        // a caller that gives up is not left waiting on a tool that never ends, and the host goes on
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => host.RunToolAsync(set.Spec, "sleepy", null, null, cts.Token));
+        Assert.Equal("OK (for nobody)", await host.RunToolAsync(set.Spec, "shout", new JsonObject { ["text"] = "ok" }));
+    }
+
+    [BunFact]
+    public async Task Lists_and_runs_a_plugins_search_apis()
+    {
+        var host = await ToolsHostAsync();
+
+        var apis = await host.SearchesAsync();
+        Assert.Equal(["fake", "own"], apis.Select(a => a.Def.Id));
+        Assert.Equal("tools-example:fake", PluginHost.VendorId(apis[0]));
+        Assert.Equal("Fake Search", apis[0].Def.Name);
+        Assert.Equal("https://example.com/keys", apis[0].Def.KeysUrl);
+        Assert.True(apis[1].Def.NeedUrl);
+
+        var pages = await host.SearchAsync(apis[0].Spec, "fake", "go", 5, "k1");
+        var page = Assert.Single(pages);
+        Assert.Equal("hit for go", page.Title);
+        Assert.Equal("count 5 key k1", page.Text);
+        var own = Assert.Single(await host.SearchAsync(apis[1].Spec, "own", "q", 3, null, "https://searx.test"));
+        Assert.Equal(("t", "https://searx.test", "c", "today"), (own.Title, own.Url, own.Text, own.Age));
+
+        var refused = await Assert.ThrowsAsync<PluginSearchRefusedException>(() => host.SearchAsync(apis[0].Spec, "fake", "go", 5, "bad"));
+        Assert.Equal(401, refused.Status);
+        Assert.Equal("7", refused.RetryAfter);
+        await Assert.ThrowsAsync<PluginHostException>(() => host.SearchAsAsync(apis[0].Spec, "fake", "go", 5, ""));
+        await Assert.ThrowsAsync<PluginHostException>(() => host.SearchAsync(apis[0].Spec, "nothing", "go", 5));
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_host is not null) await _host.DisposeAsync();
