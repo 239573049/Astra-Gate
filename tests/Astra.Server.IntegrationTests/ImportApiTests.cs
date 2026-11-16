@@ -110,6 +110,33 @@ public class ImportApiTests
     }
 
     [Fact]
+    public async Task Magpie_Keys_Import_As_One_Provider_With_A_Key_List()
+    {
+        await using var host = await TestHost.StartAsync();
+        Write(host, ".config/magpie/providers.json", """
+            {"providers":[{"id":"r","name":"Relay","key":"sk-main-key-0001","chat":"https://r.example.invalid/v1","anthropic":"https://r.example.invalid",
+              "keys":[{"name":"second","key":"sk-second-key-0002","weight":5},{"name":"claude","key":"sk-claude-key-0003","protocol":"anthropic"},{"name":"old","key":"sk-old-key-0004","off":true}]}]}
+            """);
+        var item = (await SourceAsync(host, "magpie"))["items"]!.AsArray().Single()!;
+        Assert.Equal(4, item["keyCount"]!.GetValue<int>());
+        Assert.DoesNotContain("sk-second-key-0002", item.ToJsonString());
+
+        var (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers/import", new[] { new { source = "magpie", @ref = "magpie:r" } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Single(body!["added"]!.AsArray());
+
+        var provider = (await host.Db.Providers.ListAsync()).Single();
+        Assert.True(provider.KeyPool);
+        var protector = host.App.Services.GetRequiredService<Astra.Core.Clients.ISecretProtector>();
+        Assert.Equal("sk-main-key-0001", protector.Unprotect(provider.ApiKeyEnc!)); // the first key that is on
+        var keys = (await host.Db.Accounts.ListAsync(provider.Id)).Where(a => a.Kind == AccountKinds.ApiKey).ToList();
+        Assert.Equal(["Key 1", "second", "claude", "old"], keys.Select(k => k.DisplayName));
+        Assert.Equal(5, keys[1].KeyWeight);
+        Assert.Equal(ApiProtocol.Anthropic, keys[2].KeyProtocol);
+        Assert.False(keys[3].Enabled);
+    }
+
+    [Fact]
     public async Task Second_Import_Is_Detected_As_Same_And_Skipped()
     {
         await using var host = await TestHost.StartAsync();

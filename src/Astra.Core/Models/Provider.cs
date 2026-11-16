@@ -33,6 +33,9 @@ public static class AuthSchemes
 
     /// <summary>Whether the provider's credentials are accounts (subscription logins, plugin sign-ins) rather than one key.</summary>
     public static bool UsesAccounts(string scheme) => scheme is OAuthSubscription or Plugin;
+
+    /// <summary>Whether the scheme sends a static API key (so a provider may hold several, see <see cref="Provider.KeyPool"/>).</summary>
+    public static bool IsStaticKey(string scheme) => scheme is Bearer or XApiKey or XGoogApiKey or QueryKey;
 }
 
 /// <summary>A configured AI provider instance.</summary>
@@ -80,6 +83,18 @@ public sealed class Provider
     public DateTimeOffset? QuotaCheckedAtUtc { get; set; }
 
     public ProviderEndpoint? EndpointFor(ApiProtocol protocol) => Endpoints.FirstOrDefault(e => e.Protocol == protocol);
+
+    /// <summary>Settings key of <see cref="KeyPool"/>.</summary>
+    public const string KeyPoolKey = "key_pool";
+
+    /// <summary>
+    /// The provider holds several API keys as <c>api_key</c> accounts (settings <c>key_pool</c>, set by the key list editor) instead
+    /// of the one <see cref="ApiKeyEnc"/>. <see cref="ApiKeyEnc"/> then mirrors the first enabled key, so an older binary still routes.
+    /// </summary>
+    public bool KeyPool => AuthSchemes.IsStaticKey(AuthScheme) && SettingFlag(KeyPoolKey, false);
+
+    /// <summary>Whether requests pick a credential from the provider's accounts (logins, plugin sign-ins, a key list).</summary>
+    public bool UsesAccounts => AuthSchemes.UsesAccounts(AuthScheme) || KeyPool;
 
     public bool SettingFlag(string key, bool defaultValue) =>
         Settings.TryGetPropertyValue(key, out var node) && node is JsonValue v && v.TryGetValue<bool>(out var b) ? b : defaultValue;

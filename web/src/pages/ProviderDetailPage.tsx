@@ -35,6 +35,7 @@ import { PricingEditor } from '../components/PricingEditor';
 import { ProviderTestDialog } from '../components/ProviderTestDialog';
 import { ProviderQuotaSection } from '../components/ProviderQuotaSection';
 import { PluginAccounts } from '../components/PluginAccounts';
+import { ProviderKeyList } from '../components/ProviderKeyList';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
 import { canSwitchTemplate, KeyAlternativeHint, TemplateSwitchSheet } from '../components/TemplateSwitch';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, Field, Group, Input, KV, NumberInput, Row, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
@@ -843,16 +844,20 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
 
   return (
     <>
-      <Group title={t('providers.section.auth')} footer={t('providers.apiKeyStored')}>
-        <Row label={t('providers.apiKey')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')}>
-          <div className="flex items-center gap-2">
-            <Input type="password" autoComplete="off" className="w-64 font-mono" aria-label={t('providers.apiKey')} placeholder={t('providers.replaceKey')} value={key} onChange={(e) => setKey(e.target.value)} />
-            <Button variant="primary" disabled={key.trim().length === 0} loading={update.isPending} onClick={save}>
-              {t('common.save')}
-            </Button>
-          </div>
-        </Row>
-      </Group>
+      {/* A provider with a key list (settings.key_pool) edits its keys there; the row's own key is only a mirror of the first. */}
+      {provider.settings.key_pool !== true && (
+        <Group title={t('providers.section.auth')} footer={t('providers.apiKeyStored')}>
+          <Row label={t('providers.apiKey')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')}>
+            <div className="flex items-center gap-2">
+              <Input type="password" autoComplete="off" className="w-64 font-mono" aria-label={t('providers.apiKey')} placeholder={t('providers.replaceKey')} value={key} onChange={(e) => setKey(e.target.value)} />
+              <Button variant="primary" disabled={key.trim().length === 0} loading={update.isPending} onClick={save}>
+                {t('common.save')}
+              </Button>
+            </div>
+          </Row>
+        </Group>
+      )}
+      {provider.authScheme !== 'none' && <ProviderKeyList provider={provider} />}
       <section className="card my-4 flex flex-col gap-2 p-4">
         <h3 className="text-[13px] font-medium">{t('providers.usage.title')}</h3>
         {usage.isError && <Alert tone="danger" title={t('providers.usage.error')}>{errorText(usage.error)}</Alert>}

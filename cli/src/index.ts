@@ -29,6 +29,10 @@ import {
   runProviderImportFile,
   runProviderList,
   runProviderRemove,
+  runProviderKeysAdd,
+  runProviderKeysList,
+  runProviderKeysRemove,
+  runProviderKeysSwitch,
   runTokenList,
 } from './commands/admin.js';
 import { runSetPassword } from './commands/config.js';
@@ -222,6 +226,43 @@ provider
   .option('--yes', 'Import the new entries (or those named with --only)')
   .option('--only <row...>', 'With --yes: import only these preview rows')
   .action((file: string, opts: { yes?: boolean; only?: string[] }) => runProviderImportFile(file, opts));
+const providerKeys = provider.command('keys').description('Several API keys on one provider');
+providerKeys
+  .command('list')
+  .description("List a provider's API keys")
+  .argument('<provider>', 'Provider id or name')
+  .action((id: string) => runProviderKeysList(id));
+providerKeys
+  .command('add')
+  .description('Add an API key to a provider (the key is read from --key, ASTRA_API_KEY or a hidden prompt)')
+  .argument('<provider>', 'Provider id or name')
+  .option('--key <apiKey>', 'The API key')
+  .option('--name <name>', 'Name shown in the list')
+  .option('--protocol <protocol>', 'Use the key for this protocol only: openai-chat | openai-responses | anthropic | gemini')
+  .option('--weight <n>', "Share of balanced traffic, 1-1000 (default 1)")
+  .option('--proxy <url>', "The key's own HTTP proxy")
+  .option('--notes <text>', 'A note')
+  .action((id: string, opts: { key?: string; name?: string; protocol?: string; weight?: string; proxy?: string; notes?: string }) =>
+    runProviderKeysAdd(id, opts),
+  );
+providerKeys
+  .command('remove')
+  .description('Remove an API key')
+  .argument('<provider>', 'Provider id or name')
+  .argument('<key>', 'Key id, name or its number in the list')
+  .action((id: string, key: string) => runProviderKeysRemove(id, key));
+providerKeys
+  .command('enable')
+  .description('Switch an API key on')
+  .argument('<provider>', 'Provider id or name')
+  .argument('<key>', 'Key id, name or its number in the list')
+  .action((id: string, key: string) => runProviderKeysSwitch(id, key, true));
+providerKeys
+  .command('disable')
+  .description('Switch an API key off (it stays in the list)')
+  .argument('<provider>', 'Provider id or name')
+  .argument('<key>', 'Key id, name or its number in the list')
+  .action((id: string, key: string) => runProviderKeysSwitch(id, key, false));
 provider
   .command('remove')
   .description('Remove a provider')

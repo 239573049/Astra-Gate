@@ -615,7 +615,7 @@ public sealed partial class GatewayPipeline(
             // providers cool their accounts instead.
             void Report(Provider target, ProviderOutcome outcome, HttpResponseMessage? response)
             {
-                if (AuthSchemes.UsesAccounts(target.AuthScheme)) return;
+                if (target.UsesAccounts) return;
                 health.Report(target.Id, outcome,
                     outcome == ProviderOutcome.RateLimited && response is not null ? RateLimitResetOf(response, DateTimeOffset.UtcNow) : null);
             }
@@ -869,7 +869,9 @@ public sealed partial class GatewayPipeline(
         var provider = route.Provider;
         var plugin = provider.AuthScheme == AuthSchemes.Plugin;
         // A plugin provider's sign-ins are accounts too: chosen, failed over and balanced the same way.
-        var subscription = AuthSchemes.UsesAccounts(provider.AuthScheme);
+        var subscription = provider.UsesAccounts;
+        // A provider with a key list (Provider.KeyPool): its API keys are accounts that serve one protocol each at most.
+        var keyPool = provider.KeyPool;
         // Plan §5.4: in failover mode a rate-limited or dead account hands the request to the next usable account
         // (which also becomes the provider's current account, so the following requests stay on it).
         // Balanced mode fails over the same way, but picks every account through the scheduler and leaves
@@ -899,14 +901,31 @@ public sealed partial class GatewayPipeline(
             {
                 // One upstream.attempt span per send (.plan/observability.md §2.3); a retry ends it and starts the next.
                 var attempt = StartAttempt();
+                IReadOnlyList<ProviderAccount> pickFrom = [];
+                if (balanced || keyPool)
+                {
+                    var listed = await auth.ListAccountsAsync(provider.Id, ct);
+                    pickFrom = listed;
+                    if (keyPool)
+                    {
+                        // A key limited to another protocol is out of the question for this endpoint: neither picked nor failed over to.
+                        pickFrom = listed.Where(a => a.Kind == AccountKinds.ApiKey && a.KeyServes(endpoint.Protocol)).ToList();
+                        foreach (var other in listed.Where(a => !pickFrom.Contains(a)))
+                            if (!tried.Contains(other.Id)) tried.Add(other.Id);
+                        if (pickFrom.Count == 0)
+                            throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 没有可用于 {endpoint.Protocol.ToId()} 协议的 API 密钥。");
+                    }
+                }
                 if (balanced)
                 {
                     // Pick (and hold an in-flight slot on) the account for this attempt; accounts that already failed
                     // this request are excluded. No usable account → the plain selection below reports it.
                     lease?.Dispose();
-                    lease = scheduler.Pick(provider.Id, await auth.ListAccountsAsync(provider.Id, ct), stickyKey, tried);
+                    lease = scheduler.Pick(provider.Id, pickFrom, stickyKey, tried);
                     if (lease is not null) accountId = lease.AccountId;
                 }
+                if (keyPool && lease is null)
+                    accountId = SubscriptionSupport.SelectAccount(pickFrom, accountId, DateTimeOffset.UtcNow)?.Id ?? accountId;
                 UpstreamAuth credentials;
                 var credentialsStart = Stopwatch.GetTimestamp();
                 try
@@ -924,7 +943,7 @@ public sealed partial class GatewayPipeline(
                         accountId = next;
                         continue;
                     }
-                    throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的订阅账号不可用：{e.Message}");
+                    throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的{(keyPool ? " API 密钥" : "订阅账号")}不可用：{e.Message}");
                 }
                 // A subscription token close to expiry is refreshed here, on the network.
                 attempt.Set("astra.account.id", credentials.AccountId ?? accountId)
@@ -1062,7 +1081,7 @@ public sealed partial class GatewayPipeline(
                 }
                 // 失败时的请求日志（用户要求的排查手段）：地址 + 最终出去的请求头（凭据脱敏）。
                 // 只记已保存的账号；请求自带的凭据（relay）连脱敏后的末 4 位也不进日志。
-                if (!response.IsSuccessStatusCode && subscription && credentials.AccountId is not null)
+                if (!response.IsSuccessStatusCode && subscription && !keyPool && credentials.AccountId is not null)
                     logger.LogWarning("Upstream {Status} for {Provider} → {Url}; sent: {Headers}",
                         (int)response.StatusCode, provider.Name, url, DescribeRequest(request));
                 EndAttempt(attempt, response, null);

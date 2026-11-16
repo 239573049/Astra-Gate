@@ -125,6 +125,9 @@ public sealed class ImportSourceRegistry(IReadOnlyList<IImportSource> sources, F
 {
     public IReadOnlyList<IImportSource> Sources => sources;
 
+    /// <summary>Most keys one imported provider keeps (the provider's own cap, <c>ProviderKeys.MaxKeys</c>).</summary>
+    private const int ProviderKeyCap = 100;
+
     public static ImportSourceRegistry CreateDefault(ImportContext ctx) => new(
     [
         new CcSwitchReader(ctx), new AlmaReader(ctx), new ClaudeCodeReader(ctx), new CodexReader(ctx), new MagpieReader(ctx),
@@ -144,7 +147,7 @@ public sealed class ImportSourceRegistry(IReadOnlyList<IImportSource> sources, F
             return new ImportSourceResult { Id = source.Id, Name = source.Name, Found = true, Error = e.Message };
         }
         foreach (var item in result.Items) Finalize(item);
-        var merged = Merge(result.Items);
+        var merged = FoldCopies(Merge(result.Items));
         result.Items.Clear();
         result.Items.AddRange(merged);
         return result;
@@ -155,6 +158,12 @@ public sealed class ImportSourceRegistry(IReadOnlyList<IImportSource> sources, F
     {
         c.ApiKey = string.IsNullOrWhiteSpace(c.ApiKey) ? null : c.ApiKey.Trim();
         if (c.ApiKey?.Any(char.IsControl) == true) { c.ApiKey = null; c.IgnoredFields.Add("key"); }
+        if (c.Keys.Count > 0)
+        {
+            c.Keys = c.Keys.Select(k => k with { Key = k.Key.Trim() }).Where(k => k.Key.Length > 0 && !k.Key.Any(char.IsControl))
+                .DistinctBy(k => k.Key).Take(ProviderKeyCap).ToList();
+            if (c.Keys.Count < 2) c.Keys = [];
+        }
         c.Models = c.Models.Select(m => m.Trim()).Where(m => m.Length is > 0 and <= 512 && !m.Any(char.IsControl))
             .Distinct(StringComparer.Ordinal).Take(2000).ToList();
         if (c.SkipReason is not null) return;
@@ -173,6 +182,46 @@ public sealed class ImportSourceRegistry(IReadOnlyList<IImportSource> sources, F
         else if (cleaned.Any(e => isGatewayUrl(e.BaseUrl))) c.SkipReason = ImportSkipReasons.PointsToAstra;
     }
 
+    private static readonly System.Text.RegularExpressions.Regex NumberedCopy =
+        new(@"^(?<base>.*?\S)\s*#?\s*(?<n>\d{1,5})$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// An app that keeps one entry per key (CC Switch: "NVIDIA #001" … "NVIDIA #600" at one address) is imported as one provider with those
+    /// keys, as magpie folds such copies (MIT): entries of one source whose names are a base name and that name with a number, alike in
+    /// everything but the key (endpoints, headers, proxy, auth, models), fold into the first one, each other entry becoming a key named
+    /// as the entry was (off when it was). The provider is named the base name. Entries that differ in any other way stay apart.
+    /// </summary>
+    internal static List<ImportCandidate> FoldCopies(List<ImportCandidate> items)
+    {
+        static string Shape(ImportCandidate c) => string.Join('|',
+            c.Source, c.AuthScheme, c.Proxy ?? "", c.FromApp ?? "",
+            string.Join(',', c.Endpoints.OrderBy(e => e.Protocol).Select(e => $"{e.Protocol}={e.BaseUrl.TrimEnd('/').ToLowerInvariant()}")),
+            string.Join(',', c.Headers.OrderBy(h => h.Key, StringComparer.OrdinalIgnoreCase).Select(h => $"{h.Key.ToLowerInvariant()}={h.Value}")),
+            string.Join(',', c.Models.Order(StringComparer.Ordinal)));
+        static string BaseName(string name) =>
+            NumberedCopy.Match(name) is { Success: true } m ? m.Groups["base"].Value : name;
+
+        var foldable = items.Where(c => c.SkipReason is null && c.ApiKey is not null && c.Keys.Count == 0).ToList();
+        var groups = foldable.GroupBy(c => (Shape: Shape(c), Base: BaseName(c.Name).ToLowerInvariant()))
+            .Where(g => g.Count() > 1 && g.Select(c => c.ApiKey).Distinct().Count() > 1 && g.Any(c => NumberedCopy.IsMatch(c.Name)))
+            .ToList();
+        if (groups.Count == 0) return items;
+
+        var absorbed = new HashSet<ImportCandidate>();
+        foreach (var group in groups)
+        {
+            var members = group.DistinctBy(c => c.ApiKey).ToList();
+            var head = members.FirstOrDefault(c => !c.Off) ?? members[0];
+            if (members.Count < 2) continue;
+            head.Keys = members.Select(c => new ImportKey(c.ApiKey!, c.Name, null, c.Off)).ToList();
+            head.Name = BaseName(head.Name);
+            head.Off = members.All(c => c.Off);
+            head.ApiKey = (members.FirstOrDefault(c => !c.Off) ?? members[0]).ApiKey;
+            foreach (var other in group.Where(c => !ReferenceEquals(c, head))) absorbed.Add(other);
+        }
+        return items.Where(c => !absorbed.Contains(c)).ToList();
+    }
+
     /// <summary>
     /// The same relay configured twice in one source (same key, same host: e.g. CC Switch's claude and codex entries)
     /// becomes one provider with several endpoints. Entries that would collide on a protocol stay separate.
@@ -182,8 +231,8 @@ public sealed class ImportSourceRegistry(IReadOnlyList<IImportSource> sources, F
         var result = new List<ImportCandidate>();
         foreach (var item in items)
         {
-            var target = item.SkipReason is not null || item.ApiKey is null ? null : result.FirstOrDefault(r =>
-                r.SkipReason is null && r.ApiKey == item.ApiKey && r.Source == item.Source &&
+            var target = item.SkipReason is not null || item.ApiKey is null || item.Keys.Count > 0 ? null : result.FirstOrDefault(r =>
+                r.SkipReason is null && r.Keys.Count == 0 && r.ApiKey == item.ApiKey && r.Source == item.Source &&
                 string.Equals(EndpointNormalizer.Host(r.Endpoints[0].BaseUrl), EndpointNormalizer.Host(item.Endpoints[0].BaseUrl), StringComparison.Ordinal)
                 && !item.Endpoints.Any(e => r.Endpoints.Any(x => x.Protocol == e.Protocol))
                 && r.Headers.Count == item.Headers.Count && item.Headers.All(h => r.Headers.TryGetValue(h.Key, out var v) && v == h.Value));

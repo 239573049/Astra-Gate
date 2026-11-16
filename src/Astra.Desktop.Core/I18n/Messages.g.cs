@@ -982,6 +982,7 @@ internal static class Messages
         "import.existing",
         "import.sameHostHint",
         "import.noKey",
+        "import.keyCount",
         "import.models",
         "import.template",
         "import.ignored",
@@ -1596,6 +1597,39 @@ internal static class Messages
         "providers.subscription.policy.balancedDetail",
         "providers.notes",
         "providers.apiKeyStored",
+        "providers.keys.title",
+        "providers.keys.footer",
+        "providers.keys.addAnother",
+        "providers.keys.add",
+        "providers.keys.removeConfirm",
+        "providers.keys.modeManual",
+        "providers.keys.modeFailover",
+        "providers.keys.modeBalanced",
+        "providers.keys.error",
+        "providers.keys.current",
+        "providers.keys.weightHint",
+        "providers.keys.proxyBadge",
+        "providers.keys.state.ok",
+        "providers.keys.state.off",
+        "providers.keys.state.authFailed",
+        "providers.keys.state.cooling",
+        "providers.keys.use",
+        "providers.keys.moveUp",
+        "providers.keys.moveDown",
+        "providers.keys.enabled",
+        "providers.keys.addTitle",
+        "providers.keys.editTitle",
+        "providers.keys.name",
+        "providers.keys.namePlaceholder",
+        "providers.keys.replaceHint",
+        "providers.keys.protocol",
+        "providers.keys.protocolHint",
+        "providers.keys.protocolAll",
+        "providers.keys.weight",
+        "providers.keys.weightInvalid",
+        "providers.keys.proxy",
+        "providers.keys.proxyHint",
+        "providers.keys.notes",
         "providers.replaceKey",
         "providers.endpointsFooter",
         "providers.fullUrl",
@@ -4120,6 +4154,7 @@ internal static class Messages
             case "import.existing": return "已有提供商「{name}」";
             case "import.sameHostHint": return "已有同地址提供商「{name}」，将作为新的提供商导入";
             case "import.noKey": return "无 Key";
+            case "import.keyCount": return "{n} 个 Key";
             case "import.models": return "{count} 个模型";
             case "import.template": return "模板：{id}";
             case "import.ignored": return "将忽略：{fields}";
@@ -4734,6 +4769,39 @@ internal static class Messages
             case "providers.subscription.policy.balancedDetail": return "把请求分摊到所有可用账号，优先选当前并发最少的。同一会话（相同 prompt_cache_key 或 Claude Code 会话）固定使用同一个账号，保证上游提示词缓存命中；被限流、认证拒绝且无法恢复或已失效的账号会被跳过。绑定关系只保存在内存里。";
             case "providers.notes": return "备注";
             case "providers.apiKeyStored": return "API Key 加密保存在本机，留空表示不修改。";
+            case "providers.keys.title": return "API Key 列表";
+            case "providers.keys.footer": return "一个提供商可以放多个 Key：Key 失效或被限流时，请求自动换到下一个，不会让客户端看到错误。";
+            case "providers.keys.addAnother": return "再添加一个 Key，在多个 Key 之间故障转移或按权重分摊请求。";
+            case "providers.keys.add": return "添加 Key";
+            case "providers.keys.removeConfirm": return "删除 Key「{name}」？";
+            case "providers.keys.modeManual": return "手动：请求只用「当前」Key，不会自动切换；点「使用」换 Key。";
+            case "providers.keys.modeFailover": return "故障转移：按列表顺序使用第一个可用的 Key；Key 被拒绝（401/403）或被限流（429）时冷却，请求改用下一个。";
+            case "providers.keys.modeBalanced": return "均衡：按权重把新对话分给最空闲的 Key，同一对话固定在同一个 Key 上；被拒绝或限流的 Key 冷却后跳过。";
+            case "providers.keys.error": return "无法读取 Key 列表";
+            case "providers.keys.current": return "当前";
+            case "providers.keys.weightHint": return "权重 1-1000：均衡模式下，权重 3 的 Key 分到的请求约是权重 1 的 3 倍。";
+            case "providers.keys.proxyBadge": return "独立代理";
+            case "providers.keys.state.ok": return "正常";
+            case "providers.keys.state.off": return "已停用";
+            case "providers.keys.state.authFailed": return "认证失败，冷却至 {when}";
+            case "providers.keys.state.cooling": return "限流冷却至 {when}";
+            case "providers.keys.use": return "使用";
+            case "providers.keys.moveUp": return "上移";
+            case "providers.keys.moveDown": return "下移";
+            case "providers.keys.enabled": return "启用此 Key";
+            case "providers.keys.addTitle": return "添加 API Key";
+            case "providers.keys.editTitle": return "编辑 API Key";
+            case "providers.keys.name": return "名称";
+            case "providers.keys.namePlaceholder": return "例如：备用、团队共用";
+            case "providers.keys.replaceHint": return "当前：{mask}。留空表示不修改；换新 Key 会清除它的冷却状态。";
+            case "providers.keys.protocol": return "限定协议";
+            case "providers.keys.protocolHint": return "只在请求该协议的接口时使用这个 Key（例如只给 Anthropic 接口用）。";
+            case "providers.keys.protocolAll": return "所有协议";
+            case "providers.keys.weight": return "权重";
+            case "providers.keys.weightInvalid": return "请输入 1 到 1000 的整数";
+            case "providers.keys.proxy": return "独立代理";
+            case "providers.keys.proxyHint": return "留空表示沿用提供商的代理。";
+            case "providers.keys.notes": return "备注";
             case "providers.replaceKey": return "输入新密钥以替换";
             case "providers.endpointsFooter": return "每种协议一个地址；客户端协议与上游不同时，Astra 自动转换。";
             case "providers.fullUrl": return "完整 URL";
@@ -7260,6 +7328,7 @@ internal static class Messages
             case "import.existing": return "Already added as \"{name}\"";
             case "import.sameHostHint": return "\"{name}\" already uses this address; this will be imported as a new provider";
             case "import.noKey": return "No key";
+            case "import.keyCount": return "{n} keys";
             case "import.models": return "{count} models";
             case "import.template": return "Template: {id}";
             case "import.ignored": return "Will ignore: {fields}";
@@ -7874,6 +7943,39 @@ internal static class Messages
             case "providers.subscription.policy.balancedDetail": return "Spreads requests over all usable accounts, fewest in flight first. A conversation (same prompt_cache_key or Claude Code session) stays on one account so the upstream prompt cache keeps hitting; accounts that are rate-limited, cannot recover from an auth rejection, or have dead sign-ins are skipped. Bindings are kept in memory only.";
             case "providers.notes": return "Notes";
             case "providers.apiKeyStored": return "The API key is stored encrypted on this machine. Leave empty to keep it.";
+            case "providers.keys.title": return "API keys";
+            case "providers.keys.footer": return "A provider can hold several keys: when one is rejected or rate limited, the request moves to the next without the client seeing an error.";
+            case "providers.keys.addAnother": return "Add another key to fail over between keys or share requests by weight.";
+            case "providers.keys.add": return "Add key";
+            case "providers.keys.removeConfirm": return "Delete key \"{name}\"?";
+            case "providers.keys.modeManual": return "Manual: requests use only the current key and never switch on their own; press \"Use\" to change it.";
+            case "providers.keys.modeFailover": return "Failover: the first usable key in list order is used; a key that is rejected (401/403) or rate limited (429) cools down and the request moves to the next.";
+            case "providers.keys.modeBalanced": return "Balanced: new conversations go to the least busy key by weight, a conversation stays on its key; rejected or rate-limited keys cool down and are skipped.";
+            case "providers.keys.error": return "Could not read the key list";
+            case "providers.keys.current": return "Current";
+            case "providers.keys.weightHint": return "Weight 1-1000: in balanced mode a weight-3 key gets about three times the requests of a weight-1 key.";
+            case "providers.keys.proxyBadge": return "Own proxy";
+            case "providers.keys.state.ok": return "OK";
+            case "providers.keys.state.off": return "Off";
+            case "providers.keys.state.authFailed": return "Authentication failed, cooling until {when}";
+            case "providers.keys.state.cooling": return "Rate-limited until {when}";
+            case "providers.keys.use": return "Use";
+            case "providers.keys.moveUp": return "Move up";
+            case "providers.keys.moveDown": return "Move down";
+            case "providers.keys.enabled": return "Enable this key";
+            case "providers.keys.addTitle": return "Add an API key";
+            case "providers.keys.editTitle": return "Edit API key";
+            case "providers.keys.name": return "Name";
+            case "providers.keys.namePlaceholder": return "e.g. backup, shared with the team";
+            case "providers.keys.replaceHint": return "Current: {mask}. Leave empty to keep it; a new key clears its cooldown.";
+            case "providers.keys.protocol": return "Limit to a protocol";
+            case "providers.keys.protocolHint": return "Use this key only for requests to that protocol's endpoint (e.g. only the Anthropic endpoint).";
+            case "providers.keys.protocolAll": return "All protocols";
+            case "providers.keys.weight": return "Weight";
+            case "providers.keys.weightInvalid": return "Enter a whole number from 1 to 1000";
+            case "providers.keys.proxy": return "Own proxy";
+            case "providers.keys.proxyHint": return "Leave empty to follow the provider's proxy.";
+            case "providers.keys.notes": return "Notes";
             case "providers.replaceKey": return "Enter a new key to replace";
             case "providers.endpointsFooter": return "One URL per protocol; Astra translates when the client protocol differs from upstream.";
             case "providers.fullUrl": return "Full URL";

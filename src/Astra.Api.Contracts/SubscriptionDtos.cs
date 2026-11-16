@@ -64,7 +64,13 @@ public sealed record ProviderAccountDto(
     /// <summary>The account's own proxy (null = the provider's). A proxy URL may carry credentials, but it is the user's own setting.</summary>
     string? HttpProxy = null,
     /// <summary>Masked API key (<c>kind = api_key</c> only), so a key account can be recognised.</summary>
-    string? KeyMasked = null);
+    string? KeyMasked = null,
+    /// <summary>API key accounts only: the share of balanced traffic the key takes (1..1000).</summary>
+    int Weight = 1,
+    /// <summary>API key accounts only: the one wire protocol the key is used for (null = all).</summary>
+    string? Protocol = null,
+    /// <summary>API key accounts only: the user's note.</summary>
+    string? Notes = null);
 
 /// <summary>PATCH body for one account; omitted fields keep their value. <c>httpProxy</c> "" clears the account's proxy.</summary>
 public sealed record AccountPatch(bool? Enabled, string? DisplayName, string? HttpProxy = null);

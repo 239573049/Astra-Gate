@@ -207,6 +207,8 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
             return UpstreamAuth.None with { AccountId = signedIn.Id, CanRefresh = true, Proxy = signedIn.HttpProxy, PluginKey = PluginKeyOf(signedIn) };
         }
 
+        if (provider.KeyPool) return await ResolveKeyAsync(provider, accountId, ct);
+
         if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
             return BuildStatic(provider, protector);
 
@@ -216,6 +218,23 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
             with { AccountId = account.Id, CanRefresh = SubscriptionTokenService.CanRefresh(account), Proxy = account.HttpProxy };
     }
 
+    /// <summary>
+    /// A provider that holds several API keys (<see cref="Provider.KeyPool"/>): the selected key account, its secret sent the way the
+    /// provider's auth scheme says, with the key's own proxy. A key is never renewed, so a rejection goes to the switch policy.
+    /// </summary>
+    private async Task<UpstreamAuth> ResolveKeyAsync(Provider provider, string? accountId, CancellationToken ct)
+    {
+        var all = (await db.Accounts.ListAsync(provider.Id, ct)).Where(a => a.Kind == AccountKinds.ApiKey).ToList();
+        if (all.Count == 0)
+            throw new SubscriptionAuthException(accountId ?? "", $"提供商 {provider.Name} 没有 API 密钥");
+        var account = SubscriptionSupport.SelectAccount(all, accountId, DateTimeOffset.UtcNow)
+                      ?? throw new SubscriptionAuthException(accountId ?? "", $"提供商 {provider.Name} 的 API 密钥都已停用，请在 Astra 中启用至少一个");
+        if (account.AccessTokenEnc is null)
+            throw new SubscriptionAuthException(account.Id, $"密钥“{account.DisplayName}”没有内容");
+        return Build(provider.AuthScheme, protector.Unprotect(account.AccessTokenEnc))
+            with { AccountId = account.Id, CanRefresh = false, Proxy = account.HttpProxy };
+    }
+
     /// <summary>The provider's accounts in failover order (what <see cref="AccountScheduler"/> picks from).</summary>
     public Task<IReadOnlyList<ProviderAccount>> ListAccountsAsync(string providerId, CancellationToken ct = default) =>
         db.Accounts.ListAsync(providerId, ct);
@@ -223,6 +242,8 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
     /// <summary>Upstream answered 401/403: force-refresh the account once and resolve again.</summary>
     public async Task<UpstreamAuth> ResolveAfterUnauthorizedAsync(string providerId, string? accountId, CancellationToken ct = default)
     {
+        var provider0 = await db.Providers.GetAsync(providerId, ct);
+        if (provider0 is { KeyPool: true }) return await ResolveKeyAsync(provider0, accountId, ct);
         var (provider, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
         if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
             return BuildStatic(provider, protector) ?? UpstreamAuth.None;

@@ -82,7 +82,7 @@ public sealed class PoolRouting(ClientRouting routing, UpstreamAuthResolver auth
         var available = new List<RouteTarget>();
         foreach (var target in serving)
         {
-            if (AuthSchemes.UsesAccounts(target.Provider.AuthScheme))
+            if (target.Provider.UsesAccounts)
             {
                 var accounts = await auth.ListAccountsAsync(target.Provider.Id, ct);
                 var usable = target.AccountId is { } pinned

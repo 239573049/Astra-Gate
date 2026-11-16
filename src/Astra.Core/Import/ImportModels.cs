@@ -52,6 +52,14 @@ public sealed class ImportCandidate
     public List<ImportEndpoint> Endpoints { get; set; } = [];
     public string AuthScheme { get; set; } = AuthSchemes.Bearer;
     public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// Every key of a source entry that holds several (magpie's <c>keys</c>, CC Switch entries that are copies of one relay): they
+    /// become one provider with a key list. <see cref="ApiKey"/> stays the first one that is on (what "same provider" is judged by).
+    /// Empty = the single <see cref="ApiKey"/>.
+    /// </summary>
+    public List<ImportKey> Keys { get; set; } = [];
+
     public List<string> Models { get; set; } = [];
     public Dictionary<string, string> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public string? Proxy { get; set; }
@@ -66,6 +74,9 @@ public sealed class ImportCandidate
     /// <summary>Source fields that were dropped (reserved headers, ...), by name.</summary>
     public List<string> IgnoredFields { get; set; } = [];
 }
+
+/// <summary>One key of an <see cref="ImportCandidate"/> with several (<paramref name="Protocol"/>: the only wire protocol it serves).</summary>
+public sealed record ImportKey(string Key, string? Name, string? Protocol, bool Off, int? Weight = null);
 
 /// <summary>What one source yielded: where it looked, whether it exists, and its candidates.</summary>
 public sealed class ImportSourceResult

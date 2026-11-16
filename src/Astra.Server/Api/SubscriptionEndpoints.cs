@@ -155,6 +155,7 @@ public static partial class SubscriptionEndpoints
                 // A disabled account cannot stay current: the next usable one takes over by order.
                 if (!enabled && account.IsCurrent) await db.Accounts.SetCurrentAsync(account.ProviderId, null);
             }
+            await ProviderKeys.MirrorAfterAccountWriteAsync(db, account.ProviderId);
             return Results.Ok(await ListDtosAsync(db, account.ProviderId));
         });
 
@@ -162,6 +163,7 @@ public static partial class SubscriptionEndpoints
         {
             if (await db.Providers.GetAsync(providerId) is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
             await db.Accounts.ReorderAsync(providerId, body.Ids ?? []);
+            await ProviderKeys.MirrorAfterAccountWriteAsync(db, providerId);
             return Results.Ok(await ListDtosAsync(db, providerId));
         });
 
@@ -175,7 +177,7 @@ public static partial class SubscriptionEndpoints
         {
             var provider = await db.Providers.GetAsync(providerId);
             if (provider is null) return Results.NotFound(new ErrorOnlyDto("提供商不存在"));
-            if (!AuthSchemes.UsesAccounts(provider.AuthScheme))
+            if (!provider.UsesAccounts)
                 return Results.BadRequest(new ErrorOnlyDto("该提供商不是订阅类型（auth_scheme ≠ oauth-subscription）"));
             // a plugin's provider has accounts to switch between, but none of the Claude-subscription rules
             if (provider.AuthScheme == AuthSchemes.Plugin && (body.ClientPolicy is not null || body.MimicClaudeCode is not null))
@@ -352,7 +354,9 @@ public static partial class SubscriptionEndpoints
 
         app.MapDelete("/api/provider-accounts/{id}", async (string id, AstraDatabase db) =>
         {
+            var owner = await db.Accounts.GetAsync(id);
             var removed = await db.Accounts.DeleteAsync(id);
+            if (removed && owner is not null) await ProviderKeys.MirrorAfterAccountWriteAsync(db, owner.ProviderId);
             return removed ? Results.Ok(new RemovedDto(true)) : Results.NotFound(new ErrorOnlyDto("账号不存在"));
         });
 
@@ -1112,12 +1116,12 @@ public static partial class SubscriptionEndpoints
     private static ProviderAccountDto ToDto(ProviderAccount a) => ToDto(a, a.IsCurrent);
 
     /// <summary>Extra key holding an API-key account's mask (written at import; the key itself stays encrypted).</summary>
-    private const string KeyMaskedExtra = "key_masked";
+    internal const string KeyMaskedExtra = "key_masked";
 
     private static string? KeyMaskOf(ProviderAccount a) =>
         a.Kind == AccountKinds.ApiKey && a.Extra[KeyMaskedExtra] is JsonValue v && v.TryGetValue<string>(out var mask) ? mask : null;
 
-    private static ProviderAccountDto ToDto(ProviderAccount a, bool isCurrent) => new(
+    internal static ProviderAccountDto ToDto(ProviderAccount a, bool isCurrent) => new(
         a.Id,
         a.ProviderId,
         a.DisplayName,
@@ -1137,7 +1141,10 @@ public static partial class SubscriptionEndpoints
         a.Kind,
         a.Source,
         a.HttpProxy,
-        KeyMaskOf(a));
+        KeyMaskOf(a),
+        a.KeyWeight,
+        a.KeyProtocol?.ToId(),
+        a.KeyNotes);
 
     /// <summary>The provider's accounts in failover order; <c>isCurrent</c> marks the one requests go to right now.</summary>
     private static async Task<List<ProviderAccountDto>> ListDtosAsync(AstraDatabase db, string providerId)

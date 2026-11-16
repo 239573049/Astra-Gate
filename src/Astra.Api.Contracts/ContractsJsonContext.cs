@@ -156,6 +156,8 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(TemplateUpdateDto))]
 [JsonSerializable(typeof(RemoteModelDto))]
 [JsonSerializable(typeof(ProviderTestOptions))]
+[JsonSerializable(typeof(ProviderKeyAdd))]
+[JsonSerializable(typeof(ProviderKeyPatch))]
 [JsonSerializable(typeof(ProviderTestEvent))]
 [JsonSerializable(typeof(List<ProviderDto>))]
 [JsonSerializable(typeof(List<ImportSourceDto>))]
