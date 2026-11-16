@@ -112,6 +112,21 @@ public static class ClientInstallCatalog
         new(ClientKinds.OpenPencil, ClientInstallMethod.Manual, null, null, "https://github.com/ZSeven-W/openpencil"),
         new(ClientKinds.Raycast, ClientInstallMethod.Manual, null, null, "https://www.raycast.com/"),
         new(ClientKinds.Obsidian, ClientInstallMethod.Manual, null, null, "https://obsidian.md/"),
+        new(ClientKinds.Reasonix, ClientInstallMethod.Manual, "reasonix", null, "https://github.com/esengine/DeepSeek-Reasonix"),
+        new(ClientKinds.Morph, ClientInstallMethod.Manual, null, null, "https://github.com/quailyquaily/mistermorph"),
+        new(ClientKinds.Jcode, ClientInstallMethod.Manual, "jcode", null, "https://github.com/1jehuang/jcode"),
+        new(ClientKinds.Vibe, ClientInstallMethod.Manual, "vibe", null, "https://github.com/mistralai/mistral-vibe"),
+        new(ClientKinds.Empryo, ClientInstallMethod.Manual, "empryo", null, "https://github.com/ProxySoul/soulforge"),
+        new(ClientKinds.Nanobot, ClientInstallMethod.Manual, "nanobot", null, "https://github.com/HKUDS/nanobot"),
+        new(ClientKinds.MiniQ, ClientInstallMethod.Manual, "miniq", null, "https://github.com/LeadingThink/miniQ"),
+        new(ClientKinds.Paimon, ClientInstallMethod.Manual, "paimon", null, "https://github.com/aisk/paimon"),
+        new(ClientKinds.Cline, ClientInstallMethod.Npm, "cline", "cline", "https://cline.bot/"),
+        new(ClientKinds.GrokApp, ClientInstallMethod.Manual, null, null, "https://github.com/RongleCat/grok-app"),
+        new(ClientKinds.AtomCode, ClientInstallMethod.Npm, "atomcode", "@atomgit.com/atomcode", "https://atomgit.com/atomgit_atomcode/atomcode"),
+        new(ClientKinds.Snow, ClientInstallMethod.Npm, "snow", "snow-ai", "https://github.com/MayDay-wpf/snow-cli"),
+        new(ClientKinds.Ante, ClientInstallMethod.Manual, "ante", null, "https://antigma.ai/"),
+        new(ClientKinds.CraftAgents, ClientInstallMethod.Manual, null, null, "https://github.com/lukilabs/craft-agents-oss"),
+        new(ClientKinds.TuanjieCowork, ClientInstallMethod.Manual, null, null, "https://codely.tuanjie.cn/"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

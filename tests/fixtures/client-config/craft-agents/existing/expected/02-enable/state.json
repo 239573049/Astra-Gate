@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.craft-agent/config.json",
+    "keyPath": "defaultLlmConnection",
+    "originalAbsent": false,
+    "original": "\"claude\"",
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/.craft-agent/config.json",
+    "keyPath": "llmConnections.[slug=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"slug\":\"astra\",\"name\":\"Astra\",\"providerType\":\"pi_compat\",\"authType\":\"none\",\"baseUrl\":\"https://astra.corp.com/v1\",\"customEndpoint\":{\"api\":\"openai-completions\"},\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"shortName\":\"GPT-5\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":400000,\"supportsImages\":true},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"shortName\":\"DeepSeek Chat\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":64000}],\"defaultModel\":\"deepseek-chat\",\"modelSelectionMode\":\"userDefined3Tier\"}"
+  }
+]

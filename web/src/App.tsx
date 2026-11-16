@@ -28,6 +28,7 @@ const McpPage = lazy(() => import('./pages/McpPage').then((m) => ({ default: m.M
 const ToolsPage = lazy(() => import('./pages/ToolsPage').then((m) => ({ default: m.ToolsPage })));
 const SkillsPage = lazy(() => import('./pages/SkillsPage').then((m) => ({ default: m.SkillsPage })));
 const RoutingGroupsPage = lazy(() => import('./pages/RoutingGroupsPage').then((m) => ({ default: m.RoutingGroupsPage })));
+const LibraryPage = lazy(() => import('./pages/LibraryPage').then((m) => ({ default: m.LibraryPage })));
 const SmartRoutingPage = lazy(() => import('./pages/SmartRoutingPage').then((m) => ({ default: m.SmartRoutingPage })));
 const TokensPage = lazy(() => import('./pages/TokensPage').then((m) => ({ default: m.TokensPage })));
 const TokenDetailPage = lazy(() => import('./pages/TokenDetailPage').then((m) => ({ default: m.TokenDetailPage })));
@@ -93,6 +94,7 @@ function AdminApp() {
               <Route path="mcp" element={<McpPage />} />
               <Route path="tools" element={<ToolsPage />} />
               <Route path="skills" element={<SkillsPage />} />
+              <Route path="library" element={<LibraryPage />} />
               <Route path="settings" element={<SettingsPage />} />
               <Route path="settings/:tab" element={<SettingsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />

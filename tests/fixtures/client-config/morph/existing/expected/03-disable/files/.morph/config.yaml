@@ -1,0 +1,10 @@
+llm:
+  provider: openai
+  model: gpt-4o
+  api_key: sk-mine
+  endpoint: https://api.openai.com/v1
+  context_window_tokens: 128000
+  headers:
+    X-Mine: "1"
+logging:
+  level: info

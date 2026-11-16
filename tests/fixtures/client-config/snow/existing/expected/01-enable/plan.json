@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.snow/profiles/astra.json",
+    "format": "json",
+    "keyPath": "snowcfg",
+    "kind": "key",
+    "before": null,
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"gpt-5\",\"basicModel\":\"gpt-5\",\"maxTokens\":128000,\"maxContextTokens\":400000,\"supportsVision\":true,\"baseUrlMode\":\"base\"}"
+  },
+  {
+    "file": "$HOME/.snow/active-profile.json",
+    "format": "json",
+    "keyPath": "activeProfile",
+    "kind": "key",
+    "before": "\"default\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.snow/config.json",
+    "format": "json",
+    "keyPath": "snowcfg",
+    "kind": "key",
+    "before": "{\"baseUrl\":\"https://api.openai.com/v1\",\"apiKey\":\"sk-mine\",\"requestMethod\":\"responses\",\"advancedModel\":\"gpt-4o\",\"basicModel\":\"gpt-4o-mini\",\"oauth\":{\"token\":\"t\"},\"maxTokens\":4096}",
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"requestMethod\":\"chat\",\"advancedModel\":\"gpt-5\",\"basicModel\":\"gpt-5\",\"maxTokens\":128000,\"maxContextTokens\":400000,\"supportsVision\":true,\"baseUrlMode\":\"base\"}"
+  }
+]

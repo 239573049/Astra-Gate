@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml",
+      "keyPath": "model.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml"
+  ],
+  "warnings": []
+}

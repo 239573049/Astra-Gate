@@ -6,7 +6,7 @@ namespace Astra.Data.Repositories;
 /// <summary>The user's own MCP server definitions (stdio or remote) (<c>mcp_local_servers</c>). A handful of rows, never read per request.</summary>
 public sealed class McpLocalRepository(SqliteConnectionFactory factory)
 {
-    private const string Select = "SELECT id, name, transport, command, args_json, env_enc, url, headers_enc, enabled, clients_json, created_at, updated_at FROM mcp_local_servers";
+    private const string Select = "SELECT id, name, transport, command, args_json, env_enc, url, headers_enc, enabled, clients_json, projects_json, created_at, updated_at FROM mcp_local_servers";
 
     public async Task<IReadOnlyList<LocalMcpServer>> ListAsync(CancellationToken ct = default)
     {
@@ -30,8 +30,8 @@ public sealed class McpLocalRepository(SqliteConnectionFactory factory)
     {
         await using var conn = await factory.OpenAsync(ct);
         await conn.ExecuteAsync("""
-            INSERT INTO mcp_local_servers(id, name, transport, command, args_json, env_enc, url, headers_enc, enabled, clients_json, created_at, updated_at)
-            VALUES (@id, @name, @transport, @command, @args_json, @env_enc, @url, @headers_enc, @enabled, @clients_json, @created_at, @updated_at)
+            INSERT INTO mcp_local_servers(id, name, transport, command, args_json, env_enc, url, headers_enc, enabled, clients_json, projects_json, created_at, updated_at)
+            VALUES (@id, @name, @transport, @command, @args_json, @env_enc, @url, @headers_enc, @enabled, @clients_json, @projects_json, @created_at, @updated_at)
             """, LocalMcpParameters.From(s));
     }
 
@@ -40,7 +40,7 @@ public sealed class McpLocalRepository(SqliteConnectionFactory factory)
         await using var conn = await factory.OpenAsync(ct);
         await conn.ExecuteAsync("""
             UPDATE mcp_local_servers SET name = @name, transport = @transport, command = @command, args_json = @args_json, env_enc = @env_enc,
-                   url = @url, headers_enc = @headers_enc, enabled = @enabled, clients_json = @clients_json, updated_at = @updated_at
+                   url = @url, headers_enc = @headers_enc, enabled = @enabled, clients_json = @clients_json, projects_json = @projects_json, updated_at = @updated_at
             WHERE id = @id
             """, LocalMcpParameters.From(s));
     }
@@ -65,13 +65,14 @@ internal sealed class LocalMcpParameters
     public string? env_enc { get; init; }
     public int enabled { get; init; }
     public string clients_json { get; init; } = "[]";
+    public string projects_json { get; init; } = "[]";
     public string created_at { get; init; } = "";
     public string updated_at { get; init; } = "";
 
     public static LocalMcpParameters From(LocalMcpServer s) => new()
     {
         id = s.Id, name = s.Name, transport = s.Transport, command = s.Command, url = s.Url, headers_enc = s.HeadersEnc, args_json = s.ArgsJson, env_enc = s.EnvEnc, enabled = s.Enabled ? 1 : 0,
-        clients_json = s.ClientsJson,
+        clients_json = s.ClientsJson, projects_json = s.ProjectsJson,
         created_at = DateTimeOffsetHandler.ToStorage(s.CreatedAt), updated_at = DateTimeOffsetHandler.ToStorage(s.UpdatedAt),
     };
 }

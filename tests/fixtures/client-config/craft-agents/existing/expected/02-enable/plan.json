@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.craft-agent/config.json",
+    "format": "json",
+    "keyPath": "llmConnections.[slug=astra]",
+    "kind": "key",
+    "before": "{\"slug\":\"astra\",\"name\":\"Astra\",\"providerType\":\"pi_compat\",\"authType\":\"none\",\"baseUrl\":\"https://astra.corp.com/v1\",\"customEndpoint\":{\"api\":\"openai-completions\"},\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"shortName\":\"GPT-5\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":400000,\"supportsImages\":true},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"shortName\":\"Claude Sonnet 4.5\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":200000,\"supportsImages\":true},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"shortName\":\"DeepSeek Chat\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":64000}],\"defaultModel\":\"gpt-5\",\"modelSelectionMode\":\"userDefined3Tier\"}",
+    "after": "{\"slug\":\"astra\",\"name\":\"Astra\",\"providerType\":\"pi_compat\",\"authType\":\"none\",\"baseUrl\":\"https://astra.corp.com/v1\",\"customEndpoint\":{\"api\":\"openai-completions\"},\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"shortName\":\"GPT-5\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":400000,\"supportsImages\":true},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"shortName\":\"DeepSeek Chat\",\"description\":\"\",\"provider\":\"pi\",\"contextWindow\":64000}],\"defaultModel\":\"deepseek-chat\",\"modelSelectionMode\":\"userDefined3Tier\"}"
+  },
+  {
+    "file": "$HOME/.craft-agent/config.json",
+    "format": "json",
+    "keyPath": "defaultLlmConnection",
+    "kind": "key",
+    "before": "\"astra\"",
+    "after": "\"astra\""
+  }
+]

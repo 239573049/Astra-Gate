@@ -352,6 +352,51 @@
     },
     {
       "method": "GET",
+      "path": "/api/library/instructions",
+      "file": "library/instructions.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/agents",
+      "file": "library/agents.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/commands",
+      "file": "library/commands.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/hooks",
+      "file": "library/hooks.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/env",
+      "file": "library/env.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/projects",
+      "file": "library/projects.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/skills/router",
+      "file": "library/router.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/skills/market/source",
+      "file": "library/market-source.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/library/skills/market",
+      "file": "library/market.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/health",
       "file": "health.json"
     },

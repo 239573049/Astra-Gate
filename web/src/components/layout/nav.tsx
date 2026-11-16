@@ -1,4 +1,4 @@
-import { AppWindow, Boxes, KeyRound, LayoutDashboard, Layers, Plug, Puzzle, Route as RouteIcon, Sparkles, ScrollText, Server, Settings as SettingsIcon, ShieldCheck, Waypoints, Wrench } from 'lucide-react';
+import { AppWindow, Boxes, KeyRound, LayoutDashboard, Layers, Library, Plug, Puzzle, Route as RouteIcon, Sparkles, ScrollText, Server, Settings as SettingsIcon, ShieldCheck, Waypoints, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type { NavTarget } from '../../shell/bridge';
@@ -41,6 +41,7 @@ export const NAV_GROUPS: { title?: MessageKey; items: NavItem[] }[] = [
       { id: 'mcp', path: '/mcp', label: 'nav.mcp', color: '#0a84ff', icon: <Plug className={ic} strokeWidth={1.75} /> },
       { id: 'tools', path: '/tools', label: 'nav.tools', color: '#64d2ff', icon: <Wrench className={ic} strokeWidth={1.75} /> },
       { id: 'skills', path: '/skills', label: 'nav.skills', color: '#ff9f0a', icon: <Sparkles className={ic} strokeWidth={1.75} /> },
+      { id: 'library', path: '/library', label: 'nav.library', color: '#bf5af2', icon: <Library className={ic} strokeWidth={1.75} /> },
     ],
   },
   {

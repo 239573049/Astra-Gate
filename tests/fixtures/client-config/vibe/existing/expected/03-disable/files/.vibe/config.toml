@@ -1,0 +1,12 @@
+active_model = "devstral"
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_style = "openai"
+backend = "mistral"
+
+[[models]]
+name = "devstral-latest"
+provider = "mistral"
+alias = "devstral"

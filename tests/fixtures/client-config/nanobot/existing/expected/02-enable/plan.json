@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": "{\"apiKey\":\"sk-astra-enterprise-key\",\"apiBase\":\"https://astra.corp.com/v1\",\"extraHeaders\":{\"User-Agent\":\"nanobot\"}}",
+    "after": "{\"apiKey\":\"sk-astra-enterprise-key\",\"apiBase\":\"https://astra.corp.com/v1\",\"extraHeaders\":{\"User-Agent\":\"nanobot\"}}"
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.provider",
+    "kind": "key",
+    "before": "\"astra\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.model",
+    "kind": "key",
+    "before": "\"astra/gpt-5\"",
+    "after": "\"astra/deepseek-chat\""
+  },
+  {
+    "file": "$HOME/.nanobot/config.json",
+    "format": "json",
+    "keyPath": "agents.defaults.contextWindowTokens",
+    "kind": "key",
+    "before": "400000",
+    "after": "64000"
+  }
+]

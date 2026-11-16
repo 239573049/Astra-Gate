@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra.default_model",
+    "kind": "key",
+    "before": "\"gpt-5\"",
+    "after": "\"\\u0022deepseek-chat\\u0022\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra.models",
+    "kind": "key",
+    "before": "[{ id = \"gpt-5\", context_window = 400000, input = [\"text\", \"image\"], reasoning = true }, { id = \"claude-sonnet-4-5\", context_window = 200000, input = [\"text\", \"image\"], reasoning = true }, { id = \"deepseek-chat\", context_window = 64000, input = [\"text\"] }]",
+    "after": "\"[{ id = \\u0022gpt-5\\u0022, context_window = 400000, input = [\\u0022text\\u0022, \\u0022image\\u0022], reasoning = true }, { id = \\u0022deepseek-chat\\u0022, context_window = 64000, input = [\\u0022text\\u0022] }]\""
+  },
+  {
+    "file": "$HOME/.jcode/config.toml",
+    "format": "toml",
+    "keyPath": "provider.default_model",
+    "kind": "key",
+    "before": "\"gpt-5\"",
+    "after": "\"\\u0022deepseek-chat\\u0022\""
+  }
+]

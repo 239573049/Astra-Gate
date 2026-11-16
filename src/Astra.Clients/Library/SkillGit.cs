@@ -54,6 +54,17 @@ public static class SkillGit
         return commit;
     }
 
+    /// <summary>The commit <paramref name="gitRef"/> (default HEAD) of <paramref name="url"/> points at now (<c>git ls-remote</c>: nothing is downloaded), or null when it names nothing.</summary>
+    public static async Task<string?> RemoteCommitAsync(ClientEnvironment env, string url, string? gitRef, CancellationToken ct)
+    {
+        if (CheckUrl(url) is { } why) throw new SkillLibraryException($"The repository address is not accepted ({why})", SkillFailure.Invalid);
+        if (CheckRef(gitRef) is not null) throw new SkillLibraryException("The branch or tag is not accepted", SkillFailure.Invalid);
+        var git = env.FindTool("git") ?? throw new SkillLibraryException("git was not found on this machine", SkillFailure.Invalid);
+        var output = await RunAsync(env, git, Path.GetTempPath(), ["-c", "protocol.ext.allow=never", "ls-remote", "--", url.Trim(), string.IsNullOrEmpty(gitRef) ? "HEAD" : gitRef], ct);
+        var line = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return line?.Split('\t')[0].Trim() is { Length: >= 7 } sha ? sha : null;
+    }
+
     private static async Task<string> RunAsync(ClientEnvironment env, string git, string workingDirectory, IReadOnlyList<string> args, CancellationToken ct)
     {
         var psi = new ProcessStartInfo(git)

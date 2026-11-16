@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.empryo/config.json",
+      "keyPath": "providers.[id=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.empryo/config.json"
+  ],
+  "warnings": []
+}

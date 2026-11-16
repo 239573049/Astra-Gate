@@ -29,11 +29,12 @@ public sealed class ClientMcpServerApplier(ClientEnvironment env, IClientConfigS
 
     private static string NoteKey(string kind, string name) => KeyPath(kind, name) + "#written";
 
-    public string File(string kind) => McpClientTargets.File(env, kind);
+    /// <summary>The file a server is written into: the client's own, or its file inside <paramref name="project"/> (when the client has one).</summary>
+    public string File(string kind, string? project = null) => McpClientTargets.File(env, kind, project);
 
-    public ClientMcpStatus Inspect(string kind, string name)
+    public ClientMcpStatus Inspect(string kind, string name, string? project = null)
     {
-        var file = File(kind);
+        var file = File(kind, project);
         try
         {
             var ops = ConfigEditorOps.Create(Format(kind), env.ReadTextOrNull(file) ?? "");
@@ -59,10 +60,10 @@ public sealed class ClientMcpServerApplier(ClientEnvironment env, IClientConfigS
         }
     }
 
-    public ApplyReport Apply(string kind, LocalMcpSpec spec, bool force)
+    public ApplyReport Apply(string kind, LocalMcpSpec spec, bool force, string? project = null)
     {
         RequireSupported(kind);
-        var before = Inspect(kind, spec.Name);
+        var before = Inspect(kind, spec.Name, project);
         if (before.Error is not null) throw new ClientMcpException($"The client's file cannot be read: {before.Error}", ClientMcpState.Conflict);
         switch (before.State)
         {
@@ -71,13 +72,13 @@ public sealed class ClientMcpServerApplier(ClientEnvironment env, IClientConfigS
             case ClientMcpState.Drifted when !force:
                 throw new ClientMcpException($"The MCP entry \"{spec.Name}\" in {before.File} was changed since Astra wrote it.", ClientMcpState.Drifted);
             case ClientMcpState.Drifted or ClientMcpState.Applied:
-                var restored = applier.ForceRestore(RemovalPlan(kind, spec.Name));
+                var restored = applier.ForceRestore(RemovalPlan(kind, spec.Name, project));
                 if (restored.Keys.Any(k => k.Outcome == RestoreKeyOutcome.Drifted))
                     throw new ClientMcpException("The old entry could not be removed.", ClientMcpState.Drifted);
                 break;
         }
 
-        var file = File(kind);
+        var file = File(kind, project);
         var plan = applier.Preview(StateKind(kind), [new ConfigChange(file, Format(kind), KeyPath(kind, spec.Name), null, Entry(kind, spec), Kind(kind))]);
         var report = applier.Apply(plan);
         if (kind == ClientKinds.Codex)
@@ -86,36 +87,78 @@ public sealed class ClientMcpServerApplier(ClientEnvironment env, IClientConfigS
                 ClientKind = StateKind(kind), FilePath = file, KeyPath = NoteKey(kind, spec.Name), OriginalAbsent = true,
                 AppliedValueJson = plan.Changes[0].After, AppliedAt = DateTimeOffset.UtcNow,
             });
-        if (Inspect(kind, spec.Name).State != ClientMcpState.Applied)
+        if (Inspect(kind, spec.Name, project).State != ClientMcpState.Applied)
             throw new ClientMcpException("The client changed its file while Astra was writing it. Try again.", ClientMcpState.Drifted);
         return report;
     }
 
-    public RestoreReport Remove(string kind, string name, bool force)
+    public RestoreReport Remove(string kind, string name, bool force, string? project = null) => RemoveFrom(kind, name, force, File(kind, project));
+
+    /// <summary>Removes the entry Astra wrote into one specific file (a client's own or a project's).</summary>
+    public RestoreReport RemoveAt(string kind, string name, bool force, string file) => RemoveFrom(kind, name, force, file);
+
+    /// <summary>Forgets what Astra recorded for an entry in a file that no longer exists (a deleted project): nothing is left to restore.</summary>
+    public void Forget(string kind, string name, string file)
+    {
+        store.Delete(StateKind(kind), file, KeyPath(kind, name));
+        store.Delete(StateKind(kind), file, NoteKey(kind, name));
+    }
+
+    /// <summary>Every file Astra wrote an entry named <paramref name="name"/> into for this client (the user-wide one and any project's).</summary>
+    public IReadOnlyList<string> WrittenFiles(string kind, string name)
+    {
+        var keyPath = KeyPath(kind, name);
+        return store.List(StateKind(kind)).Where(e => e.KeyPath == keyPath).Select(e => e.FilePath).Distinct(StringComparer.Ordinal).ToList();
+    }
+
+    private RestoreReport RemoveFrom(string kind, string name, bool force, string file)
     {
         RequireSupported(kind);
-        var plan = RemovalPlan(kind, name);
+        var plan = RemovalPlanFor(kind, name, file);
         var report = force ? applier.ForceRestore(plan) : applier.Disable(plan);
-        if (store.Get(StateKind(kind), File(kind), KeyPath(kind, name)) is null) store.Delete(StateKind(kind), File(kind), NoteKey(kind, name));
+        if (store.Get(StateKind(kind), file, KeyPath(kind, name)) is null) store.Delete(StateKind(kind), file, NoteKey(kind, name));
         return report;
     }
 
-    /// <summary>The names of the entries Astra wrote into a client (from its state).</summary>
-    public IReadOnlyList<string> WrittenNames(string kind)
+    /// <summary>The names of the entries Astra wrote into a client's own (user-wide) file, or into its file inside <paramref name="project"/> (from its state).</summary>
+    public IReadOnlyList<string> WrittenNames(string kind, string? project = null)
     {
+        var file = File(kind, project);
         var prefix = KeyPath(kind, "");
         return store.List(StateKind(kind))
-            .Where(e => e.KeyPath.StartsWith(prefix, StringComparison.Ordinal) && !e.KeyPath.EndsWith("#written", StringComparison.Ordinal))
+            .Where(e => e.FilePath == file && e.KeyPath.StartsWith(prefix, StringComparison.Ordinal) && !e.KeyPath.EndsWith("#written", StringComparison.Ordinal))
             .Select(e => e.KeyPath[prefix.Length..]).Distinct(StringComparer.Ordinal).ToList();
     }
 
-    /// <summary>The offline <c>restore-all</c> step: removes every local server entry Astra wrote.</summary>
-    public IReadOnlyList<(string Kind, RestoreReport Report)> RemoveAll(bool force = false) =>
-        SupportedKinds.SelectMany(k => WrittenNames(k).Select(n => (k, Remove(k, n, force)))).ToList();
-
-    private ConfigChangePlan RemovalPlan(string kind, string name)
+    /// <summary>The offline <c>restore-all</c> step: removes every server entry Astra wrote, user-wide and in any project file.</summary>
+    public IReadOnlyList<(string Kind, RestoreReport Report)> RemoveAll(bool force = false)
     {
-        var file = File(kind);
+        var result = new List<(string, RestoreReport)>();
+        foreach (var kind in SupportedKinds)
+        {
+            var prefix = KeyPath(kind, "");
+            var entries = store.List(StateKind(kind))
+                .Where(e => e.KeyPath.StartsWith(prefix, StringComparison.Ordinal) && !e.KeyPath.EndsWith("#written", StringComparison.Ordinal))
+                .Select(e => (e.FilePath, Name: e.KeyPath[prefix.Length..])).Distinct().ToList();
+            foreach (var (file, name) in entries)
+            {
+                // a project that was deleted has no file to restore; only the record is forgotten
+                if (!env.FileExists(file))
+                {
+                    store.Delete(StateKind(kind), file, KeyPath(kind, name));
+                    store.Delete(StateKind(kind), file, NoteKey(kind, name));
+                    continue;
+                }
+                result.Add((kind, RemoveFrom(kind, name, force, file)));
+            }
+        }
+        return result;
+    }
+
+    private ConfigChangePlan RemovalPlan(string kind, string name, string? project = null) => RemovalPlanFor(kind, name, File(kind, project));
+
+    private ConfigChangePlan RemovalPlanFor(string kind, string name, string file)
+    {
         var ops = ConfigEditorOps.Create(Format(kind), env.ReadTextOrNull(file) ?? "");
         var path = KeyPath(kind, name);
         var current = ops.Read(new ConfigChange(file, Format(kind), path, null, null, Kind(kind)));
@@ -145,14 +188,14 @@ public sealed class ClientMcpServerApplier(ClientEnvironment env, IClientConfigS
     /// then on. Its original is the user's entry, so taking it out of Astra later (or <c>restore-all</c>) puts that entry back; the
     /// file is backed up first like any write.
     /// </summary>
-    public ApplyReport Adopt(string kind, LocalMcpSpec spec)
+    public ApplyReport Adopt(string kind, LocalMcpSpec spec, string? project = null)
     {
         RequireSupported(kind);
-        var before = Inspect(kind, spec.Name);
+        var before = Inspect(kind, spec.Name, project);
         if (before.Error is not null) throw new ClientMcpException($"The client's file cannot be read: {before.Error}", ClientMcpState.Conflict);
         if (before.State != ClientMcpState.Conflict) throw new ClientMcpException($"There is no entry \"{spec.Name}\" of the user's to take over in {before.File}.", before.State);
-        applier.Apply(RemovalPlan(kind, spec.Name));
-        var file = File(kind);
+        applier.Apply(RemovalPlan(kind, spec.Name, project));
+        var file = File(kind, project);
         var plan = applier.Preview(StateKind(kind), [new ConfigChange(file, Format(kind), KeyPath(kind, spec.Name), null, Entry(kind, spec), Kind(kind))]);
         var report = applier.Apply(plan);
         if (kind == ClientKinds.Codex)

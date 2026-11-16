@@ -1,0 +1,4 @@
+{
+  "version": 1,
+  "providers": { "openai-compatible": {"provider":{"name":"Astra","baseUrl":"https://astra.corp.com/v1","defaultModelId":"gpt-5"},"models":{"gpt-5":{"id":"gpt-5","name":"GPT-5","capabilities":["streaming","tools","images","reasoning"],"contextWindow":400000,"maxTokens":128000},"claude-sonnet-4-5":{"id":"claude-sonnet-4-5","name":"Claude Sonnet 4.5","capabilities":["streaming","tools","images","reasoning"],"contextWindow":200000,"maxTokens":64000},"deepseek-chat":{"id":"deepseek-chat","name":"DeepSeek Chat","capabilities":["streaming","tools"],"contextWindow":64000,"maxTokens":8000}}} }
+}

@@ -1,0 +1,12 @@
+llm:
+  provider: openai
+  model: "deepseek-chat"
+  api_key: "sk-astra-enterprise-key"
+  endpoint: "https://astra.corp.com/v1"
+  context_window_tokens: 64000
+  headers:
+    X-Mine: "1"
+    User-Agent: "mistermorph"
+  inference_provider: "openai_response_compatible"
+logging:
+  level: info

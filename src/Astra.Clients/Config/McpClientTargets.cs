@@ -28,7 +28,29 @@ public sealed record FoundMcpEntry(string Name, LocalMcpSpec? Spec, string? Unsu
 public static class McpClientTargets
 {
     public static IReadOnlyList<string> Kinds { get; } =
-        [ClientKinds.ClaudeCode, ClientKinds.Codex, ClientKinds.GeminiCli, ClientKinds.QwenCode, ClientKinds.OpenCode];
+    [
+        ClientKinds.ClaudeCode, ClientKinds.Codex, ClientKinds.GeminiCli, ClientKinds.QwenCode, ClientKinds.OpenCode,
+        // Droid (.factory/mcp.json, Claude's shape), Crush (mcp in crush.json) and Copilot CLI (mcp-config.json, type local | http + tools)
+        // were added with the rest of the library; the shapes are magpie's (library/mcp.go, MIT)
+        ClientKinds.Droid, ClientKinds.Crush, ClientKinds.CopilotCli,
+    ];
+
+    /// <summary>The clients that read an MCP file inside a project directory (magpie's projectMCPFiles: only those whose docs name one).</summary>
+    public static bool SupportsProject(string kind) => kind is ClientKinds.ClaudeCode or ClientKinds.Codex or ClientKinds.GeminiCli
+        or ClientKinds.QwenCode or ClientKinds.OpenCode or ClientKinds.Droid;
+
+    /// <summary>The MCP file of a client inside a project directory: Claude Code .mcp.json, Codex .codex/config.toml, Gemini CLI .gemini/settings.json, Qwen Code .qwen/settings.json, OpenCode opencode.json and Droid .factory/mcp.json.</summary>
+    public static string ProjectFile(ClientEnvironment env, string kind, string project) => kind switch
+    {
+        ClientKinds.ClaudeCode => Path.Combine(project, ".mcp.json"),
+        ClientKinds.Codex => Path.Combine(project, ".codex", "config.toml"),
+        ClientKinds.GeminiCli => Path.Combine(project, ".gemini", "settings.json"),
+        ClientKinds.QwenCode => Path.Combine(project, ".qwen", "settings.json"),
+        ClientKinds.OpenCode => env.FileExists(Path.Combine(project, "opencode.json")) || !env.FileExists(Path.Combine(project, "opencode.jsonc"))
+            ? Path.Combine(project, "opencode.json") : Path.Combine(project, "opencode.jsonc"),
+        ClientKinds.Droid => Path.Combine(project, ".factory", "mcp.json"),
+        _ => throw new ArgumentException($"{kind} reads no MCP file inside a project", nameof(kind)),
+    };
 
     public static bool Supports(string kind) => Kinds.Contains(kind);
 
@@ -40,12 +62,13 @@ public static class McpClientTargets
     public static string Container(string kind) => kind switch
     {
         ClientKinds.Codex => "mcp_servers",
-        ClientKinds.OpenCode => "mcp",
+        ClientKinds.OpenCode or ClientKinds.Crush => "mcp",
         _ => "mcpServers",
     };
 
-    public static string File(ClientEnvironment env, string kind)
+    public static string File(ClientEnvironment env, string kind, string? project = null)
     {
+        if (project is not null) return ProjectFile(env, kind, project);
         switch (kind)
         {
             case ClientKinds.Codex:
@@ -61,6 +84,14 @@ public static class McpClientTargets
                 var dir = string.IsNullOrEmpty(xdg) ? env.Combine(".config", "opencode") : Path.Combine(xdg, "opencode");
                 var jsonc = Path.Combine(dir, "opencode.jsonc");
                 return env.FileExists(jsonc) ? jsonc : Path.Combine(dir, "opencode.json");
+            case ClientKinds.Droid:
+                return env.Combine(".factory", "mcp.json");
+            case ClientKinds.Crush:
+                var crushDir = env.GetEnvironmentVariable("CRUSH_GLOBAL_CONFIG") is { Length: > 0 } cg ? cg
+                    : env.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } cx ? Path.Combine(cx, "crush") : env.Combine(".config", "crush");
+                return Path.Combine(crushDir, "crush.json");
+            case ClientKinds.CopilotCli:
+                return Path.Combine(env.GetEnvironmentVariable("COPILOT_HOME") is { Length: > 0 } ch ? ch : env.Combine(".copilot"), "mcp-config.json");
             default:
                 throw new ArgumentException($"{kind} has no MCP server list Astra writes", nameof(kind));
         }
@@ -73,7 +104,8 @@ public static class McpClientTargets
     {
         ClientKinds.Codex => CodexEntry(s),
         ClientKinds.OpenCode => OpenCodeEntry(s),
-        ClientKinds.ClaudeCode => ClaudeEntry(s),
+        ClientKinds.ClaudeCode or ClientKinds.Droid or ClientKinds.Crush => ClaudeEntry(s),
+        ClientKinds.CopilotCli => CopilotEntry(s),
         _ => GeminiEntry(s),
     };
 
@@ -92,6 +124,26 @@ public static class McpClientTargets
         }
         var entry = new JsonObject { ["type"] = "stdio", ["command"] = s.Command, ["args"] = Array(s.Args) };
         if (s.Env.Count > 0) entry["env"] = Strings(s.Env);
+        return entry.ToJsonString();
+    }
+
+    private static string CopilotEntry(LocalMcpSpec s)
+    {
+        var entry = new JsonObject();
+        if (s.IsRemote)
+        {
+            entry["type"] = "http";
+            entry["url"] = s.Url;
+            if (s.Headers is { Count: > 0 }) entry["headers"] = Strings(s.Headers);
+        }
+        else
+        {
+            entry["type"] = "local";
+            entry["command"] = s.Command;
+            entry["args"] = Array(s.Args);
+            if (s.Env.Count > 0) entry["env"] = Strings(s.Env);
+        }
+        entry["tools"] = Array(["*"]);
         return entry.ToJsonString();
     }
 
@@ -172,7 +224,12 @@ public static class McpClientTargets
             }
             return new(name, null, "unsupported shape");
         }
-        if (kind == ClientKinds.ClaudeCode)
+        if (kind == ClientKinds.CopilotCli)
+        {
+            if (type == "http" && Str("url") is { } copilotUrl) return new(name, new LocalMcpSpec(name, "", [], new Dictionary<string, string>(), copilotUrl, Map("headers")), null);
+            if (type is "sse") return new(name, null, "sse transport");
+        }
+        else if (kind is ClientKinds.ClaudeCode or ClientKinds.Droid or ClientKinds.Crush)
         {
             if (type is "sse" or "ws") return new(name, null, "sse transport");
             if (Str("url") is { } url) return new(name, new LocalMcpSpec(name, "", [], new Dictionary<string, string>(), url, Map("headers")), null);

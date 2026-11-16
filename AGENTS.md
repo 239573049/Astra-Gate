@@ -646,7 +646,7 @@ runtime needed on the target).
     address** (the gateway stays http-only); "which clients get it" is `clients_json`. A name is `[a-z0-9][a-z0-9_-]{0,31}` and not `astra`. Env / header values never leave the
     server (the DTO has names only). Import (`GET|POST /api/mcp/local/import`): `McpClientTargets.ReadEntries` lists what a client already has that Astra did not write
     (SSE, Codex env-var headers etc. are shown but not importable); `ClientMcpServerApplier.Adopt` removes the entry and writes it again as Astra's own, so the user's original is
-    the recorded original and removing it later puts it back. Adding a client = its row in `McpClientTargets` (file, container, entry + parse), the DTO docs, `mcp.mdx` and tests
+    the recorded original and removing it later puts it back. Servers can also be written into a project's own MCP file (linked update 37). Adding a client = its row in `McpClientTargets` (file, container, entry + parse), the DTO docs, `mcp.mdx` and tests
     (verify its MCP format against its docs first). Mirrors: `Astra.Api.Contracts/LocalMcpDtos.cs`, `web/src/api` (`useLocalMcp*`) and `LocalMcpServers.tsx`, zh/en `mcp.local.*`
     (+ `gen-desktop-i18n`), the Avalonia MCP page (`Components/Mcp/LocalMcp*.cs`, `Astra.Desktop.Core/Mcp/LocalMcpDraft.cs`), the website's `mcp.mdx`. Tests: `ClientMcpServerApplierTests`, `LocalMcpApiTests`, web `local-mcp*.test`.
     nav entry is not in `NavItems.Hideable` yet. Tests: `McpGatewayTests`, `McpAdminApiTests`, `McpOAuthTests` (real SDK servers on `TestServer`, `McpFixture`), `McpRepositoryTests`.
@@ -666,7 +666,7 @@ runtime needed on the target).
     `components/skills`, the Avalonia page (`Pages/Skills`, `Components/Skills`, `Astra.Desktop.Core/Library/SkillsApi.cs`, route `AppRoute.Skills`,
     sidebar group `nav.group.resources` in `NavTable`), zh/en `skills.*` / `nav.skills` / `nav.group.resources` (+ `gen-desktop-i18n`), the UI fixtures
     (`scripts/visual/gen-fixtures.mjs`: `/api/library/skills`), the website's `content/docs/console/skills.mdx` (linked update 14). `~/.astra/library` is a path in
-    linked update 5 (`libraryDir` in the CLI and desktop). The Hooks / instructions / sub-agents menus are not built yet. Tests: `SkillLibraryTests` (+ `SkillGitTests`), `LibraryRepositoryTests`,
+    linked update 5 (`libraryDir` in the CLI and desktop). Instructions, sub-agents, commands, hooks and environment variables, project scope, updates, market and router are linked update 37. Tests: `SkillLibraryTests` (+ `SkillGitTests`), `LibraryRepositoryTests`,
     `LibraryApiTests`, `SkillsLogicTests`, `SkillsPageTests`.
 
 27. **v2 plugins** (`design/plugin-v2/`): the component vocabulary is `src/Astra.Plugins/V2/Ui/components.json` — a
@@ -911,6 +911,41 @@ runtime needed on the target).
     `content/docs/console/providers.mdx` / `settings.mdx`. A `claude_bridge` account has no token: `SubscriptionTokenService.IsFresh` is false and `SubscriptionQuotaService.CanProbe`
     false for it, so no background round touches it. Tests: `ClaudeBridgeUnitTests`, `ClaudeBridgeTests` (a fake `claude` script + the real helper subcommand, needs Node), `ClaudeBridgeApiTests`,
     `WarmupTests`, `WarmupLogicTests`, web `warmup-bridge.test.tsx`. Never verified against a real `claude` binary or subscription.
+
+37. **The rest of the resource library** (instructions, sub-agents, slash commands, hooks, environment variables, project scope, Skill updates /
+    market / router; magpie's `internal/library`, MIT, is the reference and the code credits it): `ResourceLibrary` (`src/Astra.Clients/Library`) keeps
+    items in `library_items` (migration 0033) and records everything it writes in `library_writes`, the ownership ledger — Astra removes only what the
+    ledger lists **and that is still exactly as written**; what the user changed is drift (reported, never overwritten without `force`, left in place when
+    the item is deleted). Where each client reads what is the table `ResourcePlaces` (not an adapter method: no golden cases, no TS port, linked update 20
+    does not apply) — instructions are a marked section `<!-- astra:begin <name> -->` of the client's instruction file (`ResourceText`; user text outside it is
+    never touched; a file Astra created goes with its last section), sub-agents and commands are files in the client's own folder (`ResourceFilePlace`; a file
+    of the user's by that name is a conflict), hooks are entries of `hooks.<Event>` arrays in Claude Code's `settings.json`, Codex's `hooks.json` and Gemini
+    CLI's `settings.json`, environment variables are `env.<NAME>` (Claude Code) / `shell_environment_policy.set.<NAME>` (Codex) — hooks and variables are
+    written through `ClientConfigApplier` (state kinds `<kind>-hooks` / `<kind>-env`; a hook entry is matched by its exact JSON, so a changed one is the
+    user's), the other kinds go through `~/.astra/backups/library/<stamp>-res/files/` before an existing file changes. Instructions, sub-agents and commands
+    can go **into a project directory** (`library_projects`, `LibraryTarget.Project`); Skills into `<project>/.claude/skills` or `.agents/skills`
+    (`SkillLibrary.SetProjectAsync`, `library_placements.project`, target `project` — the user-wide logic never sees them) and own MCP servers into the
+    client's project MCP file (`McpClientTargets.ProjectFile`, `mcp_local_servers.projects_json`, `ClientMcpServerApplier` takes a `project`; its state is
+    keyed by file, so `RemoveAll` / `WrittenFiles` cover every file). A project directory that no longer exists is reported (`project-missing`), never a
+    failure, and its ledger rows are forgotten. `SkillPlaces` and `McpClientTargets` grew to Pi, oh-my-pi, MiniMax Code, Hermes Agent, DeepSeek Harness,
+    Command Code, Crush, ZCode, Antigravity CLI (Skills) and Droid, Crush, Copilot CLI (MCP) — verify a path against the client before adding more.
+    Skill updates: `SkillLibrary.CheckUpdatesAsync` (`git ls-remote`, no download) / `UpdateAsync` (refused when the library copy was edited since install unless
+    forced; the old directory is backed up; links stay). Skills market: `SkillMarket` searches a registry's `GET /api/search?q=` — skills.sh by default, a
+    **third-party service** (setting `library_market` in `settings`, `GET|PUT /api/library/skills/market/source`, local-only write); install is a Git source from
+    `https://github.com/<owner>/<repo>`. Skill router (`SkillRouter`, opt-in per client, `library_router`): one link `astra-skills` into
+    `~/.astra/library/router/<client>/` whose SKILL.md lists the library's Skills the client has no link for; a client that reads the shared directory is
+    refused; a router entry the user repointed is theirs. Admin API: `/api/library/{instructions|agents|commands|hooks|env}` and `/api/library/projects`
+    (`ResourceLibraryService`, `ResourceLibraryEndpoints`) plus the `skills/{updates,market,router,{name}/projects,{name}/update}` routes in `LibraryEndpoints`
+    — every write is local-origin only. `restore-all` (`Commands.RestoreAllAsync`) takes resources and routers out and exits 1 when something the user
+    changed was left. Mirrors (a change moves them together): `Astra.Api.Contracts/ResourceDtos.cs` (+ the placement / MCP project fields),
+    `web/src/api` (`useResourceLibrary` …) and `types.ts`, `web/src/pages/LibraryPage.tsx` + `components/library`, `components/skills/{SkillMarketTab,SkillRouterPanel,
+    SkillProjectSheet}.tsx`, `LocalMcpServers.tsx`, zh/en `library.*` / `skills.market.*` / `skills.router.*` / `skills.updates.*` / `skills.project.*` keys
+    (+ `gen-desktop-i18n`), the Avalonia Library page (`Pages/Library`, `Components/Library/ResourceSheet.cs`, `Astra.Desktop.Core/Library/LibraryApi.cs`, route
+    `AppRoute.Library` appended at the end of the enum) and the UI fixtures (`scripts/visual/gen-fixtures.mjs`: `/api/library/*`). The Avalonia Skills page does
+    not yet have the market, router, project placement or updates (web only). Website: `content/docs/console/library.mdx` and `skills.mdx` / `mcp.mdx` (linked
+    update 14). Tests: `ResourceLibraryTests`, `SkillLibraryExtrasTests`, `ClientMcpServerApplierMoreTests`, `ResourceLibraryApiTests`, web `library.test.tsx`,
+    desktop `LibraryApiTests`. Not done on purpose: magpie's MCP router (it runs stdio servers locally — linked update 25 says Astra never does), cross-agent
+    memory, session handoff, the Claude plugins marketplace, RTK / billion-context / Pi extensions.
 
 ## Conventions
 

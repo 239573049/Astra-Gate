@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/vb/config.toml",
+    "keyPath": "active_model",
+    "originalAbsent": false,
+    "original": "\"\\u0022x\\u0022\"",
+    "applied": "\"\\u0022astra/gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/vb/config.toml",
+    "keyPath": "models[provider=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/vb/config.toml",
+    "keyPath": "providers[name=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

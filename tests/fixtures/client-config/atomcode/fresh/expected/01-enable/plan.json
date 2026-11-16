@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "provider_accounts.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"provider\":\"\\u0022openai-compatible\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"api_key\":\"\\u0022sk-astra-enterprise-key\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-gpt-5",
+    "kind": "table",
+    "before": null,
+    "after": "{\"account\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022gpt-5\\u0022\",\"context_window\":\"400000\",\"max_tokens\":\"128000\",\"supports_vision\":\"true\"}"
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-claude-sonnet-4-5",
+    "kind": "table",
+    "before": null,
+    "after": "{\"account\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022claude-sonnet-4-5\\u0022\",\"context_window\":\"200000\",\"max_tokens\":\"64000\",\"supports_vision\":\"true\"}"
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "models.astra-deepseek-chat",
+    "kind": "table",
+    "before": null,
+    "after": "{\"account\":\"\\u0022astra\\u0022\",\"model\":\"\\u0022deepseek-chat\\u0022\",\"context_window\":\"64000\",\"max_tokens\":\"8000\",\"supports_vision\":\"false\"}"
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "default_provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra-gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.atomcode/config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra-gpt-5\\u0022\""
+  }
+]

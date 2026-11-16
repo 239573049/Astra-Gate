@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "keyPath": "llm.api_key",
+    "originalAbsent": false,
+    "original": "\"sk-mine\"",
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "keyPath": "llm.context_window_tokens",
+    "originalAbsent": false,
+    "original": "128000",
+    "applied": "64000"
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "keyPath": "llm.endpoint",
+    "originalAbsent": false,
+    "original": "\"https://api.openai.com/v1\"",
+    "applied": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "keyPath": "llm.headers.User-Agent",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"mistermorph\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "keyPath": "llm.inference_provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"openai_response_compatible\""
+  },
+  {
+    "file": "$HOME/.morph/config.yaml",
+    "keyPath": "llm.model",
+    "originalAbsent": false,
+    "original": "\"gpt-4o\"",
+    "applied": "\"deepseek-chat\""
+  }
+]

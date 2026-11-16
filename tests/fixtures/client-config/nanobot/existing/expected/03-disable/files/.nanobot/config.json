@@ -1,0 +1,12 @@
+{
+  "agents": {
+    "defaults": {
+      "provider": "auto",
+      "model": "anthropic/claude-opus-4",
+      "modelPreset": "fast",
+      "context_window_tokens": 100000
+    }
+  },
+  "modelPresets": { "fast": { "model": "x" } },
+  "providers": { "mine": { "apiKey": "k", "apiBase": "http://localhost:1/v1" } }
+}

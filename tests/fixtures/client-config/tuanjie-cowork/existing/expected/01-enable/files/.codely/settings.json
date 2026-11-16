@@ -1,0 +1,13 @@
+{
+  "theme": "dark",
+  "customModelProviders": [
+    { "id": "mine", "name": "Mine", "baseUrl": "http://localhost:1/v1", "apiKey": "k", "authType": "openai" },
+    {"id":"astra","name":"Astra","baseUrl":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key","authType":"openai"}
+  ],
+  "customModels": [
+    { "id": "mine-1", "model": "foo", "providerId": "mine", "displayName": "foo", "roles": ["model"], "wireApi": "chat" },
+    {"id":"astra-gpt-5","providerId":"astra","model":"gpt-5","displayName":"gpt-5","roles":["model"],"wireApi":"chat","supportsMultimodal":true},
+    {"id":"astra-claude-sonnet-4-5","providerId":"astra","model":"claude-sonnet-4-5","displayName":"claude-sonnet-4-5","roles":["model"],"wireApi":"chat","supportsMultimodal":true},
+    {"id":"astra-deepseek-chat","providerId":"astra","model":"deepseek-chat","displayName":"deepseek-chat","roles":["model"],"wireApi":"chat","supportsMultimodal":false}
+  ]
+}

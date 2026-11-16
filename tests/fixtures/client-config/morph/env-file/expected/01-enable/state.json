@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/mm/custom.yaml",
+    "keyPath": "llm.api_key",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/mm/custom.yaml",
+    "keyPath": "llm.context_window_tokens",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "400000"
+  },
+  {
+    "file": "$HOME/mm/custom.yaml",
+    "keyPath": "llm.endpoint",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/mm/custom.yaml",
+    "keyPath": "llm.headers.User-Agent",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"mistermorph\""
+  },
+  {
+    "file": "$HOME/mm/custom.yaml",
+    "keyPath": "llm.inference_provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"openai_response_compatible\""
+  },
+  {
+    "file": "$HOME/mm/custom.yaml",
+    "keyPath": "llm.model",
+    "originalAbsent": false,
+    "original": "\"x\"",
+    "applied": "\"gpt-5\""
+  }
+]

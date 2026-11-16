@@ -1,0 +1,42 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.morph/config.yaml",
+      "keyPath": "llm.api_key",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.morph/config.yaml",
+      "keyPath": "llm.context_window_tokens",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.morph/config.yaml",
+      "keyPath": "llm.endpoint",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.morph/config.yaml",
+      "keyPath": "llm.headers.User-Agent",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.morph/config.yaml",
+      "keyPath": "llm.inference_provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.morph/config.yaml",
+      "keyPath": "llm.model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

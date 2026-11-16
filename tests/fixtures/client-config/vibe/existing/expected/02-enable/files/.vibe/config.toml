@@ -1,0 +1,35 @@
+active_model = "astra/deepseek-chat"
+
+[[providers]]
+name = "mistral"
+api_base = "https://api.mistral.ai/v1"
+api_style = "openai"
+backend = "mistral"
+
+[[models]]
+name = "devstral-latest"
+provider = "mistral"
+alias = "devstral"
+
+[[providers]]
+name = "astra"
+api_base = "https://astra.corp.com/v1"
+api_style = "openai"
+backend = "generic"
+extra_headers = { Authorization = "Bearer sk-astra-enterprise-key" }
+
+[[models]]
+name = "gpt-5"
+provider = "astra"
+alias = "astra/gpt-5"
+thinking_levels = ["off", "low", "medium", "high"]
+supports_images = true
+max_context_length = 400000
+
+[[models]]
+name = "deepseek-chat"
+provider = "astra"
+alias = "astra/deepseek-chat"
+thinking_levels = ["off"]
+supports_images = false
+max_context_length = 64000

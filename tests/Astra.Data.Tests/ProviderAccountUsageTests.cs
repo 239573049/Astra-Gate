@@ -125,6 +125,13 @@ public class ProviderAccountUsageTests
             // Back to just before 0019 — which means undoing 0020_request_routing, 0021_token_invites, 0022_mcp_gateway, 0023_library_skills, 0024_plugins_v2 and 0025_mcp_local too: only migrations
             // above the highest recorded version are pending.
             await conn.ExecuteAsync("""
+                DROP TABLE library_router;
+                DROP TABLE library_writes;
+                DROP TABLE library_items;
+                DROP TABLE library_projects;
+                ALTER TABLE mcp_local_servers DROP COLUMN projects_json;
+                ALTER TABLE library_placements DROP COLUMN project;
+                DELETE FROM schema_version WHERE version = 33;
                 DROP TABLE routing_groups;
                 DELETE FROM schema_version WHERE version = 32;
                 ALTER TABLE requests DROP COLUMN context_json;

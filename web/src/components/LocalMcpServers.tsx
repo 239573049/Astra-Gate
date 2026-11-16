@@ -6,7 +6,7 @@
 import { Download, Pencil, Plus, Terminal, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-import { useApplyLocalMcp, useCreateLocalMcp, useDeleteLocalMcp, useImportLocalMcp, useLocalMcpCandidates, useLocalMcpServers, useUpdateLocalMcp } from '../api/hooks';
+import { useApplyLocalMcp, useCreateLocalMcp, useDeleteLocalMcp, useImportLocalMcp, useLibraryProjects, useLocalMcpCandidates, useLocalMcpServers, useUpdateLocalMcp } from '../api/hooks';
 import type { ClientKind, ClientMcpState, LocalMcpPlacement, LocalMcpServer, LocalMcpServerInput, LocalMcpTransport } from '../api/types';
 import { useI18n, type MessageKey } from '../i18n';
 import { Alert } from './arc/alert/alert';
@@ -19,9 +19,18 @@ const CLIENTS: { kind: ClientKind; name: string }[] = [
   { kind: 'gemini-cli', name: 'Gemini CLI' },
   { kind: 'qwen-code', name: 'Qwen Code' },
   { kind: 'opencode', name: 'OpenCode' },
+  { kind: 'droid', name: 'Droid' },
+  { kind: 'crush', name: 'Crush' },
+  { kind: 'copilot-cli', name: 'Copilot CLI' },
 ];
 
-const STATE_TONE: Record<ClientMcpState, 'neutral' | 'green' | 'orange' | 'red'> = {
+/** The clients that read an MCP file inside a project directory (mirrors McpClientTargets.SupportsProject). */
+const PROJECT_CLIENTS: ClientKind[] = ['claude-code', 'codex', 'gemini-cli', 'qwen-code', 'opencode', 'droid'];
+/** What a new server is written into by default: the clients it first supported. */
+const DEFAULT_CLIENTS: ClientKind[] = ['claude-code', 'codex', 'gemini-cli', 'qwen-code', 'opencode'];
+
+const STATE_TONE: Record<ClientMcpState | 'project-missing', 'neutral' | 'green' | 'orange' | 'red'> = {
+  'project-missing': 'orange',
   missing: 'neutral',
   applied: 'green',
   drifted: 'orange',
@@ -146,7 +155,7 @@ function LocalRow({
       </Row>
       <div className="flex flex-wrap gap-3 px-4 pb-3">
         {s.placements.map((p) => (
-          <PlacementChip key={p.kind} placement={p} onForce={() => onRewrite(true)} />
+          <PlacementChip key={p.kind + (p.project ?? '')} placement={p} onForce={() => onRewrite(true)} />
         ))}
       </div>
     </div>
@@ -161,6 +170,7 @@ function PlacementChip({ placement: p, onForce }: { placement: LocalMcpPlacement
     <span className="flex flex-col gap-1">
       <span className="flex items-center gap-1.5 text-[12px]" title={p.file}>
         {clientName(p.kind)}
+        {p.project && <span className="font-mono text-[11px] text-[var(--text-muted)]">{p.project.split(/[\\/]/).filter(Boolean).pop()}</span>}
         <Badge tone={STATE_TONE[p.state]}>{t(`mcp.local.state.${p.state}` as MessageKey)}</Badge>
         {p.state === 'drifted' && p.wanted && (
           <Button size="sm" onClick={onForce}>
@@ -187,6 +197,8 @@ function LocalSheet({ server, onClose }: { server: LocalMcpServer | 'new' | null
   const [url, setUrl] = useState('');
   const [headers, setHeaders] = useState('');
   const [clients, setClients] = useState<ClientKind[]>([]);
+  const [projects, setProjects] = useState<string[]>([]);
+  const known = useLibraryProjects().data ?? [];
   const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
@@ -199,7 +211,8 @@ function LocalSheet({ server, onClose }: { server: LocalMcpServer | 'new' | null
     setHeaders('');
     setTransport(s?.transport ?? 'stdio');
     setUrl(s?.url ?? '');
-    setClients(s?.clients ?? CLIENTS.map((c) => c.kind));
+    setClients(s?.clients ?? DEFAULT_CLIENTS);
+    setProjects(s?.projects ?? []);
     setEnabled(s?.enabled ?? true);
   }, [server]);
 
@@ -213,8 +226,8 @@ function LocalSheet({ server, onClose }: { server: LocalMcpServer | 'new' | null
 
   const save = () => {
     const body: LocalMcpServerInput = http
-      ? { name: name.trim(), transport, url: url.trim(), enabled, clients }
-      : { name: name.trim(), transport, command: command.trim(), args: parseArgs(args), enabled, clients };
+      ? { name: name.trim(), transport, url: url.trim(), enabled, clients, projects }
+      : { name: name.trim(), transport, command: command.trim(), args: parseArgs(args), enabled, clients, projects };
     // blank keeps the stored values on update (when the type did not change); anything typed replaces them as a whole
     const kept = existing?.transport === transport;
     if (http && parsedHeaders && (headers.trim() !== '' || !kept)) body.headers = parsedHeaders;
@@ -295,6 +308,21 @@ function LocalSheet({ server, onClose }: { server: LocalMcpServer | 'new' | null
             ))}
           </div>
         </Field>
+        {(known.length > 0 || projects.length > 0) && (
+          <Field label={t('mcp.local.projects')} hint={t('mcp.local.projectsHint', { clients: PROJECT_CLIENTS.map(clientName).join(', ') })}>
+            <div className="grid gap-1">
+              {[...known.map((p) => p.path), ...projects.filter((p) => !known.some((k) => k.path === p))].map((path) => (
+                <Row key={path} label={<span className="font-mono text-[12px]">{path}</span>}>
+                  <Switch
+                    checked={projects.includes(path)}
+                    label={path}
+                    onChange={(on) => setProjects((ps) => (on ? [...ps.filter((x) => x !== path), path] : ps.filter((x) => x !== path)))}
+                  />
+                </Row>
+              ))}
+            </div>
+          </Field>
+        )}
         <Row label={t('mcp.local.enabled')}>
           <Switch checked={enabled} label={t('mcp.local.enabled')} onChange={setEnabled} />
         </Row>

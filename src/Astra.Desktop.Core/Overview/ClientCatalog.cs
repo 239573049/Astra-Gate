@@ -18,6 +18,7 @@ public static class ClientCatalog
         "vscode-insiders", "vscodium", "omp", "mimo-code", "deepseek-harness", "workbuddy", "workbuddy-ai", "muse-code", "nextcowork", "paseo", "zcode", "tkcode",
         "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
         "zoo-code", "jetbrains-air", "air-ide", "copilot-jetbrains", "codebuddy", "qoder", "qoder-cn", "t3code", "pencil", "openpencil", "raycast", "obsidian",
+        "reasonix", "morph", "jcode", "vibe", "empryo", "nanobot", "miniq", "paimon", "cline", "grok-app", "atomcode", "snow", "ante", "craft-agents", "tuanjie-cowork",
     ];
 
     private static readonly Dictionary<string, string> Names = new(StringComparer.Ordinal)
@@ -76,6 +77,21 @@ public static class ClientCatalog
         ["openpencil"] = "OpenPencil",
         ["raycast"] = "Raycast",
         ["obsidian"] = "Obsidian",
+        ["reasonix"] = "Reasonix Studio",
+        ["morph"] = "Mister Morph",
+        ["jcode"] = "jcode",
+        ["vibe"] = "Mistral Vibe",
+        ["empryo"] = "Empryo",
+        ["nanobot"] = "nanobot",
+        ["miniq"] = "miniQ",
+        ["paimon"] = "Paimon",
+        ["cline"] = "Cline",
+        ["grok-app"] = "Grok App",
+        ["atomcode"] = "AtomCode",
+        ["snow"] = "Snow CLI",
+        ["ante"] = "Ante",
+        ["craft-agents"] = "Craft Agents",
+        ["tuanjie-cowork"] = "Tuanjie Cowork",
     };
 
     /// <summary>Whether the catalog names <paramref name="kind"/>.</summary>

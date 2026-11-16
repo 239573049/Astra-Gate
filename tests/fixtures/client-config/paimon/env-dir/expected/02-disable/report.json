@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/pm/config.json",
+      "keyPath": "compaction.context_window",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/pm/config.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/pm/config.json",
+      "keyPath": "providers.litellm",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

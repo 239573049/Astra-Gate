@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.local/share/miniq/settings.json",
+    "keyPath": "provider",
+    "originalAbsent": false,
+    "original": "{\"baseUrl\":\"https://api.openai.com/v1\",\"apiKey\":\"sk-mine\",\"model\":\"gpt-4o\",\"apiProtocol\":\"auto\"}",
+    "applied": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"model\":\"gpt-5\",\"apiProtocol\":\"chat_completions\"}"
+  }
+]

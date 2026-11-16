@@ -27,6 +27,9 @@ public enum AppRoute
 
     /// <summary>The v2 plugin UI component gallery (design/plugin-v2 06 §2); the param is a component, or "scene:&lt;id&gt;" for one scene alone.</summary>
     PluginGallery,
+
+    /// <summary>The resource library: instructions, sub-agents, commands, hooks, environment variables (appended: the order is an index into <see cref="RouteInfo"/>'s table).</summary>
+    Library,
 }
 
 /// <summary>
@@ -58,6 +61,7 @@ public sealed record RouteInfo(AppRoute Route, string WebPath, string TitleKey, 
         new(AppRoute.Settings, "/settings[/:tab]", "nav.settings", AppRoute.Settings),
         new(AppRoute.PluginPage, "/plugins/v2/:plugin/:page/*", "nav.plugins", AppRoute.PluginPage),
         new(AppRoute.PluginGallery, "/plugins/dev/gallery", "pluginUi.gallery.title", AppRoute.Plugins),
+        new(AppRoute.Library, "/library", "nav.library", AppRoute.Library),
     ];
 
     public static IReadOnlyList<RouteInfo> Routes => All;

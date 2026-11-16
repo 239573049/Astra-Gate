@@ -1,0 +1,4 @@
+{
+  "version": 1,
+  "providers": { "openai-compatible": { "provider": { "name": "mine", "baseUrl": "http://localhost:1/v1", "defaultModelId": "m" }, "models": { "m": { "id": "m", "name": "m" } } } }
+}

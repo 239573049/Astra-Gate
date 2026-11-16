@@ -72,7 +72,10 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 `AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`),
 `ZooCodeClientAdapter.cs`, `AirClientAdapter.cs` (`jetbrains-air` / `air-ide` via `AirFlavour`), `CopilotJetBrainsClientAdapter.cs`, `CodeBuddyClientAdapter.cs`,
 `QoderClientAdapter.cs` (`qoder` / `qoder-cn` via `QoderFlavour`), `T3CodeClientAdapter.cs`, `PencilClientAdapter.cs`, `OpenPencilClientAdapter.cs`,
-`RaycastClientAdapter.cs` (YAML row `providers.[id=astra]`, `YamlEditor.NestedRows.cs`) and `ObsidianClientAdapter.cs` (one Copilot `data.json` per vault) — all on `ConfigFileClientAdapter` (SetKey / TrackedRemovals) — plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`RaycastClientAdapter.cs` (YAML row `providers.[id=astra]`, `YamlEditor.NestedRows.cs`) and `ObsidianClientAdapter.cs` (one Copilot `data.json` per vault) — all on `ConfigFileClientAdapter` (SetKey / TrackedRemovals);
+`FileClientAdapter.cs` (base of the batch-3 file-backed agents: the disable plan is "give back everything the state store recorded") with `ReasonixClientAdapter.cs`, `MorphClientAdapter.cs`, `JcodeClientAdapter.cs`, `VibeClientAdapter.cs`, `EmpryoClientAdapter.cs`,
+`NanobotClientAdapter.cs`, `MiniQClientAdapter.cs`, `PaimonClientAdapter.cs`, `ClineClientAdapter.cs`, `GrokAppClientAdapter.cs`, `AtomCodeClientAdapter.cs`, `SnowClientAdapter.cs`, `AnteClientAdapter.cs`,
+`CraftAgentsClientAdapter.cs` and `TuanjieCoworkClientAdapter.cs`, plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

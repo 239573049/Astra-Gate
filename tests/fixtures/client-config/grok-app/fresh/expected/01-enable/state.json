@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/com.grokapp.grok-app/agent-home/config.toml",
+    "keyPath": "model.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

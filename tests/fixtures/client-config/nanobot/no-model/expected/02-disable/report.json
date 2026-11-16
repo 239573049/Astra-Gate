@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.nanobot/config.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.nanobot/config.json"
+  ],
+  "warnings": []
+}
