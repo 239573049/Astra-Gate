@@ -27,8 +27,13 @@ public sealed record PrivacyRuleDto(string Id, string Category, string Descripti
 public sealed record PrivacyPolicyDto(PrivacySettings Settings, IReadOnlyList<PrivacyRuleDto> Rules);
 
 /// <summary>Admin API payload: privacy dry run result.</summary>
+/// <param name="Blocked">A block action matched.</param>
+/// <param name="Hits">What matched, per rule.</param>
+/// <param name="WouldRedact">Distinct placeholders a real request would carry.</param>
+/// <param name="Categories">Categories of the redacted values.</param>
+/// <param name="MaskedText">The input as a real request would send it, placeholders in place of the values (null when nothing would be redacted).</param>
 public sealed record PrivacyDryRunResultDto(
-    bool Blocked, IReadOnlyList<PrivacyHit> Hits, int WouldRedact, IReadOnlyList<string> Categories);
+    bool Blocked, IReadOnlyList<PrivacyHit> Hits, int WouldRedact, IReadOnlyList<string> Categories, string? MaskedText = null);
 
 /// <summary>Admin API payload: <c>DELETE /api/privacy/events</c>, how many guard events were cleared from the request log.</summary>
 /// <param name="Cleared">Events cleared.</param>

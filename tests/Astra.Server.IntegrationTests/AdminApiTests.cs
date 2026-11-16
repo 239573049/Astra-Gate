@@ -400,6 +400,33 @@ public class AdminApiTests
     }
 
     [Fact]
+    public async Task Privacy_dry_run_shows_the_placeholders_a_real_request_would_carry_and_the_new_categories()
+    {
+        await using var host = await TestHost.StartAsync();
+
+        // The catalogue lists the finer categories; public IPs and home folders are off until switched on.
+        var policy = await host.GetJsonAsync("/api/privacy");
+        var categories = policy["rules"]!.AsArray().Select(r => r!["category"]!.GetValue<string>()).Distinct().ToList();
+        foreach (var c in new[] { "passport", "iban", "mac", "ip", "birthday", "serial", "home_user" }) Assert.Contains(c, categories);
+
+        await host.SendAsync(HttpMethod.Put, "/api/privacy", new { enabled = true, dryRun = false, defaultAction = "redact" });
+        var (status, result) = await host.SendAsync(HttpMethod.Post, "/api/privacy/dry-run",
+            new { text = "mail carol@corp.io, iban DE89370400440532013000, card 4111111111111112, ip 8.134.12.7" });
+        Assert.Equal(HttpStatusCode.OK, status);
+        var masked = result!["maskedText"]!.GetValue<string>();
+        Assert.Matches(@"mail \{\{EMAIL_[a-z2-7]{8}\}\}, iban \{\{IBAN_[a-z2-7]{8}\}\}, card 4111111111111112, ip 8\.134\.12\.7", masked);
+        Assert.Equal(2, result["wouldRedact"]!.GetValue<int>());
+
+        // The same value, asked again, is the same placeholder.
+        var (_, again) = await host.SendAsync(HttpMethod.Post, "/api/privacy/dry-run", new { text = "carol@corp.io" });
+        Assert.Contains(masked[(masked.IndexOf("{{", StringComparison.Ordinal))..(masked.IndexOf("}}", StringComparison.Ordinal) + 2)], again!["maskedText"]!.GetValue<string>());
+
+        // Nothing to redact: no maskedText.
+        var (_, none) = await host.SendAsync(HttpMethod.Post, "/api/privacy/dry-run", new { text = "nothing here" });
+        Assert.Null(none!["maskedText"]);
+    }
+
+    [Fact]
     public async Task Clearing_the_privacy_events_keeps_the_requests()
     {
         await using var host = await TestHost.StartAsync();

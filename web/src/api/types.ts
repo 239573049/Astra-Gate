@@ -777,7 +777,8 @@ export interface PrivacyHit {
   /** Masked previews of the matched values (e.g. "john••••om"); empty when sample recording is off. */
   samples?: string[];
 }
-export interface PrivacyDryRunResult { blocked: boolean; hits: PrivacyHit[]; wouldRedact: number; categories: string[] }
+/** `maskedText`: the input as a real request would carry it (placeholders in place of the matches); absent when nothing would be redacted. */
+export interface PrivacyDryRunResult { blocked: boolean; hits: PrivacyHit[]; wouldRedact: number; categories: string[]; maskedText?: string | null }
 /** Per-request guard outcome, stored in requests.privacy_json (originals of redacted values are never kept). */
 export interface PrivacyReport { dryRun: boolean; blocked: boolean; redactions: number; hits: PrivacyHit[] }
 // POST /api/privacy/dry-run body {text?, json?, clientKind?} -> PrivacyDryRunResult

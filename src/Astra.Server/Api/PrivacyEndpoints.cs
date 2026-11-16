@@ -89,15 +89,13 @@ public static class PrivacyEndpoints
             if (string.IsNullOrWhiteSpace(input))
                 return Results.BadRequest(new ErrorOnlyDto("text 或 json 必填其一"));
 
-            var policy = guard.EffectiveFor(body.ClientKind, enabledOverride: true, dryRunOverride: false);
-            var detector = new PrivacyDetector();
-            var applied = body.Json is null
-                ? detector.Apply(input, policy)
-                : detector.ApplyJson(input, policy) ?? detector.Apply(input, policy);
+            var applied = guard.DryRun(input, body.Json is not null, body.ClientKind);
 
+            // MaskedText is the user's own input with the placeholders a real request would carry (never the other way round).
             return Results.Ok(new PrivacyDryRunResultDto(
                 applied.Blocked, applied.Hits, applied.Redactions.Count,
-                applied.Redactions.Select(r => r.Category).Distinct().ToList()));
+                applied.Redactions.Select(r => r.Category).Distinct().ToList(),
+                applied.Redactions.Count > 0 ? applied.Text : null));
         });
     }
 

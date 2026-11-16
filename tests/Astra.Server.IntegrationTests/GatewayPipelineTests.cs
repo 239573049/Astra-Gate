@@ -939,7 +939,7 @@ public class GatewayPipelineTests
 
         // The upstream saw the placeholder, never the address.
         var seen = Assert.Single(gw.Upstream.Requests);
-        Assert.Contains("[REDACTED:email#1]", seen.Body);
+        Assert.Matches(@"\{\{EMAIL_[a-z2-7]{8}\}\}", seen.Body);
         Assert.DoesNotContain("a@b.com", seen.Body);
 
         // The client got the original value back — the agent keeps working.
@@ -949,6 +949,66 @@ public class GatewayPipelineTests
         var record = await gw.RecordOfAsync(response);
         Assert.Equal(RequestStatus.Success, record.Status);
         Assert.NotNull(record.PrivacyJson);
+    }
+
+    // The upstream's tool call carries the placeholder it was given, cut in two across argument deltas: the client must
+    // assemble arguments that are valid JSON holding the original.
+    [Fact]
+    public async Task Privacy_Restores_A_Placeholder_Split_Across_Streamed_Tool_Call_Arguments()
+    {
+        Func<FakeUpstream.Seen, HttpResponseMessage> respond = seen =>
+        {
+            var placeholder = System.Text.RegularExpressions.Regex.Match(seen.Body, @"\{\{EMAIL_[a-z2-7]{8}\}\}").Value;
+            Assert.NotEmpty(placeholder);
+            var cut = placeholder.Length / 2;
+            string Frame(string arguments) => new JsonObject
+            {
+                ["id"] = "c1", ["object"] = "chat.completion.chunk", ["created"] = 1, ["model"] = "gpt-5",
+                ["choices"] = new JsonArray(new JsonObject
+                {
+                    ["index"] = 0,
+                    ["delta"] = new JsonObject { ["tool_calls"] = new JsonArray(new JsonObject { ["index"] = 0, ["function"] = new JsonObject { ["arguments"] = arguments } }) },
+                }),
+            }.ToJsonString();
+            return FakeUpstream.Sse(
+                "data: " + Frame("{\"to\":\"" + placeholder[..cut]) + "\n\n" +
+                "data: " + Frame(placeholder[cut..] + "\"}") + "\n\n" +
+                "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"gpt-5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n" +
+                "data: [DONE]\n\n");
+        };
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, respond);
+        await EnablePrivacyAsync(gw, PrivacyActions.Redact);
+
+        var response = await gw.PostAsync("/v1/chat/completions",
+            """{"model":"gpt-5","stream":true,"messages":[{"role":"user","content":"mail a@b.com please"}]}""");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = await response.Content.ReadAsStringAsync();
+        Assert.DoesNotContain("{{EMAIL_", text);
+        var arguments = string.Concat(text.Split("\n\n").Where(f => f.StartsWith("data: {"))
+            .Select(f => JsonNode.Parse(f["data: ".Length..])!["choices"]![0]!["delta"]!["tool_calls"]?[0]?["function"]?["arguments"]?.GetValue<string>()));
+        Assert.Equal("a@b.com", JsonNode.Parse(arguments)!["to"]!.GetValue<string>());
+        Assert.EndsWith("data: [DONE]\n\n", text);
+    }
+
+    // Fail closed: the guard is on but cannot run (a custom rule that times out), so nothing is sent unmasked.
+    [Fact]
+    public async Task Privacy_Fails_Closed_With_A_503_When_The_Guard_Cannot_Run()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        await gw.Host.App.Services.GetRequiredService<PrivacyGuardService>().UpdateAsync(new PrivacySettings
+        {
+            Enabled = true, DryRun = false, DefaultAction = PrivacyActions.Redact,
+            CategoryActions = new Dictionary<string, string> { [PrivacyCategories.Custom] = PrivacyActions.Redact },
+            CustomRules = [new PrivacyCustomRule { Id = "custom.slow", Name = "slow", Pattern = "^(a+)+$" }],
+        });
+
+        var response = await gw.PostAsync("/v1/chat/completions",
+            new JsonObject { ["model"] = "gpt-5", ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = new string('a', 30_000) + "!" }) }.ToJsonString());
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("隐私护栏", await response.Content.ReadAsStringAsync());
+        Assert.Empty(gw.Upstream.Requests);
     }
 
     [Fact]
@@ -1129,8 +1189,8 @@ public class GatewayPipelineTests
         var seen = Assert.Single(gw.Upstream.Requests);
         Assert.DoesNotContain("a@b.com", seen.Body);
         Assert.DoesNotContain("AKIAIOSFODNN7EXAMPLE", seen.Body);
-        Assert.Equal("line one\nmail [REDACTED:email#1]", seen.Json["system"]!.GetValue<string>());
-        Assert.Equal("key [REDACTED:aws_key#1]", seen.Json["messages"]![0]!["content"]![0]!["text"]!.GetValue<string>());
+        Assert.Matches(@"^line one\nmail \{\{EMAIL_[a-z2-7]{8}\}\}$", seen.Json["system"]!.GetValue<string>());
+        Assert.Matches(@"^key \{\{AWS_KEY_[a-z2-7]{8}\}\}$", seen.Json["messages"]![0]!["content"]![0]!["text"]!.GetValue<string>());
     }
 
     // Issue #10: the upstream pairs tool_result.tool_use_id with the tool_use.id it issued, byte for byte. An id the phone
@@ -1154,7 +1214,7 @@ public class GatewayPipelineTests
         Assert.DoesNotContain("13912345678", seen.Body);
         Assert.Equal(id, seen.Json["messages"]![1]!["content"]![0]!["id"]!.GetValue<string>());
         Assert.Equal(id, seen.Json["messages"]![2]!["content"]![0]!["tool_use_id"]!.GetValue<string>());
-        Assert.Equal("alice, [REDACTED:phone#1]", seen.Json["messages"]![2]!["content"]![0]!["content"]!.GetValue<string>());
+        Assert.Matches(@"^alice, \{\{PHONE_[a-z2-7]{8}\}\}$", seen.Json["messages"]![2]!["content"]![0]!["content"]!.GetValue<string>());
         var record = await gw.RecordOfAsync(response);
         Assert.Contains("\"redactions\":1", record.PrivacyJson);
     }

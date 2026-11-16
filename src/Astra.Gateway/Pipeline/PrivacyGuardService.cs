@@ -2,8 +2,10 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
+using Astra.Core.Clients;
 using Astra.Core.Privacy;
 using Astra.Data;
+using Astra.Gateway.Protocol;
 
 namespace Astra.Gateway.Pipeline;
 
@@ -41,7 +43,7 @@ public sealed record PrivacyGuardResult(
 /// on every request. One request reads the snapshot once and uses that same generation's settings and
 /// policy throughout, so an update landing mid-request is never mixed into it.
 /// </summary>
-public sealed class PrivacyGuardService(AstraDatabase db)
+public sealed class PrivacyGuardService(AstraDatabase db, ISecretProtector? protector = null)
 {
     /// <summary>
     /// Everything one client's policy depends on: the client's <em>resolved</em> default action and the
@@ -54,8 +56,11 @@ public sealed class PrivacyGuardService(AstraDatabase db)
     /// owned by this snapshot. Keys are bounded by configured client defaults and override flags;
     /// unknown client ids share the same entry.
     /// </summary>
-    private sealed class Snapshot(PrivacySettings settings)
+    private sealed class Snapshot(PrivacySettings settings, Exception? failure = null)
     {
+        /// <summary>Why the stored policy could not be read: the guard may be on, so requests are refused until it is saved again.</summary>
+        public Exception? Failure { get; } = failure;
+
         private readonly ConcurrentDictionary<PolicyKey, Lazy<EffectivePrivacyPolicy>> _policies = new();
 
         public PrivacySettings Settings { get; } = settings;
@@ -77,17 +82,57 @@ public sealed class PrivacyGuardService(AstraDatabase db)
 
     private volatile Snapshot _snapshot = new(new PrivacySettings());
 
-    // One detector for the service's lifetime: it keeps, per policy, which long strings are known to be clean.
-    private readonly PrivacyDetector _detector = new();
+    /// <summary>Where the placeholder key lives: its own settings row, protected with <see cref="ISecretProtector"/>.</summary>
+    private const string KeyStorageKey = "privacy_placeholder_key";
+
+    // One detector for the service's lifetime: it keeps, per policy, which long strings are known to be clean. Its mint
+    // holds the per-install key (loaded in LoadAsync; until then, or without a protector, one for this process only)
+    // and what has been masked so far in this process.
+    private PrivacyDetector _detector = new();
 
     /// <summary>The active settings as a copy; mutating it never reaches the published snapshot.</summary>
     public PrivacySettings Settings => _snapshot.Settings.Clone();
 
     public async Task LoadAsync(CancellationToken ct = default)
     {
-        var loaded = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey, ct) ?? new PrivacySettings();
-        _snapshot = new Snapshot(loaded.Clone());
+        if (protector is not null) _detector = new PrivacyDetector(new PlaceholderMint(await LoadKeyAsync(ct)));
+        try
+        {
+            var loaded = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey, ct) ?? new PrivacySettings();
+            _snapshot = new Snapshot(loaded.Clone());
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // The stored policy is unreadable, so whether the guard is on is unknown: fail closed (see Unavailable)
+            // until a new policy is saved, instead of sending requests the guard may have been meant to mask.
+            _snapshot = new Snapshot(new PrivacySettings(), e);
+        }
     }
+
+    // The placeholder key is made once per install and kept protected; one that cannot be unprotected (the data
+    // protection keys were lost) is replaced — placeholders then change once, nothing else.
+    private async Task<byte[]> LoadKeyAsync(CancellationToken ct)
+    {
+        try
+        {
+            if (await db.Settings.GetAsync<string>(KeyStorageKey, ct) is { Length: > 0 } stored)
+                return Convert.FromBase64String(protector!.Unprotect(stored));
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // fall through to a new key
+        }
+        var key = PlaceholderMint.NewKey();
+        await db.Settings.SetAsync(KeyStorageKey, protector!.Protect(Convert.ToBase64String(key)), ct);
+        return key;
+    }
+
+    /// <summary>The refusal for a request the guard could not be run on: the guard is on, so nothing goes upstream unmasked.</summary>
+    private static GatewayException Unavailable(Exception cause) => new(503, "api_error",
+        "Astra 隐私护栏已开启，但当前无法运行（规则读取或检测出错），为避免敏感信息未经脱敏发往上游，本次请求已被拒绝。请在 Astra 的「隐私护栏」页面检查规则。")
+    {
+        RecordErrorType = "privacy_guard_unavailable",
+    };
 
     /// <summary>Validates custom rule patterns, persists and activates the new settings.</summary>
     /// <exception cref="ArgumentException">A custom pattern is not a valid regex.</exception>
@@ -130,10 +175,23 @@ public sealed class PrivacyGuardService(AstraDatabase db)
     {
         var snapshot = _snapshot;
         var settings = snapshot.Settings;
+        if (snapshot.Failure is { } failure) throw Unavailable(failure);
         if (!settings.Enabled) return PrivacyGuardResult.PassThrough with { Body = requestBody };
 
-        var policy = snapshot.PolicyFor(clientKind, null, null);
-        var applied = _detector.ApplyJson(requestBody, policy) ?? _detector.Apply(requestBody, policy);
+        EffectivePrivacyPolicy policy;
+        PrivacyApplyResult applied;
+        try
+        {
+            policy = snapshot.PolicyFor(clientKind, null, null);
+            applied = _detector.ApplyJson(requestBody, policy) ?? _detector.Apply(requestBody, policy);
+        }
+        catch (Exception e) when (e is not (OperationCanceledException or GatewayException))
+        {
+            // Fail closed: a detector or policy error (a custom rule that timed out, …) never lets the body through
+            // unmasked. A dry run masks nothing anyway, so it is let through and only the log is the poorer for it.
+            if (settings.DryRun) return new PrivacyGuardResult(true, true, false, requestBody, [], new Dictionary<string, string>());
+            throw Unavailable(e);
+        }
 
         // Nothing matched: forward the original bytes untouched.
         if (applied.Hits.Count == 0)
@@ -148,9 +206,7 @@ public sealed class PrivacyGuardService(AstraDatabase db)
             return new PrivacyGuardResult(true, false, true, requestBody, applied.Hits,
                 new Dictionary<string, string>());
 
-        var restore = policy.Restore && settings.RestoreResponses
-            ? applied.Redactions.ToDictionary(r => r.Placeholder, r => r.Original)
-            : new Dictionary<string, string>();
+        var restore = Remembered(applied, policy, settings);
         return new PrivacyGuardResult(true, false, false, applied.Text, applied.Hits, restore);
     }
 
@@ -163,18 +219,79 @@ public sealed class PrivacyGuardService(AstraDatabase db)
     {
         var snapshot = _snapshot;
         var settings = snapshot.Settings;
+        if (snapshot.Failure is { } failure) throw Unavailable(failure);
         if (!settings.Enabled) return PrivacyGuardResult.PassThrough;
 
-        var policy = snapshot.PolicyFor(clientKind, null, null);
-        var applied = _detector.ApplyJson(source, body, policy, rewrite: !policy.DryRun);
+        EffectivePrivacyPolicy policy;
+        PrivacyApplyResult applied;
+        try
+        {
+            policy = snapshot.PolicyFor(clientKind, null, null);
+            applied = _detector.ApplyJson(source, body, policy, rewrite: !policy.DryRun);
+        }
+        catch (Exception e) when (e is not (OperationCanceledException or GatewayException))
+        {
+            // Fail closed (see Inspect). The tree may be half rewritten, which is one more reason to refuse.
+            if (settings.DryRun) return new PrivacyGuardResult(true, true, false, "", [], new Dictionary<string, string>());
+            throw Unavailable(e);
+        }
         if (applied.Hits.Count == 0 || policy.DryRun || applied.Blocked)
             return new PrivacyGuardResult(true, policy.DryRun, applied.Blocked && !policy.DryRun, "", applied.Hits,
                 new Dictionary<string, string>());
 
-        var restore = policy.Restore && settings.RestoreResponses
-            ? applied.Redactions.ToDictionary(r => r.Placeholder, r => r.Original)
-            : new Dictionary<string, string>();
+        var restore = Remembered(applied, policy, settings);
         return new PrivacyGuardResult(true, false, false, "", applied.Hits, restore) { Rewritten = applied.Redactions.Count > 0 };
+    }
+
+    /// <summary>
+    /// What the guard would do with <paramref name="input"/> under the current policy as if it were enforcing, for the
+    /// console's "试一试": the real detector, so the placeholders are the ones a real request would get (and values
+    /// masked before are masked again), but nothing is remembered — a test never teaches the guard anything.
+    /// </summary>
+    public PrivacyApplyResult DryRun(string input, bool isJson, string? clientKind)
+    {
+        var policy = EffectiveFor(clientKind, enabledOverride: true, dryRunOverride: false);
+        return isJson ? _detector.ApplyJson(input, policy) ?? _detector.Apply(input, policy) : _detector.Apply(input, policy);
+    }
+
+    // What the request really masked: remembered (so the value is masked everywhere it shows up from now on) and, when
+    // responses are restored, the map the response path puts back.
+    private Dictionary<string, string> Remembered(PrivacyApplyResult applied, EffectivePrivacyPolicy policy, PrivacySettings settings)
+    {
+        _detector.Mint.Remember(applied.Redactions);
+        var restore = new Dictionary<string, string>();
+        if (policy.Restore && settings.RestoreResponses)
+            foreach (var r in applied.Redactions) restore[r.Placeholder] = r.Original;
+        return restore;
+    }
+
+    /// <summary>
+    /// Restores placeholders in a JSON document (a non-streaming response body, one frame's data): the originals go
+    /// back into the strings they were masked in, escaped as JSON, so a value with quotes or line breaks (a PEM key)
+    /// cannot break the document — and into tool-call arguments, which are a JSON text inside a string, escaped a second
+    /// time. Text that is not JSON is restored as plain text. Documents holding no placeholder are returned unchanged.
+    /// </summary>
+    public static string RestoreJson(string json, IReadOnlyDictionary<string, string> restoreMap)
+    {
+        if (restoreMap.Count == 0 || !ContainsAny(json, restoreMap)) return json;
+        JsonNode? root;
+        try
+        {
+            root = JsonNode.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return Restore(json, restoreMap);
+        }
+        if (root is null) return json;
+        return PrivacyStreamRestorer.RestoreTree(root, restoreMap).ToJsonString(GatewayJson.Options);
+    }
+
+    internal static bool ContainsAny(string text, IReadOnlyDictionary<string, string> restoreMap)
+    {
+        foreach (var key in restoreMap.Keys)
+            if (text.Contains(key, StringComparison.Ordinal)) return true;
+        return false;
     }
 
     /// <summary>Plain-text restore for non-streaming responses (streaming uses <see cref="ChunkRestorer"/>).</summary>

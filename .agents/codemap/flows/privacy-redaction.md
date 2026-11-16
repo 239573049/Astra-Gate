@@ -10,8 +10,9 @@ updated: 2026-10-14
 `count_tokens` endpoint while the guard is enabled — or, deliberately, a *disabled* guard, which still
 passes the body through the guard so the settings read is the only work done
 (`src/Astra.Gateway/Pipeline/GatewayPipeline.cs:174`, `src/Astra.Gateway/Http/GatewayEndpoints.cs:150`).
-**Outcome:** the upstream never sees the matched spans (they are `[REDACTED:<category>#<n>]` placeholders,
-unique per request body, on the way out and the originals are put back on the way back); one row in
+**Outcome:** the upstream never sees the matched spans (they are stable `{{KIND_xxxxxxxx}}` placeholders — one value,
+one placeholder, in every request — on the way out and the originals are put back on the way back; 2026-11 update, see
+"Stable placeholders" below, which supersedes the `[REDACTED:…#n]` / per-request-counter wording in the steps); one row in
 `requests` carries `privacy_json` with hits/actions/dry-run/redaction count (originals never persisted);
 that row is what the console's interception log, stats, request detail and the provider probe show; and a
 `block` action turned the request into a 400 before anything was sent.
@@ -122,6 +123,29 @@ that row is what the console's interception log, stats, request detail and the p
 21. Retention: `RetentionService` (`src/Astra.Gateway/Pipeline/UsageWriter.cs:117`) deletes request rows older
     than `AppSettings.RequestRetentionDays` (`DeleteOlderThanAsync`), so privacy events age out with the request
     log — there is no separate privacy retention (`astra-gateway`, `astra-core`)
+
+## Stable placeholders, memory, restore and fail-closed (2026-11, magpie parity)
+- `PlaceholderMint` (`src/Astra.Core/Privacy/PlaceholderMint.cs`): `{{KIND_xxxxxxxx}}`, KIND = category upper-cased, 8 base32 digits of
+  HMAC-SHA256(key, category ‖ 0 ‖ value). The key is per install: `PrivacyGuardService.LoadAsync` reads/creates settings row
+  `privacy_placeholder_key` (protected by `ISecretProtector`; a key that cannot be unprotected is replaced). `PrivacyDetector` owns one mint;
+  `PlaceholderFor(category, ordinal)` and the per-body counters are gone. Old `[REDACTED:…]` text in a client's history is inert (no rule
+  matches it, the credential-assignment rule skips values starting `[REDACTED:` or `{{`).
+- Once masked, always masked: `PrivacyGuardService.Remembered` → `PlaceholderMint.Remember` after a non-dry-run, non-blocked request; the next
+  `ApplyInto` first runs `ApplyKnown` (a `SearchValues` index over the remembered values, whole-word) for values whose rule/category action is
+  still `redact`. Bounded (4096, FIFO), ≥ 6 chars, in memory only. `PolicyState`'s clean-string cache is keyed by `(digest, mint generation)`.
+  `PrivacyGuardService.DryRun` (the console's 试一试, `POST /api/privacy/dry-run`, which now also returns `maskedText`) never remembers.
+- Rules: `BuiltinRule`/`PrivacyRule` carry `Refine` (`MatchRefiner`, `PrivacyChecks`), `Group` (named group `v` = the value after a label) and
+  `Literals`. New categories `passport`, `iban`, `mac`, `ip` (public IPv4/IPv6), `birthday`, `serial`, `home_user`; `PrivacyCategories.DefaultOff`
+  = `ip`, `home_user` (`EffectivePrivacyPolicy.ActionFor`). Luhn on cards, check digit + real date on CN IDs, SSN ranges, example domains for mail.
+- Restore: streaming frames go through `PrivacyStreamRestorer.Process` (+ `Flush` at the end) in `GatewayPipeline.StreamAsync.WriteFrame`: per-channel
+  `ChunkRestorer` (Chat `choices[].delta.{content,tool_calls[].function.arguments}`, Anthropic `content_block_delta`, Responses `*.delta`, Gemini
+  `candidates[].content.parts[].text`), originals JSON-escaped for argument fragments, whole-placeholder tree restore for everything else
+  (`*.done`, `response.completed`, Gemini function-call args); a held tail is released as a clone of the channel's last delta frame before the next
+  non-delta frame / at the end. Whole bodies (`BufferAsync`, `WriteJsonAsync`, images) use `PrivacyGuardService.RestoreJson`. Tests:
+  `PrivacyStreamRestorerTests` + `Fixtures/privacy/*.sse`.
+- Fail closed: `PrivacyGuardService.Inspect` / `InspectJson` turn any detector / policy-build exception (e.g. a custom rule's
+  `RegexMatchTimeoutException`) into `GatewayException(503, "api_error", …)` when the guard is enforcing (dry run lets the request through), and an
+  unreadable stored policy (`LoadAsync` catch) refuses every request until a policy is saved. The old "500 gateway error" path is gone.
 
 ## Sequence
 ```mermaid

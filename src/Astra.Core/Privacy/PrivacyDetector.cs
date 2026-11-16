@@ -17,7 +17,13 @@ namespace Astra.Core.Privacy;
 /// </summary>
 public sealed partial class PrivacyDetector
 {
-    public sealed record BuiltinRule(string Id, string Category, string Description, Regex Regex);
+    public sealed record BuiltinRule(
+        string Id, string Category, string Description, Regex Regex,
+        MatchRefiner? Refine = null, string? Group = null, SearchValues<string>? Literals = null);
+
+    /// <summary>The literal pre-check of a rule: the text must contain one of them (ignoring case) for the rule to match.</summary>
+    private static SearchValues<string> Lits(params string[] literals) =>
+        SearchValues.Create(literals, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Built-in rules in evaluation order (most specific first). Placeholder text is inert to later rules.</summary>
     public static IReadOnlyList<BuiltinRule> BuiltInRules { get; } =
@@ -50,18 +56,38 @@ public sealed partial class PrivacyDetector
             TelegramBotTokenRegex()),
         new("builtin.aws-access-key", PrivacyCategories.AwsKey, "AWS Access Key（AKIA/ASIA…）",
             AwsAccessKeyRegex()),
-        new("builtin.email", PrivacyCategories.Email, "邮箱地址",
+        new("builtin.iban", PrivacyCategories.Iban, "国际银行账号（IBAN，mod 97 校验）",
+            IbanRegex(), Refine: PrivacyChecks.Iban),
+        new("builtin.mac", PrivacyCategories.Mac, "MAC 地址",
+            MacRegex(), Refine: PrivacyChecks.Mac, Literals: Lits(":", "-")),
+        new("builtin.email", PrivacyCategories.Email, "邮箱地址（示例域名不处理）",
             EmailRegex()),
         new("builtin.phone", PrivacyCategories.Phone, "手机号（中国大陆 / 国际）",
             PhoneRegex()),
         new("builtin.intranet-host", PrivacyCategories.Intranet, "内网 IP / 内部主机名",
             IntranetHostRegex()),
         new("builtin.credit-card", PrivacyCategories.CreditCard, "银行卡 / 信用卡号（Visa 万事达 运通 银联）",
-            CreditCardRegex()),
-        new("builtin.cn-id", PrivacyCategories.NationalId, "居民身份证号（中国大陆）",
-            CnIdRegex()),
+            CreditCardRegex(), Refine: PrivacyChecks.CreditCard),
+        new("builtin.cn-id", PrivacyCategories.NationalId, "居民身份证号（中国大陆，校验位）",
+            CnIdRegex(), Refine: PrivacyChecks.CnId),
         new("builtin.us-ssn", PrivacyCategories.NationalId, "社会安全号（美国 SSN）",
-            UsSsnRegex()),
+            UsSsnRegex(), Refine: PrivacyChecks.Ssn),
+        new("builtin.passport", PrivacyCategories.Passport, "护照号（跟在「passport / 护照」等字样后）",
+            PassportRegex(), Refine: PrivacyChecks.Passport, Group: "v",
+            Literals: Lits("passport", "reisepass", "护照", "護照", "パスポート")),
+        new("builtin.birthday", PrivacyCategories.Birthday, "出生日期（跟在「生日 / DOB / born」等字样后）",
+            BirthdayRegex(), Refine: PrivacyChecks.Birthday, Group: "v",
+            Literals: Lits("birth", "dob", "d.o.b", "born", "geburt", "geboren", "生日", "出生", "誕生日", "生年月日")),
+        new("builtin.serial", PrivacyCategories.Serial, "序列号（跟在「S/N / Serial / 序列号」等字样后）",
+            SerialRegex(), Refine: PrivacyChecks.Serial, Group: "v",
+            Literals: Lits("serial", "s/n", "sn", "序列", "シリアル", "seriennummer")),
+        new("builtin.public-ipv4", PrivacyCategories.Ip, "公网 IPv4 地址（默认关闭）",
+            Ipv4Regex(), Refine: PrivacyChecks.PublicIpv4, Literals: Lits(".")),
+        new("builtin.public-ipv6", PrivacyCategories.Ip, "公网 IPv6 地址（默认关闭）",
+            Ipv6Regex(), Refine: PrivacyChecks.PublicIpv6, Literals: Lits(":")),
+        new("builtin.home-user", PrivacyCategories.HomeUser, "家目录中的用户名（/Users/名、C:\\Users\\名，默认关闭）",
+            HomeUserRegex(), Refine: PrivacyChecks.HomeUser, Group: "v",
+            Literals: Lits("/users/", "/home/", "users\\", "users/")),
         new("builtin.conn-string", PrivacyCategories.Credential, "数据库连接串（postgres/mysql/mongo/redis）",
             ConnStringRegex()),
         new("builtin.credential-assignment", PrivacyCategories.Credential, "明文凭据赋值（password= / token= / api_key=）",
@@ -99,6 +125,7 @@ public sealed partial class PrivacyDetector
     private static IEnumerable<(int Index, int Length)> Matches(PrivacyRule rule, string text)
     {
         if (ReferenceEquals(rule.Regex, IntranetHostRegex()) && text.AsSpan().IndexOfAny(IntranetHints) < 0) yield break;
+        if (rule.Literals is { } literals && text.AsSpan().IndexOfAny(literals) < 0 && text.AsSpan().IndexOfAny(CaseFoldOutliers) < 0) yield break;
 
         if (ReferenceEquals(rule.Regex, EmailRegex()))
         {
@@ -114,6 +141,9 @@ public sealed partial class PrivacyDetector
                     start = percent < 0 ? end : percent + 1;
                 }
                 var accepted = start < end && text[start] != '@';
+                // example.com / .test / localhost and the like are addresses that exist to be written in examples.
+                if (accepted && PrivacyChecks.IsExampleDomain(text.AsSpan(text.IndexOf('@', start) + 1, end - text.IndexOf('@', start) - 1)))
+                    accepted = false;
                 if (accepted) yield return (start, end - start);
                 // A rejected local part must not hide a second address starting after its '@'.
                 match = EmailCandidate.Match(text, accepted ? end : text.IndexOf('@', email.Index) + 1);
@@ -121,7 +151,13 @@ public sealed partial class PrivacyDetector
             yield break;
         }
         for (var match = rule.Regex.Match(text); match.Success; match = match.NextMatch())
-            yield return (match.Index, match.Length);
+        {
+            var span = rule.Group is null ? match : match.Groups[rule.Group];
+            if (!span.Success || (rule.Group is not null && span.Length == 0)) continue;
+            // A refiner rejects with 0; without one, an empty match (a custom rule such as "$") is a match like any other.
+            var length = rule.Refine is null ? span.Length : rule.Refine(text, span.Index, span.Length);
+            if (length > 0 || rule.Refine is null) yield return (span.Index, length);
+        }
     }
 
     private static bool IsEmailLeftBoundary(char c) => c is '.' or '+' or '-' ||
@@ -138,10 +174,14 @@ public sealed partial class PrivacyDetector
         (ignoreCase ? RegexOptions.IgnoreCase : RegexOptions.None),
         TimeSpan.FromMilliseconds(500));
 
-    public static string PlaceholderFor(string category, int ordinal) => $"[REDACTED:{category}#{ordinal}]";
+    private static readonly Regex NeverMatches = new("(?!)", RegexOptions.CultureInvariant);
 
-    public static bool LooksLikePlaceholder(string text) =>
-        text.StartsWith("[REDACTED:", StringComparison.Ordinal) && text.EndsWith("]", StringComparison.Ordinal);
+    /// <summary>The mint that names placeholders and remembers what was masked (one per guard; a private one by default).</summary>
+    public PlaceholderMint Mint { get; }
+
+    public PrivacyDetector(PlaceholderMint? mint = null) => Mint = mint ?? new PlaceholderMint();
+
+    public static bool LooksLikePlaceholder(string text) => PlaceholderMint.LooksLikePlaceholder(text);
 
     /// <summary>Detects matches without changing anything (used for warnings and dry run).</summary>
     public List<PrivacyHit> Scan(string text, EffectivePrivacyPolicy policy)
@@ -161,18 +201,21 @@ public sealed partial class PrivacyDetector
     {
         var result = new PrivacyApplyResult { Text = text };
         // Most text matches nothing: one allocation-free pass per rule decides that.
-        if (!AnyRuleMatches(text, StateFor(policy))) return result;
-        result.Text = ApplyInto(text, policy, result);
+        var (known, _) = Mint.Snapshot();
+        if (!AnyRuleMatches(text, StateFor(policy)) && known?.Occurs(text) != true) return result;
+        result.Text = ApplyInto(text, policy, result, known, Mint);
         result.Blocked = result.Hits.Exists(h => h.Action == PrivacyActions.Block);
         return result;
     }
 
     // Runs every rule over text in order (each rule sees the previous rules' placeholders), adding hits and
-    // redactions to into, whose counters number the placeholders: one JSON body shares them across its strings
-    // so placeholders stay unique (each string would otherwise restart at #1). Returns text itself when nothing
-    // was redacted.
-    private static string ApplyInto(string text, EffectivePrivacyPolicy policy, PrivacyApplyResult into)
+    // redactions to into. A placeholder is the mint's for that value, so the same value gets the same placeholder
+    // wherever it occurs, in this body and in every other. Values masked before (known) go first, wherever they are.
+    // Returns text itself when nothing was redacted.
+    private static string ApplyInto(string text, EffectivePrivacyPolicy policy, PrivacyApplyResult into,
+        PlaceholderMint.KnownSet? known, PlaceholderMint mint)
     {
+        if (known is not null) text = ApplyKnown(text, policy, into, known, mint);
         foreach (var rule in policy.Rules)
         {
             var action = policy.ActionFor(rule.Id, rule.Category);
@@ -197,12 +240,13 @@ public sealed partial class PrivacyDetector
 
                 rewritten ??= new StringBuilder(input.Length);
                 rewritten.Append(input, cursor, index - cursor);
-                var placeholder = PlaceholderFor(rule.Category, into.CounterFor(rule.Category));
+                var original = input.Substring(index, length);
+                var placeholder = mint.Placeholder(rule.Category, original);
                 rewritten.Append(placeholder);
-                into.Redactions.Add(new PrivacyRedaction
+                into.AddRedaction(new PrivacyRedaction
                 {
                     Placeholder = placeholder,
-                    Original = input.Substring(index, length),
+                    Original = original,
                     Category = rule.Category,
                     RuleId = rule.Id,
                 });
@@ -215,14 +259,53 @@ public sealed partial class PrivacyDetector
         return text;
     }
 
+    // Masks the values masked before wherever they occur — a name or an id the rules alone would not find in a
+    // sentence — as long as their rule is still switched to redact. (A rule set to warn or block finds them itself.)
+    private static string ApplyKnown(string text, EffectivePrivacyPolicy policy, PrivacyApplyResult into,
+        PlaceholderMint.KnownSet known, PlaceholderMint mint)
+    {
+        var found = known.Find(text);
+        if (found.Count == 0) return text;
+        StringBuilder? rewritten = null;
+        var cursor = 0;
+        var counts = new Dictionary<string, (PrivacyRule Rule, int Count, List<string>? Samples)>();
+        foreach (var (index, length, value) in found)
+        {
+            // The rule that found it first may be gone (a custom rule deleted since); what counts is the action now.
+            if (policy.ActionFor(value.RuleId, value.Category) != PrivacyActions.Redact) continue;
+            var rule = policy.Rules.FirstOrDefault(r => r.Id == value.RuleId)
+                ?? new PrivacyRule { Id = value.RuleId, Category = value.Category, Regex = NeverMatches };
+            rewritten ??= new StringBuilder(text.Length);
+            rewritten.Append(text, cursor, index - cursor);
+            var placeholder = mint.Placeholder(value.Category, value.Value);
+            rewritten.Append(placeholder);
+            into.AddRedaction(new PrivacyRedaction
+            {
+                Placeholder = placeholder, Original = value.Value, Category = value.Category, RuleId = value.RuleId,
+            });
+            cursor = index + length;
+            counts.TryGetValue(rule.Id, out var entry);
+            var samples = entry.Samples;
+            if (policy.RecordSamples && (samples ??= []).Count < MaxSamples)
+            {
+                var sample = policy.RecordFullSamples ? FullSample(value.Value) : MaskSample(value.Value);
+                if (!samples.Contains(sample)) samples.Add(sample);
+            }
+            counts[rule.Id] = (rule, entry.Count + 1, samples);
+        }
+        foreach (var (rule, count, samples) in counts.Values) AddHit(into.Hits, rule, policy, count, samples);
+        return rewritten is null ? text : rewritten.Append(text, cursor, text.Length - cursor).ToString();
+    }
+
     /// <summary>
     /// Whether any active rule matches anywhere in <paramref name="text"/> — a necessary condition for any hit,
     /// so text that fails it needs no further work. Allocation-free: span-based IsMatch only.
     /// </summary>
     private static bool AnyRuleMatches(ReadOnlySpan<char> text, PolicyState state)
     {
-        foreach (var (regex, hint) in state.Active)
+        foreach (var (regex, hint, literals) in state.Active)
         {
+            if (literals is not null && text.IndexOfAny(literals) < 0 && text.IndexOfAny(CaseFoldOutliers) < 0) continue;
             var matched = hint switch
             {
                 RuleHint.Intranet => text.IndexOfAny(IntranetHints) >= 0 && regex.IsMatch(text),
@@ -376,7 +459,8 @@ public sealed partial class PrivacyDetector
     // returns the strings to replace (null when none).
     private List<(PathStep[] Path, string Text)>? Scan(JsonElement source, EffectivePrivacyPolicy policy, PrivacyApplyResult merged)
     {
-        var walk = new JsonWalk(policy, StateFor(policy), merged);
+        var (known, generation) = Mint.Snapshot();
+        var walk = new JsonWalk(policy, StateFor(policy), merged, known, generation, Mint);
         try
         {
             walk.Walk(source, JsonScope.Root);
@@ -409,20 +493,21 @@ public sealed partial class PrivacyDetector
         // Bounds the memory of the clean set (~100 bytes an entry); full → start over.
         private const int MaxCleanEntries = 16_384;
 
-        private readonly ConcurrentDictionary<Digest, byte> _clean = new();
+        // Keyed by the mint's generation as well: a string that was clean before a value became known may hold it now.
+        private readonly ConcurrentDictionary<(Digest, int), byte> _clean = new();
         private int _cleanCount;
 
         public PolicyState(EffectivePrivacyPolicy policy) =>
             Active = policy.Rules.Where(r => policy.ActionFor(r.Id, r.Category) != PrivacyActions.Off)
-                .Select(r => (r.Regex, HintFor(r.Regex))).ToArray();
+                .Select(r => (r.Regex, HintFor(r.Regex), r.Literals)).ToArray();
 
-        public (Regex Regex, RuleHint Hint)[] Active { get; }
+        public (Regex Regex, RuleHint Hint, SearchValues<string>? Literals)[] Active { get; }
 
-        public bool IsClean(in Digest digest) => _clean.ContainsKey(digest);
+        public bool IsClean(in Digest digest, int generation) => _clean.ContainsKey((digest, generation));
 
-        public void MarkClean(in Digest digest)
+        public void MarkClean(in Digest digest, int generation)
         {
-            if (!_clean.TryAdd(digest, 0) || Interlocked.Increment(ref _cleanCount) <= MaxCleanEntries) return;
+            if (!_clean.TryAdd((digest, generation), 0) || Interlocked.Increment(ref _cleanCount) <= MaxCleanEntries) return;
             _clean.Clear();
             Interlocked.Exchange(ref _cleanCount, 0);
         }
@@ -452,7 +537,8 @@ public sealed partial class PrivacyDetector
 
     private PolicyState StateFor(EffectivePrivacyPolicy policy) => _states.GetValue(policy, static p => new PolicyState(p));
 
-    private sealed class JsonWalk(EffectivePrivacyPolicy policy, PolicyState state, PrivacyApplyResult merged) : IDisposable
+    private sealed class JsonWalk(EffectivePrivacyPolicy policy, PolicyState state, PrivacyApplyResult merged,
+        PlaceholderMint.KnownSet? known, int generation, PlaceholderMint mint) : IDisposable
     {
         private readonly List<PathStep> _path = [];
         private char[]? _chars;
@@ -502,7 +588,7 @@ public sealed partial class PrivacyDetector
             if (content.Length >= CleanCacheMinBytes)
             {
                 var d = Digest.Of(content);
-                if (state.IsClean(d)) return;
+                if (state.IsClean(d, generation)) return;
                 digest = d;
             }
 
@@ -524,14 +610,14 @@ public sealed partial class PrivacyDetector
                 length = reader.CopyString(_chars);
             }
             var chars = _chars.AsSpan(0, length);
-            if (!AnyRuleMatches(chars, state))
+            if (!AnyRuleMatches(chars, state) && known?.Occurs(chars) != true)
             {
-                if (digest is { } clean) state.MarkClean(clean);
+                if (digest is { } clean) state.MarkClean(clean, generation);
                 return;
             }
 
             var text = new string(chars);
-            var result = ApplyInto(text, policy, merged);
+            var result = ApplyInto(text, policy, merged, known, mint);
             if (!ReferenceEquals(result, text)) (Rewrites ??= []).Add((_path.ToArray(), result));
         }
 
@@ -802,8 +888,38 @@ public sealed partial class PrivacyDetector
     [GeneratedRegex(@"(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqps?)://[^\s:@/]+:[^\s@]+@[^\s]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]
     private static partial Regex ConnStringRegex();
 
-    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|access[_\-]?key)[""']?\s*[:=]\s*[""']?(?!\[REDACTED:)[^\s""']{6,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]
+    [GeneratedRegex(@"(?<![A-Za-z0-9])(?:password|passwd|pwd|pass|secret|token|api[_\-]?key|access[_\-]?key)[""']?\s*[:=]\s*[""']?(?!\[REDACTED:|\{\{)[^\s""']{6,}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, BuiltinTimeoutMs)]
     private static partial Regex CredentialAssignmentRegex();
+
+    // The rules below follow magpie's internal/redact (MIT): the shapes, plus PrivacyChecks for the checks it makes.
+    // An IBAN as one word or in groups of four; the country's length and mod 97 are checked by PrivacyChecks.Iban.
+    [GeneratedRegex(@"(?<![A-Za-z0-9])[A-Z]{2}\d{2}(?:[A-Z0-9]{11,30}|(?: [A-Z0-9]{4}){2,7}(?: [A-Z0-9]{1,3})?)(?![A-Za-z0-9])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex IbanRegex();
+
+    [GeneratedRegex(@"(?<![0-9A-Za-z:\-])(?:[0-9A-Fa-f]{2}(?::[0-9A-Fa-f]{2}){5}|[0-9A-Fa-f]{2}(?:-[0-9A-Fa-f]{2}){5})(?![0-9A-Za-z:\-])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex MacRegex();
+
+    // A passport number only after the word for it (a bare 9-character code is anything).
+    [GeneratedRegex(@"(?:(?i:\bpassport(?:[ \t]*(?:no\.?|number|num|#))?|\breisepass(?:nummer)?)[""']?[ \t]*(?:[:#=：][ \t]*)?(?:(?i:is|was)[ \t]+)?[""']?(?<v>[A-Z0-9]{6,9})(?![A-Za-z0-9])|(?:护照(?:号码|号)?|護照(?:號碼|号码|番号)?|パスポート(?:番号)?)[ \t]*(?:[:：=][ \t]*)?(?:是[ \t]*|は[ \t]*)?[""']?(?<v>[A-Z0-9]{6,9})(?![A-Za-z0-9]))", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex PassportRegex();
+
+    // A date is a birthday only after the words that say so; a date alone is not.
+    [GeneratedRegex(@"(?:(?i:\bdate[ \t]+of[ \t]+birth|\bbirth[ \t_-]?date|\bbirthday|\bdob\b|\bd\.o\.b\.?|\bborn(?:[ \t]+on)?|\bgeburtsdatum|\bgeboren(?:[ \t]+am)?)|生日|出生日期|出生年月日|出生于|出生於|出生|誕生日|生年月日)[""']?[ \t]*(?:[:#=：][ \t]*)?(?:(?i:is|was)[ \t]+|是[ \t]*|为[ \t]*|為[ \t]*|は[ \t]*)?[""']?(?<v>\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{4}[ \t]*年[ \t]*\d{1,2}[ \t]*月[ \t]*\d{1,2}[ \t]*日?|\d{1,2}[-/.]\d{1,2}[-/.]\d{4}|(?i:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?[ \t]+\d{1,2}(?:st|nd|rd|th)?,?[ \t]+\d{4}|\d{1,2}(?:st|nd|rd|th)?[ \t]+(?i:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?[ \t]+\d{4})", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex BirthdayRegex();
+
+    // A serial number after S/N, Serial or 序列号 and a separator; not "serial port" or Serial.println.
+    [GeneratedRegex(@"(?:(?i:\bserial[ \t_-]?(?:number|num|no\.?|#)?|\bs/n|\bsn)(?:[ \t]*\([^)\n]{1,20}\))?[""']?[ \t]*[:#=：][ \t]*[""']?(?<v>[A-Za-z0-9][A-Za-z0-9-]{4,39})(?![A-Za-z0-9-])|(?:序列号|序列號|シリアル番号|(?i:seriennummer))[ \t]*[:：=]?[ \t]*[""']?(?<v>[A-Za-z0-9][A-Za-z0-9-]{4,39})(?![A-Za-z0-9-]))", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex SerialRegex();
+
+    [GeneratedRegex(@"(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex Ipv4Regex();
+
+    [GeneratedRegex(@"(?<![0-9A-Za-z:_])[0-9A-Fa-f]{1,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![0-9A-Za-z:_])", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex Ipv6Regex();
+
+    // The user name in a home folder: /Users/<name>, /home/<name>, C:\Users\<name>; the rest of the path stays.
+    [GeneratedRegex(@"(?:(?:^|[^A-Za-z0-9_.~/\\-])(?:file://)?(?:/mnt/[a-z])?/(?:Users|home)/|(?:^|[^A-Za-z0-9])[A-Za-z]:(?:\\{1,4}|/)(?i:users)(?:\\{1,4}|/))(?<v>[^\s/\\:*?""'<>|,;()\[\]{}`$%]{1,64})", RegexOptions.CultureInvariant, BuiltinTimeoutMs)]
+    private static partial Regex HomeUserRegex();
 }
 
 /// <summary>Result of applying a policy to one piece of text / one JSON body.</summary>
@@ -816,12 +932,6 @@ public sealed class PrivacyApplyResult
     /// <summary>True when any hit's action was "block" (callers reject the request).</summary>
     public bool Blocked { get; set; }
 
-    private readonly Dictionary<string, int> _counters = new();
-
-    public int CounterFor(string category)
-    {
-        var next = _counters.TryGetValue(category, out var current) ? current + 1 : 1;
-        _counters[category] = next;
-        return next;
-    }
+    /// <summary>Records one redaction (the same value masked twice is two entries with one placeholder).</summary>
+    internal void AddRedaction(PrivacyRedaction redaction) => Redactions.Add(redaction);
 }

@@ -400,6 +400,14 @@ public sealed class DryRunTesterView : LiveView
             }
             stack.Children.Add(line);
         }
+        // What a real request would carry: the input with the placeholders (stable per value) in place of the matches.
+        if (r.MaskedText is { Length: > 0 } masked)
+        {
+            stack.Children.Add(KitStyle.Text(Loc.T("settings.privacy.maskedText"), ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextMuted));
+            var maskedBlock = new SelectableTextBlock { Text = masked, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontSize = 11 };
+            maskedBlock.Token(TextBlock.FontFamilyProperty, ArcDesignTokenKind.MonoFontFamily);
+            stack.Children.Add(maskedBlock);
+        }
         var box = new Border { BorderThickness = new Thickness(0.5), CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 8), Child = stack };
         box.Token(Border.BorderBrushProperty, ArcDesignTokenKind.Border);
         _result.Content = box;

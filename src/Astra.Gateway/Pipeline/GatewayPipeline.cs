@@ -1359,6 +1359,7 @@ public sealed partial class GatewayPipeline(
         // Pass-through with nothing to change on the way (no placeholder to restore, no injected usage chunk to
         // drop, no item ids to pin, no capture, SSE to SSE): the upstream bytes are the answer. They are forwarded as
         // they arrive and only parsed to observe usage, first token and errors — no event is decoded to text and encoded back.
+        var restorer = new PrivacyStreamRestorer(restore);
         var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && itemIds is null && !asJsonArray && capture is null;
         // Upstream bytes until the first SSE event parses: a body that never becomes SSE (a JSON object /
         // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here. One exception:
@@ -1417,6 +1418,8 @@ public sealed partial class GatewayPipeline(
             }
             if (!sawSseEvent && rawPending is not null) await HandleNonSseBodyAsync(Encoding.UTF8.GetString(rawPending.Span));
             if (decoder is not null) Emit(decoder.Complete());
+            // Text a placeholder-shaped tail was holding back, when the stream ended without a frame to release it.
+            foreach (var held in restorer.Flush()) WriteRestored(held);
             await FlushAsync();
             await CloseArrayAsync();
         }
@@ -1485,7 +1488,7 @@ public sealed partial class GatewayPipeline(
             {
                 // Pass-through: the client wanted a stream but got a body — hand the body over untouched.
                 if (body is not null || arrayBody is not null)
-                    Write(PrivacyGuardService.Restore(raw, restore));
+                    Write(PrivacyGuardService.RestoreJson(raw, restore));
                 return;
             }
             if (decoder is null) return;
@@ -1513,10 +1516,16 @@ public sealed partial class GatewayPipeline(
 
         void WriteFrame(SseEvent frame)
         {
-            if (asJsonArray) Write(PrivacyGuardService.Restore(frame.Data, restore));
-            // Nothing to restore: the frame is formatted straight into the pending text.
-            else if (restore.Count == 0) SseWriter.AppendTo(outText, frame);
-            else Write(PrivacyGuardService.Restore(SseWriter.Format(frame), restore));
+            // Placeholders go back frame by frame, protocol-aware: across frames, inside tool-call arguments (see
+            // PrivacyStreamRestorer). Nothing to restore: the frame is formatted straight into the pending text.
+            if (restore.Count == 0) WriteRestored(frame);
+            else foreach (var restored in restorer.Process(frame)) WriteRestored(restored);
+        }
+
+        void WriteRestored(SseEvent frame)
+        {
+            if (asJsonArray) Write(frame.Data);
+            else SseWriter.AppendTo(outText, frame);
         }
 
         void Write(string text)
@@ -1597,7 +1606,7 @@ public sealed partial class GatewayPipeline(
                     await ctx.Response.Body.WriteAsync(body.Memory, ct);
                     return;
                 }
-                var passthrough = PrivacyGuardService.Restore(Encoding.UTF8.GetString(body.Span), restore);
+                var passthrough = PrivacyGuardService.RestoreJson(Encoding.UTF8.GetString(body.Span), restore);
                 capture?.Set(BodyStore.UpstreamResponse, passthrough);
                 capture?.Set(BodyStore.ClientResponse, passthrough);
                 await ctx.Response.WriteAsync(passthrough, ct);
@@ -1630,7 +1639,7 @@ public sealed partial class GatewayPipeline(
             await ctx.Response.BodyWriter.FlushAsync(ct);
             return;
         }
-        var output = PrivacyGuardService.Restore(payload.ToJsonString(GatewayJson.Options), restore);
+        var output = PrivacyGuardService.RestoreJson(payload.ToJsonString(GatewayJson.Options), restore);
         capture?.Set(BodyStore.ClientResponse, output);
         await ctx.Response.WriteAsync(output, ct);
     }

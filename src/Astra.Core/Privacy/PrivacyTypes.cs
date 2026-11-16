@@ -24,11 +24,34 @@ public static class PrivacyCategories
     public const string CreditCard = "credit_card";
     public const string NationalId = "national_id";
     public const string Credential = "credential";
+    public const string Passport = "passport";
+    public const string Iban = "iban";
+    public const string Mac = "mac";
+    public const string Ip = "ip";
+    public const string Birthday = "birthday";
+    public const string Serial = "serial";
+    public const string HomeUser = "home_user";
     public const string Custom = "custom";
 
     public static readonly IReadOnlyList<string> BuiltIn =
-        [ApiKey, AwsKey, Jwt, PrivateKey, Email, Phone, Intranet, CreditCard, NationalId, Credential];
+        [ApiKey, AwsKey, Jwt, PrivateKey, Email, Phone, Intranet, CreditCard, NationalId, Credential,
+         Passport, Iban, Mac, Ip, Birthday, Serial, HomeUser];
+
+    /// <summary>
+    /// Categories that stay off until the user turns them on by name (a per-category or per-rule action; neither the
+    /// default action nor a client default enables them): public IPs and the user name in a home folder turn up in
+    /// nearly every coding request, and the model has to copy such a value back exactly.
+    /// </summary>
+    public static readonly IReadOnlyList<string> DefaultOff = [Ip, HomeUser];
+
+    public static bool IsDefaultOff(string category) => category is Ip or HomeUser;
 }
+
+/// <summary>
+/// A check a regex match must pass beyond its shape (checksum, range, example values): given the text and the match,
+/// returns the length to mask — shorter than the match when only its start is the value — or 0 to reject it.
+/// </summary>
+public delegate int MatchRefiner(string text, int index, int length);
 
 /// <summary>One rule match (aggregated per rule per request).</summary>
 public sealed class PrivacyHit
@@ -45,7 +68,7 @@ public sealed class PrivacyHit
     public List<string> Samples { get; set; } = [];
 }
 
-/// <summary>One redaction: the placeholder that replaced the original for the lifetime of the request.</summary>
+/// <summary>One redaction: the placeholder that replaced the original (stable per value, see <see cref="PlaceholderMint"/>).</summary>
 public sealed class PrivacyRedaction
 {
     public string Placeholder { get; set; } = "";
@@ -107,6 +130,15 @@ public sealed class PrivacyRule
     public required string Id { get; init; }
     public required string Category { get; init; }
     public required System.Text.RegularExpressions.Regex Regex { get; init; }
+
+    /// <summary>The extra check a match has to pass (null = the regex alone decides).</summary>
+    public MatchRefiner? Refine { get; init; }
+
+    /// <summary>Named group of the regex holding the value to mask (a label such as "passport:" stays); null = the whole match.</summary>
+    public string? Group { get; init; }
+
+    /// <summary>Literals one of which the text must contain for the rule to match at all (a vectorized pre-check; null = none).</summary>
+    public System.Buffers.SearchValues<string>? Literals { get; init; }
 }
 
 /// <summary>
@@ -149,6 +181,7 @@ public sealed class EffectivePrivacyPolicy
     public string ActionFor(string ruleId, string category) =>
         _categoryActions.TryGetValue(ruleId, out var byRule) ? byRule
         : _categoryActions.TryGetValue(category, out var byCategory) ? byCategory
+        : PrivacyCategories.IsDefaultOff(category) ? PrivacyActions.Off
         : _clientDefault ?? DefaultAction;
 
     /// <summary>Compiles the effective rule set; throws <see cref="ArgumentException"/> on an invalid custom pattern.</summary>
@@ -166,7 +199,11 @@ public sealed class EffectivePrivacyPolicy
         foreach (var rule in PrivacyDetector.BuiltInRules)
         {
             if (policy.ActionFor(rule.Id, rule.Category) == PrivacyActions.Off) continue;
-            rules.Add(new PrivacyRule { Id = rule.Id, Category = rule.Category, Regex = rule.Regex });
+            rules.Add(new PrivacyRule
+            {
+                Id = rule.Id, Category = rule.Category, Regex = rule.Regex,
+                Refine = rule.Refine, Group = rule.Group, Literals = rule.Literals,
+            });
         }
         foreach (var custom in settings.CustomRules)
         {

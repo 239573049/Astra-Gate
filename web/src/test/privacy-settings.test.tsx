@@ -28,6 +28,8 @@ const overview: PrivacyOverview = {
     { id: 'builtin.email', category: 'email', description: 'Email addresses' },
     { id: 'builtin.aws-access-key', category: 'aws_key', description: 'AWS access keys' },
     { id: 'builtin.intranet-host', category: 'intranet', description: 'Intranet addresses' },
+    { id: 'builtin.iban', category: 'iban', description: 'IBAN' },
+    { id: 'builtin.public-ipv4', category: 'ip', description: 'Public IPv4 addresses (off by default)' },
   ],
 };
 
@@ -36,6 +38,7 @@ const dryRunResult: PrivacyDryRunResult = {
   hits: [{ ruleId: 'builtin.email', category: 'email', action: 'redact', count: 2 }],
   wouldRedact: 2,
   categories: ['email'],
+  maskedText: 'mail {{EMAIL_k3v9x2mq}} and {{EMAIL_k3v9x2mq}}',
 };
 
 vi.mock('../api/hooks', () => ({
@@ -109,5 +112,17 @@ describe('PrivacyGuardSettings', () => {
       expect(spies.dryRun).toHaveBeenCalledWith({ text: 'mail a@b.com' }, expect.anything()));
     expect(screen.getByText('Would redact 2 place(s)')).toBeInTheDocument();
     expect(screen.getByText('Email addresses · builtin.email × 2')).toBeInTheDocument();
+  });
+
+  it('shows the new categories, keeps default-off ones off, and shows the masked text with its placeholders', () => {
+    show(<PrivacyPanels />);
+
+    expect(screen.getAllByText('Bank accounts (IBAN)').length).toBeGreaterThan(0);
+    // Public IPs stay off until turned on by name, whatever the default action is: an "off" badge and an enable button.
+    expect(screen.getAllByText('Public IP addresses').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Off').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Enable' }).length).toBe(1);
+    // The dry run result carries the text a real request would send.
+    expect(screen.getByText('mail {{EMAIL_k3v9x2mq}} and {{EMAIL_k3v9x2mq}}')).toBeInTheDocument();
   });
 });

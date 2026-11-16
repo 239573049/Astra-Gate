@@ -20,7 +20,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
             "email" => new string('%', 300_000),
             _ => new string('a', 1_000_000),
         };
-        text += "\ncontact alice@example.com";
+        text += "\ncontact alice@acme.io";
         var policy = Policy();
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var allocated = GC.GetAllocatedBytesForCurrentThread();
@@ -28,7 +28,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         var error = Record.Exception(() => result = _detector.Apply(text, policy));
         output.WriteLine($"{shape}: {clock.Elapsed.TotalMilliseconds:F2} ms; {GC.GetAllocatedBytesForCurrentThread() - allocated:N0} bytes; {error?.GetType().Name ?? "ok"}");
         Assert.Null(error);
-        Assert.Contains(result!.Redactions, r => r.Original == "alice@example.com");
+        Assert.Contains(result!.Redactions, r => r.Original == "alice@acme.io");
     }
 
     [Theory]
@@ -63,7 +63,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         var policy = Policy(defaultAction: PrivacyActions.Off,
             categoryActions: new() { [PrivacyCategories.Email] = PrivacyActions.Redact });
         var random = new Random(42);
-        string[] pieces = ["a", "%", "_", ".", "-", "+", "@", "com", " ", "é", "中", "\u0301", "\n", "a@b.co", "foo%bar@example.com", "a@b.com@c.org"];
+        string[] pieces = ["a", "%", "_", ".", "-", "+", "@", "com", " ", "é", "中", "\u0301", "\n", "a@b.co", "foo%bar@acme.io", "a@b.com@c.org"];
         for (var i = 0; i < 2_000; i++)
         {
             var text = string.Concat(Enumerable.Range(0, 15).Select(_ => pieces[random.Next(pieces.Length)]));
@@ -92,34 +92,34 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         // Deliberately matches even Base64-alphabet data: skipping is structural, not heuristic.
         var payload = new string('A', 1_000_000) + "AKIAIOSFODNN7EXAMPLE";
         var json = "{\"messages\":[{\"content\":[" + block.Replace("PAYLOAD", payload) +
-            ",{\"type\":\"text\",\"text\":\"alice@example.com\"}]}]}";
+            ",{\"type\":\"text\",\"text\":\"alice@acme.io\"}]}]}";
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var result = _detector.ApplyJson(json, Policy(custom:
             [new() { Id = "custom.payload", Pattern = "A{1000}" }]))!;
         output.WriteLine($"opaque: {clock.Elapsed.TotalMilliseconds:F2} ms");
         Assert.Single(result.Redactions);
-        Assert.Equal("alice@example.com", result.Redactions[0].Original);
+        Assert.Equal("alice@acme.io", result.Redactions[0].Original);
         Assert.Contains(payload, result.Text);
     }
 
     [Theory]
-    [InlineData("{\"type\":\"tool_use\",\"input\":{\"type\":\"thinking\",\"signature\":\"alice@example.com\"}}")]
-    [InlineData("{\"type\":\"tool_result\",\"content\":\"alice@example.com\"}")]
-    [InlineData("{\"type\":\"thinking\",\"thinking\":\"alice@example.com\",\"signature\":\"opaque\"}")]
-    [InlineData("{\"type\":\"text\",\"data\":\"alice@example.com\"}")]
-    [InlineData("{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://example.com/alice@example.com\"}}")]
-    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"text\",\"data\":\"alice@example.com\"}}")]
-    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"text/plain\",\"data\":\"alice@example.com\"}}")]
-    [InlineData("{\"inlineData\":{\"mimeType\":\"text/plain\",\"data\":\"alice@example.com\"}}")]
+    [InlineData("{\"type\":\"tool_use\",\"input\":{\"type\":\"thinking\",\"signature\":\"alice@acme.io\"}}")]
+    [InlineData("{\"type\":\"tool_result\",\"content\":\"alice@acme.io\"}")]
+    [InlineData("{\"type\":\"thinking\",\"thinking\":\"alice@acme.io\",\"signature\":\"opaque\"}")]
+    [InlineData("{\"type\":\"text\",\"data\":\"alice@acme.io\"}")]
+    [InlineData("{\"type\":\"image_url\",\"image_url\":{\"url\":\"https://acme.io/alice@acme.io\"}}")]
+    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"text\",\"data\":\"alice@acme.io\"}}")]
+    [InlineData("{\"type\":\"document\",\"source\":{\"type\":\"base64\",\"media_type\":\"text/plain\",\"data\":\"alice@acme.io\"}}")]
+    [InlineData("{\"inlineData\":{\"mimeType\":\"text/plain\",\"data\":\"alice@acme.io\"}}")]
     public void Json_Text_Unknown_Data_And_Tool_Arguments_Are_Still_Scanned(string block)
     {
         var result = _detector.ApplyJson("{\"messages\":[{\"content\":[" + block + "]}]}", Policy())!;
-        Assert.Contains(result.Redactions, r => r.Original == "alice@example.com");
+        Assert.Contains(result.Redactions, r => r.Original == "alice@acme.io");
     }
 
     [Theory]
-    [InlineData("\"alice@example.com\"")]
-    [InlineData("[\"alice@example.com\",null,\"bob@example.org\"]")]
+    [InlineData("\"alice@acme.io\"")]
+    [InlineData("[\"alice@acme.io\",null,\"bob@acme.dev\"]")]
     public void Json_Root_And_Array_Strings_Are_Rewritten(string json)
     {
         var result = _detector.ApplyJson(json, Policy())!;
@@ -128,26 +128,26 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData("{\"contents\":[{\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"OPAQUE\"}},{\"text\":\"alice@example.com\"}]}]}")]
-    [InlineData("{\"input\":[{\"type\":\"reasoning\",\"encrypted_content\":\"OPAQUE\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"alice@example.com\"}]}]}")]
-    [InlineData("{\"input\":[{\"type\":\"function_call_output\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,OPAQUE\"},{\"type\":\"input_text\",\"text\":\"alice@example.com\"}]}]}")]
+    [InlineData("{\"contents\":[{\"parts\":[{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"OPAQUE\"}},{\"text\":\"alice@acme.io\"}]}]}")]
+    [InlineData("{\"input\":[{\"type\":\"reasoning\",\"encrypted_content\":\"OPAQUE\"},{\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"alice@acme.io\"}]}]}")]
+    [InlineData("{\"input\":[{\"type\":\"function_call_output\",\"output\":[{\"type\":\"input_image\",\"image_url\":\"data:image/png;base64,OPAQUE\"},{\"type\":\"input_text\",\"text\":\"alice@acme.io\"}]}]}")]
     public void Actual_Protocol_Paths_Skip_Only_Opaque_Values(string json)
     {
         var result = _detector.ApplyJson(json, Policy(custom:
             [new() { Id = "custom.opaque", Pattern = "OPAQUE" }]))!;
-        Assert.Equal("alice@example.com", Assert.Single(result.Redactions).Original);
+        Assert.Equal("alice@acme.io", Assert.Single(result.Redactions).Original);
         Assert.Contains("OPAQUE", result.Text);
     }
 
     [Theory]
-    [InlineData("{\"contents\":[{\"parts\":[{\"functionCall\":{\"args\":{\"thoughtSignature\":\"alice@example.com\"}}}]}]}")]
-    [InlineData("{\"contents\":[{\"parts\":[{\"functionResponse\":{\"response\":{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"alice@example.com\"}}}}]}]}")]
-    [InlineData("{\"messages\":[{\"content\":[{\"type\":\"tool_result\",\"content\":{\"type\":\"thinking\",\"signature\":\"alice@example.com\"}}]}]}")]
-    [InlineData("{\"messages\":[{\"content\":[{\"type\":\"tool_result\",\"content\":[{\"type\":\"thinking\",\"signature\":\"alice@example.com\"}]}]}]}")]
-    [InlineData("{\"input\":[{\"type\":\"function_call_output\",\"output\":[{\"type\":\"reasoning\",\"encrypted_content\":\"alice@example.com\"}]}]}")]
+    [InlineData("{\"contents\":[{\"parts\":[{\"functionCall\":{\"args\":{\"thoughtSignature\":\"alice@acme.io\"}}}]}]}")]
+    [InlineData("{\"contents\":[{\"parts\":[{\"functionResponse\":{\"response\":{\"inlineData\":{\"mimeType\":\"image/png\",\"data\":\"alice@acme.io\"}}}}]}]}")]
+    [InlineData("{\"messages\":[{\"content\":[{\"type\":\"tool_result\",\"content\":{\"type\":\"thinking\",\"signature\":\"alice@acme.io\"}}]}]}")]
+    [InlineData("{\"messages\":[{\"content\":[{\"type\":\"tool_result\",\"content\":[{\"type\":\"thinking\",\"signature\":\"alice@acme.io\"}]}]}]}")]
+    [InlineData("{\"input\":[{\"type\":\"function_call_output\",\"output\":[{\"type\":\"reasoning\",\"encrypted_content\":\"alice@acme.io\"}]}]}")]
     public void Arbitrary_Tool_Json_Does_Not_Inherit_Protocol_Skips(string json)
     {
-        Assert.Equal("alice@example.com", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
+        Assert.Equal("alice@acme.io", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
     }
 
     // A Gemini signature a Chat client echoes back (tool_calls[].extra_content.google.thought_signature) is opaque like
@@ -156,21 +156,21 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     public void Chat_Tool_Call_Thought_Signature_Is_Not_Scanned()
     {
         var payload = new string('A', 1_000) + "AKIAIOSFODNN7EXAMPLE";
-        var json = """{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"google":{"thought_signature":"PAYLOAD"}},"function":{"name":"t","arguments":"{\"to\":\"alice@example.com\"}"}}]}]}"""
+        var json = """{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"google":{"thought_signature":"PAYLOAD"}},"function":{"name":"t","arguments":"{\"to\":\"alice@acme.io\"}"}}]}]}"""
             .Replace("PAYLOAD", payload);
         var result = _detector.ApplyJson(json, Policy(custom:
             [new() { Id = "custom.payload", Pattern = "A{1000}" }]))!;
-        Assert.Equal("alice@example.com", Assert.Single(result.Redactions).Original);
+        Assert.Equal("alice@acme.io", Assert.Single(result.Redactions).Original);
         Assert.Contains(payload, result.Text);
     }
 
     [Theory]
-    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"google":{"note":"alice@example.com"}},"function":{"name":"t","arguments":"{}"}}]}]}""")]
-    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"other":{"thought_signature":"alice@example.com"}},"function":{"name":"t","arguments":"{}"}}]}]}""")]
-    [InlineData("""{"messages":[{"role":"user","extra_content":{"google":{"thought_signature":"alice@example.com"}},"content":"hi"}]}""")]
+    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"google":{"note":"alice@acme.io"}},"function":{"name":"t","arguments":"{}"}}]}]}""")]
+    [InlineData("""{"messages":[{"role":"assistant","tool_calls":[{"id":"c1","type":"function","extra_content":{"other":{"thought_signature":"alice@acme.io"}},"function":{"name":"t","arguments":"{}"}}]}]}""")]
+    [InlineData("""{"messages":[{"role":"user","extra_content":{"google":{"thought_signature":"alice@acme.io"}},"content":"hi"}]}""")]
     public void Only_The_Tool_Call_Thought_Signature_Slot_Is_Skipped(string json)
     {
-        Assert.Equal("alice@example.com", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
+        Assert.Equal("alice@acme.io", Assert.Single(_detector.ApplyJson(json, Policy())!.Redactions).Original);
     }
 
     // Issue #10: a tool id with an 11-digit run read as a phone number was rewritten, and the upstream refused every
@@ -232,7 +232,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.All(redacted.Redactions, r => Assert.Equal("13912345678", r.Original));
         Assert.DoesNotContain("13912345678", redacted.Text);
         Assert.Equal(ids, redacted.Text.Split($"\"{PairingId}\"").Length - 1);
-        Assert.Equal(texts, redacted.Text.Split("call [REDACTED:phone#").Length - 1);
+        Assert.Equal(texts, redacted.Text.Split($"call {_detector.Mint.Placeholder(PrivacyCategories.Phone, "13912345678")} now").Length - 1);
     }
 
     [Theory]
@@ -258,7 +258,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     [Fact]
     public void Json_Warn_And_No_Match_Preserve_Original_Formatting()
     {
-        const string json = "{  \"data\": \"alice@example.com\", \"null\": null }";
+        const string json = "{  \"data\": \"alice@acme.io\", \"null\": null }";
         Assert.Same(json, _detector.ApplyJson(json, Policy(defaultAction: PrivacyActions.Warn))!.Text);
         Assert.Same(json, _detector.ApplyJson(json, Policy(defaultAction: PrivacyActions.Off))!.Text);
     }
@@ -270,15 +270,16 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
             categoryActions: new() { [PrivacyCategories.Custom] = PrivacyActions.Redact },
             custom: [new() { Id = "custom.empty", Pattern = "(?=a)|$" }]);
         var result = _detector.Apply("aa", policy);
-        Assert.Equal("[REDACTED:custom#1]a[REDACTED:custom#2]a[REDACTED:custom#3]", result.Text);
+        var empty = _detector.Mint.Placeholder(PrivacyCategories.Custom, "");
+        Assert.Equal($"{empty}a{empty}a{empty}", result.Text);
         Assert.Equal(3, result.Hits.Single().Count);
     }
 
     private readonly PrivacyDetector _detector = new();
 
     [Theory]
-    [InlineData("""{"model":"m","system":"ops alice@example.com","messages":[{"role":"user","content":[{"type":"text","text":"key AKIAIOSFODNN7EXAMPLE\nand bob@test.org"}]}]}""")]
-    [InlineData("""{"messages":[{"content":"mail alice\u0040example.com, again alice@example.com"}],"n":1.50,"tags":["10.0.0.5",null,true]}""")]
+    [InlineData("""{"model":"m","system":"ops alice@acme.io","messages":[{"role":"user","content":[{"type":"text","text":"key AKIAIOSFODNN7EXAMPLE\nand bob@test.org"}]}]}""")]
+    [InlineData("""{"messages":[{"content":"mail alice\u0040acme.io, again alice@acme.io"}],"n":1.50,"tags":["10.0.0.5",null,true]}""")]
     [InlineData("""{"input":[{"type":"function_call_output","output":[{"type":"input_image","image_url":"data:image/png;base64,AKIAIOSFODNN7EXAMPLE"},{"type":"input_text","text":"x@y.io"}]}]}""")]
     public void Parsed_Body_Redaction_Matches_The_Text_Path(string json)
     {
@@ -287,7 +288,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
 
         using var document = JsonDocument.Parse(json);
         var tree = JsonObject.Create(document.RootElement)!;
-        var actual = new PrivacyDetector().ApplyJson(document.RootElement, tree, policy, rewrite: true);
+        var actual = new PrivacyDetector(_detector.Mint).ApplyJson(document.RootElement, tree, policy, rewrite: true);
 
         Assert.Equal(expected.Redactions.Select(r => (r.Placeholder, r.Original)), actual.Redactions.Select(r => (r.Placeholder, r.Original)));
         Assert.Equal(expected.Hits.Select(h => (h.RuleId, h.Action, h.Count)), actual.Hits.Select(h => (h.RuleId, h.Action, h.Count)));
@@ -297,7 +298,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     [Fact]
     public void Parsed_Body_Is_Untouched_Without_Rewrite_Or_When_Blocked()
     {
-        const string json = """{"messages":[{"content":"alice@example.com AKIAIOSFODNN7EXAMPLE"}]}""";
+        const string json = """{"messages":[{"content":"alice@acme.io AKIAIOSFODNN7EXAMPLE"}]}""";
         using var document = JsonDocument.Parse(json);
 
         var dryTree = JsonObject.Create(document.RootElement)!;
@@ -330,7 +331,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     {
         var detector = new PrivacyDetector();
         var filler = new string('x', 2_000);
-        var withEmail = $$"""{"messages":[{"content":"{{filler}} alice@example.com"}]}""";
+        var withEmail = $$"""{"messages":[{"content":"{{filler}} alice@acme.io"}]}""";
         var clean = $$"""{"messages":[{"content":"{{filler}} nothing here"}]}""";
 
         // Clean for a policy that ignores email — and remembered as clean for that policy only.
@@ -341,7 +342,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         var redact = Policy();
         for (var i = 0; i < 3; i++)
         {
-            Assert.Equal("alice@example.com", Assert.Single(detector.ApplyJson(withEmail, redact)!.Redactions).Original);
+            Assert.Equal("alice@acme.io", Assert.Single(detector.ApplyJson(withEmail, redact)!.Redactions).Original);
             Assert.Empty(detector.ApplyJson(clean, redact)!.Hits);
         }
     }
@@ -365,7 +366,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         google=AIzaSyA1234567890abcdefghijklmnopqrstuvwxyz
         aws=AKIAIOSFODNN7EXAMPLE
         token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJVadQssw5c
-        mail=alice@example.com
+        mail=alice@acme.io
         phone=13812345678
         -----BEGIN RSA PRIVATE KEY-----
         MIIBOgIBAAJBAK
@@ -388,18 +389,22 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     }
 
     [Fact]
-    public void Redact_Replaces_Each_Match_And_Counters_Per_Category()
+    public void Redact_Replaces_Each_Match_With_A_Placeholder_Of_Its_Value()
     {
         var result = _detector.Apply("mail a@b.com or bob@test.org, again a@b.com", Policy());
 
         Assert.False(result.Blocked);
         Assert.DoesNotContain("@", result.Text);
+        Assert.Equal(3, result.Hits.Single().Count);
+        // The same value is the same placeholder: three redactions, two placeholders.
         Assert.Equal(3, result.Redactions.Count);
-        Assert.Equal(PrivacyDetector.PlaceholderFor(PrivacyCategories.Email, 1), result.Redactions[0].Placeholder);
-        Assert.Equal(PrivacyDetector.PlaceholderFor(PrivacyCategories.Email, 2), result.Redactions[1].Placeholder);
+        Assert.Equal(2, result.Redactions.Select(r => r.Placeholder).Distinct().Count());
+        Assert.Equal(_detector.Mint.Placeholder(PrivacyCategories.Email, "a@b.com"), result.Redactions[0].Placeholder);
+        Assert.Equal(_detector.Mint.Placeholder(PrivacyCategories.Email, "bob@test.org"), result.Redactions[1].Placeholder);
         Assert.Equal("a@b.com", result.Redactions[0].Original);
-        Assert.Equal("a@b.com", result.Redactions[2].Original); // same value redacted twice, distinct placeholders
-        Assert.NotEqual(result.Redactions[0].Placeholder, result.Redactions[2].Placeholder);
+        Assert.Equal(result.Redactions[0].Placeholder, result.Redactions[2].Placeholder);
+        Assert.Equal(2, result.Text.Split(result.Redactions[0].Placeholder).Length - 1);
+        Assert.Matches(@"^\{\{EMAIL_[a-z2-7]{8}\}\}$", result.Redactions[0].Placeholder);
     }
 
     [Fact]
@@ -470,7 +475,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         };
         var result = _detector.Apply("employee EMP-123456 onboarded", Policy(custom: custom));
 
-        Assert.Equal("employee [REDACTED:custom#1] onboarded", result.Text);
+        Assert.Equal($"employee {_detector.Mint.Placeholder(PrivacyCategories.Custom, "EMP-123456")} onboarded", result.Text);
         Assert.Contains(result.Hits, h => h.RuleId == "custom.employee-id");
 
         Assert.ThrowsAny<ArgumentException>(() => Policy(custom:
@@ -510,9 +515,9 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.DoesNotContain("a@b.com", content);
         Assert.DoesNotContain("192.168.1.5", content);
         Assert.DoesNotContain("13812345678", content);
-        Assert.Contains(PrivacyDetector.PlaceholderFor(PrivacyCategories.Email, 1), content);
-        Assert.Contains(PrivacyDetector.PlaceholderFor(PrivacyCategories.Intranet, 1), content);
-        Assert.Contains(PrivacyDetector.PlaceholderFor(PrivacyCategories.Phone, 1), content);
+        Assert.Contains(_detector.Mint.Placeholder(PrivacyCategories.Email, "a@b.com"), content);
+        Assert.Contains(_detector.Mint.Placeholder(PrivacyCategories.Intranet, "192.168.1.5"), content);
+        Assert.Contains(_detector.Mint.Placeholder(PrivacyCategories.Phone, "13812345678"), content);
     }
 
     [Fact]
@@ -531,7 +536,7 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     [Fact]
     public void Intranet_Addresses_Are_Detected()
     {
-        var hits = _detector.Scan("server at 10.0.0.5 and nas.local, but not example.com", Policy());
+        var hits = _detector.Scan("server at 10.0.0.5 and nas.local, but not acme.io", Policy());
         Assert.Contains(hits, h => h.Category == PrivacyCategories.Intranet);
         Assert.DoesNotContain(hits, h => h.Category == PrivacyCategories.Email);
     }
@@ -539,17 +544,17 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     [Fact]
     public void Hits_Carry_Masked_Samples_And_Originals_Are_Never_Recorded()
     {
-        var result = _detector.Apply("mail john@example.com or admin@corp.example.org", Policy());
+        var result = _detector.Apply("mail john@acme.io or admin@corp.acme.dev", Policy());
 
         var hit = result.Hits.Single(h => h.Category == PrivacyCategories.Email);
         Assert.Equal(2, hit.Count);
         Assert.Equal(2, hit.Samples.Count); // distinct values → distinct masks
         Assert.All(hit.Samples, s => Assert.Contains("••••", s));
         Assert.All(hit.Samples, s => Assert.DoesNotContain("@", s[..4]));
-        Assert.DoesNotContain("john@example.com", hit.Samples);
+        Assert.DoesNotContain("john@acme.io", hit.Samples);
 
         // Recording can be turned off per policy.
-        var quiet = _detector.Apply("mail john@example.com", EffectivePrivacyPolicy.Build(
+        var quiet = _detector.Apply("mail john@acme.io", EffectivePrivacyPolicy.Build(
             new PrivacySettings { Enabled = true, DefaultAction = PrivacyActions.Warn, RecordSamples = false }, null));
         Assert.Empty(quiet.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
     }
@@ -560,12 +565,12 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
         Assert.False(new PrivacySettings().RecordFullSamples);
         Assert.False(Json.Deserialize<PrivacySettings>("""{"enabled":true}""")!.RecordFullSamples);
 
-        var full = _detector.Apply("mail john@example.com", EffectivePrivacyPolicy.Build(
+        var full = _detector.Apply("mail john@acme.io", EffectivePrivacyPolicy.Build(
             new PrivacySettings { Enabled = true, DefaultAction = PrivacyActions.Warn, RecordFullSamples = true }, null));
-        Assert.Contains("john@example.com", full.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
+        Assert.Contains("john@acme.io", full.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
 
         // Recording off wins over full.
-        var off = _detector.Apply("mail john@example.com", EffectivePrivacyPolicy.Build(
+        var off = _detector.Apply("mail john@acme.io", EffectivePrivacyPolicy.Build(
             new PrivacySettings { Enabled = true, DefaultAction = PrivacyActions.Warn, RecordSamples = false, RecordFullSamples = true }, null));
         Assert.Empty(off.Hits.Single(h => h.Category == PrivacyCategories.Email).Samples);
     }
@@ -624,12 +629,12 @@ public class PrivacyDetectorTests(Xunit.Abstractions.ITestOutputHelper output)
     [Fact]
     public void Credential_Assignment_Ignores_Already_Redacted_Values()
     {
-        // jwt redacts first; the leftover "token=[REDACTED:jwt#1]" must not be redacted again.
+        // jwt redacts first; the leftover "token={{JWT_…}}" must not be redacted again.
         var result = _detector.Apply("token=eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.c9S-flKxwRJSMeKKF2QT4", Policy());
 
         Assert.Contains(result.Hits, h => h.Category == PrivacyCategories.Jwt);
         Assert.DoesNotContain(result.Hits, h => h.Category == PrivacyCategories.Credential);
-        Assert.DoesNotContain("[REDACTED:credential", result.Text);
+        Assert.DoesNotContain("{{CREDENTIAL_", result.Text);
     }
 
     [Fact]
@@ -663,17 +668,17 @@ public class ChunkRestorerTests
     [Fact]
     public void Placeholder_Split_Across_Chunks_Is_Restored()
     {
-        var restorer = new ChunkRestorer([Redaction(PrivacyDetector.PlaceholderFor(PrivacyCategories.Email, 1), "alice@example.com")]);
+        var restorer = new ChunkRestorer([Redaction("{{EMAIL_k3v9x2mq}}", "alice@acme.io")]);
 
-        var output = restorer.Push("[REDA") + restorer.Push("CTED:email") + restorer.Push("#1]") + restorer.Flush();
-        Assert.Equal("alice@example.com", output);
+        var output = restorer.Push("hi {{EM") + restorer.Push("AIL_k3v9") + restorer.Push("x2mq}} bye") + restorer.Flush();
+        Assert.Equal("hi alice@acme.io bye", output);
     }
 
     [Fact]
     public void Multiple_Placeholders_With_Surrounding_Text()
     {
-        var p1 = PrivacyDetector.PlaceholderFor(PrivacyCategories.Email, 1);
-        var p2 = PrivacyDetector.PlaceholderFor(PrivacyCategories.Email, 2);
+        const string p1 = "{{EMAIL_aaaaaaaa}}";
+        const string p2 = "{{EMAIL_bbbbbbbb}}";
         var restorer = new ChunkRestorer([Redaction(p1, "a@b.com"), Redaction(p2, "c@d.org")]);
 
         var output = restorer.Push($"hi {p1},") + restorer.Push($"bye {p2}!") + restorer.Flush();
@@ -683,16 +688,20 @@ public class ChunkRestorerTests
     [Fact]
     public void Unknown_Tail_Text_Passes_Through_Intact()
     {
-        var restorer = new ChunkRestorer([Redaction("[REDACTED:email#1]", "a@b.com")]);
+        var restorer = new ChunkRestorer([Redaction("{{EMAIL_aaaaaaaa}}", "a@b.com")]);
 
-        var output = restorer.Push("hello [REDACT") + restorer.Flush();
-        Assert.Equal("hello [REDACT", output);
+        // "{{EM" could still become a placeholder, so it is held; the stream ending releases it unchanged.
+        Assert.Equal("hello ", restorer.Push("hello {{EM"));
+        Assert.Equal("{{EM", restorer.Flush());
+        // Ordinary text, even with a brace, is not held once it cannot be one.
+        var again = new ChunkRestorer([Redaction("{{EMAIL_aaaaaaaa}}", "a@b.com")]);
+        Assert.Equal("fn() {\n  x", again.Push("fn() {\n  x"));
     }
 
     [Fact]
     public void Complete_Round_Trip_Through_Detector()
     {
-        const string original = "contact alice@example.com today";
+        const string original = "contact alice@acme.io today";
         var detector = new PrivacyDetector();
         var applied = detector.Apply(original, EffectivePrivacyPolicy.Build(new PrivacySettings
         {
