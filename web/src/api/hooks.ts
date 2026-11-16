@@ -117,6 +117,7 @@ import type { BackupFile, BackupImportResult, BackupPreview, BackupSecrets, WebD
 import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeyStats, KeyStatsRange, Webhook, WebhookDelivery, WebhookFormat, WebhookSecret } from './types';
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 import type { PluginSuccessor, PluginV2Detail, PluginV2List, PluginV2Notification } from './types';
+import type { SearchKeyQuota, SearchTestResult, ToolInfo, ToolsSettings, ToolsSettingsUpdate } from './types';
 import type { RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
 
 export const keys = {
@@ -1965,3 +1966,51 @@ export const usePluginNotifications = (after: number, enabled: boolean) =>
     enabled,
     refetchInterval: 20_000,
   });
+
+// ---------- built-in tools (linked update 34) ----------
+
+const toolsKey = ['tools-settings'] as const;
+
+export const useToolsSettings = () => useQuery({ queryKey: toolsKey, queryFn: () => api<ToolsSettings>('GET', '/api/tools/settings') });
+
+export const useTools = () => useQuery({ queryKey: ['tools'], queryFn: () => api<ToolInfo[]>('GET', '/api/tools') });
+
+/** Every change to the tools settings answers with the new settings, which replace the cached ones. */
+function useToolsMutation<TVars>(fn: (vars: TVars) => Promise<ToolsSettings>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (data) => {
+      qc.setQueryData(toolsKey, data);
+      void qc.invalidateQueries({ queryKey: ['tools'] });
+    },
+  });
+}
+
+export const useUpdateToolsSettings = () => useToolsMutation((body: ToolsSettingsUpdate) => api<ToolsSettings>('PUT', '/api/tools/settings', body));
+export const useAddSearchApi = () => useToolsMutation((body: { vendor: string; url?: string }) => api<ToolsSettings>('POST', '/api/tools/search/apis', body));
+export const useReorderSearchApis = () => useToolsMutation((order: string[]) => api<ToolsSettings>('PUT', '/api/tools/search/apis', { order }));
+export const useUpdateSearchApi = () =>
+  useToolsMutation((v: { vendor: string; body: { enabled?: boolean; pick?: string; url?: string } }) => api<ToolsSettings>('PATCH', `/api/tools/search/apis/${enc(v.vendor)}`, v.body));
+export const useDeleteSearchApi = () => useToolsMutation((vendor: string) => api<ToolsSettings>('DELETE', `/api/tools/search/apis/${enc(vendor)}`));
+export const useAddSearchKey = () =>
+  useToolsMutation((v: { vendor: string; key: string }) => api<ToolsSettings>('POST', `/api/tools/search/apis/${enc(v.vendor)}/keys`, { key: v.key }));
+export const useUpdateSearchKey = () =>
+  useToolsMutation((v: { vendor: string; id: string; enabled: boolean }) =>
+    api<ToolsSettings>('PATCH', `/api/tools/search/apis/${enc(v.vendor)}/keys/${enc(v.id)}`, { enabled: v.enabled }));
+export const useDeleteSearchKey = () =>
+  useToolsMutation((v: { vendor: string; id: string }) => api<ToolsSettings>('DELETE', `/api/tools/search/apis/${enc(v.vendor)}/keys/${enc(v.id)}`));
+export const useReorderSearchKeys = () =>
+  useToolsMutation((v: { vendor: string; order: string[] }) => api<ToolsSettings>('PUT', `/api/tools/search/apis/${enc(v.vendor)}/keys`, { order: v.order }));
+export function useTestSearchApi() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (vendor: string) => api<SearchTestResult>('POST', `/api/tools/search/apis/${enc(vendor)}/test`, {}),
+    // A refused key now rests: the list shows it.
+    onSettled: () => void qc.invalidateQueries({ queryKey: toolsKey }),
+  });
+}
+
+/** What each key of a Tavily API has used of its limit (the server asks Tavily; kept two minutes). */
+export const useSearchQuota = (vendor: string, enabled: boolean) =>
+  useQuery({ queryKey: ['tools-quota', vendor], queryFn: () => api<Record<string, SearchKeyQuota>>('GET', `/api/tools/search/apis/${enc(vendor)}/quota`), enabled, staleTime: 60_000 });

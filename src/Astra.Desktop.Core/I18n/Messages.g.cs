@@ -2767,6 +2767,81 @@ internal static class Messages
         "nav.mcp",
         "nav.group.resources",
         "nav.skills",
+        "nav.tools",
+        "tools.subtitle",
+        "tools.onBehalf.title",
+        "tools.onBehalf.footer",
+        "tools.onBehalf.enable",
+        "tools.onBehalf.enableHint",
+        "tools.onBehalf.mode",
+        "tools.onBehalf.modeHint",
+        "tools.onBehalf.mode.auto",
+        "tools.onBehalf.mode.always",
+        "tools.onBehalf.count",
+        "tools.onBehalf.countHint",
+        "tools.search.title",
+        "tools.search.add",
+        "tools.search.fromPlugin",
+        "tools.search.hint",
+        "tools.search.empty",
+        "tools.search.url",
+        "tools.search.urlDefault",
+        "tools.search.keyOptional",
+        "tools.search.keysCount",
+        "tools.search.getKey",
+        "tools.search.moveUp",
+        "tools.search.moveDown",
+        "tools.search.test",
+        "tools.search.enabled",
+        "tools.search.pluginOff",
+        "tools.search.pick",
+        "tools.search.pickHint",
+        "tools.search.pick.turns",
+        "tools.search.pick.order",
+        "tools.search.key",
+        "tools.search.keyPlaceholder",
+        "tools.search.addKey",
+        "tools.search.refreshQuota",
+        "tools.search.testOk",
+        "tools.search.testFailed",
+        "tools.search.removeConfirm",
+        "tools.search.removeDetail",
+        "tools.search.quotaUnknown",
+        "tools.search.quotaUnlimited",
+        "tools.search.quotaOfPlan",
+        "tools.search.quotaOfKey",
+        "tools.search.quotaUsed",
+        "tools.search.rest.turned_away",
+        "tools.search.rest.out_of_credit",
+        "tools.search.rest.rate_limited",
+        "tools.search.rest.used_up",
+        "tools.fetch.title",
+        "tools.fetch.footer",
+        "tools.fetch.chars",
+        "tools.fetch.charsHint",
+        "tools.fetch.timeout",
+        "tools.fetch.timeoutHint",
+        "tools.fetch.bytes",
+        "tools.fetch.bytesHint",
+        "tools.fetch.private",
+        "tools.fetch.privateHint",
+        "tools.image.title",
+        "tools.image.footer",
+        "tools.image.model",
+        "tools.image.modelHint",
+        "tools.image.size",
+        "tools.image.sizeHint",
+        "tools.list.title",
+        "tools.list.footer",
+        "tools.list.endpoint",
+        "tools.list.endpointHint",
+        "tools.list.plugin",
+        "tools.list.builtin",
+        "tools.list.unavailable",
+        "tools.reason.web_search",
+        "tools.reason.generate_image",
+        "mcp.server.builtIn",
+        "mcp.server.builtInManage",
         "skills.subtitle",
         "skills.tab.managed",
         "skills.tab.found",
@@ -5944,6 +6019,81 @@ internal static class Messages
             case "nav.mcp": return "MCP 网关";
             case "nav.group.resources": return "资源";
             case "nav.skills": return "Skills";
+            case "nav.tools": return "工具";
+            case "tools.subtitle": return "Astra 自带的工具：联网搜索（让不会搜索的模型也能搜）、网页读取、图片生成，以及插件提供的工具。通过 MCP 网关的 astra 服务器交给客户端。";
+            case "tools.onBehalf.title": return "替模型联网搜索";
+            case "tools.onBehalf.footer": return "请求里带着联网搜索工具（Anthropic web_search、Responses web_search、Chat web_search_options、Gemini google_search），而上游自己不能搜索时，Astra 用下面的搜索 API 代为搜索，再让模型接着回答。搜索词先经过隐私守卫。请求头 x-astra-web-search: off 可让单个请求不走这里。流式请求会在搜索结束后一次性收到完整回答。";
+            case "tools.onBehalf.enable": return "替模型搜索";
+            case "tools.onBehalf.enableHint": return "默认关闭。开启后需要至少一个已启用的搜索 API。";
+            case "tools.onBehalf.mode": return "何时代搜";
+            case "tools.onBehalf.modeHint": return "「自动」只在上游不能自己搜索时代搜（官方 Anthropic / OpenAI / Gemini 地址，或标了 web_search 的提供商会自己搜）；「总是」对所有带搜索工具的请求代搜。";
+            case "tools.onBehalf.mode.auto": return "自动";
+            case "tools.onBehalf.mode.always": return "总是";
+            case "tools.onBehalf.count": return "每次搜索的结果数";
+            case "tools.onBehalf.countHint": return "1 到 20。";
+            case "tools.search.title": return "搜索 API";
+            case "tools.search.add": return "添加搜索 API";
+            case "tools.search.fromPlugin": return "插件";
+            case "tools.search.hint": return "按这里的顺序依次询问：第一个有结果就用它，失败或没有结果再问下一个。拖动或用箭头调整顺序。关闭一个 API 不会删除它的密钥。";
+            case "tools.search.empty": return "还没有搜索 API。添加一个并填入密钥（SearXNG 自建的不需要密钥）。";
+            case "tools.search.url": return "地址";
+            case "tools.search.urlDefault": return "默认用官方地址";
+            case "tools.search.keyOptional": return "密钥可选";
+            case "tools.search.keysCount": return "{count} 个密钥";
+            case "tools.search.getKey": return "获取密钥";
+            case "tools.search.moveUp": return "上移";
+            case "tools.search.moveDown": return "下移";
+            case "tools.search.test": return "测试";
+            case "tools.search.enabled": return "启用";
+            case "tools.search.pluginOff": return "插件未启用";
+            case "tools.search.pick": return "多个密钥";
+            case "tools.search.pickHint": return "「轮换」每次搜索换下一个密钥；「按顺序」先用第一个，被拒绝才换下一个。最近被拒绝的密钥总是排到最后。";
+            case "tools.search.pick.turns": return "轮换";
+            case "tools.search.pick.order": return "按顺序";
+            case "tools.search.key": return "密钥";
+            case "tools.search.keyPlaceholder": return "粘贴一个新密钥";
+            case "tools.search.addKey": return "添加密钥";
+            case "tools.search.refreshQuota": return "刷新用量";
+            case "tools.search.testOk": return "{source} 返回了 {pages} 条结果（{ms} ms）";
+            case "tools.search.testFailed": return "搜索失败：{message}";
+            case "tools.search.removeConfirm": return "删除「{name}」？";
+            case "tools.search.removeDetail": return "它的密钥也会一并删除。";
+            case "tools.search.quotaUnknown": return "用量未知 {message}";
+            case "tools.search.quotaUnlimited": return "已用 {used}，不限额";
+            case "tools.search.quotaOfPlan": return "（{plan} 套餐）";
+            case "tools.search.quotaOfKey": return "（密钥额度）";
+            case "tools.search.quotaUsed": return "已用 {used} / {limit}";
+            case "tools.search.rest.turned_away": return "被拒绝，暂排最后";
+            case "tools.search.rest.out_of_credit": return "额度用尽，暂排最后";
+            case "tools.search.rest.rate_limited": return "被限流，暂排最后";
+            case "tools.search.rest.used_up": return "额度用尽，暂排最后";
+            case "tools.fetch.title": return "网页读取（web_fetch）";
+            case "tools.fetch.footer": return "只读取公网上的 http / https 页面：回环、内网、链路本地（含云厂商元数据）地址会被拒绝，重定向的每一跳都会检查。";
+            case "tools.fetch.chars": return "每次返回的字符数";
+            case "tools.fetch.charsHint": return "长页面分段返回，回答里会说明下一段从哪里开始。";
+            case "tools.fetch.timeout": return "超时（秒）";
+            case "tools.fetch.timeoutHint": return "一次读取最长等待的时间。";
+            case "tools.fetch.bytes": return "最多读取（MB）";
+            case "tools.fetch.bytesHint": return "超过的部分不读。";
+            case "tools.fetch.private": return "允许读取内网地址";
+            case "tools.fetch.privateHint": return "开启后模型可以让 Astra 读取只有这台电脑或你的内网能访问的服务。只在你清楚后果时开启，且只能在本机上改动这个开关。";
+            case "tools.image.title": return "图片生成（generate_image）";
+            case "tools.image.footer": return "通过 Astra 网关的图片接口生成，按调用它的令牌计费。未填模型时不提供这个工具。";
+            case "tools.image.model": return "图片模型";
+            case "tools.image.modelHint": return "令牌能访问的、支持 /v1/images/generations 的模型名。";
+            case "tools.image.size": return "默认尺寸";
+            case "tools.image.sizeHint": return "留空则由模型决定。";
+            case "tools.list.title": return "工具";
+            case "tools.list.footer": return "在「令牌」页面把 Astra Tools 服务器绑定给令牌后，客户端才能用到这些工具；「应用到客户端」可以把它写进 Claude Code 或 Codex。";
+            case "tools.list.endpoint": return "MCP 地址";
+            case "tools.list.endpointHint": return "只有这一个服务器的地址（工具名不带前缀）；聚合地址在 MCP 页面。";
+            case "tools.list.plugin": return "插件";
+            case "tools.list.builtin": return "内置";
+            case "tools.list.unavailable": return "不可用";
+            case "tools.reason.web_search": return "没有已启用且有密钥的搜索 API。";
+            case "tools.reason.generate_image": return "还没有设置图片模型。";
+            case "mcp.server.builtIn": return "内置";
+            case "mcp.server.builtInManage": return "工具设置";
             case "skills.subtitle": return "Skills 统一存放在 Astra，通过链接映射到各客户端；关闭只会删除链接，内容始终保留在 Astra。";
             case "skills.tab.managed": return "Astra 托管";
             case "skills.tab.found": return "在客户端中发现";
@@ -9123,6 +9273,81 @@ internal static class Messages
             case "nav.mcp": return "MCP gateway";
             case "nav.group.resources": return "Resources";
             case "nav.skills": return "Skills";
+            case "nav.tools": return "Tools";
+            case "tools.subtitle": return "Astra's own tools: web search (so a model that cannot search still can), web fetch, image generation and the tools plugins give. Clients get them through the astra server of the MCP gateway.";
+            case "tools.onBehalf.title": return "Search on behalf of models";
+            case "tools.onBehalf.footer": return "When a request offers a web-search tool (Anthropic web_search, Responses web_search, Chat web_search_options, Gemini google_search) and the upstream cannot serve it, Astra runs the search with the APIs below and lets the model carry on. The query goes through the privacy guard first. The header x-astra-web-search: off keeps one request out. A streaming client gets the whole answer at once, after the search.";
+            case "tools.onBehalf.enable": return "Search for models";
+            case "tools.onBehalf.enableHint": return "Off by default. Needs at least one search API that is on.";
+            case "tools.onBehalf.mode": return "When";
+            case "tools.onBehalf.modeHint": return "Auto searches only when the upstream cannot (the vendors' own Anthropic / OpenAI / Gemini addresses, or a provider marked web_search, search by themselves); Always searches for every request that offers a search tool.";
+            case "tools.onBehalf.mode.auto": return "Auto";
+            case "tools.onBehalf.mode.always": return "Always";
+            case "tools.onBehalf.count": return "Results per search";
+            case "tools.onBehalf.countHint": return "1 to 20.";
+            case "tools.search.title": return "Search APIs";
+            case "tools.search.add": return "Add search API";
+            case "tools.search.fromPlugin": return "plugin";
+            case "tools.search.hint": return "Asked in this order: the first that finds pages is used, a failure or an empty answer goes on to the next. Drag or use the arrows to reorder. Switching an API off keeps its keys.";
+            case "tools.search.empty": return "No search API yet. Add one and give it a key (a self-hosted SearXNG needs none).";
+            case "tools.search.url": return "Address";
+            case "tools.search.urlDefault": return "The vendor's own address";
+            case "tools.search.keyOptional": return "Key optional";
+            case "tools.search.keysCount": return "{count} keys";
+            case "tools.search.getKey": return "Get a key";
+            case "tools.search.moveUp": return "Move up";
+            case "tools.search.moveDown": return "Move down";
+            case "tools.search.test": return "Test";
+            case "tools.search.enabled": return "On";
+            case "tools.search.pluginOff": return "Plugin is off";
+            case "tools.search.pick": return "Several keys";
+            case "tools.search.pickHint": return "Turns uses the next key for each search; In order uses the first until it is refused, then the next. A key refused lately is always asked last.";
+            case "tools.search.pick.turns": return "Turns";
+            case "tools.search.pick.order": return "In order";
+            case "tools.search.key": return "Key";
+            case "tools.search.keyPlaceholder": return "Paste a new key";
+            case "tools.search.addKey": return "Add key";
+            case "tools.search.refreshQuota": return "Refresh usage";
+            case "tools.search.testOk": return "{source} returned {pages} results ({ms} ms)";
+            case "tools.search.testFailed": return "Search failed: {message}";
+            case "tools.search.removeConfirm": return "Remove {name}?";
+            case "tools.search.removeDetail": return "Its keys are removed with it.";
+            case "tools.search.quotaUnknown": return "usage unknown {message}";
+            case "tools.search.quotaUnlimited": return "{used} used, no limit";
+            case "tools.search.quotaOfPlan": return "({plan} plan)";
+            case "tools.search.quotaOfKey": return "(key limit)";
+            case "tools.search.quotaUsed": return "{used} of {limit} used";
+            case "tools.search.rest.turned_away": return "Refused, asked last";
+            case "tools.search.rest.out_of_credit": return "Out of credit, asked last";
+            case "tools.search.rest.rate_limited": return "Rate limited, asked last";
+            case "tools.search.rest.used_up": return "Used up, asked last";
+            case "tools.fetch.title": return "Web fetch (web_fetch)";
+            case "tools.fetch.footer": return "Only public http / https pages are read: loopback, private and link-local addresses (cloud metadata included) are refused, and every redirect hop is checked.";
+            case "tools.fetch.chars": return "Characters per call";
+            case "tools.fetch.charsHint": return "A long page comes in parts; the answer says where the next one starts.";
+            case "tools.fetch.timeout": return "Timeout (seconds)";
+            case "tools.fetch.timeoutHint": return "The longest one read waits.";
+            case "tools.fetch.bytes": return "Read at most (MB)";
+            case "tools.fetch.bytesHint": return "Anything beyond is not read.";
+            case "tools.fetch.private": return "Allow private addresses";
+            case "tools.fetch.privateHint": return "A model could then make Astra read a service only this computer or your network reaches. Turn it on only if you know what that means; the switch can only be changed on this machine.";
+            case "tools.image.title": return "Image generation (generate_image)";
+            case "tools.image.footer": return "Made through Astra's images route and billed to the token that calls it. Without a model the tool is not offered.";
+            case "tools.image.model": return "Image model";
+            case "tools.image.modelHint": return "A model the token can reach that serves /v1/images/generations.";
+            case "tools.image.size": return "Default size";
+            case "tools.image.sizeHint": return "Empty leaves it to the model.";
+            case "tools.list.title": return "Tools";
+            case "tools.list.footer": return "A client gets these only once the Astra Tools server is bound to its token on the Tokens page; \"Apply to clients\" can write it into Claude Code or Codex.";
+            case "tools.list.endpoint": return "MCP address";
+            case "tools.list.endpointHint": return "This one server's address (tool names without a prefix); the aggregate address is on the MCP page.";
+            case "tools.list.plugin": return "plugin";
+            case "tools.list.builtin": return "built-in";
+            case "tools.list.unavailable": return "Unavailable";
+            case "tools.reason.web_search": return "No search API is on and has a key.";
+            case "tools.reason.generate_image": return "No image model is set.";
+            case "mcp.server.builtIn": return "Built-in";
+            case "mcp.server.builtInManage": return "Tool settings";
             case "skills.subtitle": return "Skills live in Astra and are mapped into each client with a link; switching one off only removes the link, and the content always stays in Astra.";
             case "skills.tab.managed": return "Managed by Astra";
             case "skills.tab.found": return "Found in clients";

@@ -1763,3 +1763,30 @@ export interface PluginSuccessor {
   spec: string; v1Name: string; id: string; package: string; version: string; name: string; notes?: string | null; permissions: string[]; sensitive: string[];
 }
 export interface PluginV2Notification { id: number; plugin: string; title: string; body?: string | null; tone: string; at: string }
+
+// ---------- built-in tools (web search, fetch, images; linked update 34) ----------
+
+export interface SearchKey { id: string; masked: string; enabled: boolean; resting?: string | null; restUntil?: string | null }
+export type SearchPick = 'turns' | 'order';
+export interface SearchApi {
+  vendor: string; name: string; enabled: boolean; pick: SearchPick; url?: string | null; keysUrl?: string | null; keyOptional: boolean;
+  needsUrl: boolean; plugin: boolean; available: boolean; canReadQuota: boolean; keys: SearchKey[];
+}
+export interface SearchVendor { vendor: string; name: string; keysUrl?: string | null; keyOptional: boolean; needsUrl: boolean; plugin: boolean }
+export interface SearchKeyQuota {
+  keyId: string; known: boolean; unlimited: boolean; used: number; limit: number; of?: 'key' | 'plan' | null; plan?: string | null;
+  paygoLeft: number; usedUp: boolean; error?: string | null;
+}
+export interface ToolsSettings {
+  search: { onBehalf: boolean; mode: 'auto' | 'always'; resultCount: number; apis: SearchApi[]; available: SearchVendor[] };
+  fetch: { maxBytes: number; timeoutSeconds: number; maxChars: number; allowPrivate: boolean };
+  image: { model: string; size: string };
+  mcpEndpoint: string;
+}
+export interface ToolsSettingsUpdate {
+  search?: { onBehalf?: boolean; mode?: 'auto' | 'always'; resultCount?: number };
+  fetch?: { maxBytes?: number; timeoutSeconds?: number; maxChars?: number; allowPrivate?: boolean };
+  image?: { model?: string; size?: string };
+}
+export interface ToolInfo { name: string; title: string; description?: string | null; source: 'builtin' | 'plugin'; available: boolean; reason?: string | null }
+export interface SearchTestResult { ok: boolean; source?: string | null; pages: number; elapsedMs: number; error?: string | null; firstTitle?: string | null }
