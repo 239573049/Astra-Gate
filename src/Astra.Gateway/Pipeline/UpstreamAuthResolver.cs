@@ -1,5 +1,6 @@
 using Astra.Core.Clients;
 using Astra.Core.Models;
+using Astra.Core.Routing;
 using Astra.Data;
 using Astra.Providers.Cloud;
 using Astra.Providers.Subscription;
@@ -144,7 +145,19 @@ public static class SwitchModes
     /// </summary>
     public const string Balanced = "balanced";
 
-    public static readonly IReadOnlyList<string> All = [Manual, Failover, Balanced];
+    /// <summary>Quota-aware (<see cref="QuotaModes.Smart"/>): the allowance renewing soonest goes first, a conversation stays while its prompt cache is worth keeping.</summary>
+    public const string Smart = QuotaModes.Smart;
+
+    /// <summary>Quota-aware (<see cref="QuotaModes.Pace"/>): the most of its week left per hour until it renews goes first.</summary>
+    public const string Pace = QuotaModes.Pace;
+
+    /// <summary>Quota-aware (<see cref="QuotaModes.Usage"/>): the least used account goes first.</summary>
+    public const string Usage = QuotaModes.Usage;
+
+    public static readonly IReadOnlyList<string> All = [Manual, Failover, Balanced, Smart, Pace, Usage];
+
+    /// <summary>Modes that pick every account through <see cref="AccountScheduler"/> instead of using the provider's current account.</summary>
+    public static bool UsesScheduler(string mode) => mode is Balanced or Smart or Pace or Usage;
 }
 
 /// <summary>AWS credentials with the provider's own signing scope, when its address does not say it.</summary>

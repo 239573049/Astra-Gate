@@ -1,4 +1,5 @@
 using Astra.Core.Models;
+using Astra.Core.Routing;
 
 namespace Astra.Gateway.Pipeline;
 
@@ -37,14 +38,20 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
     {
         public string AccountId { get; set; } = accountId;
         public DateTimeOffset LastUsed { get; set; } = lastUsed;
+
+        /// <summary>What the conversation's last answer read from and wrote to the provider's prompt cache; null until one reported.</summary>
+        public long? CachedTokens { get; set; }
     }
 
     /// <summary>One request's hold on an account; disposing releases its in-flight slot (idempotent).</summary>
-    public sealed class Lease(AccountScheduler owner, string accountId) : IDisposable
+    public sealed class Lease(AccountScheduler owner, string accountId, string? reason = null) : IDisposable
     {
         private int _released;
 
         public string AccountId { get; } = accountId;
+
+        /// <summary>Why this account stood first (<see cref="RankReasons"/>; <c>astra.account.pick</c> on the attempt span); null for the plain least-busy pick.</summary>
+        public string? Reason { get; } = reason;
 
         public void Dispose()
         {
@@ -57,9 +64,15 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
     /// (already tried by this request) are skipped. Null when no account is usable — the caller then falls back to
     /// <see cref="SubscriptionSupport.SelectAccount"/>, which still hands out an expired account for a clear error.
     /// </summary>
+    /// <param name="mode">
+    /// A quota-aware switch mode (<see cref="QuotaModes"/>: smart, pace, usage) orders the new conversation's candidates by what the
+    /// accounts have left (<see cref="QuotaRanking"/>; missing quota degrades to the failover order) and lets a bound conversation
+    /// move once the provider's prompt cache is no longer worth keeping (<see cref="ConversationStays"/>). Any other value is
+    /// balanced scheduling (least in flight).
+    /// </param>
     public Lease? Pick(
         string providerId, IReadOnlyList<ProviderAccount> accounts, string? stickyKey,
-        IReadOnlyCollection<string>? exclude = null)
+        IReadOnlyCollection<string>? exclude = null, string? mode = null)
     {
         var now = _clock.GetUtcNow();
         var candidates = accounts
@@ -82,7 +95,25 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
                 }
             }
 
-            var chosen = (binding is null ? null : candidates.FirstOrDefault(a => a.Id == binding.AccountId))
+            var quotaMode = QuotaModes.IsQuotaAware(mode);
+            var bound = binding is null ? null : candidates.FirstOrDefault(a => a.Id == binding.AccountId);
+            if (bound is not null && quotaMode)
+            {
+                // Quota-aware modes keep a conversation on its account only while its cache is worth it and the account has room.
+                var standing = QuotaStanding.Of(bound, now);
+                var entry = new StayEntry(binding!.LastUsed, binding.CachedTokens, null);
+                if (!ConversationStays.Holds(Stays.Auto, entry, now, null, spent: standing.Known && standing.Band == 2)) bound = null;
+            }
+            string? reason = bound is null ? null : RankReasons.Affinity;
+            ProviderAccount chosen;
+            if (bound is null && quotaMode)
+            {
+                var ranked = QuotaRanking.Rank(mode!, candidates.Select((a, i) =>
+                    new RankInput(a.Id, QuotaStanding.Of(a, now), RecentCount(a.Id, now) / (double)a.KeyWeight, i)).ToList(), now);
+                chosen = candidates.First(a => a.Id == ranked[0].Key);
+                reason = ranked[0].Reason;
+            }
+            else chosen = bound
                          ?? candidates
                              // Load per weight: API keys carry a weight (ProviderAccount.KeyWeight, 1 for every other account),
                              // so a weight-3 key takes about three times the traffic of a weight-1 one (weighting per magpie, MIT).
@@ -110,7 +141,21 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
             // Pruned here too: the pick only counts (and prunes) on a tie, so a sticky or single-account provider would
             // otherwise keep every assignment for the life of the process.
             RecentCount(chosen.Id, now);
-            return new Lease(this, chosen.Id);
+            return new Lease(this, chosen.Id, reason);
+        }
+    }
+
+    /// <summary>
+    /// Records what a finished request read from and wrote to the provider's prompt cache, so a quota-aware pick can tell whether the
+    /// conversation's cache is still worth keeping. A conversation without a binding is ignored.
+    /// </summary>
+    public void NoteCache(string providerId, string stickyKey, long cachedTokens)
+    {
+        lock (_gate)
+        {
+            if (!_bindings.TryGetValue(providerId + "\n" + stickyKey, out var binding)) return;
+            binding.CachedTokens = cachedTokens;
+            binding.LastUsed = _clock.GetUtcNow();
         }
     }
 

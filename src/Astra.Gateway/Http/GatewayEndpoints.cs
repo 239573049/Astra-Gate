@@ -74,7 +74,7 @@ public static class GatewayEndpoints
 
 /// <summary>Model listing and token counting (no usage record, no billing).</summary>
 public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs, GatewayHttpClients http,
-    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing, SmartRouter smartRouter, SettingsService settings)
+    UpstreamAuthResolver auth, PrivacyGuardService privacy, ClientRouting routing, SmartRouter smartRouter, SettingsService settings, GroupRouter groups)
 {
     /// <summary>
     /// The model ids every provider the caller can reach serves (the client's bound providers in binding order, their
@@ -157,6 +157,10 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             // Smart routing's virtual model (plan §5.8), while it is on: clients pick it like any other model.
             if (smartRouter.AdvertisedModel is { } virtualModel && list.All(m => m.Id != virtualModel))
                 list.Add((virtualModel, "Astra Auto", new Provider { Id = "astra", Name = "astra", CreatedAt = route.Provider.CreatedAt }));
+            // Routing groups the caller can reach (`group/<slug>`): offered by name, never by their members.
+            foreach (var group in await groups.AdvertisedAsync(targets, route.Token.AllowedClients() is null, ctx.RequestAborted))
+                if (list.All(m => m.Id != group.ModelId))
+                    list.Add((group.ModelId, group.Name, new Provider { Id = "astra", Name = "astra", CreatedAt = group.CreatedAt }));
         }
         return list;
     }
@@ -229,8 +233,10 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
                     route = GatewayRouter.WithTarget(route, target);
             }
             else route = await QualifiedModelRouting.ApplyAsync(router, route, requestedModel, settings.Current, isClaudeCode, ct);
+            // A routing group counts as its first choice (a read-only plan: nothing rotates, no probe is claimed).
+            if (await groups.PreviewAsync(route, requestedModel, isClaudeCode, ct) is { } groupRoute) route = groupRoute;
             // Same provider choice as the generation request for this model (ClientRouting); nothing has left the machine yet.
-            route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
+            else route = await router.ForModelAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, ct);
             SubscriptionSupport.EnforceClientPolicy(route.Provider, isClaudeCode);
             var model = route.UpstreamModelFor(requestedModel);
             var endpoint = route.Provider.EndpointFor(protocol);

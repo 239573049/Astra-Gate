@@ -19,6 +19,7 @@ public sealed class AstraDatabase
         Accounts = new ProviderAccountStore(factory);
         Clients = new ClientRepository(factory);
         Tokens = new TokenRepository(factory);
+        RoutingGroups = new RoutingGroupRepository(factory);
         TokenInvites = new TokenInviteRepository(factory);
         Mcp = new McpRepository(factory);
         McpLocal = new McpLocalRepository(factory);
@@ -41,6 +42,7 @@ public sealed class AstraDatabase
     public ProviderAccountStore Accounts { get; }
     public ClientRepository Clients { get; }
     public TokenRepository Tokens { get; }
+    public RoutingGroupRepository RoutingGroups { get; }
     public TokenInviteRepository TokenInvites { get; }
     public McpRepository Mcp { get; }
     public McpLocalRepository McpLocal { get; }

@@ -68,6 +68,68 @@ public class BalancedGatewayTests
 
     private const string Balanced = """{"switch_mode":"balanced"}""";
 
+    /// <summary>Stores a quota snapshot on an account: weekly window used / renewing in, as the quota sync writes it.</summary>
+    private static async Task SetQuotaAsync(GatewayFixture gw, string accountId, double weeklyUsed, double hoursToReset)
+    {
+        var account = (await gw.Host.Db.Accounts.GetAsync(accountId))!;
+        account.Extra["quota"] = new JsonObject
+        {
+            ["fetchedAtUtc"] = DateTimeOffset.UtcNow.AddMinutes(-1).ToString("O"),
+            ["weekly"] = new JsonObject { ["usedPercent"] = weeklyUsed, ["resetsAtUtc"] = DateTimeOffset.UtcNow.AddHours(hoursToReset).ToString("O") },
+        };
+        await gw.Host.Db.Accounts.UpdateAsync(account);
+    }
+
+    [Fact]
+    public async Task Smart_Mode_Sends_A_New_Conversation_To_The_Account_Renewing_Soonest_And_Keeps_It_There_While_The_Cache_Is_Warm()
+    {
+        await using var gw = await StartClaudeAsync("""{"switch_mode":"smart"}""");
+        await SetQuotaAsync(gw, "acc-a", 20, 100);
+        await SetQuotaAsync(gw, "acc-b", 40, 6);
+
+        var first = await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s1"));
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        // acc-a becomes the better choice, but the conversation's prompt cache is warm: it stays on acc-b.
+        await SetQuotaAsync(gw, "acc-a", 5, 1);
+        await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s1"));
+        // A new conversation takes the account renewing soonest now.
+        await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s2"));
+        Assert.Equal(["at-B", "at-B", "at-A"], Tokens(gw));
+
+        var record = await gw.RecordOfAsync(first);
+        var attempts = (await gw.Host.Db.Traces.ListSpansAsync(record.Id)).Where(sp => sp.Name == Astra.Core.Requests.TraceSpanNames.Attempt).ToList();
+        Assert.Equal("soonest_reset", JsonNode.Parse(attempts[0].AttributesJson!)!["astra.account.pick"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Usage_And_Pace_Modes_Pick_By_What_The_Accounts_Have_Left_And_Missing_Quota_Keeps_The_Failover_Order()
+    {
+        await using var gw = await StartClaudeAsync("""{"switch_mode":"usage"}""");
+        await SetQuotaAsync(gw, "acc-a", 70, 10);
+        await SetQuotaAsync(gw, "acc-b", 10, 100);
+        await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s1"));
+        Assert.Equal(["at-B"], Tokens(gw));
+
+        // Pace: acc-a has 90% left with 30 h to go (3 per hour); acc-b 40% left with 100 h (0.4).
+        await SetQuotaAsync(gw, "acc-a", 10, 30);
+        await SetQuotaAsync(gw, "acc-b", 60, 100);
+        var provider = (await gw.Host.Db.Providers.GetAsync(gw.Provider.Id))!;
+        ((JsonObject)provider.Settings["subscription"]!)["switch_mode"] = "pace";
+        await gw.Host.Db.Providers.UpdateAsync(provider);
+        await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s2"));
+        Assert.Equal("at-A", Tokens(gw)[1]);
+
+        // No quota data at all: the failover order (acc-a first), never an error.
+        foreach (var id in new[] { "acc-a", "acc-b" })
+        {
+            var account = (await gw.Host.Db.Accounts.GetAsync(id))!;
+            account.Extra.Remove("quota");
+            await gw.Host.Db.Accounts.UpdateAsync(account);
+        }
+        Assert.Equal(HttpStatusCode.OK, (await gw.PostAsync("/v1/messages", ClaudeCodeBody(), null, WithSession("s3"))).StatusCode);
+        Assert.Equal("at-A", Tokens(gw)[2]);
+    }
+
     [Fact]
     public async Task Claude_Code_Sessions_Are_Spread_And_Each_Session_Sticks_To_Its_Account()
     {

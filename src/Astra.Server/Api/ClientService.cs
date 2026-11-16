@@ -20,7 +20,8 @@ namespace Astra.Server.Api;
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
 public sealed class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
-    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents, SmartRouter smartRouter, SettingsService settings)
+    ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents, SmartRouter smartRouter, SettingsService settings,
+    Astra.Gateway.Routing.GroupRouter groups)
 {
     /// <summary>The key in a plugin client's extras holding its plugin's descriptor, for restoring it offline.</summary>
     public const string PluginExtrasKey = "plugin";
@@ -382,6 +383,8 @@ public sealed class ClientService(
         var targets = await routing.TargetsAsync(await BindingsOrDefaultAsync(kind, await IsEnabledAsync(kind, ct), DefaultProvider(ct), ct), ct);
         var models = (await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct)).Select(m => m.Id).ToList();
         if (smartRouter.AdvertisedModel is { } virtualModel && !models.Contains(virtualModel)) models.Add(virtualModel);
+        foreach (var group in await groups.AdvertisedAsync(targets, anyProvider: false, ct))
+            if (!models.Contains(group.ModelId)) models.Add(group.ModelId);
         return models;
     }
 
@@ -458,6 +461,10 @@ public sealed class ClientService(
             // Smart routing's virtual model (plan §5.8), while it is on: the client offers it like any other model.
             if (smartRouter.AdvertisedModel is { } virtualModel && !list.ContainsKey(virtualModel))
                 list[virtualModel] = new JsonObject { ["id"] = virtualModel, ["name"] = "Astra Auto" };
+            // Routing groups the client's own providers reach (`group/<slug>`): offered like any other model, by name.
+            foreach (var group in await groups.AdvertisedAsync(targets, anyProvider: false, ct))
+                if (!list.ContainsKey(group.ModelId))
+                    list[group.ModelId] = new JsonObject { ["id"] = group.ModelId, ["name"] = group.Name };
             extras["models"] = list;
         }
         // A protocol the user changed in the client's own UI since Astra last wrote it is their choice: it joins the

@@ -76,7 +76,8 @@ public sealed class PoolRouting(ClientRouting routing, UpstreamAuthResolver auth
         return new PoolPlan(available, Math.Min(available.Count, TokenPool.MaxAttemptsLimit), false, probes);
     }
 
-    private async Task<List<RouteTarget>> AdmitAsync(List<RouteTarget> serving, bool commit, List<ProviderHealth.Probe> probes, CancellationToken ct)
+    /// <summary>The targets that can take a request now (also what routing groups ask of their members, <see cref="Routing.GroupRouter"/>).</summary>
+    public async Task<List<RouteTarget>> AdmitAsync(List<RouteTarget> serving, bool commit, List<ProviderHealth.Probe> probes, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
         var available = new List<RouteTarget>();

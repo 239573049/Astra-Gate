@@ -34,10 +34,12 @@ public sealed record JudgeVerdict(
 /// <paramref name="Grade"/> instead.</param>
 /// <param name="JudgeMs">How long this request's own judge call took; null when it made none.</param>
 /// <param name="AdjustedReason">Why the caller could not use <paramref name="AdjustedFrom"/> (a <see cref="GradeProblems"/> code).</param>
+/// <param name="Reason">A routing group's decision (<c>Source</c> = <c>group</c>; <c>Grade</c> is then <c>group/&lt;slug&gt;</c>, <c>Mode</c> the
+/// group's mode): why the member that served the request stood first (a <see cref="RankReasons"/> code).</param>
 public sealed record RoutingReport(
     string Grade, string Model, string Source, string Mode,
     double? Confidence = null, string? FallbackReason = null, string? AdjustedFrom = null, long? JudgeMs = null,
-    string? AdjustedReason = null);
+    string? AdjustedReason = null, string? Reason = null);
 
 /// <summary>Why a caller cannot use a smart-routing grade (plan §7 risk 7): the codes the console and the request log explain.</summary>
 public static class GradeProblems

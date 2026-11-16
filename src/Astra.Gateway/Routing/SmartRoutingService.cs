@@ -58,7 +58,7 @@ public sealed class SmartRoutingService(AstraDatabase db, ClientRouting routing)
             Normalize(next);
             var options = await RoutingOptionsAsync(ct);
             FillProviders(next, options);
-            var problems = CheckAgainst(next, options);
+            var problems = CheckAgainst(next, options, (await db.RoutingGroups.ListAsync(ct)).Where(g => g.Enabled).Select(g => g.Slug).ToHashSet(StringComparer.Ordinal));
             if (problems.Count > 0) throw new RoutingSettingsException(problems);
             await db.Settings.SetAsync(SmartRoutingSettings.StorageKey, next, ct);
             _snapshot = new SmartRoutingSnapshot(next, _snapshot.Generation + 1);
@@ -106,7 +106,7 @@ public sealed class SmartRoutingService(AstraDatabase db, ClientRouting routing)
     }
 
     /// <summary>The shape rules always; completeness and each grade's provider and model when the result is switched on.</summary>
-    private static List<RoutingProblem> CheckAgainst(SmartRoutingSettings next, IReadOnlyList<RoutableModel> options)
+    private static List<RoutingProblem> CheckAgainst(SmartRoutingSettings next, IReadOnlyList<RoutableModel> options, IReadOnlySet<string> groupSlugs)
     {
         var problems = SmartRoutingValidator.Check(next);
         // Clients ask for the virtual model by name: it must not also be a model a provider serves.
@@ -119,7 +119,9 @@ public sealed class SmartRoutingService(AstraDatabase db, ClientRouting routing)
         for (var i = 0; i < next.Grades.Count; i++)
         {
             var grade = next.Grades[i];
+            // A grade may name a routing group (`group/<slug>`, no provider): the group's own members decide where it goes.
             if (grade.Model.Length == 0 || options.Any(o => o.Id == grade.Model && o.Target.Provider.Id == grade.ProviderId)) continue;
+            if (grade.ProviderId is null && RoutingGroup.SlugOf(grade.Model) is { } slug && groupSlugs.Contains(slug)) continue;
             problems.Add(new(SmartRoutingValidator.Codes.GradeModelUnroutable,
                 grade.ProviderId is null
                     ? $"no enabled provider serves '{grade.Model}' (grade '{grade.Id}')"

@@ -110,7 +110,7 @@ public static class KeyInfoEndpoints
     /// when <c>RequireGatewayKey</c> is off.
     /// </summary>
     private static async Task<IResult> ConnectContextAsync(HttpContext ctx, AstraDatabase db, GatewayRouter router,
-        ClientRouting routing, SmartRouter smartRouter, SettingsService settings, CancellationToken ct)
+        ClientRouting routing, SmartRouter smartRouter, SettingsService settings, GroupRouter groups, CancellationToken ct)
     {
         if (await AuthenticateAsync(ctx, db, ct) is not { } token) return Unauthorized();
         GatewayRoute route;
@@ -138,6 +138,10 @@ public static class KeyInfoEndpoints
         }
         if (smartRouter.AdvertisedModel is { } virtualModel && models.All(m => m["id"]!.GetValue<string>() != virtualModel))
             models.Add(new JsonObject { ["id"] = virtualModel, ["name"] = "Astra Auto" });
+        // Routing groups the key can reach: the group's id and name only — never its members (token self-service rules).
+        foreach (var group in await groups.AdvertisedAsync(targets, route.Token.AllowedClients() is null, ct))
+            if (models.All(m => m["id"]!.GetValue<string>() != group.ModelId))
+                models.Add(new JsonObject { ["id"] = group.ModelId, ["name"] = group.Name });
         return Json(new JsonObject { ["name"] = token.Name, ["models"] = new JsonArray(models.ToArray()) });
     }
 

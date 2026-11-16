@@ -18,7 +18,7 @@ public class MigrationTests
 
         await using var conn = await factory.OpenAsync();
         var versions = (await conn.QueryAsync<long>("SELECT version FROM schema_version")).AsList();
-        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L, 21L, 22L, 23L, 24L, 25L, 26L], versions.Order());
+        Assert.Equal([1L, 5L, 6L, 7L, 8L, 9L, 10L, 11L, 12L, 13L, 14L, 15L, 16L, 17L, 18L, 19L, 20L, 21L, 22L, 23L, 24L, 25L, 26L, 32L], versions.Order());
 
         var appliedAt = await conn.ExecuteScalarAsync<string>("SELECT applied_at FROM schema_version ORDER BY version LIMIT 1");
         Assert.NotNull(appliedAt);
@@ -125,7 +125,7 @@ public class MigrationTests
         Assert.True(new FileInfo(backup).Length > 0);
 
         await using var check = await factory.OpenAsync();
-        Assert.Equal(23, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
+        Assert.Equal(24, await check.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM schema_version"));
         Assert.Equal("true",
             await check.ExecuteScalarAsync<string>("SELECT value_json FROM settings WHERE key = 'marker'"));
         // 0005 was re-applied after the rollback: the reasoning columns are back.
@@ -166,7 +166,7 @@ public class MigrationTests
         var backup = Assert.Single(Directory.GetFiles(paths.DbBackupsDir));
         Assert.Contains("-v4", Path.GetFileName(backup));
         await using var check = await factory.OpenAsync();
-        Assert.Equal(26, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
+        Assert.Equal(32, await check.ExecuteScalarAsync<long>("SELECT MAX(version) FROM schema_version"));
         var record = await check.QuerySingleAsync<Astra.Core.Requests.RequestRecord>("""
             SELECT requested_model, reasoning_effort, reasoning_mode, reasoning_budget_tokens
             FROM requests WHERE id = 'r-v4'
@@ -179,9 +179,11 @@ public class MigrationTests
 
     /// <summary>
     /// Rolls a fully migrated database back to its v13 shape (what 0014_alerts, 0015_webhook_format,
-    /// 0016_request_origin, 0017_tracing, 0018_token_pool, 0019_provider_account_usage, 0020_request_routing, 0021_token_invites, 0022_mcp_gateway, 0023_library_skills, 0024_plugins_v2, 0025_mcp_local and 0026_request_context add is removed).
+    /// 0016_request_origin, 0017_tracing, 0018_token_pool, 0019_provider_account_usage, 0020_request_routing, 0021_token_invites, 0022_mcp_gateway, 0023_library_skills, 0024_plugins_v2, 0025_mcp_local, 0026_request_context and 0032_routing_groups add is removed).
     /// </summary>
     private const string UndoAlertsMigration = """
+        DROP TABLE routing_groups;
+        DELETE FROM schema_version WHERE version = 32;
         ALTER TABLE requests DROP COLUMN context_json;
         DELETE FROM schema_version WHERE version = 26;
         DROP TABLE mcp_local_servers;
