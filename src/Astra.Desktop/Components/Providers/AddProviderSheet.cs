@@ -348,6 +348,21 @@ internal sealed class AddProviderSheet : UserControl
         {
             stack.Children.Add(new Alert { Tone = AlertTone.Info, Title = Loc.T("providers.subscriptionWizardHint"), Content = Loc.T("providers.subscriptionWizardDetail") });
         }
+        else if (_w.AuthScheme == CloudCredentials.AwsSigV4)
+        {
+            stack.Children.Add(CloudCredentialFields.Aws(doc => { _w.ApiKey = doc; _w.NotifyChanged(); }, _w.ApiKey));
+            stack.Children.Add(CloudCredentialFields.RegionHint(_w.Endpoints.Select(e => e.BaseUrl)));
+        }
+        else if (_w.AuthScheme == CloudCredentials.GcpServiceAccount)
+        {
+            stack.Children.Add(CloudCredentialFields.ServiceAccount(doc => { _w.ApiKey = doc; _w.NotifyChanged(); }, f => _w.KeyProject = f?.ProjectId ?? "", _w.ApiKey));
+            stack.Children.Add(CloudCredentialFields.VertexTarget(_w.VertexProject, _w.VertexLocation, _w.KeyProject, (project, location) =>
+            {
+                _w.VertexProject = project;
+                _w.VertexLocation = location;
+                _w.NotifyChanged();
+            }));
+        }
         else
         {
             var key = new PasswordField { Label = Loc.T("providers.apiKey"), Description = Loc.T("providers.apiKeyHint"), Placeholder = "sk-…", Text = _w.ApiKey };

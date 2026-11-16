@@ -1,6 +1,7 @@
 using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Data;
+using Astra.Providers.Cloud;
 using Astra.Providers.Subscription;
 
 namespace Astra.Gateway.Pipeline;
@@ -146,8 +147,11 @@ public static class SwitchModes
     public static readonly IReadOnlyList<string> All = [Manual, Failover, Balanced];
 }
 
+/// <summary>AWS credentials with the provider's own signing scope, when its address does not say it.</summary>
+public sealed record AwsAuth(AwsCredentials Credentials, string? Region = null, string? Service = null);
+
 /// <summary>Resolved upstream credentials for one provider instance.</summary>
-/// <param name="AuthScheme">bearer | x-api-key | x-goog-api-key | query-key | none.</param>
+/// <param name="AuthScheme">bearer | x-api-key | x-goog-api-key | query-key | api-key | aws-sigv4 | gcp-service-account | none.</param>
 public sealed record UpstreamAuth(
     string AuthScheme,
     string? HeaderName,
@@ -172,9 +176,25 @@ public sealed record UpstreamAuth(
     /// <summary>A plugin provider's account as plugin-auth.json keys it (id, or id#slot); null for every other provider.</summary>
     public string? PluginKey { get; init; }
 
+    /// <summary>
+    /// IAM credentials to sign the request with (<see cref="AuthSchemes.AwsSigV4"/>), and the provider's own scope for an
+    /// address whose host does not name the region. <see cref="Apply"/> attaches them; the signature itself needs the final
+    /// body, so the sender calls <see cref="AwsSigV4.SignIfRequested"/> once the content is set.
+    /// </summary>
+    public AwsAuth? Aws { get; init; }
+
     /// <summary>Applies the credentials (and any fixed client header) to an outgoing upstream request.</summary>
     public void Apply(HttpRequestMessage request)
     {
+        if (Aws is { } aws)
+        {
+            var host = request.RequestUri?.Host ?? "";
+            var region = aws.Region ?? AwsSigV4.RegionOf(host);
+            var service = aws.Service ?? AwsSigV4.ServiceOf(host);
+            if (region is null || service is null)
+                throw new GatewayException(400, "invalid_request_error", $"无法从地址 {host} 判断 AWS 区域或服务。请在提供商设置里填写 settings.aws.region 和 settings.aws.service。");
+            request.Options.Set(AwsSigning.Option, new AwsSigning(aws.Credentials, region, service));
+        }
         if (ExtraHeaderName is not null && ExtraHeaderValue is not null)
         {
             request.Headers.Remove(ExtraHeaderName);
@@ -192,7 +212,8 @@ public sealed record UpstreamAuth(
 /// Builds upstream credentials for a provider: static API keys are decrypted per scheme;
 /// subscription providers go through <see cref="SubscriptionTokenService"/> with refresh-on-401 support.
 /// </summary>
-public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector protector, SubscriptionTokenService tokens) : IUpstreamAuthResolver
+public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector protector, SubscriptionTokenService tokens,
+    GoogleAccessTokens? google = null, GatewayHttpClients? http = null) : IUpstreamAuthResolver
 {
     /// <exception cref="SubscriptionAuthException">The subscription account is missing or unusable.</exception>
     public async Task<UpstreamAuth?> ResolveAsync(string providerId, string? accountId, CancellationToken ct = default)
@@ -208,7 +229,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         }
 
         if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
-            return BuildStatic(provider, protector);
+            return await BuildStaticAsync(provider, ct);
 
         var (_, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
         var token = await tokens.GetValidAccessTokenAsync(account, config, ct);
@@ -225,7 +246,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
     {
         var (provider, account, config) = await SubscriptionSupport.RequireAccountAsync(db, providerId, accountId, ct);
         if (provider.AuthScheme != AuthSchemes.OAuthSubscription)
-            return BuildStatic(provider, protector) ?? UpstreamAuth.None;
+            return await BuildStaticAsync(provider, ct) ?? UpstreamAuth.None;
         var refreshed = await tokens.RefreshAfterUnauthorizedAsync(account, config, ct);
         if (refreshed.AccessTokenEnc is null)
             throw new SubscriptionAuthException(account.Id, "刷新后仍没有访问令牌，请重新登录");
@@ -258,8 +279,38 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
     public static string? PluginKeyOf(ProviderAccount account) =>
         account.Extra["plugin_key"] is System.Text.Json.Nodes.JsonValue v && v.TryGetValue<string>(out var key) ? key : null;
 
-    private static UpstreamAuth? BuildStatic(Provider provider, ISecretProtector protector) =>
-        provider.ApiKeyEnc is null ? UpstreamAuth.None : Build(provider.AuthScheme, protector.Unprotect(provider.ApiKeyEnc));
+    /// <summary>
+    /// A stored secret becomes credentials by its scheme. The two cloud schemes keep a JSON document in the one encrypted
+    /// secret: IAM keys are signed per request (<see cref="UpstreamAuth.Aws"/>), a service account key is traded for an
+    /// access token (cached by <see cref="GoogleAccessTokens"/>) that goes as a Bearer.
+    /// </summary>
+    private async Task<UpstreamAuth?> BuildStaticAsync(Provider provider, CancellationToken ct)
+    {
+        if (provider.ApiKeyEnc is null) return UpstreamAuth.None;
+        var secret = protector.Unprotect(provider.ApiKeyEnc);
+        switch (provider.AuthScheme)
+        {
+            case AuthSchemes.AwsSigV4:
+            {
+                var credentials = AwsCredentials.TryParse(secret, out var awsError)
+                    ?? throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的 AWS 凭据无效：{awsError}");
+                var (region, service) = CloudProviders.AwsScopeOverride(provider);
+                return UpstreamAuth.None with { Aws = new AwsAuth(credentials, region, service) };
+            }
+            case AuthSchemes.GcpServiceAccount:
+            {
+                var account = GoogleServiceAccount.TryParse(secret, out var googleError)
+                    ?? throw new GatewayException(401, "authentication_error", $"提供商 {provider.Name} 的 Google 服务账号密钥无效：{googleError}");
+                var client = http?.For(provider) ?? throw new InvalidOperationException("Google service accounts need the gateway's HTTP clients");
+                string token;
+                try { token = await (google ?? throw new InvalidOperationException("Google service accounts need GoogleAccessTokens")).GetAsync(account, client, ct); }
+                catch (HttpRequestException e) { throw new GatewayException(502, "api_error", $"提供商 {provider.Name} 无法取得 Google 访问令牌：{e.Message}"); }
+                return Build(AuthSchemes.Bearer, token);
+            }
+            default:
+                return Build(provider.AuthScheme, secret);
+        }
+    }
 
     /// <summary>
     /// What <paramref name="secret"/> becomes on a request to <paramref name="provider"/>, by the rules a stored key or
@@ -285,6 +336,7 @@ public sealed class UpstreamAuthResolver(AstraDatabase db, ISecretProtector prot
         AuthSchemes.Bearer => new UpstreamAuth(scheme, "Authorization", $"Bearer {secret}", null, null, extra.Name, extra.Value),
         AuthSchemes.XApiKey => new UpstreamAuth(scheme, "x-api-key", secret, null, null, extra.Name, extra.Value),
         AuthSchemes.XGoogApiKey => new UpstreamAuth(scheme, "x-goog-api-key", secret, null, null, extra.Name, extra.Value),
+        AuthSchemes.ApiKeyHeader => new UpstreamAuth(scheme, "api-key", secret, null, null, extra.Name, extra.Value),
         AuthSchemes.QueryKey => new UpstreamAuth(scheme, null, null, "key", secret, extra.Name, extra.Value),
         _ => UpstreamAuth.None,
     };

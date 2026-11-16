@@ -756,6 +756,30 @@ runtime needed on the target).
     `Astra.Desktop.Core/Requests/ContextPresentation.cs` + `RequestTable` / `ContextSectionView`, zh/en `context.*`, `settings.currency.*`,
     `requests.col.context`, `tokens.limitUsdEquivalent` (+ `gen-desktop-i18n`), and the website's `settings.mdx` / `requests` docs.
 
+32. **Cloud providers: Amazon Bedrock, Google Vertex AI, Azure** (magpie parity, `.agents/memory/cloud-provider-auth.md`): three auth schemes
+    beyond a key in a header — `AuthSchemes.ApiKeyHeader` (`api-key`, Azure), `AwsSigV4` (`aws-sigv4`) and `GcpServiceAccount`
+    (`gcp-service-account`). The last two keep a **JSON document in the one encrypted secret** (`ProviderEndpoints` →
+    `CloudSecrets.Normalize` checks and compacts it on write, `Mask` shows only the access key id head/tail or the service account's address;
+    the DTO's `apiKey` stays the one write-only string). SigV4 is hand-written (`Astra.Providers/Cloud/AwsSigV4.cs`, known-answer tests from
+    AWS's suite; region and service come from the endpoint host or `settings.aws.region` / `service`, signed headers `host;x-amz-date[;x-amz-security-token]`):
+    `UpstreamAuth.Aws` rides on the request as an option and `GatewayPipeline.SendAsync`'s `Build` signs once the body is final. Vertex trades
+    the key file for an access token (`GoogleAccessTokens`, RS256 JWT, cached, renewed 5 min early; `token_uri` must be at googleapis.com) that
+    the resolver hands out as a plain Bearer. `Astra.Gateway/Pipeline/CloudProviders.cs` holds the rest: which protocol serves a model
+    (`ProtocolsFor`, used by `ProviderProbe.ResolveAsync`, `RelayRuntime` and `PlanModelsAsync`; Bedrock = Claude on `/anthropic`, closed GPT on
+    Responses, the rest on chat completions; Vertex = `claude-*` on rawPredict, `publisher/model` on the project's OpenAI-compatible chat, the rest on
+    generateContent), the Vertex address (`settings.vertex.{project,location}` in the path, host by location) and Anthropic's Vertex body
+    (model out, `anthropic_version: vertex-2023-10-16` in). Bedrock goes through its OpenAI- and Anthropic-compatible runtime/Mantle endpoints — **no
+    Converse codec** (not built; plan a fifth protocol only if a model needs it). Count-tokens for these two is estimated locally. Endpoints are
+    pinned (`CloudSecrets.ValidateSettings`): a service account's token goes only to `*.googleapis.com`, an IAM signature only to `*.amazonaws.com` /
+    `*.api.aws`. The relay refuses `aws-sigv4` / `gcp-service-account` templates at startup (`RelayTarget.Create`; a Bedrock API key template works).
+    Switching between the Bedrock templates drops the stored key (it cannot carry over). Mirrors: `web/src/components/CloudCredentials.tsx` (wizard +
+    the API-key tab), `Astra.Desktop.Core/Providers/CloudCredentials.cs` + `Astra.Desktop/Components/Providers/CloudCredentialFields.cs` (wizard +
+    `ApiKeyTab`), `AUTH_OPTIONS` / `ProviderProtocols.AuthOptions`, `AuthScheme` in `web/src/api/types.ts`, zh/en `providers.cloud.*`. The template catalog
+    grew by 35 templates (plans and regions are `variants`, which may only use protocols their template's base has — `ProviderTemplateCatalogTests`);
+    a template icon id needs a lobehub mark in `web/src/components/icons.tsx` **and** `BrandCatalog.ProviderAvatar` (+ `gen-desktop-brand-icons.mjs`'s `names`), or
+    an entry in `icons.test.tsx`'s `MONOGRAM_ICONS`; the website's `sync-catalog.mjs` copies the catalog. Tests: `AwsSigV4Tests`, `GoogleAccessTokensTests`,
+    `CloudProvidersTests`, `CloudProviderGatewayTests`, `CloudProviderApiTests`, `CloudCredentialsTests`, web `cloud-credentials.test`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

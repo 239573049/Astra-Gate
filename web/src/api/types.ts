@@ -160,8 +160,11 @@ export interface ProviderTemplate {
   defaultHeaders?: Record<string, string> | null;
   /** Templates of the same service whose API keys this one's endpoints refuse (a plan key vs a pay-as-you-go key). */
   keyAlternatives?: string[] | null;
+  /** The template's own settings (Vertex AI: settings.vertex = { project, location }). */
+  settings?: Record<string, unknown> | null;
 }
-export type AuthScheme = "bearer" | "x-api-key" | "x-goog-api-key" | "query-key" | "none" | "oauth-subscription" | "plugin";
+/** api-key: Azure's header; aws-sigv4: the secret is an IAM access key (JSON), requests are signed; gcp-service-account: the secret is a Google service account key file (JSON). */
+export type AuthScheme = "bearer" | "x-api-key" | "x-goog-api-key" | "query-key" | "api-key" | "aws-sigv4" | "gcp-service-account" | "none" | "oauth-subscription" | "plugin";
 // GET /api/provider-templates -> ProviderTemplate[]
 
 export interface Provider {
@@ -269,6 +272,8 @@ export interface ProviderCreate {
   /** The wizard's "more options"; each replaces the template's default. */
   preferredUpstreamProtocols?: ApiProtocol[] | null; extraHeaders?: Record<string, string> | null;
   httpProxy?: string | null; priceMultiplier?: number | null; notes?: string | null;
+  /** Only the cloud groups are taken: `vertex` ({ project, location }) and `aws` ({ region?, service? }). */
+  settings?: Record<string, unknown> | null;
 }
 export interface ProviderUpdate {
   name: string; apiKey: string; endpoints: TemplateEndpoint[]; preferredUpstreamProtocols: ApiProtocol[];

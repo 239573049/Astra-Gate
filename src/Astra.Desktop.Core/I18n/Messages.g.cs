@@ -1000,6 +1000,22 @@ internal static class Messages
         "providers.priceKeyShort",
         "providers.templateUpdate",
         "providers.noKey",
+        "providers.cloud.aws.key",
+        "providers.cloud.aws.accessKeyId",
+        "providers.cloud.aws.secretAccessKey",
+        "providers.cloud.aws.sessionToken",
+        "providers.cloud.aws.sessionTokenHint",
+        "providers.cloud.aws.region",
+        "providers.cloud.aws.regionUnknown",
+        "providers.cloud.gcp.keyFile",
+        "providers.cloud.gcp.keyFileHint",
+        "providers.cloud.gcp.chooseFile",
+        "providers.cloud.gcp.invalid",
+        "providers.cloud.gcp.detected",
+        "providers.cloud.gcp.project",
+        "providers.cloud.gcp.projectHint",
+        "providers.cloud.gcp.location",
+        "providers.cloud.gcp.locationHint",
         "providers.card.active",
         "providers.card.disabled",
         "providers.card.subscription",
@@ -4177,6 +4193,22 @@ internal static class Messages
             case "providers.priceKeyShort": return "价格：{key}";
             case "providers.templateUpdate": return "模板更新";
             case "providers.noKey": return "未设置密钥";
+            case "providers.cloud.aws.key": return "AWS 访问密钥";
+            case "providers.cloud.aws.accessKeyId": return "Access Key ID";
+            case "providers.cloud.aws.secretAccessKey": return "Secret Access Key";
+            case "providers.cloud.aws.sessionToken": return "Session Token（可选）";
+            case "providers.cloud.aws.sessionTokenHint": return "只有临时凭证（STS / SSO）才需要；长期密钥留空。";
+            case "providers.cloud.aws.region": return "区域：{region}（取自端点地址；在「版本」里换区域）";
+            case "providers.cloud.aws.regionUnknown": return "端点地址里没有 AWS 区域，签名需要它；请使用 AWS 的运行时地址。";
+            case "providers.cloud.gcp.keyFile": return "服务账号密钥（JSON）";
+            case "providers.cloud.gcp.keyFileHint": return "粘贴从 Google Cloud 下载的 JSON 密钥文件，或选择文件。加密保存在本机，只用来换取访问令牌。";
+            case "providers.cloud.gcp.chooseFile": return "选择文件…";
+            case "providers.cloud.gcp.invalid": return "这不是服务账号密钥（需要 client_email 和 private_key）。";
+            case "providers.cloud.gcp.detected": return "服务账号：{email}";
+            case "providers.cloud.gcp.project": return "Google Cloud 项目 ID";
+            case "providers.cloud.gcp.projectHint": return "留空则使用密钥文件里的 project_id。";
+            case "providers.cloud.gcp.location": return "位置";
+            case "providers.cloud.gcp.locationHint": return "global 或区域（如 us-central1）；各位置提供的模型不同。";
             case "providers.card.active": return "已启用";
             case "providers.card.disabled": return "已停用";
             case "providers.card.subscription": return "订阅账号";
@@ -7356,6 +7388,22 @@ internal static class Messages
             case "providers.priceKeyShort": return "Prices: {key}";
             case "providers.templateUpdate": return "Template update";
             case "providers.noKey": return "No API key";
+            case "providers.cloud.aws.key": return "AWS access key";
+            case "providers.cloud.aws.accessKeyId": return "Access key ID";
+            case "providers.cloud.aws.secretAccessKey": return "Secret access key";
+            case "providers.cloud.aws.sessionToken": return "Session token (optional)";
+            case "providers.cloud.aws.sessionTokenHint": return "Only for temporary credentials (STS / SSO); leave empty for a long-term key.";
+            case "providers.cloud.aws.region": return "Region: {region} (from the endpoint address; pick another under Variant)";
+            case "providers.cloud.aws.regionUnknown": return "The endpoint address names no AWS region, which the signature needs; use an AWS runtime address.";
+            case "providers.cloud.gcp.keyFile": return "Service account key (JSON)";
+            case "providers.cloud.gcp.keyFileHint": return "Paste the JSON key file downloaded from Google Cloud, or choose the file. Stored encrypted on this machine and used only to obtain access tokens.";
+            case "providers.cloud.gcp.chooseFile": return "Choose file…";
+            case "providers.cloud.gcp.invalid": return "This is not a service account key (it needs client_email and private_key).";
+            case "providers.cloud.gcp.detected": return "Service account: {email}";
+            case "providers.cloud.gcp.project": return "Google Cloud project ID";
+            case "providers.cloud.gcp.projectHint": return "Leave empty to use the key file's project_id.";
+            case "providers.cloud.gcp.location": return "Location";
+            case "providers.cloud.gcp.locationHint": return "global or a region (such as us-central1); each location serves its own models.";
             case "providers.card.active": return "Active";
             case "providers.card.disabled": return "Disabled";
             case "providers.card.subscription": return "Subscription";

@@ -17,6 +17,25 @@ vi.mock('@lobehub/icons', () => {
     return Object.assign(mark('mono'), { Avatar: mark('avatar'), Color: mark('color') });
   };
   return {
+    Ai302: stub('ai302'),
+    AiHubMix: stub('aihubmix'),
+    Azure: stub('azure'),
+    BaiduCloud: stub('baiducloud'),
+    Bedrock: stub('bedrock'),
+    Cline: stub('cline'),
+    CommandCode: stub('commandcode'),
+    Fireworks: stub('fireworks'),
+    GmiCloud: stub('gmicloud'),
+    Groq: stub('groq'),
+    HuaweiCloud: stub('huaweicloud'),
+    KiloCode: stub('kilocode'),
+    ModelScope: stub('modelscope'),
+    NousResearch: stub('nousresearch'),
+    Nvidia: stub('nvidia'),
+    TencentCloud: stub('tencentcloud'),
+    Together: stub('together'),
+    Vercel: stub('vercel'),
+    VertexAI: stub('vertexai'),
     Anthropic: stub('anthropic'),
     Claude: stub('claude'),
     ClaudeCode: stub('claude-code'),
@@ -64,6 +83,8 @@ const assets = fileURLToPath(new NodeURL('../assets/clients/', import.meta.url))
 // Provider icon ids served by a bundled vendor image rather than a @lobehub/icons component.
 // Kept in sync with LOCAL_PROVIDER_LOGOS in ../components/icons by the assertions below.
 const LOCAL_LOGO_ICONS = new Set(['nextcowork', 'routin']);
+// Small relays @lobehub/icons has no mark for: the colored-initials tile (magpie-parity templates).
+const MONOGRAM_ICONS = new Set(['pipellm', 'cherryin', 'aigocode', 'yylx']);
 
 afterEach(cleanup);
 
@@ -164,6 +185,9 @@ describe('provider brand icons', () => {
       const { container, unmount } = render(<ProviderIcon name={tpl.id} icon={tpl.icon} />);
       if (tpl.icon === 'custom') {
         expect(container.querySelector('svg[data-testid^="lobe-"]'), tpl.id).toBeNull();
+      } else if (MONOGRAM_ICONS.has(tpl.icon)) {
+        expect(container.querySelector('svg, img'), tpl.id).toBeNull();
+        expect(container.textContent, tpl.id).not.toBe('');
       } else if (LOCAL_LOGO_ICONS.has(tpl.icon)) {
         // Vendors @lobehub/icons does not ship: a locally bundled mark, never a remote URL.
         const img = container.querySelector('img');

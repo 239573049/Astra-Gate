@@ -3,8 +3,10 @@ using System.Text.Json.Nodes;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Accounts;
 using Astra.Desktop.Components.Kit;
+using Astra.Desktop.Components.Providers;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.ProviderDetail;
+using Astra.Desktop.Core.Providers;
 using Astra.Desktop.Shell;
 using Avalonia;
 using Avalonia.Controls;
@@ -31,6 +33,13 @@ public sealed class ApiKeyTabView : UserControl
     private readonly SettingsRow _keyRow;
     private string _key = "";
     private ArcButton? _save;
+    // The cloud schemes (Bedrock IAM key, Vertex service account) have more to enter than one string (web ApiKeyTab).
+    private readonly string? _cloud;
+    private readonly Border _cloudFields = new();
+    private string _vertexProject = "";
+    private string _vertexLocation = "global";
+    private string _storedProject = "";
+    private string _storedLocation = "global";
 
     /// <summary>Builds the tab for <paramref name="provider"/>.</summary>
     public ApiKeyTabView(PageContext ctx, ProviderDetailApi api, ProviderDto provider)
@@ -41,17 +50,87 @@ public sealed class ApiKeyTabView : UserControl
         Quota = new ProviderQuotaSection(ctx, api, provider);
 
         var group = new SettingsGroup { Title = Loc.T("providers.section.auth"), Footer = Loc.T("providers.apiKeyStored") };
-        var input = PdUi.Secret("", v => { _key = v; if (_save is not null) _save.IsEnabled = _key.Trim().Length > 0; }, 256, Loc.T("providers.apiKey"), Loc.T("providers.replaceKey"));
-        _save = PdUi.Button(Loc.T("common.save"), PdUi.Look.Primary, click: () => _ = SaveAsync(input));
-        _save.IsEnabled = false;
-        _keyRow = PdUi.Row(Loc.T("providers.apiKey"), KeyDetail(provider), PdUi.Inline(8, input, _save));
+        _cloud = CloudCredentials.IsCloud(provider.AuthScheme) ? provider.AuthScheme : null;
+        if (_cloud is null)
+        {
+            var input = PdUi.Secret("", v => { _key = v; if (_save is not null) _save.IsEnabled = _key.Trim().Length > 0; }, 256, Loc.T("providers.apiKey"), Loc.T("providers.replaceKey"));
+            _save = PdUi.Button(Loc.T("common.save"), PdUi.Look.Primary, click: () => _ = SaveAsync(input));
+            _save.IsEnabled = false;
+            _keyRow = PdUi.Row(Loc.T("providers.apiKey"), KeyDetail(provider), PdUi.Inline(8, input, _save));
+        }
+        else
+        {
+            (_storedProject, _storedLocation) = CloudCredentials.VertexTarget(provider.Settings);
+            (_vertexProject, _vertexLocation) = (_storedProject, _storedLocation);
+            _keyRow = PdUi.Row(Loc.T(_cloud == CloudCredentials.AwsSigV4 ? "providers.cloud.aws.key" : "providers.cloud.gcp.keyFile"), KeyDetail(provider));
+            BuildCloudFields();
+        }
         group.Rows.Add(_keyRow);
 
         // web: <section className="card my-4 flex flex-col gap-2 p-4">
         var usage = PdUi.Card(_usage, new Thickness(16));
         usage.Margin = new Thickness(0, 0, 0, 16); // web my-4, the top collapsing into the group's own bottom margin
-        Content = new StackPanel { Children = { group, usage, Quota } };
+        var body = new StackPanel { Children = { group } };
+        if (_cloud is not null)
+        {
+            var fields = PdUi.Card(_cloudFields, new Thickness(16));
+            fields.Margin = new Thickness(0, -8, 0, 16);
+            body.Children.Add(fields);
+        }
+        body.Children.Add(usage);
+        body.Children.Add(Quota);
+        Content = body;
         RebuildUsage();
+    }
+
+    /// <summary>The cloud scheme's fields, blank (also after a save): the document goes to <c>apiKey</c>, Vertex's project and location to <c>settings.vertex</c>.</summary>
+    private void BuildCloudFields()
+    {
+        _key = "";
+        var stack = new StackPanel { Spacing = 12 };
+        if (_cloud == CloudCredentials.AwsSigV4)
+        {
+            stack.Children.Add(CloudCredentialFields.Aws(doc => { _key = doc; RefreshSave(); }));
+            stack.Children.Add(CloudCredentialFields.RegionHint(_provider.Endpoints.Select(e => e.BaseUrl)));
+        }
+        else
+        {
+            stack.Children.Add(CloudCredentialFields.ServiceAccount(doc => { _key = doc; RefreshSave(); }, _ => { }));
+            stack.Children.Add(CloudCredentialFields.VertexTarget(_vertexProject, _vertexLocation, null, (project, location) =>
+            {
+                (_vertexProject, _vertexLocation) = (project, location);
+                RefreshSave();
+            }));
+        }
+        _save = PdUi.Button(Loc.T("common.save"), PdUi.Look.Primary, click: () => _ = SaveCloudAsync());
+        _save.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+        stack.Children.Add(_save);
+        RefreshSave();
+        _cloudFields.Child = stack;
+    }
+
+    private void RefreshSave()
+    {
+        if (_save is null) return;
+        var vertexChanged = _cloud == CloudCredentials.GcpServiceAccount && (_vertexProject.Trim() != _storedProject || _vertexLocation != _storedLocation);
+        _save.IsEnabled = _key.Trim().Length > 0 || vertexChanged;
+    }
+
+    private async Task SaveCloudAsync()
+    {
+        var patch = new JsonObject();
+        if (_key.Trim().Length > 0) patch["apiKey"] = _key;
+        if (_cloud == CloudCredentials.GcpServiceAccount)
+        {
+            var settings = (JsonObject)_provider.Settings.DeepClone();
+            settings["vertex"] = new JsonObject { ["project"] = _vertexProject.Trim(), ["location"] = _vertexLocation };
+            patch["settings"] = settings;
+        }
+        var ok = await PdRun.TryAsync(_ctx, () => _api.UpdateAsync(patch), _save);
+        if (!ok) return;
+        (_storedProject, _storedLocation) = (_vertexProject.Trim(), _vertexLocation);
+        BuildCloudFields();
+        _ctx.Feedback.Success(Loc.T("common.saved"));
     }
 
     /// <summary>

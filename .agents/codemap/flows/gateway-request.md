@@ -103,6 +103,10 @@ persisted at the end.
     the upstream protocol is chosen per model; `passthrough = upstreamProtocol == inbound`. With passthrough the
     client's own bytes (or the middleware's rewrite) go upstream; otherwise `IProtocolCodec.DecodeRequest` builds the
     IR (`Protocol/Ir.cs`) and the upstream codec re-encodes it. Missing codec → 501.
+    **Cloud providers** (Bedrock, Vertex AI; `Pipeline/CloudProviders.cs`): the protocol per model comes from `CloudProviders.ProtocolsFor` (via
+    `ProviderProbe.ResolveAsync`) instead of a model-list hint, the Vertex address and Anthropic body shape are applied at step 13 / the URL, and an
+    IAM key's SigV4 signature is added in `SendAsync`'s `Build` once the body is final (`UpstreamAuth.Aws`); a service account's access token is
+    resolved into a Bearer by `UpstreamAuthResolver` (`GoogleAccessTokens`). AGENTS.md linked update 28.
 13. Same-host rewrites while the body tree is still ours: model mapping, `stream_options.include_usage` injection for
     OpenAI Chat streaming, the `force_stream` Responses shape, and the Claude Code mimicry / Relay `cache_control`
     TTL. Every stage that mutates the tree must set `upstreamDirty`, or the client's original bytes go upstream.

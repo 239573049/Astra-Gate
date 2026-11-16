@@ -23,7 +23,7 @@ public class ProviderApiTests
     {
         await using var host = await TestHost.StartAsync();
         var templates = (await host.GetJsonAsync("/api/provider-templates")).AsArray();
-        Assert.Equal(28, templates.Count); // + nextcowork, github-copilot-subscription, bigmodel-subscription, routin-ai
+        Assert.Equal(63, templates.Count); // + nextcowork, github-copilot-subscription, bigmodel-subscription, routin-ai; 35 magpie-parity templates (Bedrock, Vertex AI, …)
         var claudeSub = templates.Single(t => t!["id"]!.GetValue<string>() == "claude-subscription")!;
         Assert.Equal("oauth-subscription", claudeSub["authScheme"]!.GetValue<string>());
         Assert.False(claudeSub["requiresApiKey"]!.GetValue<bool>());

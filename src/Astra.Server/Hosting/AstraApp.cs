@@ -120,6 +120,7 @@ public static class AstraApp
         builder.Services.AddSingleton<OAuthClient>();
         builder.Services.AddSingleton<SubscriptionTokenService>();
         builder.Services.AddSingleton<SubscriptionQuotaService>();
+        builder.Services.AddSingleton<Astra.Providers.Cloud.GoogleAccessTokens>();
         builder.Services.AddSingleton<UpstreamAuthResolver>();
         builder.Services.AddSingleton<AccountScheduler>();
         builder.Services.AddSingleton<ProviderHealth>();

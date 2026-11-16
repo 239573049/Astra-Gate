@@ -302,7 +302,7 @@
   },
   {
     "id": "zhipuai",
-    "version": 2,
+    "version": 3,
     "name": "Zhipu GLM",
     "category": "cn",
     "icon": "glm",
@@ -343,6 +343,34 @@
           {
             "protocol": "openai-chat",
             "baseUrl": "https://api.z.ai/api/paas/v4"
+          }
+        ]
+      },
+      {
+        "id": "coding",
+        "name": "Coding Plan",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://open.bigmodel.cn/api/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4"
+          }
+        ]
+      },
+      {
+        "id": "intl-coding",
+        "name": "Z.ai Coding Plan",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://api.z.ai/api/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.z.ai/api/coding/paas/v4"
           }
         ]
       }
@@ -686,6 +714,2175 @@
     "modelListEndpoint": {
       "protocol": "openai-responses",
       "path": "/models"
+    }
+  },
+  {
+    "id": "mistral",
+    "version": 1,
+    "name": "Mistral AI",
+    "category": "official",
+    "icon": "mistral",
+    "website": "https://console.mistral.ai",
+    "apiKeyUrl": "https://console.mistral.ai/api-keys",
+    "docsUrl": "https://docs.mistral.ai/api",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.mistral.ai/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "mistral",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "azure-openai",
+    "version": 1,
+    "name": "Azure OpenAI / AI Foundry",
+    "category": "official",
+    "icon": "azure",
+    "website": "https://ai.azure.com",
+    "apiKeyUrl": "https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub/~/OpenAI",
+    "docsUrl": "https://learn.microsoft.com/azure/ai-foundry/openai/api-version-lifecycle",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://YOUR-RESOURCE.openai.azure.com/openai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://YOUR-RESOURCE.openai.azure.com/openai/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat"
+    ],
+    "auth": {
+      "scheme": "api-key"
+    },
+    "requiresApiKey": true,
+    "priceKey": "azure-openai",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "nous",
+    "version": 1,
+    "name": "Nous Portal",
+    "category": "official",
+    "icon": "nous",
+    "website": "https://portal.nousresearch.com",
+    "apiKeyUrl": "https://portal.nousresearch.com",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://inference-api.nousresearch.com/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "nous",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "ollama-cloud",
+    "version": 1,
+    "name": "Ollama Cloud",
+    "category": "official",
+    "icon": "ollama",
+    "website": "https://docs.ollama.com/cloud",
+    "apiKeyUrl": "https://ollama.com/settings/keys",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://ollama.com/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://ollama.com"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "ollama-cloud",
+    "adapter": "ollama",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "stepfun",
+    "version": 1,
+    "name": "StepFun 阶跃星辰",
+    "category": "cn",
+    "icon": "stepfun",
+    "website": "https://platform.stepfun.com",
+    "apiKeyUrl": "https://platform.stepfun.com/interface-key",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.stepfun.com/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.stepfun.com"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "stepfun",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "plan",
+        "name": "Step Plan",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.stepfun.com/step_plan/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.stepfun.com/step_plan"
+          }
+        ]
+      },
+      {
+        "id": "intl",
+        "name": "International",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.stepfun.ai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.stepfun.ai"
+          }
+        ]
+      },
+      {
+        "id": "intl-plan",
+        "name": "International · Step Plan",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.stepfun.ai/step_plan/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.stepfun.ai/step_plan"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "longcat",
+    "version": 1,
+    "name": "LongCat",
+    "category": "cn",
+    "icon": "longcat",
+    "website": "https://longcat.chat/platform/docs/zh/api-docs",
+    "apiKeyUrl": "https://longcat.chat/platform/api_keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.longcat.chat/openai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.longcat.chat/openai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.longcat.chat/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "longcat",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "baidu-qianfan",
+    "version": 1,
+    "name": "Baidu Qianfan 百度千帆",
+    "category": "cn",
+    "icon": "qianfan",
+    "website": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+    "apiKeyUrl": "https://console.bce.baidu.com/iam/#/iam/apikey/list",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://qianfan.baidubce.com/v2"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://qianfan.baidubce.com/v2"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://qianfan.baidubce.com/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "baidu-qianfan",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "plan-personal",
+        "name": "Token Plan · Personal",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/personal"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/personal"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://qianfan.baidubce.com/anthropic/tokenplan/personal"
+          }
+        ]
+      },
+      {
+        "id": "plan-team",
+        "name": "Token Plan · Enterprise",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/team"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://qianfan.baidubce.com/v2/tokenplan/team"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://qianfan.baidubce.com/anthropic/tokenplan/team"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "tencent-cloud",
+    "version": 1,
+    "name": "Tencent Cloud TokenHub 腾讯云",
+    "category": "cn",
+    "icon": "tencentcloud",
+    "website": "https://cloud.tencent.com/document/product/1823/130078",
+    "apiKeyUrl": "https://console.cloud.tencent.com/tokenhub/apikey",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://tokenhub.tencentmaas.com/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://tokenhub.tencentmaas.com/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://tokenhub.tencentmaas.com"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "tencent-cloud",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "intl",
+        "name": "International",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://tokenhub-intl.tencentmaas.com/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://tokenhub-intl.tencentmaas.com/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://tokenhub-intl.tencentmaas.com"
+          }
+        ]
+      },
+      {
+        "id": "plan",
+        "name": "Token Plan",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://tokenhub.tencentmaas.com/plan/v3"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://tokenhub.tencentmaas.com/plan/v3"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://tokenhub.tencentmaas.com/plan/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "plan-enterprise-intl",
+        "name": "Enterprise Plan · International",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://tokenhub-intl.tencentmaas.com/plan/v3"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://tokenhub-intl.tencentmaas.com/plan/v3"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://tokenhub-intl.tencentmaas.com/plan/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "huaweicloud",
+    "version": 1,
+    "name": "Huawei Cloud MaaS 华为云",
+    "category": "cn",
+    "icon": "huaweicloud",
+    "website": "https://support.huaweicloud.com/Token-plan-maas/tokenplan-maas-0001.html",
+    "apiKeyUrl": "https://console.huaweicloud.com/modelarts/?#/model-studio/authmanage",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.modelarts-maas.com/openai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.modelarts-maas.com/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "huaweicloud",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "plan",
+        "name": "Token Plan",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.modelarts-maas.com/plan/v2"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.modelarts-maas.com/plan/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xiaomi-mimo",
+    "version": 1,
+    "name": "Xiaomi MiMo 小米",
+    "category": "cn",
+    "icon": "mimo",
+    "website": "https://platform.xiaomimimo.com",
+    "apiKeyUrl": "https://platform.xiaomimimo.com/token-plan",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.xiaomimimo.com/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.xiaomimimo.com/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.xiaomimimo.com/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "xiaomi-mimo",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "plan-cn",
+        "name": "Token Plan · China",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://token-plan-cn.xiaomimimo.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "plan-sgp",
+        "name": "Token Plan · Singapore",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://token-plan-sgp.xiaomimimo.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "plan-ams",
+        "name": "Token Plan · Europe",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://token-plan-ams.xiaomimimo.com/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://token-plan-ams.xiaomimimo.com/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://token-plan-ams.xiaomimimo.com/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "modelscope",
+    "version": 1,
+    "name": "ModelScope 魔搭",
+    "category": "cn",
+    "icon": "modelscope",
+    "website": "https://modelscope.cn/docs/model-service/API-Inference/intro",
+    "apiKeyUrl": "https://modelscope.cn/my/myaccesstoken",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api-inference.modelscope.cn/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api-inference.modelscope.cn/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "modelscope",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "kimi-code",
+    "version": 1,
+    "name": "Kimi Code (API key)",
+    "category": "coding",
+    "icon": "kimi",
+    "website": "https://www.kimi.com/code",
+    "apiKeyUrl": "https://www.kimi.com/code/console",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.kimi.com/coding/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.kimi.com/coding"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "kimi-code",
+    "adapter": "kimi",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "intl",
+        "name": "International",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://api.kimi.ai/coding/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://api.kimi.ai/coding"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "alibaba-token-plan",
+    "version": 1,
+    "name": "Alibaba Cloud Token Plan",
+    "category": "coding",
+    "icon": "qwen",
+    "website": "https://help.aliyun.com/zh/model-studio/token-plan-overview",
+    "apiKeyUrl": "https://bailian.console.aliyun.com/cn-beijing/subscription/token-plan/personal",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "models": [
+      "auto",
+      "qwen3.8-max",
+      "qwen3.8-flash",
+      "qwen3.7-max",
+      "qwen3.7-plus",
+      "qwen3.6-flash",
+      "deepseek-v4.1-flash",
+      "deepseek-v4-pro",
+      "deepseek-v4-pro-0813",
+      "deepseek-v4-flash-0731",
+      "glm-5.3",
+      "glm-5.2"
+    ],
+    "priceKey": "alibaba-token-plan",
+    "adapter": "openai",
+    "variants": [
+      {
+        "id": "intl",
+        "name": "International (Singapore)",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/apps/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "qianwen",
+        "name": "Qwen AI platform",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://token-plan.maas.qianwenaiapi.com/compatible-mode/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://token-plan.maas.qianwenaiapi.com/apps/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "qwencloud",
+        "name": "Qwen Cloud",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://token-plan.maas.qwencloudapi.com/compatible-mode/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://token-plan.maas.qwencloudapi.com/apps/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "opencode-go",
+    "version": 1,
+    "name": "OpenCode Go",
+    "category": "coding",
+    "icon": "opencode",
+    "website": "https://opencode.ai/docs/go",
+    "apiKeyUrl": "https://opencode.ai/auth",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://opencode.ai/inference/go/openai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://opencode.ai/inference/go/openai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://opencode.ai/inference/go/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "opencode-go",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "opencode-zen",
+    "version": 1,
+    "name": "OpenCode Zen",
+    "category": "aggregator",
+    "icon": "opencode",
+    "website": "https://opencode.ai/docs/zen",
+    "apiKeyUrl": "https://opencode.ai/auth",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://opencode.ai/zen/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://opencode.ai/zen/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://opencode.ai/zen"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": false,
+    "priceKey": "opencode-zen",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "clinepass",
+    "version": 1,
+    "name": "ClinePass",
+    "category": "coding",
+    "icon": "cline",
+    "website": "https://docs.cline.bot/getting-started/clinepass",
+    "apiKeyUrl": "https://app.cline.bot",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.cline.bot/api/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "models": [
+      "cline-pass/glm-5.3",
+      "cline-pass/glm-5.3-flash",
+      "cline-pass/kimi-k3",
+      "cline-pass/deepseek-v4-pro",
+      "cline-pass/deepseek-v4.1-flash",
+      "cline-pass/mimo-v2.5",
+      "cline-pass/mimo-v2.5-pro",
+      "cline-pass/minimax-m3",
+      "cline-pass/qwen3.8-max",
+      "cline-pass/qwen3.7-max",
+      "cline-pass/qwen3.7-plus"
+    ],
+    "priceKey": "clinepass",
+    "adapter": "openai"
+  },
+  {
+    "id": "commandcode",
+    "version": 1,
+    "name": "Command Code",
+    "category": "coding",
+    "icon": "commandcode",
+    "website": "https://commandcode.ai/docs/provider",
+    "apiKeyUrl": "https://commandcode.ai/settings/keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.commandcode.ai/provider/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.commandcode.ai/provider/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.commandcode.ai/provider"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "commandcode",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "vercel-ai-gateway",
+    "version": 1,
+    "name": "Vercel AI Gateway",
+    "category": "aggregator",
+    "icon": "vercel",
+    "website": "https://vercel.com/docs/ai-gateway",
+    "apiKeyUrl": "https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai-gateway%2Fapi-keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://ai-gateway.vercel.sh/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://ai-gateway.vercel.sh/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://ai-gateway.vercel.sh"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "vercel-ai-gateway",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "gmicloud",
+    "version": 1,
+    "name": "GMI Cloud",
+    "category": "aggregator",
+    "icon": "gmicloud",
+    "website": "https://www.gmicloud.ai",
+    "apiKeyUrl": "https://console.gmicloud.ai",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.gmi-serving.com/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "gmicloud",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "aihubmix",
+    "version": 1,
+    "name": "AiHubMix",
+    "category": "aggregator",
+    "icon": "aihubmix",
+    "website": "https://aihubmix.com",
+    "apiKeyUrl": "https://console.aihubmix.com/token",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://aihubmix.com/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://aihubmix.com"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "aihubmix",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "pipellm",
+    "version": 1,
+    "name": "PipeLLM",
+    "category": "aggregator",
+    "icon": "pipellm",
+    "website": "https://www.pipellm.ai",
+    "apiKeyUrl": "https://console.pipellm.ai",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.pipellm.ai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.pipellm.ai/openai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.pipellm.ai"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "pipellm",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "302ai",
+    "version": 1,
+    "name": "302.AI",
+    "category": "aggregator",
+    "icon": "302ai",
+    "website": "https://302.ai",
+    "apiKeyUrl": "https://302.ai/api-keys/list",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.302.ai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.302.ai"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "302ai",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "cherryin",
+    "version": 1,
+    "name": "CherryIN",
+    "category": "aggregator",
+    "icon": "cherryin",
+    "website": "https://open.cherryin.ai",
+    "apiKeyUrl": "https://open.cherryin.ai/console/token",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://open.cherryin.ai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://open.cherryin.ai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://open.cherryin.ai"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "cherryin",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "aigocode",
+    "version": 1,
+    "name": "AIGoCode",
+    "category": "aggregator",
+    "icon": "aigocode",
+    "website": "https://www.aigocode.net",
+    "apiKeyUrl": "https://www.aigocode.net/dashboard/keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.aigocode.dev/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.aigocode.dev/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.aigocode.dev"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "aigocode",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "yylx",
+    "version": 1,
+    "name": "鱼鱼连线 YYLX",
+    "category": "aggregator",
+    "icon": "yylx",
+    "website": "https://yylx.io",
+    "apiKeyUrl": "https://app.yylx.io/keys",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://app.yylx.io/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://app.yylx.io"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "yylx",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "global",
+        "name": "Global",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://global.yylx.io/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://global.yylx.io"
+          }
+        ]
+      },
+      {
+        "id": "cn",
+        "name": "China mainland",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://cn.yylx.io/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://cn.yylx.io"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "kilo",
+    "version": 1,
+    "name": "Kilo Gateway",
+    "category": "aggregator",
+    "icon": "kilo",
+    "website": "https://kilo.ai/docs/gateway",
+    "apiKeyUrl": "https://app.kilo.ai",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.kilo.ai/api/openrouter"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": false,
+    "priceKey": "kilo",
+    "adapter": "openrouter",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "groq",
+    "version": 1,
+    "name": "Groq",
+    "category": "inference",
+    "icon": "groq",
+    "website": "https://console.groq.com",
+    "apiKeyUrl": "https://console.groq.com/keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.groq.com/openai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.groq.com/openai/v1"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "groq",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "together",
+    "version": 1,
+    "name": "Together AI",
+    "category": "inference",
+    "icon": "together",
+    "website": "https://api.together.ai",
+    "apiKeyUrl": "https://api.together.ai/settings/api-keys",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.together.xyz/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "together",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "fireworks",
+    "version": 1,
+    "name": "Fireworks AI",
+    "category": "inference",
+    "icon": "fireworks",
+    "website": "https://fireworks.ai",
+    "apiKeyUrl": "https://app.fireworks.ai/settings/users/api-keys",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.fireworks.ai/inference/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "fireworks",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "fireworks-nexus",
+    "version": 1,
+    "name": "Fireworks Nexus",
+    "category": "inference",
+    "icon": "fireworks",
+    "website": "https://docs.fireworks.ai/nexus",
+    "apiKeyUrl": "https://nexus.fireworks.ai/settings/api-keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://api.fireworks.ai/inference/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://api.fireworks.ai/inference/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://api.fireworks.ai/inference"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "models": [
+      "auto"
+    ],
+    "priceKey": "fireworks-nexus",
+    "adapter": "openai"
+  },
+  {
+    "id": "nvidia-nim",
+    "version": 1,
+    "name": "NVIDIA NIM",
+    "category": "inference",
+    "icon": "nvidia",
+    "website": "https://build.nvidia.com",
+    "apiKeyUrl": "https://build.nvidia.com/settings/api-keys",
+    "endpoints": [
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://integrate.api.nvidia.com/v1"
+      }
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "nvidia-nim",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    }
+  },
+  {
+    "id": "bedrock",
+    "version": 1,
+    "name": "Amazon Bedrock (API key)",
+    "category": "official",
+    "icon": "bedrock",
+    "website": "https://aws.amazon.com/bedrock/",
+    "apiKeyUrl": "https://console.aws.amazon.com/bedrock/home#/api-keys",
+    "docsUrl": "https://docs.aws.amazon.com/bedrock/latest/userguide/api-keys.html",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "models": [
+      "global.anthropic.claude-opus-5-5",
+      "global.anthropic.claude-sonnet-5-5",
+      "global.anthropic.claude-sonnet-5",
+      "global.anthropic.claude-opus-5",
+      "global.anthropic.claude-fable-5-2",
+      "global.anthropic.claude-fable-5-1",
+      "global.anthropic.claude-opus-4-8",
+      "global.anthropic.claude-opus-4-7",
+      "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "openai.gpt-oss-120b-1:0",
+      "openai.gpt-oss-20b-1:0",
+      "qwen.qwen3-coder-480b-a35b-v1:0",
+      "deepseek.v3.2",
+      "moonshotai.kimi-k2.5",
+      "zai.glm-5",
+      "minimax.minimax-m2.5"
+    ],
+    "priceKey": "bedrock",
+    "keyAlternatives": [
+      "bedrock-iam"
+    ],
+    "adapter": "openai",
+    "variants": [
+      {
+        "id": "us-east-2",
+        "name": "us-east-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "us-west-2",
+        "name": "us-west-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-central-1",
+        "name": "eu-central-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-west-1",
+        "name": "eu-west-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-west-3",
+        "name": "eu-west-3",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.eu-west-3.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.eu-west-3.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.eu-west-3.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-northeast-1",
+        "name": "ap-northeast-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-1",
+        "name": "ap-southeast-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-2",
+        "name": "ap-southeast-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-2.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-south-1",
+        "name": "ap-south-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-south-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-south-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-south-1.amazonaws.com/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bedrock-iam",
+    "version": 1,
+    "name": "Amazon Bedrock (IAM access key)",
+    "category": "official",
+    "icon": "bedrock",
+    "website": "https://aws.amazon.com/bedrock/",
+    "apiKeyUrl": "https://console.aws.amazon.com/iam/home#/security_credentials",
+    "docsUrl": "https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_sigv.html",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "aws-sigv4"
+    },
+    "requiresApiKey": true,
+    "models": [
+      "global.anthropic.claude-opus-5-5",
+      "global.anthropic.claude-sonnet-5-5",
+      "global.anthropic.claude-sonnet-5",
+      "global.anthropic.claude-opus-5",
+      "global.anthropic.claude-fable-5-2",
+      "global.anthropic.claude-fable-5-1",
+      "global.anthropic.claude-opus-4-8",
+      "global.anthropic.claude-opus-4-7",
+      "global.anthropic.claude-haiku-4-5-20251001-v1:0",
+      "openai.gpt-oss-120b-1:0",
+      "openai.gpt-oss-20b-1:0",
+      "qwen.qwen3-coder-480b-a35b-v1:0",
+      "deepseek.v3.2",
+      "moonshotai.kimi-k2.5",
+      "zai.glm-5",
+      "minimax.minimax-m2.5"
+    ],
+    "priceKey": "bedrock-iam",
+    "keyAlternatives": [
+      "bedrock"
+    ],
+    "adapter": "openai",
+    "variants": [
+      {
+        "id": "us-east-2",
+        "name": "us-east-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.us-east-2.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "us-west-2",
+        "name": "us-west-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.us-west-2.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-central-1",
+        "name": "eu-central-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.eu-central-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-west-1",
+        "name": "eu-west-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.eu-west-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-west-3",
+        "name": "eu-west-3",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.eu-west-3.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.eu-west-3.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.eu-west-3.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-northeast-1",
+        "name": "ap-northeast-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-northeast-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-1",
+        "name": "ap-southeast-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-1.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-2",
+        "name": "ap-southeast-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-2.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-southeast-2.amazonaws.com/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-south-1",
+        "name": "ap-south-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-runtime.ap-south-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-runtime.ap-south-1.amazonaws.com/openai/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-runtime.ap-south-1.amazonaws.com/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "bedrock-mantle",
+    "version": 1,
+    "name": "Amazon Bedrock Mantle",
+    "category": "official",
+    "icon": "bedrock",
+    "website": "https://docs.aws.amazon.com/bedrock/latest/userguide/endpoints.html",
+    "apiKeyUrl": "https://console.aws.amazon.com/bedrock/home#/api-keys",
+    "endpoints": [
+      {
+        "protocol": "openai-responses",
+        "baseUrl": "https://bedrock-mantle.us-east-1.api.aws/v1"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://bedrock-mantle.us-east-1.api.aws/v1"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://bedrock-mantle.us-east-1.api.aws/anthropic"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "openai-responses",
+      "openai-chat",
+      "anthropic"
+    ],
+    "auth": {
+      "scheme": "bearer"
+    },
+    "requiresApiKey": true,
+    "priceKey": "bedrock-mantle",
+    "adapter": "openai",
+    "modelListEndpoint": {
+      "protocol": "openai-chat",
+      "path": "/models"
+    },
+    "variants": [
+      {
+        "id": "us-east-2",
+        "name": "us-east-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.us-east-2.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.us-east-2.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.us-east-2.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "us-west-2",
+        "name": "us-west-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.us-west-2.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.us-west-2.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.us-west-2.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-central-1",
+        "name": "eu-central-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.eu-central-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.eu-central-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.eu-central-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-central-2",
+        "name": "eu-central-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.eu-central-2.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.eu-central-2.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.eu-central-2.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-north-1",
+        "name": "eu-north-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.eu-north-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.eu-north-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.eu-north-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-south-1",
+        "name": "eu-south-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.eu-south-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.eu-south-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.eu-south-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-west-1",
+        "name": "eu-west-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.eu-west-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.eu-west-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.eu-west-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "eu-west-2",
+        "name": "eu-west-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.eu-west-2.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.eu-west-2.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.eu-west-2.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-northeast-1",
+        "name": "ap-northeast-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-northeast-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-northeast-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-northeast-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-northeast-2",
+        "name": "ap-northeast-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-northeast-2.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-northeast-2.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-northeast-2.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-south-1",
+        "name": "ap-south-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-south-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-south-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-south-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-1",
+        "name": "ap-southeast-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-1.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-2",
+        "name": "ap-southeast-2",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-2.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-2.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-2.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-3",
+        "name": "ap-southeast-3",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-3.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-3.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-3.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "ap-southeast-4",
+        "name": "ap-southeast-4",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-4.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-4.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.ap-southeast-4.api.aws/anthropic"
+          }
+        ]
+      },
+      {
+        "id": "sa-east-1",
+        "name": "sa-east-1",
+        "endpointsOverride": [
+          {
+            "protocol": "openai-responses",
+            "baseUrl": "https://bedrock-mantle.sa-east-1.api.aws/v1"
+          },
+          {
+            "protocol": "openai-chat",
+            "baseUrl": "https://bedrock-mantle.sa-east-1.api.aws/v1"
+          },
+          {
+            "protocol": "anthropic",
+            "baseUrl": "https://bedrock-mantle.sa-east-1.api.aws/anthropic"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "vertex-ai",
+    "version": 1,
+    "name": "Google Vertex AI",
+    "category": "official",
+    "icon": "vertexai",
+    "website": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models",
+    "apiKeyUrl": "https://console.cloud.google.com/iam-admin/serviceaccounts",
+    "docsUrl": "https://cloud.google.com/vertex-ai/docs/authentication",
+    "endpoints": [
+      {
+        "protocol": "gemini",
+        "baseUrl": "https://aiplatform.googleapis.com"
+      },
+      {
+        "protocol": "anthropic",
+        "baseUrl": "https://aiplatform.googleapis.com"
+      },
+      {
+        "protocol": "openai-chat",
+        "baseUrl": "https://aiplatform.googleapis.com"
+      }
+    ],
+    "preferredUpstreamProtocols": [
+      "gemini",
+      "anthropic",
+      "openai-chat"
+    ],
+    "auth": {
+      "scheme": "gcp-service-account"
+    },
+    "requiresApiKey": true,
+    "models": [
+      "gemini-3.8-flash",
+      "gemini-3.7-flash",
+      "gemini-3.6-flash",
+      "gemini-3.5-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-pro-preview",
+      "gemini-3.1-flash-lite",
+      "gemini-3-flash-preview",
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite",
+      "deepseek-ai/deepseek-v4.1-flash-maas",
+      "zai-org/glm-5.2-maas",
+      "openai/gpt-oss-120b-maas",
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5",
+      "claude-fable-5-2",
+      "claude-fable-5-1"
+    ],
+    "priceKey": "vertex-ai",
+    "adapter": "vertex",
+    "settings": {
+      "vertex": {
+        "project": "",
+        "location": "global"
+      }
     }
   },
   {

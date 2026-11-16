@@ -253,8 +253,10 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             var payload = serialized ?? requestBody.Buffer;
             try
             {
-                // A plugin's provider is estimated locally: its plugin serves conversations, not token counting.
-                var url = endpoint is null || route.Provider.AuthScheme == AuthSchemes.Plugin ? null : UpstreamUrls.CountTokens(endpoint, model);
+                // A plugin's provider is estimated locally: its plugin serves conversations, not token counting. So are Bedrock's
+                // and Vertex AI's: their compatible endpoints have no count_tokens at the address the others use.
+                var url = endpoint is null || route.Provider.AuthScheme == AuthSchemes.Plugin || CloudProviders.IsVertex(route.Provider) || CloudProviders.IsBedrock(route.Provider)
+                    ? null : UpstreamUrls.CountTokens(endpoint, model);
                 if (url is not null)
                 {
                     var claudeOAuth = SubscriptionSupport.IsClaudeSubscription(route.Provider) && protocol == ApiProtocol.Anthropic;

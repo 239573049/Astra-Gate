@@ -114,6 +114,8 @@ public sealed class RelayCredentialTests
     [InlineData("no-such-template", null)]
     [InlineData("ollama", null)]
     [InlineData("moonshot", "no-such-variant")]
+    [InlineData("bedrock-iam", null)] // a JSON IAM key to sign with, not a credential a caller sends in a header
+    [InlineData("vertex-ai", null)] // a service account key to trade for a token
     public void A_template_the_relay_cannot_serve_stops_it_at_startup(string provider, string? variant)
     {
         Assert.Throws<ArgumentException>(() => RelayApp.Create(new RelayOptions { Provider = provider, Variant = variant }));

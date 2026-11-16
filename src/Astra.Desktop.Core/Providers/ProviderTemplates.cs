@@ -39,6 +39,7 @@ public static class ProviderProtocols
     public static readonly IReadOnlyList<(string Value, string Label)> AuthOptions =
     [
         ("bearer", "Authorization: Bearer"), ("x-api-key", "x-api-key"), ("x-goog-api-key", "x-goog-api-key"), ("query-key", "?key="),
+        ("api-key", "api-key"), ("aws-sigv4", "AWS SigV4"), ("gcp-service-account", "Google service account"),
         ("none", "—"), ("oauth-subscription", "OAuth 订阅"),
     ];
 

@@ -43,6 +43,11 @@ internal sealed class RelayTarget
                        ?? throw new ArgumentException($"Unknown provider template '{options.Provider}'. Templates: {string.Join(", ", catalog.All.Select(t => t.Id))}");
         if (template.AuthScheme == AuthSchemes.None)
             throw new ArgumentException($"Template '{template.Id}' sends no credential upstream, and the relay forwards the caller's own.");
+        // The caller's credential is one string in a header; these two are a JSON key document (IAM access key / service account)
+        // that the relay would have to sign with or trade for a token, so they stay with the full server.
+        if (template.AuthScheme is AuthSchemes.AwsSigV4 or AuthSchemes.GcpServiceAccount)
+            throw new ArgumentException($"Template '{template.Id}' signs requests with a cloud key document ({template.AuthScheme}), which the relay does not take from callers; use the full server" +
+                                        (template.KeyAlternatives is { Count: > 0 } alt ? $", or the template '{alt[0]}' with an API key." : "."));
         var variants = new Dictionary<string, ProviderTemplate>(StringComparer.Ordinal) { [DefaultVariant] = template };
         foreach (var variant in template.Variants ?? []) variants[variant.Id] = template.WithVariant(variant.Id);
         var chosen = options.Variant ?? DefaultVariant;

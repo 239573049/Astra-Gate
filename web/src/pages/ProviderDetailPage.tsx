@@ -34,6 +34,7 @@ import { Page } from '../components/layout/Page';
 import { PricingEditor } from '../components/PricingEditor';
 import { ProviderTestDialog } from '../components/ProviderTestDialog';
 import { ProviderQuotaSection } from '../components/ProviderQuotaSection';
+import { AwsKeyFields, AwsRegionHint, isCloudScheme, ServiceAccountField, VertexTargetFields } from '../components/CloudCredentials';
 import { PluginAccounts } from '../components/PluginAccounts';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
 import { canSwitchTemplate, KeyAlternativeHint, TemplateSwitchSheet } from '../components/TemplateSwitch';
@@ -828,13 +829,23 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
   const update = useUpdateProvider(provider.id);
   const usage = useProviderUsage(provider.id);
   const [key, setKey] = useState('');
+  // The cloud schemes (Bedrock IAM key, Vertex service account) have more to enter than one string.
+  const cloud = isCloudScheme(provider.authScheme) ? provider.authScheme : null;
+  const [fieldsEpoch, setFieldsEpoch] = useState(0);
+  const stored = provider.settings.vertex as { project?: string; location?: string } | undefined;
+  const [vertex, setVertex] = useState({ project: stored?.project ?? '', location: stored?.location ?? 'global' });
+  const vertexChanged = cloud === 'gcp-service-account' && (vertex.project.trim() !== (stored?.project ?? '') || vertex.location !== (stored?.location ?? 'global'));
 
   const save = () =>
     update.mutate(
-      { apiKey: key },
+      {
+        ...(key.trim() ? { apiKey: key } : {}),
+        ...(cloud === 'gcp-service-account' ? { settings: { ...provider.settings, vertex: { project: vertex.project.trim(), location: vertex.location } } } : {}),
+      },
       {
         onSuccess: () => {
           setKey('');
+          setFieldsEpoch((n) => n + 1);
           toast(t('common.saved'), 'success');
         },
         onError: (e) => toast(errorText(e), 'error'),
@@ -844,14 +855,38 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
   return (
     <>
       <Group title={t('providers.section.auth')} footer={t('providers.apiKeyStored')}>
-        <Row label={t('providers.apiKey')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')}>
-          <div className="flex items-center gap-2">
-            <Input type="password" autoComplete="off" className="w-64 font-mono" aria-label={t('providers.apiKey')} placeholder={t('providers.replaceKey')} value={key} onChange={(e) => setKey(e.target.value)} />
-            <Button variant="primary" disabled={key.trim().length === 0} loading={update.isPending} onClick={save}>
-              {t('common.save')}
-            </Button>
-          </div>
-        </Row>
+        {cloud ? (
+          <>
+            <Row label={t(cloud === 'aws-sigv4' ? 'providers.cloud.aws.key' : 'providers.cloud.gcp.keyFile')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')} />
+            <div className="grid gap-3 p-4">
+              {cloud === 'aws-sigv4' ? (
+                <>
+                  <AwsKeyFields key={fieldsEpoch} onChange={setKey} />
+                  <AwsRegionHint endpoints={provider.endpoints} />
+                </>
+              ) : (
+                <>
+                  <ServiceAccountField key={fieldsEpoch} onChange={setKey} />
+                  <VertexTargetFields project={vertex.project} location={vertex.location} onChange={setVertex} />
+                </>
+              )}
+              <div>
+                <Button variant="primary" disabled={key.trim().length === 0 && !vertexChanged} loading={update.isPending} onClick={save}>
+                  {t('common.save')}
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <Row label={t('providers.apiKey')} detail={provider.hasApiKey ? provider.apiKeyMasked ?? '••••' : t('providers.noKey')}>
+            <div className="flex items-center gap-2">
+              <Input type="password" autoComplete="off" className="w-64 font-mono" aria-label={t('providers.apiKey')} placeholder={t('providers.replaceKey')} value={key} onChange={(e) => setKey(e.target.value)} />
+              <Button variant="primary" disabled={key.trim().length === 0} loading={update.isPending} onClick={save}>
+                {t('common.save')}
+              </Button>
+            </div>
+          </Row>
+        )}
       </Group>
       <section className="card my-4 flex flex-col gap-2 p-4">
         <h3 className="text-[13px] font-medium">{t('providers.usage.title')}</h3>
