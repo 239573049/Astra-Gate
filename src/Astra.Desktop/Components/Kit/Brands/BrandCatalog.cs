@@ -65,6 +65,7 @@ internal static class BrandCatalog
         "grok-app" => Lobe("Grok.Mono", "Grok", LucideIconKind.Monitor),
         "reasonix" or "morph" or "jcode" or "empryo" or "nanobot" or "miniq" or "paimon" or "atomcode" or "snow" or "ante"
             or "craft-agents" or "tuanjie-cowork" => Initials(),
+        "liveagent" or "openmausbot" or "astrbot" or "qwenpaw" or "openclaw" or "openbot" => Initials(),
         _ => null,
     };
 

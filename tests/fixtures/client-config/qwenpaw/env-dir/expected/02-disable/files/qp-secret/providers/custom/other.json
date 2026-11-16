@@ -1,0 +1,8 @@
+{
+  "id": "other",
+  "name": "Other",
+  "base_url": "https://example.com/v1",
+  "api_key": "ENC:xyz",
+  "chat_model": "OpenAIChatModel",
+  "is_custom": true
+}

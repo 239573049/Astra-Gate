@@ -127,6 +127,12 @@ public static class ClientInstallCatalog
         new(ClientKinds.Ante, ClientInstallMethod.Manual, "ante", null, "https://antigma.ai/"),
         new(ClientKinds.CraftAgents, ClientInstallMethod.Manual, null, null, "https://github.com/lukilabs/craft-agents-oss"),
         new(ClientKinds.TuanjieCowork, ClientInstallMethod.Manual, null, null, "https://codely.tuanjie.cn/"),
+        new(ClientKinds.LiveAgent, ClientInstallMethod.Manual, null, null, "https://github.com/Stack-Cairn/LiveAgent"),
+        new(ClientKinds.OpenMausBot, ClientInstallMethod.Manual, null, null, "https://github.com/milind-soni/OpenMausBot"),
+        new(ClientKinds.AstrBot, ClientInstallMethod.Manual, "astrbot", null, "https://github.com/AstrBotDevs/AstrBot"),
+        new(ClientKinds.QwenPaw, ClientInstallMethod.Manual, "qwenpaw", null, "https://github.com/agentscope-ai/QwenPaw"),
+        new(ClientKinds.OpenClaw, ClientInstallMethod.Npm, "openclaw", "openclaw", "https://github.com/openclaw/openclaw"),
+        new(ClientKinds.OpenBot, ClientInstallMethod.Manual, null, null, "https://openbot.run/"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

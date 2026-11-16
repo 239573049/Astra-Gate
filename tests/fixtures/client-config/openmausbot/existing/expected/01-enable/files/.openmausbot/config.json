@@ -1,0 +1,15 @@
+{
+  "theme": "dark",
+  "instances": {
+    "claude": {
+      "driver": "claudeAgent",
+      "config": {
+        "cli": "/usr/local/bin/claude"
+      }
+    },
+    "codex": {
+      "driver": "codex"
+    },
+    "astra": {"driver":"claudeAgent","displayName":"Astra","access":"custom","config":{"configDir":"$HOME/.openmausbot/providers/astra","requireApiKey":true,"endpointModels":["gpt-5","claude-sonnet-4-5","deepseek-chat"],"cli":"/usr/local/bin/claude"},"environment":{"ANTHROPIC_BASE_URL":"https://astra.corp.com","ANTHROPIC_AUTH_TOKEN":"sk-astra-enterprise-key","ANTHROPIC_API_KEY":"sk-astra-enterprise-key","ANTHROPIC_MODEL":"gpt-5"}}
+  }
+}

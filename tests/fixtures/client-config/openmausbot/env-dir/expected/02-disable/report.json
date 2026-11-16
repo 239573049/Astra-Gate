@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/omb/config.json",
+      "keyPath": "instances",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

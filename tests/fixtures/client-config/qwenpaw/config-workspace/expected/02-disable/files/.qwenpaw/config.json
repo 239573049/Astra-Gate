@@ -1,0 +1,14 @@
+{
+  "agents": {
+    "agent_order": [
+      "default"
+    ],
+    "profiles": {
+      "default": {
+        "id": "default",
+        "workspace_dir": "$HOME/work/default",
+        "enabled": true
+      }
+    }
+  }
+}

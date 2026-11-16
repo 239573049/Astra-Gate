@@ -95,6 +95,12 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'ante': { name: 'Ante' },
   'craft-agents': { name: 'Craft Agents' },
   'tuanjie-cowork': { name: 'Tuanjie Cowork' },
+  'liveagent': { name: 'LiveAgent' },
+  'openmausbot': { name: 'OpenMausBot' },
+  'astrbot': { name: 'AstrBot' },
+  'qwenpaw': { name: 'QwenPaw' },
+  'openclaw': { name: 'OpenClaw' },
+  'openbot': { name: 'OpenBot' },
 };
 
 /**
@@ -113,6 +119,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
   'zoo-code', 'jetbrains-air', 'air-ide', 'copilot-jetbrains', 'codebuddy', 'qoder', 'qoder-cn', 't3code', 'pencil', 'openpencil', 'raycast', 'obsidian',
   'reasonix', 'morph', 'jcode', 'vibe', 'empryo', 'nanobot', 'miniq', 'paimon', 'cline', 'grok-app', 'atomcode', 'snow', 'ante', 'craft-agents', 'tuanjie-cowork',
+  'liveagent', 'openmausbot', 'astrbot', 'qwenpaw', 'openclaw', 'openbot',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -243,6 +250,12 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   'ante': monogram('A', 'ante'),
   'craft-agents': monogram('C', 'craft-agents'),
   'tuanjie-cowork': monogram('T', 'tuanjie-cowork'),
+  liveagent: monogram('L', 'liveagent'),
+  openmausbot: monogram('O', 'openmausbot'),
+  astrbot: monogram('A', 'astrbot'),
+  qwenpaw: monogram('Q', 'qwenpaw'),
+  openclaw: monogram('C', 'openclaw'),
+  openbot: monogram('B', 'openbot'),
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

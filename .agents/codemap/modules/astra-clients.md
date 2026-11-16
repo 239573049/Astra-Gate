@@ -75,7 +75,10 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 `RaycastClientAdapter.cs` (YAML row `providers.[id=astra]`, `YamlEditor.NestedRows.cs`) and `ObsidianClientAdapter.cs` (one Copilot `data.json` per vault) — all on `ConfigFileClientAdapter` (SetKey / TrackedRemovals);
 `FileClientAdapter.cs` (base of the batch-3 file-backed agents: the disable plan is "give back everything the state store recorded") with `ReasonixClientAdapter.cs`, `MorphClientAdapter.cs`, `JcodeClientAdapter.cs`, `VibeClientAdapter.cs`, `EmpryoClientAdapter.cs`,
 `NanobotClientAdapter.cs`, `MiniQClientAdapter.cs`, `PaimonClientAdapter.cs`, `ClineClientAdapter.cs`, `GrokAppClientAdapter.cs`, `AtomCodeClientAdapter.cs`, `SnowClientAdapter.cs`, `AnteClientAdapter.cs`,
-`CraftAgentsClientAdapter.cs` and `TuanjieCoworkClientAdapter.cs`, plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`CraftAgentsClientAdapter.cs` and `TuanjieCoworkClientAdapter.cs`,;
+`LiveAgentClientAdapter.cs`, `OpenMausBotClientAdapter.cs` (writes OpenMausBot's default fleet when its file saves no `instances`), `AstrBotClientAdapter.cs`
+(array elements by `[id=…]` selector), `QwenPawClientAdapter.cs` (provider file in the secret folder + the default agent's `agent.json`),
+`OpenClawClientAdapter.cs` and `OpenBotClientAdapter.cs` (keyless: its key is sealed by the keychain), plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

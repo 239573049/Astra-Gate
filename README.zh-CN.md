@@ -113,7 +113,9 @@ astra client enable codex --provider deepseek --model deepseek-chat
 `droid` · `kimi-code` · `zed` · `vscode-insiders` · `vscodium` · `omp` · `mimo-code` ·
 `deepseek-harness` · `workbuddy` · `muse-code` · `openchamber` · `deveco-code` · `stepcode` · `aside` · `omo` ·
 `prime-agent` · `mu` · `mothx` · `penguin-harness` · `antigravity-cli` · `dim` · `command-code` · `fx` · `goose` · `zoo-code` · `jetbrains-air` · `air-ide` · `copilot-jetbrains` · `codebuddy` · `qoder` · `qoder-cn` · `t3code` · `pencil` · `openpencil` · `raycast` · `obsidian` ·
-`reasonix` · `morph` · `jcode` · `vibe` · `empryo` · `nanobot` · `miniq` · `paimon` · `cline` · `grok-app` · `atomcode` · `snow` · `ante` · `craft-agents` · `tuanjie-cowork`
+`reasonix` · `morph` · `jcode` · `vibe` · `empryo` · `nanobot` · `miniq` · `paimon` · `cline` · `grok-app` · `atomcode` · `snow` · `ante` · `craft-agents` · `tuanjie-cowork` ·
+`prime-agent` · `mu` · `mothx` · `penguin-harness` · `antigravity-cli` · `dim` · `command-code` · `fx` · `goose` · `liveagent` · `openmausbot` ·
+`astrbot` · `qwenpaw` · `openclaw` · `openbot`
 
 Zed 不会从设置文件读取 API Key，启用后需在 Zed 的提供商设置里粘贴一次 Astra 令牌。
 

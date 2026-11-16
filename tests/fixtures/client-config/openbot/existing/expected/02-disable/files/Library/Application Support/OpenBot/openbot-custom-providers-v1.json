@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "providers": [
+    {
+      "id": "mine",
+      "name": "Mine",
+      "baseUrl": "https://example.com/v1",
+      "models": [
+        {
+          "id": "m",
+          "name": "M"
+        }
+      ],
+      "secret": "enc:abc"
+    },
+    {
+      "id": "astra",
+      "name": "My Astra",
+      "baseUrl": "http://old",
+      "models": [],
+      "secret": "enc:def",
+      "harness": "opencode"
+    }
+  ]
+}

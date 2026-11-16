@@ -1,0 +1,98 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "api_key",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "base_url",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "chat_model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "custom_headers",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "enabled",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "extra_models",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "generate_kwargs",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "id",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "is_custom",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "models",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "name",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "snapshot_schema_version",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "support_connection_check",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+      "keyPath": "support_model_discovery",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qwenpaw/workspaces/default/agent.json",
+      "keyPath": "active_model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.qwenpaw.secret/providers/custom/astra.json"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/OpenBot/openbot-custom-providers-v1.json",
+      "keyPath": "providers.[id=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/OpenBot/openbot-custom-providers-v1.json",
+      "keyPath": "version",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/Library/Application Support/OpenBot/openbot-custom-providers-v1.json"
+  ],
+  "warnings": []
+}

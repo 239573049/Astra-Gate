@@ -71,6 +71,12 @@ export const ClientKinds = {
   Ante: 'ante',
   CraftAgents: 'craft-agents',
   TuanjieCowork: 'tuanjie-cowork',
+  LiveAgent: 'liveagent',
+  OpenMausBot: 'openmausbot',
+  AstrBot: 'astrbot',
+  QwenPaw: 'qwenpaw',
+  OpenClaw: 'openclaw',
+  OpenBot: 'openbot',
 } as const;
 
 export const ALL_CLIENT_KINDS: readonly string[] = [
@@ -143,6 +149,12 @@ export const ALL_CLIENT_KINDS: readonly string[] = [
   ClientKinds.Ante,
   ClientKinds.CraftAgents,
   ClientKinds.TuanjieCowork,
+  ClientKinds.LiveAgent,
+  ClientKinds.OpenMausBot,
+  ClientKinds.AstrBot,
+  ClientKinds.QwenPaw,
+  ClientKinds.OpenClaw,
+  ClientKinds.OpenBot,
 ];
 
 /** Clients whose configuration lists the bound provider's models (ClientKinds.WithModelList). */
@@ -213,6 +225,12 @@ export const CLIENTS_WITH_MODEL_LIST: readonly string[] = [
   ClientKinds.Ante,
   ClientKinds.CraftAgents,
   ClientKinds.TuanjieCowork,
+  ClientKinds.LiveAgent,
+  ClientKinds.OpenMausBot,
+  ClientKinds.AstrBot,
+  ClientKinds.QwenPaw,
+  ClientKinds.OpenClaw,
+  ClientKinds.OpenBot,
 ];
 
 /** The inbound protocol each client speaks to the gateway. */
@@ -228,6 +246,7 @@ export function protocolOf(kind: string): ApiProtocol {
     case ClientKinds.ClaudeDesktop:
     case ClientKinds.Paseo:
     case ClientKinds.T3Code:
+    case ClientKinds.OpenMausBot:
       return 'anthropic';
     case ClientKinds.GeminiCli:
     case ClientKinds.AntigravityCli:

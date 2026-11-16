@@ -1,0 +1,14 @@
+{
+  "theme": "dark",
+  "instances": {
+    "claude": {
+      "driver": "claudeAgent",
+      "config": {
+        "cli": "/usr/local/bin/claude"
+      }
+    },
+    "codex": {
+      "driver": "codex"
+    }
+  }
+}

@@ -164,6 +164,12 @@ describe('client brand icons', () => {
     'ante': { brand: 'monogram', mark: 'monogram', badge: false },
     'craft-agents': { brand: 'monogram', mark: 'monogram', badge: false },
     'tuanjie-cowork': { brand: 'monogram', mark: 'monogram', badge: false },
+    liveagent: { brand: 'monogram', mark: 'monogram', badge: false },
+    openmausbot: { brand: 'monogram', mark: 'monogram', badge: false },
+    astrbot: { brand: 'monogram', mark: 'monogram', badge: false },
+    qwenpaw: { brand: 'monogram', mark: 'monogram', badge: false },
+    openclaw: { brand: 'monogram', mark: 'monogram', badge: false },
+    openbot: { brand: 'monogram', mark: 'monogram', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

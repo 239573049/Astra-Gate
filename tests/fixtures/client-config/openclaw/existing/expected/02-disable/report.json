@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.openclaw/openclaw.json",
+      "keyPath": "agents.defaults.model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.openclaw/openclaw.json",
+      "keyPath": "agents.defaults.modelPolicy.allow",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.openclaw/openclaw.json",
+      "keyPath": "models.providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

@@ -126,7 +126,9 @@ astra client enable codex --provider deepseek --model deepseek-chat
 `droid` · `kimi-code` · `zed` · `vscode-insiders` · `vscodium` · `omp` · `mimo-code` ·
 `deepseek-harness` · `workbuddy` · `muse-code` · `openchamber` · `deveco-code` · `stepcode` · `aside` · `omo` ·
 `prime-agent` · `mu` · `mothx` · `penguin-harness` · `antigravity-cli` · `dim` · `command-code` · `fx` · `goose` · `zoo-code` · `jetbrains-air` · `air-ide` · `copilot-jetbrains` · `codebuddy` · `qoder` · `qoder-cn` · `t3code` · `pencil` · `openpencil` · `raycast` · `obsidian` ·
-`reasonix` · `morph` · `jcode` · `vibe` · `empryo` · `nanobot` · `miniq` · `paimon` · `cline` · `grok-app` · `atomcode` · `snow` · `ante` · `craft-agents` · `tuanjie-cowork`
+`reasonix` · `morph` · `jcode` · `vibe` · `empryo` · `nanobot` · `miniq` · `paimon` · `cline` · `grok-app` · `atomcode` · `snow` · `ante` · `craft-agents` · `tuanjie-cowork` ·
+`prime-agent` · `mu` · `mothx` · `penguin-harness` · `antigravity-cli` · `dim` · `command-code` · `fx` · `goose` · `liveagent` · `openmausbot` ·
+`astrbot` · `qwenpaw` · `openclaw` · `openbot`
 
 Zed never reads an API key from its settings file, so paste an Astra token into Zed's
 provider settings once after enabling.

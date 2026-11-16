@@ -106,6 +106,12 @@ public static partial class RoutingTexts
         ["ante"] = "Ante",
         ["craft-agents"] = "Craft Agents",
         ["tuanjie-cowork"] = "Tuanjie Cowork",
+        ["liveagent"] = "LiveAgent",
+        ["openmausbot"] = "OpenMausBot",
+        ["astrbot"] = "AstrBot",
+        ["qwenpaw"] = "QwenPaw",
+        ["openclaw"] = "OpenClaw",
+        ["openbot"] = "OpenBot",
     };
 
     /// <summary>A client's display name (web <c>clientName</c>); an agent plugin's client shows its plugin id.</summary>

@@ -98,6 +98,12 @@ public sealed class ClientAdapterRegistry
         new AnteClientAdapter(env, store),
         new CraftAgentsClientAdapter(env, store),
         new TuanjieCoworkClientAdapter(env, store),
+        new LiveAgentClientAdapter(env, store),
+        new OpenMausBotClientAdapter(env, store),
+        new AstrBotClientAdapter(env, store),
+        new QwenPawClientAdapter(env, store),
+        new OpenClawClientAdapter(env, store),
+        new OpenBotClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

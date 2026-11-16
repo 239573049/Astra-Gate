@@ -354,7 +354,8 @@ export type ClientKind =
   | "vscode-insiders" | "vscodium" | "omp" | "mimo-code" | "deepseek-harness" | "workbuddy" | "workbuddy-ai" | "muse-code" | "nextcowork" | "paseo" | "zcode" | "tkcode"
   | "openchamber" | "deveco-code" | "stepcode" | "aside" | "omo" | "prime-agent" | "mu" | "mothx" | "penguin-harness" | "antigravity-cli" | "dim" | "command-code" | "fx" | "goose"
   | "zoo-code" | "jetbrains-air" | "air-ide" | "copilot-jetbrains" | "codebuddy" | "qoder" | "qoder-cn" | "t3code" | "pencil" | "openpencil" | "raycast" | "obsidian"
-  | "reasonix" | "morph" | "jcode" | "vibe" | "empryo" | "nanobot" | "miniq" | "paimon" | "cline" | "grok-app" | "atomcode" | "snow" | "ante" | "craft-agents" | "tuanjie-cowork";
+  | "reasonix" | "morph" | "jcode" | "vibe" | "empryo" | "nanobot" | "miniq" | "paimon" | "cline" | "grok-app" | "atomcode" | "snow" | "ante" | "craft-agents" | "tuanjie-cowork"
+  | "openchamber" | "deveco-code" | "stepcode" | "aside" | "omo" | "prime-agent" | "mu" | "mothx" | "penguin-harness" | "antigravity-cli" | "dim" | "command-code" | "fx" | "goose" | "liveagent" | "openmausbot" | "astrbot" | "qwenpaw" | "openclaw" | "openbot";
 /** One provider bound to a client; the list order is the routing order (first = primary). */
 export interface ClientBinding { providerId: string; accountId?: string | null }
 /**

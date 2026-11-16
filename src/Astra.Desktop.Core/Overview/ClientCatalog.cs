@@ -19,6 +19,7 @@ public static class ClientCatalog
         "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
         "zoo-code", "jetbrains-air", "air-ide", "copilot-jetbrains", "codebuddy", "qoder", "qoder-cn", "t3code", "pencil", "openpencil", "raycast", "obsidian",
         "reasonix", "morph", "jcode", "vibe", "empryo", "nanobot", "miniq", "paimon", "cline", "grok-app", "atomcode", "snow", "ante", "craft-agents", "tuanjie-cowork",
+        "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose", "liveagent", "openmausbot", "astrbot", "qwenpaw", "openclaw", "openbot",
     ];
 
     private static readonly Dictionary<string, string> Names = new(StringComparer.Ordinal)
@@ -92,6 +93,12 @@ public static class ClientCatalog
         ["ante"] = "Ante",
         ["craft-agents"] = "Craft Agents",
         ["tuanjie-cowork"] = "Tuanjie Cowork",
+        ["liveagent"] = "LiveAgent",
+        ["openmausbot"] = "OpenMausBot",
+        ["astrbot"] = "AstrBot",
+        ["qwenpaw"] = "QwenPaw",
+        ["openclaw"] = "OpenClaw",
+        ["openbot"] = "OpenBot",
     };
 
     /// <summary>Whether the catalog names <paramref name="kind"/>.</summary>

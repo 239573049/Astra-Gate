@@ -1,0 +1,122 @@
+[
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "id",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "name",
+    "kind": "key",
+    "before": null,
+    "after": "\"Astra\""
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "base_url",
+    "kind": "key",
+    "before": null,
+    "after": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "api_key",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "chat_model",
+    "kind": "key",
+    "before": null,
+    "after": "\"OpenAIChatModel\""
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "is_custom",
+    "kind": "key",
+    "before": null,
+    "after": "true"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "enabled",
+    "kind": "key",
+    "before": null,
+    "after": "true"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "support_model_discovery",
+    "kind": "key",
+    "before": null,
+    "after": "false"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "support_connection_check",
+    "kind": "key",
+    "before": null,
+    "after": "false"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "models",
+    "kind": "key",
+    "before": null,
+    "after": "[]"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "generate_kwargs",
+    "kind": "key",
+    "before": null,
+    "after": "{}"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "custom_headers",
+    "kind": "key",
+    "before": null,
+    "after": "{}"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "snapshot_schema_version",
+    "kind": "key",
+    "before": null,
+    "after": "2"
+  },
+  {
+    "file": "$HOME/.qwenpaw.secret/providers/custom/astra.json",
+    "format": "json",
+    "keyPath": "extra_models",
+    "kind": "key",
+    "before": null,
+    "after": "[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"source\":\"user\",\"supports_image\":true,\"supports_multimodal\":true,\"supports_tool_calling\":true,\"max_input_length\":400000,\"max_input_length_configured\":true,\"max_output_length\":128000},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"source\":\"user\",\"supports_image\":true,\"supports_multimodal\":true,\"supports_tool_calling\":true,\"max_input_length\":200000,\"max_input_length_configured\":true,\"max_output_length\":64000},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"source\":\"user\",\"supports_image\":false,\"supports_multimodal\":false,\"supports_tool_calling\":true,\"max_input_length\":64000,\"max_input_length_configured\":true,\"max_output_length\":8000}]"
+  },
+  {
+    "file": "$HOME/work/default/agent.json",
+    "format": "json",
+    "keyPath": "active_model",
+    "kind": "key",
+    "before": "{\"provider_id\":\"openai\",\"model\":\"gpt-4o\"}",
+    "after": "{\"provider_id\":\"astra\",\"model\":\"gpt-5\"}"
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.liveagent/config.json",
+    "keyPath": "defaultModel",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"gpt-5\""
+  },
+  {
+    "file": "$HOME/.liveagent/config.json",
+    "keyPath": "defaultProvider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/.liveagent/config.json",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"name\":\"Astra\",\"type\":\"codex\",\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"activeModels\":null,\"modelOrder\":[\"gpt-5\",\"claude-sonnet-4-5\",\"deepseek-chat\"],\"requestFormat\":\"openai-completions\",\"models\":[{\"id\":\"claude-sonnet-4-5\",\"displayName\":\"Claude Sonnet 4.5\",\"input\":[\"text\",\"image\"],\"contextWindow\":200000,\"maxTokens\":64000},{\"id\":\"deepseek-chat\",\"displayName\":\"DeepSeek Chat\",\"contextWindow\":64000,\"maxTokens\":8000},{\"id\":\"gpt-5\",\"displayName\":\"GPT-5\",\"input\":[\"text\",\"image\"],\"contextWindow\":400000,\"maxTokens\":128000}]}"
+  }
+]

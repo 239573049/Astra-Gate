@@ -1,0 +1,42 @@
+[
+  {
+    "file": "$HOME/ab/data/cmd_config.json",
+    "format": "json",
+    "keyPath": "provider_sources.[id=astra]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"astra\",\"provider\":\"openai\",\"type\":\"openai_chat_completion\",\"provider_type\":\"chat_completion\",\"enable\":true,\"key\":[\"sk-astra-enterprise-key\"],\"api_base\":\"https://astra.corp.com/v1\",\"timeout\":120,\"proxy\":\"\",\"custom_headers\":{}}"
+  },
+  {
+    "file": "$HOME/ab/data/cmd_config.json",
+    "format": "json",
+    "keyPath": "provider.[id=astra/gpt-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"astra/gpt-5\",\"enable\":true,\"provider_source_id\":\"astra\",\"model\":\"gpt-5\",\"modalities\":[\"text\",\"image\",\"tool_use\"],\"custom_extra_body\":{},\"max_context_tokens\":400000}"
+  },
+  {
+    "file": "$HOME/ab/data/cmd_config.json",
+    "format": "json",
+    "keyPath": "provider.[id=astra/claude-sonnet-4-5]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"astra/claude-sonnet-4-5\",\"enable\":true,\"provider_source_id\":\"astra\",\"model\":\"claude-sonnet-4-5\",\"modalities\":[\"text\",\"image\",\"tool_use\"],\"custom_extra_body\":{},\"max_context_tokens\":200000}"
+  },
+  {
+    "file": "$HOME/ab/data/cmd_config.json",
+    "format": "json",
+    "keyPath": "provider.[id=astra/deepseek-chat]",
+    "kind": "key",
+    "before": null,
+    "after": "{\"id\":\"astra/deepseek-chat\",\"enable\":true,\"provider_source_id\":\"astra\",\"model\":\"deepseek-chat\",\"modalities\":[\"text\",\"tool_use\"],\"custom_extra_body\":{},\"max_context_tokens\":64000}"
+  },
+  {
+    "file": "$HOME/ab/data/cmd_config.json",
+    "format": "json",
+    "keyPath": "agent_runner.config.model.provider_id",
+    "kind": "key",
+    "before": "\"mine/gpt-4o\"",
+    "after": "\"astra/gpt-5\""
+  }
+]

@@ -112,6 +112,12 @@ export const CLIENT_KINDS = [
   'ante',
   'craft-agents',
   'tuanjie-cowork',
+  'liveagent',
+  'openmausbot',
+  'astrbot',
+  'qwenpaw',
+  'openclaw',
+  'openbot',
 ] as const;
 
 /** A client a plugin adds (a magpie agent plugin): "plugin-" and magpie's agent id. */

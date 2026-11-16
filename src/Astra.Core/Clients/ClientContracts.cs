@@ -72,6 +72,12 @@ public static class ClientKinds
     public const string Ante = "ante";
     public const string CraftAgents = "craft-agents";
     public const string TuanjieCowork = "tuanjie-cowork";
+    public const string LiveAgent = "liveagent";
+    public const string OpenMausBot = "openmausbot";
+    public const string AstrBot = "astrbot";
+    public const string QwenPaw = "qwenpaw";
+    public const string OpenClaw = "openclaw";
+    public const string OpenBot = "openbot";
 
     public static readonly IReadOnlyList<string> All =
     [
@@ -81,6 +87,7 @@ public static class ClientKinds
         OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
         ZooCode, JetBrainsAir, AirIde, CopilotJetBrains, CodeBuddy, Qoder, QoderCn, T3Code, Pencil, OpenPencil, Raycast, Obsidian,
         Reasonix, Morph, Jcode, Vibe, Empryo, Nanobot, MiniQ, Paimon, Cline, GrokApp, AtomCode, Snow, Ante, CraftAgents, TuanjieCowork,
+        LiveAgent, OpenMausBot, AstrBot, QwenPaw, OpenClaw, OpenBot,
     ];
 
     /// <summary>
@@ -97,6 +104,7 @@ public static class ClientKinds
         OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
         ZooCode, JetBrainsAir, AirIde, CopilotJetBrains, CodeBuddy, Qoder, QoderCn, T3Code, Pencil, OpenPencil, Raycast, Obsidian,
         Reasonix, Morph, Jcode, Vibe, Empryo, Nanobot, MiniQ, Paimon, Cline, GrokApp, AtomCode, Snow, Ante, CraftAgents, TuanjieCowork,
+        LiveAgent, OpenMausBot, AstrBot, QwenPaw, OpenClaw, OpenBot,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>
@@ -129,7 +137,8 @@ public static class ClientKinds
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
         Codex or GrokBuild or MuseCode or PenguinHarness or Morph => ApiProtocol.OpenAIResponses,
-        ClaudeCode or ClaudeDesktop or Paseo or T3Code => ApiProtocol.Anthropic,
+        Codex or GrokBuild or MuseCode or PenguinHarness => ApiProtocol.OpenAIResponses,
+        ClaudeCode or ClaudeDesktop or Paseo or T3Code or OpenMausBot => ApiProtocol.Anthropic,
         GeminiCli or AntigravityCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,
     };

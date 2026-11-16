@@ -74,6 +74,12 @@ public static class ClientNames
         ["ante"] = "Ante",
         ["craft-agents"] = "Craft Agents",
         ["tuanjie-cowork"] = "Tuanjie Cowork",
+        ["liveagent"] = "LiveAgent",
+        ["openmausbot"] = "OpenMausBot",
+        ["astrbot"] = "AstrBot",
+        ["qwenpaw"] = "QwenPaw",
+        ["openclaw"] = "OpenClaw",
+        ["openbot"] = "OpenBot",
     };
 
     /// <summary>The name of a client kind; "—" for none.</summary>

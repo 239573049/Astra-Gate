@@ -117,6 +117,7 @@ const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
   'zoo-code', 'jetbrains-air', 'air-ide', 'copilot-jetbrains', 'codebuddy', 'qoder', 'qoder-cn', 't3code', 'pencil', 'openpencil', 'raycast', 'obsidian',
   'reasonix', 'morph', 'jcode', 'vibe', 'empryo', 'nanobot', 'miniq', 'paimon', 'cline', 'grok-app', 'atomcode', 'snow', 'ante', 'craft-agents', 'tuanjie-cowork',
+  'liveagent', 'openmausbot', 'astrbot', 'qwenpaw', 'openclaw', 'openbot',
 ]);
 
 /** The built-in clients in their order, then the clients agent plugins add ("plugin-<id>"), by name. */
