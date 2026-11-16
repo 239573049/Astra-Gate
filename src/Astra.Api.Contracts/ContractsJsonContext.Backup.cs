@@ -19,7 +19,6 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(SyncStatusDto))]
 [JsonSerializable(typeof(SyncTargetInput))]
 [JsonSerializable(typeof(SyncConfigInput))]
-[JsonSerializable(typeof(SyncNowInput))]
 [JsonSerializable(typeof(SyncRunDto))]
 [JsonSerializable(typeof(RemoteBackupInput))]
 [JsonSerializable(typeof(RemoteBackupDto))]

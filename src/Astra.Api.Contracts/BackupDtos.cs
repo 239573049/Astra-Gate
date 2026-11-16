@@ -60,10 +60,7 @@ public sealed record SyncTargetInput(
 public sealed record SyncConfigInput(
     SyncTargetInput? Target, string? Passphrase, int? IntervalMinutes, List<string>? Sections, bool? IncludeKeys, bool? IncludeSignins, bool? Enabled);
 
-/// <summary>Body of <c>POST /api/sync/now</c>.</summary>
-public sealed record SyncNowInput(bool? DryRun);
-
-/// <summary>What a sync run did (or would do): documents pushed, pulled, the conflicts it settled and what it brought in.</summary>
+/// <summary>What a sync run did (<c>POST /api/sync/now</c>, or with <c>?dryRun=true</c> would do): documents pushed, pulled, the conflicts it settled and what it brought in.</summary>
 public sealed record SyncRunDto(
     int Pushed, int Pulled, bool DryRun, bool FirstSync, IReadOnlyList<SyncConflictDto> Conflicts, IReadOnlyList<BackupItemDto> Items, IReadOnlyList<string> Errors);
 

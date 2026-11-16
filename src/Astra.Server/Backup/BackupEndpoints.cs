@@ -142,10 +142,10 @@ public static class BackupEndpoints
             return Results.Ok(new { ok = true });
         });
 
-        sync.MapPost("/now", async (HttpContext http, SyncNowInput? input, SyncService svc, CancellationToken ct) =>
+        sync.MapPost("/now", async (HttpContext http, SyncService svc, CancellationToken ct, bool dryRun = false) =>
         {
             RequireLocal(http, "Sync can only be used on this machine");
-            var r = await svc.RunAsync(input?.DryRun == true, ct);
+            var r = await svc.RunAsync(dryRun, ct);
             return Results.Ok(new SyncRunDto(r.Pushed, r.Pulled, r.DryRun, r.FirstSync, r.Conflicts.Select(Map).ToList(),
                 r.Items.Select(i => new BackupItemDto(i.Section + "/" + i.Id, i.Label, i.Status)).ToList(), r.Errors));
         });
