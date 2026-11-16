@@ -15,6 +15,7 @@ using Astra.Providers.Subscription;
 using Astra.Providers.Templates;
 using Astra.Server.Alerts;
 using Astra.Server.Api;
+using Astra.Server.Backup;
 using Astra.Server.Security;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -102,6 +103,20 @@ public static class AstraApp
         builder.Services.AddSingleton<ResourceLibraryService>();
         builder.Services.AddSingleton<ProviderBackupService>();
         builder.Services.AddSingleton<WebDavBackupService>();
+        // whole-installation backup, restore and multi-machine sync (linked update 38)
+        builder.Services.AddSingleton<Astra.Server.Backup.SyncStateStore>();
+        builder.Services.AddSingleton<Astra.Server.Backup.DeviceIdentity>();
+        builder.Services.AddSingleton<Astra.Server.Backup.ConfigDocs>();
+        builder.Services.AddSingleton<Astra.Server.Backup.BackupService>();
+        builder.Services.AddSingleton<Astra.Server.Backup.AutoBackupService>();
+        builder.Services.AddSingleton<Astra.Server.Backup.RestoreService>();
+        builder.Services.AddSingleton<Astra.Server.Backup.SyncService>();
+        builder.Services.AddSingleton<Astra.Server.Backup.BackupAccess>();
+        builder.Services.AddHostedService<Astra.Server.Backup.AutoBackupWorker>();
+        builder.Services.AddHostedService<Astra.Server.Backup.SyncWorker>();
+        builder.Services.AddHttpClient(Astra.Server.Backup.SyncTargets.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(120))
+            .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
         builder.Services.AddHttpClient(WebDavBackupService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
             .RemoveAllLoggers();
@@ -416,6 +431,7 @@ public static class AstraApp
         app.MapTunnelEndpoints();
         app.MapAutostartEndpoints();
         app.MapWebDavBackupEndpoints();
+        app.MapBackupEndpoints();
 
         // SPA fallback for everything that is not an API / gateway route.
         app.MapFallback(async ctx =>

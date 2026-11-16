@@ -13,6 +13,8 @@ export interface AstraPaths {
   toolsDir: string;
   /** Resource library (Skills Astra manages; client directories link into it). */
   libraryDir: string;
+  /** Automatic whole-installation backups (backups/auto). */
+  autoBackupsDir: string;
   /** State of astra-connect (the employee CLI): profile.json, state.json, backups/. The server never reads it. */
   connectDir: string;
   /** Path of the server's log file for a given day: astra-YYYYMMDD.log. */
@@ -41,6 +43,7 @@ export function astraPaths(
     pluginsDir: path.join(home, 'plugins'),
     toolsDir: path.join(home, 'tools'),
     libraryDir: path.join(home, 'library'),
+    autoBackupsDir: path.join(home, 'backups', 'auto'),
     connectDir: path.join(home, 'connect'),
     logFile: (date: Date) => path.join(home, 'logs', logFileName(date)),
   };

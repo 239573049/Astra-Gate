@@ -17,6 +17,9 @@ public sealed class LibraryService(AstraDatabase db, ClientEnvironment env, Astr
     private sealed record Probe(string Dir, bool Temporary, string SourceKind, string? SourceJson, List<SkillCandidate> Skills, DateTimeOffset Created);
 
     private readonly SkillLibrary _skills = new(env, paths, db.Library);
+
+    /// <summary>The Skill engine (one gate for every change), for the backup service to restore Skills through.</summary>
+    public SkillLibrary Engine => _skills;
     private readonly SkillRouter _router = new(env, paths, db.Library, db.LibraryResources);
     private readonly ConcurrentDictionary<string, Probe> _probes = new();
 

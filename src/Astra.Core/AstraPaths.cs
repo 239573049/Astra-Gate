@@ -20,6 +20,9 @@ public sealed class AstraPaths
     public string BackupsDir => Path.Combine(Root, "backups");
     public string ClientBackupsDir => Path.Combine(BackupsDir, "client-configs");
     public string DbBackupsDir => Path.Combine(BackupsDir, "db");
+
+    /// <summary>Automatic whole-installation backups (and the ones kept before a restore or an update): backups/auto/astra-*.astra-backup.</summary>
+    public string AutoBackupsDir => Path.Combine(BackupsDir, "auto");
     public string BodiesDir => Path.Combine(Root, "bodies");
 
     /// <summary>Helper programs Astra downloads for itself (cloudflared for remote access): tools/&lt;name&gt;-&lt;version&gt;/.</summary>

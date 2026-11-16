@@ -25,12 +25,13 @@ public static class BackupEnvelope
     private const int MaxFileBytes = 96 * 1024 * 1024;
 
     /// <summary>Encrypts <paramref name="bundle"/>; with a null passphrase writes the plain shape (refused when the bundle holds secrets).</summary>
-    public static byte[] Seal(JsonObject bundle, string? passphrase, bool hasKeys, int iterations = DefaultIterations, string format = Format)
+    public static byte[] Seal(JsonObject bundle, string? passphrase, bool hasKeys, int iterations = DefaultIterations, string format = Format, string? content = null)
     {
         if (string.IsNullOrEmpty(passphrase))
         {
             if (hasKeys) throw new AdminApiException(400, "A backup with keys must be encrypted with a passphrase");
             var file = new JsonObject { ["format"] = format, ["version"] = Version, ["kdf"] = "none", ["bundle"] = bundle.DeepClone() };
+            if (content is not null) file["content"] = content;
             return Encoding.UTF8.GetBytes(file.ToJsonString());
         }
         RequirePassphrase(passphrase);
@@ -46,6 +47,7 @@ public static class BackupEnvelope
             ["format"] = format, ["version"] = Version, ["kdf"] = "pbkdf2-sha256", ["iterations"] = iterations,
             ["salt"] = Convert.ToBase64String(salt), ["nonce"] = Convert.ToBase64String(nonce), ["data"] = Convert.ToBase64String([.. cipher, .. tag]),
         };
+        if (content is not null) envelope["content"] = content;
         return Encoding.UTF8.GetBytes(envelope.ToJsonString());
     }
 

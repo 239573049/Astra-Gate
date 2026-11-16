@@ -131,6 +131,10 @@ public static class BackupCatalog
         ["mcp_local_servers"] = (TableClass.Config, "the user's own MCP servers"),
         ["library_skills"] = (TableClass.Config, "the Skill library (rows + files, restored through SkillLibrary)"),
         ["library_placements"] = (TableClass.MachineLocal, "paths of the links Astra made on this machine"),
+        ["library_projects"] = (TableClass.MachineLocal, "absolute project directories of this machine"),
+        ["library_writes"] = (TableClass.MachineLocal, "ledger of the files / blocks the library wrote on this machine"),
+        ["library_router"] = (TableClass.MachineLocal, "which clients have the skill router link on this machine"),
+        ["library_items"] = (TableClass.Config, "instructions / agents / commands / hooks / env of the library (rows only; the client files are written again by the library's own apply)"),
         ["plugin_kv"] = (TableClass.Config, "v2 plugin data"),
         ["plugin_secrets"] = (TableClass.Config, "v2 plugin secrets (with keys only)"),
         ["plugin_grants"] = (TableClass.Config, "v2 plugin permission grants"),
@@ -162,7 +166,8 @@ public static class BackupCatalog
         new("mcp_servers", "mcp_servers", BackupSections.Mcp, ["id"], Secret: ["headers_enc"],
             Skip: ["status", "status_message", "protocol_version", "checked_at"]),
         new("mcp_oauth", "mcp_oauth", BackupSections.Mcp, ["server_id"], Secret: ["tokens_enc"], Parent: "mcp_servers", ParentColumns: ["server_id"], RequiresSecret: true),
-        new("mcp_local_servers", "mcp_local_servers", BackupSections.Mcp, ["id"], Secret: ["env_enc", "headers_enc"]),
+        new("mcp_local_servers", "mcp_local_servers", BackupSections.Mcp, ["id"], Secret: ["env_enc", "headers_enc"], Skip: ["projects_json"]),
+        new("library_items", "library_items", BackupSections.Library, ["id"]),
 
         new("webhooks", "webhooks", BackupSections.Alerts, ["id"], Secret: ["secret_enc", "headers_enc"]),
         new("alert_rules", "alert_rules", BackupSections.Alerts, ["id"]),
@@ -206,6 +211,7 @@ public static class BackupCatalog
         ["privacy"] = BackupSections.Privacy,
         ["tools"] = BackupSections.Tools,
         ["client_profiles"] = BackupSections.Profiles,
+        ["library_market"] = BackupSections.Settings,
         // This machine's own: update checks, migration markers, the unified-gateway link, the server's own placeholder key,
         // direct-mode state and the backup / sync configuration itself.
         ["update.state"] = null,
