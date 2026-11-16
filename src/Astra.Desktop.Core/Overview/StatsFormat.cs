@@ -23,19 +23,24 @@ public static class StatsFormat
     /// <summary>"$12.34", "$0.0213", "$0.009" — 3 significant digits below $1 so per-request costs stay visible (<c>formatUsd</c>).</summary>
     public static string Usd(decimal? usd)
     {
-        if (usd is not { } v) return Dash;
+        if (usd is not { } amount) return Dash;
+        // The amount is USD; it reads in the display currency (settings; USD by default).
+        var c = Currency.DisplayMoney.Current;
+        var v = amount * c.Rate;
         var abs = Math.Abs(v);
-        if (abs == 0) return "$0";
-        if (abs >= 1) return "$" + v.ToString("N2", Inv);
-        return "$" + SignificantDigits(v, 3);
+        if (abs == 0) return c.Symbol + "0";
+        if (abs >= 1) return c.Symbol + v.ToString("N" + c.Info.Decimals, Inv);
+        return c.Symbol + SignificantDigits(v, 3);
     }
 
-    /// <summary>Short axis label: "$0.01", "$2.5", "$1.2K" (<c>formatUsdAxis</c>).</summary>
+    /// <summary>Short axis label: "$0.01", "$2.5", "$1.2K" (<c>formatUsdAxis</c>), in the display currency.</summary>
     public static string UsdAxis(decimal usd)
     {
-        if (usd == 0) return "$0";
-        if (Math.Abs(usd) >= 1000) return "$" + Compact(usd);
-        return "$" + SignificantDigits(usd, 2);
+        var c = Currency.DisplayMoney.Current;
+        var v = usd * c.Rate;
+        if (v == 0) return c.Symbol + "0";
+        if (Math.Abs(v) >= 1000) return c.Symbol + Compact(v);
+        return c.Symbol + SignificantDigits(v, 2);
     }
 
     /// <summary>Nanodollars as <see cref="Usd"/> (<c>formatNanos</c>); null is a dash.</summary>

@@ -25,7 +25,8 @@ import { Badge, Button, Dot, EmptyState, Field, Input, NumberInput, Segmented, S
 import { errorText, Menu, Select, Sheet, useFeedback } from '../components/ui/overlays';
 import { usePluginMenuItems } from '../plugin-ui/menus';
 import { useI18n } from '../i18n';
-import { formatDateTime, formatPercent, formatTime, formatTokens, formatTps, formatUsd } from '../lib/format';
+import { getDisplayCurrency, toUsd, usdToInputValue } from '../lib/currency';
+import { formatDateTime, formatPercent, formatPlainUsd, formatTime, formatTokens, formatTps, formatUsd } from '../lib/format';
 import { systemActions } from '../shell/systemActions';
 
 /** Tokens (plan: tokens): shared gateway credentials with today's and lifetime usage. */
@@ -484,7 +485,8 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
     if (!token) return;
     setName(token.name);
     setPool(poolDraftOf(token));
-    setBudgets(token.limits?.budgets.map((b) => ({ ...b })) ?? []);
+    // A cost limit is USD on the server and typed in the display currency here; `usd` keeps the saved dollars so an untouched row is not re-rounded.
+    setBudgets(token.limits?.budgets.map((b) => (b.metric === 'cost' ? { ...b, limit: usdToInputValue(b.limit), usd: b.limit, shown: usdToInputValue(b.limit) } : { ...b })) ?? []);
     setRpm(token.limits?.rpm ?? null);
     setClientsMode(token.allowedClients == null ? 'any' : 'only');
     setAllowed(token.allowedClients ?? []);
@@ -493,7 +495,12 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
 
   const save = () => {
     if (!token) return;
-    const kept: TokenBudget[] = budgets.flatMap((b) => (b.limit != null && b.limit > 0 ? [{ ...b, limit: b.limit }] : []));
+    const kept: TokenBudget[] = budgets.flatMap((b) => {
+      if (b.limit == null || b.limit <= 0) return [];
+      const { usd, shown, ...budget } = b;
+      const limit = b.metric === 'cost' ? (usd != null && b.limit === shown ? usd : Math.round(toUsd(b.limit) * 1e9) / 1e9) : b.limit;
+      return [{ ...budget, limit }];
+    });
     const limits = kept.length > 0 || (rpm != null && rpm > 0) ? { budgets: kept, rpm: rpm != null && rpm > 0 ? Math.floor(rpm) : null } : null;
     update.mutate(
       {
@@ -581,13 +588,14 @@ function TokenSettingsSheet({ token, onClose }: { token: Token | null; onClose: 
 }
 
 /** A budget being edited: the limit stays null while its field is empty (dropped on save). */
-type DraftBudget = Omit<TokenBudget, 'limit'> & { limit: number | null };
+type DraftBudget = Omit<TokenBudget, 'limit'> & { limit: number | null; usd?: number; shown?: number };
 
 const METRICS: TokenLimitMetric[] = ['cost', 'requests', 'tokens'];
 const PERIODS: TokenLimitPeriod[] = ['day', 'week', 'month', 'total'];
 
 function BudgetsEditor({ budgets, onChange }: { budgets: DraftBudget[]; onChange: (b: DraftBudget[]) => void }) {
   const { t } = useI18n();
+  const currency = getDisplayCurrency();
   const set = (i: number, patch: Partial<DraftBudget>) => onChange(budgets.map((b, j) => (j === i ? { ...b, ...patch } : b)));
   // A new row starts on the first metric × period not used yet.
   const free = METRICS.flatMap((metric) => PERIODS.map((period) => ({ metric, period })))
@@ -596,7 +604,8 @@ function BudgetsEditor({ budgets, onChange }: { budgets: DraftBudget[]; onChange
     <div className="grid gap-2">
       {budgets.length === 0 && <div className="text-[12px] text-[var(--text-muted)]">{t('tokens.unlimited')}</div>}
       {budgets.map((b, i) => (
-        <div key={i} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
+        <div key={i}>
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] items-center gap-2">
           <Select
             ariaLabel={t('tokens.limitMetric')}
             value={b.metric}
@@ -614,7 +623,7 @@ function BudgetsEditor({ budgets, onChange }: { budgets: DraftBudget[]; onChange
             value={b.limit}
             min={0}
             step={b.metric === 'cost' ? 'any' : 1}
-            placeholder={t('tokens.limitValue')}
+            placeholder={b.metric === 'cost' ? `${t('tokens.limitValue')} (${currency.code})` : t('tokens.limitValue')}
             onChange={(limit) => set(i, { limit })}
           />
           <Button
@@ -625,6 +634,10 @@ function BudgetsEditor({ budgets, onChange }: { budgets: DraftBudget[]; onChange
             title={t('tokens.removeLimit')}
             onClick={() => onChange(budgets.filter((_, j) => j !== i))}
           />
+        </div>
+          {b.metric === 'cost' && currency.code !== 'USD' && b.limit != null && b.limit > 0 && (
+            <div className="num mt-1 text-[11px] text-[var(--text-muted)]">{t('tokens.limitUsdEquivalent', { usd: formatPlainUsd(toUsd(b.limit)) })}</div>
+          )}
         </div>
       ))}
       {free && (

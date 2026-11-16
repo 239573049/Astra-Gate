@@ -61,6 +61,7 @@ public static class RequestTable
             new("tps", Loc.T("requests.col.tps"), 92, true, r => r.Tps, r => Right(Plain(RequestFormat.Tps(r.Summary.OutputTps), true, Loc.T("requests.detail.tps")))),
             new("tokens", Loc.T("requests.col.tokens"), 116, true, r => r.Tokens, TokensCell),
             new("cache", Loc.T("requests.col.cache"), 136, true, r => r.Cache, CacheCell),
+            new("context", Loc.T("requests.col.context"), 92, true, r => r.ContextFill, ContextCell),
             new("cost", Loc.T("requests.col.cost"), 92, true, r => r.Cost, CostCell),
         ];
     }
@@ -224,6 +225,14 @@ public static class RequestTable
 
     private static Control CacheCell(RequestRowViewModel row)
         => TwoLine(RequestPresentation.CacheCell(UsageSplit.Of(row.Summary), T), ArcDesignTokenKind.Success, ArcDesignTokenKind.TextSecondary, ArcDesignTokenKind.TypeXS);
+
+    private static Control ContextCell(RequestRowViewModel row)
+    {
+        var cell = ContextPresentation.Cell(row.Summary.Context, T);
+        var tone = row.Summary.Context?.Fill is { } fill ? ContextPresentation.ToneOf(fill) : ContextPresentation.Tone.Ok;
+        return TwoLine(cell, tone switch { ContextPresentation.Tone.Danger => ArcDesignTokenKind.Danger, ContextPresentation.Tone.Warn => ArcDesignTokenKind.Warning, _ => ArcDesignTokenKind.Foreground },
+            ArcDesignTokenKind.TextSecondary, ArcDesignTokenKind.TypeSM);
+    }
 
     private static Control CostCell(RequestRowViewModel row)
     {

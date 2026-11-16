@@ -699,6 +699,25 @@ runtime needed on the target).
     plugins in their own `pluginsV2` array (never `plugins`, so an older Astra never installs one as v1): `PluginMarket.ToV2Listing`,
     the website's `lib/plugin-market` (`toV2`, `metaFromAstraManifest`, `readManifests`), and linked update 10 applies.
 
+28. **Display currency and the context-window view** (magpie-parity, MIT): money is still USD nanodollars everywhere stored and sent;
+    `AppSettings.DisplayCurrency` + `CurrencyRates` (code → units per 1 USD, decimal strings, **entered by the user — Astra makes no
+    network request for exchange rates**; no migration) only change how it reads. `Astra.Core/Currency/DisplayCurrency.cs` (`Currencies`
+    catalog, `Resolve`, `Validate`: a display currency needs a rate; `PATCH /api/settings` `displayCurrency` / `currencyRates` revert both
+    on an invalid pair) has two mirrors that read it per shell: the web's `lib/currency.ts` (`formatUsd` / `formatUsdAxis` / `formatCostShort`
+    delegate to it; `DisplayCurrencyProvider` keeps it in step with the settings and re-mounts the pages) and
+    `Astra.Desktop.Core/Currency/DisplayMoney.cs` (set by `SettingsStore`; `StatsFormat` / `TraceFormat` / `ProviderFormat` / `PriceFormat` /
+    `TrayMath` / `AccountRules` read it; the shell redraws the page on a change). A new money formatter goes through those, never a literal
+    `"$"`. Typed money (token cost limits) is entered in the display currency and saved as USD with the USD equivalent shown
+    (`TokensPage` `BudgetsEditor`, `BudgetRules.UsdLimit`); unit prices in pricing JSON, provider quota amounts (their own currency),
+    gateway error text, token self-service views and webhook payload fields stay USD — only the alert message *text* reads in the display
+    currency (`AlertMessages.Format`'s `currency`). **Context window**: `requests.context_json` (migration 0026, `ContextReport`: the effective
+    model's window / max output at request time + `ContextShares`, an estimate of system / tools / history / latest turn from the client's body,
+    `Gateway/Tracing/ContextEstimator`, characters not tokens; set in `GatewayPipeline` next to `SystemModelId`) becomes `ContextUsageDto`
+    (`RequestEndpoints.ContextOf`: fill = `TotalInputTokens` / window, parts scaled to the reported input) on the admin request summary and detail
+    only — never the token-holder views. Mirrors: `web/src/lib/context.ts` + `components/ContextFill.tsx` (requests column and detail),
+    `Astra.Desktop.Core/Requests/ContextPresentation.cs` + `RequestTable` / `ContextSectionView`, zh/en `context.*`, `settings.currency.*`,
+    `requests.col.context`, `tokens.limitUsdEquivalent` (+ `gen-desktop-i18n`), and the website's `settings.mdx` / `requests` docs.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

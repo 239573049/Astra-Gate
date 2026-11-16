@@ -10,12 +10,18 @@ namespace Astra.Server.Alerts;
 /// </summary>
 public static class AlertMessages
 {
-    public static string Format(string locale, string eventId, string status, string subject, JsonObject observed, JsonObject condition)
+    public static string Format(string locale, string eventId, string status, string subject, JsonObject observed, JsonObject condition,
+        Astra.Core.Currency.DisplayCurrencyContext? currency = null)
     {
         var en = locale == "en";
         var resolved = status == "resolved";
         string O(string key) => Text(observed[key]);
         var value = Text(condition["value"]);
+        // A cost budget's used / limit are USD in the observation (and the webhook payload); the message reads in the display currency.
+        // Only when the display currency is not USD, so a USD install reads as before.
+        string Amt(string key) => O("metric") == "cost" && currency is { IsUsd: false } c && AlertConditions.Num(observed[key]) is { } n
+            ? c.FormatUsd((decimal)n)
+            : O(key);
         switch (eventId)
         {
             case AlertEventIds.ProviderBalanceLow:
@@ -52,14 +58,14 @@ public static class AlertMessages
                 var what = Budget(O("period"), O("metric"), en);
                 return resolved
                     ? en ? $"Token {subject}: {what} is down to {O("usedPercent")}%." : $"令牌 {subject} 的{what}额度已回落到 {O("usedPercent")}%。"
-                    : en ? $"Token {subject} has used {O("usedPercent")}% of its {what} limit ({O("used")} / {O("limit")})." : $"令牌 {subject} 的{what}额度已用 {O("usedPercent")}%（{O("used")} / {O("limit")}）。";
+                    : en ? $"Token {subject} has used {O("usedPercent")}% of its {what} limit ({Amt("used")} / {Amt("limit")})." : $"令牌 {subject} 的{what}额度已用 {O("usedPercent")}%（{Amt("used")} / {Amt("limit")}）。";
             }
             case AlertEventIds.TokenLimitReached:
                 if (resolved) return en ? $"Token {subject} is within its limits again." : $"令牌 {subject} 的额度已恢复。";
                 if (O("key") == "rpm") return en ? $"Token {subject} hit its requests-per-minute limit." : $"令牌 {subject} 达到每分钟请求上限。";
                 return en
-                    ? $"Token {subject} used up its {Budget(O("period"), O("metric"), en)} limit ({O("used")} / {O("limit")})."
-                    : $"令牌 {subject} 的{Budget(O("period"), O("metric"), en)}额度已用完（{O("used")} / {O("limit")}）。";
+                    ? $"Token {subject} used up its {Budget(O("period"), O("metric"), en)} limit ({Amt("used")} / {Amt("limit")})."
+                    : $"令牌 {subject} 的{Budget(O("period"), O("metric"), en)}额度已用完（{Amt("used")} / {Amt("limit")}）。";
             default:
                 return en ? "Test notification from Astra." : "这是一条来自 Astra 的测试通知。";
         }

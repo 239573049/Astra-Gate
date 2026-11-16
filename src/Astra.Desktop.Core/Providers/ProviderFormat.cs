@@ -35,14 +35,17 @@ public static class ProviderFormat
     public static string FormatUsd(decimal? usd)
     {
         if (usd is null) return "—";
-        var abs = Math.Abs(usd.Value);
-        if (abs == 0) return "$0";
-        if (abs >= 1) return "$" + usd.Value.ToString("#,##0.00", En);
+        // USD in, the display currency out (settings; USD by default).
+        var c = Currency.DisplayMoney.Current;
+        var v = usd.Value * c.Rate;
+        var abs = Math.Abs(v);
+        if (abs == 0) return c.Symbol + "0";
+        if (abs >= 1) return c.Symbol + v.ToString("#,##0." + new string('0', c.Info.Decimals), En).TrimEnd('.');
         // maximumSignificantDigits 3: round to 3 significant digits, drop trailing zeros.
         var digits = (int)Math.Floor(Math.Log10((double)abs));
         var scale = 2 - digits;
-        var rounded = Math.Round(usd.Value, Math.Clamp(scale, 0, 28), MidpointRounding.AwayFromZero);
-        return "$" + rounded.ToString("0.##########", En);
+        var rounded = Math.Round(v, Math.Clamp(scale, 0, 28), MidpointRounding.AwayFromZero);
+        return c.Symbol + rounded.ToString("0.##########", En);
     }
 
     /// <summary>The host of a URL, the text itself when it does not parse, null for none (web <c>hostOf</c>).</summary>

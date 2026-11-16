@@ -127,6 +127,7 @@ public sealed class RequestDetailSheet : Sheet
         stack.Children.Add(columns);
 
         stack.Children.Add(TokenUsageSummaryView.Create(UsageSplit.Of(r)));
+        if (ContextSectionView.Create(r.Context) is { } contextSection) stack.Children.Add(contextSection);
 
         if (!string.IsNullOrEmpty(r.ErrorType) || !string.IsNullOrEmpty(r.ErrorMessage))
             stack.Children.Add(new Alert { Tone = AlertTone.Danger, Title = r.ErrorType ?? Loc.T("requests.detail.error"), Content = r.ErrorMessage });

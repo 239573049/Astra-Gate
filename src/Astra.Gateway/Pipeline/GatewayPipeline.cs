@@ -260,6 +260,8 @@ public sealed partial class GatewayPipeline(
                                        && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
             var clientCacheTtl = ClientOptions.GetCacheTtl(route.Client?.ExtraJson);
             var clientCodec = codecs.Get(inbound);
+            // What the prompt is made of, estimated once from the client's own body (the request log's context-window view).
+            var contextShares = EstimateContext(inbound, body);
             // Decoded from the client's tree the first time a translated attempt needs it; every encode starts from the
             // decoder's own warnings, so a retry reports only its own lossy mappings.
             UnifiedRequest? ir = null;
@@ -435,6 +437,7 @@ public sealed partial class GatewayPipeline(
                     : await models.ResolveByModelIdAsync(provider, upstreamModel, ct);
                 effective = attemptEffective;
                 record.SystemModelId = attemptEffective.SystemModelId;
+                record.ContextJson = Json.Serialize(new ContextReport(attemptEffective.ContextWindow, attemptEffective.MaxOutputTokens, contextShares));
                 live.Update(record);
 
                 // What we send upstream: one tree, serialized once at the end — or the client's bytes when untouched.
@@ -1964,6 +1967,13 @@ public sealed partial class GatewayPipeline(
             if (response.Headers.TryGetValues(name, out var values) && values.FirstOrDefault() is { Length: > 0 } v) return Truncate(v, 200);
         }
         return null;
+    }
+
+    /// <summary>Log-only: the estimate must never fail a request.</summary>
+    private static ContextShares? EstimateContext(ApiProtocol inbound, JsonObject body)
+    {
+        try { return ContextEstimator.Estimate(inbound, body); }
+        catch (Exception) { return null; }
     }
 
     private static string? Str(JsonObject o, string key) =>

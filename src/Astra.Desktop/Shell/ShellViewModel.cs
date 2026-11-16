@@ -38,7 +38,13 @@ public sealed partial class ShellViewModel : ObservableObject
         // Menu items and shortcuts reach the page host through the desktop host (web: onMenuCommand).
         Context.Host.MenuCommandReceived += command => Context.Queries.Dispatcher.Post(() => _commands.Handle(command));
         Navigator.Attach(Context);
-        Status = new ShellStatusViewModel(Context, connection);
+        // Amounts are formatted when a page is built: a new display currency (settings) draws the shown page again, unless it holds
+        // edits that were not saved yet (those pages pick it up on the next visit).
+        Astra.Desktop.Core.Currency.DisplayMoney.Changed += () => Context.Queries.Dispatcher.Post(() =>
+        {
+            if (!Navigator.HoldsUnsavedWork) Navigator.Navigate(Navigator.Current.Route, Navigator.Current.Param);
+        });
+        Status =new ShellStatusViewModel(Context, connection);
     }
 
     /// <summary>The clients-outdated banner and the sidebar's remote-access note.</summary>

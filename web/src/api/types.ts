@@ -581,6 +581,13 @@ export interface TokenMutationResult { token?: Token | null; rewritten: ClientKi
 export type RequestStatus = "success" | "upstream_error" | "gateway_error" | "client_cancelled" | "blocked" | "pending";
 // GET /api/requests -> RequestPage (totalCostNanoUsd sums every matching request, all pages)
 export interface RequestPage extends Page<RequestSummary> { totalCostNanoUsd: number }
+/** What the prompt was made of, estimated (character shares of the request body scaled to the reported prompt tokens). */
+export interface ContextParts { system: number; tools: number; history: number; latest: number }
+/** Prompt tokens (input + cache) against the model's window at request time; `fill` = promptTokens / window (null without either). */
+export interface ContextUsage {
+  promptTokens: number; window?: number | null; fill?: number | null; cacheReadTokens: number;
+  outputTokens: number; maxOutput?: number | null; parts?: ContextParts | null;
+}
 export interface RequestSummary {
   id: string; startedAtUtc: string; clientKind?: string | null; providerId?: string | null; providerName?: string | null;
   inboundProtocol: ApiProtocol; upstreamProtocol?: ApiProtocol | null; passthrough: boolean;
@@ -618,6 +625,8 @@ export interface RequestSummary {
   phases?: string | null;
   /** Smart routing's decision, for a request to the virtual model only. */
   routing?: RequestRouting | null;
+  /** How full the model's context window was; null for rows logged before it was kept. */
+  context?: ContextUsage | null;
   /** Live feed only: the upstream attempts so far (the last one may still be in flight). */
   attempts?: RequestAttempt[] | null;
   /** Live feed only: why the request was sent — the user's input or tool results. */
@@ -1004,6 +1013,10 @@ export interface Settings {
   modelProviderSeparator?: string;
   /** Which ids carry the alias while providerQualifiedModels is on: only those several providers serve ("shared", default) or every one ("all"). */
   modelQualifyScope?: QualifyScope;
+  /** Currency amounts are shown in (ISO code; default USD). Money stays USD underneath; a currency needs a rate in currencyRates. */
+  displayCurrency?: string;
+  /** Exchange rates typed by the user: code to units of that currency per 1 USD (decimal strings). Astra never fetches rates. */
+  currencyRates?: Record<string, string>;
   /** Release channel for updates: stable (default) or the opt-in preview channel (previews plus every stable). */
   updateChannel: "stable" | "preview"; updateAutoCheck: boolean;
   /** Request body coding for providers that compress (e.g. ChatGPT subscription's zstd): default = each provider's own; none = off. */

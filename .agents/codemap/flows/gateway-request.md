@@ -67,6 +67,10 @@ persisted at the end.
    model is refused with a 400. Attributes `astra.route.*` go on the `gateway.resolve` span; recent outcomes are kept in
    memory (`Routing/RoutingActivity.cs`) for the console's status. Settings: `Routing/SmartRoutingService.cs` (key
    `smart_routing`).
+    **Context window** (`context_json`, migration 0026): once the client body is parsed, `ContextEstimator` splits the prompt by characters
+    into system / tools / history / latest turn (`ContextShares`); where `SystemModelId` is set per attempt the record also gets the effective
+    model's `ContextWindow` / `MaxOutputTokens` (`ContextReport`). The admin request DTOs turn it into fill % and token parts
+    (`RequestEndpoints.ContextOf`); token self-service views never see it.
     **Provider-qualified ids** (issue #21, `AppSettings.ProviderQualifiedModels`, off by default): any other model goes
    through `Pipeline/QualifiedModelRouting.cs:ApplyAsync` — `Core/Routing/ModelQualifier.TrySplit` cuts `model@alias` at the last
    separator whose right side is the alias (`Provider.Alias()`: `settings.alias`, else the name) of one of the caller's own

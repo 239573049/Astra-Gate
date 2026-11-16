@@ -432,6 +432,21 @@ public class RequestRepositoryTests
     }
 
     [Fact]
+    public async Task Context_Report_Round_Trips_In_The_Page_And_The_Detail()
+    {
+        var db = await TestDb.InitializeAsync();
+        var withContext = Success("01TEST0000000000000000000C", T0, "codex", "p1", "Alpha", "gpt-5", 0, 10, 5, 100);
+        withContext.ContextJson = """{"window":400000,"max_output":128000,"shares":{"system":0.1,"tools":0.2,"history":0.6,"latest":0.1}}""";
+        var plain = Success("01TEST0000000000000000000D", T1, "codex", "p1", "Alpha", "gpt-5", 1, 10, 5, 100);
+        await db.Requests.InsertBatchAsync([withContext, plain]);
+
+        Assert.Equal(withContext.ContextJson, (await db.Requests.GetAsync(withContext.Id))!.ContextJson);
+        var page = await db.Requests.QueryAsync(new RequestQuery());
+        Assert.Equal(withContext.ContextJson, page.Items.Single(r => r.Id == withContext.Id).ContextJson);
+        Assert.Null(page.Items.Single(r => r.Id == plain.Id).ContextJson); // rows logged before 0026 have none
+    }
+
+    [Fact]
     public async Task Routing_Report_Round_Trips_In_The_Page_And_The_Detail()
     {
         var db = await TestDb.InitializeAsync();

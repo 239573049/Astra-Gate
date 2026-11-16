@@ -5,7 +5,7 @@ using Astra.Api.Contracts;
 namespace Astra.Desktop.Core.Tokens;
 
 /// <summary>A budget being edited: the limit stays null while its field is empty and is dropped on save (web <c>DraftBudget</c>).</summary>
-public sealed record DraftBudget(string Metric, string Period, decimal? Limit);
+public sealed record DraftBudget(string Metric, string Period, decimal? Limit, decimal? SavedUsd = null, decimal? Shown = null);
 
 /// <summary>The budget editor's rules (web <c>BudgetsEditor</c> in <c>TokensPage.tsx</c>).</summary>
 public static class BudgetRules
@@ -36,6 +36,25 @@ public static class BudgetRules
         => budgets.Select(b => b.Metric + ":" + b.Period).Distinct(StringComparer.Ordinal).Count() < budgets.Count;
 
     /// <summary>
+    /// What a budget limits, in the unit the server stores: a cost limit is typed in the display currency and saved as USD; one left
+    /// as shown keeps the dollars it came with, so an untouched row is not re-rounded through the exchange rate.
+    /// </summary>
+    public static decimal UsdLimit(DraftBudget b)
+    {
+        if (b.Metric != "cost") return b.Limit!.Value;
+        if (b.SavedUsd is { } saved && b.Limit == b.Shown) return saved;
+        return Math.Round(Currency.DisplayMoney.Current.ToUsd(b.Limit!.Value), 9, MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>A saved budget as the editor shows it: a cost limit in the display currency (the dollars are kept in <see cref="DraftBudget.SavedUsd"/>).</summary>
+    public static DraftBudget Draft(string metric, string period, decimal limit)
+    {
+        if (metric != "cost" || Currency.DisplayMoney.Current.IsUsd) return new DraftBudget(metric, period, limit);
+        var shown = Currency.DisplayMoney.ToInput(limit);
+        return new DraftBudget(metric, period, shown, limit, shown);
+    }
+
+    /// <summary>
     /// The <c>limits</c> body field: budgets with a positive limit plus the whole-number RPM cap; null (unlimited) when there is neither.
     /// </summary>
     public static JsonNode? LimitsJson(IReadOnlyList<DraftBudget> budgets, double? rpm)
@@ -44,7 +63,7 @@ public static class BudgetRules
         var cap = rpm is > 0 ? (int?)Math.Floor(rpm.Value) : null;
         if (kept.Count == 0 && cap is null) return null;
         var array = new JsonArray();
-        foreach (var b in kept) array.Add((JsonNode)new JsonObject { ["metric"] = b.Metric, ["period"] = b.Period, ["limit"] = b.Limit!.Value });
+        foreach (var b in kept) array.Add((JsonNode)new JsonObject { ["metric"] = b.Metric, ["period"] = b.Period, ["limit"] = UsdLimit(b) });
         return new JsonObject { ["budgets"] = array, ["rpm"] = cap };
     }
 }
@@ -70,7 +89,7 @@ public sealed record TokenSettingsDraft(
     /// <summary>The draft of a saved token.</summary>
     public static TokenSettingsDraft Of(TokenDto token) => new(
         token.Name, PoolDrafts.Of(token),
-        token.Limits?.Budgets.Select(b => new DraftBudget(b.Metric, b.Period, b.Limit)).ToList() ?? [],
+        token.Limits?.Budgets.Select(b => BudgetRules.Draft(b.Metric, b.Period, b.Limit)).ToList() ?? [],
         token.Limits?.Rpm, token.AllowedClients is null ? ClientsMode.Any : ClientsMode.Only, token.AllowedClients ?? [], token.McpServers ?? []);
 
     /// <summary>Save is allowed with a name and no duplicate budget.</summary>

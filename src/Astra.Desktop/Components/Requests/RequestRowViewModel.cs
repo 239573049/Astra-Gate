@@ -61,6 +61,9 @@ public sealed class RequestRowViewModel : ObservableObject
     /// <summary>Sort value of the cache column: tokens read from the cache.</summary>
     public long Cache => _summary.CacheReadTokens;
 
+    /// <summary>Sort value of the context column: how full the window was (null sorts last).</summary>
+    public double? ContextFill => _summary.Context?.Fill;
+
     /// <summary>Sort value of the cost column.</summary>
     public long Cost => _summary.CostNanoUsd;
 }

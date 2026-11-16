@@ -146,7 +146,8 @@ public static partial class AccountRules
     public static string Nanos(long nanos, bool compact)
     {
         var usd = nanos / (decimal)StatsFormat.NanosPerUsd;
-        if (compact && Math.Abs(usd) >= 1000) return "$" + StatsFormat.Compact(usd);
+        if (compact && Math.Abs(usd * Currency.DisplayMoney.Current.Rate) >= 1000)
+            return Currency.DisplayMoney.Current.Symbol + StatsFormat.Compact(usd * Currency.DisplayMoney.Current.Rate);
         return StatsFormat.Usd(usd);
     }
 

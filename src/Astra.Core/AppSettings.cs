@@ -137,6 +137,18 @@ public sealed class AppSettings
     /// </summary>
     public List<string> HiddenNav { get; set; } = [];
 
+    /// <summary>
+    /// The currency amounts are shown in (<see cref="Currency.Currencies"/>; USD by default). Money stays stored in USD
+    /// nanodollars — this and <see cref="CurrencyRates"/> only change how it reads, and what a typed amount means.
+    /// </summary>
+    public string DisplayCurrency { get; set; } = "USD";
+
+    /// <summary>
+    /// Exchange rates the user entered: currency code to units of that currency per 1 USD, as decimal strings. Astra never
+    /// fetches rates; a currency without an entry cannot be <see cref="DisplayCurrency"/>.
+    /// </summary>
+    public Dictionary<string, string> CurrencyRates { get; set; } = [];
+
     /// <summary>Remote access through a Cloudflare Tunnel (Astra.Server's TunnelService).</summary>
     public TunnelSettings Tunnel { get; set; } = new();
 

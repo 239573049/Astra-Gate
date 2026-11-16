@@ -22,7 +22,25 @@ public sealed record RequestSummaryDto(
     string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
     string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp,
     string? SessionKey = null, string? Stage = null, string? TurnId = null, string? CallKind = null, string? ParentRequestId = null,
-    string? Phases = null, RoutingReport? Routing = null, List<RequestAttempt>? Attempts = null, RequestCause? Cause = null);
+    string? Phases = null, RoutingReport? Routing = null, List<RequestAttempt>? Attempts = null, RequestCause? Cause = null,
+    ContextUsageDto? Context = null);
+
+/// <summary>
+/// How full a request's context window was (admin request log only — the token self-service views never carry it). The prompt side is
+/// input + cache reads + cache writes, which is what <c>TotalInputTokens</c> already holds.
+/// </summary>
+/// <param name="PromptTokens">Prompt-side tokens the upstream reported.</param>
+/// <param name="Window">The model's context window at request time; null when its metadata has none.</param>
+/// <param name="Fill">PromptTokens / Window (above 1 when it overflowed); null without a window or without reported tokens.</param>
+/// <param name="CacheReadTokens">Part of the prompt served from the cache.</param>
+/// <param name="OutputTokens">Output tokens the upstream reported.</param>
+/// <param name="MaxOutput">The model's max output tokens; null when unknown.</param>
+/// <param name="Parts">An estimate of what the prompt was made of; null when it could not be made.</param>
+public sealed record ContextUsageDto(
+    long PromptTokens, long? Window, double? Fill, long CacheReadTokens, long OutputTokens, long? MaxOutput, ContextPartsDto? Parts);
+
+/// <summary>The prompt's estimated split in tokens (character shares of the request body scaled to the reported prompt tokens).</summary>
+public sealed record ContextPartsDto(long System, long Tools, long History, long Latest);
 
 /// <summary>Admin API payload: usage item.</summary>
 public sealed record UsageItemDto(
@@ -53,7 +71,7 @@ public sealed record RequestDetailDto(
     string? UserAgent, BodiesDto? Bodies, PrivacyReport? Privacy,
     string? ReasoningEffort, string? ReasoningMode, long? ReasoningBudgetTokens,
     string? TokenId, string? TokenName, string? AccountId, string? AccountName, bool Remote, string? ClientIp,
-    RoutingReport? Routing = null);
+    RoutingReport? Routing = null, ContextUsageDto? Context = null);
 
 /// <summary>
 /// One live request-log event (SSE <c>/api/requests/live</c>): "started" / "updated" carry the row as it stands

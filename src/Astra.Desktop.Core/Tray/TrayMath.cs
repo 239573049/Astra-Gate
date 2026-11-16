@@ -55,10 +55,12 @@ public static class TrayMath
     /// <summary>Tile-sized cost: "$0", "$&lt;0.01", "$0.37", "$12.40", "$1.2K" (<c>formatCostShort</c>).</summary>
     public static string FormatCostShort(decimal usd)
     {
-        if (usd <= 0) return "$0";
-        if (usd < 0.01m) return "$<0.01";
-        if (usd < 1000) return "$" + Math.Round(usd, 2, MidpointRounding.AwayFromZero).ToString("F2", Inv);
-        return "$" + StatsFormat.Compact(usd);
+        var c = Currency.DisplayMoney.Current;
+        if (usd <= 0) return c.Symbol + "0";
+        var v = usd * c.Rate;
+        if (v < 0.01m) return c.Symbol + "<0.01";
+        if (v < 1000) return c.Symbol + Math.Round(v, c.Info.Decimals, MidpointRounding.AwayFromZero).ToString("F" + c.Info.Decimals, Inv);
+        return c.Symbol + StatsFormat.Compact(v);
     }
 
     /// <summary>Today's requests per local hour, all 24 in order, zero where nothing happened (<c>hourlyRequests</c>).</summary>
