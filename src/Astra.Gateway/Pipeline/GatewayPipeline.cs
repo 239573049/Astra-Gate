@@ -18,6 +18,7 @@ using Astra.Gateway.Routing;
 using Astra.Gateway.Tracing;
 using Astra.Plugins.Host;
 using Astra.Plugins.Middleware;
+using Astra.Providers.Cloud;
 using Astra.Providers.Subscription;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -449,6 +450,7 @@ public sealed partial class GatewayPipeline(
                                      || forceResponsesStream || claudeMimic || claudeMode == ClaudeHeaderMode.Relay
                                      || (clientCacheTtl is not null && upstreamProtocol == ApiProtocol.Anthropic)
                                      || (upstreamProtocol == ApiProtocol.Anthropic && AnthropicToolSchemas.NeedsNormalizingTools(body))
+                                     || CloudProviders.ShapesBody(provider, upstreamProtocol)
                                      || (upstreamProtocol == ApiProtocol.OpenAIResponses && body.ContainsKey("reasoning_effort"));
                     upstreamTree = mayRetry && mayRewrite ? (JsonObject)body.DeepClone() : body;
                     var rewritten = false;
@@ -519,6 +521,8 @@ public sealed partial class GatewayPipeline(
                     foreach (var name in CodexUnsupportedParams) upstreamTree.Remove(name);
                     upstreamDirty = true;
                 }
+                // Anthropic on Vertex AI names the model in the path and the API version in the body (CloudProviders).
+                upstreamDirty |= CloudProviders.ShapeBody(provider, upstreamProtocol, upstreamTree);
                 // 模拟 Claude Code（subscription.mimic_claude_code，见 ClaudeCodeMimicry）：把最终发往
                 // 上游的请求体改写成 CLI 的形状（3 块 system + metadata.user_id）。直通与翻译两条路
                 // 都在这里收口，改的是同一棵 upstreamTree。
@@ -576,7 +580,7 @@ public sealed partial class GatewayPipeline(
                         : claudeMimic ? "mimic" : claudeMode == ClaudeHeaderMode.Relay ? "relay" : "compat")
                     .Set("astra.body.bytes", payload.Length).Ok().End();
 
-                var url = UpstreamUrls.For(endpoint, upstreamModel, stream);
+                var url = CloudProviders.Url(provider, endpoint, upstreamModel, stream) ?? UpstreamUrls.For(endpoint, upstreamModel, stream);
                 // Claude Code calls /v1/messages?beta=true; the relay keeps its query string.
                 if (claudeMode == ClaudeHeaderMode.Relay) url = WithClientQuery(url, ctx.Request.QueryString);
                 return new UpstreamPlan(candidate, endpoint, passthrough, claudeMode, upstreamCodec, attemptIr, model, upstreamModel, stream,
@@ -1204,7 +1208,7 @@ public sealed partial class GatewayPipeline(
             request.Headers.TryAddWithoutValidation("Accept", stream ? "text/event-stream" : "application/json");
             request.Headers.TryAddWithoutValidation("User-Agent",
                 passthrough && clientRequest.Headers.UserAgent.Count > 0 ? clientRequest.Headers.UserAgent.ToString() : UserAgent);
-            if (endpoint.Protocol == ApiProtocol.Anthropic)
+            if (endpoint.Protocol == ApiProtocol.Anthropic && !CloudProviders.IsVertex(provider))
             {
                 var version = passthrough ? clientRequest.Headers["anthropic-version"].ToString() : "";
                 request.Headers.TryAddWithoutValidation("anthropic-version", string.IsNullOrEmpty(version) ? DefaultAnthropicVersion : version);
@@ -1237,6 +1241,8 @@ public sealed partial class GatewayPipeline(
             ApplyHeaderEdits(request);
             // 凭据 + 上游 CLI 固定头（Authorization / chatgpt-account-id）。
             a.Apply(request);
+            // AWS SigV4 covers the final body, so it is signed once the content is set (a streamed form is never signed).
+            if (content is null) AwsSigV4.SignIfRequested(request, body.Span);
             return request;
         }
 

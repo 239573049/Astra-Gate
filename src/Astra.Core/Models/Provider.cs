@@ -17,13 +17,29 @@ public static class AuthSchemes
     public const string XApiKey = "x-api-key";
     public const string XGoogApiKey = "x-goog-api-key";
     public const string QueryKey = "query-key";
+
+    /// <summary>The key goes in an <c>api-key</c> header (Azure OpenAI; a Bearer there is an Entra ID token).</summary>
+    public const string ApiKeyHeader = "api-key";
+
+    /// <summary>
+    /// AWS IAM credentials: the stored secret is the JSON of <c>Astra.Providers.Cloud.AwsCredentials</c> and every request
+    /// is signed with SigV4 (Amazon Bedrock with an IAM access key; a Bedrock API key is plain <see cref="Bearer"/>).
+    /// </summary>
+    public const string AwsSigV4 = "aws-sigv4";
+
+    /// <summary>
+    /// A Google service account: the stored secret is its key file (JSON). The gateway trades it for a short-lived OAuth
+    /// access token and sends that as a Bearer (Google Vertex AI).
+    /// </summary>
+    public const string GcpServiceAccount = "gcp-service-account";
+
     public const string None = "none";
 
     /// <summary>Upstream auth comes from an OAuth subscription account (plan §5.4); see Astra.Providers/Subscription.</summary>
     public const string OAuthSubscription = "oauth-subscription";
 
     public static readonly IReadOnlyList<string> All =
-        [Bearer, XApiKey, XGoogApiKey, QueryKey, None, OAuthSubscription];
+        [Bearer, XApiKey, XGoogApiKey, QueryKey, ApiKeyHeader, AwsSigV4, GcpServiceAccount, None, OAuthSubscription];
 
     /// <summary>
     /// The provider is a plugin's (a magpie / OpenCode provider plugin): its accounts are the plugin's sign-ins and

@@ -16,6 +16,7 @@ import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { PasswordField } from '../components/arc/password-field/password-field';
 import { RadioCards } from '../components/arc/radio-cards/radio-cards';
 import { Stepper } from '../components/arc/stepper/stepper';
+import { AwsKeyFields, AwsRegionHint, isCloudScheme, ServiceAccountField, VertexTargetFields } from '../components/CloudCredentials';
 import { ProviderIcon } from '../components/icons';
 import { ImportProvidersSheet } from '../components/ImportProvidersSheet';
 import { ProviderBackupSheet } from '../components/ProviderBackupSheet';
@@ -56,6 +57,9 @@ export const AUTH_OPTIONS: { value: AuthScheme; label: string }[] = [
   { value: 'x-api-key', label: 'x-api-key' },
   { value: 'x-goog-api-key', label: 'x-goog-api-key' },
   { value: 'query-key', label: '?key=' },
+  { value: 'api-key', label: 'api-key' },
+  { value: 'aws-sigv4', label: 'AWS SigV4' },
+  { value: 'gcp-service-account', label: 'Google service account' },
   { value: 'none', label: '—' },
   { value: 'oauth-subscription', label: 'OAuth 订阅' },
 ];
@@ -492,6 +496,9 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
   const [choice, setChoice] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [apiKey, setApiKey] = useState('');
+  // Google Vertex AI keeps its project and location beside the key (settings.vertex); the key file names a project of its own.
+  const [vertex, setVertex] = useState({ project: '', location: 'global' });
+  const [keyProject, setKeyProject] = useState('');
   const [variantId, setVariantId] = useState('');
   const [priceKey, setPriceKey] = useState('');
   const [authScheme, setAuthScheme] = useState<AuthScheme>('bearer');
@@ -511,6 +518,8 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
       setSearch('');
       setName('');
       setApiKey('');
+      setVertex({ project: '', location: 'global' });
+      setKeyProject('');
       setVariantId('');
       setPriceKey('');
     }
@@ -539,6 +548,10 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
     setProxy('');
     setNotes('');
     setModels('');
+    // a typed key stays across Back, unless a cloud credential (a JSON document, not a typed key) is on either side of the pick
+    if (isCloudScheme(authScheme) || (tpl !== 'custom' && isCloudScheme(tpl.auth.scheme))) setApiKey('');
+    setVertex({ project: '', location: (tpl !== 'custom' && (tpl.settings?.vertex as { location?: string } | undefined)?.location) || 'global' });
+    setKeyProject('');
     if (tpl !== 'custom') {
       setName(tpl.name);
       setPriceKey(tpl.priceKey ?? tpl.id);
@@ -578,6 +591,7 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
         name: name.trim() || null,
         apiKey: apiKey.trim() || null,
         priceKey,
+        ...(authScheme === 'gcp-service-account' ? { settings: { vertex: { project: vertex.project.trim(), location: vertex.location } } } : {}),
         ...(accounts
           ? {}
           : {
@@ -778,6 +792,16 @@ function AddProviderSheet({ open, onOpenChange, onCreated }: { open: boolean; on
             <Alert tone="info" title={t('providers.subscriptionWizardHint')}>
               {t('providers.subscriptionWizardDetail')}
             </Alert>
+          ) : authScheme === 'aws-sigv4' ? (
+            <>
+              <AwsKeyFields onChange={setApiKey} />
+              <AwsRegionHint endpoints={endpoints} />
+            </>
+          ) : authScheme === 'gcp-service-account' ? (
+            <>
+              <ServiceAccountField onChange={setApiKey} onFacts={(f) => setKeyProject(f?.projectId ?? '')} />
+              <VertexTargetFields project={vertex.project} location={vertex.location} projectPlaceholder={keyProject} onChange={setVertex} />
+            </>
           ) : (
             <div className="font-mono">
               <PasswordField

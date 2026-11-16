@@ -2,6 +2,9 @@ import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qoder, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
 import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo, ZAI } from '@lobehub/icons';
 import { Baichuan, ChatGLM, Cohere, Doubao, Gemma, Hunyuan, LongCat, Mistral, Stepfun, Wenxin, Yi } from '@lobehub/icons';
+// Marks of the provider templates added for magpie parity (src/Astra.Providers/Templates/catalog.json).
+import { Ai302, AiHubMix, Azure, BaiduCloud, Bedrock, Cline, CommandCode, Fireworks, GmiCloud, Groq, HuaweiCloud, KiloCode } from '@lobehub/icons';
+import { ModelScope, NousResearch, Nvidia, TencentCloud, Together, Vercel, VertexAI } from '@lobehub/icons';
 import { Box, Code, Globe, Monitor, Puzzle, SquareTerminal, type LucideIcon } from 'lucide-react';
 import type { ComponentType, CSSProperties } from 'react';
 import type { ApiProtocol, ClientKind } from '../api/types';
@@ -232,6 +235,30 @@ const LOBE_PROVIDER_AVATARS: Record<string, BrandAvatar> = {
   ollama: Ollama.Avatar,
   'lm-studio': LmStudio.Avatar,
   qoder: Qoder.Avatar,
+  mistral: Mistral.Avatar,
+  stepfun: Stepfun.Avatar,
+  longcat: LongCat.Avatar,
+  azure: Azure.Avatar,
+  bedrock: Bedrock.Avatar,
+  vertexai: VertexAI.Avatar,
+  groq: Groq.Avatar,
+  together: Together.Avatar,
+  fireworks: Fireworks.Avatar,
+  nvidia: Nvidia.Avatar,
+  modelscope: ModelScope.Avatar,
+  nous: NousResearch.Avatar,
+  qianfan: BaiduCloud.Avatar,
+  tencentcloud: TencentCloud.Avatar,
+  huaweicloud: HuaweiCloud.Avatar,
+  mimo: XiaomiMiMo.Avatar,
+  opencode: OpenCode.Avatar,
+  cline: Cline.Avatar,
+  commandcode: CommandCode.Avatar,
+  vercel: Vercel.Avatar,
+  gmicloud: GmiCloud.Avatar,
+  aihubmix: AiHubMix.Avatar,
+  '302ai': Ai302.Avatar,
+  kilo: KiloCode.Avatar,
 };
 
 // Providers the icon library does not ship: a locally bundled vendor image, keyed by the same

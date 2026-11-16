@@ -21,7 +21,9 @@ const lobe = join(root, 'web/node_modules/@lobehub/icons/es');
 const names = (
   'Anthropic DeepSeek Gemini LmStudio Minimax Moonshot Ollama OpenAI OpenRouter Qoder Qwen SiliconCloud Volcengine XAI Zhipu ' +
   'Claude GithubCopilot Grok HermesAgent Kimi Meta OpenCode Pi XiaomiMiMo ZAI ' +
-  'Baichuan ChatGLM Cohere Doubao Gemma Hunyuan LongCat Mistral Stepfun Wenxin Yi'
+  'Baichuan ChatGLM Cohere Doubao Gemma Hunyuan LongCat Mistral Stepfun Wenxin Yi ' +
+  'Ai302 AiHubMix Azure BaiduCloud Bedrock Cline CommandCode Fireworks GmiCloud Groq HuaweiCloud KiloCode ModelScope NousResearch Nvidia ' +
+  'TencentCloud Together Vercel VertexAI'
 ).split(' ');
 
 // Vendor logos web/src/components/icons.tsx imports as files (clients and providers have their own copies of some).

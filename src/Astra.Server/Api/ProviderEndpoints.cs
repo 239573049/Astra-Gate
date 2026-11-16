@@ -103,11 +103,14 @@ public static class ProviderEndpoints
             if (body["preferredUpstreamProtocols"] is not null) provider.PreferredUpstreamProtocols = Read<List<ApiProtocol>>(body["preferredUpstreamProtocols"]!);
             if (body["extraHeaders"] is not null) provider.ExtraHeaders = Read<Dictionary<string, string>>(body["extraHeaders"]!);
             if (body["priceMultiplier"] is not null) provider.PriceMultiplier = Read<decimal>(body["priceMultiplier"]!);
+            // The cloud templates' non-secret half (Vertex's project and location, an AWS region override); the template's other settings stay.
+            if (body["settings"] is JsonObject given) CloudSecrets.MergeCreateSettings(provider, given);
             provider.HttpProxy = String(body, "httpProxy");
             provider.Notes = String(body, "notes");
             Validate(provider);
             if (provider.PreferredUpstreamProtocols.Count == 0) provider.PreferredUpstreamProtocols = provider.Endpoints.Select(e => e.Protocol).Distinct().ToList();
             var key = String(body, "apiKey");
+            if (key is not null) key = CloudSecrets.Normalize(provider.AuthScheme, key, provider);
             if (key?.Any(char.IsControl) == true) throw new AdminApiException(400, "apiKey must not contain control characters");
             if (template is { RequiresApiKey: true } && provider.AuthScheme is not AuthSchemes.None and not AuthSchemes.OAuthSubscription && key is null)
                 throw new AdminApiException(400, "API key is required");
@@ -153,6 +156,7 @@ public static class ProviderEndpoints
             {
                 if (body["apiKey"] is null) throw new AdminApiException(400, "apiKey must be a string (empty clears it)");
                 var key = Read<string>(body["apiKey"]).Trim();
+                if (key.Length > 0) key = CloudSecrets.Normalize(p.AuthScheme, key, p);
                 if (key.Any(char.IsControl)) throw new AdminApiException(400, "apiKey must not contain control characters");
                 p.ApiKeyEnc = key.Length == 0 ? null : secrets.Protect(key);
             }
@@ -351,6 +355,9 @@ public static class ProviderEndpoints
             var target = source.WithVariant(variantId);
             var old = Json.Deserialize<ProviderTemplate>(p.TemplateSnapshotJson);
             if (old is not null) FollowDefaults(p, old, target);
+            // A Bedrock API key is no IAM access key (and the other way round): across the cloud schemes the stored secret cannot carry over.
+            if (old is not null && old.Auth.Scheme != target.Auth.Scheme && (CloudSecrets.IsCloud(old.Auth.Scheme) || CloudSecrets.IsCloud(target.Auth.Scheme)))
+                p.ApiKeyEnc = null;
             p.Endpoints = target.Endpoints;
             p.PreferredUpstreamProtocols = target.PreferredUpstreamProtocols;
             p.Category = target.Category;
@@ -476,7 +483,7 @@ public static class ProviderEndpoints
         string? mask = null;
         if (p.ApiKeyEnc is not null)
         {
-            try { var key = secrets.Unprotect(p.ApiKeyEnc); mask = key.Length >= 12 ? key[..3] + "…" + key[^4..] : "••••"; }
+            try { var key = secrets.Unprotect(p.ApiKeyEnc); mask = CloudSecrets.Mask(p.AuthScheme, key) ?? (key.Length >= 12 ? key[..3] + "…" + key[^4..] : "••••"); }
             catch (CryptographicException) { mask = "••••"; }
         }
         var bound = (await db.Clients.ListBindingsByProviderAsync(p.Id, ct)).Select(b => b.ClientKind).Distinct().ToList();
@@ -511,6 +518,8 @@ public static class ProviderEndpoints
             if (existing.ContainsKey(id)) continue;
             var m = new ProviderModel { ProviderId = p.Id, ModelId = id, SystemModelId = ModelIdMatcher.Match(id, candidates, index), SortOrder = order++ };
             ApplyFamilyDefaults(p, m);
+            // Bedrock and Vertex AI serve each model over the protocol its maker's API speaks there (CloudProviders); what clients are told follows
+            if (CloudProviders.ProtocolsFor(p, id).Where(c => p.EndpointFor(c) is not null).ToList() is { Count: > 0 } cloud) m.UpstreamProtocols = cloud;
             existing[id] = m; result.Add(m);
         }
         return result;
@@ -682,6 +691,7 @@ public static class ProviderEndpoints
                 u.Scheme is not ("http" or "https") || u.UserInfo.Length != 0 || u.Fragment.Length != 0 || e.BaseUrl.Any(char.IsControl))
                 throw new AdminApiException(400, "Endpoints must be http(s) URLs without embedded credentials or fragments");
         if (!pluginOwned && !AuthSchemes.All.Contains(p.AuthScheme)) throw new AdminApiException(400, "Unknown authentication scheme");
+        CloudSecrets.ValidateSettings(p);
         if (p.PriceMultiplier < 0) throw new AdminApiException(400, "Price multiplier must be non-negative");
         // The alias that qualifies this provider's model ids (issue #21): text, no control characters; empty = use the name.
         if (p.Settings[Provider.AliasKey] is { } alias

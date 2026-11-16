@@ -48,6 +48,15 @@ public sealed partial class AddProviderWizard
     /// <summary>API key text (trimmed on submit).</summary>
     public string ApiKey { get; set; } = "";
 
+    /// <summary>Google Vertex AI's project (settings.vertex.project); "" uses the key file's own.</summary>
+    public string VertexProject { get; set; } = "";
+
+    /// <summary>Google Vertex AI's location (settings.vertex.location).</summary>
+    public string VertexLocation { get; set; } = "global";
+
+    /// <summary>The project the pasted key file names, shown as the project field's placeholder.</summary>
+    public string KeyProject { get; set; } = "";
+
     /// <summary>Selected variant id ("" = the template's default).</summary>
     public string VariantId { get; private set; } = "";
 
@@ -93,6 +102,9 @@ public sealed partial class AddProviderWizard
         Search = "";
         Name = "";
         ApiKey = "";
+        VertexProject = "";
+        VertexLocation = "global";
+        KeyProject = "";
         VariantId = "";
         PriceKey = "";
         StepChanged?.Invoke();
@@ -109,6 +121,8 @@ public sealed partial class AddProviderWizard
     /// <summary>Step 1 -> 2 with a built-in template (web <c>pick(tpl)</c>).</summary>
     public void Pick(ProviderTemplateInfo template)
     {
+        // a typed key stays across Back, unless a cloud credential (a JSON document, not a typed key) is on either side of the pick
+        if (CloudCredentials.IsCloud(AuthScheme) || CloudCredentials.IsCloud(template.AuthScheme)) ApiKey = "";
         ResetPicked();
         _template = template;
         _custom = false;
@@ -125,6 +139,7 @@ public sealed partial class AddProviderWizard
     /// <summary>Step 1 -> 2 with the custom provider.</summary>
     public void PickCustom()
     {
+        if (CloudCredentials.IsCloud(AuthScheme)) ApiKey = "";
         ResetPicked();
         _template = null;
         _custom = true;
@@ -140,6 +155,9 @@ public sealed partial class AddProviderWizard
 
     private void ResetPicked()
     {
+        VertexProject = "";
+        VertexLocation = "global";
+        KeyProject = "";
         VariantId = "";
         Proxy = "";
         Notes = "";
@@ -220,6 +238,9 @@ public sealed partial class AddProviderWizard
             ["priceKey"] = PriceKey,
         };
         if (Accounts) return body;
+        // Vertex AI's project and location ride with the key (the server keeps them in settings.vertex)
+        if (AuthScheme == CloudCredentials.GcpServiceAccount)
+            body["settings"] = new JsonObject { ["vertex"] = new JsonObject { ["project"] = VertexProject.Trim(), ["location"] = VertexLocation } };
         var endpoints = new JsonArray();
         foreach (var e in _endpoints)
         {

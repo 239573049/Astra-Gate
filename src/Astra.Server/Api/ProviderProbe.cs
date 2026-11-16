@@ -12,6 +12,7 @@ using Astra.Core.Requests;
 using Astra.Data;
 using Astra.Gateway.Pipeline;
 using Astra.Gateway.Protocol;
+using Astra.Providers.Cloud;
 using Astra.Providers.Subscription;
 using Astra.Providers.Templates;
 using Microsoft.AspNetCore.WebUtilities;
@@ -200,7 +201,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                        ?? (options.Image || IsImageModel(modelId)
                            ? (p.EndpointFor(ApiProtocol.OpenAIChat) ?? p.EndpointFor(ApiProtocol.OpenAIResponses))?.Protocol
                              ?? throw new AdminApiException(400, "The Images API needs an OpenAI endpoint (openai-chat or openai-responses)")
-                           : PreferredEndpoint(p).Protocol);
+                           : CloudProviders.ProtocolsFor(p, modelId).Where(c => p.EndpointFor(c) is not null).Cast<ApiProtocol?>().FirstOrDefault()
+                             ?? PreferredEndpoint(p).Protocol);
         if (p.EndpointFor(protocol) is null) throw new AdminApiException(400, $"Provider has no endpoint for protocol {protocol.ToId()}");
         var prompt = options.Prompt?.Trim();
         if (prompt is { Length: > MaxTestPromptChars }) throw new AdminApiException(400, $"Test prompt must be at most {MaxTestPromptChars} characters");
@@ -275,15 +277,19 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                 var url = image
                     ? UpstreamUrls.Images(endpoint, GatewayPipeline.ImagesPath(p, edit ? ImageOperation.Edits : ImageOperation.Generations))
                       ?? throw new AdminApiException(400, "The provider's OpenAI endpoint is a complete address; the Images API address cannot be derived from it")
-                    : UpstreamUrls.For(endpoint, run.ModelId, stream);
+                    : CloudProviders.Url(p, endpoint, run.ModelId, stream) ?? UpstreamUrls.For(endpoint, run.ModelId, stream);
                 using var request = await RequestAsync(p, HttpMethod.Post, url, protocol, stream, deadline.Token);
                 // 模拟 Claude Code（subscription.mimic_claude_code）：测试请求和网关请求同形，
                 // 否则"测试配置"对非 Haiku 模型的结论和真实请求不一致。
                 var outbound = protocol == ApiProtocol.Anthropic && SubscriptionSupport.MimicClaudeCodeOf(p)
                     ? ClaudeCodeMimicry.ApplyBody(guard.Body, p.Id, null)
                     : guard.Body;
+                // Anthropic on Vertex AI: the model leaves the body, the API version enters it (as the gateway sends it)
+                if (CloudProviders.ShapesBody(p, protocol) && TryObject(outbound) is { } shaped && CloudProviders.ShapeBody(p, protocol, shaped))
+                    outbound = shaped.ToJsonString(GatewayJson.Options);
                 // An edit is a multipart upload: the guarded fields as form fields, plus the built-in test picture.
                 request.Content = edit ? EditForm(outbound, options) : new StringContent(outbound, Encoding.UTF8, "application/json");
+                if (!edit) AwsSigV4.SignIfRequested(request, Encoding.UTF8.GetBytes(outbound));
                 if (capture is not null)
                     capture[BodyStore.UpstreamRequest] = Redact(edit ? EditCapture(outbound, options) : outbound, p, request);
                 using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
@@ -698,6 +704,8 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
             request.Headers.Remove(header);
             request.Headers.TryAddWithoutValidation(header, credentials.HeaderValue);
         }
+        // IAM keys: attaches the signing scope; the caller signs once the body is set (AwsSigV4.SignIfRequested)
+        if (credentials.Aws is not null) credentials.Apply(request);
         return request;
     }
 
@@ -721,6 +729,9 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     /// </summary>
     public async Task<IReadOnlyList<ApiProtocol>> ResolveAsync(Provider provider, ProviderModel model, string? accountId, CancellationToken ct)
     {
+        // Bedrock and Vertex AI serve each model over the protocol its maker's API speaks there (CloudProviders)
+        if (model.UpstreamProtocols.Count == 0 && !string.IsNullOrEmpty(model.ModelId) && CloudProviders.ProtocolsFor(provider, model.ModelId) is { Count: > 0 } cloud)
+            return cloud;
         if (model.UpstreamProtocols.Count > 0 || string.IsNullOrEmpty(model.ModelId)
             || SubscriptionSupport.ProviderKeyOf(provider) != "github-copilot-subscription")
             return model.UpstreamProtocols;
