@@ -1,0 +1,68 @@
+{
+  "kind": "command",
+  "clients": [
+    {
+      "kind": "claude-code",
+      "detected": true,
+      "path": "/Users/demo/.claude-code/file",
+      "project": true
+    },
+    {
+      "kind": "gemini-cli",
+      "detected": true,
+      "path": "/Users/demo/.gemini-cli/file",
+      "project": true
+    },
+    {
+      "kind": "droid",
+      "detected": false,
+      "path": "/Users/demo/.droid/file",
+      "project": true
+    }
+  ],
+  "items": [
+    {
+      "id": "item-fix",
+      "description": "修复指定问题",
+      "body": "修复 $1，并运行测试。",
+      "event": null,
+      "matcher": null,
+      "timeout": 0,
+      "model": null,
+      "enabled": true,
+      "updatedAt": "2026-10-25T12:00:00Z",
+      "lastError": null,
+      "kind": "command",
+      "name": "fix",
+      "targets": [
+        {
+          "client": "claude-code",
+          "project": "",
+          "state": "applied",
+          "path": "/Users/demo/.claude-code/file",
+          "message": null
+        },
+        {
+          "client": "gemini-cli",
+          "project": "",
+          "state": "unsupported",
+          "path": "/Users/demo/.gemini-cli/file",
+          "message": "不支持按位置取词（$1、$2）"
+        }
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "path": "/Users/demo/code/app",
+      "name": "app",
+      "exists": true
+    },
+    {
+      "path": "/Users/demo/code/old",
+      "name": "old",
+      "exists": false
+    }
+  ],
+  "canWrite": true
+}

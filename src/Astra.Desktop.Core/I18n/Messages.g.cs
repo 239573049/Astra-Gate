@@ -2911,6 +2911,7 @@ internal static class Messages
         "library.field.matcher",
         "library.field.matcherTools",
         "library.field.matcherStarts",
+        "library.field.matcherOwn",
         "library.field.timeout",
         "library.field.commandArgsHint",
         "library.field.model",
@@ -6389,6 +6390,7 @@ internal static class Messages
             case "library.field.matcher": return "范围";
             case "library.field.matcherTools": return "只在这类工具上运行；留空为所有工具。";
             case "library.field.matcherStarts": return "只在这些会话开始方式运行，用 | 连接：startup、resume、clear、compact、fork。";
+            case "library.field.matcherOwn": return "该客户端自己的匹配规则（原样写入）；留空为全部。";
             case "library.field.timeout": return "超时（秒）";
             case "library.field.commandArgsHint": return "$1、$2… 在不支持按位置取词的客户端（Gemini CLI、Qwen Code、Droid）上不会写入。";
             case "library.field.model": return "模型";
@@ -9869,6 +9871,7 @@ internal static class Messages
             case "library.field.matcher": return "Narrow to";
             case "library.field.matcherTools": return "Runs only for this kind of tool; empty is every tool.";
             case "library.field.matcherStarts": return "Runs only at these session starts, joined by |: startup, resume, clear, compact, fork.";
+            case "library.field.matcherOwn": return "The client's own matcher, written as given; empty is everything.";
             case "library.field.timeout": return "Timeout (seconds)";
             case "library.field.commandArgsHint": return "$1, $2… are not written for clients that take no words by place (Gemini CLI, Qwen Code, Droid).";
             case "library.field.model": return "Model";

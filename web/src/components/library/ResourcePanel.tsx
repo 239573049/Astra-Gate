@@ -193,7 +193,7 @@ function ResourceSheet({ segment, library, item, onClose }: { segment: ResourceS
   const needsDescription = kind === 'agent';
   const valid = name.trim() !== '' && (kind === 'env' || body.trim() !== '') && (!needsDescription || description.trim() !== '');
   const ownEvent = event.includes(':');
-  const showMatcher = kind === 'hook' && !ownEvent && event !== 'turn-end' && event !== 'prompt';
+  const showMatcher = kind === 'hook' && (ownEvent || (event !== 'turn-end' && event !== 'prompt'));
 
   const submit = () => {
     const input: ResourceInput = { name: name.trim(), body, enabled, targets };
@@ -256,8 +256,8 @@ function ResourceSheet({ segment, library, item, onClose }: { segment: ResourceS
               {ownEvent && <Input mono className="mt-2" value={event} onChange={(e) => setEvent(e.target.value)} placeholder="claude-code:PermissionRequest" />}
             </Field>
             {showMatcher && (
-              <Field label={t('library.field.matcher')} hint={event === 'session-start' ? t('library.field.matcherStarts') : t('library.field.matcherTools')}>
-                {event === 'session-start' ? (
+              <Field label={t('library.field.matcher')} hint={ownEvent ? t('library.field.matcherOwn') : event === 'session-start' ? t('library.field.matcherStarts') : t('library.field.matcherTools')}>
+                {event === 'session-start' || ownEvent ? (
                   <Input mono value={matcher} placeholder="startup|resume" onChange={(e) => setMatcher(e.target.value)} />
                 ) : (
                   <Select
