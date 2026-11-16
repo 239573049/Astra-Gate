@@ -312,6 +312,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/tools/settings",
+      "file": "tools/settings.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/tools",
+      "file": "tools/list.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/clients/mcp",
       "file": "mcp/client-entries.json"
     },

@@ -34,6 +34,7 @@ public static class NavTable
         new("nav.group.resources",
         [
             new(AppRoute.Mcp, "mcp", "nav.mcp", LucideIconKind.Plug),
+            new(AppRoute.Tools, "tools", "nav.tools", LucideIconKind.Wrench),
             new(AppRoute.Skills, "skills", "nav.skills", LucideIconKind.Sparkles),
         ]),
         new("nav.group.system",

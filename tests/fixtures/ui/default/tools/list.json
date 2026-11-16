@@ -1,0 +1,34 @@
+[
+  {
+    "name": "web_search",
+    "title": "Web search",
+    "description": "Search the web with the search APIs in Tools settings.",
+    "source": "builtin",
+    "available": true,
+    "reason": null
+  },
+  {
+    "name": "web_fetch",
+    "title": "Web fetch",
+    "description": "Fetch a web page as readable text.",
+    "source": "builtin",
+    "available": true,
+    "reason": null
+  },
+  {
+    "name": "generate_image",
+    "title": "Generate image",
+    "description": "Generate an image with the image model set below.",
+    "source": "builtin",
+    "available": true,
+    "reason": null
+  },
+  {
+    "name": "demo.stamp",
+    "title": "stamp",
+    "description": "A tool a plugin gives.",
+    "source": "plugin",
+    "available": true,
+    "reason": null
+  }
+]

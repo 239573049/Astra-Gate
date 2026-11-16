@@ -174,11 +174,13 @@ public sealed class McpView : UserControl
 
     private Control ServerRow(McpServerDto s)
     {
+        var builtIn = s.Id == "builtin-astra";
         var oauth = s.AuthType == "oauth";
         var authorized = s.OAuth?.Authorized == true;
         var label = ClientUi.HRow(8,
             PdUi.Text(s.Name, 13, ArcDesignTokenKind.Foreground, Avalonia.Media.FontWeight.SemiBold),
             KitBadge.Create(Loc.T("mcp.status." + s.Status), ToneOf(s.Status), s.StatusMessage));
+        if (builtIn) label.Children.Add(KitBadge.Create(Loc.T("mcp.server.builtIn"), Tone.Accent));
         if (!s.Enabled) label.Children.Add(KitBadge.Create(Loc.T("mcp.server.disabledBadge")));
 
         var meta = string.Join(" · ", new[]
@@ -195,6 +197,13 @@ public sealed class McpView : UserControl
             detail.Children.Add(PdUi.Text(Loc.T("mcp.server.authorizedBy", ("issuer", issuer)), 11.5, ArcDesignTokenKind.TextMuted, wrap: true));
 
         var actions = new List<Control>();
+        if (builtIn)
+        {
+            // Astra's own tools: its tools and address are Astra's (Tools page); only the switch is the server's.
+            actions.Add(Ui.Button(Loc.T("mcp.server.builtInManage"), () => _page.OpenTools()));
+            actions.Add(PdUi.Toggle(s.Enabled, on => _ = GuardAsync(() => _page.Api.UpdateAsync(s.Id, new System.Text.Json.Nodes.JsonObject { ["enabled"] = on })), s.Name));
+            return RowBuilder.Row(label, detail, actions.ToArray());
+        }
         if (oauth)
             actions.Add(Ui.Button(Loc.T(authorized ? "mcp.server.reauthorize" : "mcp.server.authorize"), () => _ = GuardAsync(() => AuthorizeAsync(s)),
                 authorized ? ButtonVariant.Secondary : ButtonVariant.Primary, LucideIconKind.ShieldCheck));

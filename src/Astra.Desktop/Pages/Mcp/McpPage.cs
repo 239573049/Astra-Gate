@@ -48,6 +48,9 @@ public sealed class McpPage : PageViewModel
     /// <summary>The user asked for the server sheet: a server to edit, or null for a new one.</summary>
     public event Action<McpServerDto?>? EditRequested;
 
+    /// <summary>Goes to the Tools page (the built-in server's settings).</summary>
+    public void OpenTools() => Context!.Navigator.Navigate(nameof(AppRoute.Tools));
+
     /// <summary>Opens the sheet of <paramref name="server"/>.</summary>
     public void BeginEdit(McpServerDto server) => EditRequested?.Invoke(server);
 

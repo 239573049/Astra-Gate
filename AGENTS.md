@@ -756,6 +756,38 @@ runtime needed on the target).
     `Astra.Desktop.Core/Requests/ContextPresentation.cs` + `RequestTable` / `ContextSectionView`, zh/en `context.*`, `settings.currency.*`,
     `requests.col.context`, `tokens.limitUsdEquivalent` (+ `gen-desktop-i18n`), and the website's `settings.mdx` / `requests` docs.
 
+34. **Built-in tools** (magpie parity #8; search/fetch/MCP logic ported in part from magpie's `internal/gateway/search*.go`, MIT): settings are
+    `ToolsSettings` (`Astra.Core/Tools`, `settings` key `tools`, no migration; `ToolsSettingsService` in `Astra.Gateway/Tools` keeps the snapshot).
+    Search-API keys are `ISecretProtector`-protected (`SearchKeyConfig.KeyEnc`); the admin API (`/api/tools/**`, `ToolsService`, DTOs in
+    `Astra.Api.Contracts/ToolsDtos.cs`) returns masks only. `ISearchService` (`SearchService`: the APIs in their drag order, each key in
+    `SearchKeyRotation` order — turns, or `order`; a key refused 401/402/403/429/432/433 rests and is asked last; a Tavily key's usage from
+    `/usage`; plugin APIs from `PluginHost.SearchesAsync`, sign-in ones not supported yet) lives in Gateway; a redirect from a search API is never
+    followed (the key stays at its address). A new built-in vendor is a `SearchVendors` row, its request/reply in `SearchApis` and golden-style
+    tests (`SearchApisTests`). **Search on behalf of models** (`WebSearchBridge`, mapped in `GatewayEndpoints` ahead of `GatewayPipeline.HandleAsync`
+    for chat / responses / messages / gemini; off by default, `x-astra-web-search: off` per request): the web-search server tool
+    (`SearchDialect` per protocol: Anthropic `web_search_*`, Responses `web_search*`, Chat `web_search_options`, Gemini `google_search`) becomes a
+    function tool, each round runs as an `InternalCall` through the ordinary pipeline (one request-log row per round, never `body["model"]`
+    rewrites), the call is answered by `ISearchService` and the final reply gets the protocol's own marks (server-tool blocks, `web_search_call`
+    items + citations, `groundingMetadata`). A streaming client is answered with the finished reply as events. **The query is the guarded text**
+    (`PrivacyGuardService.Inspect` on it before any search API sees it). "Served natively" = `WebSearchBridge.ServesItself` (the vendors' own hosts, or
+    `settings.web_search` on the provider) unless `Mode` is `always`. A `previous_response_id` request and Responses-over-WebSocket turns are left
+    to the upstream. Trace: `TraceSpanNames.Search` (`gateway.search`, `astra.search.*`; the query only under `TraceContent`) is added by
+    `WebSearchBridge.AddSpans` from `HttpContext.Items` before the pipeline closes its spans — update 15 applies (web `SPAN.search`).
+    **The built-in MCP server**: a real `mcp_servers` row (`McpBuiltIn`: id `builtin-astra`, slug `astra`, address `astra://builtin`, made at startup)
+    so tokens bind it, the MCP page lists it and "Apply to clients" writes it like any server (update 25 rules: an unbound tool looks unknown);
+    `McpAggregator` answers it from `IMcpBuiltIn` (`BuiltInTools`: `web_search` when an API is on, `web_fetch`, `generate_image` when
+    `ImageToolSettings.Model` is set — through `HandleImagesAsync` as the calling token — and every plugin tool as `<plugin>.<tool>`) instead of
+    connecting; `McpService` lets only its switch change and never deletes it, and the slug `astra` is reserved by it. `web_fetch` (`WebFetcher`,
+    `SsrfGuard`) reads public http(s) only: loopback / private / link-local / CGNAT / metadata addresses are refused at the URL, at every redirect
+    hop and at connect time, unless `WebFetchSettings.AllowPrivate` (local-origin write only). `POST /api/tools/run` (the CLI's
+    `astra tool list|<name> …`, `cli/src/commands/tool.ts`) and a search API's address / test are local-origin only; an image can only be
+    returned as MCP content or saved by the CLI — the server never writes a path a caller names. Mirrors: `web/src/api` (`useToolsSettings` …),
+    `components/ToolsSettings.tsx` + `pages/ToolsPage.tsx` (route `/tools`, nav `tools`), the MCP page's built-in row, zh/en `tools.*` / `nav.tools` /
+    `mcp.server.builtIn*` (+ `gen-desktop-i18n`), the Avalonia page (`Pages/Tools`, `Astra.Desktop.Core/Tools/ToolsApi.cs`, route `AppRoute.Tools`,
+    arrows instead of dragging, no Tavily usage yet), the UI fixtures (`scripts/visual/gen-fixtures.mjs`: `/api/tools*`) and the website's
+    `content/docs/console/` tools page, `mcp.mdx`, `traces.mdx` (the span) and `cli/` (`astra tool`). Tests: `SearchApisTests`, `SearchServiceTests`,
+    `WebFetchTests`, `GatewayWebSearchTests`, `BuiltInToolsTests`, `cli/test/tool.test.ts`, web `tools.test.tsx`, `ToolsPageTests`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc
