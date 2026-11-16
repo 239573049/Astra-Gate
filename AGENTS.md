@@ -152,7 +152,11 @@ names plugins see: `magpie.*` in package.json, `x-magpie-*` headers, `MAGPIE_*_P
   `scripts/vendor-magpie-host.mjs`) under the pinned Bun `BunRuntime` downloads (`ASTRA_BUN` overrides).
   `PluginProviderSync` mirrors them into providers `plugin-<id>` with `AuthSchemes.Plugin` (deliberately
   not in `AuthSchemes.All`), `plugin://` endpoints, and accounts whose `extra.plugin_key` names the
-  sign-in in plugin-auth.json; the gateway sends their requests through `PluginFetchHandler`.
+  sign-in in plugin-auth.json; the gateway sends their requests through `PluginFetchHandler`. The host also runs a
+  plugin's OpenCode `tool` hook and magpie's `search` hook (web search APIs): `PluginHost.ToolsAsync` / `RunToolAsync` and
+  `SearchesAsync` / `SearchAsync` / `SearchAsAsync` (`Host/PluginTools.cs`) are the internal API, wired to no UI or MCP
+  server yet. The vendored host is magpie `cb4ad12`; its async `magpie.hooks` gateway hooks (`init` item `gateway`,
+  `gatewayRequest`) and per-provider `options` / `heavy` recycling are not driven by Astra.
 - **v2 plugins** (`src/Astra.Plugins/V2`, design in `design/plugin-v2/` — tracked, unlike `.plan`) are Astra's own
   format: an `astra.plugin.json` (`manifestVersion: 2`) package that the v1 runtimes ignore (`PackageManifest.IsV2`).
   `PluginV2Host` runs each in one Jaunt engine (`Runtime/PluginMain.cs` + `boot.js` / `astra.js`, the virtual `astra`

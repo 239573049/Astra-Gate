@@ -12,7 +12,7 @@ namespace Astra.Plugins.Host;
 /// out as <see cref="Changed"/> (a sign-in saved or refreshed) and <see cref="SignIn"/> (what a plugin said of
 /// an account's sign-in).
 /// </summary>
-public sealed class PluginHost(
+public sealed partial class PluginHost(
     PluginCatalog catalog, BunRuntime bun, HostAssets assets, AstraPaths paths,
     Func<IEnumerable<string>?>? toolPath, Action<string, string> log, ModelsDevCatalog? modelsDev = null) : IAsyncDisposable
 {
@@ -171,7 +171,8 @@ public sealed class PluginHost(
             var servedBy = new Dictionary<string, string>();
             if (o["servedBy"] is JsonObject sb)
                 foreach (var (k, v) in sb) servedBy[k] = v?.GetValue<string>() ?? "";
-            var entry = new PluginHostLoaded(o["spec"]?.GetValue<string>() ?? "", o["error"]?.GetValue<string>(), provides, servedBy);
+            var entry = new PluginHostLoaded(o["spec"]?.GetValue<string>() ?? "", o["error"]?.GetValue<string>(), provides, servedBy,
+                ParseTools(o["tools"]), ParseSearches(o["searches"]));
             if (entry.Error is not null) log("warn", $"plugin {entry.Spec} didn't load: {entry.Error}");
             loaded.Add(entry);
         }
@@ -179,6 +180,18 @@ public sealed class PluginHost(
         Interlocked.Exchange(ref _lastProxyLook, Stopwatch.GetTimestamp());
         return new Running(client, generation, proxy, loaded);
     }
+
+    private static List<PluginTool> ParseTools(JsonNode? node) =>
+        (node as JsonArray ?? []).OfType<JsonObject>()
+        .Where(t => PluginProviders.Str(t, "name") is not null)
+        .Select(t => new PluginTool(PluginProviders.Str(t, "name")!, PluginProviders.Str(t, "description"), t["schema"]?.DeepClone())).ToList();
+
+    private static List<PluginSearchDef> ParseSearches(JsonNode? node) =>
+        (node as JsonArray ?? []).OfType<JsonObject>()
+        .Where(d => PluginProviders.Str(d, "id") is not null)
+        .Select(d => new PluginSearchDef(PluginProviders.Str(d, "id")!, PluginProviders.Str(d, "name") ?? PluginProviders.Str(d, "id")!,
+            PluginProviders.Str(d, "keysURL"), d["keyOptional"] is JsonValue k && k.GetValueKind() == System.Text.Json.JsonValueKind.True,
+            d["needURL"] is JsonValue n && n.GetValueKind() == System.Text.Json.JsonValueKind.True, PluginProviders.Str(d, "auth"))).ToList();
 
     // The enabled plugins that run in the host: not those only middleware or an agent, which run in Astra's
     // own process (magpie's InMagpieOnly).
@@ -248,8 +261,10 @@ public sealed class PluginHost(
 }
 
 /// <summary>How one plugin fared when the host loaded it: the provider ids it signs in to, and those of them another
-/// plugin serves instead (id → that plugin's spec).</summary>
-public sealed record PluginHostLoaded(string Spec, string? Error, List<string> Provides, Dictionary<string, string> ServedBy);
+/// plugin serves instead (id → that plugin's spec). <paramref name="Tools"/> and <paramref name="Searches"/> are what its
+/// <c>tool</c> and <c>search</c> hooks give (see <see cref="PluginHost.ToolsAsync"/>).</summary>
+public sealed record PluginHostLoaded(string Spec, string? Error, List<string> Provides, Dictionary<string, string> ServedBy,
+    List<PluginTool> Tools, List<PluginSearchDef> Searches);
 
 /// <summary>The host as the Plugins page shows it.</summary>
 /// <param name="StartError">Why the last start failed.</param>

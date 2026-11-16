@@ -167,7 +167,8 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
 30. **Provider** — `src/Astra.Plugins/Host/PluginHost.cs:121` `StartAsync` starts one Bun child for all host plugins:
     `PluginHostClient.Start` (`src/Astra.Plugins/Host/PluginHostClient.cs:72`) runs `bun run host.js` (the vendored
     magpie host) with newline-delimited JSON on stdin/stdout, and the `init` call (`PluginHost.cs:144`) carries
-    `authPath`, `modelsDevPath`, `piPath`, `directory`, `prefer` and `plugins[{spec,target,options}]`. `GetAsync`
+    `authPath`, `modelsDevPath`, `piPath`, `directory`, `prefer` and `plugins[{spec,target,options}]` (the host answers
+    each loaded plugin with its `tools` and `searches` too; `Host/PluginTools.cs` exposes them). `GetAsync`
     (`:91`) restarts the host when the catalog generation moved or the proxy did (`:192`) and retires the old one
     (`:202`) (`astra-plugins`)
 31. `src/Astra.Plugins/Runtime/ChildEnvironment.cs:22` `Build` — Astra's environment minus every `ASTRA_*` variable
@@ -175,7 +176,8 @@ provider through the Bun host as `plugin-<id>` provider rows with `plugin://` en
     because Bun reads `*_PROXY` once and would then put even a "direct" provider through it (`astra-plugins`)
 32. ⇢ crosses **process** boundary via stdin/stdout JSON-RPC — methods `init`, `providers`, `prompt`, `validate`,
     `authorize`, `callback`, `apiKey`, `load`, `usage`, `checkin`, `check`, `import`, `take`, `signOut`, `reload`,
-    plus the `fetch` stream and `credit`/`abort` (`PluginHostClient.CallAsync` `:113`, `PluginHost.cs:54`); unsolicited
+    `tool`, `search` (`PluginHost.RunToolAsync` / `SearchAsync`), plus the `fetch` stream and `credit`/`abort` (a
+    cancelled RPC other than `init` is aborted too) (`PluginHostClient.CallAsync` `:113`, `PluginHost.cs:54`); unsolicited
     events are `auth`, `signIn`, `log`, `toast`, `recovered` (`PluginHost.OnEvent` `:209`). The protocol is bounded
     (64 KiB frames, 512 KiB credit window, `PluginHostClient.cs:33`) (`astra-plugins`)
 33. `src/Astra.Plugins/Host/PluginFetchHandler.cs:46` `SendAsync` — a `plugin://<provider>/…` request is resolved to

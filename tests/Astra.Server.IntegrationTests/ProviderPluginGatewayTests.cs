@@ -190,7 +190,7 @@ public sealed class ProviderPluginGatewayTests : IAsyncDisposable
             Assert.Equal(50, claimed["credit"]!.GetValue<double>());
             Assert.Equal(3, claimed["streak"]!.GetValue<int>());
             // the host itself turns an outcome it doesn't know into a failure that says what came
-            Assert.Contains(accounts, a => a!["message"]?.GetValue<string>() == "the plugin answered no outcome (\"yes\")");
+            Assert.Contains(accounts, a => a!["message"]?.GetValue<string>() == "the plugin answered \"yes\"");
             Assert.Contains(accounts, a => a!["message"]?.GetValue<string>()?.Contains("check-in is down") == true);
 
             // "check in now" asks every account again

@@ -245,6 +245,20 @@ function usageOf(u) {
   }
 }
 
+// startUsage is the usage message_start tells, as Anthropic's does: the
+// vendor's prompt (input, cache read and write), which Claude Code's
+// context meter reads before message_delta comes (#1887), and the output
+// pi's start named. pi's start event names the prompt, or, as pi-ai's
+// anthropic-messages pushes start before the vendor's message_start is
+// read, the message the events after it share does. That message is
+// pi's own and goes on being written, so only its prompt is taken from
+// it: the output it holds may already be the turn's last.
+function startUsage(events) {
+  const start = events.find((e) => e.type === "start")?.partial?.usage
+  const prompt = events.map((e) => e.partial?.usage ?? e.message?.usage).find((u) => u && (u.input || u.cacheRead || u.cacheWrite))
+  return usageOf({ input: prompt?.input, cacheRead: prompt?.cacheRead, cacheWrite: prompt?.cacheWrite, output: start?.output })
+}
+
 function sse(type, data) {
   return `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`
 }
@@ -395,7 +409,7 @@ async function answer(events, { model, stream, res, said }) {
   const body = new ReadableStream({
     async start(ctl) {
       const put = (type, data) => ctl.enqueue(enc.encode(sse(type, data)))
-      put("message_start", { message: { id, type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: usageOf() } })
+      put("message_start", { message: { id, type: "message", role: "assistant", model, content: [], stop_reason: null, stop_sequence: null, usage: startUsage(first) } })
       let index = -1
       const open = new Map() // pi's content index → ours
       const begin = (ci, block) => {
@@ -522,7 +536,7 @@ export async function load(h, list) {
         const was = h.readAuth()[key]
         const next = await fn(toPi(was))
         if (next === undefined) return toPi(was)
-        h.changeAuth((all) => {
+        await h.changeAuth((all) => {
           all[key] = fromPi(next, all[key])
         })
         h.send({ event: "auth", provider: key.split("#")[0], account: key })
@@ -534,7 +548,7 @@ export async function load(h, list) {
     },
     async delete(id) {
       const key = h.keyFor(id)
-      h.changeAuth((all) => {
+      await h.changeAuth((all) => {
         if (!(key in all)) return false
         delete all[key]
       })

@@ -124,6 +124,13 @@ public sealed class PluginHostClient : IAsyncDisposable
             if (answer["error"] is JsonObject error) throw new PluginHostException(error["message"]?.GetValue<string>() ?? "the plugin host failed");
             return answer["result"]?.DeepClone();
         }
+        catch (OperationCanceledException) when (method != "init")
+        {
+            // the host cancels the work of a call whose caller gave it up (magpie #4678); init is exempt, as in
+            // host.go: a start that overruns is stopped whole, and aborting it would only interrupt its own load
+            Abort(call);
+            throw;
+        }
         finally
         {
             _calls.TryRemove(call.Id, out _);

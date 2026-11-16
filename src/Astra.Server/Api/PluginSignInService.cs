@@ -61,6 +61,9 @@ public sealed partial class PluginSignInService(AstraDatabase db, PluginProvider
         {
             ["provider"] = pp.Id, ["method"] = body.Method, ["inputs"] = Inputs(body.Inputs), ["account"] = account,
         }, ct) as JsonObject ?? throw new AdminApiException(502, $"{pp.Name}'s plugin started no sign-in");
+        // a plugin that can't start the sign-in says why instead of throwing: { ok: false, error }
+        if (a["ok"] is JsonValue started && started.GetValueKind() == System.Text.Json.JsonValueKind.False)
+            throw new AdminApiException(502, PluginProviders.Str(a, "error") ?? $"{pp.Name}'s plugin started no sign-in");
         var instructions = PluginProviders.Str(a, "instructions");
         var flow = new Flow(Guid.NewGuid().ToString("N")[..16], pp.Id, a["session"]?.DeepClone())
         {
