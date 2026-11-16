@@ -160,6 +160,15 @@ public sealed partial class McpService(
     public async Task<McpServerDto> UpdateAsync(string id, JsonObject body, CancellationToken ct)
     {
         var s = await RequireAsync(id, ct);
+        if (McpBuiltIn.Is(s))
+        {
+            // Astra's own tools server: only its switch can be changed (its address and tools are Astra's).
+            if (body.Any(p => p.Key != "enabled")) throw new AdminApiException(400, "The built-in Astra Tools server can only be switched on or off");
+            s.Enabled = body["enabled"] is JsonValue ev && ev.TryGetValue<bool>(out var eb) ? eb : throw new AdminApiException(400, "enabled must be a boolean");
+            s.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.Mcp.UpdateAsync(s, ct);
+            return await GetAsync(s.Id, ct);
+        }
         var previousUrl = s.Url;
         if (body.ContainsKey("name")) s.Name = RequireName(ReadString(body, "name"));
         if (body.ContainsKey("slug")) s.Slug = ReadString(body, "slug")?.Trim() ?? "";
@@ -175,6 +184,7 @@ public sealed partial class McpService(
 
     public async Task DeleteAsync(string id, CancellationToken ct)
     {
+        if (id == McpBuiltIn.Id) throw new AdminApiException(400, "The built-in Astra Tools server cannot be removed (switch it off instead)");
         if (!await db.Mcp.DeleteAsync(id, ct)) throw new AdminApiException(404, "MCP server not found");
         pool.Invalidate(id);
     }
@@ -275,6 +285,7 @@ public sealed partial class McpService(
     public async Task<McpTestResultDto> TestAsync(string id, CancellationToken ct)
     {
         var s = await RequireAsync(id, ct);
+        if (McpBuiltIn.Is(s)) throw new AdminApiException(400, "The built-in Astra Tools server has nothing to connect to; see Tools settings");
         pool.Invalidate(id);
         try
         {

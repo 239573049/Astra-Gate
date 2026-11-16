@@ -47,6 +47,9 @@ public static class TraceSpanNames
     public const string Encode = "gateway.encode";
     public const string Attempt = "upstream.attempt";
     public const string Response = "gateway.response";
+
+    /// <summary>A web search Astra ran for the model (the search-on-behalf loop; attributes <c>astra.search.*</c>).</summary>
+    public const string Search = "gateway.search";
 }
 
 public static class TraceSpanKinds

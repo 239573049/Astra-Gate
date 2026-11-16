@@ -109,6 +109,16 @@ public static class AstraApp
         builder.Services.AddSingleton<SettingsService>();
         builder.Services.AddSingleton<PrivacyGuardService>();
         builder.Services.AddSingleton<SmartRoutingService>();
+        // Built-in tools (linked update 34): search APIs, search on behalf of models, web fetch, the built-in MCP server.
+        builder.Services.AddSingleton<Astra.Gateway.Tools.ToolsSettingsService>();
+        builder.Services.AddSingleton<Astra.Gateway.Tools.SearchKeyRotation>();
+        builder.Services.AddSingleton<Astra.Gateway.Tools.SearchService>();
+        builder.Services.AddSingleton<Astra.Gateway.Tools.ISearchService>(sp => sp.GetRequiredService<Astra.Gateway.Tools.SearchService>());
+        builder.Services.AddSingleton<Astra.Gateway.Tools.WebFetcher>();
+        builder.Services.AddSingleton<Astra.Gateway.Tools.BuiltInTools>();
+        builder.Services.AddSingleton<Astra.Gateway.Mcp.IMcpBuiltIn>(sp => sp.GetRequiredService<Astra.Gateway.Tools.BuiltInTools>());
+        builder.Services.AddSingleton<Astra.Gateway.Tools.WebSearchBridge>();
+        builder.Services.AddSingleton<ToolsService>();
         builder.Services.AddSingleton<EffectiveModelResolver>();
         builder.Services.AddSingleton<BodyStore>();
         builder.Services.AddSingleton<LiveRequestFeed>();
@@ -323,6 +333,8 @@ public static class AstraApp
         app.Services.GetRequiredService<SettingsService>().LoadAsync().GetAwaiter().GetResult();
         app.Services.GetRequiredService<PrivacyGuardService>().LoadAsync().GetAwaiter().GetResult();
         app.Services.GetRequiredService<SmartRoutingService>().LoadAsync().GetAwaiter().GetResult();
+        app.Services.GetRequiredService<Astra.Gateway.Tools.ToolsSettingsService>().LoadAsync().GetAwaiter().GetResult();
+        Astra.Gateway.Mcp.McpBuiltIn.EnsureAsync(app.Services.GetRequiredService<AstraDatabase>()).GetAwaiter().GetResult();
         // Tokens: the 0006 migration inserts the default token without a key; generate it before the gateway serves.
         app.Services.GetRequiredService<TokenService>().EnsureDefaultAsync().GetAwaiter().GetResult();
 
@@ -362,6 +374,7 @@ public static class AstraApp
         app.MapProviderEndpoints();
         app.MapPrivacyEndpoints();
         app.MapSmartRoutingEndpoints();
+        app.MapToolsEndpoints();
         app.MapSubscriptionEndpoints();
         app.MapUpdateEndpoints();
         app.MapPluginEndpoints();

@@ -36,7 +36,7 @@ public sealed class JsonRegistrationTests
             "/api/update/status", "/api/models", "/api/requests", "/api/stats/summary", "/api/stats/timeseries",
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/stats/daily-bill", "/api/provider-quota/templates",
             "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
-            "/api/smart-routing", "/api/smart-routing/models", "/api/library/skills",
+            "/api/smart-routing", "/api/smart-routing/models", "/api/library/skills", "/api/tools", "/api/tools/settings",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -44,6 +44,9 @@ public sealed class JsonRegistrationTests
 
         foreach (var url in gets) await host.GetJsonAsync(url);
         // The Skill library's request bodies and results (nothing to migrate or install, but both directions are serialized).
+        await host.SendAsync(HttpMethod.Post, "/api/tools/search/apis", new { vendor = "tavily" });
+        await host.SendAsync(HttpMethod.Post, "/api/tools/search/apis/tavily/keys", new { key = "tvly-guard-probe-1" });
+        await host.SendAsync(HttpMethod.Post, "/api/tools/run", new { name = "web_fetch", args = new { url = "http://127.0.0.1:1/" } });
         await host.SendAsync(HttpMethod.Post, "/api/library/skills/migrate/preview", new { });
         await host.SendAsync(HttpMethod.Post, "/api/library/skills/migrate", new { items = Array.Empty<object>() });
         await host.SendAsync(HttpMethod.Put, "/api/library/skills/none/clients/claude-code", new { on = true });

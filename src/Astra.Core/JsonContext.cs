@@ -32,6 +32,7 @@ namespace Astra.Core;
 [JsonSerializable(typeof(PrivacyHit))]
 [JsonSerializable(typeof(PrivacyReport))]
 [JsonSerializable(typeof(SmartRoutingSettings))]
+[JsonSerializable(typeof(Astra.Core.Tools.ToolsSettings))]
 [JsonSerializable(typeof(RoutingReport))]
 [JsonSerializable(typeof(Astra.Core.Requests.ContextReport))]
 [JsonSerializable(typeof(SeedFile))]

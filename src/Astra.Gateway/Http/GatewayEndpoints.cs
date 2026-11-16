@@ -20,9 +20,9 @@ public static class GatewayEndpoints
 {
     public static IEndpointRouteBuilder MapGatewayEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/v1/chat/completions", (HttpContext c, GatewayPipeline p) => p.HandleAsync(c, ApiProtocol.OpenAIChat)).ExcludeFromDescription();
-        app.MapPost("/v1/responses", (HttpContext c, GatewayPipeline p) => p.HandleAsync(c, ApiProtocol.OpenAIResponses)).ExcludeFromDescription();
-        app.MapPost("/v1/messages", (HttpContext c, GatewayPipeline p) => p.HandleAsync(c, ApiProtocol.Anthropic)).ExcludeFromDescription();
+        app.MapPost("/v1/chat/completions", (HttpContext c, Tools.WebSearchBridge p) => p.HandleAsync(c, ApiProtocol.OpenAIChat)).ExcludeFromDescription();
+        app.MapPost("/v1/responses", (HttpContext c, Tools.WebSearchBridge p) => p.HandleAsync(c, ApiProtocol.OpenAIResponses)).ExcludeFromDescription();
+        app.MapPost("/v1/messages", (HttpContext c, Tools.WebSearchBridge p) => p.HandleAsync(c, ApiProtocol.Anthropic)).ExcludeFromDescription();
         app.MapPost("/v1/messages/count_tokens", (HttpContext c, GatewayAuxiliary a) => a.CountTokensAsync(c, ApiProtocol.Anthropic, null))
             .ExcludeFromDescription();
         // OpenAI Images API (issue #17): forwarded to an OpenAI-compatible provider, not translated.
@@ -44,7 +44,7 @@ public static class GatewayEndpoints
             ResponsesSocket.ServeAsync(c, p, r, a, s, f.CreateLogger("Astra.Gateway.ResponsesSocket"))).ExcludeFromDescription();
 
         // /v1beta/models/{model}:{generateContent|streamGenerateContent|countTokens}
-        app.MapPost("/v1beta/models/{*modelAction}", (HttpContext c, string modelAction, GatewayPipeline p, GatewayAuxiliary a) =>
+        app.MapPost("/v1beta/models/{*modelAction}", (HttpContext c, string modelAction, Tools.WebSearchBridge p, GatewayAuxiliary a) =>
         {
             var colon = modelAction.LastIndexOf(':');
             var model = colon > 0 ? modelAction[..colon] : modelAction;

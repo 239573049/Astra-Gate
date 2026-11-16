@@ -25,6 +25,9 @@ public sealed class InternalCall : Stream
 
     private const int MaxBufferedBytes = 1024 * 1024;
 
+    /// <summary>How much of a non-streamed answer is kept (an image reply is megabytes of base64).</summary>
+    public int BufferLimit { get; set; } = MaxBufferedBytes;
+
     private readonly CallResponseFeature _response;
     private readonly Func<string, ValueTask>? _onEvent;
     private readonly SseParser _parser = new();
@@ -115,7 +118,7 @@ public sealed class InternalCall : Stream
         {
             foreach (var sse in _parser.Feed(buffer.Span)) await _onEvent!(sse.Data);
         }
-        else if (_buffered.Length < MaxBufferedBytes) _buffered.Write(buffer.Span);
+        else if (_buffered.Length < BufferLimit) _buffered.Write(buffer.Span);
     }
 
     public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>

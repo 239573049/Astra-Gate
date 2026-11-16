@@ -48,6 +48,15 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(McpOAuthStartDto))]
 [JsonSerializable(typeof(McpCallDto))]
 [JsonSerializable(typeof(List<McpCallDto>))]
+// built-in tools (web search, fetch, images)
+[JsonSerializable(typeof(ToolsSettingsDto))]
+[JsonSerializable(typeof(SearchApiDto))]
+[JsonSerializable(typeof(SearchKeyDto))]
+[JsonSerializable(typeof(SearchKeyQuotaDto))]
+[JsonSerializable(typeof(Dictionary<string, SearchKeyQuotaDto>))]
+[JsonSerializable(typeof(List<ToolInfoDto>))]
+[JsonSerializable(typeof(SearchTestDto))]
+[JsonSerializable(typeof(ToolRunDto))]
 // client MCP entry
 [JsonSerializable(typeof(ClientMcpDto))]
 [JsonSerializable(typeof(List<ClientMcpDto>))]
