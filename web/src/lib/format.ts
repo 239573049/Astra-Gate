@@ -1,4 +1,5 @@
 // Display formatting. Money arrives as integer nano-USD (1 USD = 1e9 nanos).
+import { formatMoney, formatMoneyAxis } from './currency';
 
 export const NANOS_PER_USD = 1_000_000_000;
 
@@ -6,21 +7,25 @@ export function usdFromNanos(nanos: number): number {
   return nanos / NANOS_PER_USD;
 }
 
-/** "$12.34", "$0.0213", "$0.009" — 3 significant digits below $1 so per-request costs stay visible. */
+/**
+ * "$12.34", "$0.0213", "$0.009" — 3 significant digits below 1 so per-request costs stay visible. The amount is USD; it reads in the
+ * display currency (settings; USD by default), see lib/currency.ts.
+ */
 export function formatUsd(usd: number | null | undefined, opts: { compact?: boolean } = {}): string {
   if (usd === null || usd === undefined || Number.isNaN(usd)) return '—';
-  const abs = Math.abs(usd);
-  if (abs === 0) return '$0';
-  if (opts.compact && abs >= 1000) return '$' + `${new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(usd)}`;
-  if (abs >= 1) return '$' + `${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(usd)}`;
-  return '$' + `${new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3, maximumFractionDigits: 10 }).format(usd)}`;
+  return formatMoney(usd, opts);
 }
 
-/** Short axis label: "$0.01", "$2.5", "$1.2K". */
+/** Short axis label: "$0.01", "$2.5", "$1.2K" (display currency). */
 export function formatUsdAxis(usd: number): string {
+  return formatMoneyAxis(usd);
+}
+
+/** A USD amount always as dollars ("$5", "$0.0213"), whatever the display currency: the equivalent shown next to an amount typed in another one. */
+export function formatPlainUsd(usd: number): string {
   if (usd === 0) return '$0';
-  if (Math.abs(usd) >= 1000) return formatUsd(usd, { compact: true });
-  return '$' + `${new Intl.NumberFormat('en-US', { maximumSignificantDigits: 2, maximumFractionDigits: 10 }).format(usd)}`;
+  if (Math.abs(usd) >= 1) return '$' + new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(usd);
+  return '$' + new Intl.NumberFormat('en-US', { maximumSignificantDigits: 3, maximumFractionDigits: 10 }).format(usd);
 }
 
 export function formatNanos(nanos: number | null | undefined): string {

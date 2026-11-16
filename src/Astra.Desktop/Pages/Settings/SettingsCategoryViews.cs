@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Astra.Api.Contracts;
 using Astra.Desktop.Components.Settings;
 using Astra.Desktop.Core.I18n;
@@ -111,6 +112,52 @@ public sealed class UsageSettingsView : SettingsSectionView
         zones.Chose += v => _ = PatchAsync(JsonPatch.Of(("usageTimeZone", v == "" ? null : v)));
         OnSettings(x => zones.SetValue(x.UsageTimeZone ?? ""));
         stack.Children.Add(RowBuilder.Group(null, null, RowBuilder.Hinted(Loc.T("settings.usageTimeZone"), Loc.T("settings.usageTimeZone.hint"), zones)));
+
+        // display currency (web SettingsPage CurrencySettings): manual rates, nothing fetched; money stays USD underneath
+        var currency = new ControlledSelect(CurrencyForm.Options(), s.DisplayCurrency, 200);
+        Avalonia.Automation.AutomationProperties.SetName(currency, Loc.T("settings.currency.display"));
+        currency.Chose += v =>
+        {
+            if (CurrencyForm.HasRate(v, Last!.CurrencyRates)) _ = PatchAsync(JsonPatch.Of(("displayCurrency", v)));
+            else
+            {
+                Context.Feedback.Error(Loc.T("settings.currency.needRate", ("code", v)));
+                currency.SetValue(Last.DisplayCurrency);
+            }
+        };
+        OnSettings(x => currency.SetValue(x.DisplayCurrency));
+        var ratesText = CurrencyForm.Format(s.CurrencyRates);
+        Avalonia.Controls.Button? saveRates = null;
+        var ratesField = Ui.Field(Loc.T("settings.currency.rates"), ratesText, t =>
+        {
+            ratesText = t;
+            if (saveRates is not null) saveRates.IsEnabled = ratesText != CurrencyForm.Format(Last!.CurrencyRates);
+        }, 288, mono: true, placeholder: "CNY=7.2, EUR=0.92");
+        var saveRatesButton = Ui.Button(Loc.T("common.save"), () =>
+        {
+            if (CurrencyForm.Parse(ratesText, out var bad) is not { } table)
+            {
+                Context.Feedback.Error(Loc.T("settings.currency.badRate", ("entry", bad ?? "")));
+                return;
+            }
+            var patch = new JsonObject();
+            foreach (var (code, rate) in table) patch[code] = rate;
+            // The display currency falls back to USD together with its rate.
+            _ = PatchAsync(table.ContainsKey(Last!.DisplayCurrency) || Last.DisplayCurrency == "USD"
+                ? JsonPatch.Of(("currencyRates", patch))
+                : JsonPatch.Of(("displayCurrency", "USD"), ("currencyRates", patch)));
+        }, enabled: false);
+        saveRates = saveRatesButton;
+        OnSettings(x =>
+        {
+            ratesText = CurrencyForm.Format(x.CurrencyRates);
+            if (ratesField.Text != ratesText) ratesField.Text = ratesText;
+            saveRatesButton.IsEnabled = false;
+        });
+        stack.Children.Add(RowBuilder.Group(Loc.T("settings.currency"), null,
+            RowBuilder.Hinted(Loc.T("settings.currency.display"), Loc.T("settings.currency.displayHint"), currency),
+            RowBuilder.Hinted(Loc.T("settings.currency.rates"), Loc.T("settings.currency.ratesHint"), ratesField, saveRatesButton))
+            .WithHint(Loc.T("settings.currency.footer")));
     }
 }
 

@@ -2,6 +2,7 @@
 
 import type { Provider, ProviderAccount, QuotaWindow, StatsSummary, TimeseriesPoint, TopModel } from '../api/types';
 import type { TrayTitleMode } from '../shell/bridge';
+import { getDisplayCurrency } from './currency';
 import { formatTokens, formatUsd } from './format';
 import { isWindow, quotaEnabled, usedPercentOf } from './quota';
 import { bucketTotals, fillBuckets, rangeBuckets } from './stats';
@@ -13,9 +14,11 @@ export function failedRequests(s: Pick<StatsSummary, 'requests' | 'successRate'>
 
 /** Tile-sized cost: "$0", "$<0.01", "$0.37", "$12.40", "$1.2K". */
 export function formatCostShort(usd: number): string {
-  if (!Number.isFinite(usd) || usd <= 0) return '$0';
-  if (usd < 0.01) return '$<0.01';
-  if (usd < 1000) return `$${usd.toFixed(2)}`;
+  const c = getDisplayCurrency();
+  if (!Number.isFinite(usd) || usd <= 0) return `${c.symbol}0`;
+  const shown = usd * c.rate;
+  if (shown < 0.01) return `${c.symbol}<0.01`;
+  if (shown < 1000) return `${c.symbol}${shown.toFixed(c.decimals)}`;
   return formatUsd(usd, { compact: true });
 }
 

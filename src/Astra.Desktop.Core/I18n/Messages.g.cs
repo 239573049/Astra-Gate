@@ -1698,6 +1698,37 @@ internal static class Messages
         "cap.pdf",
         "cap.structuredOutput",
         "requests.col.cache",
+        "requests.col.context",
+        "context.title",
+        "context.unknown",
+        "context.cellTooltip",
+        "context.free",
+        "context.cached",
+        "context.fresh",
+        "context.output",
+        "context.cacheShare",
+        "context.outputLimit",
+        "context.partsTitle",
+        "context.part.system",
+        "context.part.tools",
+        "context.part.history",
+        "context.part.latest",
+        "context.partsHint",
+        "settings.currency",
+        "settings.currency.footer",
+        "settings.currency.display",
+        "settings.currency.displayHint",
+        "settings.currency.rateRow",
+        "settings.currency.rateOf",
+        "settings.currency.badRate",
+        "settings.currency.remove",
+        "settings.currency.add",
+        "settings.currency.addHint",
+        "settings.currency.addPlaceholder",
+        "settings.currency.needRate",
+        "settings.currency.rates",
+        "settings.currency.ratesHint",
+        "tokens.limitUsdEquivalent",
         "usage.title",
         "usage.inputTotal",
         "usage.outputTotal",
@@ -4844,6 +4875,37 @@ internal static class Messages
             case "cap.pdf": return "PDF";
             case "cap.structuredOutput": return "结构化输出";
             case "requests.col.cache": return "缓存命中 / 写入";
+            case "requests.col.context": return "上下文";
+            case "context.title": return "上下文窗口";
+            case "context.unknown": return "该请求没有可用的上下文窗口数据（模型窗口未知、没有用量，或是此功能之前的记录）";
+            case "context.cellTooltip": return "提示词 {prompt} / 窗口 {window} tokens";
+            case "context.free": return "剩余";
+            case "context.cached": return "缓存命中";
+            case "context.fresh": return "新输入";
+            case "context.output": return "输出";
+            case "context.cacheShare": return "提示词中 {percent} 来自缓存";
+            case "context.outputLimit": return "输出 {output} / 最大输出 {max}（{percent}）";
+            case "context.partsTitle": return "提示词被什么占着";
+            case "context.part.system": return "系统提示";
+            case "context.part.tools": return "工具定义";
+            case "context.part.history": return "历史消息";
+            case "context.part.latest": return "最新一轮";
+            case "context.partsHint": return "按请求内容的字符数估算，再按上游报告的输入 tokens 折算，仅供参考。";
+            case "settings.currency": return "显示币种";
+            case "settings.currency.footer": return "费用在内部始终以美元记账；这里只改变显示。汇率由你手动填写，Astra 不会联网获取汇率。输入金额的地方（如令牌费用上限）按显示币种填写，保存时换算为美元并标出美元等值。";
+            case "settings.currency.display": return "显示币种";
+            case "settings.currency.displayHint": return "只能选择已填写汇率的币种。";
+            case "settings.currency.rateRow": return "{code} 汇率";
+            case "settings.currency.rateOf": return "1 美元兑 {code} 的汇率";
+            case "settings.currency.badRate": return "汇率必须是大于 0 的数字（如 7.2）";
+            case "settings.currency.remove": return "移除";
+            case "settings.currency.add": return "添加币种";
+            case "settings.currency.addHint": return "添加后填写 1 美元兑该币种的汇率。";
+            case "settings.currency.addPlaceholder": return "选择币种…";
+            case "settings.currency.needRate": return "请先填写 {code} 的汇率，再把它设为显示币种";
+            case "settings.currency.rates": return "汇率";
+            case "settings.currency.ratesHint": return "每行或用逗号分隔一项：币种=1 美元兑该币种的数量，如 CNY=7.2, EUR=0.92。";
+            case "tokens.limitUsdEquivalent": return "≈ {usd}（USD）";
             case "usage.title": return "Token 用量";
             case "usage.inputTotal": return "输入总量";
             case "usage.outputTotal": return "输出总量";
@@ -7992,6 +8054,37 @@ internal static class Messages
             case "cap.pdf": return "PDF";
             case "cap.structuredOutput": return "Structured output";
             case "requests.col.cache": return "Cache read / write";
+            case "requests.col.context": return "Context";
+            case "context.title": return "Context window";
+            case "context.unknown": return "No context window data for this request (the model's window is unknown, no usage was reported, or the row predates this feature)";
+            case "context.cellTooltip": return "Prompt {prompt} / window {window} tokens";
+            case "context.free": return "Free";
+            case "context.cached": return "Cache read";
+            case "context.fresh": return "Fresh input";
+            case "context.output": return "Output";
+            case "context.cacheShare": return "{percent} of the prompt came from the cache";
+            case "context.outputLimit": return "Output {output} / max output {max} ({percent})";
+            case "context.partsTitle": return "What the prompt is made of";
+            case "context.part.system": return "System";
+            case "context.part.tools": return "Tools";
+            case "context.part.history": return "History";
+            case "context.part.latest": return "Latest turn";
+            case "context.partsHint": return "Estimated from the characters of the request body, scaled to the input tokens the upstream reported. A guide, not an exact count.";
+            case "settings.currency": return "Display currency";
+            case "settings.currency.footer": return "Costs are always booked in US dollars; this only changes how they read. You enter the exchange rates yourself — Astra never fetches rates from the network. Where you type an amount (such as a token cost limit) it is in the display currency, converted to dollars on save, with the dollar equivalent shown.";
+            case "settings.currency.display": return "Display currency";
+            case "settings.currency.displayHint": return "Only currencies with a rate can be chosen.";
+            case "settings.currency.rateRow": return "{code} rate";
+            case "settings.currency.rateOf": return "Exchange rate of {code} per 1 USD";
+            case "settings.currency.badRate": return "The rate must be a number greater than 0 (for example 7.2)";
+            case "settings.currency.remove": return "Remove";
+            case "settings.currency.add": return "Add a currency";
+            case "settings.currency.addHint": return "Then enter how many of it 1 US dollar buys.";
+            case "settings.currency.addPlaceholder": return "Choose a currency…";
+            case "settings.currency.needRate": return "Enter the exchange rate of {code} before making it the display currency";
+            case "settings.currency.rates": return "Exchange rates";
+            case "settings.currency.ratesHint": return "One entry per line or comma-separated: currency=how many of it 1 US dollar buys, such as CNY=7.2, EUR=0.92.";
+            case "tokens.limitUsdEquivalent": return "≈ {usd} (USD)";
             case "usage.title": return "Token usage";
             case "usage.inputTotal": return "Total input";
             case "usage.outputTotal": return "Total output";

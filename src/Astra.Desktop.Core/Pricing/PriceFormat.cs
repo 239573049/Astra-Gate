@@ -67,15 +67,18 @@ public static class PriceFormat
     /// </summary>
     public static string Usd(decimal? usd)
     {
-        if (usd is not { } v) return Dash;
+        if (usd is not { } amount) return Dash;
+        // USD in, the display currency out (settings; USD by default).
+        var c = Currency.DisplayMoney.Current;
+        var v = amount * c.Rate;
         var abs = Math.Abs(v);
-        if (abs == 0) return "$0";
+        if (abs == 0) return c.Symbol + "0";
         var sign = v < 0 ? "-" : "";
         // the web prints '$' + Intl(usd), so a negative amount reads "$-3.46"
-        if (abs >= 1) return "$" + sign + Math.Round(abs, 2, MidpointRounding.AwayFromZero).ToString("#,##0.00", Inv);
+        if (abs >= 1) return c.Symbol + sign + Math.Round(abs, c.Info.Decimals, MidpointRounding.AwayFromZero).ToString("#,##0." + new string('0', c.Info.Decimals), Inv).TrimEnd('.');
         var rounded = RoundSignificant(abs, 3);
         // plain digits without a limit on fraction digits (Intl: significant digits win over maximumFractionDigits)
-        return "$" + sign + PriceNumber.ToText(rounded);
+        return c.Symbol + sign + PriceNumber.ToText(rounded);
     }
 
     /// <summary>Integer nano-USD (1 USD = 1e9 nanos, AGENTS.md money) as dollars (<c>formatNanos</c>); null is a dash.</summary>

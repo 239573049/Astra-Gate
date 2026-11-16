@@ -40,7 +40,7 @@ public sealed class ReceiptBillView : UserControl
             (Loc.T("bill.field.date"), $"{view.Date} {view.Weekday}"),
             (Loc.T("bill.field.window"), view.Window),
             (Loc.T("bill.field.number"), view.Number),
-            (Loc.T("bill.field.currency"), "USD")));
+            (Loc.T("bill.field.currency"), Astra.Desktop.Core.Currency.DisplayMoney.Current.Code)));
         paper.Children.Add(Dash());
         if (view.Providers.Count == 0)
         {

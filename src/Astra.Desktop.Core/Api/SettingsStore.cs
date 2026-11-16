@@ -14,8 +14,13 @@ public sealed partial class SettingsStore
     /// <summary>Creates the store over the shared client and cache.</summary>
     public SettingsStore(QueryClient queries, ApiClient api)
     {
-        Settings = queries.Query(QueryKeys.Settings, async ct => await api.GetAsync<SettingsDto>("/api/settings", ct)
-            ?? throw new ApiException(0, "empty settings response"));
+        Settings = queries.Query(QueryKeys.Settings, async ct =>
+        {
+            var settings = await api.GetAsync<SettingsDto>("/api/settings", ct) ?? throw new ApiException(0, "empty settings response");
+            // Every money formatter reads the display currency (settings; manual rates, never fetched).
+            Currency.DisplayMoney.Apply(settings.DisplayCurrency, settings.CurrencyRates);
+            return settings;
+        });
     }
 
     /// <summary>

@@ -15,6 +15,7 @@ import { PricingSourceBadge } from '../components/Billing';
 import { CLIENT_META, ClientGlyph, ModelGlyph, ProtocolGlyph, ProviderIcon } from '../components/icons';
 import { Page } from '../components/layout/Page';
 import { EMPTY_REQUEST_FILTERS, originQuery, RequestFilters, type RequestFilterId, type RequestFilterValues } from '../components/RequestFilters';
+import { ContextFillCell, ContextSection } from '../components/ContextFill';
 import { CacheUsageCell, TokenTotalsCell, TokenTypeLabel, TokenUsageSummary } from '../components/TokenUsage';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, KV, Spinner } from '../components/ui/controls';
 import { errorText, Sheet } from '../components/ui/overlays';
@@ -52,6 +53,7 @@ const PRIVACY_ACTION_KEY: Record<string, MessageKey> = {
 /** One table row; sortable columns hold plain values, the full record rides along for rendering. */
 type Row = {
   id: string;
+  context: number | null;
   time: number;
   client: string;
   token: string;
@@ -263,6 +265,7 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
     ttft: r.ttftMs ?? null,
     tps: r.outputTps ?? null,
     tokens: r.totalInputTokens + r.totalOutputTokens,
+    context: r.context?.fill ?? null,
     cache: r.cacheReadTokens,
     cost: r.costNanoUsd ?? 0,
     r,
@@ -413,6 +416,7 @@ const RequestTable = memo(function RequestTable({ items, onOpen }: { items: Requ
     },
     { key: 'tokens', label: t('requests.col.tokens'), numeric: true, width: 116, render: (_, row) => <LiveCell r={row.r}>{(r) => <TokenTotalsCell usage={r} />}</LiveCell> },
     { key: 'cache', label: t('requests.col.cache'), numeric: true, width: 136, render: (_, row) => <LiveCell r={row.r}>{(r) => <CacheUsageCell usage={r} />}</LiveCell> },
+    { key: 'context', label: t('requests.col.context'), numeric: true, width: 92, render: (_, row) => <LiveCell r={row.r}>{(r) => <ContextFillCell context={r.context} />}</LiveCell> },
     {
       key: 'cost',
       label: t('requests.col.cost'),
@@ -861,6 +865,8 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
           </div>
 
           <TokenUsageSummary usage={r} />
+
+          <ContextSection context={r.context} />
 
           {(r.errorType || r.errorMessage) && (
             <Alert tone="danger" title={r.errorType ?? t('requests.detail.error')}>

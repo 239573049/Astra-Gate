@@ -270,6 +270,7 @@ public static class RequestEndpoints
             var next = await settings.UpdateAsync(s =>
             {
                 var (previousProxyMode, previousProxyUrl) = (s.ProxyMode, s.ProxyUrl);
+                var (previousCurrency, previousRates) = (s.DisplayCurrency, s.CurrencyRates);
                 foreach (var (key, value) in patch)
                 {
                     switch (key)
@@ -384,12 +385,25 @@ public static class RequestEndpoints
                             // Write-only: null / "" clears it; reads only report hasProxyPassword.
                             s.ProxyPasswordProtected = value?.GetValue<string>() is { Length: > 0 } password ? secrets.Protect(password) : null;
                             break;
+                        case "displayCurrency": s.DisplayCurrency = value?.GetValue<string>()?.Trim().ToUpperInvariant() ?? "USD"; break;
+                        case "currencyRates":
+                            // Rates are typed by the user (units of currency per 1 USD); Astra never fetches them. null clears the table.
+                            s.CurrencyRates = value is JsonObject rates
+                                ? rates.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key.Trim().ToUpperInvariant(), kv => kv.Value!.ToString().Trim())
+                                : [];
+                            break;
                         case "proxyBypass":
                             s.ProxyBypass = value?.GetValue<string>()?.Trim() is { Length: > 0 } bypass ? bypass : null;
                             break;
                         // read-only fields are ignored (changed via CLI / config.json)
                     }
                 }
+                if (patch.ContainsKey("displayCurrency") || patch.ContainsKey("currencyRates"))
+                    if (Astra.Core.Currency.Currencies.Validate(s.DisplayCurrency, s.CurrencyRates) is { } currencyError)
+                    {
+                        (s.DisplayCurrency, s.CurrencyRates) = (previousCurrency, previousRates);
+                        error ??= currencyError;
+                    }
                 if (s.ProxyMode == SystemProxy.ModeCustom && s.ProxyUrl is null)
                 {
                     // Keep the previous (valid) proxy choice instead of saving a custom mode with nothing to use.
@@ -415,7 +429,7 @@ public static class RequestEndpoints
         s.RequireGatewayKey, s.PluginMarketUrl, Astra.Plugins.Market.PluginMarket.DefaultUrl, s.UsageTimeZone,
         UsagePeriods.Zone(s.UsageTimeZone).Id, s.RequestCompression, s.TraceContent, s.PreventSleep,
         s.ProviderQualifiedModels, s.ModelProviderSeparator, s.HiddenNav.ToList(), s.ModelQualifyScope, s.ClientProviderFailover, s.MaxRequestBodyMb,
-        s.StripStaleReasoning);
+        s.StripStaleReasoning, s.DisplayCurrency, new Dictionary<string, string>(s.CurrencyRates));
 
     /// <summary>
     /// In-memory mirror of the list filters (<see cref="RequestRepository.RequestWhereSql"/>) for in-flight rows:
@@ -457,7 +471,7 @@ public static class RequestEndpoints
         r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
         r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp,
         r.SessionKey, inFlight ? r.LiveStage : null, r.TurnId, r.CallKind, r.ParentRequestId, inFlight || live ? r.LivePhases : null, RoutingOf(r),
-        live ? r.LiveAttempts : null, live ? r.LiveCause : null);
+        live ? r.LiveAttempts : null, live ? r.LiveCause : null, ContextOf(r));
 
     private static RequestDetailDto ToDetail(RequestRecord r, BodyStore bodies, bool inFlight = false)
     {
@@ -488,7 +502,24 @@ public static class RequestEndpoints
                 i.CostNanoUsd, i.Note)).ToList(),
             r.UserAgent, captured, r.PrivacyJson is null ? null : Json.Deserialize<PrivacyReport>(r.PrivacyJson),
             r.ReasoningEffort, r.ReasoningMode, r.ReasoningBudgetTokens,
-            r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp, RoutingOf(r));
+            r.TokenId, r.TokenName, r.AccountId, r.AccountName, r.Remote, r.ClientIp, RoutingOf(r), ContextOf(r));
+    }
+
+    /// <summary>
+    /// The context window view of a request: prompt tokens against the window the model had, and the prompt's estimated split
+    /// (character shares scaled to the reported prompt tokens). Null for a row logged before it was kept.
+    /// </summary>
+    internal static ContextUsageDto? ContextOf(RequestRecord r)
+    {
+        if (r.ContextJson is null) return null;
+        var report = Json.Deserialize<ContextReport>(r.ContextJson);
+        if (report is null) return null;
+        var prompt = r.TotalInputTokens;
+        double? fill = report.Window is > 0 && prompt > 0 ? (double)prompt / report.Window : null;
+        var parts = report.Shares is { } sh && prompt > 0
+            ? new ContextPartsDto((long)Math.Round(sh.System * prompt), (long)Math.Round(sh.Tools * prompt), (long)Math.Round(sh.History * prompt), (long)Math.Round(sh.Latest * prompt))
+            : null;
+        return new ContextUsageDto(prompt, report.Window, fill, r.CacheReadTokens, r.TotalOutputTokens, report.MaxOutput, parts);
     }
 
     /// <summary>Smart routing's decision for a request to the virtual model; null for every other request.</summary>

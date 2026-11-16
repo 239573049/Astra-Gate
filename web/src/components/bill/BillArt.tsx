@@ -7,6 +7,7 @@ import { forwardRef } from 'react';
 import logo from '../../assets/logo.png';
 import { useI18n } from '../../i18n';
 import type { BillView } from '../../lib/bill';
+import { getDisplayCurrency } from '../../lib/currency';
 import './bill.css';
 
 /** A · thermal receipt: monospace, torn edges, a barcode of the bill number. */
@@ -32,7 +33,7 @@ export const ReceiptBill = forwardRef<HTMLDivElement, { view: BillView }>(functi
           {kv(t('bill.field.date'), `${v.date} ${v.weekday}`)}
           {kv(t('bill.field.window'), v.window)}
           {kv(t('bill.field.number'), v.number)}
-          {kv(t('bill.field.currency'), 'USD')}
+          {kv(t('bill.field.currency'), getDisplayCurrency().code)}
         </div>
         <div className="dash" />
         {v.providers.length === 0 && <div className="none">{t('bill.empty')}</div>}

@@ -76,13 +76,15 @@ public static class TraceFormat
     public static string Usd(double? usd)
     {
         if (usd is null || double.IsNaN(usd.Value)) return Dash;
-        var v = usd.Value;
+        // USD in, the display currency out (settings; USD by default).
+        var c = Currency.DisplayMoney.Current;
+        var v = usd.Value * (double)c.Rate;
         var abs = Math.Abs(v);
-        if (abs == 0) return "$0";
-        if (abs >= 1) return "$" + v.ToString("N2", Inv);
+        if (abs == 0) return c.Symbol + "0";
+        if (abs >= 1) return c.Symbol + v.ToString("N" + c.Info.Decimals, Inv);
         var digits = Math.Min(10, 2 - (int)Math.Floor(Math.Log10(abs)));
         var rounded = Math.Round(v, Math.Max(0, digits), MidpointRounding.AwayFromZero);
-        return "$" + rounded.ToString("0.##########", Inv);
+        return c.Symbol + rounded.ToString("0.##########", Inv);
     }
 
     /// <summary>Nano-USD as <see cref="Usd"/> (the <c>usd</c> helper of the session and request views).</summary>

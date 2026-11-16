@@ -2,6 +2,7 @@ import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, HashRouter, Navigate, Route, Routes } from 'react-router';
 
 import { useAuthStatus } from './api/hooks';
+import { DisplayCurrencyProvider } from './components/DisplayCurrencyProvider';
 import { AppShell } from './components/layout/AppShell';
 import { Spinner } from './components/ui/controls';
 import { LoginPage } from './pages/LoginPage';
@@ -57,42 +58,44 @@ export function App() {
 function AdminApp() {
   return (
     <AuthGate>
-      {/* Pages inside the shell suspend at its <Outlet />; this boundary only covers the tray route. */}
-      <Suspense fallback={null}>
-        <Routes>
-          {/* The desktop tray popover window: no app shell around it. */}
-          <Route path="tray" element={<TrayPanelPage />} />
-          <Route element={<AppShell />}>
-            <Route index element={<OverviewPage />} />
-            <Route path="requests" element={<RequestsPage />} />
-            <Route path="traces" element={<TracesPage />} />
-            <Route path="traces/sessions" element={<TracesPage />} />
-            <Route path="traces/sessions/:key" element={<TracesPage />} />
-            <Route path="traces/requests" element={<TracesPage />} />
-            <Route path="traces/requests/:id" element={<TracesPage />} />
-            <Route path="tokens" element={<TokensPage />} />
-            <Route path="tokens/:id" element={<TokenDetailPage />} />
-            <Route path="clients" element={<ClientsPage />} />
-            <Route path="clients/:kind" element={<ClientsPage />} />
-            <Route path="providers" element={<ProvidersPage />} />
-            <Route path="providers/:id" element={<ProviderDetailPage />} />
-            <Route path="models" element={<ModelsPage />} />
-            <Route path="models/:id" element={<ModelDetailPage />} />
-            <Route path="plugins" element={<PluginsPage />} />
-            <Route path="plugins/dev/gallery" element={<PluginGalleryPage />} />
-            <Route path="plugins/v2/:plugin/:page/*" element={<PluginPage />} />
-            <Route path="plugins/:tab" element={<PluginsPage />} />
-            <Route path="privacy" element={<PrivacyPage />} />
-            <Route path="privacy/:tab" element={<PrivacyPage />} />
-            <Route path="smart-routing" element={<SmartRoutingPage />} />
-            <Route path="mcp" element={<McpPage />} />
-            <Route path="skills" element={<SkillsPage />} />
-            <Route path="settings" element={<SettingsPage />} />
-            <Route path="settings/:tab" element={<SettingsPage />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <DisplayCurrencyProvider>
+        {/* Pages inside the shell suspend at its <Outlet />; this boundary only covers the tray route. */}
+        <Suspense fallback={null}>
+          <Routes>
+            {/* The desktop tray popover window: no app shell around it. */}
+            <Route path="tray" element={<TrayPanelPage />} />
+            <Route element={<AppShell />}>
+              <Route index element={<OverviewPage />} />
+              <Route path="requests" element={<RequestsPage />} />
+              <Route path="traces" element={<TracesPage />} />
+              <Route path="traces/sessions" element={<TracesPage />} />
+              <Route path="traces/sessions/:key" element={<TracesPage />} />
+              <Route path="traces/requests" element={<TracesPage />} />
+              <Route path="traces/requests/:id" element={<TracesPage />} />
+              <Route path="tokens" element={<TokensPage />} />
+              <Route path="tokens/:id" element={<TokenDetailPage />} />
+              <Route path="clients" element={<ClientsPage />} />
+              <Route path="clients/:kind" element={<ClientsPage />} />
+              <Route path="providers" element={<ProvidersPage />} />
+              <Route path="providers/:id" element={<ProviderDetailPage />} />
+              <Route path="models" element={<ModelsPage />} />
+              <Route path="models/:id" element={<ModelDetailPage />} />
+              <Route path="plugins" element={<PluginsPage />} />
+              <Route path="plugins/dev/gallery" element={<PluginGalleryPage />} />
+              <Route path="plugins/v2/:plugin/:page/*" element={<PluginPage />} />
+              <Route path="plugins/:tab" element={<PluginsPage />} />
+              <Route path="privacy" element={<PrivacyPage />} />
+              <Route path="privacy/:tab" element={<PrivacyPage />} />
+              <Route path="smart-routing" element={<SmartRoutingPage />} />
+              <Route path="mcp" element={<McpPage />} />
+              <Route path="skills" element={<SkillsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="settings/:tab" element={<SettingsPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </DisplayCurrencyProvider>
     </AuthGate>
   );
 }

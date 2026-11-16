@@ -119,7 +119,7 @@ public static class TokenUsageSummaryView
         grid.Children.Add(stack);
     }
 
-    private static Control Composition(string label, (string Label, long Count, ArcDesignTokenKind Color)[] segments)
+    internal static Control Composition(string label, (string Label, long Count, ArcDesignTokenKind Color)[] segments)
     {
         var total = segments.Sum(s => s.Count);
         var bar = new Grid { Height = 6, ClipToBounds = true };
@@ -160,6 +160,71 @@ public static class TokenUsageSummaryView
         stack.Children.Add(bar);
         stack.Children.Add(legend);
         return stack;
+    }
+}
+
+/// <summary>
+/// The request dialog's context-window section (web <c>ContextSection</c>): the window bar (cached prompt, fresh prompt, output, free), the output against
+/// its limit and the estimated split of the prompt.
+/// </summary>
+public static class ContextSectionView
+{
+    /// <summary>Builds the section; null when the row carries no context data.</summary>
+    public static Control? Create(ContextUsageDto? c)
+    {
+        if (c is null) return null;
+        var section = new DetailSection { Title = Loc.T("context.title") };
+        var card = new StackPanel { Spacing = 0 };
+        if (c.Window is { } window && c.Fill is { } fill)
+        {
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var pct = new SelectableTextBlock { Text = ContextPresentation.FillText(fill), FontSize = 22, FontWeight = FontWeight.Medium, FontFeatures = FontFeatureCollection.Parse("tnum") };
+            pct.Token(TextBlock.ForegroundProperty, ContextPresentation.ToneOf(fill) switch { ContextPresentation.Tone.Danger => ArcDesignTokenKind.Danger, ContextPresentation.Tone.Warn => ArcDesignTokenKind.Warning, _ => ArcDesignTokenKind.Foreground });
+            var amount = KitStyle.Text($"{TraceFormat.Tokens(c.PromptTokens)} / {TraceFormat.Tokens(window)}", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary).Num();
+            amount.VerticalAlignment = VerticalAlignment.Bottom;
+            Grid.SetColumn(amount, 1);
+            head.Children.Add(pct);
+            head.Children.Add(amount);
+            card.Children.Add(head);
+            var names = new Dictionary<string, (string Label, ArcDesignTokenKind Color)>
+            {
+                ["cached"] = (Loc.T("context.cached"), ArcDesignTokenKind.Success),
+                ["fresh"] = (Loc.T("context.fresh"), ArcDesignTokenKind.Accent),
+                ["output"] = (Loc.T("context.output"), ArcDesignTokenKind.TextSecondary),
+                ["free"] = (Loc.T("context.free"), ArcDesignTokenKind.SurfaceMuted),
+            };
+            card.Children.Add(TokenUsageSummaryView.Composition(Loc.T("context.title"),
+                ContextPresentation.WindowSegments(c).Select(s => (names[s.Key].Label, s.Tokens, names[s.Key].Color)).ToArray()));
+            if (c.PromptTokens > 0)
+                card.Children.Add(Note(Loc.T("context.cacheShare", ("percent", TraceFormat.Percent((double)c.CacheReadTokens / c.PromptTokens)))));
+        }
+        else card.Children.Add(Note(Loc.T("context.unknown")));
+        if (c.MaxOutput is { } max and > 0)
+            card.Children.Add(Note(Loc.T("context.outputLimit", ("output", TraceFormat.Tokens(c.OutputTokens)), ("max", TraceFormat.Tokens(max)),
+                ("percent", ContextPresentation.FillText((double)c.OutputTokens / max)))));
+        if (c.Parts is { } parts && parts.System + parts.Tools + parts.History + parts.Latest > 0)
+        {
+            card.Children.Add(Note(Loc.T("context.partsTitle")));
+            card.Children.Add(TokenUsageSummaryView.Composition(Loc.T("context.partsTitle"),
+            [
+                (Loc.T("context.part.system"), parts.System, ArcDesignTokenKind.Accent),
+                (Loc.T("context.part.tools"), parts.Tools, ArcDesignTokenKind.Warning),
+                (Loc.T("context.part.history"), parts.History, ArcDesignTokenKind.Success),
+                (Loc.T("context.part.latest"), parts.Latest, ArcDesignTokenKind.TextSecondary),
+            ]));
+            card.Children.Add(Note(Loc.T("context.partsHint")));
+        }
+        section.Body = TokenUsageSummaryView.Card(card);
+        return section;
+    }
+
+    private static TextBlock Note(string text)
+    {
+        var note = KitStyle.Text(text, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary);
+        note.FontSize = 11;
+        note.TextWrapping = TextWrapping.Wrap;
+        note.Margin = new Thickness(0, 8, 0, 0);
+        return note;
     }
 }
 

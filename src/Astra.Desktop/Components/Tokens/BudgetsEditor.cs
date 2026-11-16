@@ -1,4 +1,6 @@
 using Astra.Desktop.Components.Kit;
+using Astra.Core.Currency;
+using Astra.Desktop.Core.Currency;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.Tokens;
 using Avalonia;
@@ -82,10 +84,23 @@ public sealed class BudgetsEditor : UserControl
         period.Width = 92;
         var limit = new NumberBox
         {
-            Value = budget.Limit, Minimum = 0, AllowFraction = budget.Metric == "cost", Placeholder = Loc.T("tokens.limitValue"),
+            Value = budget.Limit, Minimum = 0, AllowFraction = budget.Metric == "cost", Placeholder = budget.Metric == "cost" ? $"{Loc.T("tokens.limitValue")} ({DisplayMoney.Current.Code})" : Loc.T("tokens.limitValue"),
         };
         Avalonia.Automation.AutomationProperties.SetName(limit, Loc.T("tokens.limitValue"));
-        limit.ValueEdited += v => Edit(index, b => b with { Limit = v });
+        // A cost limit is typed in the display currency; the dollars it comes to are shown underneath (saved as USD).
+        var equivalent = KitStyle.Text("", ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextMuted);
+        void ShowEquivalent(decimal? v)
+        {
+            var show = budget.Metric == "cost" && !DisplayMoney.Current.IsUsd && v is > 0;
+            equivalent.IsVisible = show;
+            equivalent.Text = show ? Loc.T("tokens.limitUsdEquivalent", ("usd", DisplayCurrencyContext.UsdContext.Format(DisplayMoney.Current.ToUsd(v!.Value)))) : "";
+        }
+        ShowEquivalent(budget.Limit);
+        limit.ValueEdited += v =>
+        {
+            Edit(index, b => b with { Limit = v });
+            ShowEquivalent(v);
+        };
         var remove = new ArcButton { Variant = ButtonVariant.Ghost, Size = ControlSize.Small, Content = new LucideIcon { Kind = LucideIconKind.Trash2, Size = 14 } };
         ToolTip.SetTip(remove, Loc.T("tokens.removeLimit"));
         Avalonia.Automation.AutomationProperties.SetName(remove, Loc.T("tokens.removeLimit"));
@@ -104,6 +119,9 @@ public sealed class BudgetsEditor : UserControl
         grid.Children.Add(period);
         grid.Children.Add(limit);
         grid.Children.Add(remove);
-        return grid;
+        var row = new StackPanel { Spacing = 2 };
+        row.Children.Add(grid);
+        row.Children.Add(equivalent);
+        return row;
     }
 }

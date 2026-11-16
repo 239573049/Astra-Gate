@@ -109,6 +109,9 @@ public sealed class RequestRecord
     /// <summary>Smart routing's decision (<see cref="Routing.RoutingReport"/>, Json.Storage); null unless the virtual model was asked for.</summary>
     public string? RoutingJson { get; set; }
 
+    /// <summary>The context window and what filled it (<see cref="ContextReport"/>, Json.Storage); null when no model was resolved.</summary>
+    public string? ContextJson { get; set; }
+
     public string? BodyRef { get; set; }
     public string? UserAgent { get; set; }
 

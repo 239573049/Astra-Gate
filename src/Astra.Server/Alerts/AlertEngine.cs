@@ -223,7 +223,8 @@ public sealed class AlertEngine(
         if (notify is null) return false;
 
         var s = settings.Current;
-        var message = AlertMessages.Format(s.Locale, rule.Event, notify, signal.SubjectName, evaluation.Observed, compiled.Condition);
+        var message = AlertMessages.Format(s.Locale, rule.Event, notify, signal.SubjectName, evaluation.Observed, compiled.Condition,
+            Astra.Core.Currency.Currencies.Resolve(s.DisplayCurrency, s.CurrencyRates));
         foreach (var webhookId in rule.WebhookIds)
         {
             var id = Ulid.NewUlid();

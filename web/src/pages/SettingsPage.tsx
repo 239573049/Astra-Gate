@@ -18,6 +18,7 @@ import { hasTrayPanel } from '../components/tray/useTrayBridge';
 import { Button, Group, Input, Row, Segmented, Spinner, Switch } from '../components/ui/controls';
 import { errorText, Select, useFeedback } from '../components/ui/overlays';
 import { useI18n, type Locale } from '../i18n';
+import { CURRENCIES, parseRate } from '../lib/currency';
 import { ACCENT_PRESETS, useAppearance } from '../shell/appearance';
 import { getBridge, isDesktop } from '../shell/bridge';
 import { systemActions } from '../shell/systemActions';
@@ -248,6 +249,8 @@ function GeneralSettings() {
           </Group>
 
           <QualifiedModelsSettings settings={s} />
+
+          <CurrencySettings settings={s} />
 
           <SidebarSettings settings={s} />
 
@@ -602,6 +605,83 @@ function QualifiedModelsSettings({ settings: s }: { settings: Settings }) {
             value={separator}
             onChange={(e) => setSeparator(e.target.value)}
             onBlur={() => separator !== saved && save({ modelProviderSeparator: separator })}
+          />
+        </Row>
+      )}
+    </Group>
+  );
+}
+
+/** Display currency: amounts read in it, converted at rates the user types (Astra never fetches them); money stays USD underneath. */
+function CurrencySettings({ settings: s }: { settings: Settings }) {
+  const { t } = useI18n();
+  const { toast } = useFeedback();
+  const update = useUpdateSettings();
+  const rates = s.currencyRates ?? {};
+  const display = s.displayCurrency ?? 'USD';
+  // A rate being typed (a newly added currency has none saved yet) lives in `drafts` until it is committed.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const save = (p: Partial<Settings>) => update.mutate(p, { onError: (e) => toast(errorText(e), 'error') });
+  const shown = CURRENCIES.filter((c) => c.code !== 'USD' && (rates[c.code] != null || drafts[c.code] != null));
+  const addable = CURRENCIES.filter((c) => c.code !== 'USD' && !shown.includes(c));
+  const dropDraft = (code: string) => setDrafts(({ [code]: _drop, ...rest }) => rest);
+  const commitRate = (code: string) => {
+    const text = (drafts[code] ?? rates[code] ?? '').trim();
+    if (text === rates[code]) return dropDraft(code);
+    if (parseRate(text) == null) return toast(t('settings.currency.badRate'), 'error');
+    dropDraft(code);
+    save({ currencyRates: { ...rates, [code]: text } });
+  };
+  const remove = (code: string) => {
+    dropDraft(code);
+    if (rates[code] == null) return;
+    const { [code]: _drop, ...rest } = rates;
+    // The display currency falls back to USD together with its rate.
+    save(display === code ? { displayCurrency: 'USD', currencyRates: rest } : { currencyRates: rest });
+  };
+  return (
+    <Group title={t('settings.currency')} footer={t('settings.currency.footer')}>
+      <Row label={t('settings.currency.display')} detail={t('settings.currency.displayHint')}>
+        <Select
+          className="w-56"
+          ariaLabel={t('settings.currency.display')}
+          value={display}
+          onChange={(displayCurrency: string) => save({ displayCurrency })}
+          options={[
+            { value: 'USD', label: 'USD · $' },
+            ...CURRENCIES.filter((c) => c.code !== 'USD' && parseRate(rates[c.code]) != null).map((c) => ({ value: c.code, label: `${c.code} · ${c.symbol.trim()}` })),
+          ]}
+        />
+      </Row>
+      {shown.map((c) => (
+        <Row key={c.code} label={t('settings.currency.rateRow', { code: c.code })}>
+          <span className="flex items-center gap-2">
+            <span className="num text-[12px] text-[var(--text-secondary)]">1 USD =</span>
+            <Input
+              className="w-28"
+              mono
+              inputMode="decimal"
+              aria-label={t('settings.currency.rateOf', { code: c.code })}
+              value={drafts[c.code] ?? rates[c.code] ?? ''}
+              onChange={(e) => setDrafts((d) => ({ ...d, [c.code]: e.target.value }))}
+              onBlur={() => commitRate(c.code)}
+            />
+            <span className="num text-[12px] text-[var(--text-secondary)]">{c.code}</span>
+            <Button size="sm" variant="plain" onClick={() => remove(c.code)}>
+              {t('settings.currency.remove')}
+            </Button>
+          </span>
+        </Row>
+      ))}
+      {addable.length > 0 && (
+        <Row label={t('settings.currency.add')} detail={t('settings.currency.addHint')}>
+          <Select
+            className="w-56"
+            ariaLabel={t('settings.currency.add')}
+            value={null}
+            placeholder={t('settings.currency.addPlaceholder')}
+            onChange={(code: string) => setDrafts((d) => ({ ...d, [code]: '' }))}
+            options={addable.map((c) => ({ value: c.code, label: `${c.code} · ${c.symbol.trim()}` }))}
           />
         </Row>
       )}
