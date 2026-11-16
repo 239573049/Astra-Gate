@@ -37,6 +37,7 @@ public sealed class JsonRegistrationTests
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/stats/daily-bill", "/api/provider-quota/templates",
             "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
             "/api/smart-routing", "/api/smart-routing/models", "/api/library/skills", "/api/tools", "/api/tools/settings",
+            "/api/routing/groups", "/api/routing/groups/status",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -61,6 +62,23 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/shortlist", new { models = new[] { "gpt-5" } });
         await host.SendAsync(HttpMethod.Put, "/api/clients/codex/shortlist", new { models = Array.Empty<string>() });
         await host.SendAsync(HttpMethod.Delete, $"/api/profiles/{profile.Body!["id"]!.GetValue<string>()}");
+
+        // Routing groups: create (members and a refusal's problem list), patch, status, delete.
+        var group = await host.SendAsync(HttpMethod.Post, "/api/routing/groups",
+            new { name = "Guard group", members = new[] { new { provider = "missing", model = "m" } } });
+        Assert.Equal(HttpStatusCode.BadRequest, group.Status);
+        var guardProvider = await host.SendAsync(HttpMethod.Post, "/api/providers", new
+        {
+            name = "Group guard", endpoints = new[] { new { protocol = "openai-chat", baseUrl = "https://group.invalid/v1" } }, apiKey = "sk-guard-0001", models = Array.Empty<string>(),
+        });
+        var made = await host.SendAsync(HttpMethod.Post, "/api/routing/groups",
+            new { name = "Guard group", mode = "weight", members = new[] { new { provider = guardProvider.Body!["id"]!.GetValue<string>(), model = "m", weight = 2 } } });
+        Assert.Equal(HttpStatusCode.Created, made.Status);
+        var groupId = made.Body!["id"]!.GetValue<string>();
+        await host.SendAsync(HttpMethod.Patch, $"/api/routing/groups/{groupId}", new { listed = false });
+        await host.GetJsonAsync($"/api/routing/groups/{groupId}");
+        await host.GetJsonAsync($"/api/routing/groups/{groupId}/status");
+        await host.SendAsync(HttpMethod.Delete, $"/api/routing/groups/{groupId}");
 
         // A model round trip: create, patch, read detail, reset a field, delete.
         var created = await host.SendAsync(HttpMethod.Post, "/api/models",

@@ -21,7 +21,7 @@ import {
 import type { PluginAuthMethod, PluginPrompt, Provider, ProviderAccount, ProviderAccountUsage } from '../api/types';
 import { AccountUsageStats, ProviderUsageHint } from './AccountUsageStats';
 import { Alert } from './arc/alert/alert';
-import { SwitchModePicker } from './SubscriptionAccounts';
+import { SwitchModePicker, switchModeDetailKey } from './SubscriptionAccounts';
 import { Badge, Button, EmptyState, Field, Input, KV, Spinner, Switch } from './ui/controls';
 import { errorText, Select, Sheet, useFeedback } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
@@ -72,13 +72,7 @@ export function PluginAccounts({ provider }: { provider: Provider }) {
       {accounts.data && accounts.data.length > 1 && policy.data && (
         <div className="flex flex-wrap items-center gap-3 px-1">
           <p className="min-w-0 flex-1 text-[12px] text-[var(--text-secondary)]">
-            {t(
-              policy.data.switchMode === 'balanced'
-                ? 'providers.subscription.policy.balancedDetail'
-                : policy.data.switchMode === 'failover'
-                  ? 'providers.subscription.policy.failoverDetail'
-                  : 'providers.subscription.policy.manualDetail',
-            )}
+            {t(switchModeDetailKey(policy.data.switchMode))}
           </p>
           <SwitchModePicker
             policy={policy.data}

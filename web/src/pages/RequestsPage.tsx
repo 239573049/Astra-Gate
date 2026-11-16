@@ -594,7 +594,7 @@ function ReasoningBadge({ r }: { r: Pick<RequestSummary, 'reasoningEffort' | 're
   );
 }
 
-const ROUTE_SOURCES = ['judge', 'pin', 'turn', 'fallback', 'breaker'] as const;
+const ROUTE_SOURCES = ['judge', 'pin', 'turn', 'fallback', 'breaker', 'group'] as const;
 const ROUTE_MODES = ['session', 'turn'] as const;
 
 /** Where a routing decision came from, in the words the trace view uses; as recorded when this build does not know it. */
@@ -603,7 +603,16 @@ function routeSourceText(source: string, t: TFunction): string {
 }
 
 function routeModeText(mode: string, t: TFunction): string {
-  return (ROUTE_MODES as readonly string[]).includes(mode) ? t(`traces.route.mode.${mode}` as MessageKey) : mode;
+  if ((ROUTE_MODES as readonly string[]).includes(mode)) return t(`traces.route.mode.${mode}` as MessageKey);
+  // A routing group's mode (smart, order, rotate, usage, pace, weight).
+  const group = `routingGroups.mode.${mode}`;
+  return group in zh ? t(group as MessageKey) : mode;
+}
+
+/** Why a routing group put the member that served first (a RankReasons code), in the groups page's words. */
+function groupReasonText(reason: string | null | undefined, t: TFunction): string {
+  const key = `routingGroups.reason.${reason}`;
+  return reason && key in zh ? t(key as MessageKey) : (reason ?? '—');
 }
 
 /** Why the caller could not use the grade decided first, in the smart-routing page's words. */
@@ -627,7 +636,12 @@ function RoutingBadge({ routing }: { routing?: RequestRouting | null }) {
   const { t } = useI18n();
   if (!routing) return null;
   const vars = { grade: routing.grade, model: routing.model };
-  const [ok, text, title] = routing.fallbackReason
+  const [ok, text, title] = routing.source === 'group'
+    ? routing.reason === 'failover'
+      ? [false, t('requests.routing.groupFailover', vars), t('requests.routing.hint.groupFailover', vars)]
+      : [true, t('requests.routing.group', { ...vars, reason: groupReasonText(routing.reason, t) }),
+        t('requests.routing.hint.group', { ...vars, reason: groupReasonText(routing.reason, t) })]
+    : routing.fallbackReason
     ? [false, t('requests.routing.fallback', { ...vars, reason: routeReasonText(routing.fallbackReason, t) }),
       t('requests.routing.hint.fallback', { ...vars, reason: routeReasonText(routing.fallbackReason, t) })]
     : routing.adjustedFrom
@@ -882,6 +896,7 @@ export function RequestDetailSheet({ id, onClose }: { id: string | null; onClose
               <KV label={t('traces.kv.routeSource')}>{routeSourceText(r.routing.source, t)}</KV>
               <KV label={t('traces.kv.routeMode')}>{routeModeText(r.routing.mode, t)}</KV>
               {r.routing.confidence != null && <KV label={t('traces.kv.routeConfidence')}>{formatPercent(r.routing.confidence)}</KV>}
+              {r.routing.reason && <KV label={t('requests.routing.reason')}>{groupReasonText(r.routing.reason, t)}</KV>}
               {r.routing.fallbackReason && <KV label={t('traces.kv.routeFallback')}>{routeReasonText(r.routing.fallbackReason, t)}</KV>}
               {r.routing.adjustedFrom && (
                 <KV label={t('traces.kv.routeAdjusted')}>

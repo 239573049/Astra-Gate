@@ -1,0 +1,54 @@
+[
+  {
+    "id": "rg-opus",
+    "slug": "opus-anywhere",
+    "modelId": "group/opus-anywhere",
+    "name": "Opus anywhere",
+    "mode": "smart",
+    "stays": "auto",
+    "enabled": true,
+    "listed": true,
+    "members": [
+      {
+        "provider": "prov_anthropic",
+        "model": "claude-opus-4-1",
+        "group": null,
+        "weight": 1
+      },
+      {
+        "provider": "prov_openai",
+        "model": "gpt-5",
+        "group": null,
+        "weight": 1
+      }
+    ],
+    "createdAt": "2026-10-17T12:00:00Z",
+    "updatedAt": "2026-10-24T12:00:00Z"
+  },
+  {
+    "id": "rg-fast",
+    "slug": "fast",
+    "modelId": "group/fast",
+    "name": "Fast and cheap",
+    "mode": "weight",
+    "stays": "session",
+    "enabled": true,
+    "listed": false,
+    "members": [
+      {
+        "provider": "prov_openai",
+        "model": "gpt-4.1-mini",
+        "group": null,
+        "weight": 3
+      },
+      {
+        "provider": "prov_anthropic",
+        "model": "claude-haiku-4-5",
+        "group": null,
+        "weight": 1
+      }
+    ],
+    "createdAt": "2026-10-21T12:00:00Z",
+    "updatedAt": "2026-10-21T12:00:00Z"
+  }
+]

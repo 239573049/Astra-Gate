@@ -84,6 +84,11 @@ persisted at the end.
     into system / tools / history / latest turn (`ContextShares`); where `SystemModelId` is set per attempt the record also gets the effective
     model's `ContextWindow` / `MaxOutputTokens` (`ContextReport`). The admin request DTOs turn it into fill % and token parts
     (`RequestEndpoints.ContextOf`); token self-service views never see it.
+    **Routing groups** (`group/<slug>`, linked update 35): after the smart-routing seam, `GroupRouter.FindAsync(route.ClientModelFor(requested))` — a group's members
+   (`provider/model` or nested groups) are judged for the caller by `IGatewayRouter.GradeUseAsync`, cooled ones dropped by `PoolRouting.AdmitAsync`, the rest ordered by
+   `GroupScheduler.Order` (mode + the conversation's own member first while `ConversationStays` holds) and turned into candidate routes by `GroupRouter.RouteFor` — each with
+   its own `Routed` model and provider — which the pool failover loop of step 14 walks (`GroupPlan.Pool`). Quota-aware account modes (`SwitchModes.Smart|Pace|Usage`) order accounts
+   inside `SendAsync` through `AccountScheduler.Pick(…, mode)` / `QuotaRanking`; both record why (`astra.account.pick`, `astra.group.*`, `astra.route.*` source `group`).
     **Provider-qualified ids** (issue #21, `AppSettings.ProviderQualifiedModels`, off by default): any other model goes
    through `Pipeline/QualifiedModelRouting.cs:ApplyAsync` — `Core/Routing/ModelQualifier.TrySplit` cuts `model@alias` at the last
    separator whose right side is the alias (`Provider.Alias()`: `settings.alias`, else the name) of one of the caller's own

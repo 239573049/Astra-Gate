@@ -10,6 +10,7 @@ using Astra.Core.Billing;
 using Astra.Core.Clients;
 using Astra.Core.Models;
 using Astra.Core.Requests;
+using Astra.Core.Routing;
 using Astra.Gateway.Plugins;
 using Astra.Gateway.Protocol;
 using Astra.Gateway.Protocol.Anthropic;
@@ -54,7 +55,8 @@ public sealed partial class GatewayPipeline(
     ProviderHealth health,
     ISmartRouter smartRouter,
     ILogger<GatewayPipeline> logger,
-    RequestBodyLimits? bodyLimits = null)
+    RequestBodyLimits? bodyLimits = null,
+    GroupRouter? groups = null)
 {
     // A plugin provider's requests go through its plugin (PluginFetchHandler), not the network.
     private readonly HttpClient? _pluginClient = pluginTransport is null ? null : new(pluginTransport, disposeHandler: false) { Timeout = Timeout.InfiniteTimeSpan };
@@ -144,6 +146,10 @@ public sealed partial class GatewayPipeline(
         // Provider pools (issue #2): the request's plan (probe slots) and its in-flight hold on the member it went to.
         PoolPlan? poolPlan = null;
         ProviderPoolScheduler.Lease? poolLease = null;
+        // Routing groups (`group/<slug>`): the request's plan, which doubles as its pool plan, and the candidate that answered.
+        GroupPlan? groupPlan = null;
+        GroupCandidate? servedGroup = null;
+        string? conversationKey = null;
         MiddlewareRun? middlewareRun = null;
         MiddlewareResponseStream? middlewareStream = null;
         // Pooled: returned when the request is over (a send still running keeps its own reference).
@@ -257,6 +263,7 @@ public sealed partial class GatewayPipeline(
             // rewrites touch model / stream_options / codex fields, none of which it reads), whether an OpenAI Chat client
             // asked for the usage chunk itself (a pass-through attempt injects include_usage) and its cache TTL option.
             var stickyKey = StickyKeys.Of(inbound, body, ctx.Request.Headers);
+            conversationKey = stickyKey;
             var clientWantsChatUsage = inbound == ApiProtocol.OpenAIChat
                                        && body["stream_options"] is JsonObject so && so["include_usage"] is JsonValue iu && iu.TryGetValue<bool>(out var wants) && wants;
             var clientCacheTtl = ClientOptions.GetCacheTtl(route.Client?.ExtraJson);
@@ -286,7 +293,13 @@ public sealed partial class GatewayPipeline(
                     {
                         Caller = route.ClientKind ?? route.Token.Name,
                         // A grade this caller cannot use (its provider out of reach, or no longer serving the model) gives way.
-                        ProblemOf = async (grade, token) => (await router.GradeUseAsync(caller, grade.ProviderId, grade.Model, isClaudeCode, token)).Problem,
+                        ProblemOf = async (grade, token) =>
+                        {
+                            // A grade may name a routing group instead of a model: it is usable while some member of it is.
+                            if (groups is not null && await groups.FindAsync(grade.Model, token) is { } graded)
+                                return await groups.UsableAsync(caller, graded, isClaudeCode, token) ? null : new GradeProblem(GradeProblems.ModelNotServed, null);
+                            return (await router.GradeUseAsync(caller, grade.ProviderId, grade.Model, isClaudeCode, token)).Problem;
+                        },
                     }, ct);
                 }
                 catch (GatewayException)
@@ -297,7 +310,7 @@ public sealed partial class GatewayPipeline(
                 route = route with { Routed = new RoutedModel(requestedModel, decision.Model, decision.GradeId, decision.ProviderId) };
                 // The grade's requests go to the provider it names — not to whichever of the caller's own providers serves
                 // the same model id first. A grade nobody here can use keeps the caller's own routing below.
-                if (decision.ProviderId is not null
+                if (decision.ProviderId is not null && RoutingGroup.SlugOf(decision.Model) is null
                     && await router.GradeTargetAsync(caller, decision.ProviderId, decision.Model, isClaudeCode, ct) is { } target)
                     route = GatewayRouter.WithTarget(route, target);
                 decision.Annotate(resolveSpan);
@@ -308,7 +321,28 @@ public sealed partial class GatewayPipeline(
             else route = await QualifiedModelRouting.ApplyAsync(router, route, requestedModel, settings.Current, isClaudeCode, ct);
             List<GatewayRoute> candidates;
             var maxAttempts = 1;
-            if (route.Pool is { } pool && pools is not null)
+            // A routing group (`group/<slug>`, by the client or named by a smart-routing grade): its members, ordered by its mode,
+            // are the candidates — each routed to its own model — and the same failover loop as a pool's walks them.
+            RoutingGroup? requestedGroup = groups is null ? null : await groups.FindAsync(route.ClientModelFor(requestedModel), ct);
+            if (requestedGroup is not null)
+            {
+                groupPlan = await groups!.PlanAsync(route, requestedGroup, stickyKey, link!.TurnId, isClaudeCode, commit: true, ct);
+                poolPlan = groupPlan.Pool;
+                candidates = groupPlan.Order.Select(c => GroupRouter.RouteFor(route, requestedModel, c)).ToList();
+                maxAttempts = groupPlan.MaxAttempts;
+                resolveSpan.Set("astra.group.id", requestedGroup.Slug).Set("astra.group.mode", requestedGroup.Mode)
+                    .Set("astra.group.candidates", candidates.Count).Set("astra.group.reason", groupPlan.Order[0].Reason)
+                    .Set("astra.pool.max_attempts", maxAttempts);
+                // Without a smart-routing decision of its own the group's choice is the route decision the trace views and the log show
+                // (astra.route.*, source "group"; the group's mode and the reason its first member stands first).
+                if (record.RoutingJson is null)
+                {
+                    record.RoutingJson = Json.Serialize(GroupReport(requestedGroup, groupPlan.Order[0], 0));
+                    resolveSpan.Set("astra.route.grade", requestedGroup.ModelId).Set("astra.route.source", "group").Set("astra.route.mode", requestedGroup.Mode)
+                        .Set("astra.route.model", groupPlan.Order[0].Model).Set("astra.route.reason", groupPlan.Order[0].Reason);
+                }
+            }
+            else if (route.Pool is { } pool && pools is not null)
             {
                 poolPlan = await pools.PlanAsync(route, route.ClientModelFor(requestedModel), isClaudeCode, stickyKey, commit: true, ct);
                 candidates = poolPlan.Order.Select(t => route with { Provider = t.Provider, AccountId = t.AccountId }).ToList();
@@ -702,6 +736,19 @@ public sealed partial class GatewayPipeline(
             poolPlan?.Dispose();
             if (route.Pool is { } servedPool && answered.IsSuccessStatusCode)
                 poolScheduler.Bind(route.Token.Id, servedPool, stickyKey, route.Provider.Id);
+            if (groupPlan is not null && route.Routed is { } servedRoute)
+            {
+                var servedAt = groupPlan.Order.ToList().FindIndex(c => c.Target.Provider.Id == route.Provider.Id && c.Model == servedRoute.ModelId);
+                if (servedAt >= 0)
+                {
+                    servedGroup = groupPlan.Order[servedAt];
+                    if (answered.IsSuccessStatusCode) groups!.Bind(servedGroup, stickyKey, link!.TurnId);
+                    // The log says which member answered and why it stood where it did (a member that took over from a failed one says so).
+                    if (servedAt > 0 || record.RoutingJson is null || servedGroup.Reason != groupPlan.Order[0].Reason)
+                        record.RoutingJson = Json.Serialize(GroupReport(groupPlan.Group, servedGroup, servedAt));
+                    trace.Root.Set("astra.group.member", servedGroup.Key);
+                }
+            }
 
             using var response = answered;
             responseSpan = trace.Start(TraceSpanNames.Response);
@@ -825,6 +872,13 @@ public sealed partial class GatewayPipeline(
             poolPlan?.Dispose();
             record.ResponseModel = decoder?.ResponseModel;
             Finish(record, observer, sw, effective, provider, s.Locale);
+            // Cache-aware affinity: what the answer read from and wrote to the prompt cache decides whether the conversation stays
+            // on its account / group member for the next request (ConversationStays).
+            if (conversationKey is not null && record.Status == RequestStatus.Success && record.CacheReadTokens + record.CacheWriteTokens is var cached and > 0)
+            {
+                if (accountLease is not null && provider is not null) scheduler.NoteCache(provider.Id, conversationKey, cached);
+                if (servedGroup is not null) groups!.NoteCache(servedGroup, conversationKey, cached);
+            }
             if (middlewareRun is { WantsComplete: true })
             {
                 // v2 onComplete (read-only): how the request ended, never its bodies
@@ -885,10 +939,10 @@ public sealed partial class GatewayPipeline(
         // Balanced mode fails over the same way, but picks every account through the scheduler and leaves
         // the provider's current account alone.
         var switchMode = subscription ? SubscriptionSupport.SwitchModeOf(provider) : SwitchModes.Manual;
-        var failover = switchMode is SwitchModes.Failover or SwitchModes.Balanced;
+        var failover = switchMode == SwitchModes.Failover || SwitchModes.UsesScheduler(switchMode);
         // Balanced: spread new conversations over the usable accounts and keep a conversation (stickyKey) on its
         // account. An account pinned by the token / client binding is never rescheduled.
-        var balanced = switchMode == SwitchModes.Balanced && route.AccountId is null;
+        var balanced = SwitchModes.UsesScheduler(switchMode) && route.AccountId is null;
         // 模拟 Claude Code（subscription.mimic_claude_code）：只作用于 compat 路径（调用方不是 Claude Code 本身）。
         var claudeMimic = claudeMode == ClaudeHeaderMode.Mimic
             || claudeMode == ClaudeHeaderMode.Compat && SubscriptionSupport.MimicClaudeCodeOf(provider);
@@ -929,8 +983,13 @@ public sealed partial class GatewayPipeline(
                     // Pick (and hold an in-flight slot on) the account for this attempt; accounts that already failed
                     // this request are excluded. No usable account → the plain selection below reports it.
                     lease?.Dispose();
-                    lease = scheduler.Pick(provider.Id, pickFrom, stickyKey, tried);
-                    if (lease is not null) accountId = lease.AccountId;
+                    lease = scheduler.Pick(provider.Id, pickFrom, stickyKey, tried, switchMode);
+                    if (lease is not null)
+                    {
+                        accountId = lease.AccountId;
+                        // Quota-aware modes say why this account stood first (QuotaRanking / the conversation's affinity).
+                        if (lease.Reason is not null) attempt.Set("astra.account.pick", lease.Reason);
+                    }
                 }
                 if (keyPool && lease is null)
                     accountId = SubscriptionSupport.SelectAccount(pickFrom, accountId, DateTimeOffset.UtcNow)?.Id ?? accountId;
@@ -1173,7 +1232,7 @@ public sealed partial class GatewayPipeline(
         async Task<string?> FailOverAsync(string from, DateTimeOffset? cooldownUntil, string reason)
         {
             tried.Add(from);
-            var next = await auth.FailOverAsync(provider.Id, from, cooldownUntil, reason, tried, setCurrent: switchMode != SwitchModes.Balanced, ct: ct);
+            var next = await auth.FailOverAsync(provider.Id, from, cooldownUntil, reason, tried, setCurrent: !SwitchModes.UsesScheduler(switchMode), ct: ct);
             if (next is not null)
                 logger.LogInformation("Provider {Provider}: account {From} → {To} ({Reason})", provider.Name, from, next, reason);
             return next;
@@ -1834,6 +1893,10 @@ public sealed partial class GatewayPipeline(
     }
 
     /// <summary>Closes the request's spans into <see cref="RequestRecord.Spans"/> and remembers the tool calls it made.</summary>
+    /// <summary>The request log's mark of a routing-group decision: the member that served (or is first in line), why, and that it took over from a failed one.</summary>
+    private static RoutingReport GroupReport(RoutingGroup group, GroupCandidate candidate, int attempt) =>
+        new(group.ModelId, candidate.Model, "group", group.Mode, Reason: attempt > 0 ? RankReasons.Failover : candidate.Reason);
+
     private void FinishTrace(RequestRecord record, RequestTrace trace, TraceLink? link, string? inboundTraceId, ResponseObserver observer,
         TraceSpanBuilder? responseSpan, bool middlewareResponse, int restorable, string operation = "chat")
     {

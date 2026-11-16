@@ -122,7 +122,7 @@ import type { AlertEvent, AlertRule, AlertState, KeyInfo, KeyRequestPage, KeySta
 import type { TraceActivity, TraceRange, TraceRequest, TraceSession, TraceSessionDetail, TraceTopology } from './types';
 import type { PluginSuccessor, PluginV2Detail, PluginV2List, PluginV2Notification } from './types';
 import type { SearchKeyQuota, SearchTestResult, ToolInfo, ToolsSettings, ToolsSettingsUpdate } from './types';
-import type { RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
+import type { RoutingGroup, RoutingGroupStatus, RoutingGroupWrite, RoutingModel, SmartRouting, SmartRoutingTestRequest, SmartRoutingTestResult, SmartRoutingUpdate } from './types';
 
 export const keys = {
   health: ['health'] as const,
@@ -1873,6 +1873,42 @@ export const useTestSmartRouting = () =>
 /** Every model id a provider serves: what a grade can be given. */
 export const useRoutingModels = () =>
   useQuery({ queryKey: keys.routingModels, queryFn: ({ signal }) => api<RoutingModel[]>('GET', '/api/smart-routing/models', undefined, signal) });
+
+// ---------- routing groups: virtual models group/<slug> ----------
+
+const GROUPS_KEY = ['routing-groups'] as const;
+
+export const useRoutingGroups = () =>
+  useQuery({ queryKey: GROUPS_KEY, queryFn: ({ signal }) => api<RoutingGroup[]>('GET', '/api/routing/groups', undefined, signal) });
+
+/** Every group's live state (cooling, quota left, last used): polled while the page is open. */
+export const useRoutingGroupStatus = () =>
+  useQuery({
+    queryKey: [...GROUPS_KEY, 'status'],
+    queryFn: ({ signal }) => api<RoutingGroupStatus[]>('GET', '/api/routing/groups/status', undefined, signal),
+    refetchInterval: 10_000,
+  });
+
+function useRoutingGroupMutation<TVars, TResult>(fn: (vars: TVars) => Promise<TResult>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: GROUPS_KEY });
+      // A group joins (or leaves) the clients' model lists.
+      void qc.invalidateQueries({ queryKey: ['client-models'] });
+    },
+  });
+}
+
+export const useCreateRoutingGroup = () =>
+  useRoutingGroupMutation((body: RoutingGroupWrite) => api<RoutingGroup>('POST', '/api/routing/groups', body));
+
+export const useUpdateRoutingGroup = () =>
+  useRoutingGroupMutation((v: { id: string; body: RoutingGroupWrite }) => api<RoutingGroup>('PATCH', `/api/routing/groups/${enc(v.id)}`, v.body));
+
+export const useDeleteRoutingGroup = () =>
+  useRoutingGroupMutation((id: string) => api<void>('DELETE', `/api/routing/groups/${enc(id)}`));
 
 // ---------- the resource library: Skills (.plan/resources-library.md) ----------
 

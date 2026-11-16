@@ -30,7 +30,7 @@ const spies = vi.hoisted(() => ({
   importAccounts: vi.fn(),
   exportAccounts: vi.fn(),
   policy: { clientPolicy: 'claude-code-only', switchMode: 'manual', claudeSubscription: true, mimicClaudeCode: false } as {
-    clientPolicy: 'claude-code-only' | 'any'; switchMode: 'manual' | 'failover' | 'balanced'; claudeSubscription: boolean; mimicClaudeCode: boolean;
+    clientPolicy: 'claude-code-only' | 'any'; switchMode: 'manual' | 'failover' | 'balanced' | 'smart' | 'pace' | 'usage'; claudeSubscription: boolean; mimicClaudeCode: boolean;
   },
   // Flipped per test: whether this machine already has a `codex login`.
   localCodex: { available: false } as { available: boolean; accountEmail?: string; plan?: string; detail?: string },
@@ -359,13 +359,32 @@ describe('SubscriptionAccounts', () => {
     expect(items.some((i) => i?.includes('Add API key'))).toBe(false);
   });
 
-  it('switches the account switching mode from the pool bar', () => {
+  it('switches the account switching mode from the pool bar', async () => {
     spies.policy = { clientPolicy: 'any', switchMode: 'balanced', claudeSubscription: false, mimicClaudeCode: false };
     show(<SubscriptionAccounts provider={subscriptionProvider} />);
     expect(screen.getByText(/Spreads requests over all usable accounts/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Automatic failover'));
+    // Radix' select probes pointer capture and scrolls the current item into view; jsdom implements neither.
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.setPointerCapture = () => {};
+    Element.prototype.releasePointerCapture = () => {};
+    Element.prototype.scrollIntoView = () => {};
+    // Its trigger only opens on a mouse pointerdown; jsdom never sets pointerType.
+    fireEvent.pointerDown(screen.getByRole('combobox', { name: 'Account switching' }), { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    const options = await screen.findAllByRole('option');
+    // The quota-aware modes sit beside manual / failover / balanced.
+    expect(options.map((o) => o.textContent)).toEqual(['Manual', 'Automatic failover', 'Balanced', 'Smart', 'Pace', 'Least used']);
+    fireEvent.click(options[1]);
     expect(spies.updatePolicy).toHaveBeenCalledWith({ switchMode: 'failover' }, expect.anything());
+  });
+
+  it('shows what each quota-aware switching mode does', () => {
+    for (const [mode, text] of [['smart', /allowance renewing soonest/], ['pace', /most of its week left per hour/], ['usage', /least used account goes first/]] as const) {
+      cleanup();
+      spies.policy = { clientPolicy: 'any', switchMode: mode, claudeSubscription: false, mimicClaudeCode: false };
+      show(<SubscriptionAccounts provider={subscriptionProvider} />);
+      expect(screen.getByText(text)).toBeInTheDocument();
+    }
   });
 
   it('surfaces the coming-soon hint when the provider flow is not verified yet', async () => {
@@ -469,7 +488,7 @@ describe('SubscriptionAccounts', () => {
     spies.policy = { clientPolicy: 'any', switchMode: 'manual', claudeSubscription: false, mimicClaudeCode: false };
     show(<SubscriptionAccounts provider={subscriptionProvider} />);
     expect(screen.queryByText('Claude Code only')).toBeNull();
-    expect(screen.getByRole('group', { name: 'Account switching' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Account switching' })).toBeInTheDocument();
   });
 });
 

@@ -29,11 +29,11 @@ import type { Provider, ProviderAccount, SubscriptionLoginStart, SubscriptionPol
 import { Alert } from '../components/arc/alert/alert';
 import { AccountImportSheet, type ImportMode } from './AccountImportSheet';
 import { ProviderUsageHint } from './AccountUsageStats';
-import { Button, Input, SearchField, Segmented, Spinner } from './ui/controls';
+import { Button, Input, SearchField, Spinner } from './ui/controls';
 import { accountState, SubscriptionAccountCard, type AccountActions, type AccountState } from './SubscriptionAccountCard';
 import { SubscriptionAccountDetail } from './SubscriptionAccountDetail';
 import { SubscriptionPolicy } from './SubscriptionPolicy';
-import { errorText, Menu, type MenuItem, Sheet, useFeedback } from './ui/overlays';
+import { errorText, Menu, type MenuItem, Select, Sheet, useFeedback } from './ui/overlays';
 import { systemActions } from '../shell/systemActions';
 import { useI18n, type MessageKey } from '../i18n';
 import { cn } from '../lib/cn';
@@ -426,13 +426,7 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
       </div>
       {policy.data && (
         <p className="-mt-1 mb-3 px-1 text-[11px] text-[var(--text-muted)]">
-          {t(
-            policy.data.switchMode === 'balanced'
-              ? 'providers.subscription.policy.balancedDetail'
-              : policy.data.switchMode === 'failover'
-                ? 'providers.subscription.policy.failoverDetail'
-                : 'providers.subscription.policy.manualDetail',
-          )}
+          {t(switchModeDetailKey(policy.data.switchMode))}
         </p>
       )}
 
@@ -689,19 +683,23 @@ export function SubscriptionAccounts({ provider }: { provider: Provider }) {
   );
 }
 
-/** The provider's account switching mode, inline in the pool bar (also on a plugin provider's accounts). */
+/** The account switching modes in picker order; smart / pace / usage look at the quota each account has left. */
+export const SWITCH_MODES: Policy['switchMode'][] = ['manual', 'failover', 'balanced', 'smart', 'pace', 'usage'];
+
+/** The sentence under the picker for a mode. */
+export function switchModeDetailKey(mode: Policy['switchMode']): MessageKey {
+  return `providers.subscription.policy.${mode}Detail` as MessageKey;
+}
+
+/** The provider's account switching mode, inline in the pool bar (also on a plugin provider's accounts and a key list). */
 export function SwitchModePicker({ policy, onChange }: { policy: Policy; onChange: (mode: Policy['switchMode']) => void }) {
   const { t } = useI18n();
   return (
-    <Segmented
+    <Select
       ariaLabel={t('providers.subscription.policy.switchMode')}
       value={policy.switchMode}
       onChange={onChange}
-      items={[
-        { value: 'manual', label: t('providers.subscription.policy.manual') },
-        { value: 'failover', label: t('providers.subscription.policy.failover') },
-        { value: 'balanced', label: t('providers.subscription.policy.balanced') },
-      ]}
+      options={SWITCH_MODES.map((mode) => ({ value: mode, label: t(`providers.subscription.policy.${mode}` as MessageKey) }))}
     />
   );
 }

@@ -156,6 +156,7 @@ public sealed class RequestDetailSheet : Sheet
         rows.Children.Add(new DetailRow(Loc.T("traces.kv.routeSource"), RequestPresentation.RouteSource(routing.Source, T)));
         rows.Children.Add(new DetailRow(Loc.T("traces.kv.routeMode"), RequestPresentation.RouteMode(routing.Mode, T)));
         if (routing.Confidence is { } c) rows.Children.Add(new DetailRow(Loc.T("traces.kv.routeConfidence"), TraceFormat.Percent(c)));
+        if (!string.IsNullOrEmpty(routing.Reason)) rows.Children.Add(new DetailRow(Loc.T("requests.routing.reason"), RequestPresentation.GroupReason(routing.Reason, T)));
         if (!string.IsNullOrEmpty(routing.FallbackReason)) rows.Children.Add(new DetailRow(Loc.T("traces.kv.routeFallback"), RequestPresentation.RouteReason(routing.FallbackReason, T)));
         if (!string.IsNullOrEmpty(routing.AdjustedFrom)) rows.Children.Add(new DetailRow(Loc.T("traces.kv.routeAdjusted"), $"{routing.AdjustedFrom} · {RequestPresentation.Unusable(routing.AdjustedReason, T)}"));
         if (routing.JudgeMs is { } ms) rows.Children.Add(new DetailRow(Loc.T("requests.routing.judgeMs"), TraceFormat.Ms(ms)));

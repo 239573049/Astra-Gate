@@ -38,7 +38,7 @@ public sealed class PluginAccountsView : LiveView
     private ContentControl _usageError = null!;
     private TextBlock _hint = null!;
     private ContentControl _checkin = null!;
-    private ControlledSegmented _mode = null!;
+    private ControlledSelect _mode = null!;
 
     /// <summary>Creates the view for <paramref name="provider"/> over the app context.</summary>
     public PluginAccountsView(PageContext ctx, ProviderDto provider) : base(ctx)
@@ -66,9 +66,7 @@ public sealed class PluginAccountsView : LiveView
         _hint = AccountsUi.Note("");
         _hint.LineHeight = 17.875;
         _checkin = new ContentControl { HorizontalContentAlignment = HorizontalAlignment.Stretch };
-        _mode = new ControlledSegmented(
-            [("manual", Loc.T("providers.subscription.policy.manual")), ("failover", Loc.T("providers.subscription.policy.failover")), ("balanced", Loc.T("providers.subscription.policy.balanced"))],
-            null);
+        _mode = new ControlledSelect(SubscriptionAccountsModel.SwitchModeOptions(), null, 170);
         Avalonia.Automation.AutomationProperties.SetName(_mode, Loc.T("providers.subscription.policy.switchMode"));
         _mode.Chose += mode => _ = _model.SetSwitchModeAsync(mode);
         _listSignature = "";

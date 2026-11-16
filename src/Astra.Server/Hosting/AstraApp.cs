@@ -142,6 +142,11 @@ public static class AstraApp
         builder.Services.AddSingleton<CodecRegistry>();
         builder.Services.AddSingleton<ClientRouting>();
         builder.Services.AddSingleton<GatewayRouter>();
+        // Routing groups (`group/<slug>`, magpie parity): the in-memory scheduler and the router that plans a request over a group's members.
+        builder.Services.AddSingleton<Astra.Gateway.Routing.GroupScheduler>();
+        builder.Services.AddSingleton<Astra.Gateway.Routing.GroupRouter>(sp => new Astra.Gateway.Routing.GroupRouter(
+            sp.GetRequiredService<AstraDatabase>(), sp.GetRequiredService<GatewayRouter>(), sp.GetRequiredService<UpstreamAuthResolver>(),
+            sp.GetRequiredService<PoolRouting>(), sp.GetRequiredService<ProviderHealth>(), sp.GetRequiredService<Astra.Gateway.Routing.GroupScheduler>()));
         builder.Services.AddSingleton<GatewayHttpClients>();
         builder.Services.AddSingleton<Astra.Gateway.Tracing.TraceLinker>(_ => new Astra.Gateway.Tracing.TraceLinker());
         // Smart routing (plan §5): the routing judges (one per wire dialect) and the router that asks them.
@@ -378,6 +383,7 @@ public static class AstraApp
         app.MapPrivacyEndpoints();
         app.MapSmartRoutingEndpoints();
         app.MapToolsEndpoints();
+        app.MapRoutingGroupEndpoints();
         app.MapSubscriptionEndpoints();
         app.MapUpdateEndpoints();
         app.MapPluginEndpoints();

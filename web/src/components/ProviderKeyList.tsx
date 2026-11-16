@@ -17,7 +17,7 @@ import { Alert } from './arc/alert/alert';
 import { Badge, Button, Dot, Field, Group, Input, NumberInput, Switch, TextArea } from './ui/controls';
 import { errorText, Select, Sheet, useFeedback } from './ui/overlays';
 import { SwitchModePicker } from './SubscriptionAccounts';
-import { useI18n } from '../i18n';
+import { useI18n, type MessageKey } from '../i18n';
 import { formatDateTime, formatTokens, formatUsd, usdFromNanos } from '../lib/format';
 
 export const MAX_KEY_WEIGHT = 1000;
@@ -102,11 +102,7 @@ export function ProviderKeyList({ provider }: { provider: Provider }) {
       <Group
         title={t('providers.keys.title')}
         footer={
-          policy.data?.switchMode === 'balanced'
-            ? t('providers.keys.modeBalanced')
-            : policy.data?.switchMode === 'failover'
-              ? t('providers.keys.modeFailover')
-              : t('providers.keys.modeManual')
+          t(`providers.keys.mode${(policy.data?.switchMode ?? 'manual').replace(/^./, (c) => c.toUpperCase())}` as MessageKey)
         }
       >
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">

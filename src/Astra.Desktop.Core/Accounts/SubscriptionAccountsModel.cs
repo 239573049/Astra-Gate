@@ -286,8 +286,23 @@ public sealed class SubscriptionAccountsModel : ModelBase
     {
         "balanced" => "providers.subscription.policy.balancedDetail",
         "failover" => "providers.subscription.policy.failoverDetail",
+        // The quota-aware modes: what each account has left decides (smart / pace / usage).
+        "smart" => "providers.subscription.policy.smartDetail",
+        "pace" => "providers.subscription.policy.paceDetail",
+        "usage" => "providers.subscription.policy.usageDetail",
         _ => "providers.subscription.policy.manualDetail",
     });
+
+    /// <summary>The switching modes in picker order, as (value, label); smart / pace / usage look at the quota each account has left.</summary>
+    public static IReadOnlyList<(string Value, string Label)> SwitchModeOptions() =>
+    [
+        ("manual", Loc.T("providers.subscription.policy.manual")),
+        ("failover", Loc.T("providers.subscription.policy.failover")),
+        ("balanced", Loc.T("providers.subscription.policy.balanced")),
+        ("smart", Loc.T("providers.subscription.policy.smart")),
+        ("pace", Loc.T("providers.subscription.policy.pace")),
+        ("usage", Loc.T("providers.subscription.policy.usage")),
+    ];
 
     /// <summary>The proxy the provider's requests take (the pool line's last item).</summary>
     public string ProviderProxyText => Loc.T("providers.accounts.providerProxy",

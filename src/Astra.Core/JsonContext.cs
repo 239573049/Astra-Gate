@@ -35,6 +35,7 @@ namespace Astra.Core;
 [JsonSerializable(typeof(SmartRoutingSettings))]
 [JsonSerializable(typeof(Astra.Core.Tools.ToolsSettings))]
 [JsonSerializable(typeof(RoutingReport))]
+[JsonSerializable(typeof(List<GroupMember>))]
 [JsonSerializable(typeof(Astra.Core.Requests.ContextReport))]
 [JsonSerializable(typeof(SeedFile))]
 [JsonSerializable(typeof(SeedModel))]

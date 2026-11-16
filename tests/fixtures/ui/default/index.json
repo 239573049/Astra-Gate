@@ -342,6 +342,16 @@
     },
     {
       "method": "GET",
+      "path": "/api/routing/groups/status",
+      "file": "routing-groups-status.json"
+    },
+    {
+      "method": "GET",
+      "path": "/api/routing/groups",
+      "file": "routing-groups.json"
+    },
+    {
+      "method": "GET",
       "path": "/api/health",
       "file": "health.json"
     },
