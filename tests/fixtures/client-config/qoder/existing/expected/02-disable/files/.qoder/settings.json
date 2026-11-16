@@ -1,0 +1,17 @@
+{
+  "providers": {
+    "mine": {
+      "displayName": "mine",
+      "protocol": "openai",
+      "baseUrl": "https://mine.example/v1",
+      "apiKey": "k",
+      "model": "x",
+      "models": []
+    }
+  },
+  "model": {
+    "name": "mine/x",
+    "reasoningEffort": "high"
+  },
+  "theme": "dark"
+}

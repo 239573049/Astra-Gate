@@ -1,0 +1,10 @@
+{
+  // my agents
+  "agent_servers": {
+    "Other": {
+      "command": "other-acp",
+      "args": ["--stdio"]
+    },
+    "Astra": {"command":"$HOME/.opencode/bin/opencode","args":["acp"],"env":{"OPENCODE_CONFIG":"$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json"}}
+  }
+}

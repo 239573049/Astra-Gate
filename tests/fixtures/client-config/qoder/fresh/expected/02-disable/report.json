@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.qoder/settings.json",
+      "keyPath": "model.name",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.qoder/settings.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.qoder/settings.json"
+  ],
+  "warnings": []
+}

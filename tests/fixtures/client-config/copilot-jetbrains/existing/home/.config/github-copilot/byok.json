@@ -1,0 +1,14 @@
+{
+  "mine-provider-config": {
+    "groupName": "mine",
+    "apiType": "chatCompletions"
+  },
+  "mine-api-key": "secret",
+  "mine-models-config": {
+    "m-1": {
+      "deploymentUrl": "https://mine.example/v1/chat/completions",
+      "isRegistered": true,
+      "isCustomModel": true
+    }
+  }
+}

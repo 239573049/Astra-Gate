@@ -55,6 +55,10 @@ internal static class BrandCatalog
         "command-code" => Lobe("CommandCode.Mono", "CommandCode"),
         "fx" => Lobe("Vercel.Mono", "Vercel", LucideIconKind.SquareTerminal),
         "deveco-code" or "antigravity-cli" => Initials(LucideIconKind.SquareTerminal),
+        "qoder" => Lobe("Qoder.Mono", "Qoder", LucideIconKind.SquareTerminal),
+        "qoder-cn" => Lobe("Qoder.Mono", "Qoder", LucideIconKind.Globe),
+        "copilot-jetbrains" => Lobe("GithubCopilot.Mono", "GithubCopilot", LucideIconKind.Monitor),
+        "zoo-code" or "jetbrains-air" or "air-ide" or "codebuddy" or "t3code" or "pencil" or "openpencil" or "raycast" or "obsidian" => Initials(),
         "aside" or "omo" or "prime-agent" or "mu" or "mothx" or "penguin-harness" or "dim" or "goose" => Initials(),
         _ => null,
     };

@@ -75,6 +75,7 @@ public static class ClientsLogic
         "crush", "qwen-code", "droid", "kimi-code", "zed", "vscode-insiders", "vscodium", "omp", "mimo-code", "deepseek-harness", "workbuddy", "workbuddy-ai", "nextcowork",
         "paseo", "zcode", "tkcode", "muse-code", "codex", "grok-build", "hermes-agent",
         "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
+        "zoo-code", "jetbrains-air", "air-ide", "copilot-jetbrains", "codebuddy", "qoder", "qoder-cn", "t3code", "pencil", "openpencil", "raycast", "obsidian",
     };
 
     /// <summary>The built-in kinds in their order (<see cref="ClientCatalog.Order"/>), then the agent plugins' clients by name (web <c>orderOf</c>).</summary>

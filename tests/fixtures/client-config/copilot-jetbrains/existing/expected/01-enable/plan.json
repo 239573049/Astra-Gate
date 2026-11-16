@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.config/github-copilot/byok.json",
+    "format": "json",
+    "keyPath": "astra-provider-config",
+    "kind": "key",
+    "before": null,
+    "after": "{\"groupName\":\"astra\",\"apiType\":\"chatCompletions\"}"
+  },
+  {
+    "file": "$HOME/.config/github-copilot/byok.json",
+    "format": "json",
+    "keyPath": "astra-api-key",
+    "kind": "key",
+    "before": null,
+    "after": "\"sk-astra-enterprise-key\""
+  },
+  {
+    "file": "$HOME/.config/github-copilot/byok.json",
+    "format": "json",
+    "keyPath": "astra-models-config",
+    "kind": "key",
+    "before": null,
+    "after": "{\"gpt-5\":{\"deploymentUrl\":\"https://astra.corp.com/v1/chat/completions\",\"isRegistered\":true,\"isCustomModel\":true,\"modelCapabilities\":{\"name\":\"GPT-5\",\"maxInputTokens\":400000,\"maxOutputTokens\":100000,\"toolCalling\":true,\"vision\":true}},\"claude-sonnet-4-5\":{\"deploymentUrl\":\"https://astra.corp.com/v1/chat/completions\",\"isRegistered\":true,\"isCustomModel\":true,\"modelCapabilities\":{\"name\":\"Claude Sonnet 4.5\",\"maxInputTokens\":200000,\"maxOutputTokens\":50000,\"toolCalling\":true,\"vision\":true}},\"deepseek-chat\":{\"deploymentUrl\":\"https://astra.corp.com/v1/chat/completions\",\"isRegistered\":true,\"isCustomModel\":true,\"modelCapabilities\":{\"name\":\"DeepSeek Chat\",\"maxInputTokens\":64000,\"maxOutputTokens\":8000,\"toolCalling\":true,\"vision\":false}}}"
+  }
+]

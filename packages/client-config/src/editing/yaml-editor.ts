@@ -673,6 +673,201 @@ function replaceRow(text: string, row: YAMLMap, newRow: JObj, nl: string): strin
   return splice(text, r.start, r.end, renderRow(newRow, r.indent, nl) + (hadNewline ? nl : ''));
 }
 
+
+// ------------------------------------------------------------------ nested rows (`providers.[id=astra]`)
+
+/**
+ * Rows of a block sequence under a top-level mapping key, addressed as `providers.[id=astra]` (Raycast AI's
+ * `providers.yaml`): the key picks the sequence, the selector the row. Only whole rows are read, set and removed. The
+ * sequence is found by scanning lines — the key at column 0, its items at one indentation — so every other line of the
+ * file stays byte-identical; the row Astra writes is rendered as block YAML. Removing the last row removes the key too.
+ */
+const isNestedRowPath = (segments: string[]): boolean =>
+  segments.length === 2 && !isSelector(segments[0]!) && isSelector(segments[1]!);
+
+function nestedRowIndex(list: J[], selector: string): number {
+  for (let i = 0; i < list.length; i++) if (elementMatches(list[i]!, selector)) return i;
+  return -1;
+}
+
+function nestedRowGet(text: string, segments: string[]): { node: J | undefined; present: boolean } {
+  const list = documentObject(loadRoot(text)).get(segments[0]!);
+  if (!Array.isArray(list)) return { node: undefined, present: false };
+  const index = nestedRowIndex(list, segments[1]!);
+  return index < 0 ? { node: undefined, present: false } : { node: list[index]!, present: true };
+}
+
+type SequenceScan = {
+  keyStart: number;
+  keyEnd: number;
+  /** The key's value is on its own line (`[]`, a flow list) or it has no items: the whole entry is rewritten. */
+  inline: boolean;
+  itemIndent: number;
+  items: Array<{ start: number; end: number }>;
+};
+
+function scanSequence(text: string, key: string): SequenceScan | null {
+  const lines: Array<{ start: number; end: number }> = [];
+  for (let i = 0; i < text.length; ) {
+    const end = lineEnd(text, i);
+    lines.push({ start: i, end });
+    i = end;
+  }
+  const content = (index: number): string => text.slice(lines[index]!.start, lines[index]!.end).replace(/[\r\n]+$/, '');
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const keyPattern = new RegExp(`^(?:${escaped}|"${escaped}"|'${escaped}')[ \\t]*:(.*)$`);
+  let k = -1;
+  let rest = '';
+  for (let i = 0; i < lines.length; i++) {
+    const match = keyPattern.exec(content(i));
+    if (!match) continue;
+    k = i;
+    rest = match[1]!;
+    break;
+  }
+  if (k < 0) return null;
+  const hash = rest.indexOf(' #');
+  if (rest.trimStart().startsWith('#')) rest = '';
+  else if (hash >= 0) rest = rest.slice(0, hash);
+  if (rest.trim().length > 0)
+    return { keyStart: lines[k]!.start, keyEnd: lines[k]!.end, inline: true, itemIndent: 2, items: [] };
+
+  let itemIndent = -1;
+  const items: Array<{ start: number; end: number }> = [];
+  for (let i = k + 1; i < lines.length; i++) {
+    const c = content(i);
+    const trimmed = c.replace(/^ +/, '');
+    if (trimmed.length === 0 || trimmed.startsWith('#')) continue;
+    const indent = c.length - trimmed.length;
+    const dash = trimmed === '-' || trimmed.startsWith('- ');
+    if (itemIndent < 0) {
+      if (!dash) break;
+      itemIndent = indent;
+    }
+    if (indent < itemIndent || (indent === itemIndent && !dash)) break;
+    if (indent === itemIndent) items.push({ start: lines[i]!.start, end: lines[i]!.end });
+    else items[items.length - 1] = { start: items[items.length - 1]!.start, end: lines[i]!.end };
+  }
+  return {
+    keyStart: lines[k]!.start,
+    keyEnd: lines[k]!.end,
+    inline: items.length === 0,
+    itemIndent: itemIndent < 0 ? 2 : itemIndent,
+    items,
+  };
+}
+
+function nestedRowSet(text: string, segments: string[], value: J, path: string): YamlEditor {
+  if (!isObj(value)) throw new EditorException(`'${path}' must be set to a whole mapping.`);
+  const key = segments[0]!;
+  const nl = newlineOf(text);
+  const expected = documentObject(loadRoot(text));
+  let list = expected.get(key);
+  if (list !== undefined && list !== null && !Array.isArray(list))
+    throw new EditorException(`Cannot set '${path}': '${key}' is not a sequence.`);
+  const count = Array.isArray(list) ? list.length : 0;
+  const index = Array.isArray(list) ? nestedRowIndex(list, segments[1]!) : -1;
+  if (!Array.isArray(list)) {
+    list = [];
+    expected.set(key, list);
+  }
+  if (index >= 0) list[index] = clone(value);
+  else list.push(clone(value));
+
+  const scan = scanSequence(text, key);
+  let updated: string;
+  if (scan === null) {
+    updated = text + (text.length === 0 || text.endsWith('\n') ? '' : nl) + key + ':' + nl + blockItem(value, '  ', nl) + nl;
+  } else if (scan.inline) {
+    const rows = list.map((r) => {
+      if (!isObj(r)) throw new EditorException(`Cannot set '${path}': '${key}' holds a row that is not a mapping.`);
+      return r;
+    });
+    updated = splice(text, scan.keyStart, scan.keyEnd, renderSequence(key, rows, ' '.repeat(scan.itemIndent), nl) + nl);
+  } else {
+    if (scan.items.length !== count)
+      throw new EditorException(`Cannot set '${path}': the sequence under '${key}' has a layout Astra does not edit.`);
+    const indent = ' '.repeat(scan.itemIndent);
+    if (index >= 0) {
+      const { start, end } = scan.items[index]!;
+      const hadNewline = end > 0 && text[end - 1] === '\n';
+      updated = splice(text, start, end, blockItem(value, indent, nl) + (hadNewline ? nl : ''));
+    } else {
+      const at = scan.items[scan.items.length - 1]!.end;
+      updated = splice(text, at, at, (at > 0 && text[at - 1] === '\n' ? '' : nl) + blockItem(value, indent, nl) + nl);
+    }
+  }
+  return verify(updated, expected, `set '${path}'`);
+}
+
+function nestedRowRemove(text: string, segments: string[], path: string, self: YamlEditor): YamlEditor {
+  const key = segments[0]!;
+  const expected = documentObject(loadRoot(text));
+  const list = expected.get(key);
+  if (!Array.isArray(list)) return self;
+  const index = nestedRowIndex(list, segments[1]!);
+  if (index < 0) return self;
+  const count = list.length;
+  list.splice(index, 1);
+  const empty = list.length === 0;
+  if (empty) expected.delete(key);
+
+  const scan = scanSequence(text, key);
+  if (scan === null) throw new EditorException(`Cannot remove '${path}': '${key}' was not found.`);
+  const nl = newlineOf(text);
+  let updated: string;
+  if (scan.inline) {
+    const rest = empty
+      ? ''
+      : renderSequence(
+          key,
+          list.map((r) => {
+            if (!isObj(r)) throw new EditorException(`Cannot remove '${path}': '${key}' holds a row that is not a mapping.`);
+            return r;
+          }),
+          '  ',
+          nl,
+        ) + nl;
+    updated = splice(text, scan.keyStart, scan.keyEnd, rest);
+  } else {
+    if (scan.items.length !== count)
+      throw new EditorException(`Cannot remove '${path}': the sequence under '${key}' has a layout Astra does not edit.`);
+    updated = empty
+      ? splice(text, scan.keyStart, scan.items[scan.items.length - 1]!.end, '')
+      : splice(text, scan.items[index]!.start, scan.items[index]!.end, '');
+  }
+  return verify(updated, expected, `remove '${path}'`);
+}
+
+function renderSequence(key: string, rows: JObj[], indent: string, nl: string): string {
+  return renderKey(key) + ':' + rows.map((r) => nl + blockItem(r, indent, nl)).join('');
+}
+
+/** A sequence item at `indent`: a mapping's first member rides on the dash line, nested collections are block style. */
+function blockItem(item: J, indent: string, nl: string): string {
+  if (isObj(item)) {
+    if (item.size === 0) return indent + '- {}';
+    const lines = blockMapLines(item, indent + INDENT_UNIT, nl);
+    return indent + '- ' + lines.slice(indent.length + INDENT_UNIT.length);
+  }
+  if (Array.isArray(item)) return indent + '- ' + toJsonString(item);
+  return indent + '- ' + renderScalar(item);
+}
+
+function blockMapLines(map: JObj, indent: string, nl: string): string {
+  const parts: string[] = [];
+  for (const [name, child] of map) parts.push(indent + renderKey(name) + ':' + blockValue(child, indent, nl));
+  return parts.join(nl);
+}
+
+/** The text that follows "key:" in a block mapping at `indent`. */
+function blockValue(value: J, indent: string, nl: string): string {
+  if (isObj(value)) return value.size === 0 ? ' {}' : nl + blockMapLines(value, indent + INDENT_UNIT, nl);
+  if (Array.isArray(value))
+    return value.length === 0 ? ' []' : value.map((item) => nl + blockItem(item, indent + INDENT_UNIT, nl)).join('');
+  return ' ' + renderScalar(value);
+}
+
 // ------------------------------------------------------------------ the editor
 
 /** Format-preserving YAML editor. Immutable: every mutation returns the updated editor. */
@@ -688,6 +883,10 @@ export class YamlEditor {
   /** The value at `path` (dotted) as compact JSON text, or null when the key is absent. */
   getJsonText(path: string): string | null {
     const segments = splitPath(path);
+    if (isNestedRowPath(segments)) {
+      const { node } = nestedRowGet(this.text, segments);
+      return node !== undefined ? toJsonString(node) : null;
+    }
     const root = loadRoot(this.text);
     if (isSelector(segments[0]!)) {
       const { node, present } = resolveInRow(root, segments);
@@ -700,6 +899,10 @@ export class YamlEditor {
   /** The value at `path` as plain JS data (null when absent or YAML null). */
   get(path: string): JsonValue {
     const segments = splitPath(path);
+    if (isNestedRowPath(segments)) {
+      const { node } = nestedRowGet(this.text, segments);
+      return node === undefined ? null : toPlain(node);
+    }
     const root = loadRoot(this.text);
     if (isSelector(segments[0]!)) {
       const { node } = resolveInRow(root, segments);
@@ -712,6 +915,7 @@ export class YamlEditor {
   /** True when a key exists at this dotted path. */
   has(path: string): boolean {
     const segments = splitPath(path);
+    if (isNestedRowPath(segments)) return nestedRowGet(this.text, segments).present;
     const root = loadRoot(this.text);
     if (isSelector(segments[0]!)) return resolveInRow(root, segments).present;
     return locate(root, segments) !== null;
@@ -734,6 +938,7 @@ export class YamlEditor {
     }
 
     const segments = splitPath(path);
+    if (isNestedRowPath(segments)) return nestedRowSet(this.text, segments, value, path);
     const root = loadRoot(this.text);
     if (isSelector(segments[0]!)) return this.setRow(root, segments, value, path);
     const expected = documentObject(root);
@@ -757,6 +962,7 @@ export class YamlEditor {
   /** Removes the key at `path`. No-op (returns this) when absent. */
   remove(path: string): YamlEditor {
     const segments = splitPath(path);
+    if (isNestedRowPath(segments)) return nestedRowRemove(this.text, segments, path, this);
     const root = loadRoot(this.text);
     if (isSelector(segments[0]!)) return this.removeRow(root, segments, path);
     const entry = locate(root, segments);

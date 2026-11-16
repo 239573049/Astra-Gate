@@ -69,7 +69,10 @@ Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexC
 `ZCodeClientAdapter.cs`, `TKCodeClientAdapter.cs`,
 `MothXClientAdapter.cs`, `PenguinHarnessClientAdapter.cs` (its `[[models]]` rows through `TomlArrayEntries`, selector `models[provider=astra]`),
 `GooseClientAdapter.cs`, `CommandCodeClientAdapter.cs`, `FxClientAdapter.cs` (these two keyless), `DimClientAdapter.cs` and
-`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`), plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`),
+`ZooCodeClientAdapter.cs`, `AirClientAdapter.cs` (`jetbrains-air` / `air-ide` via `AirFlavour`), `CopilotJetBrainsClientAdapter.cs`, `CodeBuddyClientAdapter.cs`,
+`QoderClientAdapter.cs` (`qoder` / `qoder-cn` via `QoderFlavour`), `T3CodeClientAdapter.cs`, `PencilClientAdapter.cs`, `OpenPencilClientAdapter.cs`,
+`RaycastClientAdapter.cs` (YAML row `providers.[id=astra]`, `YamlEditor.NestedRows.cs`) and `ObsidianClientAdapter.cs` (one Copilot `data.json` per vault) — all on `ConfigFileClientAdapter` (SetKey / TrackedRemovals) — plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

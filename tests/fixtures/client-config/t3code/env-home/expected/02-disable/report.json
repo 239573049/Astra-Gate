@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/t3/userdata/settings.json",
+      "keyPath": "providerInstances.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

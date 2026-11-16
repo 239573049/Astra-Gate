@@ -68,6 +68,18 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   'command-code': { name: 'Command Code' },
   'fx': { name: 'fx' },
   'goose': { name: 'Goose' },
+  'zoo-code': { name: 'Zoo Code' },
+  'jetbrains-air': { name: 'JetBrains Air' },
+  'air-ide': { name: 'Air (JetBrains IDEs)' },
+  'copilot-jetbrains': { name: 'Copilot (JetBrains)' },
+  'codebuddy': { name: 'CodeBuddy' },
+  'qoder': { name: 'Qoder' },
+  'qoder-cn': { name: 'Qoder CN' },
+  't3code': { name: 'T3 Code' },
+  'pencil': { name: 'Pencil' },
+  'openpencil': { name: 'OpenPencil' },
+  'raycast': { name: 'Raycast' },
+  'obsidian': { name: 'Obsidian' },
 };
 
 /**
@@ -84,6 +96,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
   'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode', 'tkcode',
   'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
+  'zoo-code', 'jetbrains-air', 'air-ide', 'copilot-jetbrains', 'codebuddy', 'qoder', 'qoder-cn', 't3code', 'pencil', 'openpencil', 'raycast', 'obsidian',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -186,6 +199,19 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   // fx.sh is a Vercel Labs project: the Vercel mark with a terminal badge
   fx: { Mark: Vercel, Avatar: Vercel.Avatar, badge: SquareTerminal },
   goose: { Mark: Goose, Avatar: Goose.Avatar },
+  qoder: { Mark: Qoder, Avatar: Qoder.Avatar, badge: SquareTerminal },
+  // the China build (qoder.cn accounts) shares the mark: told apart by a globe badge
+  'qoder-cn': { Mark: Qoder, Avatar: Qoder.Avatar, badge: Globe },
+  'copilot-jetbrains': { Mark: GithubCopilot, Avatar: GithubCopilot.Avatar, badge: Monitor },
+  'zoo-code': monogram('Z', 'zoo-code'),
+  'jetbrains-air': monogram('A', 'jetbrains-air'),
+  'air-ide': monogram('A', 'air-ide'),
+  codebuddy: monogram('C', 'codebuddy'),
+  t3code: monogram('T', 't3code'),
+  pencil: monogram('P', 'pencil'),
+  openpencil: monogram('O', 'openpencil'),
+  raycast: monogram('R', 'raycast'),
+  obsidian: monogram('O', 'obsidian'),
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

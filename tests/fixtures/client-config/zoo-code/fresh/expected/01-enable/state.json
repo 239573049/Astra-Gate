@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json",
+    "keyPath": "providerProfiles",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"currentApiConfigName\":\"astra\",\"apiConfigs\":{\"astra\":{\"id\":\"astra\",\"apiProvider\":\"openai\",\"openAiBaseUrl\":\"https://astra.corp.com/v1\",\"openAiApiKey\":\"sk-astra-enterprise-key\",\"openAiModelId\":\"gpt-5\",\"openAiStreamingEnabled\":true,\"openAiCustomModelInfo\":{\"supportsPromptCache\":false,\"supportsImages\":true,\"contextWindow\":400000,\"maxTokens\":128000}}}}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Code/User/settings.json",
+    "keyPath": "zoo-code\\.autoImportSettingsPath",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json\""
+  }
+]

@@ -1,0 +1,45 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.jetbrains/acp.json",
+      "keyPath": "agent_servers.Astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jetbrains/astra-opencode.json",
+      "keyPath": "$schema",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jetbrains/astra-opencode.json",
+      "keyPath": "enabled_providers",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jetbrains/astra-opencode.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jetbrains/astra-opencode.json",
+      "keyPath": "provider.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.jetbrains/astra-opencode.json",
+      "keyPath": "small_model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.jetbrains/acp.json",
+    "$HOME/.jetbrains/astra-opencode.json"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/openpencil/settings.json",
+      "keyPath": "builtin_agents.[id=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/openpencil/settings.json",
+      "keyPath": "version",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/Library/Application Support/openpencil/settings.json"
+  ],
+  "warnings": []
+}

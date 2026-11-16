@@ -79,6 +79,18 @@ public static partial class RoutingTexts
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["zoo-code"] = "Zoo Code",
+        ["jetbrains-air"] = "JetBrains Air",
+        ["air-ide"] = "Air (JetBrains IDEs)",
+        ["copilot-jetbrains"] = "Copilot (JetBrains)",
+        ["codebuddy"] = "CodeBuddy",
+        ["qoder"] = "Qoder",
+        ["qoder-cn"] = "Qoder CN",
+        ["t3code"] = "T3 Code",
+        ["pencil"] = "Pencil",
+        ["openpencil"] = "OpenPencil",
+        ["raycast"] = "Raycast",
+        ["obsidian"] = "Obsidian",
     };
 
     /// <summary>A client's display name (web <c>clientName</c>); an agent plugin's client shows its plugin id.</summary>

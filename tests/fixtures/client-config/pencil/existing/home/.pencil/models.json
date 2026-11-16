@@ -1,0 +1,15 @@
+{
+  "providers": {
+    "mine": {
+      "name": "mine",
+      "baseUrl": "https://mine.example/v1",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "m-1",
+          "name": "M1"
+        }
+      ]
+    }
+  }
+}

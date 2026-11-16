@@ -1,0 +1,28 @@
+{
+  "settingsVersion": 4,
+  "defaultModelKey": "abc",
+  "providers": {
+    "openai": {
+      "providerId": "openai",
+      "providerType": "openai",
+      "displayName": "OpenAI"
+    }
+  },
+  "configuredModels": [
+    {
+      "configuredModelId": "abc",
+      "providerId": "openai",
+      "info": {
+        "id": "gpt-4o"
+      },
+      "configuredAt": 1
+    }
+  ],
+  "backends": {
+    "chat": {
+      "enabledModels": [
+        "abc"
+      ]
+    }
+  }
+}

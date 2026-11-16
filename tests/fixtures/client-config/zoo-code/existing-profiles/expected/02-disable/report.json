@@ -1,0 +1,26 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json",
+      "keyPath": "providerProfiles",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/Code/User/profiles/1a2b3c4d/settings.json",
+      "keyPath": "zoo-code\\.autoImportSettingsPath",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Library/Application Support/Code/User/settings.json",
+      "keyPath": "zoo-code\\.autoImportSettingsPath",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json"
+  ],
+  "warnings": []
+}

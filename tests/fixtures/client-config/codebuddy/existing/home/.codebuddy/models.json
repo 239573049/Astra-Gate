@@ -1,0 +1,14 @@
+{
+  "models": [
+    {
+      "id": "glm-4",
+      "name": "GLM 4",
+      "vendor": "zhipu",
+      "url": "https://glm.example/v1/chat/completions",
+      "apiKey": "k"
+    }
+  ],
+  "availableModels": [
+    "glm-4"
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "models": [
+    {
+      "id": "glm-4",
+      "name": "GLM 4",
+      "vendor": "zhipu",
+      "url": "https://glm.example/v1/chat/completions",
+      "apiKey": "k"
+    },
+    {"id":"gpt-5","name":"Astra: gpt-5","vendor":"Astra","url":"https://astra.corp.com/v1/chat/completions","apiKey":"sk-astra-enterprise-key","maxInputTokens":400000,"maxOutputTokens":128000,"supportsToolCall":true,"supportsImages":true,"supportsReasoning":true},
+    {"id":"claude-sonnet-4-5","name":"Astra: claude-sonnet-4-5","vendor":"Astra","url":"https://astra.corp.com/v1/chat/completions","apiKey":"sk-astra-enterprise-key","maxInputTokens":200000,"maxOutputTokens":64000,"supportsToolCall":true,"supportsImages":true,"supportsReasoning":true},
+    {"id":"deepseek-chat","name":"Astra: deepseek-chat","vendor":"Astra","url":"https://astra.corp.com/v1/chat/completions","apiKey":"sk-astra-enterprise-key","maxInputTokens":64000,"maxOutputTokens":8000,"supportsToolCall":true,"supportsImages":false,"supportsReasoning":false}
+  ],
+  "availableModels": [
+    "glm-4"
+  ]
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.t3/userdata/settings.json",
+    "format": "json",
+    "keyPath": "providerInstances.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"driver\":\"claudeAgent\",\"displayName\":\"Astra\",\"enabled\":true,\"environment\":[{\"name\":\"ANTHROPIC_BASE_URL\",\"value\":\"https://astra.corp.com\",\"sensitive\":false},{\"name\":\"ANTHROPIC_AUTH_TOKEN\",\"value\":\"sk-astra-enterprise-key\",\"sensitive\":false},{\"name\":\"ENABLE_TOOL_SEARCH\",\"value\":\"true\",\"sensitive\":false}],\"config\":{\"customModels\":[{\"slug\":\"gpt-5\",\"name\":\"GPT-5\",\"capabilities\":{\"optionDescriptors\":[{\"id\":\"effort\",\"label\":\"Reasoning\",\"type\":\"select\",\"options\":[{\"id\":\"low\",\"label\":\"Low\"},{\"id\":\"medium\",\"label\":\"Medium\",\"isDefault\":true},{\"id\":\"high\",\"label\":\"High\"}]},{\"id\":\"thinking\",\"label\":\"Thinking\",\"type\":\"boolean\",\"currentValue\":true}]}},{\"slug\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"capabilities\":{\"optionDescriptors\":[{\"id\":\"effort\",\"label\":\"Reasoning\",\"type\":\"select\",\"options\":[{\"id\":\"low\",\"label\":\"Low\"},{\"id\":\"medium\",\"label\":\"Medium\",\"isDefault\":true},{\"id\":\"high\",\"label\":\"High\"}]},{\"id\":\"thinking\",\"label\":\"Thinking\",\"type\":\"boolean\",\"currentValue\":true}]}},{\"slug\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\"}],\"binaryPath\":\"/opt/claude/bin/claude\",\"homePath\":\"/home/me/.claude-work\"}}"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/raycast/ai/providers.yaml",
+      "keyPath": "providers.[id=astra]",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

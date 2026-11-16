@@ -1,0 +1,66 @@
+# my providers
+providers:
+  - id: mine
+    name: Mine
+    base_url: https://mine.example/v1
+    api_keys:
+      mine: secret
+    models:
+      - id: m-1
+        name: M1
+        context: 8000
+        abilities:
+          temperature:
+            supported: true
+  - id: "astra"
+    name: "Astra"
+    base_url: "https://astra.corp.com/v1"
+    api_keys:
+      astra: "sk-astra-enterprise-key"
+    models:
+      - id: "gpt-5"
+        name: "GPT-5"
+        context: 400000
+        abilities:
+          temperature:
+            supported: true
+          vision:
+            supported: true
+          system_message:
+            supported: true
+          tools:
+            supported: true
+          reasoning_effort:
+            supported: true
+      - id: "claude-sonnet-4-5"
+        name: "Claude Sonnet 4.5"
+        context: 200000
+        abilities:
+          temperature:
+            supported: true
+          vision:
+            supported: true
+          system_message:
+            supported: true
+          tools:
+            supported: true
+          reasoning_effort:
+            supported: true
+      - id: "deepseek-chat"
+        name: "DeepSeek Chat"
+        context: 64000
+        abilities:
+          temperature:
+            supported: true
+          vision:
+            supported: false
+          system_message:
+            supported: true
+          tools:
+            supported: true
+          reasoning_effort:
+            supported: false
+
+# AI extensions
+tools:
+  - id: web

@@ -1,0 +1,1 @@
+{ "providerProfiles": {"currentApiConfigName":"astra","apiConfigs":{"astra":{"id":"astra","apiProvider":"openai","openAiBaseUrl":"https://astra.corp.com/v1","openAiApiKey":"sk-astra-enterprise-key","openAiModelId":"gpt-5","openAiStreamingEnabled":true,"openAiCustomModelInfo":{"supportsPromptCache":false,"supportsImages":true,"contextWindow":400000,"maxTokens":128000}}}} }

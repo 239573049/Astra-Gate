@@ -137,6 +137,18 @@ describe('client brand icons', () => {
     'command-code': { brand: 'commandcode', mark: 'mono', badge: false },
     fx: { brand: 'vercel', mark: 'mono', badge: true },
     goose: { brand: 'goose', mark: 'mono', badge: false },
+    qoder: { brand: 'qoder', mark: 'mono', badge: true },
+    'qoder-cn': { brand: 'qoder', mark: 'mono', badge: true },
+    'copilot-jetbrains': { brand: 'github-copilot', mark: 'mono', badge: true },
+    'zoo-code': { brand: 'monogram', mark: 'monogram', badge: false },
+    'jetbrains-air': { brand: 'monogram', mark: 'monogram', badge: false },
+    'air-ide': { brand: 'monogram', mark: 'monogram', badge: false },
+    codebuddy: { brand: 'monogram', mark: 'monogram', badge: false },
+    t3code: { brand: 'monogram', mark: 'monogram', badge: false },
+    pencil: { brand: 'monogram', mark: 'monogram', badge: false },
+    openpencil: { brand: 'monogram', mark: 'monogram', badge: false },
+    raycast: { brand: 'monogram', mark: 'monogram', badge: false },
+    obsidian: { brand: 'monogram', mark: 'monogram', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {

@@ -112,7 +112,7 @@ astra client enable codex --provider deepseek --model deepseek-chat
 `pi` · `hermes-agent` · `minimax-code` · `copilot-cli` · `vscode-copilot` · `crush` · `qwen-code` ·
 `droid` · `kimi-code` · `zed` · `vscode-insiders` · `vscodium` · `omp` · `mimo-code` ·
 `deepseek-harness` · `workbuddy` · `muse-code` · `openchamber` · `deveco-code` · `stepcode` · `aside` · `omo` ·
-`prime-agent` · `mu` · `mothx` · `penguin-harness` · `antigravity-cli` · `dim` · `command-code` · `fx` · `goose`
+`prime-agent` · `mu` · `mothx` · `penguin-harness` · `antigravity-cli` · `dim` · `command-code` · `fx` · `goose` · `zoo-code` · `jetbrains-air` · `air-ide` · `copilot-jetbrains` · `codebuddy` · `qoder` · `qoder-cn` · `t3code` · `pencil` · `openpencil` · `raycast` · `obsidian`
 
 Zed 不会从设置文件读取 API Key，启用后需在 Zed 的提供商设置里粘贴一次 Astra 令牌。
 

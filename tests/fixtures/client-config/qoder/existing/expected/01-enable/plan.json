@@ -1,0 +1,18 @@
+[
+  {
+    "file": "$HOME/.qoder/settings.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"displayName\":\"Astra\",\"protocol\":\"openai\",\"baseUrl\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\",\"model\":\"gpt-5\",\"models\":[{\"model\":\"gpt-5\",\"displayName\":\"GPT-5\",\"capabilities\":{\"tools\":true,\"vision\":true,\"thinking\":{\"modes\":[\"enabled\"],\"supportsEffort\":true,\"supportedEffortLevels\":[\"low\",\"medium\",\"high\"],\"requiresBudgetForEnabled\":false}},\"contextWindow\":400000,\"maxOutputTokens\":128000},{\"model\":\"claude-sonnet-4-5\",\"displayName\":\"Claude Sonnet 4.5\",\"capabilities\":{\"tools\":true,\"vision\":true,\"thinking\":{\"modes\":[\"enabled\"],\"supportsEffort\":true,\"supportedEffortLevels\":[\"low\",\"medium\",\"high\"],\"requiresBudgetForEnabled\":false}},\"contextWindow\":200000,\"maxOutputTokens\":64000},{\"model\":\"deepseek-chat\",\"displayName\":\"DeepSeek Chat\",\"capabilities\":{\"tools\":true,\"vision\":false},\"contextWindow\":64000,\"maxOutputTokens\":8000}]}"
+  },
+  {
+    "file": "$HOME/.qoder/settings.json",
+    "format": "json",
+    "keyPath": "model.name",
+    "kind": "key",
+    "before": "\"mine/x\"",
+    "after": "\"astra/gpt-5\""
+  }
+]

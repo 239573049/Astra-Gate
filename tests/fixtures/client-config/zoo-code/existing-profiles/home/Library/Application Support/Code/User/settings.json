@@ -1,0 +1,5 @@
+// my settings
+{
+  "editor.fontSize": 14,
+  "zoo-code.autoImportSettingsPath": "/tmp/own-import.json"
+}
