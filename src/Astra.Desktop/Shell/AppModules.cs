@@ -26,6 +26,7 @@ public static class AppModules
     [
         new ClientsModule(),
         new McpModule(),
+        new Astra.Desktop.Pages.Tools.ToolsModule(),
         new ModelsModule(),
         new OverviewModule(),
         new PluginsModule(),

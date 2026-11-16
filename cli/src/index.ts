@@ -60,6 +60,7 @@ import {
   runPluginTest,
   runPluginV2List,
 } from './commands/plugin.js';
+import { runToolList, runToolRun } from './commands/tool.js';
 import { runRestoreAll } from './commands/restore-all.js';
 import { runClaude } from './commands/claude.js';
 import { VERSION } from './version.js';
@@ -311,6 +312,23 @@ provider
   .argument('<id>', 'Provider id')
   .action((id: string) => runProviderRemove(id));
 
+const tool = program
+  .command('tool')
+  .description("Run Astra's built-in tools: web search, web fetch, image generation and plugin tools (this machine only)");
+tool.command('list').alias('ls').description('List the tools').option('--json', 'Print JSON').action((opts: { json?: boolean }) => runToolList(opts));
+tool
+  .command('run', { isDefault: true })
+  .description('Run a tool, e.g. astra tool generate_image "a magpie, watercolor" -o hero.png')
+  .argument('<name>', 'web_search, web_fetch, generate_image or a plugin tool (see `astra tool list`)')
+  .argument('[words...]', "The tool's main argument (query, url or prompt)")
+  .option('-o, --output <file>', 'Save an image (or the text) here')
+  .option('-a, --arg <key=value...>', 'Another argument; repeat for more')
+  .option('--json <object>', 'Arguments as a JSON object')
+  .option('--token <key>', 'The gateway key an image is generated as (default: $ASTRA_API_KEY)')
+  .option('--raw', 'Print the tool result as JSON')
+  .action((name: string, words: string[], opts: { output?: string; arg?: string[]; json?: string; token?: string; raw?: boolean }) =>
+    runToolRun(name, words, opts),
+  );
 const plugin = program
   .command('plugin')
   .alias('plugins')

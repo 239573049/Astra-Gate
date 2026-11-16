@@ -837,6 +837,7 @@ public sealed partial class GatewayPipeline(
                     record.Status == RequestStatus.Success ? null : record.ErrorType ?? record.Status);
             }
             middlewareRun?.Dispose();
+            Tools.WebSearchBridge.AddSpans(ctx, trace, s.TraceContent);
             FinishTrace(record, trace, link, inboundTraceId, observer, responseSpan, middlewareStream is not null, restorable);
             if (capture is not null)
             {

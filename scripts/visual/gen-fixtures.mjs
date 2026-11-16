@@ -327,6 +327,36 @@ put('mcp/calls.json', [
 ]);
 route('/api/mcp/calls', 'mcp/calls.json');
 
+// built-in tools (linked update 34): search APIs with masked keys, the switches, the tool list
+put('tools/settings.json', {
+  search: {
+    onBehalf: true, mode: 'auto', resultCount: 6,
+    apis: [
+      {
+        vendor: 'tavily', name: 'Tavily', enabled: true, pick: 'turns', url: null, keysUrl: 'https://app.tavily.com/home', keyOptional: false, needsUrl: false, plugin: false,
+        available: true, canReadQuota: true,
+        keys: [{ id: 'k1a2b3', masked: 'tvl…y-1', enabled: true, resting: null, restUntil: null }, { id: 'k4d5e6', masked: 'tvl…y-2', enabled: true, resting: 'rate limited', restUntil: ago(-4 * 60_000) }],
+      },
+      { vendor: 'searxng', name: 'SearXNG', enabled: false, pick: 'turns', url: 'http://127.0.0.1:8888', keysUrl: null, keyOptional: true, needsUrl: true, plugin: false, available: true, canReadQuota: false, keys: [] },
+    ],
+    available: [
+      { vendor: 'brave', name: 'Brave Search', keysUrl: 'https://api-dashboard.search.brave.com/app/keys', keyOptional: false, needsUrl: false, plugin: false },
+      { vendor: 'exa', name: 'Exa', keysUrl: 'https://dashboard.exa.ai/api-keys', keyOptional: false, needsUrl: false, plugin: false },
+    ],
+  },
+  fetch: { maxBytes: 5 * 1024 * 1024, timeoutSeconds: 30, maxChars: 20000, allowPrivate: false },
+  image: { model: 'gpt-image-1', size: '1024x1024' },
+  mcpEndpoint: 'http://127.0.0.1:17321/mcp/astra',
+});
+route('/api/tools/settings', 'tools/settings.json');
+put('tools/list.json', [
+  { name: 'web_search', title: 'Web search', description: 'Search the web with the search APIs in Tools settings.', source: 'builtin', available: true, reason: null },
+  { name: 'web_fetch', title: 'Web fetch', description: 'Fetch a web page as readable text.', source: 'builtin', available: true, reason: null },
+  { name: 'generate_image', title: 'Generate image', description: 'Generate an image with the image model set below.', source: 'builtin', available: true, reason: null },
+  { name: 'demo.stamp', title: 'stamp', description: 'A tool a plugin gives.', source: 'plugin', available: true, reason: null },
+]);
+route('/api/tools', 'tools/list.json');
+
 // client MCP entries (issue #34): the gateway entry in two clients, the user's own servers, and what clients already have
 put('mcp/client-entries.json', [
   { kind: 'claude-code', state: 'applied', file: '/Users/dev/.claude.json', url: 'http://127.0.0.1:17321/mcp', tokenId: 'tok_pool', tokenName: 'team-shared', gatewayEnabled: true, gatewayUrl: 'http://127.0.0.1:17321/mcp', error: null },

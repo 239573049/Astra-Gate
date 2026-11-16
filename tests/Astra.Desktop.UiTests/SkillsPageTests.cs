@@ -89,7 +89,7 @@ public class SkillsPageTests
     public void Resources_group_holds_mcp_and_skills_in_the_sidebar()
     {
         var group = NavTable.Groups.Single(g => g.TitleKey == "nav.group.resources");
-        Assert.Equal([AppRoute.Mcp, AppRoute.Skills], group.Items.Select(i => i.Route));
+        Assert.Equal([AppRoute.Mcp, AppRoute.Tools, AppRoute.Skills], group.Items.Select(i => i.Route));
         Assert.DoesNotContain(NavTable.Groups.Single(g => g.TitleKey == "nav.group.config").Items, i => i.Route is AppRoute.Mcp or AppRoute.Skills);
     }
 }

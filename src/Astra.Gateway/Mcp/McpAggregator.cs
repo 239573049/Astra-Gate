@@ -21,7 +21,7 @@ public sealed class McpToolNotFoundException(string name) : Exception($"Unknown 
 /// The MCP gateway's engine between the front end and the upstream pool: per-token visibility, aggregate naming, ordering and routing
 /// (plan mcp-gateway §4). It knows nothing of HTTP and nothing of the protocol eras on either side.
 /// </summary>
-public sealed class McpAggregator(AstraDatabase db, McpUpstreamPool pool, ILogger<McpAggregator> logger)
+public sealed class McpAggregator(AstraDatabase db, McpUpstreamPool pool, ILogger<McpAggregator> logger, IMcpBuiltIn? builtIn = null)
 {
     private long _calls;
 
@@ -48,6 +48,8 @@ public sealed class McpAggregator(AstraDatabase db, McpUpstreamPool pool, ILogge
         {
             try
             {
+                if (McpBuiltIn.Is(server))
+                    return (server, tools: builtIn is null ? (IReadOnlyList<Tool>)[] : await builtIn.ListToolsAsync(ct));
                 return (server, tools: await pool.ListToolsAsync(server, refresh: false, ct));
             }
             catch (McpUpstreamException)
@@ -89,7 +91,8 @@ public sealed class McpAggregator(AstraDatabase db, McpUpstreamPool pool, ILogge
     /// error result — the MCP convention for "the tool did not run" — with a message that never names the upstream; a tool that does not
     /// exist in the view throws <see cref="McpToolNotFoundException"/>.
     /// </summary>
-    public async Task<CallToolResult> CallToolAsync(McpView view, string? name, JsonObject? arguments, string frontEra, CancellationToken ct)
+    public async Task<CallToolResult> CallToolAsync(McpView view, string? name, JsonObject? arguments, string frontEra, CancellationToken ct,
+        Microsoft.AspNetCore.Http.HttpContext? origin = null)
     {
         var (server, tool) = Resolve(view, name) ?? throw new McpToolNotFoundException(name ?? "");
         var watch = Stopwatch.StartNew();
@@ -97,7 +100,9 @@ public sealed class McpAggregator(AstraDatabase db, McpUpstreamPool pool, ILogge
         string? category = null;
         try
         {
-            result = await pool.CallToolAsync(server, tool, arguments, ct);
+            result = McpBuiltIn.Is(server)
+                ? builtIn is null ? throw new McpToolNotFoundException(tool) : await builtIn.CallAsync(tool, arguments, new BuiltInCall(origin), ct)
+                : await pool.CallToolAsync(server, tool, arguments, ct);
             if (result.IsError == true) category = McpErrorCategories.Tool;
         }
         catch (McpUpstreamException failure)

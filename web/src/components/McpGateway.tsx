@@ -1,5 +1,6 @@
 import { Copy, Ellipsis, KeyRound, Pencil, Plug, Plus, ShieldCheck, Trash2, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router';
 
 import {
   useCreateMcpServer,
@@ -201,6 +202,8 @@ function ServerRow({
   server: McpServer; busy: boolean; onTest: () => void; onEdit: () => void; onAuthorize: () => void; onForget: () => void; onDelete: () => void;
 }) {
   const { t, locale } = useI18n();
+  const update = useUpdateMcpServer();
+  const builtIn = s.id === 'builtin-astra';
   const oauth = s.authType === 'oauth';
   const authorized = s.oauth?.authorized === true;
   const detail = [
@@ -214,6 +217,7 @@ function ServerRow({
       label={
         <span className="flex min-w-0 items-center gap-2">
           <span className="truncate">{s.name}</span>
+          {builtIn && <Badge tone="accent">{t('mcp.server.builtIn')}</Badge>}
           <Badge tone={STATUS_TONE[s.status]} title={s.statusMessage ?? undefined}>{t(`mcp.status.${s.status}` as MessageKey)}</Badge>
           {!s.enabled && <Badge>{t('mcp.server.disabledBadge')}</Badge>}
         </span>
@@ -226,14 +230,20 @@ function ServerRow({
         </span>
       }
     >
+      {builtIn && <ToolSettingsLink />}
       {oauth && (
         <Button size="sm" variant={authorized ? 'glass' : 'primary'} icon={<ShieldCheck className="size-3.5" />} onClick={onAuthorize}>
           {authorized ? t('mcp.server.reauthorize') : t('mcp.server.authorize')}
         </Button>
       )}
-      <Button size="sm" icon={<Zap className="size-3.5" />} loading={busy} onClick={onTest}>
-        {t('mcp.server.test')}
-      </Button>
+      {!builtIn && (
+        <Button size="sm" icon={<Zap className="size-3.5" />} loading={busy} onClick={onTest}>
+          {t('mcp.server.test')}
+        </Button>
+      )}
+      {builtIn ? (
+        <Switch checked={s.enabled} label={s.name} onChange={(enabled) => update.mutate({ id: s.id, body: { enabled } as McpServerInput })} />
+      ) : (
       <Menu
         label={s.name}
         iconOnly
@@ -244,7 +254,19 @@ function ServerRow({
           { id: 'delete', label: t('common.delete'), icon: <Trash2 className="size-3.5" />, destructive: true, separatorBefore: true, onSelect: onDelete },
         ]}
       />
+      )}
     </Row>
+  );
+}
+
+/** The built-in server's way to its settings: its tools are Astra's own, not an upstream to edit. */
+function ToolSettingsLink() {
+  const { t } = useI18n();
+  const navigate = useNavigate();
+  return (
+    <Button size="sm" onClick={() => navigate('/tools')}>
+      {t('mcp.server.builtInManage')}
+    </Button>
   );
 }
 

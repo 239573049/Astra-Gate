@@ -29,6 +29,7 @@ export const SPAN = {
   encode: 'gateway.encode',
   attempt: 'upstream.attempt',
   response: 'gateway.response',
+  search: 'gateway.search',
 } as const;
 
 export type Tone = 'neutral' | 'ok' | 'warn' | 'error' | 'idle' | 'sub' | 'task';

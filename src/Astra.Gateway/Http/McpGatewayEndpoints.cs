@@ -186,7 +186,7 @@ public static class McpGatewayEndpoints
                         await RpcError(ctx, id, InvalidParams, "params.name is required");
                         return;
                     }
-                    var result = await aggregator.CallToolAsync(view, name, parameters?["arguments"] as JsonObject, era, ct);
+                    var result = await aggregator.CallToolAsync(view, name, parameters?["arguments"] as JsonObject, era, ct, ctx);
                     await Result(ctx, id, ToNode(result), modern);
                     return;
                 default:

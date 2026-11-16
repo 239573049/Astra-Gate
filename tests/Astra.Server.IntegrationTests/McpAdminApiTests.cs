@@ -55,7 +55,8 @@ public class McpAdminApiTests
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/mcp/servers") { Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json") };
         var response = await host.Client.SendAsync(request);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Empty((await host.GetJsonAsync("/api/mcp/servers")).AsArray());
+        // Only Astra's own built-in server is there.
+        Assert.Equal(["astra"], (await host.GetJsonAsync("/api/mcp/servers")).AsArray().Select(x => x!["slug"]!.GetValue<string>()));
     }
 
     [Fact]
@@ -109,7 +110,7 @@ public class McpAdminApiTests
         Assert.Equal(HttpStatusCode.BadRequest, (await host.SendAsync(HttpMethod.Patch, $"/api/tokens/{id}", new { mcpServers = "a" })).Status);
         Assert.Equal(2, (await host.GetJsonAsync($"/api/tokens/{id}"))["mcpServers"]!.AsArray().Count); // a refused change changed nothing
 
-        var servers = (await host.GetJsonAsync("/api/mcp/servers")).AsArray();
+        var servers = (await host.GetJsonAsync("/api/mcp/servers")).AsArray().Where(x => x!["slug"]!.GetValue<string>() != "astra").ToList();
         Assert.All(servers, s => Assert.Equal(1, s!["boundTokens"]!.GetValue<int>()));
 
         var (_, cleared) = await host.SendAsync(HttpMethod.Patch, $"/api/tokens/{id}", new Dictionary<string, object?> { ["mcpServers"] = null });

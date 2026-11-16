@@ -99,6 +99,14 @@ sequenceDiagram
 - A tool call whose upstream died mid-flight may already have had its effect — which is why nothing retries it.
 - `mcp_calls` and status writes failing (SQLite closed during shutdown) are logged at debug level and swallowed.
 
+## The built-in server (`astra`)
+
+Astra's own tools are one more row of `mcp_servers` (`McpBuiltIn`: id `builtin-astra`, slug `astra`, address `astra://builtin`, created at
+startup by `McpBuiltIn.EnsureAsync`). `McpAggregator` recognizes it (`McpBuiltIn.Is`) and asks `IMcpBuiltIn` (`Astra.Gateway/Tools/BuiltInTools`:
+`web_search`, `web_fetch`, `generate_image`, plugin tools as `<plugin>.<tool>`) instead of `McpUpstreamPool`; the call gets the MCP request's
+`HttpContext` so an image generation runs through `HandleImagesAsync` as the caller's own token. Binding, listing, "apply to clients" and the
+unbound-looks-unknown rule are the generic ones. Settings and admin API: AGENTS.md item 34, `/api/tools/**`.
+
 ## Where to hook in
 
 - **Supported:** a new method (resources, prompts) is a case in `HandleAsync`'s switch, `Capabilities()`, a list/route pair in
