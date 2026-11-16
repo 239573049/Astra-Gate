@@ -21,7 +21,11 @@ namespace Astra.Server.Api;
 public sealed class ProviderBackupService(AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets, ILogger<ProviderBackupService> log)
 {
     public const string FormatId = "astra-providers";
-    public const int FormatVersion = 1;
+    /// <summary>
+    /// 2 adds the per-provider <c>keys</c> list (several API keys on one provider, <see cref="ProviderKeys"/>); a provider with one key
+    /// is still written with <c>api_key</c> / <c>api_key_sealed</c> (the first enabled key), and a version-1 file restores as before.
+    /// </summary>
+    public const int FormatVersion = 2;
     public const int MaxProviders = 500;
     public const int MaxModels = 2000;
 
@@ -74,6 +78,24 @@ public sealed class ProviderBackupService(AstraDatabase db, ProviderTemplateCata
             {
                 if (crypto is null) item["api_key"] = key;
                 else item["api_key_sealed"] = crypto.Seal(key);
+            }
+            // The key list: every key with its own switches (the lone api_key above stays for a reader that predates the list).
+            if (mode != Modes.None && p.KeyPool)
+            {
+                var keys = new JsonArray();
+                foreach (var k in (await db.Accounts.ListAsync(p.Id, ct)).Where(a => a.Kind == AccountKinds.ApiKey))
+                {
+                    if (k.AccessTokenEnc is null || Unprotect(k.AccessTokenEnc) is not { } secret) continue;
+                    var entry = new JsonObject { ["name"] = k.DisplayName, ["enabled"] = k.Enabled };
+                    if (crypto is null) entry["api_key"] = secret;
+                    else entry["api_key_sealed"] = crypto.Seal(secret);
+                    if (k.KeyProtocol is { } kp) entry["protocol"] = kp.ToId();
+                    if (k.KeyWeight != 1) entry["weight"] = k.KeyWeight;
+                    if (k.HttpProxy is not null) entry["http_proxy"] = k.HttpProxy;
+                    if (k.KeyNotes is not null) entry["notes"] = k.KeyNotes;
+                    Push(keys, entry);
+                }
+                if (keys.Count > 0) item["keys"] = keys;
             }
             var models = new JsonArray();
             foreach (var m in (await db.Providers.ListModelsAsync(p.Id, ct)).OrderBy(m => m.SortOrder))
@@ -151,10 +173,16 @@ public sealed class ProviderBackupService(AstraDatabase db, ProviderTemplateCata
             provider.Id = Ulid.NewUlid();
             provider.Name = ImportService.UniqueName(plan.Name, names);
             provider.SortOrder = order++;
-            provider.ApiKeyEnc = plan.Key is null ? null : secrets.Protect(plan.Key);
+            // One key stays in the provider row; several go into its key list once the provider exists.
+            var pooled = plan.Keys.Count > 1 || plan.Keys.Any(k => k.Name is not null);
+            provider.ApiKeyEnc = pooled || plan.Key is null ? null : secrets.Protect(plan.Key);
             var models = await ProviderEndpoints.PlanModelsAsync(db, provider, plan.ModelIds, ct);
             Overlay(models, plan.ModelEntries);
             await db.Providers.InsertWithModelsAsync(provider, models, ct);
+            if (pooled)
+                foreach (var k in plan.Keys)
+                    await ProviderKeys.AddAsync(db, secrets, provider, new ProviderKeyAdd(
+                        k.Key, k.Name, k.Protocol, k.Weight, k.HttpProxy, k.Notes, k.Enabled), ct);
             existing.Add(new ExistingProvider(provider.Id, provider.Name, ImportService.KeyHash(plan.Key), Urls(provider)));
             Push(added, new JsonObject { ["id"] = provider.Id, ["name"] = provider.Name });
         }
@@ -184,8 +212,14 @@ public sealed class ProviderBackupService(AstraDatabase db, ProviderTemplateCata
     // ------------------------------------------------------------------ reading the file
 
     private sealed record Planned(
-        int Index, string Name, Provider? Provider, string? Key, List<string> ModelIds, Dictionary<string, JsonObject> ModelEntries,
-        List<string> Ignored, string? Error);
+        int Index, string Name, Provider? Provider, List<PlannedKey> Keys, List<string> ModelIds, Dictionary<string, JsonObject> ModelEntries,
+        List<string> Ignored, string? Error)
+    {
+        /// <summary>The key the provider row carries (the first enabled one): what "same provider" is judged by.</summary>
+        public string? Key => (Keys.FirstOrDefault(k => k.Enabled) ?? Keys.FirstOrDefault())?.Key;
+    }
+
+    private sealed record PlannedKey(string Key, string? Name, bool Enabled, string? Protocol, int? Weight, string? HttpProxy, string? Notes);
 
     private (string Mode, List<Planned> Items) Plan(JsonObject body)
     {
@@ -253,14 +287,40 @@ public sealed class ProviderBackupService(AstraDatabase db, ProviderTemplateCata
             var settings = item["settings"] is JsonObject s ? (JsonObject)s.DeepClone() : (JsonObject)template.Settings.DeepClone();
             settings.Remove("unified_gateway");
 
-            string? key = null;
-            if (mode == Modes.Plaintext) key = Text(item["api_key"]);
-            else if (mode == Modes.Passphrase && Text(item["api_key_sealed"]) is { } sealedKey)
+            settings.Remove(Provider.KeyPoolKey);
+            string? Secret(JsonObject entry)
             {
-                if (crypto!.TryOpen(sealedKey, out var plain)) key = plain;
-                else throw new AdminApiException(400, "Could not decrypt this provider's API key");
+                string? secret = null;
+                if (mode == Modes.Plaintext) secret = Text(entry["api_key"]);
+                else if (mode == Modes.Passphrase && Text(entry["api_key_sealed"]) is { } sealedKey)
+                {
+                    if (crypto!.TryOpen(sealedKey, out var plain)) secret = plain;
+                    else throw new AdminApiException(400, "Could not decrypt this provider's API key");
+                }
+                return secret is { Length: > 0 } ? secret : null;
             }
-            if (key is { Length: 0 }) key = null;
+            var keys = new List<PlannedKey>();
+            if (item["keys"] is JsonArray keyList)
+                foreach (var node in keyList.Take(ProviderKeys.MaxKeys))
+                {
+                    if (node is not JsonObject entry || Secret(entry) is not { } secret || keys.Any(k => k.Key == secret)) continue;
+                    var keyProtocol = Text(entry["protocol"]);
+                    if (keyProtocol is not null && !(ApiProtocols.TryParse(keyProtocol, out var kp) && protocols.Contains(kp)))
+                    {
+                        keyProtocol = null;
+                        ignored.Add("key-protocol");
+                    }
+                    var weight = entry["weight"] is JsonValue wv && wv.TryGetValue<int>(out var w) && w is >= 1 and <= ProviderAccount.MaxKeyWeight ? w : (int?)null;
+                    var keyProxy = Text(entry["http_proxy"]);
+                    if (keyProxy is not null && !(Uri.TryCreate(keyProxy, UriKind.Absolute, out var kpu) && kpu.Scheme is "http" or "https" or "socks5"))
+                    {
+                        keyProxy = null;
+                        ignored.Add("key-proxy");
+                    }
+                    keys.Add(new PlannedKey(secret, Text(entry["name"]), !(entry["enabled"] is JsonValue ke && ke.TryGetValue<bool>(out var kon) && !kon),
+                        keyProtocol, weight, keyProxy, Text(entry["notes"])));
+                }
+            else if (Secret(item) is { } single) keys.Add(new PlannedKey(single, null, true, null, null, null, null));
 
             var provider = new Provider
             {
@@ -281,11 +341,11 @@ public sealed class ProviderBackupService(AstraDatabase db, ProviderTemplateCata
                 foreach (var node in models)
                     if (node is JsonObject entry && Text(entry["model_id"])?.Trim() is { Length: > 0 } id && entries.TryAdd(id, entry)) ids.Add(id);
             ProviderEndpoints.ValidateModelIds(ids);
-            return new Planned(index, name, provider, key, ids, entries, ignored, null);
+            return new Planned(index, name, provider, keys, ids, entries, ignored, null);
         }
         catch (AdminApiException e)
         {
-            return new Planned(index, name, null, null, [], [], ignored, e.Message);
+            return new Planned(index, name, null, [], [], [], ignored, e.Message);
         }
     }
 

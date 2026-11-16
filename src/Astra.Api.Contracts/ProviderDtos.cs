@@ -68,7 +68,9 @@ public sealed record ImportExistingDto(string Id, string Name);
 public sealed record ImportCandidateDto(
     string Ref, string Source, string Name, string? FromApp, List<ImportEndpointDto> Endpoints, string AuthScheme,
     bool HasKey, string? KeyMasked, string? KeyFingerprint, List<string> Models, List<string> Headers, string? TemplateId,
-    string Status, ImportExistingDto? Existing, bool Off, string? SkipReason, List<string> IgnoredFields);
+    string Status, ImportExistingDto? Existing, bool Off, string? SkipReason, List<string> IgnoredFields,
+    /// <summary>How many keys the provider would get (more than one: a key list).</summary>
+    int KeyCount = 1);
 
 /// <summary>Admin API payload: import source.</summary>
 public sealed record ImportSourceDto(string Id, string Name, string? Path, bool Found, string? Error, List<ImportCandidateDto> Items);
@@ -100,7 +102,27 @@ public sealed record RemoteModelDto(string Id, string? DisplayName, string? Link
 /// </summary>
 public sealed record ProviderTestOptions(string? ModelId, ApiProtocol? Protocol, bool Stream, string? Prompt, int MaxOutputTokens,
     bool Image = false, string? ImageSize = null, string? ImageQuality = null, int ImageCount = 1, bool ImageEdit = false,
-    byte[]? ImageInput = null, string? ImageInputType = null, bool ImagePreview = false);
+    byte[]? ImageInput = null, string? ImageInputType = null, bool ImagePreview = false,
+    /// <summary>The API key (a key account id) of a provider with a key list to test with; null = its first usable key for the protocol.</summary>
+    string? KeyId = null);
+
+/// <summary>
+/// <c>POST /api/providers/{id}/keys</c>: one more API key for the provider. <c>name</c> defaults to "Key N"; <c>protocol</c> limits the
+/// key to one wire protocol (<c>openai-chat</c> | <c>openai-responses</c> | <c>anthropic</c> | <c>gemini</c>; null = all); <c>weight</c> is its
+/// share of balanced traffic (1..1000, default 1); <c>httpProxy</c> is its own proxy (null = the provider's). The first key added to a
+/// provider that has one key already keeps that one as the first entry of the list.
+/// </summary>
+public sealed record ProviderKeyAdd(
+    string? Key, string? Name = null, string? Protocol = null, int? Weight = null, string? HttpProxy = null, string? Notes = null,
+    bool? Enabled = null);
+
+/// <summary>
+/// <c>PATCH /api/providers/{id}/keys/{keyId}</c>: omitted fields keep their value; "" clears <c>protocol</c>, <c>httpProxy</c> and
+/// <c>notes</c>; <c>key</c> replaces the secret (and lifts the key's cooldown).
+/// </summary>
+public sealed record ProviderKeyPatch(
+    string? Name = null, string? Key = null, bool? Enabled = null, string? Protocol = null, int? Weight = null,
+    string? HttpProxy = null, string? Notes = null);
 
 /// <summary>One event of a provider test stream, ready to be written as SSE.</summary>
 public sealed record ProviderTestEvent(string Event, JsonNode Payload);

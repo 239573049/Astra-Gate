@@ -369,7 +369,7 @@ internal sealed class PoolMemberLookup(AstraDatabase db, ProviderHealth health)
     {
         if (provider is null) return new PoolMemberHealthDto("missing", null, null);
         if (!ClientRouting.IsUsable(provider)) return new PoolMemberHealthDto("disabled", null, null);
-        if (!AuthSchemes.UsesAccounts(provider.AuthScheme))
+        if (!provider.UsesAccounts)
         {
             var status = health.Status(provider.Id);
             return new PoolMemberHealthDto(status.State, status.Until, status.Reason);

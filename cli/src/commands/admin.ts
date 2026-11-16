@@ -51,7 +51,7 @@ interface TemplateRow {
 }
 
 interface ApiCallOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
 }
 
@@ -275,6 +275,119 @@ export async function runProviderRemove(id: string): Promise<void> {
     throw err;
   }
   success(`Provider "${id}" removed.`);
+}
+
+// ---------- provider keys (several API keys on one provider) ----------
+
+interface ProviderKeyRow {
+  id: string;
+  displayName: string;
+  enabled?: boolean;
+  isCurrent?: boolean;
+  keyMasked?: string | null;
+  weight?: number;
+  protocol?: string | null;
+  status?: string;
+  cooldownUntilUtc?: string | null;
+  lastError?: string | null;
+}
+
+async function requireProvider(idOrName: string): Promise<ProviderRow> {
+  const provider = findProvider(await api<ProviderRow[]>('/api/providers'), idOrName);
+  if (!provider) {
+    throw new AstraError(
+      `No provider matches "${idOrName}".`,
+      'Run `astra provider list` to see available providers.',
+    );
+  }
+  return provider;
+}
+
+/** A key by id, exact name, or 1-based position in the listing. */
+function findKey(keys: ProviderKeyRow[], ref: string): ProviderKeyRow {
+  const needle = ref.toLowerCase();
+  const found =
+    keys.find((k) => k.id.toLowerCase() === needle) ??
+    keys.find((k) => k.displayName.toLowerCase() === needle) ??
+    (/^\d+$/.test(ref) ? keys[Number(ref) - 1] : undefined);
+  if (!found) {
+    throw new AstraError(
+      `No key matches "${ref}".`,
+      'Run `astra provider keys list <provider>` to see its keys.',
+    );
+  }
+  return found;
+}
+
+function keyState(k: ProviderKeyRow): string {
+  if (k.enabled === false) return 'off';
+  if (k.cooldownUntilUtc && new Date(k.cooldownUntilUtc).getTime() > Date.now()) {
+    const auth = /^40[13] /.test(k.lastError ?? '');
+    return `${auth ? 'auth failed' : 'cooling'} until ${k.cooldownUntilUtc}`;
+  }
+  return 'ok';
+}
+
+export async function runProviderKeysList(idOrName: string): Promise<void> {
+  const provider = await requireProvider(idOrName);
+  const keys = await api<ProviderKeyRow[]>(`/api/providers/${encodeURIComponent(provider.id)}/keys`);
+  if (keys.length === 0) {
+    console.log(`${provider.name ?? provider.id} holds a single API key (use \`astra provider keys add\` to add more).`);
+    return;
+  }
+  printTable(
+    keys.map((k, i) => [
+      String(i + 1),
+      k.id,
+      k.displayName,
+      k.keyMasked ?? '',
+      k.protocol ?? 'all',
+      String(k.weight ?? 1),
+      keyState(k),
+    ]),
+    ['#', 'ID', 'NAME', 'KEY', 'PROTOCOL', 'WEIGHT', 'STATE'],
+  );
+}
+
+export async function runProviderKeysAdd(
+  idOrName: string,
+  opts: { key?: string; name?: string; protocol?: string; weight?: string; proxy?: string; notes?: string },
+): Promise<void> {
+  const provider = await requireProvider(idOrName);
+  const key = opts.key ?? process.env.ASTRA_API_KEY ?? (await promptHidden('API key: '));
+  if (!key.trim()) throw new AstraError('No key given.', 'Pass --key, set ASTRA_API_KEY, or type it at the prompt.');
+  const weight = opts.weight === undefined ? undefined : Number(opts.weight);
+  if (weight !== undefined && !Number.isInteger(weight)) {
+    throw new AstraError(`Invalid weight "${opts.weight}".`, 'Use a whole number from 1 to 1000.');
+  }
+  const keys = await api<ProviderKeyRow[]>(`/api/providers/${encodeURIComponent(provider.id)}/keys`, {
+    method: 'POST',
+    body: {
+      key: key.trim(),
+      ...(opts.name ? { name: opts.name } : {}),
+      ...(opts.protocol ? { protocol: opts.protocol } : {}),
+      ...(weight !== undefined ? { weight } : {}),
+      ...(opts.proxy ? { httpProxy: opts.proxy } : {}),
+      ...(opts.notes ? { notes: opts.notes } : {}),
+    },
+  });
+  success(`Key added to ${provider.name ?? provider.id}; it now holds ${keys.length} keys.`);
+}
+
+export async function runProviderKeysRemove(idOrName: string, ref: string): Promise<void> {
+  const provider = await requireProvider(idOrName);
+  const base = `/api/providers/${encodeURIComponent(provider.id)}/keys`;
+  const key = findKey(await api<ProviderKeyRow[]>(base), ref);
+  await api(`${base}/${encodeURIComponent(key.id)}`, { method: 'DELETE' });
+  success(`Key "${key.displayName}" removed from ${provider.name ?? provider.id}.`);
+}
+
+export async function runProviderKeysSwitch(idOrName: string, ref: string, enabled: boolean): Promise<void> {
+  const provider = await requireProvider(idOrName);
+  const base = `/api/providers/${encodeURIComponent(provider.id)}/keys`;
+  const key = findKey(await api<ProviderKeyRow[]>(base), ref);
+  await api(`${base}/${encodeURIComponent(key.id)}`, { method: 'PATCH', body: { enabled } });
+  success(`Key "${key.displayName}" ${enabled ? 'enabled' : 'disabled'}.`);
 }
 
 // ---------- provider import ----------

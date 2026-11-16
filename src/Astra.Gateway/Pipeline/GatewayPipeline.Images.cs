@@ -445,7 +445,7 @@ public sealed partial class GatewayPipeline
     /// <summary>Health of an API-key provider (pools read it), as the generation pipeline reports it.</summary>
     private void ReportHealth(Provider target, ProviderOutcome outcome, HttpResponseMessage? response)
     {
-        if (AuthSchemes.UsesAccounts(target.AuthScheme)) return;
+        if (target.UsesAccounts) return;
         health.Report(target.Id, outcome,
             outcome == ProviderOutcome.RateLimited && response is not null ? RateLimitResetOf(response, DateTimeOffset.UtcNow) : null);
     }

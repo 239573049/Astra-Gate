@@ -213,6 +213,7 @@ function CandidateRow({ c, checked, onToggle }: { c: ImportCandidate; checked: b
         {protocols && <div className="mt-0.5 truncate font-mono text-[11px] text-[var(--text-muted)]" title={protocols}>{protocols}</div>}
         <div className="mt-0.5 flex flex-wrap gap-x-3 text-[11px] text-[var(--text-muted)]">
           <span className="font-mono">{c.hasKey ? (c.keyMasked ?? '••••') : t('import.noKey')}</span>
+          {(c.keyCount ?? 1) > 1 && <span>{t('import.keyCount', { n: c.keyCount ?? 1 })}</span>}
           {c.models.length > 0 && <span>{t('import.models', { count: c.models.length })}</span>}
           {c.templateId && <span>{t('import.template', { id: c.templateId })}</span>}
         </div>

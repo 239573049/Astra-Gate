@@ -84,8 +84,10 @@ public sealed class AccountScheduler(TimeProvider? timeProvider = null)
 
             var chosen = (binding is null ? null : candidates.FirstOrDefault(a => a.Id == binding.AccountId))
                          ?? candidates
-                             .OrderBy(a => _inflight.GetValueOrDefault(a.Id))
-                             .ThenBy(a => RecentCount(a.Id, now))
+                             // Load per weight: API keys carry a weight (ProviderAccount.KeyWeight, 1 for every other account),
+                             // so a weight-3 key takes about three times the traffic of a weight-1 one (weighting per magpie, MIT).
+                             .OrderBy(a => _inflight.GetValueOrDefault(a.Id) / (double)a.KeyWeight)
+                             .ThenBy(a => RecentCount(a.Id, now) / (double)a.KeyWeight)
                              .ThenBy(a => a.SortOrder)
                              .ThenBy(a => a.CreatedAt)
                              .ThenBy(a => a.Id, StringComparer.Ordinal)

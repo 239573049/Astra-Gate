@@ -6,8 +6,8 @@ using Astra.Core.Models;
 namespace Astra.Clients.Import;
 
 /// <summary>
-/// Magpie: <c>${XDG_CONFIG_HOME:-~/.config}/magpie/providers.json</c> (plain text). Each enabled key becomes its own
-/// candidate (Astra's provider has one key); routing, rate limits, balance and fallback settings are not imported.
+/// Magpie: <c>${XDG_CONFIG_HOME:-~/.config}/magpie/providers.json</c> (plain text). A provider's keys (<c>key</c> plus
+/// <c>keys[]</c> with name / protocol / off / weight) stay together as one candidate with a key list; routing, rate limits, balance and fallback settings are not imported.
 /// Entries without any endpoint are Magpie's per-subscription model picks and are ignored.
 /// </summary>
 public sealed class MagpieReader(ImportContext ctx) : IImportSource
@@ -54,11 +54,11 @@ public sealed class MagpieReader(ImportContext ctx) : IImportSource
         var headers = ImportJson.Headers(p["headers"]);
         var proxy = ProxyOf(ImportJson.Str(p["proxy"]));
 
-        // (key, label, protocol limit, off) for the main key and each saved one.
-        var keys = new List<(string? Key, string? Label, string? Protocol, bool Off)>();
+        // (key, name, protocol limit, off, weight) for the main key and each saved one.
+        var keys = new List<(string? Key, string? Label, string? Protocol, bool Off, int? Weight)>();
         var main = ImportJson.Str(p["key"]);
         if (main is not null || p["keys"] is not JsonArray { Count: > 0 })
-            keys.Add((main, null, ImportJson.Str(p["keyProtocol"]), false));
+            keys.Add((main, null, ImportJson.Str(p["keyProtocol"]), false, null));
         if (p["keys"] is JsonArray extra)
         {
             var index = 0;
@@ -66,25 +66,33 @@ public sealed class MagpieReader(ImportContext ctx) : IImportSource
             {
                 index++;
                 if (ImportJson.Str(k["key"]) is not { } value) continue;
-                keys.Add((value, ImportJson.Str(k["name"]) ?? $"key {index}", ImportJson.Str(k["protocol"]), ImportJson.Truthy(k["off"])));
+                var weight = k["weight"] is JsonValue wv && wv.TryGetValue<int>(out var w) && w is >= 1 and <= ProviderAccount.MaxKeyWeight ? w : (int?)null;
+                keys.Add((value, ImportJson.Str(k["name"]) ?? $"key {index}", ImportJson.Str(k["protocol"]), ImportJson.Truthy(k["off"]), weight));
             }
         }
 
-        for (var i = 0; i < keys.Count; i++)
+        var distinct = keys.Where(k => k.Key is not null).DistinctBy(k => k.Key).ToList();
+        var first = distinct.FirstOrDefault(k => !k.Off) is { Key: not null } on ? on : distinct.FirstOrDefault();
+        var many = distinct.Count > 1;
+        var single = many || keys.Count == 0 ? default : keys[0];
+        var c = new ImportCandidate
         {
-            var (key, label, limit, keyOff) = keys[i];
-            var c = new ImportCandidate
-            {
-                Ref = i == 0 ? $"{Id}:{id}" : $"{Id}:{id}#{i}", Source = Id,
-                Name = label is null ? name : $"{name} · {label}", FromApp = ImportJson.Str(p["preset"]),
-                ApiKey = key, Off = off || keyOff, Models = [.. models], Headers = new Dictionary<string, string>(headers, StringComparer.OrdinalIgnoreCase),
-                Proxy = proxy, Website = ImportJson.Str(p["website"]),
-            };
-            c.Endpoints.AddRange(limit is null ? endpoints : endpoints.Where(e => MatchesLimit(e.Protocol, limit)));
-            if (c.Endpoints.Count == 0) c.SkipReason = ImportSkipReasons.UnsupportedProtocol;
-            c.AuthScheme = ImportJson.AuthFor(c.Endpoints);
-            result.Items.Add(c);
+            Ref = $"{Id}:{id}", Source = Id, Name = name, FromApp = ImportJson.Str(p["preset"]),
+            ApiKey = many ? first.Key : single.Key, Off = off || (many ? distinct.All(k => k.Off) : single.Off),
+            Models = [.. models], Headers = new Dictionary<string, string>(headers, StringComparer.OrdinalIgnoreCase),
+            Proxy = proxy, Website = ImportJson.Str(p["website"]),
+        };
+        if (many)
+        {
+            // several keys: one provider with a key list, each key keeping the protocol it was made for
+            c.Keys.AddRange(distinct.Select(k => new ImportKey(k.Key!, k.Label, k.Protocol, k.Off, k.Weight)));
+            c.Endpoints.AddRange(endpoints);
         }
+        else
+            c.Endpoints.AddRange(single.Protocol is null ? endpoints : endpoints.Where(e => MatchesLimit(e.Protocol, single.Protocol)));
+        if (c.Endpoints.Count == 0) c.SkipReason = ImportSkipReasons.UnsupportedProtocol;
+        c.AuthScheme = ImportJson.AuthFor(c.Endpoints);
+        result.Items.Add(c);
     }
 
     private static bool MatchesLimit(ApiProtocol protocol, string limit) =>

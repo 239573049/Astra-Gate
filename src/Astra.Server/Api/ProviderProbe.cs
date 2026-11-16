@@ -278,7 +278,7 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
                     ? UpstreamUrls.Images(endpoint, GatewayPipeline.ImagesPath(p, edit ? ImageOperation.Edits : ImageOperation.Generations))
                       ?? throw new AdminApiException(400, "The provider's OpenAI endpoint is a complete address; the Images API address cannot be derived from it")
                     : CloudProviders.Url(p, endpoint, run.ModelId, stream) ?? UpstreamUrls.For(endpoint, run.ModelId, stream);
-                using var request = await RequestAsync(p, HttpMethod.Post, url, protocol, stream, deadline.Token);
+                using var request = await RequestAsync(p, HttpMethod.Post, url, protocol, stream, deadline.Token, options.KeyId);
                 // 模拟 Claude Code（subscription.mimic_claude_code）：测试请求和网关请求同形，
                 // 否则"测试配置"对非 Haiku 模型的结论和真实请求不一致。
                 var outbound = protocol == ApiProtocol.Anthropic && SubscriptionSupport.MimicClaudeCodeOf(p)
@@ -671,6 +671,11 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
     private async Task<HttpRequestMessage> RequestAsync(Provider p, HttpMethod method, string url, ApiProtocol protocol,
         bool stream, CancellationToken ct, string? accountId = null)
     {
+        // A provider with a key list tests with the chosen key, else its first usable key that serves this protocol.
+        if (p.KeyPool && accountId is null)
+            accountId = SubscriptionSupport.SelectAccount(
+                (await auth.ListAccountsAsync(p.Id, ct)).Where(a => a.Kind == AccountKinds.ApiKey && a.KeyServes(protocol)).ToList(),
+                null, DateTimeOffset.UtcNow)?.Id;
         var credentials = await auth.ResolveAsync(p.Id, accountId, ct) ?? UpstreamAuth.None;
         if (credentials.QueryName is { } q && credentials.QueryValue is { } value) url = WithQuery(url, q, value);
         var request = new HttpRequestMessage(method, url);

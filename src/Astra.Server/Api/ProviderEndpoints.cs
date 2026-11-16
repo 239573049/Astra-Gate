@@ -66,6 +66,7 @@ public static class ProviderEndpoints
                     new(u.TotalRequests, u.TotalInputTokens, u.TotalOutputTokens, u.TotalCostNanoUsd),
                     new(u.TodayRequests, u.TodayInputTokens, u.TodayOutputTokens, u.TodayCostNanoUsd))).ToList()));
         });
+        group.MapProviderKeyEndpoints();
         group.MapImportEndpoints();
         group.MapBackupEndpoints();
 
@@ -144,6 +145,9 @@ public static class ProviderEndpoints
                 if (p.Settings[QuotaConfig.SettingsKey] is { } stored) settings[QuotaConfig.SettingsKey] = stored.DeepClone();
                 settings.Remove(Provider.ModelMapKey);
                 if (p.Settings[Provider.ModelMapKey] is { } mapped) settings[Provider.ModelMapKey] = mapped.DeepClone();
+                // Whether the provider holds a key list is the key endpoints' to say, not a settings write's.
+                settings.Remove(Provider.KeyPoolKey);
+                if (p.Settings[Provider.KeyPoolKey] is { } pooled) settings[Provider.KeyPoolKey] = pooled.DeepClone();
                 p.Settings = settings;
             }
             if (body.ContainsKey("enabled")) p.Enabled = Read<bool>(body["enabled"]);
@@ -152,9 +156,12 @@ public static class ProviderEndpoints
             if (plugin && (p.AuthScheme != AuthSchemes.Plugin || !Same(p.Endpoints, storedEndpoints)))
                 throw new AdminApiException(400, "A plugin provider's endpoints and authentication are managed by its plugin");
             Validate(p, plugin);
+            if (p.KeyPool && !AuthSchemes.IsStaticKey(p.AuthScheme))
+                throw new AdminApiException(400, "A provider with a key list authenticates with its API keys; remove the keys first");
             if (body.ContainsKey("apiKey"))
             {
                 if (body["apiKey"] is null) throw new AdminApiException(400, "apiKey must be a string (empty clears it)");
+                if (p.KeyPool) throw new AdminApiException(409, "This provider holds several API keys; change them in its key list");
                 var key = Read<string>(body["apiKey"]).Trim();
                 if (key.Length > 0) key = CloudSecrets.Normalize(p.AuthScheme, key, p);
                 if (key.Any(char.IsControl)) throw new AdminApiException(400, "apiKey must not contain control characters");
@@ -188,6 +195,7 @@ public static class ProviderEndpoints
             p.SortOrder = (await db.Providers.ListAsync(ct)).Select(x => x.SortOrder).DefaultIfEmpty(-1).Max() + 1;
             foreach (var m in oldModels) { m.Id = 0; m.ProviderId = p.Id; }
             await db.Providers.InsertWithModelsAsync(p, oldModels, ct);
+            if (p.KeyPool) await ProviderKeys.CopyAsync(db, id, p.Id, ct);
             return Results.Ok(await ToDtoAsync(p, db, catalog, secrets, quota, ct));
         });
         group.MapPut("/order", async (JsonObject body, AstraDatabase db, CancellationToken ct) =>
@@ -765,7 +773,8 @@ public static class ProviderEndpoints
             body["stream"] is null || Read<bool>(body["stream"]),
             prompt, maxOutputTokens, image, image ? size : null, image ? quality : null, image ? count : 1, image && operation == "edit",
             image && operation == "edit" ? input : null, image && operation == "edit" ? inputType : null,
-            body["imagePreview"] is not null && Read<bool>(body["imagePreview"]));
+            body["imagePreview"] is not null && Read<bool>(body["imagePreview"]),
+            String(body, "keyId"));
     }
 
     private static T Read<T>(JsonNode? value)

@@ -62,6 +62,8 @@ import type {
   PrivacySettingsDto,
   Provider,
   ProviderAccount,
+  ProviderKeyAdd,
+  ProviderKeyPatch,
   ProviderCreate,
   ProviderModel,
   ProviderQuotaConfigInput,
@@ -157,6 +159,7 @@ export const keys = {
   privacyEvents: (q: PrivacyEventQuery) => ['privacy-events', q] as const,
   privacyEventStats: (...args: unknown[]) => ['privacy-event-stats', ...args] as const,
   providerAccounts: (id: string) => ['provider-accounts', id] as const,
+  providerKeys: (id: string) => ['provider-keys', id] as const,
   providerUsage: (id: string) => ['provider-usage', id] as const,
   subscriptionPolicy: (id: string) => ['subscription-policy', id] as const,
   localCodexLogin: ['local-codex-login'] as const,
@@ -837,6 +840,50 @@ export const useUpdateProviderAccount = (providerId: string) =>
 export const useReorderProviderAccounts = (providerId: string) =>
   useAccountListMutation(providerId, (ids: string[]) =>
     api<ProviderAccount[]>('PUT', `/api/providers/${enc(providerId)}/accounts/order`, { ids }));
+
+// ---------- API key list (several keys on one provider) ----------
+
+export const useProviderKeys = (id: string | undefined, enabled = true) =>
+  useQuery({
+    queryKey: keys.providerKeys(id ?? ''),
+    queryFn: () => api<ProviderAccount[]>('GET', `/api/providers/${enc(id!)}/keys`),
+    enabled: Boolean(id) && enabled,
+  });
+
+/** Every key write answers with the whole list; the provider row (settings.key_pool, the mirrored key) and usage move with it. */
+function useKeyListMutation<V>(providerId: string, fn: (v: V) => Promise<ProviderAccount[]>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: (list) => {
+      qc.setQueryData(keys.providerKeys(providerId), list);
+      void qc.invalidateQueries({ queryKey: keys.provider(providerId) });
+      void qc.invalidateQueries({ queryKey: keys.providers });
+      void qc.invalidateQueries({ queryKey: keys.providerUsage(providerId) });
+    },
+  });
+}
+
+export const useAddProviderKey = (providerId: string) =>
+  useKeyListMutation(providerId, (body: ProviderKeyAdd) =>
+    api<ProviderAccount[]>('POST', `/api/providers/${enc(providerId)}/keys`, body));
+
+export const usePatchProviderKey = (providerId: string) =>
+  useKeyListMutation(providerId, ({ id, ...patch }: ProviderKeyPatch & { id: string }) =>
+    api<ProviderAccount[]>('PATCH', `/api/providers/${enc(providerId)}/keys/${enc(id)}`, patch));
+
+export const useRemoveProviderKey = (providerId: string) =>
+  useKeyListMutation(providerId, (id: string) =>
+    api<ProviderAccount[]>('DELETE', `/api/providers/${enc(providerId)}/keys/${enc(id)}`));
+
+export const useReorderProviderKeys = (providerId: string) =>
+  useKeyListMutation(providerId, (ids: string[]) =>
+    api<ProviderAccount[]>('PUT', `/api/providers/${enc(providerId)}/keys/order`, { ids }));
+
+/** "Use this key first": it becomes the provider's current key (what manual mode pins). */
+export const useActivateProviderKey = (providerId: string) =>
+  useKeyListMutation(providerId, (id: string) =>
+    api<ProviderAccount[]>('POST', `/api/providers/${enc(providerId)}/keys/${enc(id)}/activate`));
 
 export const useSubscriptionPolicy = (providerId: string, enabled = true) =>
   useQuery({

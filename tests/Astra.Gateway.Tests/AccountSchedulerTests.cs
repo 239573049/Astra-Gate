@@ -36,6 +36,42 @@ public class AccountSchedulerTests
     }
 
     [Fact]
+    public void A_Heavier_Key_Takes_Proportionally_More_Of_The_New_Conversations()
+    {
+        var scheduler = new AccountScheduler(new Clock());
+        List<ProviderAccount> keys =
+        [
+            Account("light", 0), Account("heavy", 1, a => a.Extra["weight"] = 3),
+        ];
+        var picked = new List<string>();
+        for (var i = 0; i < 8; i++)
+        {
+            using var lease = scheduler.Pick("p", keys, null)!;
+            picked.Add(lease.AccountId);
+        }
+        Assert.Equal(2, picked.Count(id => id == "light"));
+        Assert.Equal(6, picked.Count(id => id == "heavy"));
+    }
+
+    [Fact]
+    public void A_Key_Weight_And_Protocol_Come_From_Extra_And_Are_Clamped()
+    {
+        var plain = Account("plain", 0);
+        Assert.Equal(1, plain.KeyWeight);
+        Assert.Null(plain.KeyProtocol);
+        Assert.True(plain.KeyServes(Astra.Core.ApiProtocol.Gemini));
+
+        var tuned = Account("tuned", 0, a =>
+        {
+            a.Extra["weight"] = 99999;
+            a.Extra["protocol"] = "anthropic";
+        });
+        Assert.Equal(ProviderAccount.MaxKeyWeight, tuned.KeyWeight);
+        Assert.True(tuned.KeyServes(Astra.Core.ApiProtocol.Anthropic));
+        Assert.False(tuned.KeyServes(Astra.Core.ApiProtocol.OpenAIChat));
+    }
+
+    [Fact]
     public void Least_In_Flight_Wins_Then_Least_Recent_Then_Order()
     {
         var scheduler = new AccountScheduler(new Clock());

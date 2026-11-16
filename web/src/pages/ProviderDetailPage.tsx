@@ -36,6 +36,7 @@ import { ProviderTestDialog } from '../components/ProviderTestDialog';
 import { ProviderQuotaSection } from '../components/ProviderQuotaSection';
 import { AwsKeyFields, AwsRegionHint, isCloudScheme, ServiceAccountField, VertexTargetFields } from '../components/CloudCredentials';
 import { PluginAccounts } from '../components/PluginAccounts';
+import { ProviderKeyList } from '../components/ProviderKeyList';
 import { SubscriptionAccounts } from '../components/SubscriptionAccounts';
 import { canSwitchTemplate, KeyAlternativeHint, TemplateSwitchSheet } from '../components/TemplateSwitch';
 import { Badge, Button, CodeBlock, DetailSection, EmptyState, Field, Group, Input, KV, NumberInput, Row, SearchField, Spinner, Switch, TextArea } from '../components/ui/controls';
@@ -854,6 +855,8 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
 
   return (
     <>
+      {/* A provider with a key list (settings.key_pool) edits its keys there; the row's own key is only a mirror of the first. */}
+      {provider.settings.key_pool !== true && (
       <Group title={t('providers.section.auth')} footer={t('providers.apiKeyStored')}>
         {cloud ? (
           <>
@@ -888,6 +891,8 @@ function ApiKeyTab({ provider }: { provider: Provider }) {
           </Row>
         )}
       </Group>
+      )}
+      {!cloud && provider.authScheme !== 'none' && <ProviderKeyList provider={provider} />}
       <section className="card my-4 flex flex-col gap-2 p-4">
         <h3 className="text-[13px] font-medium">{t('providers.usage.title')}</h3>
         {usage.isError && <Alert tone="danger" title={t('providers.usage.error')}>{errorText(usage.error)}</Alert>}

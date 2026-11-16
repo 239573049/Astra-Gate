@@ -33,6 +33,9 @@ public static class AccountSources
     public const string Token = "token";
     public const string Batch = "batch";
 
+    /// <summary>An API key added to a provider's key list (<see cref="AccountKinds.ApiKey"/> on a provider that is not a subscription).</summary>
+    public const string Key = "key";
+
     /// <summary>Signed in through a provider plugin.</summary>
     public const string Plugin = "plugin";
 }
@@ -96,6 +99,26 @@ public sealed class ProviderAccount
 
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>Largest <see cref="KeyWeight"/>.</summary>
+    public const int MaxKeyWeight = 1000;
+
+    /// <summary>
+    /// Share of balanced traffic an API key takes (<c>extra.weight</c>, 1..<see cref="MaxKeyWeight"/>; default 1). The balanced
+    /// scheduler picks the usable account with the least load per weight, so a weight-3 key carries about three times a weight-1 one.
+    /// </summary>
+    public int KeyWeight =>
+        Extra["weight"] is JsonValue v && v.TryGetValue<int>(out var w) ? Math.Clamp(w, 1, MaxKeyWeight) : 1;
+
+    /// <summary>The only protocol this API key is used for (<c>extra.protocol</c>); null = every protocol of the provider.</summary>
+    public ApiProtocol? KeyProtocol =>
+        Extra["protocol"] is JsonValue v && v.TryGetValue<string>(out var id) && ApiProtocols.TryParse(id, out var p) ? p : null;
+
+    /// <summary>Free-text note on an API key (<c>extra.notes</c>).</summary>
+    public string? KeyNotes => Extra["notes"] is JsonValue v && v.TryGetValue<string>(out var n) && n.Length > 0 ? n : null;
+
+    /// <summary>Whether the key may be sent to an endpoint speaking <paramref name="protocol"/> (a key with no restriction may).</summary>
+    public bool KeyServes(ApiProtocol protocol) => KeyProtocol is not { } only || only == protocol;
 }
 
 /// <summary>Persistence for <see cref="ProviderAccount"/> (implemented with Dapper in Astra.Data).</summary>

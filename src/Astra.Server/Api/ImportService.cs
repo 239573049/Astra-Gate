@@ -64,7 +64,8 @@ public sealed class ImportService(
         return new ImportCandidateDto(
             c.Ref, c.Source, c.Name, c.FromApp, c.Endpoints.Select(e => new ImportEndpointDto(e.Protocol, e.BaseUrl)).ToList(),
             c.AuthScheme, c.ApiKey is not null, Mask(c.ApiKey), hash?[..8], c.Models, c.Headers.Keys.Order().ToList(),
-            MatchTemplate(c)?.Id, status, shown is null ? null : new ImportExistingDto(shown.Id, shown.Name), c.Off, c.SkipReason, ignored);
+            MatchTemplate(c)?.Id, status, shown is null ? null : new ImportExistingDto(shown.Id, shown.Name), c.Off, c.SkipReason, ignored,
+            Math.Max(1, c.Keys.Count));
     }
 
     // ------------------------------------------------------------------ commit
@@ -109,6 +110,11 @@ public sealed class ImportService(
             ProviderEndpoints.ValidateModelIds(modelIds);
             var models = await ProviderEndpoints.PlanModelsAsync(db, provider, modelIds, ct);
             await db.Providers.InsertWithModelsAsync(provider, models, ct);
+            // Several keys of one source entry become the provider's key list (the first on is what the provider row mirrors).
+            foreach (var k in c.Keys)
+                await ProviderKeys.AddAsync(db, secrets, provider, new ProviderKeyAdd(
+                    k.Key, k.Name, k.Protocol is { } kp && ApiProtocols.TryParse(kp, out var parsed) && provider.EndpointFor(parsed) is not null ? kp : null,
+                    k.Weight, null, null, !k.Off), ct);
             existing.Add(new ExistingProvider(provider.Id, provider.Name, hash, [.. urls]));
             added.Add(new ImportedProviderDto(provider.Id, provider.Name));
         }
@@ -144,7 +150,7 @@ public sealed class ImportService(
             TemplateSnapshotJson = ProviderEndpoints.Snapshot(baseTemplate, null), Name = name, Icon = baseTemplate.Icon,
             Category = baseTemplate.Category, Endpoints = c.Endpoints.Select(e => new ProviderEndpoint { Protocol = e.Protocol, BaseUrl = e.BaseUrl }).ToList(),
             PreferredUpstreamProtocols = preferred.Count > 0 ? preferred : protocols.Distinct().ToList(),
-            AuthScheme = keyless ? AuthSchemes.None : c.AuthScheme, ApiKeyEnc = c.ApiKey is null ? null : secrets.Protect(c.ApiKey),
+            AuthScheme = keyless ? AuthSchemes.None : c.AuthScheme, ApiKeyEnc = c.ApiKey is null || c.Keys.Count > 1 ? null : secrets.Protect(c.ApiKey),
             ExtraHeaders = headers, HttpProxy = proxy, PriceKey = baseTemplate.PriceKey ?? baseTemplate.Id,
             PriceMultiplier = baseTemplate.DefaultPriceMultiplier, AdapterId = baseTemplate.Adapter, Settings = (System.Text.Json.Nodes.JsonObject)baseTemplate.Settings.DeepClone(),
             Website = website, Notes = $"导入自 {SourceName(c.Source)} · {DateTime.UtcNow:yyyy-MM-dd}", SortOrder = sortOrder, Enabled = true,

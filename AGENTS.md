@@ -780,6 +780,29 @@ runtime needed on the target).
     an entry in `icons.test.tsx`'s `MONOGRAM_ICONS`; the website's `sync-catalog.mjs` copies the catalog. Tests: `AwsSigV4Tests`, `GoogleAccessTokensTests`,
     `CloudProvidersTests`, `CloudProviderGatewayTests`, `CloudProviderApiTests`, `CloudCredentialsTests`, web `cloud-credentials.test`.
 
+33. **Several API keys per provider** (magpie parity, `.agents/memory/magpie-parity-2026-11.md`): an API-key provider (`AuthSchemes.IsStaticKey`)
+    holds a key list once `settings.key_pool` is true (`Provider.KeyPool`; the flag is written only by `ProviderKeys`, and `PATCH /api/providers/{id}`
+    keeps it whatever `settings` says). Keys are `provider_accounts` rows of kind `api_key` (no migration: `extra.weight` 1–1000, `extra.protocol`
+    = the one wire protocol the key serves, `extra.notes`, `extra.key_masked`; `http_proxy` is the key's own proxy), so selection, failover, balanced
+    scheduling, cooldown (`ProviderHealth.AuthCooldown` for 401/403, the rate-limit reset for 429), per-key usage (`/usage`, `astra.account.id`) and
+    the switch mode (`settings.subscription.switch_mode`, endpoint `/subscription-policy`; a list starts on `failover`) are the subscription-account
+    machinery — `Provider.UsesAccounts` (not `AuthSchemes.UsesAccounts`) is the question the pipeline, pools and `TokenService` ask. A provider with one
+    key keeps it in `Provider.ApiKeyEnc` exactly as before (zero migration); adding the second moves it into the list as "Key 1". `Provider.ApiKeyEnc`
+    then mirrors the first enabled key (`ProviderKeys.MirrorAsync`, also after the generic `/api/provider-accounts/{id}` writes) so an older binary
+    still routes, and a list that empties is a plain provider again. `GatewayPipeline.SendAsync` filters keys by `ProviderAccount.KeyServes(endpoint
+    protocol)` (an ineligible key is seeded into `tried`, so failover never lands on it); `AccountScheduler` orders by load per `KeyWeight`; a request
+    is never retried on another key beyond what the account failover does today (401/403/429 only; a 5xx is not). Admin API (`ProviderKeys.cs`, inside
+    the provider group and its write lock): `GET|POST /api/providers/{id}/keys`, `PATCH|DELETE …/keys/{keyId}`, `PUT …/keys/order`, `POST
+    …/keys/{keyId}/activate`; the test run takes `keyId`, probes and model lists use the first usable key serving the protocol. Mirrors:
+    `Astra.Api.Contracts` (`ProviderKeyAdd` / `ProviderKeyPatch`, `ProviderAccountDto.Weight/Protocol/Notes`, `ProviderTestOptions.KeyId`,
+    `ImportCandidateDto.KeyCount`), `web/src/api` (`useProviderKeys` …) + `components/ProviderKeyList.tsx`, the Avalonia
+    `Components/ProviderDetail/ProviderKeyList.cs` + `Astra.Desktop.Core/ProviderDetail/ProviderKeysApi.cs`, zh/en `providers.keys.*` / `import.keyCount`
+    (+ `gen-desktop-i18n`), `astra provider keys …` (`cli/src/commands/admin.ts`). Importers: `ImportCandidate.Keys` (magpie `keys[]`; CC Switch
+    numbered copies of one relay fold into one provider by `ImportSourceRegistry.FoldCopies`, as magpie's `FoldCopies`) → `ImportService` adds them
+    through `ProviderKeys.AddAsync`. Provider backup format version 2 adds each provider's `keys` list (and still writes the first key as
+    `api_key` / `api_key_sealed`); version 1 files restore as before. Not touched: the quota query (`ProviderQuotaManager`) reads the mirrored key.
+    Tests: `ProviderKeysTests` (integration), `AccountSchedulerTests`, `ImportReaderTests`, web `provider-keys.test.tsx`, cli `provider-keys.test.ts`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

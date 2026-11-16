@@ -5,6 +5,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 
 ## Project
 - [magpie parity (2026-11)](magpie-parity-2026-11.md) — 13-area parity push on feat/magpie-parity; privacy rules only (no NER), all 62 agents, manual FX only, subagents on Sonnet
+- [Provider key list = api_key accounts](provider-key-list-as-accounts.md) — magpie parity: several keys per provider reuse `provider_accounts` (kind api_key) behind `settings.key_pool`; one key stays in `ApiKeyEnc`, which mirrors the first enabled key; ask `Provider.UsesAccounts`, not the scheme
 - [Skill library decisions](skill-library-decisions.md) — issue #34: `~/.astra/library/skills` (not `~/.astra-gate`), "Resources" nav group, links not copies, `SkillPlaces` table instead of adapter methods; Windows paths unverified
 - [MCP gateway design](mcp-gateway-design.md) — issue #29: remote upstreams only, OAuth in phase 1 (no CIMD), no legacy-SSE front end; the SDK serves the upstream side, the front end is ours
 - [Avalonia native menu is set once](avalonia-native-menu-set-once.md) — a second NativeMenu.SetMenu on a macOS window throws "The menu being updated does not match"; relabel in place

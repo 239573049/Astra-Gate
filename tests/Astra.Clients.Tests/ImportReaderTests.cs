@@ -354,32 +354,57 @@ public sealed class ImportReaderTests : IDisposable
     private string MagpieFile => _home.File(".config", "magpie", "providers.json");
 
     [Fact]
-    public void Magpie_Turns_Each_Key_Into_A_Candidate_And_Ignores_Pick_Records()
+    public void Magpie_Keeps_A_Providers_Keys_Together_As_One_Candidate_And_Ignores_Pick_Records()
     {
         _home.WriteFile(MagpieFile, """
             {"providers":[
               {"id":"relay","name":"Relay","key":"k-main","chat":"https://r.example/v1","anthropic":"https://r.example",
                "models":["m-1"],"headers":{"X-T":"1"},"proxy":"127.0.0.1:7890",
-               "keys":[{"name":"backup","key":"k-2"},{"name":"anth","key":"k-3","protocol":"anthropic"},{"name":"old","key":"k-4","off":true}]},
+               "keys":[{"name":"backup","key":"k-2","weight":4},{"name":"anth","key":"k-3","protocol":"anthropic"},{"name":"old","key":"k-4","off":true}]},
               {"id":"claude","models":["claude-opus"]},
-              {"id":"gone","name":"Gone","key":"k","chat":"https://g.example/v1","hidden":true}
+              {"id":"gone","name":"Gone","key":"k","chat":"https://g.example/v1","hidden":true},
+              {"id":"limited","name":"Limited","key":"k-a","anthropic":"https://l.example","keyProtocol":"anthropic","chat":"https://l.example/v1"}
             ]}
             """);
         var r = Read(ImportSourceIds.Magpie);
         Assert.Null(r.Error);
-        Assert.Equal(["Relay", "Relay · backup", "Relay · anth", "Relay · old", "Gone"], r.Items.Select(i => i.Name));
+        Assert.Equal(["Relay", "Gone", "Limited"], r.Items.Select(i => i.Name));
 
         var main = r.Items[0];
         Assert.Equal("magpie:relay", main.Ref);
         Assert.Equal([ApiProtocol.OpenAIChat, ApiProtocol.Anthropic], main.Endpoints.Select(e => e.Protocol));
         Assert.Equal("http://127.0.0.1:7890", main.Proxy);
         Assert.Equal("1", main.Headers["X-T"]);
+        Assert.Equal("k-main", main.ApiKey);
+        Assert.Equal(["k-main", "k-2", "k-3", "k-4"], main.Keys.Select(k => k.Key));
+        Assert.Equal([null, "backup", "anth", "old"], main.Keys.Select(k => k.Name));
+        Assert.Equal([null, 4, null, null], main.Keys.Select(k => k.Weight));
+        Assert.Equal("anthropic", main.Keys[2].Protocol); // each key keeps the protocol it was made for
+        Assert.True(main.Keys[3].Off);
+        Assert.False(main.Off);
 
-        Assert.Equal("magpie:relay#1", r.Items[1].Ref);
-        Assert.Equal([ApiProtocol.Anthropic], r.Items[2].Endpoints.Select(e => e.Protocol)); // key limited to one protocol
-        Assert.Equal(AuthSchemes.XApiKey, r.Items[2].AuthScheme);
-        Assert.True(r.Items[3].Off);
-        Assert.True(r.Items[4].Off); // hidden: importable but unticked
+        Assert.True(r.Items[1].Off); // hidden: importable but unticked
+        Assert.Empty(r.Items[1].Keys);
+        // one key limited to a protocol: the provider keeps only that endpoint (nothing to choose between)
+        Assert.Equal([ApiProtocol.Anthropic], r.Items[2].Endpoints.Select(e => e.Protocol));
+    }
+
+    [Fact]
+    public void CcSwitch_Entries_That_Are_Numbered_Copies_Of_One_Relay_Fold_Into_One_Provider_With_Many_Keys()
+    {
+        CcSchema();
+        foreach (var (id, name, key) in new[] { ("a1", "NVIDIA #001", "nv-1"), ("a2", "NVIDIA #002", "nv-2"), ("a3", "NVIDIA #003", "nv-3") })
+            CcRow(id, "claude", name, $$$"""{"env":{"ANTHROPIC_BASE_URL":"https://nv.example","ANTHROPIC_AUTH_TOKEN":"{{{key}}}"}}""");
+        CcRow("o1", "claude", "Other", """{"env":{"ANTHROPIC_BASE_URL":"https://other.example","ANTHROPIC_AUTH_TOKEN":"ot-1"}}""");
+        CcRow("o2", "claude", "Other 2", """{"env":{"ANTHROPIC_BASE_URL":"https://different.example","ANTHROPIC_AUTH_TOKEN":"ot-2"}}""");
+
+        var r = Read(ImportSourceIds.CcSwitch);
+        var nvidia = r.Items.Single(i => i.Name == "NVIDIA");
+        Assert.Equal(["nv-1", "nv-2", "nv-3"], nvidia.Keys.Select(k => k.Key));
+        Assert.Equal(["NVIDIA #001", "NVIDIA #002", "NVIDIA #003"], nvidia.Keys.Select(k => k.Name));
+        Assert.Equal(3, r.Items.Count); // the fold left Other and Other 2 (another address) alone
+        Assert.Contains(r.Items, i => i.Name == "Other");
+        Assert.Contains(r.Items, i => i.Name == "Other 2");
     }
 
     [Fact]

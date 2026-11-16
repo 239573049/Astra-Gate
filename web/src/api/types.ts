@@ -195,6 +195,8 @@ export interface ImportCandidate {
   models: string[]; headers: string[]; templateId?: string | null;
   status: ImportStatus; existing?: { id: string; name: string } | null;
   off: boolean; skipReason?: string | null; ignoredFields: string[];
+  /** More than one: the provider would be created with a key list. */
+  keyCount?: number;
 }
 export interface ImportSource {
   id: string; name: string; path?: string | null; found: boolean; error?: string | null; items: ImportCandidate[];
@@ -850,7 +852,24 @@ export interface ProviderAccount {
   httpProxy?: string | null;
   /** Masked key of an api_key account (the key itself never crosses the wire). */
   keyMasked?: string | null;
+  /** api_key accounts (a provider's key list): share of balanced traffic, 1-1000 (default 1). */
+  weight?: number;
+  /** api_key accounts: the one wire protocol the key is used for (null / absent = all). */
+  protocol?: ApiProtocol | null;
+  /** api_key accounts: the user's note. */
+  notes?: string | null;
 }
+
+/** POST /api/providers/{id}/keys: a provider's key list (settings.key_pool is true once it exists). Every write answers with the whole list. */
+export interface ProviderKeyAdd {
+  key: string; name?: string; protocol?: ApiProtocol; weight?: number; httpProxy?: string; notes?: string; enabled?: boolean;
+}
+// PATCH /api/providers/{id}/keys/{keyId}: omitted fields keep their value, "" clears protocol / httpProxy / notes, `key` replaces the secret
+export interface ProviderKeyPatch {
+  name?: string; key?: string; enabled?: boolean; protocol?: ApiProtocol | ''; weight?: number; httpProxy?: string; notes?: string;
+}
+// GET /api/providers/{id}/keys -> ProviderAccount[]  (empty while the provider holds its single key in the row)
+// PUT /api/providers/{id}/keys/order body {ids}; POST /api/providers/{id}/keys/{keyId}/activate; DELETE /api/providers/{id}/keys/{keyId}
 
 /** Finished requests, with the cost saved by model billing at request time (integer nano-USD). */
 export interface ProviderUsageTotals {
