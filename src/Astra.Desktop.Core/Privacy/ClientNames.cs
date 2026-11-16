@@ -33,6 +33,20 @@ public static class ClientNames
         ["paseo"] = "Paseo",
         ["zcode"] = "ZCode",
         ["tkcode"] = "TKCode",
+        ["openchamber"] = "OpenChamber",
+        ["deveco-code"] = "DevEco Code",
+        ["stepcode"] = "StepCode",
+        ["aside"] = "Aside",
+        ["omo"] = "OmO",
+        ["prime-agent"] = "Prime Agent",
+        ["mu"] = "mu",
+        ["mothx"] = "MothX",
+        ["penguin-harness"] = "PenguinHarness",
+        ["antigravity-cli"] = "Antigravity CLI",
+        ["dim"] = "Dim",
+        ["command-code"] = "Command Code",
+        ["fx"] = "fx",
+        ["goose"] = "Goose",
     };
 
     /// <summary>The name of a client kind; "—" for none.</summary>

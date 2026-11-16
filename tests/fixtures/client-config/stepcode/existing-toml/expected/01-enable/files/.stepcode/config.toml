@@ -1,0 +1,7 @@
+# StepCode
+defaultProvider = "astra"
+defaultModel = "gpt-5"
+enabledModels = ["mine/*"]
+
+[ui]
+theme = "dark"

@@ -1,0 +1,4 @@
+# goose
+GOOSE_PROVIDER: openai
+GOOSE_MODEL: gpt-4o
+GOOSE_MODE: auto

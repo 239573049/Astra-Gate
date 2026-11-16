@@ -1,0 +1,5 @@
+{
+  "theme": "dark",
+  "defaultProvider": "mine",
+  "defaultModel": "foo"
+}

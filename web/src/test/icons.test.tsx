@@ -36,6 +36,9 @@ vi.mock('@lobehub/icons', () => {
     Together: stub('together'),
     Vercel: stub('vercel'),
     VertexAI: stub('vertexai'),
+    Antigravity: stub('antigravity'),
+    Goose: stub('goose'),
+    Huawei: stub('huawei'),
     Anthropic: stub('anthropic'),
     Claude: stub('claude'),
     ClaudeCode: stub('claude-code'),
@@ -120,6 +123,20 @@ describe('client brand icons', () => {
     paseo: { brand: null, mark: 'logo', badge: false },
     zcode: { brand: 'zai', mark: 'mono', badge: true },
     tkcode: { brand: null, mark: 'logo', badge: false },
+    openchamber: { brand: 'opencode', mark: 'mono', badge: true },
+    'deveco-code': { brand: 'huawei', mark: 'mono', badge: true },
+    stepcode: { brand: 'stepfun', mark: 'mono', badge: true },
+    aside: { brand: 'monogram', mark: 'monogram', badge: false },
+    omo: { brand: 'monogram', mark: 'monogram', badge: false },
+    'prime-agent': { brand: 'monogram', mark: 'monogram', badge: false },
+    mu: { brand: 'monogram', mark: 'monogram', badge: false },
+    mothx: { brand: 'monogram', mark: 'monogram', badge: false },
+    'penguin-harness': { brand: 'monogram', mark: 'monogram', badge: false },
+    'antigravity-cli': { brand: 'antigravity', mark: 'color', badge: true },
+    dim: { brand: 'monogram', mark: 'monogram', badge: false },
+    'command-code': { brand: 'commandcode', mark: 'mono', badge: false },
+    fx: { brand: 'vercel', mark: 'mono', badge: true },
+    goose: { brand: 'goose', mark: 'mono', badge: false },
   };
 
   it('renders the vendor mark for every client, colored where the library has one', () => {
@@ -133,6 +150,9 @@ describe('client brand icons', () => {
         expect(img, kind).not.toBeNull();
         expect(img!.getAttribute('src'), kind).toMatch(/\.(png|svg)$|^data:image\//);
         expect(img!.getAttribute('src'), kind).not.toMatch(/^https?:/);
+      } else if (brand === 'monogram') {
+        expect(container.querySelector('svg[data-testid^="lobe-"]'), kind).toBeNull();
+        expect(container.querySelector('span[data-client-mark="monogram"]'), kind).not.toBeNull();
       } else {
         const svg = container.querySelector('svg[data-testid^="lobe-"]');
         expect(svg?.getAttribute('data-testid'), kind).toBe(`lobe-${brand}`);
@@ -164,6 +184,8 @@ describe('client brand icons', () => {
       const brand = expected[kind]!.brand;
       if (brand === null) {
         expect(container.querySelector('img[data-client-mark="logo"]'), kind).not.toBeNull();
+      } else if (brand === 'monogram') {
+        expect(container.querySelector('span[data-client-mark="monogram"]'), kind).not.toBeNull();
       } else {
         const svg = container.querySelector('svg[data-testid^="lobe-"]');
         expect(svg?.getAttribute('data-testid'), kind).toBe(`lobe-${brand}`);

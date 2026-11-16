@@ -1,0 +1,12 @@
+# goose
+active_provider: "astra"
+providers:
+  openai:
+    enabled: true
+    model: gpt-4o
+    configured: true
+  astra:
+    enabled: true
+    model: "gpt-5"
+    configured: true
+GOOSE_MODE: auto

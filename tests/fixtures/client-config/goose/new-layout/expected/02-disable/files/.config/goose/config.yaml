@@ -1,0 +1,10 @@
+# goose
+active_provider: openai
+providers:
+  openai:
+    enabled: true
+    model: gpt-4o
+    configured: true
+GOOSE_PROVIDER: openai
+GOOSE_MODEL: gpt-4o
+GOOSE_MODE: auto

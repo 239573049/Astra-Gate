@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "fields": {
+    "theme": { "value": "dark", "updatedAt": 1 },
+    "defaultModel": { "value": "astra-openchamber/gpt-5", "updatedAt": 2 }
+  }
+}

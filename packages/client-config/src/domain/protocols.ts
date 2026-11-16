@@ -58,11 +58,18 @@ export function clientProtocolsFor(kind: string): ApiProtocol[] {
     case K.VsCodium:
     case K.ZCode:
     case K.TKCode:
+    case K.OpenChamber:
+    case K.DevEcoCode:
       return OPENAI_AND_ANTHROPIC;
     case K.Pi:
     case K.Omp:
     case K.QwenCode:
     case K.Crush:
+    case K.StepCode:
+    case K.Aside:
+    case K.OmO:
+    case K.PrimeAgent:
+    case K.Mu:
       return ALL_FOUR;
     case K.GrokBuild:
       return ['openai-responses', 'openai-chat', 'anthropic'];

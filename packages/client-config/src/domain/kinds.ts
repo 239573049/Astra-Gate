@@ -30,6 +30,20 @@ export const ClientKinds = {
   Paseo: 'paseo',
   ZCode: 'zcode',
   TKCode: 'tkcode',
+  OpenChamber: 'openchamber',
+  DevEcoCode: 'deveco-code',
+  StepCode: 'stepcode',
+  Aside: 'aside',
+  OmO: 'omo',
+  PrimeAgent: 'prime-agent',
+  Mu: 'mu',
+  MothX: 'mothx',
+  PenguinHarness: 'penguin-harness',
+  AntigravityCli: 'antigravity-cli',
+  Dim: 'dim',
+  CommandCode: 'command-code',
+  Fx: 'fx',
+  Goose: 'goose',
 } as const;
 
 export const ALL_CLIENT_KINDS: readonly string[] = [
@@ -61,6 +75,20 @@ export const ALL_CLIENT_KINDS: readonly string[] = [
   ClientKinds.Paseo,
   ClientKinds.ZCode,
   ClientKinds.TKCode,
+  ClientKinds.OpenChamber,
+  ClientKinds.DevEcoCode,
+  ClientKinds.StepCode,
+  ClientKinds.Aside,
+  ClientKinds.OmO,
+  ClientKinds.PrimeAgent,
+  ClientKinds.Mu,
+  ClientKinds.MothX,
+  ClientKinds.PenguinHarness,
+  ClientKinds.AntigravityCli,
+  ClientKinds.Dim,
+  ClientKinds.CommandCode,
+  ClientKinds.Fx,
+  ClientKinds.Goose,
 ];
 
 /** Clients whose configuration lists the bound provider's models (ClientKinds.WithModelList). */
@@ -90,6 +118,20 @@ export const CLIENTS_WITH_MODEL_LIST: readonly string[] = [
   ClientKinds.Codex,
   ClientKinds.GrokBuild,
   ClientKinds.HermesAgent,
+  ClientKinds.OpenChamber,
+  ClientKinds.DevEcoCode,
+  ClientKinds.StepCode,
+  ClientKinds.Aside,
+  ClientKinds.OmO,
+  ClientKinds.PrimeAgent,
+  ClientKinds.Mu,
+  ClientKinds.MothX,
+  ClientKinds.PenguinHarness,
+  ClientKinds.AntigravityCli,
+  ClientKinds.Dim,
+  ClientKinds.CommandCode,
+  ClientKinds.Fx,
+  ClientKinds.Goose,
 ];
 
 /** The inbound protocol each client speaks to the gateway. */
@@ -98,12 +140,14 @@ export function protocolOf(kind: string): ApiProtocol {
     case ClientKinds.Codex:
     case ClientKinds.GrokBuild:
     case ClientKinds.MuseCode:
+    case ClientKinds.PenguinHarness:
       return 'openai-responses';
     case ClientKinds.ClaudeCode:
     case ClientKinds.ClaudeDesktop:
     case ClientKinds.Paseo:
       return 'anthropic';
     case ClientKinds.GeminiCli:
+    case ClientKinds.AntigravityCli:
       return 'gemini';
     default:
       return 'openai-chat';

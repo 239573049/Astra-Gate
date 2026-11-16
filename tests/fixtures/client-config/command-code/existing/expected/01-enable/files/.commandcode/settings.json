@@ -1,0 +1,5 @@
+{
+  "model": "astra/gpt-5",
+  "theme": "dark",
+  "modelProvider": "astra"
+}

@@ -296,6 +296,11 @@ public class ClientInstallPlannerTests
     [InlineData(ClientKinds.QwenCode, "@qwen-code/qwen-code")]
     [InlineData(ClientKinds.Droid, "droid")]
     [InlineData(ClientKinds.MiMoCode, "@mimo-ai/cli")]
+    [InlineData(ClientKinds.DevEcoCode, "@deveco/deveco-code")]
+    [InlineData(ClientKinds.MothX, "mothx-installer")]
+    [InlineData(ClientKinds.PenguinHarness, "@prismshadow/penguin-cli")]
+    [InlineData(ClientKinds.OmO, "omo-ai")]
+    [InlineData(ClientKinds.Dim, "dimcode-alpha")]
     public void New_Npm_Clients_Install_And_Update_With_Npm_Whether_Scoped_Or_Not(string kind, string package)
     {
         var spec = ClientInstallCatalog.Get(kind)!;

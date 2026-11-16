@@ -1,0 +1,19 @@
+# penguin
+default_model = { provider = "mine", model_id = "foo" }
+
+[providers.mine]
+base_url = "http://localhost:1/v1"
+client_type = "openai-chat"
+api_key = "k"
+
+[[models]]
+provider = "mine"
+model_id = "foo"
+display_name = "Foo"
+
+[models.pricing]
+unit = "usd_per_mtok"
+
+[[models]]
+provider = "mine"
+model_id = "bar"

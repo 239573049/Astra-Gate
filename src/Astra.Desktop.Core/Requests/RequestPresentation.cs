@@ -71,6 +71,20 @@ public static class RequestPresentation
         ["vscodium"] = "VSCodium", ["omp"] = "omp (oh-my-pi)", ["mimo-code"] = "MiMo Code", ["deepseek-harness"] = "DeepSeek Harness",
         ["workbuddy"] = "WorkBuddy", ["workbuddy-ai"] = "WorkBuddy AI", ["muse-code"] = "Muse Code", ["nextcowork"] = "NextCoWork",
         ["paseo"] = "Paseo", ["zcode"] = "ZCode", ["tkcode"] = "TKCode",
+        ["openchamber"] = "OpenChamber",
+        ["deveco-code"] = "DevEco Code",
+        ["stepcode"] = "StepCode",
+        ["aside"] = "Aside",
+        ["omo"] = "OmO",
+        ["prime-agent"] = "Prime Agent",
+        ["mu"] = "mu",
+        ["mothx"] = "MothX",
+        ["penguin-harness"] = "PenguinHarness",
+        ["antigravity-cli"] = "Antigravity CLI",
+        ["dim"] = "Dim",
+        ["command-code"] = "Command Code",
+        ["fx"] = "fx",
+        ["goose"] = "Goose",
     };
 
     /// <summary>The settings categories the privacy hits of a detail are named by (web <c>PRIVACY_CATEGORY_KEY</c>).</summary>

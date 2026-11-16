@@ -71,6 +71,20 @@ export const CLIENT_KINDS = [
   'muse-code',
   'paseo',
   'tkcode',
+  'openchamber',
+  'deveco-code',
+  'stepcode',
+  'aside',
+  'omo',
+  'prime-agent',
+  'mu',
+  'mothx',
+  'penguin-harness',
+  'antigravity-cli',
+  'dim',
+  'command-code',
+  'fx',
+  'goose',
 ] as const;
 
 /** A client a plugin adds (a magpie agent plugin): "plugin-" and magpie's agent id. */

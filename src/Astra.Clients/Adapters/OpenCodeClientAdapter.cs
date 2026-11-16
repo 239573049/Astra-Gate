@@ -25,6 +25,9 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
 {
     public const string ProviderId = "astra";
 
+    /// <summary>The provider id this flavour writes: <c>astra</c>, or its own for a front end that must not share OpenCode's block.</summary>
+    private string ProviderKey => flavour.ProviderKey;
+
     /// <summary>OpenCode itself.</summary>
     public OpenCodeClientAdapter(ClientEnvironment env, IClientConfigStateStore store)
         : this(env, store, OpenCodeFlavour.OpenCode)
@@ -64,25 +67,56 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
 
     public override ClientAvailability Availability => ClientAvailability.Available;
 
+    /// <summary>
+    /// OpenChamber's own data directory (<c>OPENCHAMBER_DATA_DIR</c> when absolute, else <c>~/.config/openchamber</c>, not moved by
+    /// XDG_CONFIG_HOME). Only a <see cref="OpenCodeFlavour.Profile"/> flavour has one: it selects its model there, not in OpenCode's file.
+    /// </summary>
+    private string ProfileDir =>
+        Env.GetEnvironmentVariable("OPENCHAMBER_DATA_DIR") is { Length: > 0 } dir && Path.IsPathRooted(dir) ? dir : Env.Combine(".config", "openchamber");
+
+    private string ProfilePreferences => Path.Combine(ProfileDir, "preferences.json");
+
+    private string ProfileSettings => Path.Combine(ProfileDir, "settings.json");
+
     public override ClientDetection Detect()
     {
-        var dir = ConfigDir;
+        var dir = flavour.Profile ? ProfileDir : ConfigDir;
         if (Env.DirectoryExists(dir)) return ClientDetection.Found(null, $"config directory {dir}");
         var exe = Env.FindOnPath(flavour.Executable);
         return exe is not null ? ClientDetection.Found(null, $"executable {exe}") : ClientDetection.NotFound($"no {dir} and no {flavour.Executable} executable on PATH");
     }
 
-    public override IReadOnlyList<string> ConfigPaths() => ConfigCandidates;
+    public override IReadOnlyList<string> ConfigPaths() =>
+        flavour.Profile ? [.. ConfigCandidates, ProfilePreferences, ProfileSettings] : ConfigCandidates;
+
+    /// <summary>
+    /// The keys that hold OpenChamber's default model: <c>fields.defaultModel.value</c> in <c>preferences.json</c> (a version-1
+    /// document; it wins) and the copy in <c>settings.json</c> that builds from before the split read, which is the only place
+    /// when there is no preferences file. A <c>preferences.json</c> that is not a version-1 document is left alone.
+    /// </summary>
+    private IEnumerable<(string File, string Path)> ProfileModelKeys()
+    {
+        var hasPreferences = Env.FileExists(ProfilePreferences)
+            && CurrentValue(ProfilePreferences, ConfigFileFormat.Json, "fields") is { } fields && fields.TrimStart().StartsWith('{');
+        if (hasPreferences) yield return (ProfilePreferences, "fields.defaultModel.value");
+        if (!hasPreferences || Env.FileExists(ProfileSettings)) yield return (ProfileSettings, "defaultModel");
+    }
+
+    private IEnumerable<ConfigChange> ProfileModelChanges(string reference) =>
+        ProfileModelKeys().Select(k => new ConfigChange(k.File, ConfigFileFormat.Json, k.Path,
+            CurrentValue(k.File, ConfigFileFormat.Json, k.Path), JsonString(reference)));
 
     public override ConfigChangePlan PlanEnable(EnableContext ctx)
     {
         var file = ConfigFile;
         var changes = new List<ConfigChange> { ProviderChange(file, ctx) };
-        if (!string.IsNullOrEmpty(ctx.Model))
+        if (!string.IsNullOrEmpty(ctx.Model) && flavour.Profile)
+            changes.AddRange(ProfileModelChanges($"{ProviderKey}/{ctx.Model}"));
+        else if (!string.IsNullOrEmpty(ctx.Model))
         {
             var path = "model";
             var before = CurrentValue(file, ConfigFileFormat.Json, path);
-            changes.Add(new ConfigChange(file, ConfigFileFormat.Json, path, before, JsonString($"{ProviderId}/{ctx.Model}")));
+            changes.Add(new ConfigChange(file, ConfigFileFormat.Json, path, before, JsonString($"{ProviderKey}/{ctx.Model}")));
         }
         return BuildPlan(changes);
     }
@@ -91,7 +125,7 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
     public ConfigChangePlan PlanModelsRefresh(EnableContext ctx)
     {
         var file = ConfigFile;
-        var path = $"provider.{ProviderId}.models";
+        var path = $"provider.{ProviderKey}.models";
         var before = CurrentValue(file, ConfigFileFormat.Json, path);
         return BuildPlan([new ConfigChange(file, ConfigFileFormat.Json, path, before, ModelsJson(ctx))]);
     }
@@ -100,9 +134,17 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
     {
         var file = ConfigFile;
         var changes = new List<ConfigChange>();
-        var providerBefore = CurrentValue(file, ConfigFileFormat.Json, $"provider.{ProviderId}");
+        var providerBefore = CurrentValue(file, ConfigFileFormat.Json, $"provider.{ProviderKey}");
         if (providerBefore is not null)
-            changes.Add(new ConfigChange(file, ConfigFileFormat.Json, $"provider.{ProviderId}", providerBefore, null));
+            changes.Add(new ConfigChange(file, ConfigFileFormat.Json, $"provider.{ProviderKey}", providerBefore, null));
+        if (flavour.Profile)
+        {
+            // Each default-model key is ours only while it still names the Astra provider.
+            foreach (var (profileFile, profilePath) in ProfileModelKeys())
+                if (CurrentValue(profileFile, ConfigFileFormat.Json, profilePath) is { } current && IsOurModelSelection(current))
+                    changes.Add(new ConfigChange(profileFile, ConfigFileFormat.Json, profilePath, current, null));
+            return BuildPlan(changes);
+        }
         var modelBefore = CurrentValue(file, ConfigFileFormat.Json, "model");
         if (modelBefore is not null && IsOurModelSelection(modelBefore))
             changes.Add(new ConfigChange(file, ConfigFileFormat.Json, "model", modelBefore, null));
@@ -114,10 +156,10 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
     public override ClientStatus Inspect()
     {
         var detection = Detect();
-        var entry = Store.Get(Kind, ConfigFile, $"provider.{ProviderId}");
+        var entry = Store.Get(Kind, ConfigFile, $"provider.{ProviderKey}");
         var enabled = entry is not null && ConfigValueCodec.EqualsValue(
             ConfigFileFormat.Json,
-            CurrentValue(ConfigFile, ConfigFileFormat.Json, $"provider.{ProviderId}"),
+            CurrentValue(ConfigFile, ConfigFileFormat.Json, $"provider.{ProviderKey}"),
             entry.AppliedValueJson);
         var warnings = new List<string>();
         if (flavour.HomeVariable is { } variable && !string.IsNullOrEmpty(Env.GetEnvironmentVariable(variable)))
@@ -127,7 +169,7 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
 
     private ConfigChange ProviderChange(string file, EnableContext ctx)
     {
-        var path = $"provider.{ProviderId}";
+        var path = $"provider.{ProviderKey}";
         var provider = new JsonObject
         {
             ["npm"] = "@ai-sdk/openai-compatible",
@@ -187,7 +229,7 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
         try
         {
             var node = System.Text.Json.Nodes.JsonNode.Parse(modelJsonText);
-            return node?.GetValue<string>()?.StartsWith($"{ProviderId}/", StringComparison.Ordinal) == true;
+            return node?.GetValue<string>()?.StartsWith($"{ProviderKey}/", StringComparison.Ordinal) == true;
         }
         catch (System.Text.Json.JsonException)
         {
@@ -204,11 +246,22 @@ public sealed class OpenCodeClientAdapter(ClientEnvironment env, IClientConfigSt
 /// <param name="WindowsLocalAppData">The directory lives under <c>%LOCALAPPDATA%</c> on Windows (not the XDG layout).</param>
 /// <param name="HomeVariable">An environment variable that relocates the client's paths in an undocumented way (warned about).</param>
 public sealed record OpenCodeFlavour(string Kind, string DirName, string FileBase, string Executable,
-    bool WindowsLocalAppData = false, string? HomeVariable = null)
+    bool WindowsLocalAppData = false, string? HomeVariable = null, string ProviderKey = "astra", bool Profile = false)
 {
     public static readonly OpenCodeFlavour OpenCode = new(ClientKinds.OpenCode, "opencode", "opencode", "opencode");
 
     /// <summary>MiMo Code (Xiaomi, npm <c>@mimo-ai/cli</c>, bin <c>mimo</c>) is an OpenCode fork: <c>~/.config/mimocode/mimocode.json(c)</c>, same provider schema.</summary>
     public static readonly OpenCodeFlavour MiMoCode = new(ClientKinds.MiMoCode, "mimocode", "mimocode", "mimo",
         WindowsLocalAppData: true, HomeVariable: "MIMOCODE_HOME");
+
+    /// <summary>DevEco Code (Huawei's fork of OpenCode for HarmonyOS apps, npm <c>@deveco/deveco-code</c>): <c>~/.config/deveco/deveco.json(c)</c>, same provider schema.</summary>
+    public static readonly OpenCodeFlavour DevEcoCode = new(ClientKinds.DevEcoCode, "deveco", "deveco", "deveco");
+
+    /// <summary>
+    /// OpenChamber (a desktop, web and VS Code front end for OpenCode): it runs an OpenCode on the user's OpenCode config, so Astra writes a
+    /// provider of its own (<c>astra-openchamber</c>, never OpenCode's <c>astra</c> block, whose key belongs to the OpenCode client) there and
+    /// selects the model in OpenChamber's own profile instead of OpenCode's <c>model</c>.
+    /// </summary>
+    public static readonly OpenCodeFlavour OpenChamber = new(ClientKinds.OpenChamber, "opencode", "opencode", "openchamber",
+        ProviderKey: "astra-openchamber", Profile: true);
 }

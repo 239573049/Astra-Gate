@@ -57,6 +57,20 @@ public sealed class ClientAdapterRegistry
         new PaseoClientAdapter(env, store),
         new ZCodeClientAdapter(env, store),
         new TKCodeClientAdapter(env, store),
+        new OpenCodeClientAdapter(env, store, OpenCodeFlavour.OpenChamber),
+        new OpenCodeClientAdapter(env, store, OpenCodeFlavour.DevEcoCode),
+        new PiClientAdapter(env, store, PiFlavour.StepCode),
+        new PiClientAdapter(env, store, PiFlavour.Aside),
+        new PiClientAdapter(env, store, PiFlavour.OmO),
+        new PiClientAdapter(env, store, PiFlavour.PrimeAgent),
+        new PiClientAdapter(env, store, PiFlavour.Mu),
+        new MothXClientAdapter(env, store),
+        new PenguinHarnessClientAdapter(env, store),
+        new AntigravityCliClientAdapter(env, store),
+        new DimClientAdapter(env, store),
+        new CommandCodeClientAdapter(env, store),
+        new FxClientAdapter(env, store),
+        new GooseClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

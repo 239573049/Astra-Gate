@@ -1,0 +1,23 @@
+[
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "keyPath": "default_model",
+    "originalAbsent": false,
+    "original": "\"{ provider = \\u0022mine\\u0022, model_id = \\u0022foo\\u0022 }\"",
+    "applied": "\"{ provider = \\u0022astra\\u0022, model_id = \\u0022gpt-5\\u0022 }\""
+  },
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "keyPath": "models[provider=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

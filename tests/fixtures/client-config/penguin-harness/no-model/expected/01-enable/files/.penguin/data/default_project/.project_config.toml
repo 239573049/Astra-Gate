@@ -1,0 +1,32 @@
+[[models]]
+provider = "mine"
+model_id = "foo"
+
+[providers.astra]
+base_url = "https://astra.corp.com/v1"
+client_type = "openai-responses"
+api_key = "sk-astra-enterprise-key"
+
+[[models]]
+provider = "astra"
+model_id = "gpt-5"
+display_name = "GPT-5"
+context_window = 400000
+vision = true
+max_tokens = 128000
+
+[[models]]
+provider = "astra"
+model_id = "claude-sonnet-4-5"
+display_name = "Claude Sonnet 4.5"
+context_window = 200000
+vision = true
+max_tokens = 64000
+
+[[models]]
+provider = "astra"
+model_id = "deepseek-chat"
+display_name = "DeepSeek Chat"
+context_window = 64000
+vision = false
+max_tokens = 8000

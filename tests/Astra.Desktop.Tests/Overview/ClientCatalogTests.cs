@@ -39,6 +39,6 @@ public sealed class ClientCatalogTests
         Assert.Equal("weird", ClientCatalog.Name("weird"));
         Assert.True(ClientCatalog.Known("zed"));
         Assert.False(ClientCatalog.Known("plugin-my"));
-        Assert.Equal(28, ClientCatalog.Order.Count);
+        Assert.Equal(Astra.Core.Clients.ClientKinds.All.Count, ClientCatalog.Order.Count);
     }
 }

@@ -1,0 +1,27 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.commandcode/providers.json",
+      "keyPath": "provider.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.commandcode/settings.json",
+      "keyPath": "modelProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.commandcode/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.commandcode/providers.json",
+    "$HOME/.commandcode/settings.json"
+  ],
+  "warnings": []
+}

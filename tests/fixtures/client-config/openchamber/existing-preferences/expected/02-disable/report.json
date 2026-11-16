@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/opencode/opencode.jsonc",
+      "keyPath": "provider.astra-openchamber",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/openchamber/preferences.json",
+      "keyPath": "fields.defaultModel.value",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/openchamber/settings.json",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

@@ -1,0 +1,20 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/deveco/deveco.json",
+      "keyPath": "provider.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/deveco/deveco.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.config/deveco/deveco.json"
+  ],
+  "warnings": []
+}

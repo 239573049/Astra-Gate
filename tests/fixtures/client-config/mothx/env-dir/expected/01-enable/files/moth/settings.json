@@ -1,0 +1,8 @@
+{
+  "defaultProvider": "astra",
+  "defaultModel": "gpt-5",
+  "providers": {
+    "mine": { "baseUrl": "http://localhost:1/v1", "api": "openai-chat", "apiKey": "k", "models": [{ "id": "foo" }] },
+    "astra": {"baseUrl":"https://astra.corp.com/v1","api":"openai-chat","apiKey":"sk-astra-enterprise-key","thinkingFormat":"openai","models":[{"id":"gpt-5","name":"GPT-5","reasoning":true,"input":["text","image"],"contextWindow":400000,"maxTokens":128000},{"id":"claude-sonnet-4-5","name":"Claude Sonnet 4.5","reasoning":true,"input":["text","image"],"contextWindow":200000,"maxTokens":64000},{"id":"deepseek-chat","name":"DeepSeek Chat","reasoning":false,"input":["text"],"contextWindow":64000,"maxTokens":8000}]}
+  }
+}

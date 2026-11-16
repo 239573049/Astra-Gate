@@ -413,6 +413,11 @@ export class TomlEditor {
   }
 }
 
+/** Checks that `text` is a valid TOML document (throws EditorException otherwise). */
+export function validateToml(text: string): void {
+  parse(text);
+}
+
 /** A TOML basic string with escapes for control characters, backslash and quote. */
 export function tomlString(value: string): string {
   let out = '"';

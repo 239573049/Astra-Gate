@@ -14,8 +14,6 @@ import { JNum, JObj, compactJson, type JV } from '../editing/jsonc-editor.js';
 import type { ClientEnvironment } from '../env.js';
 import { ClientKinds } from '../domain/kinds.js';
 
-const PROVIDER_ID = 'astra';
-
 /** The OpenCode build an OpenCodeClientAdapter configures (OpenCode and its forks share the schema). */
 export interface OpenCodeFlavour {
   kind: string;
@@ -29,6 +27,10 @@ export interface OpenCodeFlavour {
   windowsLocalAppData?: boolean;
   /** An environment variable that relocates the client's paths in an undocumented way (warned about). */
   homeVariable?: string | null;
+  /** The provider id written: `astra`, or its own for a front end that must not share OpenCode's block. */
+  providerKey?: string;
+  /** The model is selected in the front end's own profile (OpenChamber), not in OpenCode's `model`. */
+  profile?: boolean;
 }
 
 export const OpenCodeFlavours = {
@@ -41,6 +43,17 @@ export const OpenCodeFlavours = {
     executable: 'mimo',
     windowsLocalAppData: true,
     homeVariable: 'MIMOCODE_HOME',
+  },
+  /** DevEco Code (Huawei's fork of OpenCode for HarmonyOS apps): `~/.config/deveco/deveco.json(c)`, same provider schema. */
+  DevEcoCode: { kind: ClientKinds.DevEcoCode, dirName: 'deveco', fileBase: 'deveco', executable: 'deveco' },
+  /** OpenChamber: its own provider (`astra-openchamber`) in OpenCode's config, the model chosen in its own profile. */
+  OpenChamber: {
+    kind: ClientKinds.OpenChamber,
+    dirName: 'opencode',
+    fileBase: 'opencode',
+    executable: 'openchamber',
+    providerKey: 'astra-openchamber',
+    profile: true,
   },
 } as const satisfies Record<string, OpenCodeFlavour>;
 
@@ -69,6 +82,36 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
     return this.flavour.kind;
   }
 
+  private get providerKey(): string {
+    return this.flavour.providerKey ?? 'astra';
+  }
+
+  /** OpenChamber's data directory: OPENCHAMBER_DATA_DIR when absolute, else ~/.config/openchamber. */
+  private get profileDir(): string {
+    const dir = this.env.getEnvironmentVariable('OPENCHAMBER_DATA_DIR');
+    return dir && path.isAbsolute(dir) ? dir : this.env.combine('.config', 'openchamber');
+  }
+
+  private get profilePreferences(): string {
+    return path.join(this.profileDir, 'preferences.json');
+  }
+
+  private get profileSettings(): string {
+    return path.join(this.profileDir, 'settings.json');
+  }
+
+  /** The keys holding OpenChamber's default model (see the C# adapter). */
+  private profileModelKeys(): Array<[string, string]> {
+    const fields = this.env.fileExists(this.profilePreferences)
+      ? this.currentValue(this.profilePreferences, 'json', 'fields')
+      : null;
+    const hasPreferences = fields !== null && fields.trimStart().startsWith('{');
+    const keys: Array<[string, string]> = [];
+    if (hasPreferences) keys.push([this.profilePreferences, 'fields.defaultModel.value']);
+    if (!hasPreferences || this.env.fileExists(this.profileSettings)) keys.push([this.profileSettings, 'defaultModel']);
+    return keys;
+  }
+
   private get configDir(): string {
     const f = this.flavour;
     if (f.windowsLocalAppData && this.env.os === 'windows') {
@@ -93,7 +136,7 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
   }
 
   detect(): ClientDetection {
-    const dir = this.configDir;
+    const dir = this.flavour.profile ? this.profileDir : this.configDir;
     if (this.env.directoryExists(dir)) return ClientDetections.found(null, `config directory ${dir}`);
     const exe = this.env.findOnPath(this.flavour.executable);
     return exe
@@ -102,17 +145,29 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
   }
 
   configPaths(): string[] {
+    if (this.flavour.profile) return [...this.configCandidates, this.profilePreferences, this.profileSettings];
     return this.configCandidates;
   }
 
   planEnable(ctx: EnableContext): ConfigChangePlan {
     const file = this.configFile;
     const changes: ConfigChange[] = [this.providerChange(file, ctx)];
-    if (ctx.model) {
+    if (ctx.model && this.flavour.profile) {
+      for (const [profileFile, keyPath] of this.profileModelKeys())
+        changes.push(
+          new ConfigChange(
+            profileFile,
+            'json',
+            keyPath,
+            this.currentValue(profileFile, 'json', keyPath),
+            ClientAdapterBase.jsonString(`${this.providerKey}/${ctx.model}`),
+          ),
+        );
+    } else if (ctx.model) {
       const keyPath = 'model';
       const before = this.currentValue(file, 'json', keyPath);
       changes.push(
-        new ConfigChange(file, 'json', keyPath, before, ClientAdapterBase.jsonString(`${PROVIDER_ID}/${ctx.model}`)),
+        new ConfigChange(file, 'json', keyPath, before, ClientAdapterBase.jsonString(`${this.providerKey}/${ctx.model}`)),
       );
     }
     return this.buildPlan(changes);
@@ -121,7 +176,7 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
   /** Rewrites only `provider.astra.models` (used when the bound provider's model list changes). */
   planModelsRefresh(ctx: EnableContext): ConfigChangePlan {
     const file = this.configFile;
-    const keyPath = `provider.${PROVIDER_ID}.models`;
+    const keyPath = `provider.${this.providerKey}.models`;
     const before = this.currentValue(file, 'json', keyPath);
     const models = this.modelsJson(ctx);
     return this.buildPlan([new ConfigChange(file, 'json', keyPath, before, models === null ? null : compactJson(models))]);
@@ -130,11 +185,20 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
   planDisable(): ConfigChangePlan {
     const file = this.configFile;
     const changes: ConfigChange[] = [];
-    const providerPath = `provider.${PROVIDER_ID}`;
+    const providerPath = `provider.${this.providerKey}`;
     const providerBefore = this.currentValue(file, 'json', providerPath);
     if (providerBefore !== null) changes.push(new ConfigChange(file, 'json', providerPath, providerBefore, null));
+    if (this.flavour.profile) {
+      // Each default-model key is ours only while it still names the Astra provider.
+      for (const [profileFile, keyPath] of this.profileModelKeys()) {
+        const current = this.currentValue(profileFile, 'json', keyPath);
+        if (current !== null && this.isOurModelSelection(current))
+          changes.push(new ConfigChange(profileFile, 'json', keyPath, current, null));
+      }
+      return this.buildPlan(changes);
+    }
     const modelBefore = this.currentValue(file, 'json', 'model');
-    if (modelBefore !== null && OpenCodeClientAdapter.isOurModelSelection(modelBefore))
+    if (modelBefore !== null && this.isOurModelSelection(modelBefore))
       changes.push(new ConfigChange(file, 'json', 'model', modelBefore, null));
     return this.buildPlan(changes);
   }
@@ -146,7 +210,7 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
   inspect(): ClientStatus {
     const detection = this.detect();
     const file = this.configFile;
-    const providerPath = `provider.${PROVIDER_ID}`;
+    const providerPath = `provider.${this.providerKey}`;
     const entry = this.store.get(this.kind, file, providerPath);
     const enabled =
       entry !== null && equalsValue('json', this.currentValue(file, 'json', providerPath), entry.appliedValueJson);
@@ -160,7 +224,7 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
   }
 
   private providerChange(file: string, ctx: EnableContext): ConfigChange {
-    const keyPath = `provider.${PROVIDER_ID}`;
+    const keyPath = `provider.${this.providerKey}`;
     const entries: Array<[string, JV]> = [
       ['npm', '@ai-sdk/openai-compatible'],
       ['name', 'Astra'],
@@ -214,7 +278,7 @@ export class OpenCodeClientAdapter extends ClientAdapterBase {
     return new JObj([...models]);
   }
 
-  private static isOurModelSelection(modelJsonText: string): boolean {
-    return ClientAdapterBase.stringOf(modelJsonText)?.startsWith(`${PROVIDER_ID}/`) === true;
+  private isOurModelSelection(modelJsonText: string): boolean {
+    return ClientAdapterBase.stringOf(modelJsonText)?.startsWith(`${this.providerKey}/`) === true;
   }
 }

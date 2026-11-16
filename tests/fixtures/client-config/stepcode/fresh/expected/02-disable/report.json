@@ -1,0 +1,27 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.stepcode/models.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.stepcode/config.toml",
+      "keyPath": "defaultProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.stepcode/config.toml",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.stepcode/models.json",
+    "$HOME/.stepcode/config.toml"
+  ],
+  "warnings": []
+}

@@ -16,6 +16,9 @@ internal static class BrandCatalog
 
     private static ClientBrand Logo(string key, LucideIconKind? badge = null) => new(null, null, key, badge);
 
+    /// <summary>A client with no vendor mark the desktop bundles: its initials on a tile (the web draws a letter tile or the library mark).</summary>
+    private static ClientBrand Initials(LucideIconKind? badge = null) => new(null, null, null, badge);
+
     /// <summary>The identity of a client kind; null for kinds the table does not know (agent plugins).</summary>
     public static ClientBrand? Client(string kind) => kind switch
     {
@@ -47,6 +50,12 @@ internal static class BrandCatalog
         "paseo" => Logo("paseo"),
         "zcode" => Lobe("ZAI.Mono", "ZAI", LucideIconKind.Monitor),
         "tkcode" => Logo("tkcode"),
+        "openchamber" => Lobe("OpenCode.Mono", "OpenCode", LucideIconKind.Monitor),
+        "stepcode" => Lobe("Stepfun.Mono", "Stepfun", LucideIconKind.SquareTerminal),
+        "command-code" => Lobe("CommandCode.Mono", "CommandCode"),
+        "fx" => Lobe("Vercel.Mono", "Vercel", LucideIconKind.SquareTerminal),
+        "deveco-code" or "antigravity-cli" => Initials(LucideIconKind.SquareTerminal),
+        "aside" or "omo" or "prime-agent" or "mu" or "mothx" or "penguin-harness" or "dim" or "goose" => Initials(),
         _ => null,
     };
 

@@ -1,0 +1,16 @@
+[
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "keyPath": "models[provider=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "keyPath": "providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  }
+]

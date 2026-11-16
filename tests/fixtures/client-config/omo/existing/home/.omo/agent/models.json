@@ -1,0 +1,5 @@
+{
+  "providers": {
+    "mine": { "baseUrl": "http://localhost:1/v1", "api": "openai-completions", "apiKey": "k", "models": [{ "id": "foo" }] }
+  }
+}

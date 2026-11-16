@@ -1,0 +1,93 @@
+[
+  {
+    "file": "$HOME/.config/goose/config.yaml",
+    "keyPath": "GOOSE_MODEL",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"gpt-5\""
+  },
+  {
+    "file": "$HOME/.config/goose/config.yaml",
+    "keyPath": "GOOSE_PROVIDER",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "api_key_env",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "base_url",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://astra.corp.com/v1\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "description",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"Every model Astra has, through its local gateway\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "display_name",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"Astra\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "dynamic_models",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "false"
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "engine",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"openai\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "headers",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"Authorization\":\"Bearer sk-astra-enterprise-key\"}"
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "models",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "[{\"name\":\"gpt-5\",\"reasoning\":true,\"context_limit\":400000},{\"name\":\"claude-sonnet-4-5\",\"reasoning\":false,\"context_limit\":200000},{\"name\":\"deepseek-chat\",\"reasoning\":false,\"context_limit\":64000}]"
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "name",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra\""
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "requires_auth",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "false"
+  },
+  {
+    "file": "$HOME/.config/goose/custom_providers/astra.json",
+    "keyPath": "skip_canonical_filtering",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "true"
+  }
+]

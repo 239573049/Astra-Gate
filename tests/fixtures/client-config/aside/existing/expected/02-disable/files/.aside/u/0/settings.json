@@ -1,0 +1,5 @@
+{
+  "theme": "dark",
+  "defaultModel": { "provider": "anthropic", "modelId": "claude-x", "thinkingLevel": "high" },
+  "modelCategories": { "fast": { "provider": "mine", "modelId": "foo" } }
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.fx/settings.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"protocol\":\"openai-chat-completions\",\"base_url\":\"https://astra.corp.com/v1\",\"auth\":{\"type\":\"none\"},\"tool_choice_mode\":\"send\",\"model_metadata\":{\"gpt-5\":{\"supports_tool_use\":true,\"supports_vision\":true,\"context_window\":400000,\"max_output_tokens\":128000},\"claude-sonnet-4-5\":{\"supports_tool_use\":true,\"supports_vision\":true,\"context_window\":200000,\"max_output_tokens\":64000},\"deepseek-chat\":{\"supports_tool_use\":true,\"supports_vision\":false,\"context_window\":64000,\"max_output_tokens\":8000}}}"
+  },
+  {
+    "file": "$HOME/.fx/settings.json",
+    "format": "json",
+    "keyPath": "provider",
+    "kind": "key",
+    "before": "\"gateway\"",
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.fx/settings.json",
+    "format": "json",
+    "keyPath": "models.astra",
+    "kind": "key",
+    "before": null,
+    "after": "\"gpt-5\""
+  }
+]

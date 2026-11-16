@@ -1,6 +1,7 @@
 import { type IconAvatarProps } from '@lobehub/icons';
 import { Anthropic, DeepSeek, Gemini, LmStudio, Minimax, Moonshot, Ollama, OpenAI, OpenRouter, Qoder, Qwen, SiliconCloud, Volcengine, XAI, Zhipu } from '@lobehub/icons';
 import { Claude, GithubCopilot, Grok, HermesAgent, Kimi, Meta, OpenCode, Pi, XiaomiMiMo, ZAI } from '@lobehub/icons';
+import { Antigravity, Goose, Huawei } from '@lobehub/icons';
 import { Baichuan, ChatGLM, Cohere, Doubao, Gemma, Hunyuan, LongCat, Mistral, Stepfun, Wenxin, Yi } from '@lobehub/icons';
 // Marks of the provider templates added for magpie parity (src/Astra.Providers/Templates/catalog.json).
 import { Ai302, AiHubMix, Azure, BaiduCloud, Bedrock, Cline, CommandCode, Fireworks, GmiCloud, Groq, HuaweiCloud, KiloCode } from '@lobehub/icons';
@@ -53,6 +54,20 @@ export const CLIENT_META: Record<ClientKind, { name: string }> = {
   paseo: { name: 'Paseo' },
   zcode: { name: 'ZCode' },
   tkcode: { name: 'TKCode' },
+  'openchamber': { name: 'OpenChamber' },
+  'deveco-code': { name: 'DevEco Code' },
+  'stepcode': { name: 'StepCode' },
+  'aside': { name: 'Aside' },
+  'omo': { name: 'OmO' },
+  'prime-agent': { name: 'Prime Agent' },
+  'mu': { name: 'mu' },
+  'mothx': { name: 'MothX' },
+  'penguin-harness': { name: 'PenguinHarness' },
+  'antigravity-cli': { name: 'Antigravity CLI' },
+  'dim': { name: 'Dim' },
+  'command-code': { name: 'Command Code' },
+  'fx': { name: 'fx' },
+  'goose': { name: 'Goose' },
 };
 
 /**
@@ -68,6 +83,7 @@ export const CLIENT_ORDER: ClientKind[] = [
   'pi', 'hermes-agent', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed',
   'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'muse-code', 'nextcowork', 'paseo', 'zcode', 'tkcode',
+  'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
 ];
 
 type BrandMark = ComponentType<{ size?: number | string; 'aria-hidden'?: boolean }>;
@@ -96,6 +112,33 @@ function logoAvatar(src: string): ComponentType<IconAvatarProps> {
 }
 
 const logo = (src: string) => ({ Mark: logoMark(src), Avatar: logoAvatar(src) });
+
+// Clients with no vendor mark anywhere: a one-letter tile (the letter comes from CSS, so the glyph carries no text).
+function monogram(letter: string, key: string) {
+  const Mark: BrandMark = function MonogramMark({ size = 18 }) {
+    const px = Number(size);
+    return (
+      <span
+        data-client-mark="monogram"
+        data-letter={letter}
+        className="inline-flex items-center justify-center rounded-[4px] font-semibold text-[var(--foreground)] shadow-[0_0_0_1px_var(--border)] after:content-[attr(data-letter)]"
+        style={{ width: px, height: px, fontSize: px * 0.58, lineHeight: 1 }}
+      />
+    );
+  };
+  const Avatar: ComponentType<IconAvatarProps> = function MonogramAvatar({ size = 28, style }: IconAvatarProps) {
+    const px = Number(size);
+    return (
+      <span
+        data-client-mark="monogram"
+        data-letter={letter}
+        className="inline-flex items-center justify-center font-semibold text-white after:content-[attr(data-letter)]"
+        style={{ width: px, height: px, fontSize: px * 0.5, lineHeight: 1, background: hashColor(key), ...style }}
+      />
+    );
+  };
+  return { Mark, Avatar };
+}
 
 const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType<IconAvatarProps>; badge?: LucideIcon }> = {
   codex: { Mark: OpenAI, Avatar: OpenAI.Avatar },
@@ -128,6 +171,21 @@ const CLIENT_BRANDS: Record<ClientKind, { Mark: BrandMark; Avatar: ComponentType
   // ZCode is Z.ai's desktop agent: the Z.ai mark with a desktop badge
   zcode: { Mark: ZAI, Avatar: ZAI.Avatar, badge: Monitor },
   tkcode: logo(tkcodeLogo),
+  openchamber: { Mark: OpenCode, Avatar: OpenCode.Avatar, badge: Monitor },
+  'deveco-code': { Mark: Huawei, Avatar: Huawei.Avatar, badge: SquareTerminal },
+  stepcode: { Mark: Stepfun, Avatar: Stepfun.Avatar, badge: SquareTerminal },
+  aside: monogram('A', 'aside'),
+  omo: monogram('O', 'omo'),
+  'prime-agent': monogram('P', 'prime-agent'),
+  mu: monogram('μ', 'mu'),
+  mothx: monogram('M', 'mothx'),
+  'penguin-harness': monogram('P', 'penguin-harness'),
+  'antigravity-cli': { Mark: Antigravity.Color, Avatar: Antigravity.Avatar, badge: SquareTerminal },
+  dim: monogram('D', 'dim'),
+  'command-code': { Mark: CommandCode, Avatar: CommandCode.Avatar },
+  // fx.sh is a Vercel Labs project: the Vercel mark with a terminal badge
+  fx: { Mark: Vercel, Avatar: Vercel.Avatar, badge: SquareTerminal },
+  goose: { Mark: Goose, Avatar: Goose.Avatar },
 };
 
 // An agent plugin's client: a puzzle piece on a tile colored by its id.

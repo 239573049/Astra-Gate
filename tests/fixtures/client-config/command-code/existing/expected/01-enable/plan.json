@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.commandcode/providers.json",
+    "format": "json",
+    "keyPath": "provider.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"name\":\"Astra\",\"api\":\"openai-completions\",\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":false,\"models\":{\"gpt-5\":{\"name\":\"GPT-5\",\"reasoning\":true,\"contextWindow\":400000,\"maxOutput\":128000},\"claude-sonnet-4-5\":{\"name\":\"Claude Sonnet 4.5\",\"reasoning\":true,\"contextWindow\":200000,\"maxOutput\":64000},\"deepseek-chat\":{\"name\":\"DeepSeek Chat\",\"contextWindow\":64000,\"maxOutput\":8000}}}"
+  },
+  {
+    "file": "$HOME/.commandcode/settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": "\"anthropic/claude-x\"",
+    "after": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/.commandcode/settings.json",
+    "format": "json",
+    "keyPath": "modelProvider",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra\""
+  }
+]

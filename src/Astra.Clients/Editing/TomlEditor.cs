@@ -389,6 +389,13 @@ public sealed class TomlEditor
         return new TomlEditor(updated);
     }
 
+    /// <summary>Checks that <paramref name="text"/> is a valid TOML document (throws <see cref="EditorException"/> otherwise).</summary>
+    public static TomlEditor Validated(string text)
+    {
+        _ = ToModel(text);
+        return new TomlEditor(text);
+    }
+
     private static TomlTable ToModel(string text)
     {
         try

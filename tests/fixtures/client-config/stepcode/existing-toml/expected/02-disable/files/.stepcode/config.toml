@@ -1,0 +1,7 @@
+# StepCode
+defaultProvider = "mine"
+defaultModel = "foo"
+enabledModels = ["mine/*"]
+
+[ui]
+theme = "dark"

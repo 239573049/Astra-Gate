@@ -4,6 +4,12 @@ import { DotEnvEditor } from './editing/dotenv-editor.js';
 import { EditorException } from './editing/errors.js';
 import { JsoncEditor } from './editing/jsonc-editor.js';
 import { ShellBlockEditor } from './editing/shell-block-editor.js';
+import {
+  hasArrayEntries,
+  isArrayEntrySelector,
+  removeArrayEntries,
+  setArrayEntries,
+} from './editing/toml-array-entries.js';
 import { TomlEditor } from './editing/toml-editor.js';
 import { YamlEditor } from './editing/yaml-editor.js';
 import type { ConfigFileFormat } from './types.js';
@@ -64,14 +70,32 @@ class TomlOps implements ConfigEditorOps {
     return this.editor.text;
   }
   read(change: ConfigChange): string | null {
-    return change.kind === 'table'
-      ? this.editor.tableExists(change.keyPath)
-        ? 'true'
-        : null
-      : this.editor.getValue(change.keyPath);
+    if (change.kind === 'table') {
+      const exists = isArrayEntrySelector(change.keyPath)
+        ? hasArrayEntries(this.editor.text, change.keyPath)
+        : this.editor.tableExists(change.keyPath);
+      return exists ? 'true' : null;
+    }
+    return this.editor.getValue(change.keyPath);
   }
   apply(change: ConfigChange): void {
     if (change.after === null) return this.remove(change);
+    if (change.kind === 'table' && isArrayEntrySelector(change.keyPath)) {
+      // An array-entry change: "after" is a JSON array of objects mapping item keys to raw TOML value texts.
+      const entries = (JSON.parse(change.after) as unknown[]).map((e): Array<[string, string]> => {
+        if (e === null || typeof e !== 'object' || Array.isArray(e))
+          throw new EditorException(`Array entry change for '${change.keyPath}' has a non-object entry.`);
+        return Object.entries(e as Record<string, unknown>).map(([key, value]): [string, string] => {
+          if (typeof value !== 'string')
+            throw new EditorException(
+              `Array entry change for '${change.keyPath}' has a non-string item value for '${key}'.`,
+            );
+          return [key, value];
+        });
+      });
+      this.editor = new TomlEditor(setArrayEntries(this.editor.text, change.keyPath, entries));
+      return;
+    }
     if (change.kind === 'table') {
       // The "after" of a table change is a JSON object mapping item keys to raw TOML value texts.
       const items = JSON.parse(change.after) as Record<string, unknown>;
@@ -93,6 +117,10 @@ class TomlOps implements ConfigEditorOps {
     this.editor = this.editor.set(change.keyPath, source);
   }
   remove(change: ConfigChange): void {
+    if (change.kind === 'table' && isArrayEntrySelector(change.keyPath)) {
+      this.editor = new TomlEditor(removeArrayEntries(this.editor.text, change.keyPath));
+      return;
+    }
     this.editor =
       change.kind === 'table'
         ? this.editor.removeTable(change.keyPath)

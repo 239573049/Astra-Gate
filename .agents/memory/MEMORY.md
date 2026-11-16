@@ -4,6 +4,7 @@ Index of this directory: one line per entry. Open an entry before relying on it.
 Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork/memory/` (not committed).
 
 ## Project
+- [magpie clients batch 1 (2026-11)](magpie-clients-batch1-2026-11.md) — 14 adapters from magpie: keyless fx and Command Code, no Claude Science or Devin, array-of-tables editing, shell-function clients
 - [magpie parity (2026-11)](magpie-parity-2026-11.md) — 13-area parity push on feat/magpie-parity; privacy rules only (no NER), all 62 agents, manual FX only, subagents on Sonnet
 - [Provider key list = api_key accounts](provider-key-list-as-accounts.md) — magpie parity: several keys per provider reuse `provider_accounts` (kind api_key) behind `settings.key_pool`; one key stays in `ApiKeyEnc`, which mirrors the first enabled key; ask `Provider.UsesAccounts`, not the scheme
 - [Skill library decisions](skill-library-decisions.md) — issue #34: `~/.astra/library/skills` (not `~/.astra-gate`), "Resources" nav group, links not copies, `SkillPlaces` table instead of adapter methods; Windows paths unverified
