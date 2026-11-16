@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/moth/settings.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/moth/settings.json",
+      "keyPath": "defaultProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/moth/settings.json",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

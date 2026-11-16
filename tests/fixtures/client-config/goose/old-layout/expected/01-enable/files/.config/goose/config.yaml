@@ -1,0 +1,4 @@
+# goose
+GOOSE_PROVIDER: "astra"
+GOOSE_MODEL: "gpt-5"
+GOOSE_MODE: auto

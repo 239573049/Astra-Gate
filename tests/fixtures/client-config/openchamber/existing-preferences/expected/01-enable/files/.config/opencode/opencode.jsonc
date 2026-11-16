@@ -1,0 +1,10 @@
+// my OpenCode config
+{
+  "$schema": "https://opencode.ai/config.json",
+  // keep my provider
+  "provider": {
+    "mine": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "http://localhost:1/v1" } },
+    "astra-openchamber": {"npm":"@ai-sdk/openai-compatible","name":"Astra","options":{"baseURL":"https://astra.corp.com/v1","apiKey":"sk-astra-enterprise-key"},"models":{"gpt-5":{"name":"GPT-5","provider":{"npm":"@ai-sdk/openai"},"limit":{"context":400000,"output":128000},"modalities":{"input":["text","image"],"output":["text"]},"reasoning":true},"claude-sonnet-4-5":{"name":"Claude Sonnet 4.5","provider":{"npm":"@ai-sdk/anthropic"},"limit":{"context":200000,"output":64000},"modalities":{"input":["text","image"],"output":["text"]},"reasoning":true},"deepseek-chat":{"name":"DeepSeek Chat","limit":{"context":64000,"output":8000},"modalities":{"input":["text"],"output":["text"]},"reasoning":false}}}
+  },
+  "model": "mine/foo",
+}

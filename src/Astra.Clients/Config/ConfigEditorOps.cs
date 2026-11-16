@@ -67,14 +67,25 @@ internal abstract class ConfigEditorOps
         public override string Text => _editor.Text;
 
         public override string? Read(ConfigChange change) => change.Kind == ConfigChangeKind.Table
-            ? _editor.TableExists(change.KeyPath) ? "true" : null
+            ? (TomlArrayEntries.IsSelector(change.KeyPath) ? TomlArrayEntries.Has(_editor.Text, change.KeyPath) : _editor.TableExists(change.KeyPath)) ? "true" : null
             : _editor.GetValue(change.KeyPath);
 
         public override void Apply(ConfigChange change, List<string> warnings)
         {
             _ = warnings;
             if (change.After is null) { Remove(change); return; }
-            if (change.Kind == ConfigChangeKind.Table)
+            if (change.Kind == ConfigChangeKind.Table && TomlArrayEntries.IsSelector(change.KeyPath))
+            {
+                // An array-entry change: "after" is a JSON array of objects mapping item keys to raw TOML value texts.
+                var entries = (JsonSerializer.Deserialize(change.After, JsonContexts.Info<JsonArray>(Json.Storage)) ?? new JsonArray())
+                    .Select(e => (IReadOnlyList<KeyValuePair<string, string>>)((e as JsonObject) ?? throw new EditorException($"Array entry change for '{change.KeyPath}' has a non-object entry."))
+                        .Select(p => new KeyValuePair<string, string>(p.Key, (p.Value as JsonValue)?.GetValue<string>()
+                            ?? throw new EditorException($"Array entry change for '{change.KeyPath}' has a non-string item value for '{p.Key}'.")))
+                        .ToList())
+                    .ToList();
+                _editor = new TomlEditor(TomlArrayEntries.Set(_editor.Text, change.KeyPath, entries));
+            }
+            else if (change.Kind == ConfigChangeKind.Table)
             {
                 // The "after" of a table change is a JSON object mapping item keys to raw TOML value texts.
                 var items = JsonSerializer.Deserialize(change.After, JsonContexts.Info<JsonObject>(Json.Storage)) ?? new JsonObject();
@@ -93,7 +104,11 @@ internal abstract class ConfigEditorOps
 
         public override void Remove(ConfigChange change)
         {
-            _editor = change.Kind == ConfigChangeKind.Table ? _editor.RemoveTable(change.KeyPath) : _editor.Remove(change.KeyPath);
+            _editor = change.Kind == ConfigChangeKind.Table
+                ? TomlArrayEntries.IsSelector(change.KeyPath)
+                    ? new TomlEditor(TomlArrayEntries.Remove(_editor.Text, change.KeyPath))
+                    : _editor.RemoveTable(change.KeyPath)
+                : _editor.Remove(change.KeyPath);
         }
     }
 

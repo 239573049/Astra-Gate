@@ -1,0 +1,2 @@
+GOOSE_PROVIDER: "astra"
+GOOSE_MODEL: "gpt-5"

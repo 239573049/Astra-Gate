@@ -1,0 +1,14 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zshrc",
+      "keyPath": "dim",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.zshrc"
+  ],
+  "warnings": []
+}

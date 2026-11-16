@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "format": "toml",
+    "keyPath": "providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"client_type\":\"\\u0022openai-responses\\u0022\",\"api_key\":\"\\u0022sk-astra-enterprise-key\\u0022\"}"
+  },
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "format": "toml",
+    "keyPath": "models[provider=astra]",
+    "kind": "table",
+    "before": null,
+    "after": "[{\"provider\":\"\\u0022astra\\u0022\",\"model_id\":\"\\u0022gpt-5\\u0022\",\"display_name\":\"\\u0022GPT-5\\u0022\",\"context_window\":\"400000\",\"vision\":\"true\",\"max_tokens\":\"128000\"},{\"provider\":\"\\u0022astra\\u0022\",\"model_id\":\"\\u0022claude-sonnet-4-5\\u0022\",\"display_name\":\"\\u0022Claude Sonnet 4.5\\u0022\",\"context_window\":\"200000\",\"vision\":\"true\",\"max_tokens\":\"64000\"},{\"provider\":\"\\u0022astra\\u0022\",\"model_id\":\"\\u0022deepseek-chat\\u0022\",\"display_name\":\"\\u0022DeepSeek Chat\\u0022\",\"context_window\":\"64000\",\"vision\":\"false\",\"max_tokens\":\"8000\"}]"
+  },
+  {
+    "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+    "format": "toml",
+    "keyPath": "default_model",
+    "kind": "key",
+    "before": null,
+    "after": "\"{ provider = \\u0022astra\\u0022, model_id = \\u0022gpt-5\\u0022 }\""
+  }
+]

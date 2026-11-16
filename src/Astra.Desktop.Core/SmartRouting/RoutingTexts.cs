@@ -65,6 +65,20 @@ public static partial class RoutingTexts
         ["vscodium"] = "VSCodium", ["omp"] = "omp (oh-my-pi)", ["mimo-code"] = "MiMo Code", ["deepseek-harness"] = "DeepSeek Harness",
         ["workbuddy"] = "WorkBuddy", ["workbuddy-ai"] = "WorkBuddy AI", ["muse-code"] = "Muse Code", ["nextcowork"] = "NextCoWork",
         ["paseo"] = "Paseo", ["zcode"] = "ZCode", ["tkcode"] = "TKCode",
+        ["openchamber"] = "OpenChamber",
+        ["deveco-code"] = "DevEco Code",
+        ["stepcode"] = "StepCode",
+        ["aside"] = "Aside",
+        ["omo"] = "OmO",
+        ["prime-agent"] = "Prime Agent",
+        ["mu"] = "mu",
+        ["mothx"] = "MothX",
+        ["penguin-harness"] = "PenguinHarness",
+        ["antigravity-cli"] = "Antigravity CLI",
+        ["dim"] = "Dim",
+        ["command-code"] = "Command Code",
+        ["fx"] = "fx",
+        ["goose"] = "Goose",
     };
 
     /// <summary>A client's display name (web <c>clientName</c>); an agent plugin's client shows its plugin id.</summary>

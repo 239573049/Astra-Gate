@@ -38,6 +38,20 @@ public static class ClientMeta
         ["paseo"] = "Paseo",
         ["zcode"] = "ZCode",
         ["tkcode"] = "TKCode",
+        ["openchamber"] = "OpenChamber",
+        ["deveco-code"] = "DevEco Code",
+        ["stepcode"] = "StepCode",
+        ["aside"] = "Aside",
+        ["omo"] = "OmO",
+        ["prime-agent"] = "Prime Agent",
+        ["mu"] = "mu",
+        ["mothx"] = "MothX",
+        ["penguin-harness"] = "PenguinHarness",
+        ["antigravity-cli"] = "Antigravity CLI",
+        ["dim"] = "Dim",
+        ["command-code"] = "Command Code",
+        ["fx"] = "fx",
+        ["goose"] = "Goose",
     };
 
     /// <summary>The order clients are listed in (web <c>CLIENT_ORDER</c>).</summary>
@@ -47,6 +61,7 @@ public static class ClientMeta
         "pi", "hermes-agent", "minimax-code", "copilot-cli", "vscode-copilot",
         "crush", "qwen-code", "droid", "kimi-code", "zed",
         "vscode-insiders", "vscodium", "omp", "mimo-code", "deepseek-harness", "workbuddy", "workbuddy-ai", "muse-code", "nextcowork", "paseo", "zcode", "tkcode",
+        "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
     ];
 
     /// <summary>

@@ -86,6 +86,20 @@ public static class ClientInstallCatalog
         new(ClientKinds.Paseo, ClientInstallMethod.Manual, "paseo", null, "https://paseo.sh/"),
         new(ClientKinds.ZCode, ClientInstallMethod.Manual, null, null, "https://zcode.z.ai/"),
         new(ClientKinds.TKCode, ClientInstallMethod.Manual, null, null, "https://github.com/AtomUICommunity/TKCode"),
+        new(ClientKinds.OpenChamber, ClientInstallMethod.Manual, "openchamber", null, "https://github.com/btriapitsyn/openchamber"),
+        new(ClientKinds.DevEcoCode, ClientInstallMethod.Npm, "deveco", "@deveco/deveco-code", "https://github.com/openharmony-sig/deveco-code"),
+        new(ClientKinds.StepCode, ClientInstallMethod.Manual, null, null, "https://www.stepfun.com/"),
+        new(ClientKinds.Aside, ClientInstallMethod.Manual, "aside", null, "https://aside.sh/"),
+        new(ClientKinds.OmO, ClientInstallMethod.Npm, "omo", "omo-ai", "https://github.com/code-yeongyu/oh-my-openagent", ["update"]),
+        new(ClientKinds.PrimeAgent, ClientInstallMethod.Manual, "prime-agent", null, "https://github.com/PrimeIntellect-ai/prime-agent"),
+        new(ClientKinds.Mu, ClientInstallMethod.Manual, null, null, "https://github.com/qybaihe/mu"),
+        new(ClientKinds.MothX, ClientInstallMethod.Npm, "mothx", "mothx-installer", "https://github.com/oschina/mothx"),
+        new(ClientKinds.PenguinHarness, ClientInstallMethod.Npm, "penguin", "@prismshadow/penguin-cli", "https://github.com/Prism-Shadow/penguin-harness"),
+        new(ClientKinds.AntigravityCli, ClientInstallMethod.Manual, "agy", null, "https://antigravity.google/"),
+        new(ClientKinds.Dim, ClientInstallMethod.Npm, "dima", "dimcode-alpha", "https://github.com/arcships/dim"),
+        new(ClientKinds.CommandCode, ClientInstallMethod.Manual, "command-code", null, "https://commandcode.ai/"),
+        new(ClientKinds.Fx, ClientInstallMethod.Manual, null, null, "https://fx.sh/"),
+        new(ClientKinds.Goose, ClientInstallMethod.Manual, "goose", null, "https://block.github.io/goose/"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

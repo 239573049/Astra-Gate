@@ -58,15 +58,18 @@ options (`astra-gateway`), the plugin runtime that produces `AgentPluginDescript
 
 Adapter files that exist today, all under `src/Astra.Clients/Adapters/`: `CodexClientAdapter.cs`,
 `ClaudeCodeClientAdapter.cs`, `ClaudeDesktopClientAdapter.cs`, `GeminiCliClientAdapter.cs`,
-`OpenCodeClientAdapter.cs` (also serves `mimo-code` via `OpenCodeFlavour`),
-`GrokBuildClientAdapter.cs`, `PiClientAdapter.cs`, `HermesAgentClientAdapter.cs`,
+`OpenCodeClientAdapter.cs` (also serves `mimo-code`, `deveco-code` and `openchamber` via `OpenCodeFlavour`),
+`GrokBuildClientAdapter.cs`, `PiClientAdapter.cs` (also `stepcode`, `aside`, `omo`, `prime-agent`, `mu` via `PiFlavour`), `HermesAgentClientAdapter.cs`,
 `MiniMaxCodeClientAdapter.cs`, `CopilotCliClientAdapter.cs`,
 `VsCodeCopilotClientAdapter.cs` (stable / Insiders / VSCodium via `VsCodeFlavour`),
 `CrushClientAdapter.cs`, `QwenCodeClientAdapter.cs`, `DroidClientAdapter.cs`,
 `KimiCodeClientAdapter.cs`, `ZedClientAdapter.cs`, `OmpClientAdapter.cs`,
 `DeepSeekHarnessClientAdapter.cs`, `WorkBuddyClientAdapter.cs` (also `workbuddy-ai`),
 `MuseCodeClientAdapter.cs`, `NextCoWorkClientAdapter.cs`, `PaseoClientAdapter.cs`,
-`ZCodeClientAdapter.cs`, `TKCodeClientAdapter.cs`, plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
+`ZCodeClientAdapter.cs`, `TKCodeClientAdapter.cs`,
+`MothXClientAdapter.cs`, `PenguinHarnessClientAdapter.cs` (its `[[models]]` rows through `TomlArrayEntries`, selector `models[provider=astra]`),
+`GooseClientAdapter.cs`, `CommandCodeClientAdapter.cs`, `FxClientAdapter.cs` (these two keyless), `DimClientAdapter.cs` and
+`AntigravityCliClientAdapter.cs` (shell-rc function blocks like Muse Code, via `ShellRc`), plus `PluginClientAdapter.cs` for `plugin-<agent id>` kinds and `ClientAdapterRegistry.cs`.
 `ClientAvailability.ComingSoon` is used only by an unavailable plugin client today
 (`PluginClientAdapter.Availability`); every built-in adapter is `Available`.
 

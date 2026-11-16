@@ -1,0 +1,18 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+      "keyPath": "models[provider=astra]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.penguin/data/default_project/.project_config.toml",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

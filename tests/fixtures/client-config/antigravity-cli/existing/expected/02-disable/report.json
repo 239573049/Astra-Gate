@@ -1,0 +1,32 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zshrc",
+      "keyPath": "antigravity-cli",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/antigravity-cli/astra-settings.json",
+      "keyPath": "customModelsConfig",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/antigravity-cli/astra-settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/antigravity-cli/astra-settings.json",
+      "keyPath": "modelProvider",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.gemini/antigravity-cli/astra-settings.json"
+  ],
+  "warnings": []
+}

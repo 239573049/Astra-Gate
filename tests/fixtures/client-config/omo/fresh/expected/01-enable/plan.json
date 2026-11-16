@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/.omo/agent/models.json",
+    "format": "json",
+    "keyPath": "providers.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"baseUrl\":\"https://astra.corp.com/v1\",\"api\":\"openai-completions\",\"apiKey\":\"sk-astra-enterprise-key\",\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"api\":\"openai-responses\",\"reasoning\":true,\"input\":[\"text\",\"image\"],\"contextWindow\":400000,\"maxTokens\":128000},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"api\":\"anthropic-messages\",\"baseUrl\":\"https://astra.corp.com\",\"reasoning\":true,\"input\":[\"text\",\"image\"],\"contextWindow\":200000,\"maxTokens\":64000},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"reasoning\":false,\"input\":[\"text\"],\"contextWindow\":64000,\"maxTokens\":8000}]}"
+  },
+  {
+    "file": "$HOME/.omo/agent/settings.json",
+    "format": "json",
+    "keyPath": "defaultProvider",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra\""
+  },
+  {
+    "file": "$HOME/.omo/agent/settings.json",
+    "format": "json",
+    "keyPath": "defaultModel",
+    "kind": "key",
+    "before": null,
+    "after": "\"gpt-5\""
+  }
+]

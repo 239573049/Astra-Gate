@@ -1,0 +1,24 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.fx/settings.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.fx/settings.json",
+      "keyPath": "provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.fx/settings.json",
+      "keyPath": "models.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

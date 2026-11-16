@@ -1,0 +1,12 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.bashrc",
+      "keyPath": "dim",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

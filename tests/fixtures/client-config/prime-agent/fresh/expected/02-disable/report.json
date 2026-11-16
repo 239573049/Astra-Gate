@@ -1,0 +1,27 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.prime/agent/models.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.prime/agent/settings.json",
+      "keyPath": "defaultProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.prime/agent/settings.json",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.prime/agent/models.json",
+    "$HOME/.prime/agent/settings.json"
+  ],
+  "warnings": []
+}

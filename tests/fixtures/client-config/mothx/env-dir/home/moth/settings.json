@@ -1,0 +1,7 @@
+{
+  "defaultProvider": "mine",
+  "defaultModel": "foo",
+  "providers": {
+    "mine": { "baseUrl": "http://localhost:1/v1", "api": "openai-chat", "apiKey": "k", "models": [{ "id": "foo" }] }
+  }
+}

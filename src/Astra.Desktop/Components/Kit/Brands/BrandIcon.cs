@@ -227,7 +227,9 @@ public sealed class BrandIcon : Decorator
         LucideIconKind? badge = brand?.Badge;
         if (brand is { } known)
         {
-            if (known.Logo is { } logo)
+            if (known is { Logo: null, Mark: null })
+                body = InitialsTile(Label ?? kind, size);
+            else if (known.Logo is { } logo)
             {
                 body = LogoBitmap(logo) is { } bitmap
                     ? (tile ? ImageTile(bitmap, size) : GlyphImage(bitmap, size))

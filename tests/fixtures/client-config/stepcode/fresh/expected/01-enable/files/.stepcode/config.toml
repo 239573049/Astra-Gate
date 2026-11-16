@@ -1,0 +1,2 @@
+defaultProvider = "astra"
+defaultModel = "gpt-5"

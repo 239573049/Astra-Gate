@@ -1,0 +1,8 @@
+{
+  "theme": "dark",
+  "provider": "gateway",
+  "model": "anthropic/claude-x",
+  "providers": {
+    "local": { "protocol": "openai-chat-completions", "base_url": "http://localhost:11434/v1", "auth": { "type": "none" } }
+  }
+}

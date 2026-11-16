@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/.bashrc",
+    "keyPath": "dim",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"# Dim is routed through Astra. Turn the Dim client off in Astra to remove this block.\\nunalias dima 2\\u003E/dev/null || true\\ndima() {\\n  DIM_BASE_URL=\\u0027https://astra.corp.com/v1\\u0027 DIM_API_FORMAT=openai-compatible DIM_API_KEY=\\u0027sk-astra-enterprise-key\\u0027 DIM_MODEL=\\u0027gpt-5\\u0027 DIM_MAX_CONTEXT_TOKENS=400000 DIM_MAX_OUTPUT_TOKENS=128000 command dima \\u0022$@\\u0022\\n}\""
+  }
+]

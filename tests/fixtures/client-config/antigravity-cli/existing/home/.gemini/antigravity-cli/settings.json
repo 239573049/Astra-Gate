@@ -1,0 +1,8 @@
+{
+  "theme": "dark",
+  "customModelsConfig": {
+    "customModels": {
+      "mine/gem": { "apiProvider": "API_PROVIDER_GOOGLE_GEMINI", "modelName": "gem" }
+    }
+  }
+}

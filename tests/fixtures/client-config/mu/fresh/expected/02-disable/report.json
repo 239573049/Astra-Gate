@@ -1,0 +1,27 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.mu/agent/models.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.mu/agent/settings.json",
+      "keyPath": "defaultProvider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.mu/agent/settings.json",
+      "keyPath": "defaultModel",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.mu/agent/models.json",
+    "$HOME/.mu/agent/settings.json"
+  ],
+  "warnings": []
+}

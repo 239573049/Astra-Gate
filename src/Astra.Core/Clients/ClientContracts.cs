@@ -31,12 +31,27 @@ public static class ClientKinds
     public const string Paseo = "paseo";
     public const string ZCode = "zcode";
     public const string TKCode = "tkcode";
+    public const string OpenChamber = "openchamber";
+    public const string DevEcoCode = "deveco-code";
+    public const string StepCode = "stepcode";
+    public const string Aside = "aside";
+    public const string OmO = "omo";
+    public const string PrimeAgent = "prime-agent";
+    public const string Mu = "mu";
+    public const string MothX = "mothx";
+    public const string PenguinHarness = "penguin-harness";
+    public const string AntigravityCli = "antigravity-cli";
+    public const string Dim = "dim";
+    public const string CommandCode = "command-code";
+    public const string Fx = "fx";
+    public const string Goose = "goose";
 
     public static readonly IReadOnlyList<string> All =
     [
         Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
         DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo, ZCode, TKCode,
+        OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
     ];
 
     /// <summary>
@@ -50,6 +65,7 @@ public static class ClientKinds
         OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, WorkBuddyAi, NextCoWork,
         Paseo, ZCode, TKCode, MuseCode, Codex, GrokBuild, HermesAgent,
+        OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
     ];
 
     /// <summary>The prefix of a client a plugin adds (a magpie agent plugin): "plugin-&lt;agent id&gt;".</summary>
@@ -81,9 +97,9 @@ public static class ClientKinds
     /// <summary>The inbound protocol each client speaks to the gateway.</summary>
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
-        Codex or GrokBuild or MuseCode => ApiProtocol.OpenAIResponses,
+        Codex or GrokBuild or MuseCode or PenguinHarness => ApiProtocol.OpenAIResponses,
         ClaudeCode or ClaudeDesktop or Paseo => ApiProtocol.Anthropic,
-        GeminiCli => ApiProtocol.Gemini,
+        GeminiCli or AntigravityCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,
     };
 }

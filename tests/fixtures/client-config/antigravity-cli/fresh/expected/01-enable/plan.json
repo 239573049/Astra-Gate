@@ -1,0 +1,34 @@
+[
+  {
+    "file": "$HOME/.gemini/antigravity-cli/astra-settings.json",
+    "format": "json",
+    "keyPath": "modelProvider",
+    "kind": "key",
+    "before": null,
+    "after": "\"gemini\""
+  },
+  {
+    "file": "$HOME/.gemini/antigravity-cli/astra-settings.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/.gemini/antigravity-cli/astra-settings.json",
+    "format": "json",
+    "keyPath": "customModelsConfig",
+    "kind": "key",
+    "before": null,
+    "after": "{\"customModels\":{\"astra/gpt-5\":{\"apiProvider\":\"API_PROVIDER_GOOGLE_GEMINI\",\"modelName\":\"gpt-5\"},\"astra/claude-sonnet-4-5\":{\"apiProvider\":\"API_PROVIDER_GOOGLE_GEMINI\",\"modelName\":\"claude-sonnet-4-5\"},\"astra/deepseek-chat\":{\"apiProvider\":\"API_PROVIDER_GOOGLE_GEMINI\",\"modelName\":\"deepseek-chat\"}}}"
+  },
+  {
+    "file": "$HOME/.zshrc",
+    "format": "shellblock",
+    "keyPath": "antigravity-cli",
+    "kind": "key",
+    "before": null,
+    "after": "\"# Antigravity CLI is routed through Astra. Turn the Antigravity CLI client off in Astra to remove this block.\\nunalias agy 2\\u003E/dev/null || true\\nagy() {\\n  local m a\\n  m=\\u0027astra/gpt-5\\u0027\\n  for a in \\u0022$@\\u0022; do case \\u0022$a\\u0022 in remote-control|--remote-control|--remote-control=*|-remote-control) command agy \\u0022$@\\u0022; return;; esac; done\\n  for a in \\u0022$@\\u0022; do case \\u0022$a\\u0022 in --model|--model=*|-model|-model=*) m=;; esac; done\\n  if [ -n \\u0022$m\\u0022 ]; then set -- --model \\u0022$m\\u0022 \\u0022$@\\u0022; fi\\n  set -- --settings \\u0022$HOME/.gemini/antigravity-cli/astra-settings.json\\u0022 \\u0022$@\\u0022\\n  GEMINI_API_KEY=\\u0027sk-astra-enterprise-key\\u0027 GOOGLE_GEMINI_BASE_URL=\\u0027https://astra.corp.com\\u0027 command agy \\u0022$@\\u0022\\n}\""
+  }
+]

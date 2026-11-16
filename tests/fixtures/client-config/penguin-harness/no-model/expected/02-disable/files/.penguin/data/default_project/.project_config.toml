@@ -1,0 +1,3 @@
+[[models]]
+provider = "mine"
+model_id = "foo"

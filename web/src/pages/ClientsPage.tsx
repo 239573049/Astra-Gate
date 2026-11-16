@@ -114,6 +114,7 @@ const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'nextcowork',
   'paseo', 'zcode', 'tkcode', 'muse-code', 'codex', 'grok-build', 'hermes-agent',
+  'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
 ]);
 
 /** The built-in clients in their order, then the clients agent plugins add ("plugin-<id>"), by name. */

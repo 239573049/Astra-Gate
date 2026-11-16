@@ -535,7 +535,12 @@ public sealed partial class ClientService(
         ClientKinds.ClaudeCode => "env.ANTHROPIC_MODEL",
         ClientKinds.GeminiCli => "GEMINI_MODEL",
         ClientKinds.GrokBuild => "model.astra.model",
-        ClientKinds.Pi or ClientKinds.MiniMaxCode => "defaultModel",
+        ClientKinds.Pi or ClientKinds.MiniMaxCode or ClientKinds.StepCode or ClientKinds.Aside or ClientKinds.OmO or ClientKinds.PrimeAgent
+            or ClientKinds.Mu or ClientKinds.MothX => "defaultModel",
+        ClientKinds.Fx => "models.astra",
+        ClientKinds.Goose => "GOOSE_MODEL",
+        ClientKinds.OpenChamber => "fields.defaultModel.value",
+        ClientKinds.PenguinHarness => "default_model",
         ClientKinds.HermesAgent => "model.default",
         ClientKinds.Crush => "models.large",
         ClientKinds.QwenCode => "model.name",
@@ -776,6 +781,10 @@ public sealed partial class ClientService(
         ClientKinds.Omp => "omp (oh-my-pi)", ClientKinds.MiMoCode => "MiMo Code", ClientKinds.DeepSeekHarness => "DeepSeek Harness",
         ClientKinds.WorkBuddy => "WorkBuddy", ClientKinds.WorkBuddyAi => "WorkBuddy AI", ClientKinds.MuseCode => "Muse Code", ClientKinds.NextCoWork => "NextCoWork",
         ClientKinds.Paseo => "Paseo", ClientKinds.ZCode => "ZCode", ClientKinds.TKCode => "TKCode",
+        ClientKinds.OpenChamber => "OpenChamber", ClientKinds.DevEcoCode => "DevEco Code", ClientKinds.StepCode => "StepCode", ClientKinds.Aside => "Aside",
+        ClientKinds.OmO => "OmO", ClientKinds.PrimeAgent => "Prime Agent", ClientKinds.Mu => "mu", ClientKinds.MothX => "MothX",
+        ClientKinds.PenguinHarness => "PenguinHarness", ClientKinds.AntigravityCli => "Antigravity CLI", ClientKinds.Dim => "Dim",
+        ClientKinds.CommandCode => "Command Code", ClientKinds.Fx => "fx", ClientKinds.Goose => "Goose",
         _ => kind,
     };
 }

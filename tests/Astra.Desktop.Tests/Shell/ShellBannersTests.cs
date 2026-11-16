@@ -45,7 +45,7 @@ public class ShellBannersTests
     [Fact]
     public void Client_meta_matches_the_web_table()
     {
-        Assert.Equal(28, ClientMeta.Names.Count);
+        Assert.Equal(Astra.Core.Clients.ClientKinds.All.Count, ClientMeta.Names.Count);
         Assert.Equal(ClientMeta.Names.Keys.Order(StringComparer.Ordinal), ClientMeta.Order.Order(StringComparer.Ordinal));
         Assert.Equal("Claude Code", ClientMeta.Name("claude-code"));
         Assert.Equal("omp (oh-my-pi)", ClientMeta.Name("omp", "ignored"));

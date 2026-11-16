@@ -1,0 +1,9 @@
+// my OpenCode config
+{
+  "$schema": "https://opencode.ai/config.json",
+  // keep my provider
+  "provider": {
+    "mine": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "http://localhost:1/v1" } }
+  },
+  "model": "mine/foo",
+}

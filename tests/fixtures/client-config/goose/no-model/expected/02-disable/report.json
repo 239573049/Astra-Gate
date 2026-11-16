@@ -1,0 +1,74 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "api_key_env",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "base_url",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "description",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "display_name",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "dynamic_models",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "engine",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "headers",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "models",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "name",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "requires_auth",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.config/goose/custom_providers/astra.json",
+      "keyPath": "skip_canonical_filtering",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.config/goose/custom_providers/astra.json"
+  ],
+  "warnings": []
+}

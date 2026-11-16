@@ -1,0 +1,7 @@
+[default_model]
+provider = "mine"
+model_id = "foo"
+
+[[models]]
+provider = "mine"
+model_id = "foo"
