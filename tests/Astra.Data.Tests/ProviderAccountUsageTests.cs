@@ -131,9 +131,9 @@ public class ProviderAccountUsageTests
                 DROP TABLE library_projects;
                 ALTER TABLE mcp_local_servers DROP COLUMN projects_json;
                 ALTER TABLE library_placements DROP COLUMN project;
-                DELETE FROM schema_version WHERE version = 33;
+                DELETE FROM schema_version WHERE version = 28;
                 DROP TABLE routing_groups;
-                DELETE FROM schema_version WHERE version = 32;
+                DELETE FROM schema_version WHERE version = 27;
                 ALTER TABLE requests DROP COLUMN context_json;
                 DELETE FROM schema_version WHERE version = 26;
                 DROP TABLE mcp_local_servers;

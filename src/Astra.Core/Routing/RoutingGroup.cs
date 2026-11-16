@@ -46,7 +46,7 @@ public sealed class GroupMember
 }
 
 /// <summary>
-/// A named virtual model clients pick like any other: <c>group/&lt;slug&gt;</c> (row of <c>routing_groups</c>, migration 0032).
+/// A named virtual model clients pick like any other: <c>group/&lt;slug&gt;</c> (row of <c>routing_groups</c>, migration 0027).
 /// A request for it goes to one of its members — <c>provider/model</c> targets or other groups — chosen by <see cref="Mode"/>,
 /// the next member trying it when an attempt fails before anything reached the client. Ordering rules after magpie (MIT).
 /// </summary>

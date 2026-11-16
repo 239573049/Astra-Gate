@@ -1875,7 +1875,7 @@ export interface SkillMarketSource { url: string; default: string }
 /** `why` is `shared` (reads the shared directory) or `own` (the user's own astra-skills entry is there) when the router cannot be turned on. */
 export interface SkillRouterClient { kind: ClientKind; supported: boolean; enabled: boolean; why?: 'shared' | 'own' | null; listed: number; entry?: string | null }
 
-// ---------- the resource library: instructions, sub-agents, commands, hooks, environment variables (migration 0033) ----------
+// ---------- the resource library: instructions, sub-agents, commands, hooks, environment variables (migration 0028) ----------
 export type ResourceKind = 'instruction' | 'agent' | 'command' | 'hook' | 'env';
 /** URL segment of each kind: /api/library/<segment>. */
 export type ResourceSegment = 'instructions' | 'agents' | 'commands' | 'hooks' | 'env';

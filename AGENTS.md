@@ -866,7 +866,7 @@ runtime needed on the target).
     the attempt span as `astra.account.pick`, a `RankReasons` code). Affinity is cache-aware (`ConversationStays.Holds`: stays while the conversation answered
     within 5 min and its last request read+wrote >= 1,024 cached tokens — `AccountScheduler.NoteCache` / `GroupRouter.NoteCache` from `GatewayPipeline`'s
     `finally`; a first answer reports nothing yet and stays; a bound account at >= 98% is left) — balanced keeps its hour-long sticky binding untouched.
-    **Routing groups**: `group/<slug>` is a virtual model (`routing_groups`, migration 0032; `RoutingGroupRepository` with a `RowCache`, `ListCachedAsync` is
+    **Routing groups**: `group/<slug>` is a virtual model (`routing_groups`, migration 0027; `RoutingGroupRepository` with a `RowCache`, `ListCachedAsync` is
     read-only; members are `GroupMember` = `provider/model` or a nested group, `Weight`; `RoutingGroupValidator` has the problem codes, cycle and depth (3) checks).
     The routing seam is `GroupRouter.PlanAsync` in `GatewayPipeline`, after smart routing and before the pool / bindings branch: members are judged for the caller
     with `IGatewayRouter.GradeUseAsync` exactly like a smart-routing grade (a limited token skips members it cannot reach; none left = a 404 that names no
@@ -914,7 +914,7 @@ runtime needed on the target).
 
 37. **The rest of the resource library** (instructions, sub-agents, slash commands, hooks, environment variables, project scope, Skill updates /
     market / router; magpie's `internal/library`, MIT, is the reference and the code credits it): `ResourceLibrary` (`src/Astra.Clients/Library`) keeps
-    items in `library_items` (migration 0033) and records everything it writes in `library_writes`, the ownership ledger — Astra removes only what the
+    items in `library_items` (migration 0028) and records everything it writes in `library_writes`, the ownership ledger — Astra removes only what the
     ledger lists **and that is still exactly as written**; what the user changed is drift (reported, never overwritten without `force`, left in place when
     the item is deleted). Where each client reads what is the table `ResourcePlaces` (not an adapter method: no golden cases, no TS port, linked update 20
     does not apply) — instructions are a marked section `<!-- astra:begin <name> -->` of the client's instruction file (`ResourceText`; user text outside it is

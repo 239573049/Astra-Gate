@@ -30,7 +30,7 @@ never a copy (a copy only where a link is impossible). Switching a client off re
 - Migration links back **in place** (never into the shared directory) so no client gains a Skill it never had; originals go to `~/.astra/backups/library/<timestamp>/`, last 30 kept.
 - Nothing is deleted without a backup first (migrate, delete, take-edits, overwrite-copy).
 
-## The rest of the library (linked update 37, migration 0033)
+## The rest of the library (linked update 37, migration 0028)
 
 | Where | What |
 |---|---|

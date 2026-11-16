@@ -4,7 +4,7 @@ using Astra.Core.Library;
 namespace Astra.Data.Repositories;
 
 /// <summary>
-/// The non-Skill part of the resource library (migration 0033): the items (instructions, sub-agents, commands, hooks, environment
+/// The non-Skill part of the resource library (migration 0028): the items (instructions, sub-agents, commands, hooks, environment
 /// variables), what Astra wrote for them (the ownership ledger), the project directories and the skill router's clients.
 /// A handful of rows, never read per request.
 /// </summary>

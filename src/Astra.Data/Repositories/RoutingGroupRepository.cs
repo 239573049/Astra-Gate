@@ -4,7 +4,7 @@ using Astra.Core.Routing;
 namespace Astra.Data.Repositories;
 
 /// <summary>
-/// Routing groups (<c>routing_groups</c>, migration 0032). The gateway reads the whole (small) list on every request that
+/// Routing groups (<c>routing_groups</c>, migration 0027). The gateway reads the whole (small) list on every request that
 /// could name one, so <see cref="ListCachedAsync"/> goes through a <see cref="RowCache{TKey,TValue}"/> like the other per-request
 /// rows; its callers only read. The admin API uses the uncached methods and gets fresh copies.
 /// </summary>
