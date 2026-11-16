@@ -328,6 +328,8 @@ public static class AstraApp
 
         app.UseCors();
         app.UseMiddleware<SecurityMiddleware>();
+        // The Responses WebSocket (GET /v1/responses): after the security middleware, so its Host and origin rules judge the upgrade.
+        app.UseWebSockets();
         app.UseRateLimiter();
         app.UseMiddleware<Astra.Server.Power.KeepAwakeMiddleware>();
         if (app.Environment.WebRootPath is not null)
@@ -365,6 +367,8 @@ public static class AstraApp
         app.MapPluginEndpoints();
         Astra.Server.PluginsV2.PluginV2Endpoints.MapPluginV2Endpoints(app);
         app.MapGatewayEndpoints();
+        // The Ollama face (/ollama/api/*): a gateway path beside /v1, not under the admin API's /api.
+        app.MapOllamaEndpoints();
         app.MapKeyInfoEndpoints();
         app.MapAlertEndpoints();
         app.MapTunnelEndpoints();

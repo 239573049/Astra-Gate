@@ -80,7 +80,8 @@ public sealed class AdminSessions(IDataProtectionProvider dp)
 /// (<see cref="RequestOrigin"/>): the gateway wants a token from them, /api wants a session too, and in loopback mode
 /// they reach only the gateway unless the tunnel settings allow the admin UI. In loopback mode the connection is
 /// local, so Cloudflare's own headers are trusted for the client address and scheme (rate limits, Secure cookies).
-/// Gateway endpoints (/v1, /v1beta) authenticate with gateway tokens elsewhere; network requests always need one.
+/// Gateway endpoints (/v1, /v1beta, and the Ollama face under /ollama — deliberately not under /api) authenticate with gateway
+/// tokens elsewhere; network requests always need one.
 /// </summary>
 public sealed class SecurityMiddleware(RequestDelegate next, ServerOptions options, AdminSessions sessions,
     Tunnel.TunnelService tunnel, SettingsService settings)

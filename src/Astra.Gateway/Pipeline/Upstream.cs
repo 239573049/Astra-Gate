@@ -63,6 +63,9 @@ public static class UpstreamUrls
         return null;
     }
 
+    /// <summary>A path beside the endpoint's base address (Gemini's <c>models/x:embedContent</c>); null for a full-URL endpoint.</summary>
+    public static string? Beside(ProviderEndpoint endpoint, string path) => endpoint.FullUrl ? null : Append(endpoint.BaseUrl, "/" + path);
+
     /// <summary>Appends <c>key=value</c> to the query string (Gemini ?key= auth).</summary>
     public static string WithQuery(string url, string key, string value)
     {

@@ -134,11 +134,16 @@ public static class RelayApp
             // OpenAI Images API (issue #17): the pipeline's own handler, through the same contracts as a generation request.
             app.MapPost(prefix + "/images/generations", context => HandleAsync(context, ApiProtocol.OpenAIChat, image: ImageOperation.Generations));
             app.MapPost(prefix + "/images/edits", context => HandleAsync(context, ApiProtocol.OpenAIChat, image: ImageOperation.Edits));
+            // Rerank and audio through the pipeline too (embeddings stay raw-relayed above: the upstream's own answer, as is).
+            app.MapPost(prefix + "/rerank", context => HandleAsync(context, ApiProtocol.OpenAIChat, forwarded: ForwardedCall.Rerank));
+            app.MapPost(prefix + "/audio/transcriptions", context => HandleAsync(context, ApiProtocol.OpenAIChat, forwarded: ForwardedCall.Transcriptions));
+            app.MapPost(prefix + "/audio/translations", context => HandleAsync(context, ApiProtocol.OpenAIChat, forwarded: ForwardedCall.Translations));
+            app.MapPost(prefix + "/audio/speech", context => HandleAsync(context, ApiProtocol.OpenAIChat, forwarded: ForwardedCall.Speech));
         }
         app.MapPost("/v1beta/models/{**action}", context => HandleAsync(context, ApiProtocol.Gemini));
         return app;
 
-        async Task HandleAsync(HttpContext context, ApiProtocol protocol, Relayed? relayed = null, ImageOperation? image = null)
+        async Task HandleAsync(HttpContext context, ApiProtocol protocol, Relayed? relayed = null, ImageOperation? image = null, ForwardedCall? forwarded = null)
         {
             context.Features.Set(new Inbound(protocol));
             var caller = target.Caller(context.Request);
@@ -161,6 +166,11 @@ public static class RelayApp
                 if (image is { } operation)
                 {
                     await context.RequestServices.GetRequiredService<GatewayPipeline>().HandleImagesAsync(context, operation);
+                    return;
+                }
+                if (forwarded is not null)
+                {
+                    await context.RequestServices.GetRequiredService<GatewayPipeline>().HandleForwardedAsync(context, forwarded);
                     return;
                 }
                 string? pathModel = null;
