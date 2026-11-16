@@ -70,6 +70,9 @@ public sealed class ClientPanelView : UserControl
     private List<ClientBindingDto> _order = [];
     private bool _bindingsBusy;
     private bool _accountBusy;
+    private bool _shortlistBusy;
+    // The shortlist being edited per client, with the saved list it was started from (a new saved list resets it).
+    private readonly Dictionary<string, (string Saved, List<string> Picked)> _shortlistDrafts = new(StringComparer.Ordinal);
     private bool _disableBusy;
     private bool _repairBusy;
 
@@ -226,6 +229,7 @@ public sealed class ClientPanelView : UserControl
             case ClientTab.Models:
                 AddToken(client, draft, tokens);
                 AddModels(client, draft, models);
+                if (client.ProviderId is not null && !draft.IsDesktopClient) AddShortlist(client);
                 break;
             case ClientTab.Options:
                 AddOptions(client, draft, isDirect);
@@ -847,6 +851,43 @@ public sealed class ClientPanelView : UserControl
             models2.Rows.Add(slotRow);
         }
         _body.Children.Add(models2);
+    }
+
+    // ---------- model shortlist ----------
+
+    private void AddShortlist(ClientInfoDto client)
+    {
+        var all = _watch.Use(_vm.Api.Models(client.Kind, all: true));
+        var saved = ClientExtras.ShortlistOf(client.Extras);
+        var savedKey = string.Join("\n", saved);
+        if (!_shortlistDrafts.TryGetValue(client.Kind, out var d) || d.Saved != savedKey) _shortlistDrafts[client.Kind] = d = (savedKey, saved);
+        var picked = d.Picked;
+        var changed = string.Join("\n", picked) != savedKey;
+        _body.Children.Add(ClientShortlistGroup.Create(all.Data ?? [], picked, changed, _shortlistBusy, client.Enabled, next =>
+        {
+            _shortlistDrafts[client.Kind] = (savedKey, next);
+            Schedule();
+        }, () => _ = SaveShortlistAsync(client.Kind, picked)));
+    }
+
+    private async Task SaveShortlistAsync(string kind, List<string> models)
+    {
+        _shortlistBusy = true;
+        Schedule();
+        try
+        {
+            await _vm.Api.SetShortlistAsync(kind, models);
+            _vm.Context!.Feedback.Success(Loc.T("common.saved"));
+        }
+        catch (Exception e) when (e is ApiException or HttpRequestException or TaskCanceledException)
+        {
+            _vm.Context!.Feedback.Error(e.Message);
+        }
+        finally
+        {
+            _shortlistBusy = false;
+            Schedule();
+        }
     }
 
     // ---------- options & protocols ----------

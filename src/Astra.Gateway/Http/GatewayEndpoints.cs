@@ -133,7 +133,8 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
     {
         var route = await router.ResolveAsync(ctx.Request, ctx.RequestAborted);
         var targets = route.Targets.Count > 0 ? route.Targets : [new RouteTarget(route.Provider, route.AccountId)];
-        return await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ctx.RequestAborted);
+        var all = await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ctx.RequestAborted);
+        return ModelShortlist.Of(route.Client?.ExtraJson) is { } shortlist ? all.Where(m => ModelShortlist.Allows(shortlist, m.Id)).ToList() : all;
     }
 
     private async Task<List<(string Id, string Name, Provider Provider)>> ModelListAsync(HttpContext ctx)
@@ -157,6 +158,8 @@ public sealed class GatewayAuxiliary(GatewayRouter router, CodecRegistry codecs,
             // Smart routing's virtual model (plan §5.8), while it is on: clients pick it like any other model.
             if (smartRouter.AdvertisedModel is { } virtualModel && list.All(m => m.Id != virtualModel))
                 list.Add((virtualModel, "Astra Auto", new Provider { Id = "astra", Name = "astra", CreatedAt = route.Provider.CreatedAt }));
+            // The client's own shortlist (ModelShortlist): only the ids the user picked, the virtual model among them if chosen.
+            if (ModelShortlist.Of(route.Client?.ExtraJson) is { } shortlist) list = list.Where(m => ModelShortlist.Allows(shortlist, m.Id)).ToList();
         }
         return list;
     }

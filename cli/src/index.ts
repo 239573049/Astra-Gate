@@ -23,6 +23,12 @@ import {
   runClientEnable,
   runClientList,
   runClientStatus,
+  runClientShortlist,
+  runClientUse,
+  runProfileList,
+  runProfileRemove,
+  runProfileSave,
+  runProfileUse,
   runProviderAdd,
   runProviderExport,
   runProviderImport,
@@ -176,10 +182,46 @@ client
       runClientEnable(kind, opts),
   );
 client
+  .command('use')
+  .description('Switch a client to <provider>/<model> in one step (e.g. `astra client use claude-code deepseek/deepseek-v4-pro`)')
+  .addArgument(clientKindArgument())
+  .argument('<target>', "provider/model, or a model of the client's current provider")
+  .action((kind: ClientKind, target: string) => runClientUse(kind, target));
+client
+  .command('shortlist')
+  .description('Limit the models a client sees to the ones listed (none = no limit)')
+  .addArgument(clientKindArgument())
+  .argument('[models...]', 'Model ids the client should see')
+  .action((kind: ClientKind, models: string[]) => runClientShortlist(kind, models));
+client
   .command('disable')
   .description('Disable a client and restore its original configuration')
   .addArgument(clientKindArgument())
   .action((kind: ClientKind) => runClientDisable(kind));
+
+const profile = program
+  .command('profile')
+  .description("Profiles: save every client's setup under a name and switch them all at once");
+profile
+  .command('list')
+  .description('List profiles')
+  .action(() => runProfileList());
+profile
+  .command('save')
+  .description("Save the clients' current setup as a profile (overwrites a profile of the same name)")
+  .argument('<name>')
+  .action((name: string) => runProfileSave(name));
+profile
+  .command('use')
+  .description('Apply a profile: switch every client in it through the normal enable / disable path')
+  .argument('<name>')
+  .option('--dry-run', 'Only show what would change')
+  .action((name: string, opts: { dryRun?: boolean }) => runProfileUse(name, opts));
+profile
+  .command('rm')
+  .description("Delete a profile (the clients' configurations do not change)")
+  .argument('<name>')
+  .action((name: string) => runProfileRemove(name));
 
 const token = program.command('token').description('Manage tokens (credentials clients use to reach Astra)');
 token

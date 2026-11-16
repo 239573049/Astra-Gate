@@ -81,6 +81,7 @@ public static class AstraApp
         builder.Services.AddHostedService<ClientProbeWarmup>();
         builder.Services.AddHostedService<TemplateAutoUpdate>();
         builder.Services.AddSingleton<ClientService>();
+        builder.Services.AddSingleton<ProfileService>();
         builder.Services.AddSingleton<ClaudeDirectService>();
         builder.Services.AddSingleton<TokenService>();
         builder.Services.AddSingleton<TokenInviteService>();
@@ -358,6 +359,7 @@ public static class AstraApp
         app.MapJoinEndpoints();
         app.MapMcpEndpoints();
         app.MapLocalMcpEndpoints();
+        app.MapProfileEndpoints();
         app.MapMcpGatewayEndpoints();
         app.MapConnectEndpoints();
         app.MapProviderEndpoints();

@@ -18,7 +18,7 @@ namespace Astra.Server.Api;
 
 
 /// <summary>Client admin operations; file changes are serialized so two UI requests cannot overwrite each other.</summary>
-public sealed class ClientService(
+public sealed partial class ClientService(
     AstraDatabase db, ISecretProtector secrets, ClientEnvironment env, AstraPaths paths, ServerOptions server,
     ClientInstallService installs, ClientRouting routing, IAgentPluginCatalog agents, SmartRouter smartRouter, SettingsService settings)
 {
@@ -97,7 +97,10 @@ public sealed class ClientService(
     /// only if it is already bound. accountId: null = the provider's default account, an id = pin it.
     /// </summary>
     public async Task<ClientInfoDto> SetBindingsAsync(string kind, IReadOnlyList<ClientBindingDto> input, CancellationToken ct) =>
-        await MutateAsync(async () =>
+        await MutateAsync(() => SetBindingsCoreAsync(kind, input, ct), ct);
+
+    private async Task<ClientInfoDto> SetBindingsCoreAsync(string kind, IReadOnlyList<ClientBindingDto> input, CancellationToken ct)
+    {
         {
             await RefreshRegistryAsync(ct);
             var adapter = Require(kind);
@@ -119,7 +122,8 @@ public sealed class ClientService(
             await db.Clients.ReplaceBindingsAsync(kind, next, ct);
             if (ClientKinds.HasModelList(kind)) await SyncModelListCoreAsync(kind, null, ct);
             return await InfoAsync(adapter, ct);
-        }, ct);
+        }
+    }
 
     /// <summary>
     /// Takes a provider out of every client's list before it goes away (deleting it, leaving the unified gateway): a client
@@ -232,7 +236,10 @@ public sealed class ClientService(
         }, ct);
 
     public async Task<ClientInfoDto> EnableAsync(string kind, JsonObject input, CancellationToken ct) =>
-        await MutateAsync(async () =>
+        await MutateAsync(() => EnableCoreAsync(kind, input, ct), ct);
+
+    private async Task<ClientInfoDto> EnableCoreAsync(string kind, JsonObject input, CancellationToken ct)
+    {
         {
             await RefreshRegistryAsync(ct);
             var (adapter, record, context, providerId, tokenId, _) = await PrepareAsync(kind, input, ct);
@@ -250,10 +257,14 @@ public sealed class ClientService(
                 await db.Clients.ReplaceBindingsAsync(kind,
                     WithPrimary(bindings, kind, providerId, bindings.FirstOrDefault(b => b.ProviderId == providerId)?.AccountId));
             return await InfoAsync(adapter, CancellationToken.None);
-        }, ct);
+        }
+    }
 
     public async Task<ClientDisableDto> DisableAsync(string kind, bool force, CancellationToken ct) =>
-        await MutateAsync(async () =>
+        await MutateAsync(() => DisableCoreAsync(kind, force, ct), ct);
+
+    private async Task<ClientDisableDto> DisableCoreAsync(string kind, bool force, CancellationToken ct)
+    {
         {
             await RefreshRegistryAsync(ct);
             var adapter = Require(kind);
@@ -268,7 +279,8 @@ public sealed class ClientService(
                 report.Keys.Where(k => k.Outcome == RestoreKeyOutcome.Restored).Select(KeyLabel).Concat(report.DeletedFiles).Distinct().ToList(),
                 report.Keys.Where(k => k.Outcome == RestoreKeyOutcome.Drifted).Select(KeyLabel).ToList(),
                 await InfoAsync(adapter, CancellationToken.None));
-        }, ct);
+        }
+    }
 
     /// <summary>
     /// Fixes the config files the client cannot read as they are (comments or trailing commas in a file it parses as
@@ -373,25 +385,28 @@ public sealed class ClientService(
 
     /// <summary>
     /// The model ids the client can use: enabled models of its usable bound providers, each id once, and smart routing's
-    /// virtual model while it is on.
+    /// virtual model while it is on; only the client's shortlist when it has one (<paramref name="unfiltered"/> = everything it can reach).
     /// </summary>
-    public async Task<IReadOnlyList<string>> ModelsAsync(string kind, CancellationToken ct)
+    public async Task<IReadOnlyList<string>> ModelsAsync(string kind, CancellationToken ct, bool unfiltered = false)
     {
         await RefreshRegistryAsync(ct);
         Require(kind);
         var targets = await routing.TargetsAsync(await BindingsOrDefaultAsync(kind, await IsEnabledAsync(kind, ct), DefaultProvider(ct), ct), ct);
         var models = (await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct)).Select(m => m.Id).ToList();
         if (smartRouter.AdvertisedModel is { } virtualModel && !models.Contains(virtualModel)) models.Add(virtualModel);
+        // The client's own shortlist (ModelShortlist) narrows what it sees; the shortlist editor asks for the full list.
+        if (!unfiltered && ModelShortlist.Of((await db.Clients.GetAsync(kind, ct))?.ExtraJson) is { } shortlist)
+            models = models.Where(m => ModelShortlist.Allows(shortlist, m)).ToList();
         return models;
     }
 
     private async Task<(IClientAdapter Adapter, ClientRecord Record, EnableContext Context, string ProviderId, string TokenId, List<string> Warnings)>
-        PrepareAsync(string kind, JsonObject input, CancellationToken ct)
+        PrepareAsync(string kind, JsonObject input, CancellationToken ct, IReadOnlyList<ClientBinding>? bindingsOverride = null)
     {
         var adapter = Require(kind);
         if (adapter.Availability != ClientAvailability.Available) throw new AdminApiException(409, adapter.UnavailableReason ?? "Client not supported yet");
         var record = await db.Clients.GetAsync(kind, ct) ?? new ClientRecord { Kind = kind };
-        var bindings = await BindingsOrDefaultAsync(kind, record.Enabled, DefaultProvider(ct), ct);
+        var bindings = bindingsOverride ?? await BindingsOrDefaultAsync(kind, record.Enabled, DefaultProvider(ct), ct);
         var providerId = input["providerId"]?.GetValue<string>() ?? bindings.FirstOrDefault()?.ProviderId;
         if (string.IsNullOrWhiteSpace(providerId)) throw new AdminApiException(400, "Choose a provider first");
         await RequireProviderAsync(providerId, ct);
@@ -411,6 +426,13 @@ public sealed class ClientService(
                 if (ClientProtocols.Validate(kind, overridesObject) is { } invalid) throw new AdminApiException(400, invalid);
             }
             next.ExtraJson = input["extras"]?.ToJsonString();
+            // The shortlist is edited on its own (SetShortlistAsync); an enable that sends extras without it keeps the stored one.
+            if (ModelShortlist.Of(record.ExtraJson) is { } kept && input["extras"] is JsonObject sent && !sent.ContainsKey(ModelShortlist.ExtrasKey))
+            {
+                var carried = Json.Deserialize<JsonObject>(next.ExtraJson) ?? new JsonObject();
+                ModelShortlist.Set(carried, kept);
+                next.ExtraJson = carried.ToJsonString();
+            }
         }
         // Plan §7.5: the gateway maps Claude Desktop's role ids, so at least one role must point at a model.
         if (kind == ClientKinds.ClaudeDesktop && ClaudeDesktopRoles.Parse(next.ExtraJson).Count == 0)
@@ -440,8 +462,10 @@ public sealed class ClientService(
             // Every bound provider's models and mapped ids, each id once (ClientRouting): the gateway routes each to its
             // provider. A mapped id carries its target model's capabilities under its own name.
             var list = new JsonObject();
+            var shortlist = ModelShortlist.Of(extras); // the client's own picks only (magpie's "visible")
             foreach (var (id, target, pm, effective) in await routing.ListModelsAsync(targets, ModelQualifier.From(settings.Current), ct))
             {
+                if (!ModelShortlist.Allows(shortlist, id)) continue;
                 var entry = new JsonObject { ["id"] = id, ["name"] = id == pm.ModelId ? effective.DisplayName : id };
                 // Capability hints for clients that declare per-model limits (VS Code Copilot); omitted when unknown.
                 if (effective.ContextWindow is { } context) entry["contextWindow"] = context;
@@ -456,7 +480,7 @@ public sealed class ClientService(
                 list[id] = entry;
             }
             // Smart routing's virtual model (plan §5.8), while it is on: the client offers it like any other model.
-            if (smartRouter.AdvertisedModel is { } virtualModel && !list.ContainsKey(virtualModel))
+            if (smartRouter.AdvertisedModel is { } virtualModel && !list.ContainsKey(virtualModel) && ModelShortlist.Allows(shortlist, virtualModel))
                 list[virtualModel] = new JsonObject { ["id"] = virtualModel, ["name"] = "Astra Auto" };
             extras["models"] = list;
         }

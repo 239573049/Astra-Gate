@@ -462,6 +462,29 @@ export interface BackupInfo { id: string; createdAt: string; files: string[]; fi
 // POST /api/clients/{kind}/repair -> ClientInfo   (fixes every file in `repairs`; nothing to fix is not an error)
 // GET /api/clients/{kind}/backups -> BackupInfo[] ; POST /api/clients/{kind}/backups/{id}/restore -> ClientInfo
 // GET /api/clients/{kind}/models -> string[]   (enabled models of every bound provider, each id once, for model pickers)
+//   (only the client's shortlist when it has one; ?all=true lists every model it can reach, for the shortlist editor)
+// PUT /api/clients/{kind}/shortlist body {models: string[]} -> ClientInfo   (empty clears it; kept in extras.modelShortlist)
+
+// ---------- profiles ----------
+/** One client inside a saved profile. */
+export interface ProfileClient {
+  kind: string; name: string; enabled: boolean; bindings: ClientBinding[]; model?: string | null; modelShortlist: string[];
+}
+/** A named snapshot of every configured client. `active`: applied (or saved) last; `drifted`: the clients no longer match it. */
+export interface Profile {
+  id: string; name: string; createdAt: string; updatedAt: string; clients: ProfileClient[]; active: boolean; drifted: boolean;
+}
+export type ProfileAction = 'enable' | 'update' | 'disable' | 'store' | 'unchanged' | 'skipped' | 'failed';
+/** `reason`: for a skipped client not-installed | unavailable | unknown-client | no-provider; for a failed one the error. */
+export interface ProfileStep {
+  kind: string; name: string; action: ProfileAction; reason?: string | null; changes: ConfigChange[];
+  diffs: { file: string; unifiedDiff: string }[]; notes: string[];
+}
+export interface ProfileDrop { kind: string; what: 'provider' | 'account' | 'token'; id: string; reason: 'missing' | 'disabled' }
+/** GET /api/profiles/{id}/preview (nothing written) and POST /api/profiles/{id}/apply (the outcome). */
+export interface ProfilePlan { profile: Profile; steps: ProfileStep[]; dropped: ProfileDrop[] }
+// GET /api/profiles -> Profile[] ; POST /api/profiles {name} saves the current state ; PUT /api/profiles/{id} {name?, overwrite?}
+// DELETE /api/profiles/{id} ; {id} also accepts the profile's name
 
 // ---------- Claude Code direct connection (Astra launcher only) ----------
 export type ClaudeDirectMode = "gateway" | "direct";

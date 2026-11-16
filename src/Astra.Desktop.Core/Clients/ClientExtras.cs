@@ -109,6 +109,14 @@ public static class ClientExtras
         return obj;
     }
 
+    // ---------- model shortlist ----------
+
+    /// <summary>The model shortlist in <c>extras.modelShortlist</c> (the ids the client should see, in order); empty = no limit.</summary>
+    public static List<string> ShortlistOf(JsonObject? extras)
+        => extras?["modelShortlist"] is JsonArray a
+            ? a.Select(n => n is JsonValue v && v.TryGetValue<string>(out var s) ? s : null).OfType<string>().Where(s => s.Length > 0).Distinct(StringComparer.Ordinal).ToList()
+            : [];
+
     // ---------- protocols (clientProtocols.ts) ----------
 
     /// <summary>The wire protocol ids in the web's order.</summary>

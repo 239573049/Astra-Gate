@@ -803,6 +803,27 @@ runtime needed on the target).
     `api_key` / `api_key_sealed`); version 1 files restore as before. Not touched: the quota query (`ProviderQuotaManager`) reads the mirrored key.
     Tests: `ProviderKeysTests` (integration), `AccountSchedulerTests`, `ImportReaderTests`, web `provider-keys.test.tsx`, cli `provider-keys.test.ts`.
 
+31. **Profiles and model shortlists** (magpie parity: `magpie save` / `use`, `visible`; MIT): a profile (`ClientProfile`, `Astra.Core/Clients`) is a
+    named snapshot of every client that has a row or bindings — enabled flag, providers + account pins in order, model, token, extras (options,
+    protocol overrides, Claude Code slots, the shortlist; without the regenerated `plugin` descriptor and, for `HasModelList` clients, the generated
+    `models` list, but Claude Code's `models` slots stay). Stored as one document under the `settings` key `client_profiles` (`ClientProfiles`; a
+    handful of whole-document edits with the active marker, so no table / migration), by `ProfileService`; `/api/profiles` (`ProfileEndpoints`:
+    CRUD, `GET …/preview`, `POST …/apply`, `GET /summary` for the tray; `{id}` also takes the name). **Applying never writes a client file
+    itself**: `ClientService.RunProfileAsync` (`ClientService.Profiles.cs`) resolves each entry (unknown / unavailable / not detected client →
+    skipped; missing or disabled providers, missing accounts and unusable tokens dropped and reported in `ProfilePlanDto.Dropped`; an enabled
+    entry with no provider left disables the client) and then runs the same `EnableCoreAsync` / `DisableCoreAsync` the endpoints use, in one
+    `MutateAsync`, so originals, backups and drift handling hold; a client the profile does not list is left alone. "Active" is `ActiveId`
+    (set by save / overwrite / a failure-free apply); "drifted" is `ProfileDriftedAsync` (stored state, never file reads). The **shortlist** is
+    `extras.modelShortlist` (`ModelShortlist`, `PUT /api/clients/{kind}/shortlist`, `GET …/models?all=true` for the editor): applied in
+    `GatewayAuxiliary.ModelListAsync` / `ListRoutableAsync` (what `/v1/models` answers that client, qualified ids as listed), in
+    `ClientService.ModelsAsync` and in the `extras.models` list `ContextAsync` builds for `HasModelList` clients (so no adapter, TS port or golden
+    case changes — linked update 20 does not apply); an enable that sends extras without the key keeps the stored shortlist; setting it re-syncs an
+    enabled client's model list. Mirrors: `Astra.Api.Contracts/ProfileDtos.cs`, `web/src/api` (`useProfiles` …, `useSetShortlist`) and
+    `components/ProfilesBar.tsx` / `ClientShortlistGroup.tsx`, `astra profile save|use|list|rm` and `astra client use|shortlist`
+    (`cli/src/commands/admin.ts`), the Avalonia `ProfilesApi`, `Components/Clients/ProfileSheets.cs` / `ClientShortlistGroup.cs`, the tray's
+    "Profiles" submenu (`TrayProfile`, `TrayMenuVerb.ApplyProfile`), zh/en `profiles.*` / `clients.shortlist.*` (+ `gen-desktop-i18n`), and the
+    website's `content/docs/console/clients.mdx` + `cli` pages. Tests: `ProfileApiTests`, `tray` / `ClientExtrasTests`, `cli/test/profile.test.ts`.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

@@ -1,9 +1,10 @@
 import { existsSync } from 'node:fs';
 import { chmod, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import process from 'node:process';
 
 import { AstraError } from '../errors.js';
-import { printTable, success } from '../ui.js';
+import { printTable, success, warn } from '../ui.js';
 import { promptHidden } from '../lib/prompt.js';
 import { apiRequest, ApiError } from '../lib/http.js';
 import { ensureServerRunning } from '../lib/server-lifecycle.js';
@@ -182,6 +183,128 @@ export async function runClientEnable(
 export async function runClientDisable(kind: ClientKind): Promise<void> {
   await api(`/api/clients/${kind}/disable`, { method: 'POST', body: {} });
   success(`Client "${kind}" disabled. Its original configuration was restored.`);
+}
+
+/**
+ * One-shot switch, like magpie's `magpie claude deepseek/deepseek-v4-pro`: enables the client on `<provider>/<model>`.
+ * `<provider>` is a provider's name or id; a target without a known provider prefix is a model of the client's current
+ * provider (a model id may itself contain a slash).
+ */
+export async function runClientUse(kind: ClientKind, target: string): Promise<void> {
+  const providers = await api<ProviderRow[]>('/api/providers');
+  const slash = target.indexOf('/');
+  let provider: ProviderRow | undefined;
+  let model = target;
+  if (slash > 0) {
+    provider = findProvider(providers, target.slice(0, slash));
+    if (provider) model = target.slice(slash + 1);
+  }
+  if (!provider) {
+    const row = (await api<ClientRow[]>('/api/clients')).find((r) => r.kind === kind);
+    provider = providers.find((p) => p.id === row?.providerId);
+    if (!provider) {
+      throw new AstraError(
+        `No provider for "${target}".`,
+        'Write <provider>/<model> (see `astra provider list`), or bind the client to a provider first.',
+      );
+    }
+  }
+  if (!model) throw new AstraError('Missing the model after "<provider>/".');
+  await runClientEnable(kind, { provider: provider.id, model });
+}
+
+/** Sets (or, with no models, clears) the models a client should see. */
+export async function runClientShortlist(kind: ClientKind, models: string[]): Promise<void> {
+  await api(`/api/clients/${kind}/shortlist`, { method: 'PUT', body: { models } });
+  success(
+    models.length > 0
+      ? `Client "${kind}" now sees only: ${models.join(', ')}.`
+      : `Client "${kind}" shortlist cleared: it sees every model.`,
+  );
+}
+
+// ---------- profile ----------
+
+interface ProfileRow {
+  id: string;
+  name: string;
+  clients: { kind: string; enabled: boolean }[];
+  active: boolean;
+  drifted: boolean;
+}
+
+interface ProfileStepRow {
+  kind: string;
+  action: string;
+  reason?: string | null;
+  notes?: string[];
+}
+
+interface ProfilePlanRow {
+  profile: ProfileRow;
+  steps: ProfileStepRow[];
+  dropped: { kind: string; what: string; id: string; reason: string }[];
+}
+
+export async function runProfileList(): Promise<void> {
+  const rows = await api<ProfileRow[]>('/api/profiles');
+  if (rows.length === 0) {
+    console.log('No profiles yet. Save one with `astra profile save <name>`.');
+    return;
+  }
+  printTable(
+    rows.map((r) => [
+      r.name,
+      String(r.clients.length),
+      String(r.clients.filter((c) => c.enabled).length),
+      r.active ? (r.drifted ? 'active (changed since)' : 'active') : '',
+    ]),
+    ['NAME', 'CLIENTS', 'ENABLED', 'STATE'],
+  );
+}
+
+/** Saves the clients' current state as a profile; an existing profile of that name is overwritten. */
+export async function runProfileSave(name: string): Promise<void> {
+  const existing = (await api<ProfileRow[]>('/api/profiles')).find(
+    (p) => p.name.toLowerCase() === name.trim().toLowerCase(),
+  );
+  const saved = existing
+    ? await api<ProfileRow>(`/api/profiles/${encodeURIComponent(existing.id)}`, { method: 'PUT', body: { overwrite: true } })
+    : await api<ProfileRow>('/api/profiles', { method: 'POST', body: { name } });
+  success(`${existing ? 'Updated' : 'Saved'} profile "${saved.name}" (${saved.clients.length} clients).`);
+}
+
+function printPlan(plan: ProfilePlanRow): void {
+  for (const step of plan.steps) {
+    const reason = step.reason ? ` (${step.reason})` : '';
+    console.log(`  ${step.kind.padEnd(18)} ${step.action}${reason}`);
+    for (const n of step.notes ?? []) console.log(`      ${n.replace(/^drifted:/, 'left as the user changed it: ')}`);
+  }
+  for (const d of plan.dropped) warn(`${d.kind}: ${d.what} ${d.id} is ${d.reason}, ignored.`);
+}
+
+/** Switches every client to a profile through the regular enable / disable path; `dryRun` only lists what would change. */
+export async function runProfileUse(name: string, opts: { dryRun?: boolean } = {}): Promise<void> {
+  const id = encodeURIComponent(name);
+  if (opts.dryRun) {
+    printPlan(await api<ProfilePlanRow>(`/api/profiles/${id}/preview`));
+    return;
+  }
+  const plan = await api<ProfilePlanRow>(`/api/profiles/${id}/apply`, { method: 'POST', body: {} });
+  printPlan(plan);
+  const bad = plan.steps.filter((s) => s.action === 'failed').length;
+  if (bad > 0) {
+    process.exitCode = 1;
+    warn(`Profile "${plan.profile.name}" applied with ${bad} failed client(s).`);
+    return;
+  }
+  success(`Applied profile "${plan.profile.name}".`);
+  console.log('Restart the clients (Codex, Claude Desktop, …) if they do not pick up the change.');
+}
+
+export async function runProfileRemove(name: string): Promise<void> {
+  await api(`/api/profiles/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  success(`Deleted profile "${name}". The clients' configurations did not change.`);
 }
 
 // ---------- token ----------

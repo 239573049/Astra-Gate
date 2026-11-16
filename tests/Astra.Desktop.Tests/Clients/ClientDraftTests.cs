@@ -15,6 +15,14 @@ public sealed class ClientExtrasTests
     ];
 
     [Fact]
+    public void The_shortlist_reads_ids_in_order_and_drops_blanks_and_repeats()
+    {
+        Assert.Equal(["b", "a"], ClientExtras.ShortlistOf(JsonNode.Parse("""{"modelShortlist":["b","a","b",""]}""")!.AsObject()));
+        Assert.Empty(ClientExtras.ShortlistOf(JsonNode.Parse("""{"modelShortlist":"x"}""")!.AsObject()));
+        Assert.Empty(ClientExtras.ShortlistOf(null));
+    }
+
+    [Fact]
     public void Options_keep_known_non_default_values()
     {
         var extras = JsonNode.Parse("""{"options":{"context1m":true,"contextWindow":0,"cacheTtl":"1h","unknown":1}}""")!.AsObject();
