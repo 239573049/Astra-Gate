@@ -100,9 +100,10 @@ public sealed partial class SkillLibrary(ClientEnvironment env, AstraPaths paths
             var clients = kinds.Select(k => ClientView(k, mine)).ToList();
             infos.Add(new SkillInfo(skill.Name, skill.Description, skill.SourceKind, skill.SourceJson, skill.UpdatedAt, clients,
                 mine.Select(m => new SkillPlacementInfo(m.Record.Path, m.Record.Target, m.Record.How, m.Record.Origin,
-                    m.Held == Held.ModifiedCopy, m.Held is Held.Gone)).ToList()));
+                    m.Held == Held.ModifiedCopy, m.Held is Held.Gone, m.Record.Project, m.Record.Project.Length > 0 && !Directory.Exists(m.Record.Project))).ToList()));
         }
-        return new SkillLibraryState(targets, infos, Found(skills), LibraryDir, SharedDir);
+        return new SkillLibraryState(targets, infos, Found(skills), LibraryDir, SharedDir,
+            [.. SkillPlaces.ProjectDirs.Select(d => new SkillProjectDirInfo(d.Dir, d.Clients))]);
     }, ct);
 
     private SkillClientView ClientView(string kind, List<(LibraryPlacementRecord Record, Held Held)> mine)
@@ -160,6 +161,7 @@ public sealed partial class SkillLibrary(ClientEnvironment env, AstraPaths paths
             foreach (var entry in new DirectoryInfo(dir).EnumerateDirectories())
             {
                 if (entry.Name.StartsWith('.')) continue;
+                if (entry.Name == SkillRouter.EntryName && FsLinks.IsLink(entry.FullName)) continue;   // the skill router's own entry
                 if (FsLinks.LinkTargetOf(entry.FullName) is { } link)
                 {
                     if (!FsLinks.IsLinkTo(entry.FullName, SkillDir(entry.Name)) && File.Exists(Path.Combine(entry.FullName, "SKILL.md")))
@@ -198,6 +200,39 @@ public sealed partial class SkillLibrary(ClientEnvironment env, AstraPaths paths
             if (await ledger.GetSkillAsync(name, ct) is null || !Directory.Exists(SkillDir(name)))
                 throw new SkillLibraryException($"No Skill named '{name}'", SkillFailure.NotFound);
             return on ? await ApplyAsync(name, place, ct) : await UnapplyAsync(name, place, confirm, ct);
+        }, ct);
+
+    /// <summary>
+    /// Switches a Skill on or off inside a project directory: a link in <c>&lt;project&gt;/&lt;dir&gt;/&lt;name&gt;</c> (<paramref name="dir"/> is one of
+    /// <see cref="SkillPlaces.ProjectDirs"/>), recorded in the ledger with the project. Same ownership rules as a user-wide link.
+    /// </summary>
+    public Task<SkillSetResult> SetProjectAsync(string name, string project, string dir, bool on, CancellationToken ct = default) =>
+        LockedAsync(async () =>
+        {
+            RequireName(name);
+            if (!Path.IsPathRooted(project)) throw new SkillLibraryException("A project is a full directory path", SkillFailure.Invalid);
+            if (!SkillPlaces.ProjectDirs.Any(d => d.Dir == dir)) throw new SkillLibraryException($"'{dir}' is not a project Skills directory", SkillFailure.Invalid);
+            project = Path.GetFullPath(project).TrimEnd(Path.DirectorySeparatorChar);
+            var path = Path.Combine(project, dir, name);
+            var existing = (await ledger.ListPlacementsAsync(name, ct)).FirstOrDefault(p => p.Path == path && p.Target == SkillTargets.Project);
+            if (!on)
+            {
+                if (existing is not null) await RemovePlacementAsync(existing, backup: true, ct);
+                return new SkillSetResult(true, []);
+            }
+            if (await ledger.GetSkillAsync(name, ct) is null || !Directory.Exists(SkillDir(name)))
+                throw new SkillLibraryException($"No Skill named '{name}'", SkillFailure.NotFound);
+            if (!Directory.Exists(project)) throw new SkillLibraryException("That project directory does not exist", SkillFailure.NotFound);
+            if (existing is not null && Inspect(existing) is Held.Ours or Held.OurCopy or Held.ModifiedCopy) return new SkillSetResult(true, []);
+            if (Exists(path)) throw new SkillLibraryException($"{path} already exists and is not managed by Astra; move or remove it first", SkillFailure.Conflict);
+            var how = FsLinks.Create(path, SkillDir(name));
+            await ledger.UpsertPlacementAsync(new LibraryPlacementRecord
+            {
+                Path = path, SkillName = name, Target = SkillTargets.Project, How = how, Project = project,
+                CopyHash = how == PlacementHows.Copy ? FsLinks.HashDirectory(path) : null,
+                Origin = PlacementOrigins.Applied, PlacedAt = DateTimeOffset.UtcNow,
+            }, ct);
+            return new SkillSetResult(true, []);
         }, ct);
 
     private async Task<SkillSetResult> ApplyAsync(string name, SkillPlace place, CancellationToken ct)

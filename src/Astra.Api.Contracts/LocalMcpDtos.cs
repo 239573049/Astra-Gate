@@ -6,7 +6,8 @@ namespace Astra.Api.Contracts;
 /// <param name="State"><c>missing</c>, <c>applied</c>, <c>drifted</c> (Astra wrote it and it was changed since) or <c>conflict</c> (an entry of that name Astra did not write, or an unreadable file; never overwritten).</param>
 /// <param name="File">The client file the entry lives in.</param>
 /// <param name="Error">Why the last write or read failed.</param>
-public sealed record LocalMcpPlacementDto(string Kind, bool Wanted, string State, string File, string? Error);
+/// <param name="Project">The project directory the entry is in; empty for the client's own user-wide file.</param>
+public sealed record LocalMcpPlacementDto(string Kind, bool Wanted, string State, string File, string? Error, string Project = "");
 
 /// <summary>An MCP server definition Astra writes into the chosen clients; the client starts or reaches it, Astra never runs or proxies it.</summary>
 /// <param name="Transport"><c>stdio</c> (a command) or <c>http</c> (a remote streamable-HTTP address).</param>
@@ -14,16 +15,17 @@ public sealed record LocalMcpPlacementDto(string Kind, bool Wanted, string State
 /// <param name="HeaderNames">An http server's header names; their values are never returned.</param>
 public sealed record LocalMcpServerDto(
     string Id, string Name, string Transport, string Command, List<string> Args, List<string> EnvNames, string Url, List<string> HeaderNames,
-    bool Enabled, List<string> Clients, List<LocalMcpPlacementDto> Placements);
+    bool Enabled, List<string> Clients, List<LocalMcpPlacementDto> Placements, List<string>? Projects = null);
 
 /// <summary>Create / update body of an MCP server definition.</summary>
 /// <param name="Transport"><c>stdio</c> (default) or <c>http</c>.</param>
 /// <param name="Env">Environment variables of a stdio server. On update, null keeps the stored ones and an empty object clears them.</param>
 /// <param name="Headers">Request headers of an http server, with the same keep / clear rule as <paramref name="Env"/>.</param>
 /// <param name="Clients">The client kinds to write it into.</param>
+/// <param name="Projects">Project directories (full paths) to also write it into, in each chosen client's project MCP file (Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Droid). On update, null keeps the stored list.</param>
 public sealed record LocalMcpServerInputDto(
     string Name, string? Transport, string? Command, List<string>? Args, Dictionary<string, string>? Env, string? Url,
-    Dictionary<string, string>? Headers, bool? Enabled, List<string>? Clients);
+    Dictionary<string, string>? Headers, bool? Enabled, List<string>? Clients, List<string>? Projects = null);
 
 /// <summary>An entry that already exists in a client's MCP list and was not written by Astra: a candidate for import.</summary>
 /// <param name="Importable">False when Astra cannot carry it (<paramref name="Reason"/> says why); such an entry is shown only.</param>

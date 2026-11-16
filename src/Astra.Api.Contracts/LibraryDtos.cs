@@ -15,7 +15,10 @@ public sealed record SkillTargetDto(string Kind, bool Supported, bool Detected, 
 public sealed record SkillClientDto(string Kind, string State, string? How, bool Modified);
 
 /// <summary>A link or copy Astra made.</summary>
-public sealed record SkillPlacementDto(string Path, string Target, string How, string Origin, bool Modified, bool Missing);
+/// <param name="Target"><c>shared</c>, a client kind, or <c>project</c> (a link inside a project directory).</param>
+/// <param name="Project">The project directory of a <c>project</c> placement; empty otherwise.</param>
+/// <param name="ProjectMissing">The project directory no longer exists (reported, not a failure).</param>
+public sealed record SkillPlacementDto(string Path, string Target, string How, string Origin, bool Modified, bool Missing, string Project = "", bool ProjectMissing = false);
 
 /// <summary>A Skill in Astra's library.</summary>
 /// <param name="SourceKind"><c>migrated</c>, <c>local</c> or <c>git</c>.</param>
@@ -38,7 +41,8 @@ public sealed record FoundSkillDto(
 /// <summary>The Skills page's data.</summary>
 /// <param name="CanCreate">False off this machine: installing a Skill (a local path or a repository, and the scripts in it) is local-only.</param>
 public sealed record SkillLibraryDto(
-    List<SkillTargetDto> Targets, List<SkillDto> Skills, List<FoundSkillDto> Found, string LibraryDir, string SharedDir, bool CanCreate);
+    List<SkillTargetDto> Targets, List<SkillDto> Skills, List<FoundSkillDto> Found, string LibraryDir, string SharedDir, bool CanCreate,
+    List<SkillProjectDirDto>? ProjectDirs = null);
 
 /// <summary>Request body of switching a client on or off for a Skill.</summary>
 /// <param name="Confirm">Go ahead although the shared link also serves other clients.</param>

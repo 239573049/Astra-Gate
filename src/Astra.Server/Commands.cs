@@ -102,6 +102,28 @@ public static class Commands
             Console.Error.WriteLine($"Skills: give-back failed: {ex.Message}");
             skillsIncomplete = true;
         }
+        // Instructions, sub-agents, commands, hooks and environment variables the library wrote (only what is still exactly as Astra wrote it),
+        // and the skill router's links. Changed content is the user's now and is left, which makes the run incomplete.
+        try
+        {
+            var resources = new Astra.Clients.Library.ResourceLibrary(env, paths, db.LibraryResources, db.ClientConfigState, applier);
+            foreach (var left in await resources.RemoveAllAsync())
+            {
+                Console.Error.WriteLine($"  Left changed resource untouched: {left}");
+                incomplete = true;
+            }
+            var router = new Astra.Clients.Library.SkillRouter(env, paths, db.Library, db.LibraryResources);
+            foreach (var left in await router.RemoveAllAsync())
+            {
+                Console.Error.WriteLine($"  Skill router entry could not be removed: {left}");
+                incomplete = true;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Astra.Clients.Editing.EditorException or Astra.Clients.Library.ResourceLibraryException)
+        {
+            Console.Error.WriteLine($"Library resources: restore failed: {ex.Message}");
+            incomplete = true;
+        }
         // 3 = a Skill is still a link into ~/.astra/library: `astra uninstall --purge` must not delete that directory.
         return skillsIncomplete ? 3 : incomplete ? 1 : 0;
     }

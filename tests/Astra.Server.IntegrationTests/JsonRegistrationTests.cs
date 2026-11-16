@@ -37,6 +37,8 @@ public sealed class JsonRegistrationTests
             "/api/stats/top-models", "/api/stats/activity-heatmap", "/api/stats/daily-bill", "/api/provider-quota/templates",
             "/api/providers/import/sources", "/api/clients/claude-code/direct", "/api/tunnel", "/api/server/autostart",
             "/api/smart-routing", "/api/smart-routing/models", "/api/library/skills", "/api/tools", "/api/tools/settings",
+            "/api/library/instructions", "/api/library/agents", "/api/library/commands", "/api/library/hooks", "/api/library/env", "/api/library/projects",
+            "/api/library/skills/router", "/api/library/skills/market/source", "/api/library/skills/market?q=none",
         ];
 
         // Reset after startup (seeding/migration run there) so we only observe request-time payloads.
@@ -51,6 +53,16 @@ public sealed class JsonRegistrationTests
         await host.SendAsync(HttpMethod.Post, "/api/library/skills/migrate", new { items = Array.Empty<object>() });
         await host.SendAsync(HttpMethod.Put, "/api/library/skills/none/clients/claude-code", new { on = true });
         await host.SendAsync(HttpMethod.Post, "/api/library/skills/return-all");
+        // The rest of the library: create (a Claude Code instruction and a hook), list, delete; the Skill router and project switch.
+        var instruction = await host.SendAsync(HttpMethod.Post, "/api/library/instructions", new { name = "guard", body = "x", targets = new[] { new { client = "claude-code", project = "" } } });
+        await host.SendAsync(HttpMethod.Post, "/api/library/hooks", new { name = "guard", body = "true", @event = "turn-end", targets = new[] { new { client = "claude-code", project = "" } } });
+        await host.GetJsonAsync("/api/library/instructions");
+        await host.GetJsonAsync("/api/library/hooks");
+        await host.SendAsync(HttpMethod.Delete, $"/api/library/instructions/{instruction.Body!["id"]!.GetValue<string>()}");
+        await host.SendAsync(HttpMethod.Put, "/api/library/skills/router/claude-code", new { on = true });
+        await host.SendAsync(HttpMethod.Put, "/api/library/skills/router/claude-code", new { on = false });
+        await host.SendAsync(HttpMethod.Put, "/api/library/skills/none/projects", new { project = "/none", dir = ".claude/skills", on = true });
+        await host.GetJsonAsync("/api/library/skills/updates");
         // Profiles and the model shortlist: save, list, preview, apply, rename, delete.
         var profile = await host.SendAsync(HttpMethod.Post, "/api/profiles", new { name = "guard" });
         await host.GetJsonAsync("/api/profiles");
