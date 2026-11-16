@@ -1961,3 +1961,34 @@ export interface ToolsSettingsUpdate {
 }
 export interface ToolInfo { name: string; title: string; description?: string | null; source: 'builtin' | 'plugin'; available: boolean; reason?: string | null }
 export interface SearchTestResult { ok: boolean; source?: string | null; pages: number; elapsedMs: number; error?: string | null; firstTitle?: string | null }
+
+// Whole-installation backup, restore and multi-machine sync: /api/backup/{info,export,preview,restore,auto}, /api/sync/*
+// (mirrors Astra.Api.Contracts/BackupDtos.cs). Everything but status / info / a keyless export is for this machine only.
+export interface FullBackupInfo { sections: Record<string, number>; version: string }
+export interface FullBackupExportInput { sections?: string[]; includeKeys?: boolean; includeUsage?: boolean; passphrase?: string }
+export interface FullBackupExport { name: string; content: string; encrypted: boolean; hasKeys: boolean; documents: number; warnings: string[] }
+export type FullBackupSourceKind = 'file' | 'auto' | 'remote';
+export type FullBackupMode = 'merge' | 'replace';
+export interface FullBackupSource { source: FullBackupSourceKind; content?: string; name?: string; passphrase?: string; sections?: string[]; mode?: FullBackupMode }
+export type FullBackupItemStatus = 'added' | 'changed' | 'removed' | 'unchanged';
+export interface FullBackupItem { id: string; label: string; status: FullBackupItemStatus }
+export interface FullBackupSectionPlan { section: string; added: number; changed: number; removed: number; unchanged: number; items: FullBackupItem[]; truncated: boolean }
+export interface FullBackupPlan {
+  createdAt: string; astraVersion: string; hasKeys: boolean; mode: FullBackupMode; available: string[]; sections: FullBackupSectionPlan[];
+  notes: string[]; legacy: boolean; legacyJson?: string | null;
+}
+export interface FullBackupRestore { plan: FullBackupPlan; written: number; removed: number; skipped: string[]; errors: string[]; safetyBackup?: string | null; legacyJson?: string | null }
+export interface AutoBackupFile { name: string; kind: 'auto' | 'restore' | 'update' | string; at: string; size: number; encrypted: boolean }
+export interface AutoBackup { enabled: boolean; hours: number; keep: number; hasPassphrase: boolean; dir: string; files: AutoBackupFile[] }
+export interface AutoBackupInput { enabled?: boolean; hours?: number; keep?: number; passphrase?: string; clearPassphrase?: boolean }
+export type SyncKind = 'folder' | 'webdav' | 's3' | 'github';
+export interface SyncTarget { kind: SyncKind | ''; url: string; username: string; hasSecret: boolean; folder: string; bucket: string; region: string; pathStyle: boolean; branch: string }
+export interface SyncConflict { section: string; id: string; label: string; winner: 'local' | 'remote' | string; at: string; device: string }
+export interface SyncStatus {
+  enabled: boolean; configured: boolean; target: SyncTarget; hasPassphrase: boolean; intervalMinutes: number; sections: string[]; includeKeys: boolean; includeSignins: boolean;
+  deviceId: string; lastSyncAt?: string | null; lastError?: string | null; lastPushed: number; lastPulled: number; running: boolean; conflicts: SyncConflict[]; tracked: number;
+}
+export interface SyncTargetInput { kind: SyncKind; url?: string; username?: string; secret?: string; folder?: string; bucket?: string; region?: string; pathStyle?: boolean; branch?: string }
+export interface SyncConfigInput { target?: SyncTargetInput; passphrase?: string; intervalMinutes?: number; sections?: string[]; includeKeys?: boolean; includeSignins?: boolean; enabled?: boolean }
+export interface SyncRun { pushed: number; pulled: number; dryRun: boolean; firstSync: boolean; conflicts: SyncConflict[]; items: FullBackupItem[]; errors: string[] }
+export interface RemoteBackupInput { sections?: string[]; includeKeys?: boolean; includeUsage?: boolean; passphrase?: string }

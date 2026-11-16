@@ -97,6 +97,26 @@ public sealed class JsonRegistrationTests
         await host.GetJsonAsync($"/api/routing/groups/{groupId}/status");
         await host.SendAsync(HttpMethod.Delete, $"/api/routing/groups/{groupId}");
 
+        // Backup and sync (linked update 38): both settings documents and every DTO, in both directions.
+        await host.GetJsonAsync("/api/backup/info");
+        await host.GetJsonAsync("/api/backup/auto");
+        await host.SendAsync(HttpMethod.Put, "/api/backup/auto", new { enabled = true, hours = 12, keep = 3, passphrase = "guard passphrase" });
+        await host.SendAsync(HttpMethod.Post, "/api/backup/auto/run");
+        var exported = await host.SendAsync(HttpMethod.Post, "/api/backup/export", new { includeKeys = true, passphrase = "guard passphrase" });
+        var exportedFile = exported.Body!["content"]!.GetValue<string>();
+        await host.SendAsync(HttpMethod.Post, "/api/backup/preview", new { source = "file", content = exportedFile, passphrase = "guard passphrase", mode = "replace" });
+        await host.SendAsync(HttpMethod.Post, "/api/backup/restore", new { source = "file", content = exportedFile, passphrase = "guard passphrase", sections = new[] { "routing" } });
+        var syncDir = Path.Combine(Path.GetTempPath(), "astra-guard-sync-" + Guid.NewGuid().ToString("N"));
+        await host.SendAsync(HttpMethod.Put, "/api/sync/config", new { target = new { kind = "folder", url = syncDir }, passphrase = "guard passphrase", enabled = true });
+        await host.GetJsonAsync("/api/sync/status");
+        await host.SendAsync(HttpMethod.Post, "/api/sync/test");
+        await host.SendAsync(HttpMethod.Post, "/api/sync/now?dryRun=true");
+        await host.SendAsync(HttpMethod.Post, "/api/sync/now");
+        await host.SendAsync(HttpMethod.Post, "/api/sync/backup", new { });
+        await host.SendAsync(HttpMethod.Delete, "/api/sync/conflicts");
+        await host.SendAsync(HttpMethod.Delete, "/api/sync/config");
+        try { Directory.Delete(syncDir, true); } catch (IOException) { }
+
         // A model round trip: create, patch, read detail, reset a field, delete.
         var created = await host.SendAsync(HttpMethod.Post, "/api/models",
             new { id = "guard-probe-model", displayName = "Guard", vendor = "anthropic" });

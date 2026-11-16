@@ -22,6 +22,7 @@ namespace Astra.Api.Contracts;
 [JsonSerializable(typeof(SyncRunDto))]
 [JsonSerializable(typeof(RemoteBackupInput))]
 [JsonSerializable(typeof(RemoteBackupDto))]
+[JsonSerializable(typeof(SyncTestDto))]
 public partial class ContractsJsonContext
 {
 }

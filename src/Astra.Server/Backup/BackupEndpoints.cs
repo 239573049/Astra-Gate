@@ -139,7 +139,7 @@ public static class BackupEndpoints
         {
             RequireLocal(http, "Sync can only be used on this machine");
             await svc.TestAsync(ct);
-            return Results.Ok(new { ok = true });
+            return Results.Ok(new SyncTestDto(true));
         });
 
         sync.MapPost("/now", async (HttpContext http, SyncService svc, CancellationToken ct, bool dryRun = false) =>

@@ -69,3 +69,6 @@ public sealed record RemoteBackupInput(List<string>? Sections, bool? IncludeKeys
 
 /// <summary>The name a manual remote backup was stored under.</summary>
 public sealed record RemoteBackupDto(string Name);
+
+/// <summary>Answer of <c>POST /api/sync/test</c> (a failure is an error response instead).</summary>
+public sealed record SyncTestDto(bool Ok);
