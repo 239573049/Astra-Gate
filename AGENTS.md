@@ -703,6 +703,25 @@ runtime needed on the target).
     plugins in their own `pluginsV2` array (never `plugins`, so an older Astra never installs one as v1): `PluginMarket.ToV2Listing`,
     the website's `lib/plugin-market` (`toV2`, `metaFromAstraManifest`, `readManifests`), and linked update 10 applies.
 
+28. **Privacy guard** (`.agents/codemap/flows/privacy-redaction.md`; ported in part from magpie's `internal/redact`, MIT): a masked value
+    becomes `{{KIND_xxxxxxxx}}` (`PlaceholderMint`, `Astra.Core/Privacy`): KIND is the category upper-cased and the 8 base32 digits are an HMAC of
+    category and value under a per-install key — so one value is **one placeholder in every request** (the prompt cache and the model's view of
+    the conversation stay stable). The key is a settings row `privacy_placeholder_key` kept through `ISecretProtector` (`PrivacyGuardService.LoadAsync`;
+    a key that cannot be unprotected is replaced, nothing else breaks); never store or log a value, only its placeholder. Values masked once are
+    remembered **in memory only** (bounded, FIFO, ≥ 6 chars) and masked wherever they show up later while their category is still on `redact`
+    (`PlaceholderMint.Remember` / `PrivacyDetector.ApplyKnown`; the clean-string cache is keyed by the mint's generation). A dry run
+    (`PrivacyGuardService.DryRun`) uses the real mint but remembers nothing. Restoring is protocol-aware: `PrivacyStreamRestorer` handles streamed
+    frames of all four wire protocols (text and tool-call argument deltas per channel, `ChunkRestorer` holding only a tail that is still a placeholder
+    prefix, originals JSON-escaped inside argument fragments), `PrivacyGuardService.RestoreJson` whole bodies — a new response writer goes through
+    one of them, never a string replace. The guard **fails closed**: a detector / policy error, or an unreadable stored policy, is a 503
+    (`GatewayException`, Chinese message) instead of an unmasked request (dry run excepted). A rule is a regex plus an optional `MatchRefiner`
+    (checksums and context in `PrivacyChecks`: Luhn, CN ID check digit, IBAN mod 97, SSN ranges, real birthdays, public IPs), a `Group` and
+    `Literals` pre-check; `PrivacyCategories.DefaultOff` (`ip`, `home_user`) stay off until a per-category / per-rule action names them. A new
+    category is: its rule(s) in `BuiltInRules`, a constant in `PrivacyCategories.BuiltIn`, zh/en `settings.privacy.category.<id>`
+    (`PRIVACY_CATEGORY_KEY`, `PrivacyMeta.Categories` in the Avalonia client + `gen-desktop-i18n`), and — when it is default-off — `PRIVACY_DEFAULT_OFF`
+    in `web/src/components/PrivacyMeta.tsx` and `PrivacyPolicyLogic.ActionOf`. Emails under example domains (`example.com/.org/.net`, `.test`,
+    `.invalid`, `.example`, `localhost`) are never masked.
+
 ## Conventions
 
 - C#: file-scoped namespaces, nullable enabled, records and primary constructors, XML doc

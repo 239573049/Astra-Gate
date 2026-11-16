@@ -40,8 +40,9 @@ public static class PrivacyPolicyLogic
     /// <summary>The first rule's description of a category (what the row's detail says).</summary>
     public static string? Description(IEnumerable<PrivacyRuleDto> rules, string category) => rules.FirstOrDefault(r => r.Category == category)?.Description;
 
-    /// <summary>The action a category effectively has: its override, else the default action.</summary>
-    public static string ActionOf(PrivacySettings s, string category) => s.CategoryActions.TryGetValue(category, out var a) ? a : s.DefaultAction;
+    /// <summary>The action a category effectively has: its override, else off for the categories that stay off until turned on by name, else the default action.</summary>
+    public static string ActionOf(PrivacySettings s, string category) =>
+        s.CategoryActions.TryGetValue(category, out var a) ? a : PrivacyCategories.IsDefaultOff(category) ? PrivacyActions.Off : s.DefaultAction;
 
     /// <summary>The category row is off: the guard is off, or this category's action is "off".</summary>
     public static bool IsOff(PrivacySettings s, string category) => !s.Enabled || ActionOf(s, category) == PrivacyActions.Off;

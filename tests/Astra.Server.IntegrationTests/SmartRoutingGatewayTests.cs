@@ -545,7 +545,7 @@ public class SmartRoutingGatewayTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var asked = Assert.Single(Judged(gw));
         Assert.DoesNotContain("a@b.com", asked.Body);
-        Assert.Contains("REDACTED", asked.Json["state"]!["request"]!.GetValue<string>());
+        Assert.Contains("{{EMAIL_", asked.Json["state"]!["request"]!.GetValue<string>());
     }
 
     // ---------------------------------------------------------------- model lists and token counting

@@ -10,7 +10,7 @@ public static class PrivacyMeta
 {
     /// <summary>The built-in categories, in the web's key table order.</summary>
     public static readonly string[] Categories =
-        ["api_key", "aws_key", "jwt", "private_key", "email", "phone", "intranet", "credit_card", "national_id", "credential", "custom"];
+        ["api_key", "aws_key", "jwt", "private_key", "email", "phone", "intranet", "credit_card", "national_id", "credential", "passport", "iban", "mac", "ip", "birthday", "serial", "home_user", "custom"];
 
     /// <summary>Every action a category may have, "off" first (the policy selects).</summary>
     public static readonly string[] Actions = ["off", "warn", "block", "redact"];

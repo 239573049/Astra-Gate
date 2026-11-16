@@ -1,0 +1,6 @@
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Sending to {{EMAIL_k3"}]},"index":0}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"text":"v9x2mq}} now."}]},"index":0}]}
+
+data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name":"send_mail","args":{"to":"{{EMAIL_k3v9x2mq}}","key":"{{PRIVATE_KEY_aaaaaaaa}}"}}}]},"finishReason":"STOP","index":0}],"usageMetadata":{"promptTokenCount":5,"candidatesTokenCount":9,"totalTokenCount":14}}
+

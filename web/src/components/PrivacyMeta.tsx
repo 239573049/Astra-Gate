@@ -14,8 +14,18 @@ export const PRIVACY_CATEGORY_KEY: Record<string, MessageKey> = {
   credit_card: 'settings.privacy.category.credit_card',
   national_id: 'settings.privacy.category.national_id',
   credential: 'settings.privacy.category.credential',
+  passport: 'settings.privacy.category.passport',
+  iban: 'settings.privacy.category.iban',
+  mac: 'settings.privacy.category.mac',
+  ip: 'settings.privacy.category.ip',
+  birthday: 'settings.privacy.category.birthday',
+  serial: 'settings.privacy.category.serial',
+  home_user: 'settings.privacy.category.home_user',
   custom: 'settings.privacy.category.custom',
 };
+
+/** Categories that stay off until turned on by name (mirrors `PrivacyCategories.DefaultOff`): not even the default action enables them. */
+export const PRIVACY_DEFAULT_OFF: readonly string[] = ['ip', 'home_user'];
 
 export const PRIVACY_ACTION_KEY: Record<string, MessageKey> = {
   warn: 'settings.privacy.action.warn',

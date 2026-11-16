@@ -92,6 +92,17 @@ public class PrivacyPolicyLogicTests
     }
 
     [Fact]
+    public void Public_ips_and_home_folders_stay_off_until_turned_on_by_name()
+    {
+        var p = Policy();
+        Assert.Equal("off", PrivacyPolicyLogic.ActionOf(p, "ip"));
+        Assert.Equal("off", PrivacyPolicyLogic.ActionOf(p, "home_user"));
+        Assert.Equal("warn", PrivacyPolicyLogic.ActionOf(p, "iban")); // the other new categories follow the default
+        Assert.Equal("redact", PrivacyPolicyLogic.ActionOf(PrivacyPolicyLogic.SetAction(p, "ip", "redact"), "ip"));
+        Assert.Contains("passport", PrivacyMeta.Categories);
+    }
+
+    [Fact]
     public void Enabling_a_switched_off_category_gives_it_the_default_action_or_warn()
     {
         var p = Policy();

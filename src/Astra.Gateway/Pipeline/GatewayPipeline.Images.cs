@@ -473,7 +473,7 @@ public sealed partial class GatewayPipeline
             while ((read = await reader.ReadAsync(body.GetMemory(known ? 1 : 16 * 1024))) > 0) body.Advance(read);
             Observe(ImageUsageOf(body.Span));
             if (restore.Count == 0) await ctx.Response.Body.WriteAsync(body.Memory, ct);
-            else await ctx.Response.WriteAsync(PrivacyGuardService.Restore(Encoding.UTF8.GetString(body.Span), restore), ct);
+            else await ctx.Response.WriteAsync(PrivacyGuardService.RestoreJson(Encoding.UTF8.GetString(body.Span), restore), ct);
         }
         finally
         {

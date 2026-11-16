@@ -2378,8 +2378,9 @@ public class ProviderApiTests
                 var body = request.Content!.ReadAsStringAsync().Result;
                 // Redacted: the placeholder goes upstream instead of the card number.
                 Assert.DoesNotContain("4111111111111111", body);
-                Assert.Contains("[REDACTED:credit_card#1]", body);
-                return Task.FromResult(JsonResponse("""{"choices":[{"message":{"content":"[REDACTED:credit_card#1] seen"}}]}"""));
+                var placeholder = System.Text.RegularExpressions.Regex.Match(body, @"\{\{CREDIT_CARD_[a-z2-7]{8}\}\}").Value;
+                Assert.NotEmpty(placeholder);
+                return Task.FromResult(JsonResponse("""{"choices":[{"message":{"content":"PLACEHOLDER seen"}}]}""".Replace("PLACEHOLDER", placeholder)));
             })));
         var id = await CreateCustomAsync(host, "openai-chat", "https://example.invalid/v1", "none");
         await EnablePrivacyAsync(host, PrivacyActions.Redact);

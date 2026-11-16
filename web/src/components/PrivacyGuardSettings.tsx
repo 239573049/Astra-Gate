@@ -6,7 +6,7 @@ import { useI18n } from '../i18n';
 import type { PrivacyAction, PrivacyCustomRule, PrivacySettingsDto } from '../api/types';
 import { Badge, Button, Field, Group, Input, Row, Spinner, Switch, TextArea } from './ui/controls';
 import { errorText, Select, Sheet, useFeedback } from './ui/overlays';
-import { PRIVACY_ACTION_KEY, usePrivacyCategoryLabel } from './PrivacyMeta';
+import { PRIVACY_ACTION_KEY, PRIVACY_DEFAULT_OFF, usePrivacyCategoryLabel } from './PrivacyMeta';
 import { PRIVACY_RULE_TEMPLATES } from '../lib/privacyTemplates';
 
 const ACTIONS: PrivacyAction[] = ['off', 'warn', 'block', 'redact'];
@@ -107,7 +107,7 @@ export function PrivacyRulesPanel() {
     <div className="mx-auto flex max-w-[720px] flex-col gap-4">
       <Group title={t('settings.privacy.categories')}>
         {categories.map((category) => {
-          const current = s.categoryActions[category] ?? s.defaultAction;
+          const current = s.categoryActions[category] ?? (PRIVACY_DEFAULT_OFF.includes(category) ? 'off' : s.defaultAction);
           const off = !s.enabled || current === 'off';
           return (
             <Row
@@ -132,7 +132,7 @@ export function PrivacyRulesPanel() {
                   size="sm"
                   variant="plain"
                   disabled={!s.enabled}
-                  onClick={() => setAction(category, s.categoryActions[category] ?? s.defaultAction)}
+                  onClick={() => setAction(category, s.defaultAction === 'off' ? 'warn' : s.defaultAction)}
                 >
                   {t('settings.privacy.enableCategory')}
                 </Button>
@@ -294,6 +294,12 @@ export function DryRunTester() {
               )}
               {!result.blocked && result.wouldRedact === 0 && <Badge tone="green">{t('settings.privacy.noHits')}</Badge>}
             </div>
+            {result.maskedText && (
+              <div className="mt-2">
+                <div className="text-[11px] text-[var(--text-muted)]">{t('settings.privacy.maskedText')}</div>
+                <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]">{result.maskedText}</pre>
+              </div>
+            )}
             {result.hits.length > 0 && (
               <ul className="mt-2 space-y-1">
                 {result.hits.map((h) => (

@@ -1866,6 +1866,13 @@ internal static class Messages
         "settings.privacy.category.credit_card",
         "settings.privacy.category.national_id",
         "settings.privacy.category.credential",
+        "settings.privacy.category.passport",
+        "settings.privacy.category.iban",
+        "settings.privacy.category.mac",
+        "settings.privacy.category.ip",
+        "settings.privacy.category.birthday",
+        "settings.privacy.category.serial",
+        "settings.privacy.category.home_user",
         "settings.privacy.enableCategory",
         "settings.privacy.customRules",
         "settings.privacy.noCustomRules",
@@ -1911,6 +1918,7 @@ internal static class Messages
         "settings.privacy.noHits",
         "settings.privacy.wouldBlock",
         "settings.privacy.wouldRedact",
+        "settings.privacy.maskedText",
         "privacy.tab.overview",
         "privacy.tab.logs",
         "privacy.tab.rules",
@@ -5004,6 +5012,13 @@ internal static class Messages
             case "settings.privacy.category.credit_card": return "银行卡号";
             case "settings.privacy.category.national_id": return "证件号码";
             case "settings.privacy.category.credential": return "凭据 / 连接串";
+            case "settings.privacy.category.passport": return "护照号";
+            case "settings.privacy.category.iban": return "国际银行账号（IBAN）";
+            case "settings.privacy.category.mac": return "MAC 地址";
+            case "settings.privacy.category.ip": return "公网 IP";
+            case "settings.privacy.category.birthday": return "出生日期";
+            case "settings.privacy.category.serial": return "序列号";
+            case "settings.privacy.category.home_user": return "家目录用户名";
             case "settings.privacy.enableCategory": return "启用";
             case "settings.privacy.customRules": return "自定义规则";
             case "settings.privacy.noCustomRules": return "暂无自定义规则";
@@ -5049,6 +5064,7 @@ internal static class Messages
             case "settings.privacy.noHits": return "没有命中任何规则";
             case "settings.privacy.wouldBlock": return "会拦截请求";
             case "settings.privacy.wouldRedact": return "将脱敏 {count} 处";
+            case "settings.privacy.maskedText": return "发给模型的文本（占位符同一值始终相同）";
             case "privacy.tab.overview": return "概览";
             case "privacy.tab.logs": return "拦截日志";
             case "privacy.tab.rules": return "检测规则";
@@ -8144,6 +8160,13 @@ internal static class Messages
             case "settings.privacy.category.credit_card": return "Card numbers";
             case "settings.privacy.category.national_id": return "National IDs";
             case "settings.privacy.category.credential": return "Credentials & connection strings";
+            case "settings.privacy.category.passport": return "Passport numbers";
+            case "settings.privacy.category.iban": return "Bank accounts (IBAN)";
+            case "settings.privacy.category.mac": return "MAC addresses";
+            case "settings.privacy.category.ip": return "Public IP addresses";
+            case "settings.privacy.category.birthday": return "Dates of birth";
+            case "settings.privacy.category.serial": return "Serial numbers";
+            case "settings.privacy.category.home_user": return "User name in home folders";
             case "settings.privacy.enableCategory": return "Enable";
             case "settings.privacy.customRules": return "Custom rules";
             case "settings.privacy.noCustomRules": return "No custom rules yet";
@@ -8189,6 +8212,7 @@ internal static class Messages
             case "settings.privacy.noHits": return "No rule matched";
             case "settings.privacy.wouldBlock": return "Would block the request";
             case "settings.privacy.wouldRedact": return "Would redact {count} place(s)";
+            case "settings.privacy.maskedText": return "Text sent to the model (a value always gets the same placeholder)";
             case "privacy.tab.overview": return "Overview";
             case "privacy.tab.logs": return "Interception log";
             case "privacy.tab.rules": return "Detection rules";

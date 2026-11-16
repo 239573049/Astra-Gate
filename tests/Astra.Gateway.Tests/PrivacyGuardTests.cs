@@ -97,13 +97,13 @@ public class PrivacyGuardServiceTests
             s.DefaultAction = PrivacyActions.Redact;
         }));
         const string twoStrings = """
-            {"model":"claude-x","system":"ops mail alice@example.com","messages":[{"role":"user","content":"cc bob@example.com"}]}
+            {"model":"claude-x","system":"ops mail alice@acme.io","messages":[{"role":"user","content":"cc bob@acme.io"}]}
             """;
 
         var result = guard.Inspect(twoStrings, "claude-code");
 
         Assert.Equal(2, result.RestoreMap.Count);
-        Assert.Equal(["alice@example.com", "bob@example.com"], result.RestoreMap.Values.Order().ToArray());
+        Assert.Equal(["alice@acme.io", "bob@acme.io"], result.RestoreMap.Values.Order().ToArray());
         var restorer = new ChunkRestorer(result.RestoreMap);
         Assert.Equal(twoStrings, restorer.Push(result.Body) + restorer.Flush());
     }
@@ -167,7 +167,7 @@ public class PrivacyGuardServiceTests
         var second = new PrivacyGuardService(db);
         await second.LoadAsync();
         var result = second.Inspect("""{"content":"EMP-123456"}""", null);
-        Assert.Contains("[REDACTED:custom#1]", result.Body);
+        Assert.Contains("{{CUSTOM_", result.Body);
 
         await Assert.ThrowsAsync<ArgumentException>(() => second.UpdateAsync(Settings(s =>
         {
@@ -226,7 +226,7 @@ public class PrivacyGuardServiceTests
             ];
         }));
         var before = guard.EffectiveFor(null);
-        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
+        Assert.Contains("{{CUSTOM_", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
 
         // The update publishes a new generation: its own policy, with the new rule set.
         await guard.UpdateAsync(Settings(s =>
@@ -241,7 +241,7 @@ public class PrivacyGuardServiceTests
         Assert.NotSame(before, after);
         Assert.DoesNotContain(after.Rules, r => r.Id == "custom.employee");
         Assert.Contains(after.Rules, r => r.Id == "custom.ticket");
-        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"TKT-1234"}""", null).Body);
+        Assert.Contains("{{CUSTOM_", guard.Inspect("""{"content":"TKT-1234"}""", null).Body);
 
         // A rejected update publishes nothing: neither the active generation nor the stored settings move.
         await Assert.ThrowsAsync<ArgumentException>(() => guard.UpdateAsync(Settings(s =>
@@ -251,7 +251,7 @@ public class PrivacyGuardServiceTests
         })));
 
         Assert.Same(after, guard.EffectiveFor(null));
-        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"TKT-1234"}""", null).Body);
+        Assert.Contains("{{CUSTOM_", guard.Inspect("""{"content":"TKT-1234"}""", null).Body);
         var stored = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey);
         Assert.NotNull(stored);
         Assert.Equal("custom.ticket", Assert.Single(stored!.CustomRules).Id);
@@ -287,7 +287,7 @@ public class PrivacyGuardServiceTests
         Assert.Equal(PrivacyActions.Redact, guard.Settings.DefaultAction);
         Assert.Single(guard.Settings.CustomRules);
         Assert.Equal(PrivacyActions.Redact, guard.EffectiveFor("claude-code").ActionFor("builtin.email", PrivacyCategories.Email));
-        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
+        Assert.Contains("{{CUSTOM_", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
 
         // Neither does mutating the copy the getter hands out.
         var read = guard.Settings;
@@ -300,7 +300,7 @@ public class PrivacyGuardServiceTests
         Assert.Equal(PrivacyActions.Redact, guard.Settings.DefaultAction);
         Assert.Single(guard.Settings.CustomRules);
         Assert.Equal(PrivacyActions.Redact, guard.EffectiveFor("claude-code").ActionFor("builtin.email", PrivacyCategories.Email));
-        Assert.Contains("[REDACTED:custom#1]", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
+        Assert.Contains("{{CUSTOM_", guard.Inspect("""{"content":"EMP-123456"}""", null).Body);
 
         // What was persisted is the snapshot's copy too, so the input mutations never reached the database.
         var stored = await db.Settings.GetAsync<PrivacySettings>(PrivacySettings.StorageKey);
