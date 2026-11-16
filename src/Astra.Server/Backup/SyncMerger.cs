@@ -126,9 +126,11 @@ public static class SyncMerger
             }
 
             var tsL = pending.TryGetValue(key, out var p) ? p : l is not null ? DocTime(l) ?? (b is null ? 0 : now) : now;
+            // A pushed change carries the time it was made (first seen), not the time it was sent: a delete made at 10:00 must not beat an edit made at 11:00 on another machine.
+            var stamp = tsL == 0 ? now : tsL;
             if (localChanged && !remoteChanged)
             {
-                PushLocal(now);
+                PushLocal(stamp);
             }
             else if (!localChanged)
             {
@@ -148,7 +150,7 @@ public static class SyncMerger
                     Section = section, Id = id, Label = label, Winner = localWins ? "local" : "remote",
                     At = DateTimeOffset.FromUnixTimeMilliseconds(now).ToString("O", CultureInfo.InvariantCulture), Device = r?.Device ?? "",
                 });
-                if (localWins) PushLocal(now); else PullRemote();
+                if (localWins) PushLocal(stamp); else PullRemote();
             }
         }
         return result;

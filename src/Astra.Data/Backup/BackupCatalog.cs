@@ -148,8 +148,8 @@ public static class BackupCatalog
     /// <summary>The tables that have a spec or a special handler; every <see cref="TableClass.Config"/> table must be among them or a child of one.</summary>
     public static readonly IReadOnlyList<TableSpec> Specs =
     [
-        new("models", "models", BackupSections.Prices, ["id"], Where: "source <> 'seed' OR user_modified_fields_json <> '[]'"),
-        new("model_prices", "model_prices", BackupSections.Prices, ["model_id", "price_key"], Skip: ["id"], Where: "source <> 'seed' OR user_modified = 1", Parent: "models", ParentColumns: ["model_id"]),
+        new("models", "models", BackupSections.Prices, ["id"], Where: "source = 'user' OR user_modified_fields_json <> '[]'"),
+        new("model_prices", "model_prices", BackupSections.Prices, ["model_id", "price_key"], Skip: ["id"], Where: "source = 'user' OR user_modified = 1", Parent: "models", ParentColumns: ["model_id"]),
 
         new("providers", "providers", BackupSections.Providers, ["id"], Secret: ["api_key_enc"], Skip: ["quota_json", "quota_checked_at_utc"]),
         new("provider_models", "provider_models", BackupSections.Providers, ["provider_id", "model_id"], Skip: ["id"], Parent: "providers", ParentColumns: ["provider_id"]),
@@ -217,6 +217,7 @@ public static class BackupCatalog
         ["update.state"] = null,
         ["token_migration"] = null,
         ["unified_gateway"] = null,
+        ["seed_version"] = null,
         ["claude_direct"] = null,
         ["privacy_placeholder_key"] = null,
         ["webdav_backup"] = null,
