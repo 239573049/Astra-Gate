@@ -70,6 +70,22 @@ internal sealed class ConnectionTrayService(ServiceManager? manager, ConnectionV
 
     public async Task SwitchProviderAsync(string clientKind, string providerId)
         => await api.PutAsync<BindingInput, ClientInfoDto>("/api/clients/" + clientKind + "/binding", new BindingInput(providerId, null));
+
+    /// <summary>The profiles from <c>/api/profiles/summary</c> (the stored names only, no drift check); a server without profiles answers 404 = none.</summary>
+    public async Task<IReadOnlyList<TrayProfile>> ProfilesAsync()
+    {
+        try
+        {
+            return (await api.GetAsync<List<ProfileSummaryDto>>("/api/profiles/summary") ?? []).Select(p => new TrayProfile(p.Id, p.Name, p.Active)).ToList();
+        }
+        catch (ApiException e) when (e.Status == 404)
+        {
+            return [];
+        }
+    }
+
+    public async Task ApplyProfileAsync(string profileId)
+        => await api.PostAsync<ProfilePlanDto>("/api/profiles/" + ApiClient.Enc(profileId) + "/apply");
 }
 
 /// <summary>

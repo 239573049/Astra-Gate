@@ -27,6 +27,7 @@ public sealed class ClientsView : UserControl
     private readonly ClientListView _list = new();
     private readonly ContentControl _status = new();
     private readonly ContentControl _connect = new();
+    private readonly ContentControl _profileBar = new();
     private readonly ClientPanelView _panel;
     private bool _wired;
 
@@ -36,7 +37,7 @@ public sealed class ClientsView : UserControl
         _vm = vm;
         _panel = new ClientPanelView(vm);
         vm.Panel = _panel;
-        var top = new StackPanel { Children = { _connect, _status } };
+        var top = new StackPanel { Children = { _connect, _profileBar, _status } };
         var right = new DockPanel();
         DockPanel.SetDock(top, Dock.Top);
         right.Children.Add(top);
@@ -61,7 +62,9 @@ public sealed class ClientsView : UserControl
         _vm.BackupsRequested += OnBackups;
         _vm.InstallRequested += OnInstall;
         _vm.ConnectRequested += OnConnectRequested;
+        _vm.ProfilesRequested += OnProfiles;
         _vm.Connect.Status.PropertyChanged += OnClients;
+        _vm.Profiles.PropertyChanged += OnClients;
         JoinLinkInbox.Arrived += OnInbox;
         Render();
         TakeInbox();
@@ -79,7 +82,9 @@ public sealed class ClientsView : UserControl
         _vm.BackupsRequested -= OnBackups;
         _vm.InstallRequested -= OnInstall;
         _vm.ConnectRequested -= OnConnectRequested;
+        _vm.ProfilesRequested -= OnProfiles;
         _vm.Connect.Status.PropertyChanged -= OnClients;
+        _vm.Profiles.PropertyChanged -= OnClients;
         JoinLinkInbox.Arrived -= OnInbox;
     }
 
@@ -103,12 +108,26 @@ public sealed class ClientsView : UserControl
         var q = _vm.Clients;
         var loading = !q.HasData && !q.IsError;
         _connect.Content = ConnectBanner.Create(_vm.Connect.Status.Data, () => _vm.RequestConnect(null), () => _ = _vm.LeaveConnectAsync());
+        _profileBar.Content = ActiveProfileBar(_vm.Profiles.Data?.FirstOrDefault(p => p.Active));
         _list.Show(q.Data, loading, _vm.SelectedKind, _vm.Select);
         if (loading) _status.Content = new LoadingState(4);
         else if (q.IsError && !q.HasData) _status.Content = ClientUi.Alert(AlertTone.Danger, Loc.T("common.error"), q.Error?.Message);
         else _status.Content = null;
         _panel.Rebuild();
     }
+
+    // The active profile above the panel: green while the clients still match it, a warning once they changed.
+    private static Control? ActiveProfileBar(ProfileDto? active) => active is null
+        ? null
+        : new Border
+        {
+            Margin = new Thickness(0, 0, 0, 10),
+            Child = active.Drifted
+                ? ClientUi.Alert(AlertTone.Warning, Loc.T("profiles.active") + ": " + active.Name + " · " + Loc.T("profiles.drifted"), Loc.T("profiles.driftedHint"))
+                : ClientUi.Alert(AlertTone.Info, Loc.T("profiles.active") + ": " + active.Name),
+        };
+
+    private void OnProfiles() => _vm.OpenSheet = ProfileSheets.Show(this, new ProfileSheetContext(_vm.ProfileApi, _vm.Context!.Feedback));
 
     private ClientSheetContext SheetContext() => new(_vm.Api, _vm.Context!.Feedback, CopyAsync, _vm.Zone);
 

@@ -125,6 +125,10 @@ Astra's first write. Disabling puts the recorded originals back key by key, skip
     (`TokenService.cs:138`/`:155` and `TokenMigrationWorker.cs:38` → `RewriteForTokenAsync`, `:238`), and provider
     model changes (`ProviderEndpoints.cs:568` → `SyncModelListsAsync`, `:122`)
 
+23. **Profiles** (linked update 31): `ProfileService` → `ClientService.ApplyProfileAsync` (`ClientService.Profiles.cs`) switches every client a saved
+    snapshot covers by calling `EnableCoreAsync` / `DisableCoreAsync` under the one `_writes` lock — the same plan → `Apply` / `Disable` path as
+    steps 5–17, never a direct file write. `extras.modelShortlist` narrows the model list `ContextAsync` writes for `HasModelList` clients.
+
 ## Sequence
 ```mermaid
 sequenceDiagram

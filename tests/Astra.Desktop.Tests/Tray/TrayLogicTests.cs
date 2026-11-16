@@ -280,6 +280,20 @@ public sealed class TrayLogicTests : IDisposable
     }
 
     [Fact]
+    public void Menu_has_a_profiles_submenu_that_applies_one_and_marks_the_active_one()
+    {
+        var s = State() with { Profiles = [new("p1", "Work", true), new("p2", "Home", false)] };
+        var profiles = Find(Menu(s, "darwin", "en"), "Profiles");
+        Assert.True(profiles.Enabled);
+        Assert.Equal([("Work", true), ("Home", false)], profiles.Submenu!.Select(i => (i.Label, i.Checked)));
+        Assert.Equal(new TrayMenuAction(TrayMenuVerb.ApplyProfile, "p2"), profiles.Submenu![1].Action);
+        Find(Menu(s, "win32", "zh"), "方案");
+        Assert.DoesNotContain(Menu(State(), "darwin", "en"), i => i.Label == "Profiles");
+        // A new profile or a new active one rebuilds the native menu.
+        Assert.NotEqual(s.Key(), (s with { Profiles = [new("p1", "Work", false), new("p2", "Home", true)] }).Key());
+    }
+
+    [Fact]
     public void Menu_lists_enabled_clients_with_their_provider()
     {
         var s = State(

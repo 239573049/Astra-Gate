@@ -213,6 +213,7 @@ namespace Astra.Api.Contracts;
 // clients
 [JsonSerializable(typeof(ProfileDto))]
 [JsonSerializable(typeof(List<ProfileDto>))]
+[JsonSerializable(typeof(List<ProfileSummaryDto>))]
 [JsonSerializable(typeof(ProfileInput))]
 [JsonSerializable(typeof(ProfilePlanDto))]
 [JsonSerializable(typeof(ShortlistInput))]

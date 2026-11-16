@@ -19,6 +19,12 @@ public sealed record ProfileDto(
     string Id, string Name, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, IReadOnlyList<ProfileClientDto> Clients, bool Active, bool Drifted);
 
 /// <summary>
+/// <c>GET /api/profiles/summary</c>: a profile's id, name and whether it is the active one, from the stored document alone (no drift check) —
+/// what the desktop tray polls every 10 s.
+/// </summary>
+public sealed record ProfileSummaryDto(string Id, string Name, bool Active);
+
+/// <summary>
 /// Body of <c>POST /api/profiles</c> (save the current state as <c>name</c>) and <c>PUT /api/profiles/{id}</c>: <c>name</c>
 /// renames; <c>overwrite</c> replaces the profile's snapshot with the current state of the clients.
 /// </summary>

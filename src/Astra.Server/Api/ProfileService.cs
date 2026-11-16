@@ -23,6 +23,13 @@ public sealed class ProfileService(AstraDatabase db, ClientService clients)
         return result;
     }
 
+    /// <summary>Names and the active marker from the stored document alone (the tray polls this; no drift check).</summary>
+    public async Task<List<ProfileSummaryDto>> SummaryAsync(CancellationToken ct)
+    {
+        var doc = await LoadAsync(ct);
+        return doc.Profiles.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).Select(p => new ProfileSummaryDto(p.Id, p.Name, doc.ActiveId == p.Id)).ToList();
+    }
+
     public async Task<ProfileDto> GetAsync(string idOrName, CancellationToken ct)
     {
         var doc = await LoadAsync(ct);

@@ -7,6 +7,8 @@ public static class ProfileEndpoints
     {
         var group = app.MapGroup("/api/profiles").AddEndpointFilter<AdminApiErrorFilter>();
         group.MapGet("", async (ProfileService profiles, CancellationToken ct) => Results.Ok(await profiles.ListAsync(ct)));
+        // Names and the active marker only (database read): what the desktop tray polls.
+        group.MapGet("/summary", async (ProfileService profiles, CancellationToken ct) => Results.Ok(await profiles.SummaryAsync(ct)));
         group.MapGet("/{id}", async (string id, ProfileService profiles, CancellationToken ct) => Results.Ok(await profiles.GetAsync(id, ct)));
         // Saves the clients' current state as a new profile.
         group.MapPost("", async (ProfileInput body, ProfileService profiles, CancellationToken ct) => Results.Ok(await profiles.SaveAsync(body.Name, ct)));

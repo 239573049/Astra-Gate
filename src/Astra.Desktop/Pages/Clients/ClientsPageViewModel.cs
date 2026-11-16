@@ -56,18 +56,33 @@ public sealed class ClientsPageViewModel : PageViewModel
         Api = new ClientsApi(context.Api, context.Queries);
         Clients = Api.Clients();
         Connect = new ConnectApi(context.Api, context.Queries);
+        ProfileApi = new ProfilesApi(context.Api, context.Queries);
+        Profiles = ProfileApi.Profiles();
         Providers = new ListQueries(context.Api, context.Queries).Providers();
         _selected = param;
         Observe(Clients);
         Observe(Connect.Status);
+        Observe(Profiles);
         Observe(Providers);
         Observe(context.Tokens.Tokens);
         Subscribe(Clients, OnClients);
 
         _checkButton = ClientUi.Button(Loc.T("clients.checkUpdates"), () => _ = CheckNowAsync(), icon: ClientUi.Icon(LucideIconKind.RefreshCw));
         var connectButton = ClientUi.Button(Loc.T("connect.open"), () => RequestConnect(null), icon: ClientUi.Icon(LucideIconKind.Link));
-        SetHeaderActions(new ActionGroup(8, connectButton, _checkButton));
+        _profilesButton = ClientUi.Button(Loc.T("profiles.title"), () => ProfilesRequested?.Invoke(), icon: ClientUi.Icon(LucideIconKind.Layers));
+        SetHeaderActions(new ActionGroup(8, _profilesButton, connectButton, _checkButton));
     }
+
+    private readonly ArcButton _profilesButton;
+
+    /// <summary>The saved profiles (the active one is shown in a bar above the panel).</summary>
+    public Query<List<ProfileDto>> Profiles { get; }
+
+    /// <summary>The profiles API (the profile sheets).</summary>
+    public ProfilesApi ProfileApi { get; }
+
+    /// <summary>The view opens the profiles sheet.</summary>
+    public event Action? ProfilesRequested;
 
     /// <summary>The shown view's panel (the visual tests drive it).</summary>
     internal ClientPanelView? Panel { get; set; }
@@ -126,6 +141,7 @@ public sealed class ClientsPageViewModel : PageViewModel
     {
         base.OnLanguageChanged();
         _checkButton.Content = ClientUi.HRow(6, ClientUi.Icon(LucideIconKind.RefreshCw), new Avalonia.Controls.TextBlock { Text = Loc.T("clients.checkUpdates"), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
+        _profilesButton.Content = ClientUi.HRow(6, ClientUi.Icon(LucideIconKind.Layers), new Avalonia.Controls.TextBlock { Text = Loc.T("profiles.title"), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center });
         SelectionChanged?.Invoke();
     }
 

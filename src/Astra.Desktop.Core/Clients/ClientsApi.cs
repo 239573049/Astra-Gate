@@ -28,9 +28,13 @@ public sealed class ClientsApi(ApiClient api, QueryClient queries)
                 SameData = QueryData.JsonEqual,
             });
 
-    /// <summary>The models the client's bound providers serve (web <c>useClientModels</c>; no retry).</summary>
-    public Query<List<string>> Models(string kind)
-        => queries.Query(new QueryKey("client-models", kind), async ct => await api.GetAsync<List<string>>($"/api/clients/{ApiClient.Enc(kind)}/models", ct) ?? [],
+    /// <summary>
+    /// The models the client's bound providers serve (web <c>useClientModels</c>; no retry): only its shortlist when it has one, or with
+    /// <paramref name="all"/> everything it can reach (what the shortlist editor picks from).
+    /// </summary>
+    public Query<List<string>> Models(string kind, bool all = false)
+        => queries.Query(all ? new QueryKey("client-models", kind, "all") : new QueryKey("client-models", kind),
+            async ct => await api.GetAsync<List<string>>($"/api/clients/{ApiClient.Enc(kind)}/models{(all ? "?all=true" : "")}", ct) ?? [],
             new QueryOptions<List<string>> { Retries = 0, SameData = QueryData.JsonEqual });
 
     /// <summary>The client's config backups (web <c>useBackups</c>).</summary>
@@ -76,6 +80,10 @@ public sealed class ClientsApi(ApiClient api, QueryClient queries)
     /// <summary>Replaces the provider list; the order is the routing order (first = primary).</summary>
     public Task SetBindingsAsync(string kind, IReadOnlyList<ClientBindingDto> bindings, CancellationToken ct = default)
         => Mutate(() => api.PutAsync($"/api/clients/{ApiClient.Enc(kind)}/bindings", new BindingsInput([.. bindings]), ct), new QueryKey("client-models", kind));
+
+    /// <summary>Sets the models the client should see (its shortlist); an empty list clears it. An enabled client's model list is rewritten.</summary>
+    public Task SetShortlistAsync(string kind, IReadOnlyList<string> models, CancellationToken ct = default)
+        => Mutate(() => api.PutAsync($"/api/clients/{ApiClient.Enc(kind)}/shortlist", new ShortlistInput([.. models]), ct), new QueryKey("profiles"));
 
     /// <summary>The config edits enabling would make; writes nothing.</summary>
     public async Task<ClientPreviewDto> PreviewEnableAsync(string kind, JsonObject body, CancellationToken ct = default)

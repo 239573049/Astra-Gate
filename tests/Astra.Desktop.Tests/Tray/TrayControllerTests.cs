@@ -30,6 +30,9 @@ public sealed class TrayControllerTests : IDisposable
         public Task<IReadOnlyList<TrayClient>> ClientsAsync() => Task.FromResult(Clients);
         public Task<IReadOnlyList<TrayProvider>> ProvidersAsync() => Task.FromResult(Providers);
         public async Task SwitchProviderAsync(string clientKind, string providerId) { Calls.Add($"switch {clientKind} {providerId}"); await Run(); }
+        public IReadOnlyList<TrayProfile> Profiles { get; set; } = [];
+        public Task<IReadOnlyList<TrayProfile>> ProfilesAsync() => Task.FromResult(Profiles);
+        public async Task ApplyProfileAsync(string profileId) { Calls.Add($"profile {profileId}"); await Run(); }
 
         private async Task Run()
         {
@@ -191,6 +194,22 @@ public sealed class TrayControllerTests : IDisposable
         Assert.Contains("error Failed to switch provider for codex: nope", shell.Calls);
         // Forced rebuild: the native radio item already moved.
         Assert.True(shell.MenuBuilds > builds);
+    }
+
+    [Fact]
+    public async Task Applying_a_profile_goes_through_the_service_and_rebuilds_the_menu()
+    {
+        var (c, service, shell, _) = Create();
+        service.Profiles = [new("p1", "Work", false)];
+        await c.RefreshAsync();
+        Assert.Contains(shell.Menu!, i => i.Label is "Profiles" or "方案");
+        var builds = shell.MenuBuilds;
+        await c.OnMenuAsync(new(TrayMenuVerb.ApplyProfile, "p1"));
+        Assert.Contains("profile p1", service.Calls);
+        Assert.True(shell.MenuBuilds > builds);
+        service.Fail = new InvalidOperationException("nope");
+        await c.OnMenuAsync(new(TrayMenuVerb.ApplyProfile, "p1"));
+        Assert.Contains("error Failed to apply the profile: nope", shell.Calls);
     }
 
     [Fact]

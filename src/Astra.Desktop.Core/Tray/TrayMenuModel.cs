@@ -9,6 +9,9 @@ public sealed record TrayClient(string Kind, string Name, bool Enabled, string? 
 /// <summary>A provider as the tray menu needs it (<c>GatewayProvider</c>).</summary>
 public sealed record TrayProvider(string Id, string Name, bool Enabled);
 
+/// <summary>A saved profile as the tray menu needs it (<c>GET /api/profiles</c>): applying one switches every client at once.</summary>
+public sealed record TrayProfile(string Id, string Name, bool Active);
+
 /// <summary>Everything the tray icon, its menu and the panel header show about the service (desktop/src/shared/trayMenu.ts <c>TrayState</c>).</summary>
 /// <param name="Running">The service answers its health probe.</param>
 /// <param name="Port">Its port, when known.</param>
@@ -18,9 +21,10 @@ public sealed record TrayProvider(string Id, string Name, bool Enabled);
 /// <param name="UpdateAvailable">Non-null when an update check found something newer.</param>
 /// <param name="Activity">A start / stop / restart the tray started and is still waiting on.</param>
 /// <param name="OpenAtLogin">Launch-at-login state; null where unsupported.</param>
+/// <param name="Profiles">Saved profiles (the "Profiles" submenu); null / empty = no submenu.</param>
 public sealed record TrayState(
     bool Running, int? Port, bool ApiVersionMismatch, IReadOnlyList<TrayClient> Clients, IReadOnlyList<TrayProvider> Providers,
-    string? UpdateAvailable, TrayActivity? Activity, bool? OpenAtLogin)
+    string? UpdateAvailable, TrayActivity? Activity, bool? OpenAtLogin, IReadOnlyList<TrayProfile>? Profiles = null)
 {
     /// <summary>Before the first probe.</summary>
     public static TrayState Initial { get; } = new(false, null, false, [], [], null, null, null);
@@ -36,13 +40,15 @@ public sealed record TrayState(
             .Append(Activity).Append('|').Append(OpenAtLogin).Append('|');
         foreach (var c in Clients) b.Append(c.Kind).Append(',').Append(c.Name).Append(',').Append(c.Enabled).Append(',').Append(c.ProviderId).Append(';');
         b.Append('|');
+        foreach (var pr in Profiles ?? []) b.Append(pr.Id).Append(',').Append(pr.Name).Append(',').Append(pr.Active).Append(';');
+        b.Append('|');
         foreach (var p in Providers) b.Append(p.Id).Append(',').Append(p.Name).Append(',').Append(p.Enabled).Append(';');
         return b.ToString();
     }
 }
 
 /// <summary>What a tray menu item does.</summary>
-public enum TrayMenuVerb { None, OpenWindow, ShowPanel, Navigate, Start, Stop, Restart, CopyApiAddress, OpenInBrowser, OpenLogs, SwitchProvider, ToggleOpenAtLogin, CheckUpdates, Quit }
+public enum TrayMenuVerb { None, OpenWindow, ShowPanel, Navigate, Start, Stop, Restart, CopyApiAddress, OpenInBrowser, OpenLogs, SwitchProvider, ApplyProfile, ToggleOpenAtLogin, CheckUpdates, Quit }
 
 /// <summary>An item's action with its arguments (nav target; client kind + provider id; the login item's next state).</summary>
 public sealed record TrayMenuAction(TrayMenuVerb Verb, string? Arg = null, string? Arg2 = null, bool Flag = false);
@@ -81,6 +87,7 @@ public sealed record TrayMenuLabels(bool Zh)
     public string Clients => T("客户端提供商", "Client Providers");
     public string NoProviders => T("未配置提供商", "No providers configured");
     public string DisabledProvider(string name) => Zh ? $"{name}（已停用）" : $"{name} (disabled)";
+    public string Profiles => T("方案", "Profiles");
     public string Unbound => T("未绑定", "Not bound");
     public string StartService => T("启动服务", "Start Service");
     public string StopService => T("停止服务", "Stop Service");
@@ -161,6 +168,14 @@ public static class TrayMenuModel
                 // macOS 14.4+ renders a native sublabel; elsewhere the binding goes inline.
                 items.Add(new(mac ? client.Name : $"{client.Name} · {currentName}", Enabled: state.Running && !busy, Sublabel: mac ? currentName : null, Submenu: sub));
             }
+        }
+
+        // Profiles: one click switches every client (the server applies it through the regular enable / disable path).
+        if (state.Profiles is { Count: > 0 } profiles)
+        {
+            items.Add(TrayMenuItem.Separator);
+            items.Add(new(t.Profiles, Enabled: state.Running && !busy, Submenu: profiles.Select(p => new TrayMenuItem(
+                p.Name, new(TrayMenuVerb.ApplyProfile, p.Id), Kind: TrayMenuItemKind.Radio, Checked: p.Active)).ToList()));
         }
 
         // Service control.

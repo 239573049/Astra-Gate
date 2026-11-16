@@ -51,6 +51,7 @@ public sealed class JsonRegistrationTests
         // Profiles and the model shortlist: save, list, preview, apply, rename, delete.
         var profile = await host.SendAsync(HttpMethod.Post, "/api/profiles", new { name = "guard" });
         await host.GetJsonAsync("/api/profiles");
+        await host.GetJsonAsync("/api/profiles/summary");
         await host.GetJsonAsync("/api/profiles/guard/preview");
         await host.SendAsync(HttpMethod.Post, "/api/profiles/guard/apply");
         await host.SendAsync(HttpMethod.Put, "/api/profiles/guard", new { name = "guard 2", overwrite = true });

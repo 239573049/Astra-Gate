@@ -28,6 +28,12 @@ public interface ITrayService
 
     /// <summary>Points a client at a provider; throws on failure.</summary>
     Task SwitchProviderAsync(string clientKind, string providerId);
+
+    /// <summary>The saved profiles (empty when unreachable or none).</summary>
+    Task<IReadOnlyList<TrayProfile>> ProfilesAsync() => Task.FromResult<IReadOnlyList<TrayProfile>>([]);
+
+    /// <summary>Applies a profile (every client it covers is switched); throws on failure.</summary>
+    Task ApplyProfileAsync(string profileId) => Task.CompletedTask;
 }
 
 /// <summary>The OS side of the tray: icon, menu, panel window, main window and the odd system action.</summary>
@@ -192,18 +198,21 @@ public sealed class TrayController : ITrayHost
         }
         IReadOnlyList<TrayClient> clients = [];
         IReadOnlyList<TrayProvider> providers = [];
+        IReadOnlyList<TrayProfile> profiles = [];
         if (probe.Running && probe.Port is not null)
         {
             var c = Safe(_service.ClientsAsync);
             var p = Safe(_service.ProvidersAsync);
+            var pr = Safe(_service.ProfilesAsync);
             clients = await c;
             providers = await p;
+            profiles = await pr;
         }
         lock (_gate)
         {
             // The activity belongs to RunServiceAction: a poll finishing mid-transition must not clear it.
             _state = new TrayState(probe.Running, probe.Port, probe.Running && probe.ApiVersionMismatch, clients, providers,
-                _updateAvailable() ? "yes" : null, _state.Activity, _openAtLogin());
+                _updateAvailable() ? "yes" : null, _state.Activity, _openAtLogin(), profiles);
         }
         Publish(force);
     }
@@ -358,6 +367,19 @@ public sealed class TrayController : ITrayHost
                     _shell.ShowError($"Failed to switch provider for {kind}", e.Message);
                 }
                 // Forced: on failure the native radio item has already moved to the clicked provider.
+                await RefreshAsync(force: true);
+                break;
+            case TrayMenuVerb.ApplyProfile when action.Arg is { } profileId:
+                if (state.Port is null) break;
+                try
+                {
+                    await _service.ApplyProfileAsync(profileId);
+                }
+                catch (Exception e)
+                {
+                    _shell.ShowError("Failed to apply the profile", e.Message);
+                }
+                // Forced: on failure the native radio item has already moved to the clicked profile.
                 await RefreshAsync(force: true);
                 break;
             case TrayMenuVerb.ToggleOpenAtLogin:

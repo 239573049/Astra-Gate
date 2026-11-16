@@ -81,6 +81,14 @@ vi.mock('../api/hooks', () => ({
   useStartClientInstall: () => ({ mutate: hookSpies.startInstall, isPending: false }),
   useCancelClientInstall: () => ({ mutate: vi.fn(), isPending: false }),
   useCheckClientUpdates: () => ({ mutate: vi.fn(), isPending: false }),
+  // Profiles bar and the model shortlist (no profiles, nothing saved).
+  useProfiles: () => ({ data: [], isLoading: false }),
+  useSaveProfile: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateProfile: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteProfile: () => ({ mutate: vi.fn(), isPending: false }),
+  useApplyProfile: () => ({ mutate: vi.fn(), isPending: false }),
+  useProfilePreview: () => ({ data: undefined, isPending: false, isError: false }),
+  useSetShortlist: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 // The real @lobehub/icons barrel transitively imports JSON with import attributes that Node ESM rejects;
