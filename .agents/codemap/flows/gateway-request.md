@@ -101,6 +101,8 @@ persisted at the end.
     API keys skip it. Failover/balanced modes cool a still-rejected account for `ProviderHealth.AuthCooldown` (10 min)
     and try an untried usable account (`auth_failover`), even after a successful renewal. Credential-resolution
     failures also hand over in those modes. Manual mode returns an upstream rejection without cooling or switching.
+    A provider with a key list (`Provider.KeyPool`, linked update 28) is account-based here too: its `api_key` accounts are filtered by
+    `KeyServes(endpoint.Protocol)` before `AccountScheduler` / `SelectAccount` pick, and `UpstreamAuthResolver.ResolveKeyAsync` builds the credentials.
     Exception: Copilot's Responses 401 "input item … does not belong to this connection" blames the request, so `SendAsync`
     (`AnswerStaleInputItemsAsync`) skips all of this: with `AppSettings.StripStaleReasoning` (default on) it resends once on the same
     account without the reasoning items' `encrypted_content` (retry `stale_reasoning`), else — or refused again — it throws a 400

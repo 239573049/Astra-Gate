@@ -29,6 +29,8 @@ public sealed class ApiKeyTabView : UserControl
     private readonly StackPanel _usage = new() { Spacing = 8 };
     private IDisposable? _watch;
     private readonly SettingsRow _keyRow;
+    private readonly SettingsGroup _keyGroup;
+    private readonly ProviderKeyListView _keyList;
     private string _key = "";
     private ArcButton? _save;
 
@@ -46,11 +48,15 @@ public sealed class ApiKeyTabView : UserControl
         _save.IsEnabled = false;
         _keyRow = PdUi.Row(Loc.T("providers.apiKey"), KeyDetail(provider), PdUi.Inline(8, input, _save));
         group.Rows.Add(_keyRow);
+        // A provider with a key list (settings.key_pool) edits its keys there; the row's own key is only a mirror of the first.
+        _keyGroup = group;
+        group.IsVisible = !ProviderKeyLogic.IsPool(provider);
+        _keyList = new ProviderKeyListView(ctx, api, provider);
 
         // web: <section className="card my-4 flex flex-col gap-2 p-4">
         var usage = PdUi.Card(_usage, new Thickness(16));
         usage.Margin = new Thickness(0, 0, 0, 16); // web my-4, the top collapsing into the group's own bottom margin
-        Content = new StackPanel { Children = { group, usage, Quota } };
+        Content = new StackPanel { Children = { group, _keyList, usage, Quota } };
         RebuildUsage();
     }
 
@@ -58,7 +64,12 @@ public sealed class ApiKeyTabView : UserControl
     /// A new provider object (a save, a refetch): the masked key follows it; the typed replacement and the quota section's form stay (web: the
     /// tab's state survives the re-render, and the quota form only resets when its configuration changed, which the section checks itself).
     /// </summary>
-    internal void UpdateProvider(ProviderDto provider) => _keyRow.Detail = KeyDetail(provider);
+    internal void UpdateProvider(ProviderDto provider)
+    {
+        _keyRow.Detail = KeyDetail(provider);
+        _keyGroup.IsVisible = !ProviderKeyLogic.IsPool(provider);
+        _keyList.UpdateProvider(provider);
+    }
 
     private static string KeyDetail(ProviderDto p) => p.HasApiKey ? p.ApiKeyMasked ?? "••••" : Loc.T("providers.noKey");
 
