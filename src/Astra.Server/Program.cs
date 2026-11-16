@@ -16,6 +16,7 @@ namespace Astra.Server;
 ///   relay --provider id        a gateway without storage: each request's own credential, one provider template
 ///                              (see RelayOptions; reads ASTRA_RELAY_*, ASTRA_HOST, ASTRA_PORT and nothing in ~/.astra)
 ///   version                    print {"version","apiVersion"}
+///   claude-mcp-helper          (hidden) the stdio MCP server a claude run of the Claude bridge starts for the caller's tools
 ///   plugin-selftest            run the in-process plugin runtime checks; exit 0 when all pass (CI runs it on
 ///                              each Native AOT binary, since AOT can break at run time what the JIT never shows)
 /// serve and healthcheck also read ASTRA_HOST / ASTRA_PORT / ASTRA_PUBLIC_URL / ASTRA_STRICT_PORT /
@@ -52,6 +53,8 @@ public static class Program
                     return await Relay.RelayApp.RunAsync(rest);
                 case "plugin-selftest":
                     return PluginSelfTest();
+                case Astra.Gateway.ClaudeBridge.ClaudeMcpHelper.Command:
+                    return await ClaudeMcpHelperAsync(rest);
                 default:
                     Console.Error.WriteLine($"Unknown command '{command}'. Commands: serve, relay, restore-all [--purge], migrate, set-password, healthcheck, version");
                     return 64;
@@ -62,6 +65,14 @@ public static class Program
             Console.Error.WriteLine(ex.Message);
             return 64;
         }
+    }
+
+    /// <summary>The stdio MCP server a claude run starts for the caller's tools (linked update 36); speaks UTF-8 on both ends whatever the console's code page.</summary>
+    private static async Task<int> ClaudeMcpHelperAsync(string[] args)
+    {
+        using var input = new StreamReader(Console.OpenStandardInput(), new System.Text.UTF8Encoding(false));
+        await using var output = new StreamWriter(Console.OpenStandardOutput(), new System.Text.UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+        return await Astra.Gateway.ClaudeBridge.ClaudeMcpHelper.RunAsync(args, input, output, CancellationToken.None);
     }
 
     private static int PluginSelfTest()

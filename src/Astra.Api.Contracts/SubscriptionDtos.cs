@@ -70,7 +70,11 @@ public sealed record ProviderAccountDto(
     /// <summary>API key accounts only: the one wire protocol the key is used for (null = all).</summary>
     string? Protocol = null,
     /// <summary>API key accounts only: the user's note.</summary>
-    string? Notes = null);
+    string? Notes = null,
+    /// <summary>Claude bridge accounts only: the <c>claude</c> sign-in's config directory (empty = the program's default one).</summary>
+    string? ClaudeConfigDir = null,
+    /// <summary>The account's own warm-up setting (<c>extra.warmup</c>: mode, times, weekdays) and the last one made; null = it follows the global one.</summary>
+    JsonNode? Warmup = null);
 
 /// <summary>PATCH body for one account; omitted fields keep their value. <c>httpProxy</c> "" clears the account's proxy.</summary>
 public sealed record AccountPatch(bool? Enabled, string? DisplayName, string? HttpProxy = null);

@@ -23,6 +23,8 @@ namespace Astra.Core;
 [JsonSerializable(typeof(EffortBudgets))]
 [JsonSerializable(typeof(TunnelSettings))]
 [JsonSerializable(typeof(McpGatewaySettings))]
+[JsonSerializable(typeof(ClaudeBridgeSettings))]
+[JsonSerializable(typeof(WarmupSettings))]
 [JsonSerializable(typeof(PricingSchedule))]
 [JsonSerializable(typeof(PriceSet))]
 [JsonSerializable(typeof(ServiceTierRule))]

@@ -1144,7 +1144,9 @@ public static partial class SubscriptionEndpoints
         KeyMaskOf(a),
         a.KeyWeight,
         a.KeyProtocol?.ToId(),
-        a.KeyNotes);
+        a.KeyNotes,
+        a.IsClaudeBridge ? a.ClaudeBridgeConfigDir : null,
+        a.Extra["warmup"]?.DeepClone());
 
     /// <summary>The provider's accounts in failover order; <c>isCurrent</c> marks the one requests go to right now.</summary>
     private static async Task<List<ProviderAccountDto>> ListDtosAsync(AstraDatabase db, string providerId)

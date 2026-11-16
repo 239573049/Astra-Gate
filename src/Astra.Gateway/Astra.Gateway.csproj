@@ -11,6 +11,11 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <!-- The Claude bridge's unit tests read its parsing and classification directly (linked update 36). -->
+    <InternalsVisibleTo Include="Astra.Gateway.Tests" />
+    <InternalsVisibleTo Include="Astra.Server.IntegrationTests" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Content-Encoding: zstd request bodies (codex-cli compresses with it); managed port, no native library. -->
     <PackageReference Include="ZstdSharp.Port" Version="0.8.8" />
     <!-- The MCP gateway's upstream side: era detection (Streamable HTTP / HTTP+SSE), sessions of initialize-based servers and the OAuth client

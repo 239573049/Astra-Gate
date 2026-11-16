@@ -714,6 +714,66 @@ public sealed class ProviderProbe(AstraDatabase db, IHttpClientFactory http, Ups
         return request;
     }
 
+    /// <summary>The request-log marker of a warm-up (<see cref="RequestRecord.ClientKind"/>): not a client's, never counted as one's.</summary>
+    public const string WarmupClientKind = "warmup";
+
+    /// <summary>
+    /// The cheapest request there is, with the account's own credentials (linked update 36): it starts the account's usage window, as the
+    /// first use after a reset does. Never renews a token — the caller has checked that the account's is fresh — and goes out through
+    /// <paramref name="client"/> (the account's own proxy). The request is logged like a gateway request, marked <see cref="WarmupClientKind"/>.
+    /// </summary>
+    /// <returns>Null when the upstream took it, else why not.</returns>
+    public async Task<string?> WarmAsync(Provider p, ProviderAccount account, string modelId, HttpClient client, CancellationToken ct)
+    {
+        var endpoint = PreferredEndpoint(p);
+        var protocol = endpoint.Protocol;
+        var record = new RequestRecord
+        {
+            Id = Ulid.NewUlid(), StartedAtUtc = DateTimeOffset.UtcNow, ClientKind = WarmupClientKind, TokenName = "Warm-up", ProviderId = p.Id, ProviderName = p.Name,
+            AccountId = account.Id, InboundProtocol = protocol.ToId(), UpstreamProtocol = protocol.ToId(), Passthrough = true, RequestedModel = modelId, UpstreamModel = modelId,
+            Stream = true, UserAgent = "Astra warm-up", Status = RequestStatus.GatewayError,
+        };
+        var sw = Stopwatch.StartNew();
+        string? error = null;
+        try
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(TimeSpan.FromSeconds(TestTimeoutSec));
+            using var request = await RequestAsync(p, HttpMethod.Post, UpstreamUrls.For(endpoint, modelId, true), protocol, true, deadline.Token, account.Id);
+            request.Content = new StringContent(TestBody(modelId, "hi", 16, true, protocol).ToJsonString(GatewayJson.Options), Encoding.UTF8, "application/json");
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+            record.HttpStatus = (int)response.StatusCode;
+            record.UpstreamRequestId = FirstHeader(response, "x-request-id", "request-id", "cf-ray");
+            if (response.IsSuccessStatusCode)
+            {
+                // read it to its end: the request counts once the upstream has answered it
+                await ReadLimitedAsync(response, 64 * 1024, deadline.Token);
+                record.Status = RequestStatus.Success;
+            }
+            else
+            {
+                error = $"HTTP {(int)response.StatusCode}: {Truncate(await ReadLimitedAsync(response, 4096, deadline.Token))}";
+                record.Status = RequestStatus.UpstreamError;
+                record.ErrorType = "upstream_error";
+                record.ErrorMessage = error;
+            }
+        }
+        catch (Exception e) when (!ct.IsCancellationRequested && e is HttpRequestException or OperationCanceledException or SubscriptionAuthException)
+        {
+            error = e.Message;
+            record.ErrorType = "warmup_failed";
+            record.ErrorMessage = error;
+        }
+        finally
+        {
+            record.TotalMs = sw.ElapsedMilliseconds;
+            await writer.EnqueueAsync(record);
+        }
+        return error;
+    }
+
+    private static string Truncate(string s) => s.Length <= 300 ? s : s[..300];
+
     private HttpClient CreateClient(Provider provider)
     {
         // a plugin's provider is reached through its plugin (plugin:// endpoints), never over the network directly

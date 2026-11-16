@@ -101,6 +101,8 @@ public sealed class SubscriptionQuotaService(
 
     /// <summary>Whether <see cref="FetchAsync"/> can query this account's quota (a probed family, not a setup token).</summary>
     public static bool CanProbe(Provider provider, ProviderAccount account) =>
+        // a Claude bridge account has no token of its own to query with: its allowance comes from the claude program's rate_limit_event
+        !account.IsClaudeBridge &&
         ProbedFamilies.Contains(provider.TemplateId ?? provider.PriceKey ?? provider.Id)
         && !(account.Extra[SetupTokenFlag] is JsonValue flag && flag.TryGetValue<bool>(out var setup) && setup);
 
