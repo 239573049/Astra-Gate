@@ -137,7 +137,6 @@ public static class ClientKinds
     public static ApiProtocol ProtocolOf(string kind) => kind switch
     {
         Codex or GrokBuild or MuseCode or PenguinHarness or Morph => ApiProtocol.OpenAIResponses,
-        Codex or GrokBuild or MuseCode or PenguinHarness => ApiProtocol.OpenAIResponses,
         ClaudeCode or ClaudeDesktop or Paseo or T3Code or OpenMausBot => ApiProtocol.Anthropic,
         GeminiCli or AntigravityCli => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,
