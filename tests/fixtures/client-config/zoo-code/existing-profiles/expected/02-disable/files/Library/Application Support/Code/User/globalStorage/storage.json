@@ -1,0 +1,16 @@
+{
+  "userDataProfiles": [
+    {
+      "name": "Work",
+      "location": "1a2b3c4d",
+      "useDefaultFlags": {}
+    },
+    {
+      "name": "Shared",
+      "location": "5e6f7a8b",
+      "useDefaultFlags": {
+        "settings": true
+      }
+    }
+  ]
+}

@@ -44,6 +44,18 @@ export const ClientKinds = {
   CommandCode: 'command-code',
   Fx: 'fx',
   Goose: 'goose',
+  ZooCode: 'zoo-code',
+  JetBrainsAir: 'jetbrains-air',
+  AirIde: 'air-ide',
+  CopilotJetBrains: 'copilot-jetbrains',
+  CodeBuddy: 'codebuddy',
+  Qoder: 'qoder',
+  QoderCn: 'qoder-cn',
+  T3Code: 't3code',
+  Pencil: 'pencil',
+  OpenPencil: 'openpencil',
+  Raycast: 'raycast',
+  Obsidian: 'obsidian',
 } as const;
 
 export const ALL_CLIENT_KINDS: readonly string[] = [
@@ -89,6 +101,18 @@ export const ALL_CLIENT_KINDS: readonly string[] = [
   ClientKinds.CommandCode,
   ClientKinds.Fx,
   ClientKinds.Goose,
+  ClientKinds.ZooCode,
+  ClientKinds.JetBrainsAir,
+  ClientKinds.AirIde,
+  ClientKinds.CopilotJetBrains,
+  ClientKinds.CodeBuddy,
+  ClientKinds.Qoder,
+  ClientKinds.QoderCn,
+  ClientKinds.T3Code,
+  ClientKinds.Pencil,
+  ClientKinds.OpenPencil,
+  ClientKinds.Raycast,
+  ClientKinds.Obsidian,
 ];
 
 /** Clients whose configuration lists the bound provider's models (ClientKinds.WithModelList). */
@@ -132,6 +156,18 @@ export const CLIENTS_WITH_MODEL_LIST: readonly string[] = [
   ClientKinds.CommandCode,
   ClientKinds.Fx,
   ClientKinds.Goose,
+  ClientKinds.ZooCode,
+  ClientKinds.JetBrainsAir,
+  ClientKinds.AirIde,
+  ClientKinds.CopilotJetBrains,
+  ClientKinds.CodeBuddy,
+  ClientKinds.Qoder,
+  ClientKinds.QoderCn,
+  ClientKinds.T3Code,
+  ClientKinds.Pencil,
+  ClientKinds.OpenPencil,
+  ClientKinds.Raycast,
+  ClientKinds.Obsidian,
 ];
 
 /** The inbound protocol each client speaks to the gateway. */
@@ -145,6 +181,7 @@ export function protocolOf(kind: string): ApiProtocol {
     case ClientKinds.ClaudeCode:
     case ClientKinds.ClaudeDesktop:
     case ClientKinds.Paseo:
+    case ClientKinds.T3Code:
       return 'anthropic';
     case ClientKinds.GeminiCli:
     case ClientKinds.AntigravityCli:

@@ -1,0 +1,10 @@
+[
+  {
+    "file": "$HOME/.config/raycast/ai/providers.yaml",
+    "format": "yaml",
+    "keyPath": "providers.[id=astra]",
+    "kind": "key",
+    "before": "{\"id\":\"astra\",\"name\":\"Mine\",\"include_user_email\":true,\"base_url\":\"https://old.example/v1\",\"api_keys\":{\"astra\":\"old\"},\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"description\":\"my note\"}]}",
+    "after": "{\"id\":\"astra\",\"name\":\"Astra\",\"base_url\":\"https://astra.corp.com/v1\",\"api_keys\":{\"astra\":\"sk-astra-enterprise-key\"},\"models\":[{\"id\":\"gpt-5\",\"name\":\"GPT-5\",\"context\":400000,\"abilities\":{\"temperature\":{\"supported\":true},\"vision\":{\"supported\":true},\"system_message\":{\"supported\":true},\"tools\":{\"supported\":true},\"reasoning_effort\":{\"supported\":true}},\"description\":\"my note\"},{\"id\":\"claude-sonnet-4-5\",\"name\":\"Claude Sonnet 4.5\",\"context\":200000,\"abilities\":{\"temperature\":{\"supported\":true},\"vision\":{\"supported\":true},\"system_message\":{\"supported\":true},\"tools\":{\"supported\":true},\"reasoning_effort\":{\"supported\":true}}},{\"id\":\"deepseek-chat\",\"name\":\"DeepSeek Chat\",\"context\":64000,\"abilities\":{\"temperature\":{\"supported\":true},\"vision\":{\"supported\":false},\"system_message\":{\"supported\":true},\"tools\":{\"supported\":true},\"reasoning_effort\":{\"supported\":false}}}],\"include_user_email\":true}"
+  }
+]

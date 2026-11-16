@@ -52,6 +52,18 @@ const NAMES: Record<string, string> = {
   [ClientKinds.CommandCode]: 'Command Code',
   [ClientKinds.Fx]: 'fx',
   [ClientKinds.Goose]: 'Goose',
+  [ClientKinds.ZooCode]: 'Zoo Code',
+  [ClientKinds.JetBrainsAir]: 'JetBrains Air',
+  [ClientKinds.AirIde]: 'Air (JetBrains IDEs)',
+  [ClientKinds.CopilotJetBrains]: 'Copilot (JetBrains)',
+  [ClientKinds.CodeBuddy]: 'CodeBuddy',
+  [ClientKinds.Qoder]: 'Qoder',
+  [ClientKinds.QoderCn]: 'Qoder CN',
+  [ClientKinds.T3Code]: 'T3 Code',
+  [ClientKinds.Pencil]: 'Pencil',
+  [ClientKinds.OpenPencil]: 'OpenPencil',
+  [ClientKinds.Raycast]: 'Raycast',
+  [ClientKinds.Obsidian]: 'Obsidian',
 };
 
 export const clientName = (kind: string): string => NAMES[kind] ?? kind;

@@ -1,0 +1,26 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json",
+    "format": "json",
+    "keyPath": "providerProfiles",
+    "kind": "key",
+    "before": null,
+    "after": "{\"currentApiConfigName\":\"astra\",\"apiConfigs\":{\"astra\":{\"id\":\"astra\",\"apiProvider\":\"openai\",\"openAiBaseUrl\":\"https://astra.corp.com/v1\",\"openAiApiKey\":\"sk-astra-enterprise-key\",\"openAiModelId\":\"gpt-5\",\"openAiStreamingEnabled\":true,\"openAiCustomModelInfo\":{\"supportsPromptCache\":false,\"supportsImages\":true,\"contextWindow\":400000,\"maxTokens\":128000}}}}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/Code/User/settings.json",
+    "format": "json",
+    "keyPath": "zoo-code\\.autoImportSettingsPath",
+    "kind": "key",
+    "before": "\"/tmp/own-import.json\"",
+    "after": "\"$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/Code/User/profiles/1a2b3c4d/settings.json",
+    "format": "json",
+    "keyPath": "zoo-code\\.autoImportSettingsPath",
+    "kind": "key",
+    "before": null,
+    "after": "\"$HOME/Library/Application Support/Code/User/globalStorage/zoocodeorganization.zoo-code/settings/astra-import.json\""
+  }
+]

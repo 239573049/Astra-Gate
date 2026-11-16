@@ -52,6 +52,18 @@ public static class ClientMeta
         ["command-code"] = "Command Code",
         ["fx"] = "fx",
         ["goose"] = "Goose",
+        ["zoo-code"] = "Zoo Code",
+        ["jetbrains-air"] = "JetBrains Air",
+        ["air-ide"] = "Air (JetBrains IDEs)",
+        ["copilot-jetbrains"] = "Copilot (JetBrains)",
+        ["codebuddy"] = "CodeBuddy",
+        ["qoder"] = "Qoder",
+        ["qoder-cn"] = "Qoder CN",
+        ["t3code"] = "T3 Code",
+        ["pencil"] = "Pencil",
+        ["openpencil"] = "OpenPencil",
+        ["raycast"] = "Raycast",
+        ["obsidian"] = "Obsidian",
     };
 
     /// <summary>The order clients are listed in (web <c>CLIENT_ORDER</c>).</summary>
@@ -62,6 +74,7 @@ public static class ClientMeta
         "crush", "qwen-code", "droid", "kimi-code", "zed",
         "vscode-insiders", "vscodium", "omp", "mimo-code", "deepseek-harness", "workbuddy", "workbuddy-ai", "muse-code", "nextcowork", "paseo", "zcode", "tkcode",
         "openchamber", "deveco-code", "stepcode", "aside", "omo", "prime-agent", "mu", "mothx", "penguin-harness", "antigravity-cli", "dim", "command-code", "fx", "goose",
+        "zoo-code", "jetbrains-air", "air-ide", "copilot-jetbrains", "codebuddy", "qoder", "qoder-cn", "t3code", "pencil", "openpencil", "raycast", "obsidian",
     ];
 
     /// <summary>

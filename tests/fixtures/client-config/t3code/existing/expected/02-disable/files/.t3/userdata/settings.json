@@ -1,0 +1,20 @@
+{
+  "providerInstances": {
+    "claudeAgent": {
+      "driver": "claudeAgent",
+      "config": {
+        "binaryPath": "/opt/claude/bin/claude",
+        "homePath": "/home/me/.claude-work"
+      }
+    },
+    "other": {
+      "driver": "codex",
+      "displayName": "Other",
+      "enabled": true
+    }
+  },
+  "textGenerationModelSelection": {
+    "instanceId": "other",
+    "model": "gpt-5"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "agent_servers": {
+    "Mine": {
+      "command": "mine",
+      "args": [
+        "acp"
+      ],
+      "env": {
+        "X": "1"
+      }
+    },
+    "Astra": {"command":"opencode","args":["acp"],"env":{"OPENCODE_CONFIG":"$HOME/.jetbrains/astra-opencode.json"}}
+  }
+}

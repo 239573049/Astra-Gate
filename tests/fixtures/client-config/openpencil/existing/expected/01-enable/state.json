@@ -1,0 +1,9 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/openpencil/settings.json",
+    "keyPath": "builtin_agents.[id=astra]",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"id\":\"astra\",\"preset\":\"custom\",\"display_name\":\"Astra\",\"kind\":\"openai-compat\",\"api_key\":\"sk-astra-enterprise-key\",\"model\":\"gpt-5\",\"models\":[\"gpt-5\",\"claude-sonnet-4-5\",\"deepseek-chat\"],\"base_url\":\"https://astra.corp.com/v1\",\"enabled\":true}"
+  }
+]

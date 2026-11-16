@@ -1,0 +1,1 @@
+{ "agent_servers": { "Astra": {"command":"opencode","args":["acp"],"env":{"OPENCODE_CONFIG":"$HOME/.jetbrains/astra-opencode.json"}} } }

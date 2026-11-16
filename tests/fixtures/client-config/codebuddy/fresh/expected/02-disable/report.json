@@ -1,0 +1,33 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.codebuddy/models.json",
+      "keyPath": "models.[name=Astra: claude-sonnet-4-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codebuddy/models.json",
+      "keyPath": "models.[name=Astra: deepseek-chat]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codebuddy/models.json",
+      "keyPath": "models.[name=Astra: gpt-5]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codebuddy/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/.codebuddy/models.json",
+    "$HOME/.codebuddy/settings.json"
+  ],
+  "warnings": []
+}

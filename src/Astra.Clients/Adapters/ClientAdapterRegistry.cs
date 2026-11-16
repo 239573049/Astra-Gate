@@ -71,6 +71,18 @@ public sealed class ClientAdapterRegistry
         new CommandCodeClientAdapter(env, store),
         new FxClientAdapter(env, store),
         new GooseClientAdapter(env, store),
+        new ZooCodeClientAdapter(env, store),
+        new AirClientAdapter(env, store, AirFlavour.App),
+        new AirClientAdapter(env, store, AirFlavour.Plugin),
+        new CopilotJetBrainsClientAdapter(env, store),
+        new CodeBuddyClientAdapter(env, store),
+        new QoderClientAdapter(env, store, QoderFlavour.Qoder),
+        new QoderClientAdapter(env, store, QoderFlavour.QoderCn),
+        new T3CodeClientAdapter(env, store),
+        new PencilClientAdapter(env, store),
+        new OpenPencilClientAdapter(env, store),
+        new RaycastClientAdapter(env, store),
+        new ObsidianClientAdapter(env, store),
     ];
 
     public IReadOnlyList<IClientAdapter> All { get; }

@@ -85,6 +85,18 @@ export const CLIENT_KINDS = [
   'command-code',
   'fx',
   'goose',
+  'zoo-code',
+  'jetbrains-air',
+  'air-ide',
+  'copilot-jetbrains',
+  'codebuddy',
+  'qoder',
+  'qoder-cn',
+  't3code',
+  'pencil',
+  'openpencil',
+  'raycast',
+  'obsidian',
 ] as const;
 
 /** A client a plugin adds (a magpie agent plugin): "plugin-" and magpie's agent id. */

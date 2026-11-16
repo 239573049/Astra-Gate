@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "theme": "dark",
+  "builtin_agents": [
+    {
+      "id": "builtin-1",
+      "preset": "custom",
+      "display_name": "Mine",
+      "kind": "openai-compat",
+      "api_key": "k",
+      "model": "m",
+      "base_url": "https://mine.example/v1",
+      "enabled": true
+    }
+  ]
+}

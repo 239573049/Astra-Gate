@@ -1,0 +1,44 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/Notes/.obsidian/plugins/copilot/data.json",
+      "keyPath": "backends.chat.enabledModels",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Notes/.obsidian/plugins/copilot/data.json",
+      "keyPath": "configuredModels.[configuredModelId=ab6f862e-27f1-57f5-8d12-bb9ccd3340c8]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Notes/.obsidian/plugins/copilot/data.json",
+      "keyPath": "configuredModels.[configuredModelId=cee9ad01-062f-5c97-89b4-fc916913b146]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Notes/.obsidian/plugins/copilot/data.json",
+      "keyPath": "configuredModels.[configuredModelId=f5c52db4-f0be-57ee-bb15-e9d464d46106]",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Notes/.obsidian/plugins/copilot/data.json",
+      "keyPath": "defaultModelKey",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/Notes/.obsidian/plugins/copilot/data.json",
+      "keyPath": "providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [
+    "$HOME/Notes/.obsidian/plugins/copilot/data.json"
+  ],
+  "warnings": []
+}

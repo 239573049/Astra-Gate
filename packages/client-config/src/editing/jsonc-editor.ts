@@ -741,7 +741,14 @@ function splitKeyPath(path: string): string[] {
   const parts: string[] = [];
   let current = '';
   let depth = 0;
-  for (const c of path) {
+  for (let i = 0; i < path.length; i++) {
+    const c = path[i]!;
+    // `\.` is a literal dot in a key (VS Code's `zoo-code.autoImportSettingsPath` is one flat key).
+    if (c === '\\' && path[i + 1] === '.') {
+      current += '.';
+      i++;
+      continue;
+    }
     if (c === '[') depth++;
     else if (c === ']') depth = Math.max(0, depth - 1);
     if (c === '.' && depth === 0) {

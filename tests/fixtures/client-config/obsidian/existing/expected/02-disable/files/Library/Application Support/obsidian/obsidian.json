@@ -1,0 +1,13 @@
+{
+  "vaults": {
+    "v1": {
+      "path": "$HOME/Notes",
+      "ts": 1,
+      "open": true
+    },
+    "v2": {
+      "path": "$HOME/Work",
+      "ts": 2
+    }
+  }
+}

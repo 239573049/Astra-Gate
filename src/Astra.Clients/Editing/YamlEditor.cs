@@ -42,6 +42,7 @@ public sealed partial class YamlEditor
     public string? GetJsonText(string path)
     {
         var segments = SplitPath(path);
+        if (IsNestedRowPath(segments)) return NestedRowGet(segments, out _)?.ToJsonString();
         if (IsRowPath(segments)) return ResolveInRow(LoadRoot(Text), segments, out var present) is { } node ? node.ToJsonString() : present ? "null" : null;
         var entry = Locate(LoadRoot(Text), segments);
         return entry is null ? null : ToJson(entry.Value.Value)?.ToJsonString() ?? "null";
@@ -51,6 +52,7 @@ public sealed partial class YamlEditor
     public JsonNode? Get(string path)
     {
         var segments = SplitPath(path);
+        if (IsNestedRowPath(segments)) return NestedRowGet(segments, out _);
         if (IsRowPath(segments)) return ResolveInRow(LoadRoot(Text), segments, out _);
         var entry = Locate(LoadRoot(Text), segments);
         return entry is null ? null : ToJson(entry.Value.Value);
@@ -60,6 +62,11 @@ public sealed partial class YamlEditor
     public bool Has(string path)
     {
         var segments = SplitPath(path);
+        if (IsNestedRowPath(segments))
+        {
+            _ = NestedRowGet(segments, out var nestedPresent);
+            return nestedPresent;
+        }
         if (IsRowPath(segments))
         {
             _ = ResolveInRow(LoadRoot(Text), segments, out var present);
@@ -92,6 +99,7 @@ public sealed partial class YamlEditor
         }
 
         var segments = SplitPath(path);
+        if (IsNestedRowPath(segments)) return NestedRowSet(segments, value, path);
         var root = LoadRoot(Text);
         if (IsRowPath(segments)) return SetRow(root, segments, value, path);
         var expected = DocumentObject(root);
@@ -118,6 +126,7 @@ public sealed partial class YamlEditor
     public YamlEditor Remove(string path)
     {
         var segments = SplitPath(path);
+        if (IsNestedRowPath(segments)) return NestedRowRemove(segments, path);
         var root = LoadRoot(Text);
         if (IsRowPath(segments)) return RemoveRow(root, segments, path);
         if (Locate(root, segments) is not { } entry) return this;

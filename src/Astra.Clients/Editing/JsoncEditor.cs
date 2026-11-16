@@ -421,14 +421,24 @@ public sealed class JsoncEditor
 
     // ---------------------------------------------------------------- key paths and array selectors
 
-    /// <summary>Splits a dotted key path; dots inside a <c>[…]</c> selector segment do not split.</summary>
+    /// <summary>
+    /// Splits a dotted key path; dots inside a <c>[…]</c> selector segment do not split, and <c>\.</c> is a literal dot in a key
+    /// (VS Code's <c>zoo-code.autoImportSettingsPath</c> is one flat key).
+    /// </summary>
     public static string[] SplitKeyPath(string path)
     {
         var parts = new List<string>();
         var current = new StringBuilder();
         var depth = 0;
-        foreach (var c in path)
+        for (var i = 0; i < path.Length; i++)
         {
+            var c = path[i];
+            if (c == '\\' && i + 1 < path.Length && path[i + 1] == '.')
+            {
+                current.Append('.');
+                i++;
+                continue;
+            }
             if (c == '[') depth++;
             else if (c == ']') depth = Math.Max(0, depth - 1);
             if (c == '.' && depth == 0)

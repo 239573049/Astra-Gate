@@ -100,6 +100,18 @@ public static class ClientInstallCatalog
         new(ClientKinds.CommandCode, ClientInstallMethod.Manual, "command-code", null, "https://commandcode.ai/"),
         new(ClientKinds.Fx, ClientInstallMethod.Manual, null, null, "https://fx.sh/"),
         new(ClientKinds.Goose, ClientInstallMethod.Manual, "goose", null, "https://block.github.io/goose/"),
+        new(ClientKinds.ZooCode, ClientInstallMethod.Manual, null, null, "https://marketplace.visualstudio.com/items?itemName=ZooCodeOrganization.zoo-code"),
+        new(ClientKinds.JetBrainsAir, ClientInstallMethod.Manual, null, null, "https://www.jetbrains.com/air/"),
+        new(ClientKinds.AirIde, ClientInstallMethod.Manual, null, null, "https://www.jetbrains.com/air/"),
+        new(ClientKinds.CopilotJetBrains, ClientInstallMethod.Manual, null, null, "https://plugins.jetbrains.com/plugin/17718-github-copilot"),
+        new(ClientKinds.CodeBuddy, ClientInstallMethod.Npm, "codebuddy", "@tencent-ai/codebuddy-code", "https://www.codebuddy.ai/"),
+        new(ClientKinds.Qoder, ClientInstallMethod.Npm, "qodercli", "@qoder-ai/qodercli", "https://qoder.com/cli"),
+        new(ClientKinds.QoderCn, ClientInstallMethod.Npm, "qoderclicn", "@qodercn-ai/qoderclicn", "https://qoder.com/cli"),
+        new(ClientKinds.T3Code, ClientInstallMethod.Manual, null, null, "https://github.com/pingdotgg/t3code"),
+        new(ClientKinds.Pencil, ClientInstallMethod.Manual, null, null, "https://pen.dev/"),
+        new(ClientKinds.OpenPencil, ClientInstallMethod.Manual, null, null, "https://github.com/ZSeven-W/openpencil"),
+        new(ClientKinds.Raycast, ClientInstallMethod.Manual, null, null, "https://www.raycast.com/"),
+        new(ClientKinds.Obsidian, ClientInstallMethod.Manual, null, null, "https://obsidian.md/"),
     }.ToDictionary(s => s.Kind, StringComparer.Ordinal);
 
     /// <summary>The spec for a client kind, or null when Astra cannot install that client (unknown or not catalogued yet).</summary>

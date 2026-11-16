@@ -1,0 +1,9 @@
+{
+  // my agents
+  "agent_servers": {
+    "Other": {
+      "command": "other-acp",
+      "args": ["--stdio"]
+    }
+  }
+}

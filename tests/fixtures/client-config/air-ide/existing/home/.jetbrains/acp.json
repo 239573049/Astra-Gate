@@ -1,0 +1,13 @@
+{
+  "agent_servers": {
+    "Mine": {
+      "command": "mine",
+      "args": [
+        "acp"
+      ],
+      "env": {
+        "X": "1"
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+# my providers
+providers:
+  - id: mine
+    name: Mine
+    base_url: https://mine.example/v1
+    api_keys:
+      mine: secret
+    models:
+      - id: m-1
+        name: M1
+        context: 8000
+        abilities:
+          temperature:
+            supported: true
+
+# AI extensions
+tools:
+  - id: web

@@ -1,0 +1,50 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "format": "json",
+    "keyPath": "$schema",
+    "kind": "key",
+    "before": null,
+    "after": "\"https://opencode.ai/config.json\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "format": "json",
+    "keyPath": "model",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "format": "json",
+    "keyPath": "small_model",
+    "kind": "key",
+    "before": null,
+    "after": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "format": "json",
+    "keyPath": "enabled_providers",
+    "kind": "key",
+    "before": null,
+    "after": "[\"astra\"]"
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "format": "json",
+    "keyPath": "provider.astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Astra\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"},\"models\":{\"gpt-5\":{\"name\":\"GPT-5\",\"limit\":{\"context\":400000,\"output\":128000},\"modalities\":{\"input\":[\"text\",\"image\"],\"output\":[\"text\"]},\"reasoning\":true},\"claude-sonnet-4-5\":{\"name\":\"Claude Sonnet 4.5\",\"limit\":{\"context\":200000,\"output\":64000},\"modalities\":{\"input\":[\"text\",\"image\"],\"output\":[\"text\"]},\"reasoning\":true},\"deepseek-chat\":{\"name\":\"DeepSeek Chat\",\"limit\":{\"context\":64000,\"output\":8000},\"modalities\":{\"input\":[\"text\"],\"output\":[\"text\"]},\"reasoning\":false}}}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/acp.json",
+    "format": "json",
+    "keyPath": "agent_servers.Astra",
+    "kind": "key",
+    "before": null,
+    "after": "{\"command\":\"$HOME/.opencode/bin/opencode\",\"args\":[\"acp\"],\"env\":{\"OPENCODE_CONFIG\":\"$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json\"}}"
+  }
+]

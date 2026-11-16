@@ -1,0 +1,44 @@
+[
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/acp.json",
+    "keyPath": "agent_servers.Astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"command\":\"opencode\",\"args\":[\"acp\"],\"env\":{\"OPENCODE_CONFIG\":\"$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json\"}}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "keyPath": "$schema",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"https://opencode.ai/config.json\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "keyPath": "enabled_providers",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "[\"astra\"]"
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "keyPath": "model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "keyPath": "provider.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Astra\",\"options\":{\"baseURL\":\"https://astra.corp.com/v1\",\"apiKey\":\"sk-astra-enterprise-key\"},\"models\":{\"gpt-5\":{\"name\":\"GPT-5\",\"limit\":{\"context\":400000,\"output\":128000},\"modalities\":{\"input\":[\"text\",\"image\"],\"output\":[\"text\"]},\"reasoning\":true},\"claude-sonnet-4-5\":{\"name\":\"Claude Sonnet 4.5\",\"limit\":{\"context\":200000,\"output\":64000},\"modalities\":{\"input\":[\"text\",\"image\"],\"output\":[\"text\"]},\"reasoning\":true},\"deepseek-chat\":{\"name\":\"DeepSeek Chat\",\"limit\":{\"context\":64000,\"output\":8000},\"modalities\":{\"input\":[\"text\"],\"output\":[\"text\"]},\"reasoning\":false}}}"
+  },
+  {
+    "file": "$HOME/Library/Application Support/JetBrains/Air/astra-opencode.json",
+    "keyPath": "small_model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra/gpt-5\""
+  }
+]
