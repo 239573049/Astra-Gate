@@ -333,6 +333,15 @@ export function useCheckUpdate() {
   });
 }
 
+/** Docker: asks the container updater to pull the new image and recreate this container (the server restarts). */
+export function useApplyContainerUpdate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<UpdateStatus>('POST', '/api/update/apply'),
+    onSuccess: (s) => qc.setQueryData(keys.update, s),
+  });
+}
+
 // ---------- models ----------
 
 export const useModels = (search?: string, vendor?: string) =>

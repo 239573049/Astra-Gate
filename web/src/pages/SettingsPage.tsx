@@ -1,15 +1,16 @@
-import { Archive, Bell, Copy, Download, FolderOpen, Globe, LogOut, PanelTop, RefreshCw, SlidersHorizontal } from 'lucide-react';
+import { Archive, Bell, Copy, FolderOpen, Globe, LogOut, PanelTop, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { keys, useAuthStatus, useCheckUpdate, useLogout, useSettings, useTunnel, useUpdateSettings, useUpdateStatus, useVersion } from '../api/hooks';
+import { keys, useAuthStatus, useLogout, useSettings, useTunnel, useUpdateSettings, useVersion } from '../api/hooks';
 import type { ProxyMode, QualifyScope, RequestCompression, Settings } from '../api/types';
 import { BackupSyncSettings } from '../components/backup/BackupSyncSettings';
 import { ListenRows } from '../components/ListenSettings';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { RemoteAccessSettings } from '../components/RemoteAccessSettings';
 import { StartupSettings } from '../components/StartupSettings';
+import { UpdateRows } from '../components/UpdateRows';
 import { WarmupSettings } from '../components/WarmupSettings';
 import { NAV_GROUPS } from '../components/layout/nav';
 import { Page } from '../components/layout/Page';
@@ -363,118 +364,6 @@ function GeneralSettings() {
         )}
       </Group>
     </div>
-  );
-}
-
-/**
- * Update feed rows: auto-check and preview-channel toggles plus a manual check button. In the
- * desktop app an available update gets an apply button that runs the shared
- * update engine over the bridge (server first, then the app per track); the
- * plain web UI never installs anything itself and points at the tray menu
- * / `astra update` instead.
- */
-function UpdateRows() {
-  const { t } = useI18n();
-  const { toast } = useFeedback();
-  const qc = useQueryClient();
-  const update = useUpdateSettings();
-  const settings = useSettings();
-  const status = useUpdateStatus();
-  const check = useCheckUpdate();
-  const s = status.data;
-  // The saved setting, not the status: the status only changes once a feed check returns (up to 15 s).
-  const channel = settings.data?.updateChannel ?? s?.channel;
-  const updates = getBridge()?.updates ?? null;
-  const [applying, setApplying] = useState(false);
-
-  const runCheck = () =>
-    check.mutate(undefined, {
-      // A failed feed fetch still answers 200 with the previous result plus `error`: say it failed.
-      onSuccess: (r) =>
-        r.error
-          ? toast(t('settings.updateCheckFailed', { error: r.error }), 'error')
-          : toast(r.available ? t('settings.updateAvailable', { version: r.available }) : t('settings.upToDate')),
-      onError: (e) => toast(errorText(e), 'error'),
-    });
-
-  const runApply = () => {
-    if (!updates || applying) return;
-    setApplying(true);
-    updates
-      .apply()
-      .then((outcome) => {
-        if (outcome === 'server') {
-          toast(t('settings.updateApplied'));
-          void qc.invalidateQueries({ queryKey: keys.version });
-          void qc.invalidateQueries({ queryKey: keys.update });
-        } else if (outcome === 'desktop') {
-          // The desktop step relaunches the app; say so before it quits.
-          toast(t('settings.updateDesktopRelaunch'));
-        } else if (outcome === 'download') {
-          toast(t('settings.updateDownloadOpened'));
-        } else if (outcome === 'downloading') {
-          toast(t('settings.updateDownloading'));
-        } else {
-          toast(t('settings.upToDate'));
-        }
-      })
-      .catch((e) => toast(errorText(e), 'error'))
-      .finally(() => setApplying(false));
-  };
-
-  const lastChecked = s?.lastCheckAt ? new Date(s.lastCheckAt).toLocaleString() : undefined;
-  const availableDetail = s?.available
-    ? updates
-      ? t('settings.updateAvailable', { version: s.available })
-      : `${t('settings.updateAvailable', { version: s.available })} ${t('settings.updateApplyHint')}`
-    : undefined;
-
-  return (
-    <>
-      <Row
-        label={t('settings.autoCheck')}
-        detail={s && !s.feedConfigured ? t('settings.updateCheckFailed', { error: 'feed-not-configured' }) : undefined}
-      >
-        <Switch
-          checked={s?.autoCheck ?? true}
-          label={t('settings.autoCheck')}
-          onChange={(autoCheck) => update.mutate({ updateAutoCheck: autoCheck }, { onError: (e) => toast(errorText(e), 'error') })}
-        />
-      </Row>
-      <Row label={t('settings.previewUpdates')} detail={t('settings.previewUpdatesHint')}>
-        <Switch
-          checked={channel === 'preview'}
-          label={t('settings.previewUpdates')}
-          disabled={!channel || update.isPending}
-          // Flips as soon as the setting is saved; the check for the new channel runs behind it
-          // (the check row shows its spinner).
-          onChange={(on) =>
-            update.mutate({ updateChannel: on ? 'preview' : 'stable' }, { onSuccess: runCheck, onError: (e) => toast(errorText(e), 'error') })
-          }
-        />
-      </Row>
-      <Row
-        label={t('settings.checkUpdates')}
-        detail={
-          check.isError
-            ? t('settings.updateCheckFailed', { error: errorText(check.error) })
-            : s?.available
-              ? availableDetail
-              : lastChecked
-                ? t('settings.lastChecked', { time: lastChecked })
-                : undefined
-        }
-      >
-        <Button size="sm" variant="plain" disabled={check.isPending} onClick={runCheck}>
-          {check.isPending ? <Spinner className="size-3.5" /> : <RefreshCw className="size-3.5" />}
-        </Button>
-        {updates && s?.available && (
-          <Button size="sm" variant="plain" disabled={applying} aria-label={t('settings.updateApply')} onClick={runApply}>
-            {applying ? <Spinner className="size-3.5" /> : <Download className="size-3.5" />}
-          </Button>
-        )}
-      </Row>
-    </>
   );
 }
 

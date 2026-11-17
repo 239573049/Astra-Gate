@@ -1125,7 +1125,7 @@ export interface Settings {
 }
 export type ProxyMode = "system" | "custom" | "direct";
 /** proxyPassword is write-only (null / "" clears it); reads only report hasProxyPassword. */
-export type SettingsPatch = Partial<Settings> & { proxyPassword?: string | null };
+export type SettingsPatch = Partial<Settings> & { proxyPassword?: string | null; updateAutoApply?: boolean };
 // GET /api/settings -> Settings ; PATCH /api/settings body SettingsPatch -> Settings
 
 // ---------- remote access (Cloudflare Tunnel) ----------
@@ -1176,10 +1176,16 @@ export interface TunnelConfig {
 export interface DetectedCloudflared { path?: string | null; version?: string | null }
 
 // ---------- update feed ----------
-// GET /api/update/status ; POST /api/update/check
+// GET /api/update/status ; POST /api/update/check ; POST /api/update/apply (Docker with a container updater)
 export interface UpdateStatus {
   current: string; available?: string | null; lastCheckAt?: string | null; notes?: string | null;
   error?: string | null; channel: "stable" | "preview"; autoCheck: boolean; feedConfigured: boolean;
+  /** A Docker deployment with a container updater beside it (ASTRA_UPDATER_URL): the server installs updates itself. */
+  containerUpdater?: boolean;
+  /** With a container updater: install a newer version as soon as a check finds it. */
+  autoApply?: boolean;
+  /** The last request to the container updater: the version, when, and why it failed (updater-unreachable / updater-unauthorized / updater-http-N). */
+  applyVersion?: string | null; applyRequestedAt?: string | null; applyError?: string | null;
 }
 
 

@@ -2319,6 +2319,12 @@ internal static class Messages
         "settings.updateDownloading",
         "settings.lastChecked",
         "settings.autoCheck",
+        "settings.autoApply",
+        "settings.autoApplyHint",
+        "settings.updateContainerHint",
+        "settings.updateContainerRequested",
+        "settings.updateContainerPending",
+        "settings.updateContainerFailed",
         "settings.previewUpdates",
         "settings.previewUpdatesHint",
         "settings.tab.general",
@@ -6131,6 +6137,12 @@ internal static class Messages
             case "settings.updateDownloading": return "新版本正在后台下载，下载完成后会提示重启安装";
             case "settings.lastChecked": return "上次检查：{time}";
             case "settings.autoCheck": return "自动检查更新";
+            case "settings.autoApply": return "自动安装更新";
+            case "settings.autoApplyHint": return "发现新版本后由容器更新器拉取新镜像并重启服务（Docker 部署）";
+            case "settings.updateContainerHint": return "由容器更新器拉取新镜像并重启服务";
+            case "settings.updateContainerRequested": return "已请求更新，容器更新器拉取新镜像后服务会自动重启";
+            case "settings.updateContainerPending": return "已于 {time} 请求更新到 {version}，镜像发布后会自动安装";
+            case "settings.updateContainerFailed": return "更新请求失败：{error}";
             case "settings.previewUpdates": return "接收预览版更新";
             case "settings.previewUpdatesHint": return "提前获得下一个正式版的新功能，可能不稳定。关闭后不会降级，停在当前版本直到更新的正式版发布";
             case "settings.tab.general": return "常规";
@@ -9945,6 +9957,12 @@ internal static class Messages
             case "settings.updateDownloading": return "The new version is downloading in the background — you will be prompted to restart once it is ready";
             case "settings.lastChecked": return "Last checked: {time}";
             case "settings.autoCheck": return "Check for updates automatically";
+            case "settings.autoApply": return "Install updates automatically";
+            case "settings.autoApplyHint": return "When a new version is found, the container updater pulls the new image and restarts the server (Docker)";
+            case "settings.updateContainerHint": return "The container updater pulls the new image and restarts the server";
+            case "settings.updateContainerRequested": return "Update requested — the server restarts once the container updater has pulled the new image";
+            case "settings.updateContainerPending": return "Update to {version} requested at {time}; it installs as soon as the image is published";
+            case "settings.updateContainerFailed": return "Update request failed: {error}";
             case "settings.previewUpdates": return "Receive preview updates";
             case "settings.previewUpdatesHint": return "Get the next release's features early; previews may be unstable. Turning this off never downgrades: you stay on your version until a newer stable release";
             case "settings.tab.general": return "General";

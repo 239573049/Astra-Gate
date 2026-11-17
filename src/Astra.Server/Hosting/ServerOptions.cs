@@ -30,6 +30,19 @@ public sealed class ServerOptions
     /// <summary><c>ASTRA_PLUGINS=off</c>: no installed plugin runs and none can be installed (the list is kept).</summary>
     [JsonIgnore] public bool PluginsOff { get; set; }
 
+    /// <summary>
+    /// ASTRA_UPDATER_URL: the container updater (a Watchtower HTTP API, e.g. <c>http://updater:8080</c>) Astra asks to pull its
+    /// image and recreate its container when the feed offers a newer version (<see cref="ContainerUpdater"/>). Null = none.
+    /// </summary>
+    [JsonIgnore] public string? UpdaterUrl { get; set; }
+
+    /// <summary>
+    /// The updater's API token: ASTRA_UPDATER_TOKEN, else the file ASTRA_UPDATER_TOKEN_FILE names — created with a random
+    /// token when it does not exist yet, so a compose file can share it with the updater without a second secret to set.
+    /// Never logged or returned.
+    /// </summary>
+    [JsonIgnore] public string? UpdaterToken { get; set; }
+
     /// <summary>ASTRA_HOST chose <see cref="Host"/>: config.json's host does not apply (containers).</summary>
     [JsonIgnore] public bool HostFromEnvironment { get; private set; }
 
@@ -91,7 +104,8 @@ public sealed class ServerOptions
 
     /// <summary>
     /// Applies the container-oriented environment overrides (precedence: config.json &lt; environment &lt; flags):
-    /// ASTRA_HOST, ASTRA_PORT, ASTRA_PUBLIC_URL, ASTRA_STRICT_PORT, ASTRA_ADMIN_PASSWORD or ASTRA_ADMIN_PASSWORD_FILE.
+    /// ASTRA_HOST, ASTRA_PORT, ASTRA_PUBLIC_URL, ASTRA_STRICT_PORT, ASTRA_ADMIN_PASSWORD or ASTRA_ADMIN_PASSWORD_FILE,
+    /// ASTRA_UPDATER_URL with ASTRA_UPDATER_TOKEN or ASTRA_UPDATER_TOKEN_FILE.
     /// The password is hashed in memory only; it is never written to config.json.
     /// </summary>
     public void ApplyEnvironment(Func<string, string?> get)
@@ -114,6 +128,16 @@ public sealed class ServerOptions
         if (Nonblank(get("ASTRA_PLUGINS")) is { } plugins)
             PluginsOff = plugins.ToLowerInvariant() is "0" or "false" or "no" or "off";
 
+        if (Nonblank(get("ASTRA_UPDATER_URL")) is { } updater)
+        {
+            if (!Uri.TryCreate(updater, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0)
+                throw new ArgumentException("ASTRA_UPDATER_URL must be an absolute http(s) URL without credentials");
+            UpdaterUrl = updater.TrimEnd('/');
+            UpdaterToken = Nonblank(get("ASTRA_UPDATER_TOKEN"))
+                           ?? (Nonblank(get("ASTRA_UPDATER_TOKEN_FILE")) is { } tokenFile ? ReadOrCreateToken(tokenFile) : null)
+                           ?? throw new ArgumentException("ASTRA_UPDATER_URL needs ASTRA_UPDATER_TOKEN or ASTRA_UPDATER_TOKEN_FILE");
+        }
+
         var password = Nonblank(get("ASTRA_ADMIN_PASSWORD"));
         if (password is null && Nonblank(get("ASTRA_ADMIN_PASSWORD_FILE")) is { } file)
         {
@@ -134,6 +158,24 @@ public sealed class ServerOptions
     }
 
     private static string? Nonblank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>The token in <paramref name="path"/>; a missing file gets a new random token (owner-only) first.</summary>
+    internal static string ReadOrCreateToken(string path)
+    {
+        try
+        {
+            if (File.Exists(path) && Nonblank(File.ReadAllText(path)) is { } existing) return existing;
+            var token = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+            if (Path.GetDirectoryName(Path.GetFullPath(path)) is { } dir) Directory.CreateDirectory(dir);
+            File.WriteAllText(path, token);
+            AstraPaths.RestrictToOwner(path);
+            return token;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new ArgumentException($"Cannot read or create ASTRA_UPDATER_TOKEN_FILE: {ex.Message}");
+        }
+    }
 
     /// <summary>Applies --port / --host / --started-by flags.</summary>
     public void ApplyArgs(IReadOnlyList<string> args)

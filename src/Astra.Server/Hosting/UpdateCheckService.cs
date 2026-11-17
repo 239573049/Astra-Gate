@@ -56,6 +56,13 @@ public sealed class UpdateCheckState
 
     /// <summary>Last failure ("feed-not-configured" when the feed was disabled), null on success.</summary>
     public string? Error { get; set; }
+
+    /// <summary>The version the container updater was last asked to install, and when (<see cref="ContainerUpdater"/>).</summary>
+    public string? ApplyVersion { get; set; }
+    public DateTimeOffset? ApplyRequestedAt { get; set; }
+
+    /// <summary>Why the last request to the container updater failed; null when it was accepted.</summary>
+    public string? ApplyError { get; set; }
 }
 
 /// <summary>

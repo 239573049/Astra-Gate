@@ -133,6 +133,99 @@ public class UpdateApiTests
         Assert.Equal("preview", (await host.GetJsonAsync("/api/settings"))["updateChannel"]!.GetValue<string>());
     }
 
+    /// <summary>A fake container updater (Watchtower's <c>POST /v1/update</c>): records each call and answers <paramref name="status"/>.</summary>
+    private static async Task<(TestServer Server, List<(string Query, string? Auth)> Calls)> UpdaterAsync(int status)
+    {
+        var calls = new List<(string, string?)>();
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        var app = builder.Build();
+        app.MapPost("/v1/update", (HttpRequest req) =>
+        {
+            lock (calls) calls.Add((req.QueryString.Value ?? "", req.Headers.Authorization.ToString()));
+            return Results.StatusCode(status);
+        });
+        await app.StartAsync();
+        return (app.GetTestServer(), calls);
+    }
+
+    private static Action<WebApplicationBuilder> WithUpdater(TestServer? feed, TestServer updater) => b =>
+    {
+        if (feed is not null) PointFeedAt(feed)(b);
+        var server = (ServerOptions)b.Services.Last(d => d.ServiceType == typeof(ServerOptions)).ImplementationInstance!;
+        server.UpdaterUrl = "http://updater:8080";
+        server.UpdaterToken = "updater-secret";
+        b.Services.Configure<HttpClientFactoryOptions>(ContainerUpdater.HttpClientName,
+            o => o.HttpMessageHandlerBuilderActions.Add(hb => hb.PrimaryHandler = updater.CreateHandler()));
+    };
+
+    [Fact]
+    public async Task Apply_without_a_container_updater_is_refused()
+    {
+        await using var host = await TestHost.StartAsync();
+        var status = await host.GetJsonAsync("/api/update/status");
+        Assert.False(status["containerUpdater"]!.GetValue<bool>());
+        Assert.True(status["autoApply"]!.GetValue<bool>());
+        var (code, body) = await host.SendAsync(HttpMethod.Post, "/api/update/apply");
+        Assert.Equal(HttpStatusCode.Conflict, code);
+        Assert.Contains("ASTRA_UPDATER_URL", body!["error"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Apply_asks_the_container_updater_and_records_the_request()
+    {
+        using var feed = await FeedServerAsync("99.0.0", "big release");
+        var (updater, calls) = await UpdaterAsync(202);
+        using var _ = updater;
+        await using var host = await TestHost.StartAsync(WithUpdater(feed, updater));
+        await host.SendAsync(HttpMethod.Patch, "/api/settings", new JsonObject { ["updateFeedUrl"] = "http://feed.test/astra" });
+        await host.SendAsync(HttpMethod.Post, "/api/update/check");
+
+        var (code, applied) = await host.SendAsync(HttpMethod.Post, "/api/update/apply");
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.True(applied!["containerUpdater"]!.GetValue<bool>());
+        Assert.Equal("99.0.0", applied["applyVersion"]!.GetValue<string>());
+        Assert.NotNull(applied["applyRequestedAt"]);
+        Assert.True(applied["applyError"] is null);
+        var call = Assert.Single(calls);
+        Assert.Equal("?async=true", call.Query);
+        Assert.Equal("Bearer updater-secret", call.Auth);
+        // The token never reaches the console.
+        Assert.DoesNotContain("updater-secret", (await host.GetJsonAsync("/api/update/status")).ToJsonString());
+
+        // The setting that lets the worker do it on its own.
+        await host.SendAsync(HttpMethod.Patch, "/api/settings", new JsonObject { ["updateAutoApply"] = false });
+        Assert.False((await host.GetJsonAsync("/api/update/status"))["autoApply"]!.GetValue<bool>());
+    }
+
+    [Theory]
+    [InlineData(401, "updater-unauthorized")]
+    [InlineData(500, "updater-http-500")]
+    [InlineData(429, null)]
+    public async Task A_refusing_updater_is_reported_in_the_status(int answer, string? error)
+    {
+        var (updater, _) = await UpdaterAsync(answer);
+        using var _ = updater;
+        await using var host = await TestHost.StartAsync(WithUpdater(null, updater));
+        var (code, applied) = await host.SendAsync(HttpMethod.Post, "/api/update/apply");
+        Assert.Equal(HttpStatusCode.OK, code);
+        Assert.Equal(error, (string?)applied!["applyError"]);
+        Assert.Equal(error, (string?)(await host.GetJsonAsync("/api/update/status"))["applyError"]);
+    }
+
+    [Fact]
+    public void The_worker_asks_again_for_a_version_only_after_an_hour()
+    {
+        var now = DateTimeOffset.UtcNow;
+        Assert.False(ContainerUpdater.Due(new UpdateCheckState(), now));
+        Assert.True(ContainerUpdater.Due(new UpdateCheckState { AvailableVersion = "2.0.0" }, now));
+        var asked = new UpdateCheckState { AvailableVersion = "2.0.0", ApplyVersion = "2.0.0", ApplyRequestedAt = now.AddMinutes(-10) };
+        Assert.False(ContainerUpdater.Due(asked, now));
+        Assert.True(ContainerUpdater.Due(asked, now.AddMinutes(51)));
+        // A newer version than the one asked for is asked for at once.
+        Assert.True(ContainerUpdater.Due(new UpdateCheckState { AvailableVersion = "2.0.1", ApplyVersion = "2.0.0", ApplyRequestedAt = now }, now));
+    }
+
     [Fact]
     public void IsNewer_follows_semver_precedence()
     {

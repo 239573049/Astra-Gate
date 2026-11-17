@@ -9,10 +9,18 @@ public sealed record StatusDto(string Status);
 /// <summary>Body of <c>GET /api/version</c>: the server build and the admin API protocol version.</summary>
 public sealed record VersionDto(string Version, string ApiVersion);
 
-/// <summary>Payload of /api/update/status and /api/update/check (the UI caches it under one key).</summary>
+/// <summary>
+/// Payload of /api/update/status, /api/update/check and /api/update/apply (the UI caches it under one key).
+/// <paramref name="ContainerUpdater"/>: a Docker deployment with an updater beside it (ASTRA_UPDATER_URL), so the server can
+/// install an update itself; <paramref name="AutoApply"/> is the setting that does so on its own; <paramref name="ApplyVersion"/>,
+/// <paramref name="ApplyRequestedAt"/> and <paramref name="ApplyError"/> describe the last request to the updater
+/// (<c>updater-unreachable</c>, <c>updater-unauthorized</c>, <c>updater-http-&lt;status&gt;</c>).
+/// </summary>
 public sealed record UpdateStatusDto(
     string Current, string? Available, DateTimeOffset? LastCheckAt, string? Notes, string? Error,
-    string Channel, bool AutoCheck, bool FeedConfigured);
+    string Channel, bool AutoCheck, bool FeedConfigured,
+    bool ContainerUpdater = false, bool AutoApply = true, string? ApplyVersion = null, DateTimeOffset? ApplyRequestedAt = null,
+    string? ApplyError = null);
 
 /// <summary>Error body of the admin API and the gateway: <c>{ "error", "details"? }</c>. <c>Details</c> is object-typed and written by its runtime type, so every details shape is a named record registered in <see cref="ContractsJsonContext"/> (an anonymous object has no generated metadata under Native AOT).</summary>
 public sealed record ErrorBody(string Error, object? Details = null);

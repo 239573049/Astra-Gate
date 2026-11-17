@@ -320,6 +320,7 @@ public static class RequestEndpoints
                             else error = "updateChannel must be stable or preview";
                             break;
                         case "updateAutoCheck": s.UpdateAutoCheck = value?.GetValue<bool>() ?? true; break;
+                        case "updateAutoApply": s.UpdateAutoApply = value?.GetValue<bool>() ?? true; break;
                         case "updateFeedUrl":
                             // JSON null resets to the built-in feed; "" disables checks entirely.
                             var feedUrl = value?.GetValue<string>();

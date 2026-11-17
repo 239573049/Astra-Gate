@@ -1,10 +1,19 @@
 # Astra gateway. Set the admin password first:
 #   ASTRA_ADMIN_PASSWORD='a-long-password' docker compose up -d
 # Admin UI + gateway: http://localhost:17321  (put a TLS reverse proxy in front for anything beyond localhost)
+#
+# Automatic updates: Astra checks its update feed and, when a newer version is out, asks the `updater` service below
+# (Watchtower) to pull the new image and recreate the astra container. Settings → Updates shows it and has
+# "Install updates automatically" (on by default) and an "Update now" button. The image tag decides what is pulled:
+# `latest` = stable releases; for previews use `:preview` and turn on "Receive preview updates" too.
+# Don't want automatic updates? Delete the `updater` service and the two ASTRA_UPDATER_* lines.
 services:
   astra:
     image: ghcr.io/239573049/astra-gate:latest
     restart: unless-stopped
+    # The updater only ever touches containers with this label.
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
     ports:
       - "17321:17321"
       # Codex subscription login callback (browser must run on this Docker host):
@@ -12,6 +21,9 @@ services:
       # - "1457:1457"
     environment:
       ASTRA_ADMIN_PASSWORD: ${ASTRA_ADMIN_PASSWORD:?set ASTRA_ADMIN_PASSWORD (min 8 characters)}
+      # The updater's API (below). Astra creates the token file on first start; the updater reads the same file.
+      ASTRA_UPDATER_URL: http://updater:8080
+      ASTRA_UPDATER_TOKEN_FILE: /data/updater-token
       # Externally reachable URL shown to clients (reverse proxy / domain); defaults to http://127.0.0.1:17321.
       # ASTRA_PUBLIC_URL: https://gate.example.com
       # Behind a TLS-terminating proxy, trust X-Forwarded-Proto/-For so the session cookie gets `Secure`:
@@ -23,6 +35,25 @@ services:
       - astra-data:/data
     # Upstreams on the Docker host (e.g. Ollama) are reachable as host.docker.internal; on Linux add:
     # extra_hosts: ["host.docker.internal:host-gateway"]
+
+  # Pulls a new astra image and recreates the container when Astra asks (POST /v1/update) — never on a schedule of its
+  # own, never another container (label-enable). nickfedor/watchtower is the maintained fork of the archived
+  # containrrr/watchtower. It needs the Docker socket; Astra itself never gets it. Its API port is not published.
+  updater:
+    image: nickfedor/watchtower:1.24
+    restart: unless-stopped
+    # Started once astra is healthy: by then the token file exists (a token file missing at start is read as a literal token).
+    depends_on:
+      astra:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - astra-data:/astra:ro
+    environment:
+      WATCHTOWER_HTTP_API_ENDPOINTS: update
+      WATCHTOWER_HTTP_API_TOKEN: /astra/updater-token
+      WATCHTOWER_LABEL_ENABLE: "true"
+      WATCHTOWER_CLEANUP: "true"
 
   # The same image as a stateless relay for one provider template (docs: 无状态中转): no volume and no admin password —
   # every request brings its own upstream credential, so only let callers you trust reach it.

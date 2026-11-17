@@ -210,7 +210,7 @@ use fixtures copy them via a `Fixtures\**\*` entry, e.g. `Astra.Gateway.Tests.cs
   actually in use — the port can drift at startup (`PortPicker`), so never assume the configured
   port; read `runtime.json`. In containers the environment overrides config.json
   (`ServerOptions.ApplyEnvironment`: `ASTRA_HOST`, `ASTRA_PORT`, `ASTRA_PUBLIC_URL`,
-  `ASTRA_STRICT_PORT`, `ASTRA_ADMIN_PASSWORD[_FILE]`; precedence flags > env > config.json) and
+  `ASTRA_STRICT_PORT`, `ASTRA_ADMIN_PASSWORD[_FILE]`, `ASTRA_UPDATER_URL` + `ASTRA_UPDATER_TOKEN[_FILE]`; precedence flags > env > config.json) and
   `ASTRA_STRICT_PORT` disables the drift. `GatewayBaseUrl` is `ASTRA_PUBLIC_URL` when set, else
   `LocalUrl` (what `healthcheck` probes).
 - Everything else lives in SQLite (`Astra.Data`, Dapper.AOT, WAL; see Native AOT).
@@ -421,7 +421,8 @@ runtime needed on the target).
    `ci.yml`'s `oven-sh/setup-bun` `bun-version` move together.
 9. **Server startup configuration or release packaging**: the container surface is the env vars in
    `ServerOptions.ApplyEnvironment` (tests: `ServerOptionsEnvironmentTests`), the `healthcheck`
-   subcommand, `Dockerfile` / `compose.yaml`, the `docker` job in `release.yml`, and
+   subcommand, `Dockerfile` / `compose.yaml` (its `updater` service and the `ASTRA_UPDATER_*` / Watchtower settings and label
+   move together with `ContainerUpdater`; tests: `UpdateApiTests`), the `docker` job in `release.yml`, and
    the website's `content/docs/guide/docker.mdx`. Change them together; the job's smoke test expects
    `/api/health`, `/api/auth/status` (`required: true`) and the SPA at `/`. The same image runs `relay`: its
    settings are `RelayOptions` (`ASTRA_RELAY_*`, tests: `RelayCredentialTests`), `healthcheck` falls back to its
@@ -1047,7 +1048,10 @@ runtime needed on the target).
   (`aidotnet-server-*.tgz`) and the workflow globs rely on that. The `docker` job runs after
   `publish` (it unpacks the `pkg-linux-*` artifacts), so an image never exists for an unreleased version.
 - Update flow ownership: the server only checks the feed (`UpdateCheckWorker`,
-  `GET /api/update/status`, `POST /api/update/check`); applies happen out of process in the CLI
+  `GET /api/update/status`, `POST /api/update/check`) — in Docker with a container updater (`ASTRA_UPDATER_URL`,
+  compose.yaml's `updater`: the maintained Watchtower fork, label-scoped, no schedule of its own) it also asks that updater to
+  pull the image and recreate the container (`ContainerUpdater`, `POST /api/update/apply`, on its own while `UpdateAutoApply`;
+  the image tag, not the channel setting, picks what is pulled); the server never holds the Docker socket. Other applies happen out of process in the CLI
   or desktop via `packages/update-core` (staged download → sha256 → swap → restart → rollback,
   state in `~/.astra/update-state.json`, executor never replaces a running binary in place).
   The desktop surfaces this to its web UI through the `updates` bridge (`astra:update-check` /

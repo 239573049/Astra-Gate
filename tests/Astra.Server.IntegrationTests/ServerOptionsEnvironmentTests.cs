@@ -32,6 +32,44 @@ public class ServerOptionsEnvironmentTests
         Assert.Equal(off, Apply(new() { ["ASTRA_PLUGINS"] = value }).PluginsOff);
 
     [Fact]
+    public void ASTRA_UPDATER_URL_takes_a_token_or_a_token_file_it_creates()
+    {
+        var o = Apply(new() { ["ASTRA_UPDATER_URL"] = "http://updater:8080/", ["ASTRA_UPDATER_TOKEN"] = "t0k" });
+        Assert.Equal("http://updater:8080", o.UpdaterUrl);
+        Assert.Equal("t0k", o.UpdaterToken);
+        Assert.Null(Apply([]).UpdaterUrl);
+
+        var dir = Path.Combine(Path.GetTempPath(), "astra-updater-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var file = Path.Combine(dir, "updater-token");
+            var created = Apply(new() { ["ASTRA_UPDATER_URL"] = "http://updater:8080", ["ASTRA_UPDATER_TOKEN_FILE"] = file });
+            Assert.Equal(64, created.UpdaterToken!.Length);
+            Assert.Equal(created.UpdaterToken, File.ReadAllText(file));
+            if (!OperatingSystem.IsWindows())
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(file));
+            // The next start reads the same token: the updater was started with it.
+            var again = Apply(new() { ["ASTRA_UPDATER_URL"] = "http://updater:8080", ["ASTRA_UPDATER_TOKEN_FILE"] = file });
+            Assert.Equal(created.UpdaterToken, again.UpdaterToken);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Theory]
+    [InlineData("updater:8080")]
+    [InlineData("ftp://updater")]
+    [InlineData("http://user:pw@updater:8080")]
+    public void ASTRA_UPDATER_URL_must_be_a_plain_http_url(string url) =>
+        Assert.Throws<ArgumentException>(() => Apply(new() { ["ASTRA_UPDATER_URL"] = url, ["ASTRA_UPDATER_TOKEN"] = "t" }));
+
+    [Fact]
+    public void ASTRA_UPDATER_URL_without_a_token_fails_the_start() =>
+        Assert.Throws<ArgumentException>(() => Apply(new() { ["ASTRA_UPDATER_URL"] = "http://updater:8080" }));
+
+    [Fact]
     public void Environment_Overrides_The_Loaded_Config()
     {
         var o = Apply(

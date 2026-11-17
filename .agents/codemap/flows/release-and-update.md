@@ -112,7 +112,7 @@ the `preview` feed also offers every stable. Clients follow the server's `update
     `ghcr.io/<repo>` — tags `latest`/`x.y`/`x.y.z` for stable, `x.y.z-preview.N` for a preview, plus
     `preview` when `tag_preview` (`packaging-release`)
 
-### (b) Updating — the server only checks
+### (b) Updating — the server only checks (or, in Docker, asks its container updater)
 
 21. `src/Astra.Server/Hosting/UpdateCheckService.cs:CheckAsync` — GET
     `{EffectiveFeedUrl}/{UpdateChannels.Normalize(UpdateChannel)}/latest.json` with User-Agent
@@ -131,6 +131,11 @@ the `preview` feed also offers every stable. Clients follow the server's `update
     return the status payload shape") extracted that builder because the web UI caches the check
     response as the status (`astra-server`). The prompt's `415d99d` is this commit; the prompt's
     `c521a689` is wrong — the fix commit is `c21a68995b2631bb85c8717f81e09365ecace6fd`
+23a. `src/Astra.Server/Hosting/ContainerUpdater.cs` — Docker only (`ASTRA_UPDATER_URL` + token, `ServerOptions`): `RequestAsync`
+    POSTs `{updater}/v1/update?async=true` (Bearer token, no proxy) to the Watchtower fork in `compose.yaml` and records
+    `ApplyVersion` / `ApplyRequestedAt` / `ApplyError` in `update.state`; `POST /api/update/apply` calls it, and
+    `UpdateCheckWorker` does after a check that found a version while `AppSettings.UpdateAutoApply` (default on), at most
+    hourly per version (`Due`) because the image is pushed after the feed announces it (`astra-server`)
 24. `web/src/api/hooks.ts:238-248` — `useUpdateStatus` (5-minute refetch) and `useCheckUpdate`, whose
     `onSuccess` writes the POST result into the same query key; `web/src/api/types.ts:806`
     (`UpdateStatus`) and `web/src/pages/SettingsPage.tsx` (About section) consume it (`web-ui`)

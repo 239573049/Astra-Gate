@@ -43,6 +43,12 @@ public sealed class AppSettings
     /// <summary>Whether the server polls the update feed on a schedule (UpdateCheckWorker).</summary>
     public bool UpdateAutoCheck { get; set; } = true;
 
+    /// <summary>
+    /// With a container updater (ASTRA_UPDATER_URL, Docker): ask it to pull the new image as soon as a check finds a newer
+    /// version (UpdateCheckWorker). Without an updater this setting does nothing.
+    /// </summary>
+    public bool UpdateAutoApply { get; set; } = true;
+
     /// <summary>Update feed base URL override; null = built-in default, empty = checks disabled.</summary>
     public string? UpdateFeedUrl { get; set; }
 

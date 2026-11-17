@@ -13,6 +13,8 @@
 #   docker build -t astra .
 # Run:
 #   docker run -d -p 17321:17321 -v astra-data:/data -e ASTRA_ADMIN_PASSWORD=change-me-please astra
+# Automatic updates: compose.yaml runs a container updater (Watchtower) beside it; Astra asks it to pull the new
+# image when its feed offers one (ASTRA_UPDATER_URL + ASTRA_UPDATER_TOKEN or ASTRA_UPDATER_TOKEN_FILE).
 # The same image as a stateless relay (no volume, no password: every request brings its own upstream credential):
 #   docker run -d -p 17321:17321 astra relay --provider <template id>
 #

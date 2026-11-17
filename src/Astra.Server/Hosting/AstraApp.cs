@@ -302,6 +302,7 @@ public static class AstraApp
         builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2ProviderSync>();
         builder.Services.AddHostedService<Astra.Server.PluginsV2.PluginV2ProviderWorker>();
         builder.Services.AddSingleton<UpdateCheckService>();
+        builder.Services.AddSingleton<ContainerUpdater>();
         builder.Services.AddHostedService<UpdateCheckWorker>();
         builder.Services.AddSingleton<RuntimeFile>();
         // Remote access (Cloudflare Tunnel): cloudflared, downloaded on first use, run and supervised as a child process.
@@ -346,6 +347,13 @@ public static class AstraApp
             .RemoveAllLoggers();
         builder.Services.AddHttpClient(UpdateCheckService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))
+            .RemoveAllLoggers();
+        // The container updater is a neighbour on the Docker network: never through the outbound proxy, never redirected.
+        builder.Services.AddHttpClient(ContainerUpdater.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+            {
+                AllowAutoRedirect = false, UseProxy = false, ConnectTimeout = TimeSpan.FromSeconds(10),
+            })
             .RemoveAllLoggers();
         builder.Services.AddHttpClient(ClientInstallService.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(15))
             .ConfigurePrimaryHttpMessageHandler(() => SystemProxy.CreateHandler(TimeSpan.FromSeconds(15)))

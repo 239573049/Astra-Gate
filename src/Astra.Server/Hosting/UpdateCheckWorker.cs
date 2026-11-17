@@ -4,9 +4,9 @@ namespace Astra.Server.Hosting;
 
 /// <summary>
 /// Periodically polls the update feed (plan §P1.4): 12h interval, doubling after failed checks
-/// (cap 48h). Never affects request handling — every failure is caught and logged.
+/// (cap 48h); with a container updater and <c>UpdateAutoApply</c> a newer version is installed through it (hourly until done). Never affects request handling — every failure is caught and logged.
 /// </summary>
-public sealed class UpdateCheckWorker(UpdateCheckService checks, SettingsService settings, ILogger<UpdateCheckWorker> logger) : BackgroundService
+public sealed class UpdateCheckWorker(UpdateCheckService checks, ContainerUpdater updater, SettingsService settings, ILogger<UpdateCheckWorker> logger) : BackgroundService
 {
     private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan Interval = TimeSpan.FromHours(12);
@@ -32,6 +32,13 @@ public sealed class UpdateCheckWorker(UpdateCheckService checks, SettingsService
                 {
                     var state = await checks.CheckAsync(stoppingToken);
                     interval = state.Error is null ? Interval : Backoff(interval);
+                    // Docker with an updater beside it: install the new version without being asked. The image is pushed
+                    // after the feed announces it, so until the container is replaced the next round comes within the hour.
+                    if (state.Error is null && state.AvailableVersion is not null && updater.Configured && settings.Current.UpdateAutoApply)
+                    {
+                        if (ContainerUpdater.Due(state, DateTimeOffset.UtcNow)) await updater.RequestAsync(stoppingToken);
+                        interval = ContainerUpdater.RetryAfter;
+                    }
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
