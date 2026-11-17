@@ -385,8 +385,8 @@ public class GatewayPipelineTests
         await gw.Host.Db.Clients.ReplaceBindingsAsync(ClientKinds.OpenCode,
             [new ClientBinding { ProviderId = gw.Provider.Id }, new ClientBinding { ProviderId = second.Id }]);
 
-        // Exact model match in binding order; disabled or unknown models stay on the primary. Names are never rewritten.
-        foreach (var (model, host) in new[] { ("only-second", "second.test"), ("shared", "upstream.test"), ("off-second", "upstream.test"), ("unknown", "upstream.test") })
+        // Exact model match in binding order. Names are never rewritten.
+        foreach (var (model, host) in new[] { ("only-second", "second.test"), ("shared", "upstream.test") })
         {
             var body = new JsonObject { ["model"] = model, ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "hi" }) };
             var response = await gw.PostAsync("/v1/chat/completions", body.ToJsonString());
@@ -397,6 +397,15 @@ public class GatewayPipelineTests
             Assert.Equal(host == "second.test" ? "Bearer sk-second-secret" : "Bearer sk-upstream-secret", seen.Headers["authorization"]);
             Assert.Equal(host == "second.test" ? second.Id : gw.Provider.Id, (await gw.RecordOfAsync(response)).ProviderId);
         }
+
+        // Disabled or unknown models fall to the primary, whose model list does not have them either: refused, nothing sent.
+        var sent = gw.Upstream.Requests.Count;
+        foreach (var model in new[] { "off-second", "unknown" })
+        {
+            var body = new JsonObject { ["model"] = model, ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "hi" }) };
+            Assert.Equal(HttpStatusCode.NotFound, (await gw.PostAsync("/v1/chat/completions", body.ToJsonString())).StatusCode);
+        }
+        Assert.Equal(sent, gw.Upstream.Requests.Count);
 
         // The model list is the union in binding order, each id once (owned by the provider that serves it).
         using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/models");
@@ -411,6 +420,43 @@ public class GatewayPipelineTests
         var fallback = await gw.PostAsync("/v1/chat/completions", """{"model":"shared","messages":[{"role":"user","content":"hi"}]}""");
         Assert.Equal(HttpStatusCode.OK, fallback.StatusCode);
         Assert.Equal("second.test", gw.Upstream.Requests[^1].Url.Host);
+    }
+
+    [Fact]
+    public async Task A_Disabled_Or_Removed_Model_Is_Refused_Once_The_Provider_Has_A_Model_List()
+    {
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, _ => FakeUpstream.Json(ChatCompletion));
+        async Task<HttpResponseMessage> PostAsync(string model) =>
+            await gw.PostAsync("/v1/chat/completions", new JsonObject
+            {
+                ["model"] = model, ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "hi" }),
+            }.ToJsonString());
+
+        // No model list: any id goes upstream as it is.
+        Assert.Empty(await gw.Host.Db.Providers.ListModelsAsync(gw.Provider.Id));
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync("anything")).StatusCode);
+        Assert.Single(gw.Upstream.Requests);
+
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "kept" });
+        await gw.Host.Db.Providers.InsertModelAsync(new ProviderModel { ProviderId = gw.Provider.Id, ModelId = "gone" });
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync("gone")).StatusCode);
+        Assert.Equal(2, gw.Upstream.Requests.Count);
+
+        // Disabled: refused, nothing sent, and the answer names the model.
+        var gone = (await gw.Host.Db.Providers.GetModelAsync(gw.Provider.Id, "gone"))!;
+        gone.Enabled = false;
+        await gw.Host.Db.Providers.UpdateModelAsync(gone);
+        var refused = await PostAsync("gone");
+        Assert.Equal(HttpStatusCode.NotFound, refused.StatusCode);
+        Assert.Contains("gone", await refused.Content.ReadAsStringAsync());
+        // Removed, and an id that was never listed: refused the same way.
+        await gw.Host.Db.Providers.DeleteModelAsync(gone.Id);
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync("gone")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync("anything")).StatusCode);
+        Assert.Equal(2, gw.Upstream.Requests.Count);
+
+        Assert.Equal(HttpStatusCode.OK, (await PostAsync("kept")).StatusCode);
+        Assert.Equal(3, gw.Upstream.Requests.Count);
     }
 
     [Fact]
@@ -434,18 +480,22 @@ public class GatewayPipelineTests
         await gw.Host.Db.Clients.ReplaceBindingsAsync(ClientKinds.OpenCode,
             [new ClientBinding { ProviderId = gw.Provider.Id }, new ClientBinding { ProviderId = second.Id }]);
 
-        async Task<(FakeUpstream.Seen Seen, RequestRecord Record)> SendAsync(string model)
+        async Task<HttpResponseMessage> PostAsync(string model)
         {
             var body = new JsonObject { ["model"] = model, ["messages"] = new JsonArray(new JsonObject { ["role"] = "user", ["content"] = "hi" }) };
-            var response = await gw.PostAsync("/v1/chat/completions", body.ToJsonString());
+            return await gw.PostAsync("/v1/chat/completions", body.ToJsonString());
+        }
+
+        async Task<(FakeUpstream.Seen Seen, RequestRecord Record)> SendAsync(string model)
+        {
+            var response = await PostAsync(model);
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             return (gw.Upstream.Requests[^1], await gw.RecordOfAsync(response));
         }
 
-        // Without a mapping the second provider does not serve deepseek-v4.1: the primary gets it as is.
-        var (seen, _) = await SendAsync("deepseek-v4.1");
-        Assert.Equal("upstream.test", seen.Url.Host);
-        Assert.Equal("deepseek-v4.1", seen.Json["model"]!.GetValue<string>());
+        // Without a mapping nobody serves deepseek-v4.1: it falls to the primary, whose model list does not have it.
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync("deepseek-v4.1")).StatusCode);
+        Assert.Empty(gw.Upstream.Requests);
 
         second.Settings[Provider.ModelMapKey] = new JsonObject { ["deepseek-v4.1"] = "deepseek-chat", ["mapped-off"] = "off" };
         await gw.Host.Db.Providers.UpdateAsync(second);
@@ -454,16 +504,16 @@ public class GatewayPipelineTests
         await gw.Host.Db.Providers.UpdateAsync(primary);
 
         // The mapping makes the second provider match, and its model is what goes upstream (and is billed).
-        (seen, var record) = await SendAsync("deepseek-v4.1");
+        var (seen, record) = await SendAsync("deepseek-v4.1");
         Assert.Equal("second.test", seen.Url.Host);
         Assert.Equal("deepseek-chat", seen.Json["model"]!.GetValue<string>());
         Assert.Equal("deepseek-v4.1", record.RequestedModel);
         Assert.Equal("deepseek-chat", record.UpstreamModel);
         Assert.Equal(second.Id, record.ProviderId);
 
-        // A mapping onto a disabled model does not match; the primary's own mapping applies to what it receives.
-        (seen, _) = await SendAsync("mapped-off");
-        Assert.Equal("upstream.test", seen.Url.Host);
+        // A mapping onto a disabled model does not match (the primary does not serve it either); the primary's own
+        // mapping applies to what it receives.
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync("mapped-off")).StatusCode);
         (seen, _) = await SendAsync("alias-a");
         Assert.Equal("upstream.test", seen.Url.Host);
         Assert.Equal("a-model", seen.Json["model"]!.GetValue<string>());

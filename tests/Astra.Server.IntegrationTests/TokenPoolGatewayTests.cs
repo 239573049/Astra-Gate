@@ -232,9 +232,9 @@ public class TokenPoolGatewayTests
         for (var i = 0; i < 2; i++) Assert.Equal(HttpStatusCode.OK, (await PostAsync(gw, Chat("only-third"))).StatusCode);
         Assert.Equal(["third.test", "third.test"], Hosts(gw));
 
-        // Nobody serves it: the first member answers for it, once.
-        Assert.Equal(HttpStatusCode.OK, (await PostAsync(gw, Chat("unknown"))).StatusCode);
-        Assert.Equal("upstream.test", Hosts(gw)[^1]);
+        // Nobody serves it: it falls to the first member, whose model list does not have it — refused, nothing sent.
+        Assert.Equal(HttpStatusCode.NotFound, (await PostAsync(gw, Chat("unknown"))).StatusCode);
+        Assert.Equal(2, Hosts(gw).Length);
 
         // The model list is the union of the members.
         using var request = new HttpRequestMessage(HttpMethod.Get, "/v1/models");

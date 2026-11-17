@@ -66,6 +66,9 @@ internal sealed class RelayRuntime(IHttpContextAccessor accessor, RelayCatalog c
     public Task<EffectiveModel> ResolveAsync(Provider provider, ProviderModel pm, CancellationToken ct = default) =>
         Task.FromResult(ModelMerger.Merge(provider, pm, null, null));
 
+    // The relay keeps no model list of its own: the upstream decides what it serves.
+    public Task<bool> ServesAsync(Provider provider, string modelId, CancellationToken ct = default) => Task.FromResult(true);
+
     public Task<IReadOnlyList<ApiProtocol>> ResolveAsync(Provider provider, ProviderModel model, string? accountId, CancellationToken ct) =>
         // Bedrock (API key) serves each model over the protocol its maker's API speaks there, as on the server
         Task.FromResult(model.UpstreamProtocols.Count > 0 || string.IsNullOrEmpty(model.ModelId) ? model.UpstreamProtocols

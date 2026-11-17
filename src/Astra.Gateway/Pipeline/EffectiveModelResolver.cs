@@ -16,9 +16,21 @@ public sealed class EffectiveModelResolver(AstraDatabase db) : IEffectiveModelRe
         return ModelMerger.Merge(provider, pm, system, prices);
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// The list is a whitelist once it has an entry: a model disabled there, removed from it, or whose system model is
+    /// disabled is refused (the same test <see cref="ClientRouting"/> applies when it picks among several providers).
+    /// </remarks>
+    public async Task<bool> ServesAsync(Provider provider, string modelId, CancellationToken ct = default)
+    {
+        if ((await db.Providers.ListModelsAsync(provider.Id, ct)).Count == 0) return true;
+        return await db.Providers.GetModelAsync(provider.Id, modelId, ct) is { Enabled: true } pm
+               && (await ResolveAsync(provider, pm, ct)).Enabled;
+    }
+
     /// <summary>
-    /// Resolves the model a client asked for at a provider. The gateway forwards model names verbatim, so a model
-    /// that is not in the provider's list is still billed: it is auto-linked to a system model on the fly.
+    /// Resolves the model a client asked for at a provider. A provider without a model list forwards model names
+    /// verbatim, so a model that is not listed is still billed: it is auto-linked to a system model on the fly.
     /// </summary>
     public async Task<(ProviderModel Model, EffectiveModel Effective)> ResolveByModelIdAsync(
         Provider provider, string modelId, CancellationToken ct = default)

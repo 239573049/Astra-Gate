@@ -393,7 +393,13 @@ public sealed partial class GatewayPipeline(
                 SubscriptionSupport.EnforceClientPolicy(provider, isClaudeCode);
                 // 按实际发给上游的模型选择协议；Copilot 存量模型缺少能力时先自动补齐，
                 // 不支持入站协议就经 IR 翻译，不能仅因提供商有 Responses 端点便直通。
-                var resolvedModel = await models.ResolveProviderModelAsync(provider, candidate.UpstreamModelFor(requestedModel), ct);
+                var upstreamModelId = candidate.UpstreamModelFor(requestedModel);
+                // A provider with a model list serves only its enabled models: one disabled or removed there is refused
+                // (a pool or group skips this member), never sent upstream under its old name.
+                if (upstreamModelId.Length > 0 && !await models.ServesAsync(provider, upstreamModelId, ct))
+                    throw new GatewayException(404, "not_found_error",
+                        $"提供商 {provider.Name} 没有启用模型 {upstreamModelId}（已停用，或不在它的模型列表中）。请在 Astra 的「提供商」页面启用或添加该模型。");
+                var resolvedModel = await models.ResolveProviderModelAsync(provider, upstreamModelId, ct);
                 // Capability discovery may go to the network (a /models listing); timed on its own.
                 var capabilitiesStart = Stopwatch.GetTimestamp();
                 var supportedProtocols = await modelProtocols.ResolveAsync(provider, resolvedModel, candidate.AccountId, ct);

@@ -56,11 +56,9 @@ public class QualifiedModelGatewayTests
         await using var _gw = gw;
         Assert.Equal(["shared", "only-second"], await ModelIdsAsync(gw));
         var response = await gw.PostAsync("/v1/chat/completions", Chat("shared@fake"));
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        // No switch, no split: the id goes upstream as written, to the primary.
-        var seen = gw.Upstream.Requests[^1];
-        Assert.Equal("upstream.test", seen.Url.Host);
-        Assert.Equal("shared@fake", seen.Json["model"]!.GetValue<string>());
+        // No switch, no split: the id is looked up as written at the primary, whose model list does not have it.
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(gw.Upstream.Requests);
     }
 
     [Fact]

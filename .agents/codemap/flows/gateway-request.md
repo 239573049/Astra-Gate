@@ -103,7 +103,7 @@ persisted at the end.
    `SubscriptionSupport.EnforceClientPolicy` (`Pipeline/UpstreamAuthResolver.cs`) rejects before capability discovery
    can send anything.
 11. `Pipeline/EffectiveModelResolver.cs` + `IModelProtocolResolver` — the upstream model and the protocols the
-    provider actually supports are resolved without merging billing data (`ResolveProviderModelAsync`; capability discovery may hit the network). Unlisted names use the cached immutable matcher; provider-model misses share the 2-second/generation invalidation and 4,096-entry cache bound. Effective pricing is merged once afterwards, against the then-current catalog.
+    provider actually supports are resolved without merging billing data (`ResolveProviderModelAsync`; capability discovery may hit the network). First `ServesAsync`: once the provider has a model list, a model disabled or missing there is a 404 before anything goes upstream (a pool / group member is skipped instead); only a provider without a list takes unlisted names, which use the cached immutable matcher; provider-model misses share the 2-second/generation invalidation and 4,096-entry cache bound. Effective pricing is merged once afterwards, against the then-current catalog.
 12. `Pipeline/GatewayRouter.cs:GatewayRouter.SelectEndpoint` + `Protocol/GatewayCodecs.cs:GatewayCodecs.Register` —
     the upstream protocol is chosen per model; `passthrough = upstreamProtocol == inbound`. With passthrough the
     client's own bytes (or the middleware's rewrite) go upstream; otherwise `IProtocolCodec.DecodeRequest` builds the

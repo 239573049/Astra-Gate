@@ -46,6 +46,13 @@ public interface IEffectiveModelResolver
     Task<(ProviderModel Model, EffectiveModel Effective)> ResolveByModelIdAsync(Provider provider, string modelId, CancellationToken ct = default);
 
     Task<EffectiveModel> ResolveAsync(Provider provider, ProviderModel pm, CancellationToken ct = default);
+
+    /// <summary>
+    /// Whether requests for <paramref name="modelId"/> (the id sent upstream, after the provider's model mapping) may go
+    /// to <paramref name="provider"/>: a provider with a model list serves only its enabled models; one without a list
+    /// takes any id as it is. The relay keeps no list and takes every id.
+    /// </summary>
+    Task<bool> ServesAsync(Provider provider, string modelId, CancellationToken ct = default);
 }
 
 /// <summary>The runtime settings a request reads (<see cref="SettingsService"/>).</summary>
