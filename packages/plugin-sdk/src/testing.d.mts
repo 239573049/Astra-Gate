@@ -20,7 +20,24 @@ export interface MountOptions {
   strict?: boolean;
   /** the slot the view fills, for its root check (tray.panel) */
   slot?: string;
+  /** answers to data.* calls by name ('requests.stats', 'requests.query', 'providers.list', 'models.list', 'tokens.list'): a value or (args) => value */
+  data?: Record<string, unknown | ((args: Record<string, unknown>) => unknown)>;
+  /** env.locale (Astra's language, what jobs translate into; default en), env.timeZone / env.utcOffsetMinutes (default UTC, 0) */
+  locale?: string;
+  timeZone?: string;
+  utcOffsetMinutes?: number;
 }
+
+/** What the host saw during runJob / deliverEvents. */
+export interface HostSeen {
+  storage: Record<string, unknown>;
+  notifications: unknown[];
+  logs: unknown[];
+  emitted: unknown[];
+  queries: { what: string; args: unknown }[];
+}
+export function runJob(plugin: PluginDefinition, id: string, opts?: MountOptions & { scheduledAt?: string; attempt?: number }): Promise<HostSeen>;
+export function deliverEvents(plugin: PluginDefinition, events: { name: string; payload?: unknown }[], opts?: MountOptions): Promise<HostSeen>;
 
 export interface Mounted<S> {
   state: S;

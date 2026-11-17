@@ -155,3 +155,49 @@ describe('a bidirectional provider (connect framing)', () => {
     expect(disposed).toEqual(['r1']);
   });
 });
+
+describe('jobs, events and data views', () => {
+  it('runs a job against answered data queries and reports what the host saw', async () => {
+    const { runJob } = await import('../src/testing.mjs');
+    const { jobs, data, notifications } = await import('astra');
+    const plugin = definePlugin({
+      activate() {
+        jobs.handle('daily', async () => {
+          const s = await data.requests.stats({ groupBy: 'model' });
+          await storage.set('top', s.groups?.[0]?.key ?? null);
+          notifications.send({ title: `spent ${s.costNanoUsd}` });
+        });
+      },
+    });
+    const seen = await runJob(plugin, 'daily', {
+      permissions: ['storage', 'notifications', 'jobs', 'data.requests:read'],
+      data: { 'requests.stats': (args: { groupBy?: string }) => ({ costNanoUsd: 5, groups: [{ key: args.groupBy === 'model' ? 'big' : 'x' }] }) },
+    });
+    expect(seen.storage.top).toBe('big');
+    expect(seen.notifications).toEqual([{ title: 'spent 5' }]);
+    expect(seen.queries).toEqual([{ what: 'requests.stats', args: { groupBy: 'model' } }]);
+    // without the permission the call fails like the host's
+    await expect(runJob(plugin, 'daily', { permissions: ['storage', 'jobs'] })).rejects.toThrow(/data.requests:read/);
+  });
+
+  it('delivers events to the listeners registered in activate', async () => {
+    const { deliverEvents } = await import('../src/testing.mjs');
+    const { events } = await import('astra');
+    const plugin = definePlugin({
+      activate() {
+        events.on('request.completed', async (r) => { await storage.set('last', r.id); });
+      },
+    });
+    const seen = await deliverEvents(plugin, [{ name: 'request.completed', payload: { id: 'r1' } }, { name: 'request.completed', payload: { id: 'r2' } }]);
+    expect(seen.storage.last).toBe('r2');
+  });
+
+  it("translates a job's texts into Astra's language, a view's into the viewer's", async () => {
+    const { runJob } = await import('../src/testing.mjs');
+    const { jobs, t } = await import('astra');
+    const plugin = definePlugin({ activate() { jobs.handle('j', async () => { await storage.set('said', t('hi')); }); } });
+    const messages = { en: { hi: 'hello' }, zh: { hi: '你好' } };
+    expect((await runJob(plugin, 'j', { messages, locale: 'zh' })).storage.said).toBe('你好');
+    expect((await runJob(plugin, 'j', { messages })).storage.said).toBe('hello');
+  });
+});

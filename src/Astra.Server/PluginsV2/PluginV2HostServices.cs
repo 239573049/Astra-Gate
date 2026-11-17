@@ -18,6 +18,16 @@ namespace Astra.Server.PluginsV2;
 /// </summary>
 public sealed class PluginV2HostServices(AstraDatabase db, ISecretProtector protector, ILoggerFactory loggers) : IPluginV2Services
 {
+    /// <summary>Reads the usage time zone setting (set by the composition root; UTC until then).</summary>
+    public Func<TimeZoneInfo>? Zone { get; set; }
+
+    public TimeZoneInfo UsageZone => Zone?.Invoke() ?? TimeZoneInfo.Utc;
+
+    /// <summary>Reads the interface language setting (set by the composition root; "en" until then).</summary>
+    public Func<string>? Language { get; set; }
+
+    public string Locale => Language?.Invoke() ?? "en";
+
     private readonly ILogger _log = loggers.CreateLogger("Astra.Plugins.V2");
     private readonly ConcurrentQueue<PluginNotification> _notifications = new();
     private long _nextNotification;
@@ -41,6 +51,8 @@ public sealed class PluginV2HostServices(AstraDatabase db, ISecretProtector prot
     {
         AllowAutoRedirect = false,
         UseCookies = false,
+        // Astra's proxy setting (system / custom / direct), as for the gateway's own upstream requests (02 §5)
+        Proxy = SystemProxy.Dynamic,
         AutomaticDecompression = DecompressionMethods.All,
         PooledConnectionLifetime = TimeSpan.FromMinutes(5),
         // the host checked the name before the request; this checks the address actually dialled (DNS can change)
@@ -48,7 +60,10 @@ public sealed class PluginV2HostServices(AstraDatabase db, ISecretProtector prot
         {
             var addresses = await Dns.GetHostAddressesAsync(context.DnsEndPoint.Host, ct);
             var target = addresses.FirstOrDefault() ?? throw new HttpRequestException($"{context.DnsEndPoint.Host} doesn't resolve");
-            if (Private(target) && !(IPAddress.IsLoopback(target) && Environment.GetEnvironmentVariable("ASTRA_PLUGIN_DEV_LOOPBACK") == "1"))
+            // through a proxy (often a local one, 127.0.0.1) this dials the proxy, not the target: the target's own name was
+            // checked before the request (HostCalls), and the proxy is the user's own setting, so its address may be private
+            if (Private(target) && !IsProxyHop(context.InitialRequestMessage.RequestUri, context.DnsEndPoint, SystemProxy.Dynamic)
+                && !(IPAddress.IsLoopback(target) && Environment.GetEnvironmentVariable("ASTRA_PLUGIN_DEV_LOOPBACK") == "1"))
                 throw new HttpRequestException($"{context.DnsEndPoint.Host} resolves to a private address");
             var socket = new Socket(target.AddressFamily, SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
             try
@@ -63,6 +78,22 @@ public sealed class PluginV2HostServices(AstraDatabase db, ISecretProtector prot
             }
         },
     }) { Timeout = TimeSpan.FromMinutes(3) };
+
+    /// <summary>
+    /// Whether <paramref name="endPoint"/> is the proxy <paramref name="proxy"/> sends <paramref name="request"/> through. For an
+    /// https request the connection being opened is the proxy's CONNECT, whose own address is <paramref name="request"/>: then
+    /// it counts when it is the proxy the policy names for a public https address.
+    /// </summary>
+    internal static bool IsProxyHop(Uri? request, DnsEndPoint endPoint, IWebProxy? proxy)
+    {
+        if (request is null || proxy is null) return false;
+        var tunnel = string.Equals(request.IdnHost, endPoint.Host, StringComparison.OrdinalIgnoreCase) && request.Port == endPoint.Port;
+        var target = tunnel ? PublicProbe : request;
+        if (proxy.IsBypassed(target) || proxy.GetProxy(target) is not { } via) return false;
+        return string.Equals(via.IdnHost, endPoint.Host, StringComparison.OrdinalIgnoreCase) && via.Port == endPoint.Port;
+    }
+
+    private static readonly Uri PublicProbe = new("https://example.com/");
 
     private static bool Private(IPAddress a)
     {
@@ -96,34 +127,64 @@ public sealed class PluginV2HostServices(AstraDatabase db, ISecretProtector prot
         {
             case "requests.query":
             {
+                // one request by id, or a page of them (newest first)
+                if (Str(o?["id"]) is { } id)
+                {
+                    var one = await db.Requests.GetAsync(id, ct);
+                    return new JsonObject { ["total"] = one is null ? 0 : 1, ["items"] = one is null ? new JsonArray() : new JsonArray(PluginRequestRows.Row(one)) };
+                }
                 var page = await db.Requests.QueryAsync(new RequestQuery
                 {
                     From = Date(o?["from"]), To = Date(o?["to"]),
                     Model = Str(o?["model"]), ClientKind = Str(o?["client"]), Status = Str(o?["status"]),
+                    TokenId = Str(o?["token"]), ProviderId = Str(o?["provider"]),
                     Page = Math.Max(1, Int(o?["page"]) ?? 1), PageSize = Math.Clamp(Int(o?["pageSize"]) ?? 50, 1, 200),
                 }, ct);
                 return new JsonObject
                 {
                     ["total"] = page.Total,
-                    ["items"] = new JsonArray([.. page.Items.Select(r => (JsonNode?)new JsonObject
-                    {
-                        ["id"] = r.Id, ["client"] = r.ClientKind, ["token"] = r.TokenName, ["provider"] = r.ProviderName,
-                        ["protocol"] = r.InboundProtocol, ["model"] = r.RequestedModel, ["status"] = r.Status, ["httpStatus"] = r.HttpStatus,
-                        ["inputTokens"] = r.TotalInputTokens, ["outputTokens"] = r.TotalOutputTokens, ["costNanoUsd"] = r.CostNanoUsd,
-                        ["totalMs"] = r.TotalMs,
-                    })]),
+                    ["items"] = new JsonArray([.. page.Items.Select(r => (JsonNode?)PluginRequestRows.Row(r))]),
                 };
             }
             case "requests.stats":
             {
                 var to = Date(o?["to"]) ?? DateTimeOffset.UtcNow;
                 var from = Date(o?["from"]) ?? to.AddDays(-1);
-                var s = await db.Requests.SummaryAsync(from, to, Str(o?["client"]), null, ct);
-                return new JsonObject
+                var client = Str(o?["client"]);
+                var s = await db.Requests.SummaryAsync(from, to, client, null, ct);
+                var result = new JsonObject
                 {
                     ["requests"] = s.TotalRequests, ["success"] = s.SuccessRequests, ["costNanoUsd"] = s.TotalCostNanoUsd,
                     ["inputTokens"] = s.TotalInputTokens, ["outputTokens"] = s.TotalOutputTokens,
+                    ["cacheReadTokens"] = s.TotalCacheReadTokens, ["cacheWriteTokens"] = s.TotalCacheWriteTokens,
                 };
+                // design/plugin-v2 02 §10 / 09 §4.2: groupBy day | hour → series, model | provider | client | token → groups
+                if (Str(o?["groupBy"]) is { } groupBy)
+                {
+                    var offset = Math.Clamp(Int(o?["utcOffsetMinutes"]) ?? 0, -14 * 60, 14 * 60);
+                    switch (groupBy)
+                    {
+                        case "day" or "hour":
+                        {
+                            var points = await db.Requests.TimeseriesAsync(from, to, groupBy, "client", client, offset, ct: ct);
+                            result["series"] = new JsonArray([.. points.GroupBy(p => p.Bucket).OrderBy(g => g.Key, StringComparer.Ordinal)
+                                .Select(g => (JsonNode?)Totals(new JsonObject { ["bucket"] = g.Key }, g))]);
+                            break;
+                        }
+                        case "model" or "provider" or "client" or "token":
+                        {
+                            var points = await db.Requests.TimeseriesAsync(from, to, "day", groupBy, client, offset, ct: ct);
+                            result["groups"] = new JsonArray([.. points.GroupBy(p => p.GroupKey ?? "")
+                                .Select(g => Totals(new JsonObject { ["key"] = g.Key.Length > 0 ? g.Key : null, ["label"] = g.Select(p => p.Label).LastOrDefault(l => l is not null) ?? (g.Key.Length > 0 ? g.Key : null) }, g))
+                                .OrderByDescending(g => (long)g["costNanoUsd"]!).ThenByDescending(g => (long)g["requests"]!)
+                                .Select(g => (JsonNode?)g)]);
+                            break;
+                        }
+                        default:
+                            throw new InvalidOperationException("groupBy must be day, hour, model, provider, client or token");
+                    }
+                }
+                return result;
             }
             case "providers.list":
                 return new JsonArray([.. (await db.Providers.ListAsync(ct)).Select(p => (JsonNode?)new JsonObject
@@ -143,6 +204,23 @@ public sealed class PluginV2HostServices(AstraDatabase db, ISecretProtector prot
                 })]);
         }
         return null;
+    }
+
+    private static JsonObject Totals(JsonObject o, IEnumerable<TimeseriesPoint> points)
+    {
+        long requests = 0, cost = 0, input = 0, output = 0;
+        foreach (var p in points)
+        {
+            requests += p.Requests;
+            cost += p.TotalCostNanoUsd;
+            input += p.TotalInputTokens;
+            output += p.TotalOutputTokens;
+        }
+        o["requests"] = requests;
+        o["costNanoUsd"] = cost;
+        o["inputTokens"] = input;
+        o["outputTokens"] = output;
+        return o;
     }
 
     private static string? Str(JsonNode? n) => n is JsonValue v && v.TryGetValue<string>(out var s) && s.Length > 0 ? s : null;

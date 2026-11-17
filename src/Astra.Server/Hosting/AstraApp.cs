@@ -246,13 +246,24 @@ public static class AstraApp
             };
         });
         // Plugins v2 (design/plugin-v2): the host (main contexts, view sessions, events, jobs) and its admin side.
-        builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2HostServices>(sp => new Astra.Server.PluginsV2.PluginV2HostServices(
-            database, sp.GetRequiredService<Astra.Core.Clients.ISecretProtector>(), sp.GetRequiredService<ILoggerFactory>()));
+        builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2HostServices>(sp =>
+        {
+            var settings = sp.GetRequiredService<SettingsService>();
+            return new Astra.Server.PluginsV2.PluginV2HostServices(
+                database, sp.GetRequiredService<Astra.Core.Clients.ISecretProtector>(), sp.GetRequiredService<ILoggerFactory>())
+            {
+                Zone = () => Astra.Core.Tokens.UsagePeriods.Zone(settings.Current.UsageTimeZone),
+                Language = () => settings.Current.Locale,
+            };
+        });
         builder.Services.AddSingleton(sp =>
         {
             var host = new Astra.Plugins.V2.PluginV2Host(sp.GetRequiredService<PluginCatalog>(),
                 sp.GetRequiredService<Astra.Server.PluginsV2.PluginV2HostServices>());
             sp.GetRequiredService<SettingsService>().Changed += _ => host.Publish("settings.changed", null);
+            // provider.changed / account.changed / alert.fired (design/plugin-v2 09 §4.1); they live as long as the host
+            _ = new Astra.Server.PluginsV2.PluginDataEvents(database, host);
+            sp.GetRequiredService<AlertEngine>().Fired += alert => host.Publish("alert.fired", alert);
             return host;
         });
         builder.Services.AddSingleton<Astra.Server.PluginsV2.PluginV2Service>();

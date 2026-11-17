@@ -2,7 +2,7 @@
 name: plugin-v2-design
 description: Plugin system v2 (design/plugin-v2/) — 2.0 and 2.1 implemented 2026-11-11 on the proposed decisions after the user said to implement all plans; which decisions the user made vs. took as proposed
 type: project
-updated: 2026-11-11
+updated: 2026-11-16
 source: session
 evidence: ["design/plugin-v2/README.md", "src/Astra.Plugins/V2/PluginV2Host.cs", "packages/plugin-sdk/package.json"]
 ---
@@ -24,3 +24,9 @@ an open question — update the README's table and the code together. 2.0 and 2.
 user's stop condition was "all the plans": the palette, dev tools, gallery, scene comparison, `astra plugin test` and 2.1's
 providers / clients / flows / streaming all went in on 2026-11-11). Not built: 01 §11's "之后" items (mcp.tools,
 routing.judges, alerts.channels, plugin-to-plugin API) — the design says each needs its own design first.
+
+**2026-11-16, the roadmap:** the user asked for a survey of which plugins to build, then "写成 09-plugin-roadmap.md，然后先做 P1".
+`design/plugin-v2/09-plugin-roadmap.md` holds it; P1 (host events, `data.*`, `env.locale` / time zone, the proxy fix, and five plugins in the
+community repo — Usage Insights, Status Watch, OTel Export, Context Trim, Tool Policy) was built the same day and is not published. The plugin
+list and its trims (no per-request cost plugin, budget + reports merged into one) are my proposal, not confirmed by the user; P2 / P3 not started.
+

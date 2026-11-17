@@ -18,6 +18,19 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
 
     private const string AccountOrder = "ORDER BY sort_order, created_at, id";
 
+    /// <summary>
+    /// Raised after an account row was created, updated or deleted (<see cref="RowChanges"/>): the account id and the kind of
+    /// change. A signal only (re-read the row). Not raised for a token refresh (<see cref="UpdateTokensAsync"/>) or the
+    /// failover order. Handlers run on the writer's thread and must not block (design/plugin-v2 09 §4.1).
+    /// </summary>
+    public event Action<string, string>? Changed;
+
+    private bool Signal(bool done, string id, string change)
+    {
+        if (done) RowChanges.Raise(Changed, id, change);
+        return done;
+    }
+
     public async Task<IReadOnlyList<ProviderAccount>> ListAsync(string? providerId = null, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
@@ -70,13 +83,14 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
             source = account.Source,
             http_proxy = account.HttpProxy,
         });
+        Signal(true, account.Id, RowChanges.Created);
     }
 
     public async Task<bool> UpdateAsync(ProviderAccount account, CancellationToken ct = default)
     {
         account.UpdatedAt = DateTimeOffset.UtcNow;
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             UPDATE provider_accounts SET
                 display_name = @display_name, account_email = @account_email, plan = @plan,
                 access_token_enc = @access_token_enc, refresh_token_enc = @refresh_token_enc,
@@ -97,7 +111,7 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
             last_refresh_at_utc = account.LastRefreshAtUtc is { } lr ? DateTimeOffsetHandler.ToStorage(lr) : null,
             extra_json = Json.Serialize(account.Extra),
             updated_at = DateTimeOffsetHandler.ToStorage(account.UpdatedAt),
-        }) > 0;
+        }) > 0, account.Id, RowChanges.Updated);
     }
 
     public async Task<bool> UpdateTokensAsync(
@@ -126,15 +140,15 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
     public async Task<bool> SetStatusAsync(string id, string status, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             UPDATE provider_accounts SET status = @status, updated_at = @now WHERE id = @id
-            """, new { id, status, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0;
+            """, new { id, status, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0, id, RowChanges.Updated);
     }
 
     public async Task<bool> DeleteAsync(string id, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("DELETE FROM provider_accounts WHERE id = @id", new { id }) > 0;
+        return Signal(await conn.ExecuteAsync("DELETE FROM provider_accounts WHERE id = @id", new { id }) > 0, id, RowChanges.Deleted);
     }
 
     // ----- switching state (plan §5.4); deliberately not written by UpdateAsync -----
@@ -160,39 +174,40 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
                 UPDATE provider_accounts SET cooldown_until_utc = NULL, last_error = NULL, updated_at = @now WHERE id = @id
                 """, new { id = accountId, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }, tx);
         await tx.CommitAsync(ct);
+        if (accountId is not null) Signal(true, accountId, RowChanges.Updated);
         return true;
     }
 
     public async Task<bool> SetEnabledAsync(string id, bool enabled, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             UPDATE provider_accounts SET enabled = @enabled, updated_at = @now WHERE id = @id
-            """, new { id, enabled, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0;
+            """, new { id, enabled, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0, id, RowChanges.Updated);
     }
 
     public async Task<bool> SetDisplayNameAsync(string id, string displayName, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             UPDATE provider_accounts SET display_name = @display_name, updated_at = @now WHERE id = @id
-            """, new { id, display_name = displayName, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0;
+            """, new { id, display_name = displayName, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0, id, RowChanges.Updated);
     }
 
     /// <summary>Sets the account's own proxy (null = follow the provider's).</summary>
     public async Task<bool> SetHttpProxyAsync(string id, string? httpProxy, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             UPDATE provider_accounts SET http_proxy = @http_proxy, updated_at = @now WHERE id = @id
-            """, new { id, http_proxy = httpProxy, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0;
+            """, new { id, http_proxy = httpProxy, now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow) }) > 0, id, RowChanges.Updated);
     }
 
     /// <summary>Takes the account out of automatic rotation until <paramref name="untilUtc"/> (null lifts it).</summary>
     public async Task<bool> SetCooldownAsync(string id, DateTimeOffset? untilUtc, string? reason, CancellationToken ct = default)
     {
         await using var conn = await factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             UPDATE provider_accounts SET cooldown_until_utc = @until, last_error = @reason, updated_at = @now WHERE id = @id
             """, new
         {
@@ -200,7 +215,7 @@ public sealed class ProviderAccountStore(SqliteConnectionFactory factory) : IPro
             until = untilUtc is { } u ? DateTimeOffsetHandler.ToStorage(u) : null,
             reason,
             now = DateTimeOffsetHandler.ToStorage(DateTimeOffset.UtcNow),
-        }) > 0;
+        }) > 0, id, RowChanges.Updated);
     }
 
     /// <summary>

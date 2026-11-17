@@ -8,7 +8,12 @@ const envInfo = hostSync('env');
 
 export const version = envInfo.astraVersion;
 export const api = envInfo.api;
-export const env = Object.freeze({ ...envInfo });
+// the usage time zone is read each time: it follows the setting, and its offset follows daylight saving
+export const env = Object.freeze(Object.defineProperties({ ...envInfo }, {
+  locale: { enumerable: true, get: () => hostSync('env').locale },
+  timeZone: { enumerable: true, get: () => hostSync('env').timeZone },
+  utcOffsetMinutes: { enumerable: true, get: () => hostSync('env').utcOffsetMinutes },
+}));
 export { AstraError };
 
 export const has = (what) => hostSync('has', String(what)) === true;
@@ -278,7 +283,8 @@ export const gateway = {
 
 // ---------- providers / clients (2.1, design/plugin-v2 08)
 // A provider's code: prepare(req, account) shapes each upstream request the host sends (req.provider is its local id);
-// models / refresh(account, { status, body }) are optional, and usage() is not called by the host yet. A provider whose manifest
+// models / refresh(account, { status, body }) / usage(account) are optional (usage: { plan?, until?, user?, error?, windows: [{ name, used? (%),
+// resetsAt?, display?, amount?, limit?, unit?, aside? }] }, shown on the account cards when asked for). A provider whose manifest
 // has a `reply` block also registers transformResponse { start(res, ctx), frame(frame, ctx), end(ctx) } (08 §2.2).
 // An account handed to them carries its key and reads its credential with account.secret().
 export const providers = {

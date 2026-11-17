@@ -19,6 +19,7 @@ v1 插件继续按现状运行，但不再增加新能力。插件出了 v2 版�
 | [06-ui-tooling.md](06-ui-tooling.md) | UI 工具链：SDK、开发模式、画廊与检查器、测试夹具、两端一致性流程、UI 版本 |
 | [07-v1-coexistence.md](07-v1-coexistence.md) | v1 保留方式、v2 升级提醒、升级流程与数据迁移 |
 | [08-2.1-providers-clients.md](08-2.1-providers-clients.md) | 2.1：流式 `net`、`providers`、`clients`、`ui.flows`，以及 v1 provider / agent 插件的升级交接 |
+| [09-plugin-roadmap.md](09-plugin-roadmap.md) | 插件路线图：现有插件的覆盖面、平台缺口、接下来做哪些插件、P1–P3 分期 |
 
 ## 目标
 
@@ -118,4 +119,4 @@ v1 插件继续按现状运行，但不再增加新能力。插件出了 v2 版�
 场景集与两端视觉比对、组件参考文档、SDK（构建、校验、组合件）及其发布步骤；2.1 的流式 `net`、`providers`、
 `clients`、`ui.flows`、`legacy.auth:import` 与 v1 provider 插件的升级交接；provider 的回复翻译（`reply` + `transformResponse`，08 §2.2）。
 
-之后（01 §11 的“之后”）：`mcp.tools`、`routing.judges`、`alerts.channels`、插件间 API——各自需要单独设计。
+之后（01 §11 的“之后”）：`mcp.tools`、`routing.judges`、`alerts.channels`、插件间 API——各自需要单独设计。做哪些插件、平台先补什么，见 [09](09-plugin-roadmap.md)。

@@ -25,7 +25,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Avalonia DispatcherTimer starts itself](avalonia-dispatchertimer-autostart.md) — the (interval, priority, callback) constructor runs the timer at once; it made tray-only processes restart in a loop
 - [Windows tray menu is an Avalonia window](avalonia-win32-tray-menu-window.md) — TrayPopupRoot sized to a MenuFlyoutPresenter; without menu themes it was 0 x 0 (issue #18, fixed 0.13.2); TrayMenuWindowTests builds it headless
 - [JS engine AOT fallback was rejected](jint-aot-fallback-rejected.md) — middleware stays in-process; the Bun middleware host was the failure plan, not a design
-- [Plugin v2 design](plugin-v2-design.md) — `design/plugin-v2/`, 2.0 + 2.1 implemented 2026-11-11; user required tree / date / line chart / Markdown, the other decisions (D1–D9, D11–D14) were taken as proposed
+- [Plugin v2 design](plugin-v2-design.md) — `design/plugin-v2/`, 2.0 + 2.1 implemented 2026-11-11; user required tree / date / line chart / Markdown, the other decisions (D1–D9, D11–D14) were taken as proposed; 09 roadmap + P1 built 2026-11-16 at the user's request (plugin list itself unconfirmed)
 - [Cursor v2 runs over HTTP/1.1](cursor-v2-http1-run.md) — RunSSE + BidiAppend on byte bodies, connect framing, `$end`, `dispose` (2026-11-12); HTTP/2 regional host given up; unverified against real Cursor
 - [Jaunt replaces Jint](jaunt-replaces-jint.md) — 2026-11-11 user request; limit hits fault the engine, strict tail calls dodge the depth limit, tracked bytes only grow
 - [Webhook formats were added](webhook-formats-added.md) — Feishu, DingTalk, WeCom, Slack and Discord renderers exist despite the "generic JSON only" design

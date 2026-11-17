@@ -25,6 +25,11 @@ export function createHost(options = {}) {
     asked: [],
     flushed: [],
     accounts: new Map(),
+    dataAnswers: options.data ?? {},
+    locale: options.locale ?? 'en',
+    timeZone: options.timeZone ?? 'UTC',
+    utcOffsetMinutes: options.utcOffsetMinutes ?? 0,
+    queries: [],
   };
   const ops = new Map();
   const streams = new Map();
@@ -43,7 +48,7 @@ export function createHost(options = {}) {
     if (cryptoNames.has(name)) return cryptoAnswer(name, args);
     switch (name) {
       case 'env':
-        return { astraVersion: options.astraVersion ?? '0.15.0', api: '2.0.0', ui: schema.version, platform: 'test', plugin: host.plugin, dev: true };
+        return { astraVersion: options.astraVersion ?? '0.15.0', api: '2.0.0', ui: schema.version, platform: 'test', plugin: host.plugin, dev: true, locale: host.locale, timeZone: host.timeZone, utcOffsetMinutes: host.utcOffsetMinutes };
       case 'has':
         return host.granted.has(args) || name in {};
       case 'config.get':
@@ -177,6 +182,20 @@ export function createHost(options = {}) {
       case 'commands.execute':
       case 'jobs.runNow':
         return null;
+      // read-only data views: a test answers them (options.data: { 'requests.stats': value | (args) => value, … })
+      case 'data.requests.query':
+      case 'data.requests.stats':
+      case 'data.providers.list':
+      case 'data.models.list':
+      case 'data.tokens.list': {
+        const what = name.slice('data.'.length);
+        const permission = { 'requests.query': 'data.requests:read', 'requests.stats': 'data.requests:read', 'providers.list': 'data.providers:read', 'models.list': 'data.models:read', 'tokens.list': 'data.tokens:read' }[what];
+        need(permission);
+        host.queries.push({ what, args });
+        const answer = host.dataAnswers[what];
+        if (answer === undefined) return what === 'requests.query' ? { total: 0, items: [] } : what === 'requests.stats' ? { requests: 0, success: 0, costNanoUsd: 0, inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } : [];
+        return typeof answer === 'function' ? await answer(args ?? {}) : answer;
+      }
       case 'ui.files.read':
         return host.answers.files?.[args] ?? null;
     }

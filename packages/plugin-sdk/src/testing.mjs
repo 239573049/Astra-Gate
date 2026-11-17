@@ -15,6 +15,9 @@ const DEFAULT_PERMISSIONS = ['storage', 'secrets', 'ui', 'notifications', 'jobs'
 
 function reset(opts = {}) {
   const h = host();
+  // what an earlier run's activate registered (the real host activates once per engine; here every run activates again)
+  const v2 = globalThis.__astraV2;
+  for (const m of [v2?.commands, v2?.jobs, v2?.listeners, v2?.providers, v2?.clients]) m?.clear?.();
   h.storage = new Map(Object.entries(opts.storage ?? {}).map(([k, v]) => [k, JSON.stringify(v)]));
   h.secrets = new Map(Object.entries(opts.secrets ?? {}));
   h.config = opts.config ?? {};
@@ -24,6 +27,11 @@ function reset(opts = {}) {
   if (opts.fetch) h.fetch = opts.fetch;
   h.answers = { confirm: opts.confirm, prompt: opts.prompt, pickFile: opts.pickFile, openSheet: opts.openSheet, openDialog: opts.openDialog, files: opts.files };
   h.accounts = new Map();
+  h.dataAnswers = opts.data ?? {};
+  h.locale = opts.locale ?? 'en';
+  h.timeZone = opts.timeZone ?? 'UTC';
+  h.utcOffsetMinutes = opts.utcOffsetMinutes ?? 0;
+  h.queries = [];
   h.logs = [];
   h.notifications = [];
   h.emitted = [];
@@ -122,6 +130,38 @@ export async function runCommand(plugin, id, args = {}, opts = {}) {
   await h.run({ op: 'activate', reason: 'test' });
   return h.run({ op: 'command', id, args });
 }
+
+/**
+ * Runs a job the plugin handles (jobs.handle in activate) the way the scheduler does: activate first, then the job. Returns what the
+ * host saw — storage, notifications, the http requests made (via `fetch`), the data queries — for asserting on.
+ */
+export async function runJob(plugin, id, opts = {}) {
+  const h = reset(opts);
+  h.adopt('default', plugin);
+  await h.run({ op: 'activate', reason: 'test' });
+  await h.run({ op: 'job', id, scheduledAt: opts.scheduledAt ?? new Date().toISOString(), attempt: opts.attempt ?? 1 });
+  return seen(h);
+}
+
+/**
+ * Delivers host or plugin events (request.completed, provider.changed, …) to the listeners the plugin registered in activate,
+ * in order: `events` is [{ name, payload }]. Like runJob, returns what the host saw.
+ */
+export async function deliverEvents(plugin, events, opts = {}) {
+  const h = reset(opts);
+  h.adopt('default', plugin);
+  await h.run({ op: 'activate', reason: 'test' });
+  for (const e of events) await h.run({ op: 'event', name: e.name, payload: e.payload ?? null });
+  return seen(h);
+}
+
+const seen = (h) => ({
+  storage: Object.fromEntries([...h.storage].map(([k, v]) => [k, JSON.parse(v)])),
+  notifications: h.notifications,
+  logs: h.logs,
+  emitted: h.emitted,
+  queries: h.queries,
+});
 
 /**
  * Runs one gateway hook of a hook set the way the gateway does: input in, what it returned out, plus what it did
