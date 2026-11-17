@@ -6,6 +6,8 @@ import { useI18n, useT, type MessageKey } from '../i18n';
 import { pretty } from '../lib/format';
 import { ChipGroup } from './arc/chip-group/chip-group';
 import { PricingRuleDialog, type PricingRuleKind } from './PricingRuleDialog';
+import { getDisplayCurrency } from '../lib/currency';
+import { PriceInput } from './PriceInput';
 import { Button, Field, Input, NumberInput, Segmented, TextArea } from './ui/controls';
 import { Select, Sheet } from './ui/overlays';
 
@@ -125,7 +127,7 @@ export function PricingEditor({
             { value: 'json', label: 'JSON' },
           ]}
         />
-        <span className="text-[12px] text-[var(--text-muted)]">{t('pricing.unit')}</span>
+        <span className="text-[12px] text-[var(--text-muted)]">{getDisplayCurrency().code === 'USD' ? t('pricing.unit') : t('pricing.unitIn', { code: getDisplayCurrency().code })}</span>
         {allowEmpty && (
           <Button size="sm" variant="destructive" className="ml-auto" onClick={() => onChange(null)}>
             {t('pricing.remove')}
@@ -157,12 +159,12 @@ export function PricingEditor({
               {TOKEN_TYPES.map((type) => (
                 <div key={type} className="flex items-center justify-between gap-2">
                   <span className="truncate font-mono text-[11px] text-[var(--text-secondary)]">{type}</span>
-                  <NumberInput className="w-28" label={type} value={p.base[type] ?? null} onChange={(v) => setBase(type, v)} />
+                  <PriceInput className="w-28" label={type} value={p.base[type] ?? null} onChange={(v) => setBase(type, v)} />
                 </div>
               ))}
               <div className="flex items-center justify-between gap-2">
                 <span className="truncate text-[12px] text-[var(--text-secondary)]">{t('pricing.perRequest')}</span>
-                <NumberInput className="w-28" label={t('pricing.perRequest')} value={p.per_request ?? null} onChange={(v) => set({ per_request: v })} />
+                <PriceInput className="w-28" label={t('pricing.perRequest')} value={p.per_request ?? null} onChange={(v) => set({ per_request: v })} />
               </div>
             </div>
           </div>
@@ -265,7 +267,7 @@ function PriceRow({ prices, onChange }: { prices: PriceSet | null | undefined; o
       {(['input', 'cache_read', 'output'] as const).map((type) => (
         <div key={type} className="flex items-center gap-2">
           <span className="font-mono text-[11px] text-[var(--text-secondary)]">{type}</span>
-          <NumberInput className="w-24" label={type} value={prices?.[type] ?? null} onChange={(v) => onChange(type, v)} />
+          <PriceInput className="w-24" label={type} value={prices?.[type] ?? null} onChange={(v) => onChange(type, v)} />
         </div>
       ))}
     </div>

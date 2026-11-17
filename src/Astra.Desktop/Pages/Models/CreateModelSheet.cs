@@ -80,8 +80,8 @@ public sealed class CreateModelSheet : UserControl
         var vendor = PricingUi.TextBox(_draft.Vendor, v => { _draft.Vendor = v; Refresh(); }, name: Loc.T("models.field.vendor"), placeholder: "openai", visibleLabel: true);
         vendor.Width = double.NaN;
         var context = PricingUi.Number(_draft.ContextWindow, v => _draft.ContextWindow = v is { } d ? (long)d : null, name: Loc.T("models.field.contextWindow"), integer: true, visibleLabel: true);
-        var input = PricingUi.Number(_draft.InputPrice, v => _draft.InputPrice = v, name: Loc.T("models.field.inputPrice"), visibleLabel: true);
-        var output = PricingUi.Number(_draft.OutputPrice, v => _draft.OutputPrice = v, name: Loc.T("models.field.outputPrice"), visibleLabel: true);
+        var input = PricingUi.Price(_draft.InputPrice, v => _draft.InputPrice = v, name: Loc.T("models.field.inputPrice"), visibleLabel: true);
+        var output = PricingUi.Price(_draft.OutputPrice, v => _draft.OutputPrice = v, name: Loc.T("models.field.outputPrice"), visibleLabel: true);
         foreach (var box in new Control[] { context, input, output })
         {
             box.Width = double.NaN;

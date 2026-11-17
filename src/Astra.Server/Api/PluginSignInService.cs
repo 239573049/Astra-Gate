@@ -70,6 +70,7 @@ public sealed partial class PluginSignInService(AstraDatabase db, PluginProvider
             Url = PluginProviders.Str(a, "url"),
             Instructions = instructions,
             PasteCode = PluginProviders.Str(a, "method") == "code",
+            Opened = a["opened"] is JsonValue opened && opened.GetValueKind() == System.Text.Json.JsonValueKind.True,
             DeviceCode = instructions is null ? null : DeviceCode().Match(instructions) is { Success: true } m ? m.Groups[1].Value : null,
         };
         foreach (var (key, old) in _flows)
@@ -252,11 +253,12 @@ public sealed partial class PluginSignInService(AstraDatabase db, PluginProvider
         public string? Url { get; init; }
         public string? Instructions { get; init; }
         public bool PasteCode { get; init; }
+        public bool Opened { get; init; }
         public string? DeviceCode { get; init; }
         public volatile string State = "waiting";
         public string? Account { get; set; }
         public string? Error { get; set; }
 
-        public PluginSignInDto Dto() => new(Id, State, Url, Instructions, PasteCode, DeviceCode, Account, Error);
+        public PluginSignInDto Dto() => new(Id, State, Url, Instructions, PasteCode, DeviceCode, Account, Error, Opened);
     }
 }

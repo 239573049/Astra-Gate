@@ -17,12 +17,13 @@ public static class PriceFormat
 
     /// <summary>
     /// Per-1M-token unit price: "$3", "$0.075", "$1.25" (<c>formatUnitPrice</c>): at most 8 significant digits, no trailing zeros,
-    /// JS number text (so below 1e-6 it is "$1e-7", as in the web).
+    /// JS number text (so below 1e-6 it is "$1e-7", as in the web). A USD price reads in the display currency (settings; USD by default).
     /// </summary>
     public static string UnitPrice(decimal? price)
     {
         if (price is not { } p) return Dash;
-        return "$" + PriceNumber.ToJsText(RoundSignificant(p, 8));
+        var c = Currency.DisplayMoney.Current;
+        return c.Symbol + PriceNumber.ToJsText(RoundSignificant(p * c.Rate, 8));
     }
 
     /// <summary>The same for a pricing JSON value (a number or a decimal string); a string that is not a number is printed as written, like the web.</summary>

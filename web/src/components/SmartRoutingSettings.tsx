@@ -2,7 +2,7 @@ import { ArrowDown, ArrowUp, Copy, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 
 import { ApiError } from '../api/client';
-import { useRoutingModels, useSmartRouting, useTestSmartRouting, useUpdateSmartRouting } from '../api/hooks';
+import { useRoutingGroups, useRoutingModels, useSmartRouting, useTestSmartRouting, useUpdateSmartRouting } from '../api/hooks';
 import type {
   JudgeProtocol,
   RoutingMode,
@@ -567,6 +567,7 @@ function Tester({ draft }: { draft: Draft }) {
 function GradesGroup({ draft, patch }: { draft: Draft; patch: (change: Partial<Draft>) => void }) {
   const { t } = useI18n();
   const models = useRoutingModels();
+  const groups = useRoutingGroups();
   const grades = draft.grades;
 
   const setGrades = (next: SmartRoutingGrade[], fallbackGrade = draft.fallbackGrade) =>
@@ -587,11 +588,16 @@ function GradesGroup({ draft, patch }: { draft: Draft; patch: (change: Partial<D
   // two choices (and then says which provider it is in its own label, since a short list shows no detail).
   const served = models.data ?? [];
   const shared = new Set(served.filter((m, i) => served.findIndex((o) => o.id === m.id) !== i).map((m) => m.id));
-  const choices = served.map((m) => ({
+  const modelChoices = served.map((m) => ({
     value: choiceOf(m.providerId, m.id),
     label: shared.has(m.id) ? `${m.id} · ${m.providerName}` : m.id,
     detail: shared.has(m.id) ? undefined : m.providerName,
   }));
+  // A routing group (group/<slug>) is a grade's target too, with no provider of its own: its members decide where a request goes.
+  const groupChoices = (groups.data ?? [])
+    .filter((x) => x.enabled)
+    .map((x) => ({ value: choiceOf(null, x.modelId), label: t('smartRouting.grade.groupOption', { name: x.name || x.slug }), detail: x.modelId }));
+  const choices = [...modelChoices, ...groupChoices];
   const options = (g: SmartRoutingGrade) => {
     const current = choiceOf(g.providerId, g.model);
     return g.model && !choices.some((o) => o.value === current) ? [{ value: current, label: t('smartRouting.grade.unavailable', { model: g.model }) }, ...choices] : choices;

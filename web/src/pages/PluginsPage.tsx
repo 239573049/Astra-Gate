@@ -269,6 +269,8 @@ function PluginRow({
         {mw.lastError && <span className="block text-[var(--danger)]">{t('plugins.mw.lastError', { error: mw.lastError })}</span>}
       </Detail>,
     );
+  if (p.notice === 'hooks-unsupported')
+    details.push(<Detail key="notice" label={t('plugins.kind.hooks')}>{t('plugins.hooksUnsupported')}</Detail>);
   if (p.agent?.kind)
     details.push(
       <Detail key="agent" label={t('plugins.kind.agent')}>

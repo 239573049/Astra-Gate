@@ -242,7 +242,7 @@ public sealed class PricingEditor : UserControl
         var row = new DockPanel { LastChildFill = false };
         var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         left.Children.Add(segmented);
-        left.Children.Add(PricingUi.Muted12(Loc.T("pricing.unit")));
+        left.Children.Add(PricingUi.Muted12(Astra.Desktop.Core.Currency.DisplayMoney.Current.IsUsd ? Loc.T("pricing.unit") : Loc.T("pricing.unitIn", ("code", Astra.Desktop.Core.Currency.DisplayMoney.Current.Code))));
         ((TextBlock)left.Children[1]).VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(left);
         if (AllowEmpty && !IsReadOnly)
@@ -336,11 +336,11 @@ public sealed class PricingEditor : UserControl
         var grid = new AutoFillGrid { MinColumnWidth = 200, ColumnSpacing = 20, RowSpacing = 8 };
         foreach (var type in PricingDocument.TokenTypes)
         {
-            var box = PricingUi.Number(Current.BasePrice(type), v => Commit(Current.WithBasePrice(type, v), structural: false), width: 112, name: type);
+            var box = PricingUi.Price(Current.BasePrice(type), v => Commit(Current.WithBasePrice(type, v), structural: false), width: 112, name: type);
             box.IsReadOnly = IsReadOnly;
             grid.Children.Add(TypedCell(type, box));
         }
-        var perRequest = PricingUi.Number(Current.PerRequest, v => Commit(Current.WithPerRequest(v), structural: false), width: 112, name: Loc.T("pricing.perRequest"));
+        var perRequest = PricingUi.Price(Current.PerRequest, v => Commit(Current.WithPerRequest(v), structural: false), width: 112, name: Loc.T("pricing.perRequest"));
         perRequest.IsReadOnly = IsReadOnly;
         var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
         cell.Children.Add(PricingUi.Text(Loc.T("pricing.perRequest"), ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.TextSecondary));
@@ -411,7 +411,7 @@ public sealed class PricingEditor : UserControl
         {
             var cell = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
             cell.Children.Add(PricingUi.Text(type, ArcDesignTokenKind.TypeXS, ArcDesignTokenKind.TextSecondary, mono: true));
-            var box = PricingUi.Number(rule.Price(type), v => Commit(Current.WithRule(section, i, r => SetRulePrice(r, type, v)), false), width: 96, name: type);
+            var box = PricingUi.Price(rule.Price(type), v => Commit(Current.WithRule(section, i, r => SetRulePrice(r, type, v)), false), width: 96, name: type);
             box.IsReadOnly = IsReadOnly;
             cell.Children.Add(box);
             prices.Children.Add(cell);

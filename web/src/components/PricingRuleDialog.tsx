@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ContextTier, PriceSet, ServiceTierRule, TimeWindowRule } from '../api/types';
 import { useI18n } from '../i18n';
 import { ChipGroup } from './arc/chip-group/chip-group';
+import { PriceInput } from './PriceInput';
 import { Button, Field, Input, NumberInput } from './ui/controls';
 import { Select, Sheet } from './ui/overlays';
 
@@ -83,7 +84,7 @@ export function PricingRuleDialog({ kind, onClose, onAdd, serviceNames = [], lev
           </div>
           <div className="grid grid-cols-2 gap-4">
             {(['input', 'cache_read', 'cache_write_5m', 'cache_write_30m', 'cache_write_1h', 'cache_write_12h', 'output', 'reasoning'] as const).map((token) => (
-              <Field key={token} label={token}><NumberInput value={prices[token]} onChange={(v) => setPrices({ ...prices, [token]: v } as PriceSet)} min={0} /></Field>
+              <Field key={token} label={token}><PriceInput value={prices[token]} onChange={(v) => setPrices({ ...prices, [token]: v } as PriceSet)} min={0} /></Field>
             ))}
           </div>
         </>}

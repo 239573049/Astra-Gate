@@ -25,6 +25,7 @@ public sealed class SmartRoutingApi
         _queries = queries;
         Settings = queries.Polling(SettingsKey, async ct => await api.GetAsync<SmartRoutingDto>("/api/smart-routing", ct) ?? throw Empty("smart routing"), TimeSpan.FromSeconds(30));
         Models = queries.Query(ModelsKey, async ct => await api.GetAsync<List<RoutingModelDto>>("/api/smart-routing/models", ct) ?? []);
+        Groups = queries.Query(Astra.Desktop.Core.RoutingGroups.RoutingGroupsApi.GroupsKey, async ct => await api.GetAsync<List<RoutingGroupDto>>("/api/routing/groups", ct) ?? []);
     }
 
     /// <summary>The settings with the live status (a judge being left alone, sessions holding a grade).</summary>
@@ -32,6 +33,9 @@ public sealed class SmartRoutingApi
 
     /// <summary>Every model id a provider serves: what a grade can be given.</summary>
     public Query<List<RoutingModelDto>> Models { get; }
+
+    /// <summary>The routing groups: a grade may name one (<c>group/&lt;slug&gt;</c>) instead of a provider's model.</summary>
+    public Query<List<RoutingGroupDto>> Groups { get; }
 
     /// <summary>
     /// Saves (PUT). The answer replaces the cached settings; the virtual model joins (or leaves) the clients' model pickers and the

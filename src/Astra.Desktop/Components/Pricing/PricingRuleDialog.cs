@@ -151,7 +151,7 @@ public sealed class PricingRuleDialog : UserControl
                         [new SelectOption("highest", Loc.T("pricing.output.highest")), new SelectOption("base", Loc.T("pricing.output.base"))],
                         draft.OutputPolicy, v => draft.OutputPolicy = v, name: Loc.T("pricing.outputPolicy")))));
                 body.Children.Add(PricingUi.Columns(2, PricingRuleDraft.ContextPriceTypes.Select(type =>
-                    Stretch(PricingUi.Number(null, v => { draft.Prices[type] = v; Refresh(); }, name: type, minimum: 0, visibleLabel: true))).ToArray()));
+                    Stretch(PricingUi.Price(null, v => { draft.Prices[type] = v; Refresh(); }, name: type, minimum: 0, visibleLabel: true))).ToArray()));
                 break;
 
             case PricingRuleKind.Time:

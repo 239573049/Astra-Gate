@@ -33,6 +33,12 @@ public sealed class PackageManifest
     /// <summary>The agent module (package.json magpie.agent, or a *.agent.js / .mjs file); null when it has none.</summary>
     public string? AgentFile { get; private set; }
 
+    /// <summary>
+    /// The async gateway hooks module (package.json <c>magpie.hooks</c>: onRequest / onSignIn …); null when it has none. Astra does not
+    /// drive these yet (host.js is never given the module), so a package that has only this is "not supported yet", not an error.
+    /// </summary>
+    public string? HooksFile { get; private set; }
+
     /// <summary>Whether it is a pi package or extension, which the host loads through pi (pi.js).</summary>
     public bool IsPi { get; private set; }
 
@@ -50,7 +56,16 @@ public sealed class PackageManifest
     /// nothing of it to load: magpie's InMagpieOnly — middleware or an agent, and no main or exports
     /// (an index file beside them doesn't count, as in magpie).
     /// </summary>
-    public bool InProcessOnly => (MiddlewareFile is not null || AgentFile is not null) && !_mainOrExports;
+    public bool InProcessOnly => ((MiddlewareFile is not null || AgentFile is not null) && !_mainOrExports) || HooksOnly;
+
+    /// <summary>
+    /// Whether <c>magpie.hooks</c> is all it has (no entry, pi, middleware or agent): it installs and shows, and nothing loads
+    /// (<see cref="NotSupportedReason"/>).
+    /// </summary>
+    public bool HooksOnly => HooksFile is not null && MiddlewareFile is null && AgentFile is null && !IsPi && !HasEntry;
+
+    /// <summary>What Astra cannot do with this package yet (shown as a plain status, not a load error), or null.</summary>
+    public string? NotSupportedReason => HooksOnly ? $"{Name}: its magpie.hooks (async gateway hooks) aren't supported by Astra yet" : null;
 
     private bool _mainOrExports;
 
@@ -143,6 +158,7 @@ public sealed class PackageManifest
         {
             if (Str(magpie, "middleware") is { } mw) MiddlewareFile = Resolve(dir, mw);
             if (Str(magpie, "agent") is { } agent) AgentFile = Resolve(dir, agent);
+            if (Str(magpie, "hooks") is { } hooks) HooksFile = Resolve(dir, hooks);
             OptionsExample = magpie["options"] as JsonObject;
             Icon = Str(magpie, "icon");
         }
@@ -154,7 +170,7 @@ public sealed class PackageManifest
                || (pkg["keywords"] as JsonArray)?.Any(k => k is JsonValue v && v.TryGetValue<string>(out var s) && s == "pi-package") == true
                || DependsOn(pkg["dependencies"]) || DependsOn(pkg["peerDependencies"]);
 
-        if (!HasEntry && !IsPi && MiddlewareFile is null && AgentFile is null)
+        if (!HasEntry && !IsPi && MiddlewareFile is null && AgentFile is null && HooksFile is null)
         {
             var bin = pkg["bin"];
             NotPluginReason = NoEntryReason(Name, bin is not null && bin.GetValueKind() != JsonValueKind.Null);

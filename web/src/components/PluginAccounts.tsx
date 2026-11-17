@@ -244,7 +244,7 @@ function SignInSheet({ provider, method, onClose }: { provider: Provider; method
       {
         onSuccess: (r) => {
           setFlow(r.id);
-          if (r.url) window.open(r.url, '_blank', 'noopener');
+          if (r.url && !r.opened) window.open(r.url, '_blank', 'noopener');
         },
         onError: (e) => toast(errorText(e), 'error'),
       },

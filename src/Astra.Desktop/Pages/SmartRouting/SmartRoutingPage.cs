@@ -17,6 +17,7 @@ public sealed class SmartRoutingPage : PageViewModel
         Model = new SmartRoutingPageModel(api, context.Feedback);
         Observe(api.Settings);
         Observe(api.Models);
+        Observe(api.Groups);
     }
 
     /// <summary>The settings form's model.</summary>

@@ -1199,6 +1199,8 @@ export interface Plugin {
   spec: string; name: string; shortName: string; version?: string | null; enabled: boolean; kinds: PluginKind[];
   source?: string | null; options?: Record<string, unknown> | null; optionsExample?: Record<string, unknown> | null;
   icon?: string | null; isPath: boolean; error?: string | null; middleware?: MiddlewareState | null; agent?: PluginAgent | null;
+  /** A plain status, not an error: 'hooks-unsupported' = the package only declares magpie.hooks, which Astra does not drive yet. */
+  notice?: string | null;
 }
 
 /** Bun, which provider plugins run on: where it is, whether it is being fetched, why the last fetch failed. */
@@ -1262,6 +1264,8 @@ export interface PluginPrompt {
 export interface PluginSignIn {
   id: string; state: "waiting" | "done" | "failed"; url?: string | null; instructions?: string | null; pasteCode: boolean;
   deviceCode?: string | null; account?: string | null; error?: string | null;
+  /** The plugin's own CLI already opened the page: the console must not open it again. */
+  opened?: boolean;
 }
 
 /** An account's allowance, as the plugin tells it. */

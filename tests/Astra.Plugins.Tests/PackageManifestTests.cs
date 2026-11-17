@@ -73,6 +73,26 @@ public class PackageManifestTests
     }
 
     [Fact]
+    public void A_hooks_only_package_is_not_supported_yet_rather_than_broken()
+    {
+        var m = PackageManifest.Read(Folder("""{"name":"magpie-gate","magpie":{"hooks":"./hooks.js"}}""", "hooks.js"));
+        Assert.Equal("hooks.js", Path.GetFileName(m.HooksFile));
+        Assert.True(m.HooksOnly);
+        Assert.True(m.InProcessOnly); // nothing for the host to load
+        Assert.Null(m.NotPluginReason); // installs and lists
+        Assert.Contains("aren't supported by Astra yet", m.NotSupportedReason);
+    }
+
+    [Fact]
+    public void Hooks_beside_an_entry_leave_the_package_a_normal_plugin()
+    {
+        var m = PackageManifest.Read(Folder("""{"name":"x","main":"./index.js","magpie":{"hooks":"./hooks.js"}}""", "hooks.js", "index.js"));
+        Assert.False(m.HooksOnly);
+        Assert.False(m.InProcessOnly);
+        Assert.Null(m.NotSupportedReason);
+    }
+
+    [Fact]
     public void A_command_only_package_is_not_a_plugin()
     {
         var m = PackageManifest.Read(Folder("""{"name":"magpie-x-search","bin":{"x":"./cli.js"}}"""));

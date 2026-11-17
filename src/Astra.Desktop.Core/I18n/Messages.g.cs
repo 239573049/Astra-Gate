@@ -298,6 +298,7 @@ internal static class Messages
         "pricing.remove",
         "pricing.mode.form",
         "pricing.unit",
+        "pricing.unitIn",
         "pricing.base",
         "pricing.perRequest",
         "pricing.notes",
@@ -2428,6 +2429,7 @@ internal static class Messages
         "plugins.kind.v2",
         "plugins.kind.ui",
         "plugins.kind.hooks",
+        "plugins.hooksUnsupported",
         "pluginUi.v2Title",
         "pluginUi.more",
         "pluginUi.commandRan",
@@ -3770,6 +3772,7 @@ internal static class Messages
         "smartRouting.grade.descriptionPlaceholder",
         "smartRouting.grade.model",
         "smartRouting.grade.pickModel",
+        "smartRouting.grade.groupOption",
         "smartRouting.grade.unavailable",
         "smartRouting.grade.up",
         "smartRouting.grade.down",
@@ -4107,6 +4110,7 @@ internal static class Messages
             case "pricing.remove": return "移除价格";
             case "pricing.mode.form": return "表单";
             case "pricing.unit": return "USD / 百万 tokens";
+            case "pricing.unitIn": return "{code} / 百万 tokens";
             case "pricing.base": return "基础价格";
             case "pricing.perRequest": return "每次请求";
             case "pricing.notes": return "备注";
@@ -6237,6 +6241,7 @@ internal static class Messages
             case "plugins.kind.v2": return "v2";
             case "plugins.kind.ui": return "界面";
             case "plugins.kind.hooks": return "网关钩子";
+            case "plugins.hooksUnsupported": return "这个插件只声明了异步网关钩子（magpie.hooks），Astra 暂不支持，所以不会运行。";
             case "pluginUi.v2Title": return "v2 插件";
             case "pluginUi.more": return "加载更多";
             case "pluginUi.commandRan": return "已运行「{name}」";
@@ -7579,6 +7584,7 @@ internal static class Messages
             case "smartRouting.grade.descriptionPlaceholder": return "用英文写这一档适合的任务（判定模型读的就是这段话）";
             case "smartRouting.grade.model": return "模型";
             case "smartRouting.grade.pickModel": return "选择模型";
+            case "smartRouting.grade.groupOption": return "路由组 · {name}";
             case "smartRouting.grade.unavailable": return "{model}（选中的提供商现在不提供，请重新选择）";
             case "smartRouting.grade.up": return "上移";
             case "smartRouting.grade.down": return "下移";
@@ -7918,6 +7924,7 @@ internal static class Messages
             case "pricing.remove": return "Remove pricing";
             case "pricing.mode.form": return "Form";
             case "pricing.unit": return "USD / 1M tokens";
+            case "pricing.unitIn": return "{code} / 1M tokens";
             case "pricing.base": return "Base prices";
             case "pricing.perRequest": return "Per request";
             case "pricing.notes": return "Notes";
@@ -10048,6 +10055,7 @@ internal static class Messages
             case "plugins.kind.v2": return "v2";
             case "plugins.kind.ui": return "UI";
             case "plugins.kind.hooks": return "Gateway hooks";
+            case "plugins.hooksUnsupported": return "This plugin only declares async gateway hooks (magpie.hooks), which Astra does not support yet, so nothing runs.";
             case "pluginUi.v2Title": return "v2 plugins";
             case "pluginUi.more": return "Load more";
             case "pluginUi.commandRan": return "Ran “{name}”";
@@ -11390,6 +11398,7 @@ internal static class Messages
             case "smartRouting.grade.descriptionPlaceholder": return "Describe the kind of request that belongs to this grade (the judge reads this)";
             case "smartRouting.grade.model": return "Model";
             case "smartRouting.grade.pickModel": return "Choose a model";
+            case "smartRouting.grade.groupOption": return "Routing group · {name}";
             case "smartRouting.grade.unavailable": return "{model} (the chosen provider does not serve it now — choose again)";
             case "smartRouting.grade.up": return "Move up";
             case "smartRouting.grade.down": return "Move down";

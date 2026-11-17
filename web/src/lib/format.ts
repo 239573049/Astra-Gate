@@ -1,5 +1,5 @@
 // Display formatting. Money arrives as integer nano-USD (1 USD = 1e9 nanos).
-import { formatMoney, formatMoneyAxis } from './currency';
+import { formatMoney, formatMoneyAxis, getDisplayCurrency } from './currency';
 
 export const NANOS_PER_USD = 1_000_000_000;
 
@@ -37,7 +37,8 @@ export function formatUnitPrice(price: number | string | null | undefined): stri
   if (price === null || price === undefined || price === '') return '—';
   const n = typeof price === 'string' ? Number(price) : price;
   if (Number.isNaN(n)) return String(price);
-  return `$${Number(n.toPrecision(8))}`;
+  const c = getDisplayCurrency();
+  return `${c.symbol}${Number((n * c.rate).toPrecision(8))}`;
 }
 
 /** 1234 → "1,234"; 8_100_000 → "8.1M" when compact. */

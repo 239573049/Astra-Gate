@@ -746,7 +746,7 @@ runtime needed on the target).
     `Astra.Desktop.Core/Currency/DisplayMoney.cs` (set by `SettingsStore`; `StatsFormat` / `TraceFormat` / `ProviderFormat` / `PriceFormat` /
     `TrayMath` / `AccountRules` read it; the shell redraws the page on a change). A new money formatter goes through those, never a literal
     `"$"`. Typed money (token cost limits) is entered in the display currency and saved as USD with the USD equivalent shown
-    (`TokensPage` `BudgetsEditor`, `BudgetRules.UsdLimit`); unit prices in pricing JSON, provider quota amounts (their own currency),
+    (`TokensPage` `BudgetsEditor`, `BudgetRules.UsdLimit`); unit prices are shown (`formatUnitPrice`, `PriceFormat.UnitPrice`) and typed in the display currency too (web `PriceInput`, Avalonia `PricingUi.Price` / `PriceCurrency`: decimal conversion, the USD value beside the box) but the pricing JSON stays USD; provider quota amounts (their own currency),
     gateway error text, token self-service views and webhook payload fields stay USD — only the alert message *text* reads in the display
     currency (`AlertMessages.Format`'s `currency`). **Context window**: `requests.context_json` (migration 0026, `ContextReport`: the effective
     model's window / max output at request time + `ContextShares`, an estimate of system / tools / history / latest turn from the client's body,

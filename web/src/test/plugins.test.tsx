@@ -31,7 +31,8 @@ const aider: Plugin = {
   isPath: true,
   agent: { id: 'aider', kind: 'plugin-aider', name: 'Aider' },
 };
-const list: PluginList = { plugins: [wordGuard, aider], preferences: {}, runtime: { downloading: false, version: '1.4.2', target: 'bun-darwin-aarch64' } };
+const gate: Plugin = { spec: 'magpie-gate', name: 'magpie-gate', shortName: 'magpie-gate', enabled: true, kinds: ['hooks'], isPath: false, notice: 'hooks-unsupported' };
+const list: PluginList = { plugins: [wordGuard, aider, gate], preferences: {}, runtime: { downloading: false, version: '1.4.2', target: 'bun-darwin-aarch64' } };
 const market: MarketListing[] = [
   { package: '@astragate-community/middleware-word-guard', name: 'Word Guard', kind: 'middleware', providers: [], summary: { en: 'Sensitive-word filter' }, latest: '0.1.1', origin: 'upstream', tags: [], tarballs: [] },
   { package: '@astragate-community/opencode-zcode-auth', name: 'ZCode', kind: 'provider', providers: ['zcode'], summary: { en: 'GLM Coding Plan' }, latest: '0.1.15', origin: 'upstream', tags: [], tarballs: [] },
@@ -125,6 +126,12 @@ describe('PluginsPage', () => {
     expect(screen.getByText(/Aider/)).toBeTruthy();
   });
 
+  it('shows a hooks-only package as not supported yet, not as an error', () => {
+    renderAt('/plugins');
+    expect(screen.getByText(/magpie\.hooks.*(暂不支持|does not support)/)).toBeTruthy();
+    expect(screen.queryByText(/can't load|无法加载/)).toBeNull();
+  });
+
   it('switches a plugin off and moves it in the middleware order', () => {
     renderAt('/plugins');
     const switches = screen.getAllByRole('switch');
@@ -133,7 +140,7 @@ describe('PluginsPage', () => {
 
     const down = screen.getAllByRole('button', { name: /move down|下移/i })[0]!;
     fireEvent.click(down);
-    expect(spies.reorder).toHaveBeenCalledWith([aider.spec, wordGuard.spec], expect.anything());
+    expect(spies.reorder).toHaveBeenCalledWith([aider.spec, wordGuard.spec, gate.spec], expect.anything());
   });
 
 

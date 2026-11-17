@@ -102,13 +102,18 @@ public static class RoutingModels
     /// A choice is a model on one provider: the same id on two providers is two choices (and then says which provider it is in its own
     /// label, since a short list shows no detail).
     /// </summary>
-    public static List<ModelChoice> Choices(IReadOnlyList<RoutingModelDto> served)
+    public static List<ModelChoice> Choices(IReadOnlyList<RoutingModelDto> served, IReadOnlyList<RoutingGroupDto>? groups = null)
     {
         var shared = served.GroupBy(m => m.Id).Where(g => g.Count() > 1).Select(g => g.Key).ToHashSet(StringComparer.Ordinal);
-        return served.Select(m => new ModelChoice(
+        var choices = served.Select(m => new ModelChoice(
             JudgePresets.ChoiceOf(m.ProviderId, m.Id),
             shared.Contains(m.Id) ? $"{m.Id} · {m.ProviderName}" : m.Id,
             shared.Contains(m.Id) ? null : m.ProviderName)).ToList();
+        // A routing group (group/<slug>) is a grade's target too, with no provider of its own (web `groupChoices`).
+        foreach (var g in groups ?? [])
+            if (g.Enabled)
+                choices.Add(new ModelChoice(JudgePresets.ChoiceOf(null, g.ModelId), Loc.T("smartRouting.grade.groupOption", ("name", g.Name.Length > 0 ? g.Name : g.Slug)), g.ModelId));
+        return choices;
     }
 
     /// <summary>The options for one grade: the choices, led by the grade's own model when no provider serves it any more (web <c>options</c>).</summary>
