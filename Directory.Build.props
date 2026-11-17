@@ -5,6 +5,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- NuGet audit could not reach its vulnerability data (NU1900) or a source had none (NU1905): a network
+         blip on a runner, not a finding. Keep them warnings so a restore never fails on it; a real
+         vulnerability (NU1901-NU1904) is still an error. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900;NU1905</WarningsNotAsErrors>
     <InvariantGlobalization>false</InvariantGlobalization>
     <Version>0.14.3112</Version>
     <Authors>Astra</Authors>
