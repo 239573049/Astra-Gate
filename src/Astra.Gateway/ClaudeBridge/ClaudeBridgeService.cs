@@ -120,7 +120,7 @@ public sealed class ClaudeBridgeService : IAsyncDisposable
                     var results = request.ToolResults(run.Digests.Count);
                     foreach (var id in run.PendingIds)
                         run.Deliver(id, results.TryGetValue(id, out var r) ? r
-                            : new ClaudeToolResult([new JsonObject { ["type"] = "text", ["text"] = "The caller gave no result for this call." }], true));
+                            : new ClaudeToolResult([(JsonNode)new JsonObject { ["type"] = "text", ["text"] = "The caller gave no result for this call." }], true));
                     run.Digests = [.. request.Digests];
                     run.PendingIds = [];
                     Mark(run, ClaudeRunState.Busy);
@@ -615,7 +615,7 @@ public sealed class ClaudeBridgeService : IAsyncDisposable
         catch (OperationCanceledException)
         {
             // the run ended, or claude gave the call up
-            return ([new JsonObject { ["type"] = "text", ["text"] = "The run ended before the caller gave a result." }], true);
+            return ([(JsonNode)new JsonObject { ["type"] = "text", ["text"] = "The run ended before the caller gave a result." }], true);
         }
     }
 
