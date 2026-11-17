@@ -291,7 +291,7 @@ public sealed class PluginSignInModel : ModelBase, IDisposable
         {
             var r = await _owner.Api.StartPluginSignInAsync(_owner.Provider.Id, Method.Index, _inputs);
             Follow(r.Id);
-            if (!string.IsNullOrEmpty(r.Url)) await _owner.OpenUrl(r.Url);
+            if (!string.IsNullOrEmpty(r.Url) && !r.Opened) await _owner.OpenUrl(r.Url);
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {

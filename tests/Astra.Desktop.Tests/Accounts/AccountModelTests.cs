@@ -375,6 +375,21 @@ public sealed class AccountModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Plugin_sign_in_the_plugin_already_opened_is_not_opened_again()
+    {
+        _http.On("POST /api/plugin-providers/p1/prompt", """{"prompt":null}""")
+            .On("POST /api/plugin-providers/p1/sign-in", """{"id":"f1","state":"waiting","url":"https://page","pasteCode":false,"opened":true}""")
+            .On("GET /api/plugin-providers/p1/sign-in/f1", """{"id":"f1","state":"waiting","url":"https://page","pasteCode":false,"opened":true}""");
+        var owner = PluginModel();
+        using var sign = new PluginSignInModel(owner, new PluginAuthMethodDto(0, "oauth", "Browser", null));
+        await Until(() => sign.PromptLoaded);
+        await sign.BeginAsync();
+        await Settle();
+        Assert.Empty(_opened);
+        Assert.True(sign.State!.Opened);
+    }
+
+    [Fact]
     public async Task Plugin_checkin_and_sign_out()
     {
         _http.On("GET /api/plugin-providers/p1/checkin", """{"supported":true,"on":false,"accounts":[]}""")

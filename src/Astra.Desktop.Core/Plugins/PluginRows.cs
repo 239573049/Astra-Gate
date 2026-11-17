@@ -15,6 +15,11 @@ public sealed record PluginAlert(string Title, string Text);
 /// <summary>One line of the grey block under a plugin row (web <c>Detail</c>): a label and what the plugin does there.</summary>
 public abstract record PluginDetail(string Label);
 
+/// <summary>A plain status line (not an error): what Astra does not support of the plugin yet.</summary>
+/// <param name="Label">The kind label.</param>
+/// <param name="Text">The sentence.</param>
+public sealed record NoticeDetail(string Label, string Text) : PluginDetail(Label);
+
 /// <summary>A gateway middleware's hooks and counters.</summary>
 /// <param name="Label">The "middleware" kind label.</param>
 /// <param name="Stats">Hooks, calls, µs per call, failures.</param>
@@ -99,6 +104,7 @@ public static class PluginRows
             var last = string.IsNullOrEmpty(mw.LastError) ? null : Loc.T("plugins.mw.lastError", ("error", mw.LastError));
             details.Add(new MiddlewareDetail(Loc.T("plugins.kind.middleware"), stats, last));
         }
+        if (p.Notice == PluginNotices.HooksUnsupported) details.Add(new NoticeDetail(Loc.T("plugins.kind.hooks"), Loc.T("plugins.hooksUnsupported")));
         if (!string.IsNullOrEmpty(p.Agent?.Kind))
             details.Add(new AgentDetail(Loc.T("plugins.kind.agent"), Loc.T("plugins.agent.adds", ("name", p.Agent!.Name ?? p.Agent.Id ?? "")), p.Agent.Kind));
         if (loaded is { Provides.Count: > 0 })

@@ -13,7 +13,14 @@ namespace Astra.Api.Contracts;
 public sealed record PluginDto(
     string Spec, string Name, string ShortName, string? Version, bool Enabled, List<string> Kinds, string? Source,
     JsonObject? Options, JsonObject? OptionsExample, string? Icon, bool IsPath, string? Error, MiddlewareStateDto? Middleware,
-    PluginAgentDto? Agent);
+    PluginAgentDto? Agent, string? Notice = null);
+
+/// <summary>Values of <see cref="PluginDto.Notice"/>: a plain status the plugins page shows (not a load error).</summary>
+public static class PluginNotices
+{
+    /// <summary>The package only declares <c>magpie.hooks</c> (async gateway hooks), which Astra does not drive yet.</summary>
+    public const string HooksUnsupported = "hooks-unsupported";
+}
 
 /// <summary>The client a plugin adds: its client kind ("plugin-&lt;id&gt;") on the Clients page, or why it didn't load.</summary>
 public sealed record PluginAgentDto(string? Id, string? Kind, string? Name, string? Error);
@@ -41,8 +48,9 @@ public sealed record PluginAuthMethodDto(int Index, string Type, string Label, s
 /// <summary>A plugin sign-in under way: the page to open, and either a code to paste (<see cref="PasteCode"/>) or the
 /// plugin noticing on its own; <see cref="DeviceCode"/> is the code the page asks to confirm, when the instructions say one.</summary>
 /// <param name="State">waiting, done or failed.</param>
+/// <param name="Opened">The plugin's own CLI already opened the page (host.js <c>opened</c>); the shell must not open it again.</param>
 public sealed record PluginSignInDto(
-    string Id, string State, string? Url, string? Instructions, bool PasteCode, string? DeviceCode, string? Account, string? Error);
+    string Id, string State, string? Url, string? Instructions, bool PasteCode, string? DeviceCode, string? Account, string? Error, bool Opened = false);
 
 /// <summary>POST …/prompt: the method's answers so far; the next question comes back, null when none is left.</summary>
 public sealed record PluginPromptInput(int Method, JsonObject? Inputs);

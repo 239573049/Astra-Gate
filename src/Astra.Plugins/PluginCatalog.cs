@@ -110,6 +110,7 @@ public sealed record InstalledPlugin(PluginEntry Entry, string Target, PackageMa
             else if (!Manifest.InProcessOnly && Manifest.HasEntry) kinds.Add(PluginKinds.Provider);
             if (Manifest.MiddlewareFile is not null) kinds.Add(PluginKinds.Middleware);
             if (Manifest.AgentFile is not null) kinds.Add(PluginKinds.Agent);
+            if (Manifest.HooksFile is not null) kinds.Add(PluginKinds.Hooks);
             return kinds;
         }
     }

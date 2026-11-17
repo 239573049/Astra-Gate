@@ -152,6 +152,8 @@ internal static class PluginRowView
                 }
                 return stack;
             }
+            case NoticeDetail notice:
+                return Secondary(notice.Text);
             case AgentDetail agent:
                 return PageUi.Link(agent.Text, () => model.OpenClient(agent.ClientKind));
             case ProvidesDetail provides:

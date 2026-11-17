@@ -41,7 +41,8 @@ public sealed class PluginService(
             p.Entry.Enabled, [.. p.Kinds], p.Entry.Source, ParseOptions(p.Entry.OptionsJson), p.Manifest.OptionsExample,
             SafeIcon(p.Manifest.Icon), PluginSpec.IsPath(p.Entry.Spec),
             Exists(p.Target) ? p.Manifest.NotPluginReason : $"{p.Target} is missing: install it again",
-            Dto(middlewareStates.GetValueOrDefault(p.Entry.Spec)), AgentOf(p, loadedAgents))).ToList();
+            Dto(middlewareStates.GetValueOrDefault(p.Entry.Spec)), AgentOf(p, loadedAgents),
+            !p.Manifest.HooksOnly ? null : PluginNotices.HooksUnsupported)).ToList();
         return new PluginsDto(rows, snapshot.Preferences.ToDictionary(), Dto(bun.Status), catalog.Off);
     }
 
