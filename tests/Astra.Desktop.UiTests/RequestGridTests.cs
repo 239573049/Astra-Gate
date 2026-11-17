@@ -96,7 +96,7 @@ public class RequestGridTests
     {
         var (grid, window) = Open([new RequestRowViewModel(Row("a", "2026-10-26T11:00:00Z", 30))], width: 900);
         var row = BodyRows(grid)[0];
-        Assert.Equal(1352, row.Bounds.Width, 1); // 92+320+72+110+130+104+88+92+116+136+92
+        Assert.Equal(1444, row.Bounds.Width, 1); // 92+320+72+110+130+104+88+92+116+136+92, + the context column (92)
         window.Close();
     }
 
