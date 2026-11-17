@@ -99,6 +99,25 @@ internal static class PricingUi
         return box;
     }
 
+    /// <summary>
+    /// A unit-price box (the web's <c>PriceInput</c>): <paramref name="usd"/> is the stored USD price and <paramref name="changed"/> gets USD,
+    /// but in another display currency the box shows and takes that currency (<see cref="PriceCurrency"/>) and its tooltip carries the USD value.
+    /// </summary>
+    public static NumberBox Price(decimal? usd, Action<decimal?>? changed, double? width = null, string? name = null, decimal? minimum = null, bool visibleLabel = false)
+    {
+        var currency = Astra.Desktop.Core.Currency.DisplayMoney.Current;
+        var box = Number(Astra.Desktop.Core.Pricing.PriceCurrency.ToInput(usd, currency), null, width, currency.IsUsd ? name : name is null ? currency.Code : $"{name} ({currency.Code})", false, minimum, visibleLabel);
+        void Tip(decimal? value) => ToolTip.SetTip(box, currency.IsUsd || value is not > 0 ? null : Astra.Desktop.Core.Pricing.PriceCurrency.Equivalent(value, currency));
+        Tip(usd);
+        box.ValueEdited += (_, v) =>
+        {
+            var converted = Astra.Desktop.Core.Pricing.PriceCurrency.ToUsd(v, currency);
+            Tip(converted);
+            changed?.Invoke(converted);
+        };
+        return box;
+    }
+
     /// <summary>A choice field (web <c>Select</c>) over <paramref name="options"/> with <paramref name="value"/> selected.</summary>
     public static Select Choice(IEnumerable<SelectOption> options, string? value, Action<string>? changed, double? width = null, string? placeholder = null, string? name = null)
     {

@@ -298,6 +298,7 @@ internal static class Messages
         "pricing.remove",
         "pricing.mode.form",
         "pricing.unit",
+        "pricing.unitIn",
         "pricing.base",
         "pricing.perRequest",
         "pricing.notes",
@@ -3968,6 +3969,7 @@ internal static class Messages
             case "pricing.remove": return "移除价格";
             case "pricing.mode.form": return "表单";
             case "pricing.unit": return "USD / 百万 tokens";
+            case "pricing.unitIn": return "{code} / 百万 tokens";
             case "pricing.base": return "基础价格";
             case "pricing.perRequest": return "每次请求";
             case "pricing.notes": return "备注";
@@ -7640,6 +7642,7 @@ internal static class Messages
             case "pricing.remove": return "Remove pricing";
             case "pricing.mode.form": return "Form";
             case "pricing.unit": return "USD / 1M tokens";
+            case "pricing.unitIn": return "{code} / 1M tokens";
             case "pricing.base": return "Base prices";
             case "pricing.perRequest": return "Per request";
             case "pricing.notes": return "Notes";
