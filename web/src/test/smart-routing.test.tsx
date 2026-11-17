@@ -14,6 +14,7 @@ const spies = vi.hoisted(() => ({
   test: vi.fn(),
   data: undefined as unknown,
   models: [] as unknown[],
+  groups: [] as unknown[],
 }));
 
 vi.mock('../api/hooks', () => ({
@@ -21,6 +22,7 @@ vi.mock('../api/hooks', () => ({
   useUpdateSmartRouting: () => ({ mutate: spies.update, isPending: false }),
   useTestSmartRouting: () => ({ mutate: spies.test, isPending: false }),
   useRoutingModels: () => ({ data: spies.models }),
+  useRoutingGroups: () => ({ data: spies.groups }),
 }));
 
 // The brand marks behind the icons module do not load in jsdom; only the client names are needed here.
@@ -104,6 +106,7 @@ beforeEach(() => {
     { id: 'mid-model', name: 'Mid', providerId: 'p1', providerName: 'Models provider' },
     { id: 'big-model', name: 'Big', providerId: 'p1', providerName: 'Models provider' },
   ];
+  spies.groups = [];
   spies.data = saved();
 });
 afterEach(cleanup);
@@ -350,6 +353,21 @@ describe('smart routing settings', () => {
 
     fireEvent.click(saveButton());
     expect(sent().grades?.[0]).toMatchObject({ model: 'small-model', providerId: 'p2' });
+  });
+
+  it('offers an enabled routing group as a grade target, saved as group/<slug> with no provider', async () => {
+    spies.groups = [
+      { id: 'g1', slug: 'fast', modelId: 'group/fast', name: 'Fast pool', enabled: true, members: [] },
+      { id: 'g2', slug: 'off', modelId: 'group/off', name: 'Switched off', enabled: false, members: [] },
+    ];
+    show();
+
+    fireEvent.pointerDown(screen.getAllByRole('combobox', { name: t('smartRouting.grade.model') })[0]!, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    expect(screen.queryByRole('option', { name: t('smartRouting.grade.groupOption', { name: 'Switched off' }) })).toBeNull();
+    fireEvent.click(await screen.findByRole('option', { name: t('smartRouting.grade.groupOption', { name: 'Fast pool' }) }));
+
+    fireEvent.click(saveButton());
+    expect(sent().grades?.[0]).toMatchObject({ model: 'group/fast', providerId: null });
   });
 
   it('points to Providers when no model can be chosen yet', () => {

@@ -349,6 +349,10 @@ internal sealed class GradesSection : FormSection
         {
             if (e.PropertyName == "Data" && TopLevel.GetTopLevel(this) is not null) Build();
         };
+        api.Groups.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == "Data" && TopLevel.GetTopLevel(this) is not null) Build();
+        };
     }
 
     public override void Build()
@@ -358,7 +362,7 @@ internal sealed class GradesSection : FormSection
         Group.Rows.Clear();
 
         var served = _api.Models.Data ?? [];
-        var choices = RoutingModels.Choices(served);
+        var choices = RoutingModels.Choices(served, _api.Groups.Data);
         var grades = Draft.Grades;
         for (var i = 0; i < grades.Count; i++) Group.Rows.Add(GradeRow(i, grades[i], choices));
         if (_api.Models.Data is { Count: 0 })

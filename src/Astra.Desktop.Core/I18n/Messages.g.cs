@@ -3633,6 +3633,7 @@ internal static class Messages
         "smartRouting.grade.descriptionPlaceholder",
         "smartRouting.grade.model",
         "smartRouting.grade.pickModel",
+        "smartRouting.grade.groupOption",
         "smartRouting.grade.unavailable",
         "smartRouting.grade.up",
         "smartRouting.grade.down",
@@ -7305,6 +7306,7 @@ internal static class Messages
             case "smartRouting.grade.descriptionPlaceholder": return "用英文写这一档适合的任务（判定模型读的就是这段话）";
             case "smartRouting.grade.model": return "模型";
             case "smartRouting.grade.pickModel": return "选择模型";
+            case "smartRouting.grade.groupOption": return "路由组 · {name}";
             case "smartRouting.grade.unavailable": return "{model}（选中的提供商现在不提供，请重新选择）";
             case "smartRouting.grade.up": return "上移";
             case "smartRouting.grade.down": return "下移";
@@ -10979,6 +10981,7 @@ internal static class Messages
             case "smartRouting.grade.descriptionPlaceholder": return "Describe the kind of request that belongs to this grade (the judge reads this)";
             case "smartRouting.grade.model": return "Model";
             case "smartRouting.grade.pickModel": return "Choose a model";
+            case "smartRouting.grade.groupOption": return "Routing group · {name}";
             case "smartRouting.grade.unavailable": return "{model} (the chosen provider does not serve it now — choose again)";
             case "smartRouting.grade.up": return "Move up";
             case "smartRouting.grade.down": return "Move down";

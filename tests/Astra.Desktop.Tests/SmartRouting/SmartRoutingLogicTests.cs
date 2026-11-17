@@ -188,6 +188,27 @@ public sealed class SmartRoutingLogicTests : IDisposable
     }
 
     [Fact]
+    public void Enabled_routing_groups_are_choices_with_no_provider()
+    {
+        var served = new List<RoutingModelDto> { new("sonnet", "sonnet", "anthropic", "Anthropic") };
+        var groups = new List<RoutingGroupDto>
+        {
+            new("g1", "fast", "group/fast", "Fast pool", "smart", "off", true, true, [], default, default),
+            new("g2", "off", "group/off", "Off", "smart", "off", false, true, [], default, default),
+        };
+        var choices = RoutingModels.Choices(served, groups);
+        Assert.Equal(2, choices.Count);
+        Assert.Equal("\ngroup/fast", choices[1].Value);
+        Assert.Equal(Loc.T("smartRouting.grade.groupOption", ("name", "Fast pool")), choices[1].Label);
+        Assert.Equal("group/fast", choices[1].Detail);
+        var d = SmartRoutingDraft.Of(Saved());
+        d.ChooseModel(0, choices[1].Value);
+        Assert.Equal(("group/fast", (string?)null), (d.Grades[0].Model, d.Grades[0].ProviderId));
+        // a saved grade naming the group is found among the choices, so it is not "unavailable"
+        Assert.Single(RoutingModels.OptionsFor(choices.Skip(1).ToList(), new GradeDraft { Id = "x", Model = "group/fast" }));
+    }
+
+    [Fact]
     public void A_model_no_provider_serves_any_more_leads_the_list_as_unavailable()
     {
         var choices = RoutingModels.Choices([new RoutingModelDto("a", "a", "p", "P")]);
