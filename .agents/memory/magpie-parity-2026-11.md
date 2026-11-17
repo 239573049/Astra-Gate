@@ -23,3 +23,13 @@ Scope decisions taken with the user:
 **Why:** the user wants parity with magpie as a product decision; the deferrals above were explicit choices.
 **How to apply:** don't add an FX feed or a NER model without asking again; treat magpie's source as the reference
 for agent config formats (MIT), but verify against each agent's own docs where possible.
+
+## Outcome (2026-11-16, integrated on `feat/magpie-parity`, not pushed)
+All 13 areas merged; migrations 0026 (request context), 0027 (routing groups), 0028 (library resources).
+Built-in clients went 28 → 75 (47 added). Left out with reasons in the client batch memories: Claude Science, Devin,
+Cursor CLI, Cursor Private Inference, Kiro Crew, NewMax, Alma, Shelley, Lody, Cindy, AionUi, Cherry Studio, Avibe, Kun,
+OpenHanako (live API / deep link / sealed store / SQLite only).
+Still open, needing the user: magpie's MCP router (running stdio MCP servers locally contradicts linked update 25);
+the Claude bridge runs `claude -p` (stream-json), not magpie's default interactive pty/TUI mode; the local NER model.
+Nothing was verified against real third-party clients, a real `claude` subscription, AWS/GCP, S3/GitHub/WebDAV or
+Windows — all tests use fakes. Website docs (astra-gate-web) for every area are not written yet.
