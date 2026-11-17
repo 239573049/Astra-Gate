@@ -37,6 +37,15 @@ public interface IPluginV2Services
     /// <summary>A line of a plugin's log (rate limited by the caller).</summary>
     void Log(string pluginId, string level, string message);
 
+    /// <summary>
+    /// The time zone Astra counts usage in (its "usage time zone" setting): <c>env.timeZone</c> / <c>env.utcOffsetMinutes</c>, so a
+    /// plugin's "today" and "this month" match the console's (the sandbox's own <c>Date</c> runs in UTC). UTC on a host without one.
+    /// </summary>
+    TimeZoneInfo UsageZone => TimeZoneInfo.Utc;
+
+    /// <summary>Astra's interface language (<c>env.locale</c>): what a job or an event handler translates into, with no viewer to ask.</summary>
+    string Locale => "en";
+
     /// <summary>The provider accounts of v2 providers (2.1, design/plugin-v2 08 §2); null on a host that has none.</summary>
     IPluginProviderAccounts? ProviderAccounts => null;
 }

@@ -45,6 +45,12 @@ public sealed class AlertEngine(
 
     private sealed record CompiledRule(AlertRuleRecord Rule, AlertEventDescriptor Event, JsonObject Condition, HashSet<string>? Subjects);
 
+    /// <summary>
+    /// Raised when a rule notifies (firing, a repeat, or resolved), whether or not it has webhooks: the v2 plugins'
+    /// <c>alert.fired</c> event (design/plugin-v2 09 §4.1). Runs on the engine's reader; handlers must not block.
+    /// </summary>
+    public event Action<JsonObject>? Fired;
+
     public void Report(AlertSignal signal)
     {
         // Loaded rules and none for this subject type: nothing could fire.
@@ -224,6 +230,22 @@ public sealed class AlertEngine(
 
         var s = settings.Current;
         var message = AlertMessages.Format(s.Locale, rule.Event, notify, signal.SubjectName, evaluation.Observed, compiled.Condition);
+        if (Fired is { } fired)
+        {
+            try
+            {
+                fired(new JsonObject
+                {
+                    ["ruleId"] = rule.Id, ["rule"] = rule.Name, ["event"] = rule.Event, ["state"] = notify, ["repeat"] = repeat,
+                    ["subjectType"] = signal.SubjectType, ["subjectId"] = signal.SubjectId, ["subject"] = signal.SubjectName,
+                    ["message"] = message, ["at"] = now.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                });
+            }
+            catch (Exception e)
+            {
+                logger.LogDebug(e, "alert.fired listener failed");
+            }
+        }
         foreach (var webhookId in rule.WebhookIds)
         {
             var id = Ulid.NewUlid();

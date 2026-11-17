@@ -58,7 +58,9 @@
   const clientImpls = new Map();
   let plugin = null;
   let hooks = null;
-  let locale = 'en';
+  // the viewer's language while a view or command runs; null in a job or an event, which use Astra's own (env.locale)
+  let locale = null;
+  const currentLocale = () => locale || (hostSync('env') || {}).locale || 'en';
   let messages = null;
 
   const errorOf = (e) => {
@@ -154,7 +156,7 @@
     const ask = (effect) => hostCall('ui.ask', { session: op.session, effect });
     const ctx = {
       params: op.params || {}, client: op.client || {}, local: op.local || {}, session: op.session, query: op.query || {},
-      t: (key, params) => translate((op.client && op.client.locale) || locale, key, params),
+      t: (key, params) => translate((op.client && op.client.locale) || currentLocale(), key, params),
       toast: (o) => { effects.push({ type: 'toast', ...(typeof o === 'string' ? { message: o } : o) }); },
       navigate: (to) => { effects.push({ type: 'navigate', to }); },
       back: () => { effects.push({ type: 'back' }); },
@@ -282,12 +284,14 @@
         return r === undefined ? null : r;
       }
       case 'job': {
+        locale = null;
         const fn = jobs.get(op.id);
         if (!fn) throw new AstraError('not_found', 'no handler for job "' + op.id + '" (jobs.handle)');
         await fn({ scheduledAt: op.scheduledAt, attempt: op.attempt || 1 });
         return null;
       }
       case 'event': {
+        locale = null;
         const fns = listeners.get(op.name) || [];
         for (const fn of [...fns]) await fn(op.payload);
         return null;
@@ -386,7 +390,7 @@
 
   const internal = {
     context, hostCall, hostSync, AstraError, translate, format, b64, unb64, utf8, collectionOps, bytes: g,
-    commands, jobs, listeners, getLocale: () => locale, providers: providerImpls, clients: clientImpls,
+    commands, jobs, listeners, getLocale: currentLocale, providers: providerImpls, clients: clientImpls,
     // the in-sandbox test harness drives views and commands through the same operations the host does
     ...(context === 'test' ? { run, adopt, testHost } : {}),
   };

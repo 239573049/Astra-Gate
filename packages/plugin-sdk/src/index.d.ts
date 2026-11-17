@@ -32,7 +32,15 @@ export const AstraError: { new (code: string, message: string, details?: Json): 
 
 export const version: string;
 export const api: string;
-export const env: { astraVersion: string; api: string; ui: string; platform: string; plugin: { id: string; version: string }; dev: boolean };
+export const env: {
+  astraVersion: string; api: string; ui: string; platform: string; plugin: { id: string; version: string }; dev: boolean;
+  /** Astra's interface language ("zh", "en"): what t() uses in a job or an event handler, where there is no viewer. */
+  readonly locale: string;
+  /** Astra's usage time zone (IANA id, "UTC" when unset), the one the console counts days in; the sandbox's Date runs in UTC. */
+  readonly timeZone: string;
+  /** Its current offset from UTC in minutes (follows daylight saving): local "now" is Date.now() + utcOffsetMinutes * 60000. */
+  readonly utcOffsetMinutes: number;
+};
 /** Whether an extension point, namespace or permission is there (has('gateway.hooks@2'), has('net:https://x')). */
 export function has(what: string): boolean;
 
@@ -98,7 +106,14 @@ export const http: {
 };
 
 export const commands: { register(id: string, fn: (args: any, ctx: { client: Record<string, unknown> }) => unknown): Disposable; execute(id: string, args?: Json): Promise<Json> };
-export const events: { on(name: string, fn: (payload: any) => void | Promise<void>): Disposable; emit(name: string, payload?: Json): void };
+export const events: {
+  on(name: 'request.completed', fn: (payload: RequestRow) => void | Promise<void>): Disposable;
+  on(name: 'provider.changed', fn: (payload: ProviderChangedEvent) => void | Promise<void>): Disposable;
+  on(name: 'account.changed', fn: (payload: AccountChangedEvent) => void | Promise<void>): Disposable;
+  on(name: 'alert.fired', fn: (payload: AlertFiredEvent) => void | Promise<void>): Disposable;
+  on(name: string, fn: (payload: any) => void | Promise<void>): Disposable;
+  emit(name: string, payload?: Json): void;
+};
 export const jobs: { handle(id: string, fn: (ctx: { scheduledAt: string; attempt: number }) => void | Promise<void>): Disposable; runNow(id: string): Promise<void> };
 export const notifications: { send(o: string | { title: string; body?: string; tone?: Tone }): void };
 export const permissions: { has(p: string): boolean; request(p: string | string[]): Promise<boolean> };
@@ -150,8 +165,36 @@ export const timers: {
   setInterval(fn: (...a: any[]) => void, ms: number, ...args: any[]): number;
   clearInterval(id: number): void;
 };
+/** A request as plugins see it (data.requests.query rows, the request.completed payload): metadata only, never bodies or client IPs. */
+export interface RequestRow {
+  id: string; /** start time, ISO 8601 */ at: string; client: string | null; token: string | null; tokenId: string | null;
+  provider: string | null; providerId: string | null; protocol: string; /** the model the client asked for */ model: string | null;
+  stream: boolean; status: string; httpStatus: number | null; inputTokens: number; outputTokens: number; cacheReadTokens: number;
+  cacheWriteTokens: number; reasoningTokens: number; /** nanodollars (1e9 per USD) */ costNanoUsd: number; ttftMs: number | null; totalMs: number | null;
+}
+export interface RequestTotals { requests: number; costNanoUsd: number; inputTokens: number; outputTokens: number }
+export interface RequestStats extends RequestTotals {
+  success: number; cacheReadTokens: number; cacheWriteTokens: number;
+  /** groupBy day | hour: one per bucket that had requests ("2026-11-16" / "2026-11-16T09:00", UTC shifted by utcOffsetMinutes) */
+  series?: (RequestTotals & { bucket: string })[];
+  /** groupBy model | provider | client | token: most expensive first; model = the catalog model when linked, else the requested one */
+  groups?: (RequestTotals & { key: string | null; label: string | null })[];
+}
+/** provider.changed / account.changed / alert.fired payloads (design/plugin-v2 09 §4.1): a change means "re-read"; bursts arrive as one. */
+export interface ProviderChangedEvent { providerId: string; change: 'created' | 'updated' | 'deleted'; name?: string; enabled?: boolean }
+export interface AccountChangedEvent { accountId: string; change: 'created' | 'updated' | 'deleted'; providerId?: string; status?: string; enabled?: boolean; cooldownUntil?: string | null }
+export interface AlertFiredEvent {
+  ruleId: string; rule: string; event: string; state: 'firing' | 'resolved'; repeat: boolean;
+  subjectType: string; subjectId: string; subject: string; message: string; at: string;
+}
+
 export const data: {
-  requests: { query(o?: Record<string, Json>): Promise<{ total: number; items: Record<string, Json>[] }>; stats(o?: Record<string, Json>): Promise<Record<string, number>> };
+  requests: {
+    /** One request by `id`, or a page (newest first): from / to (ISO), model (contains), client, status, provider / token (ids), page, pageSize (≤ 200). */
+    query(o?: { id?: string; from?: string; to?: string; model?: string; client?: string; status?: string; provider?: string; token?: string; page?: number; pageSize?: number }): Promise<{ total: number; items: RequestRow[] }>;
+    /** Totals over from..to (default: the last day), optionally grouped. */
+    stats(o?: { from?: string; to?: string; client?: string; groupBy?: 'day' | 'hour' | 'model' | 'provider' | 'client' | 'token'; utcOffsetMinutes?: number }): Promise<RequestStats>;
+  };
   providers: { list(): Promise<Record<string, Json>[]> };
   models: { list(): Promise<Record<string, Json>[]> };
   tokens: { list(): Promise<Record<string, Json>[]> };

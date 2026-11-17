@@ -37,6 +37,21 @@ public sealed class ProviderRepository
         _modelLists = new RowCache<string, List<ProviderModelRow>>(factory);
     }
 
+    /// <summary>
+    /// Raised after a provider row was created, updated or deleted (<see cref="RowChanges"/>): the id and the kind of change.
+    /// A signal only (re-read the row); not raised for the sort order or the provider's models. Handlers run on the writer's
+    /// thread and must not block; one that throws is ignored (design/plugin-v2 09 §4.1).
+    /// </summary>
+    public event Action<string, string>? Changed;
+
+    private void Signal(string id, string change) => RowChanges.Raise(Changed, id, change);
+
+    private bool Signal(bool done, string id, string change)
+    {
+        if (done) Signal(id, change);
+        return done;
+    }
+
     // ----- providers -----
 
     /// <summary>All providers ordered by sort_order then name.</summary>
@@ -90,6 +105,7 @@ public sealed class ProviderRepository
             created_at = DateTimeOffsetHandler.ToStorage(provider.CreatedAt),
             updated_at = DateTimeOffsetHandler.ToStorage(provider.UpdatedAt),
         });
+        Signal(provider.Id, RowChanges.Created);
     }
 
     /// <summary>Full update of every column; stamps <c>UpdatedAt</c>. Returns false when the id is unknown.</summary>
@@ -97,7 +113,7 @@ public sealed class ProviderRepository
     {
         provider.UpdatedAt = DateTimeOffset.UtcNow;
         await using var conn = await _factory.OpenAsync(ct);
-        return await conn.ExecuteAsync(ProviderUpdateSql, new
+        return Signal(await conn.ExecuteAsync(ProviderUpdateSql, new
         {
             id = provider.Id,
             template_id = provider.TemplateId,
@@ -122,14 +138,14 @@ public sealed class ProviderRepository
             website = provider.Website,
             created_at = DateTimeOffsetHandler.ToStorage(provider.CreatedAt),
             updated_at = DateTimeOffsetHandler.ToStorage(provider.UpdatedAt),
-        }) > 0;
+        }) > 0, provider.Id, RowChanges.Updated);
     }
 
     /// <summary>Deletes the provider and (via cascade) its models and bindings. Returns false when absent.</summary>
     public async Task<bool> DeleteAsync(string id, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("DELETE FROM providers WHERE id = @id", new { id }) > 0;
+        return Signal(await conn.ExecuteAsync("DELETE FROM providers WHERE id = @id", new { id }) > 0, id, RowChanges.Deleted);
     }
 
     /// <summary>Creation/duplication and its initial models commit together.</summary>
@@ -188,16 +204,17 @@ public sealed class ProviderRepository
                 upstream_protocols_json = model.UpstreamProtocols is { Count: > 0 } ? Json.Serialize(model.UpstreamProtocols) : null,
             }, transaction: tx);
         await tx.CommitAsync(ct);
+        Signal(provider.Id, insert ? RowChanges.Created : RowChanges.Updated);
     }
 
     /// <summary>Checks bindings in the DELETE itself, so a concurrent bind cannot be silently cascaded away.</summary>
     public async Task<bool> DeleteIfUnboundAsync(string id, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        return await conn.ExecuteAsync("""
+        return Signal(await conn.ExecuteAsync("""
             DELETE FROM providers WHERE id = @id
             AND NOT EXISTS (SELECT 1 FROM client_bindings WHERE provider_id = @id)
-            """, new { id }) > 0;
+            """, new { id }) > 0, id, RowChanges.Deleted);
     }
 
     /// <summary>
@@ -207,14 +224,14 @@ public sealed class ProviderRepository
     public async Task<bool> UpdateQuotaAsync(string id, JsonObject? quota, DateTimeOffset checkedAtUtc, CancellationToken ct = default)
     {
         await using var conn = await _factory.OpenAsync(ct);
-        return await conn.ExecuteAsync(
+        return Signal(await conn.ExecuteAsync(
             "UPDATE providers SET quota_json = @quota_json, quota_checked_at_utc = @checked_at WHERE id = @id",
             new
             {
                 id,
                 quota_json = quota is null ? null : Json.Serialize(quota),
                 checked_at = DateTimeOffsetHandler.ToStorage(checkedAtUtc),
-            }) > 0;
+            }) > 0, id, RowChanges.Updated);
     }
 
     public async Task ReorderAsync(IReadOnlyList<string> ids, CancellationToken ct = default)

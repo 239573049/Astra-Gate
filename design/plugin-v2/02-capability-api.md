@@ -165,7 +165,7 @@ events.emit('hit', payload);                      // 自己的事件，全名是
 ```
 
 首批宿主事件：`request.completed`（元数据，不含正文）、`provider.changed`、`account.changed`、`settings.changed`、
-`plugin.configChanged`、`alert.fired`。事件是尽力投递、不保证顺序跨类型，处理函数受 `main` 的时限约束。
+`plugin.configChanged`、`alert.fired`（载荷见 09 §4.1）。事件是尽力投递、不保证顺序跨类型，处理函数受 `main` 的时限约束。
 
 ## 8. `jobs`
 
@@ -206,7 +206,7 @@ await jobs.runNow('sync');
 | 调用 | 权限 | 内容 |
 |---|---|---|
 | `data.requests.query({ from, to, filter, limit, cursor })` | `data.requests:read` | 请求元数据：时间、模型、状态、用量、耗时、客户端。不含正文、不含 IP |
-| `data.requests.stats({ from, to, groupBy })` | 同上 | 聚合 |
+| `data.requests.stats({ from, to, groupBy })` | 同上 | 聚合；`groupBy` 与行的形状见 09 §4.2 |
 | `data.providers.list()` | `data.providers:read` | id、名称、协议、状态；没有密钥 |
 | `data.models.list()` | `data.models:read` | 模型与价格 |
 | `data.tokens.list()` | `data.tokens:read` | id、名称、状态、掩码 |
@@ -221,7 +221,7 @@ await jobs.runNow('sync');
 | `t` / `i18n` | `t(key, params)`；`i18n.locale` |
 | `notifications` | `notifications.send({ title, body, tone })`：没有打开界面时也能到达（控制台通知、桌面系统通知） |
 | `crypto` / `encoding` | 摘要、HMAC、AES、RSA、ECDSA、PBKDF2、HKDF 和 base64 / hex 编码，见 §11.1；沙箱里没有 Web Crypto |
-| `env` | `{ platform, astraVersion, plugin: { id, version }, dev }` |
+| `env` | `{ platform, astraVersion, plugin: { id, version }, dev, locale, timeZone, utcOffsetMinutes }`：`locale` 是 Astra 的界面语言（任务、事件里没有观看者，`t()` 用它），`timeZone` / `utcOffsetMinutes` 是用量时区（沙箱的 `Date` 是 UTC）；后三项每次读取都是当前值（09 §4.3） |
 | `timers` | `setTimeout` / `setInterval`（只在 `main`，受最小间隔限制） |
 | `permissions` | `permissions.has(p)`、`permissions.request([…])`（运行时申请，01 §6） |
 | `ui.files` | `ui.files.read(ref)`：读用户通过 `pickFile` / `FileDrop` 交来的文件内容（04 §5） |

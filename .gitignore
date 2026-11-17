@@ -1,4 +1,6 @@
 bin/
+# the plugin SDK's CLI (astra-plugin) is source, not a build output
+!packages/plugin-sdk/bin/
 obj/
 node_modules/
 dist/

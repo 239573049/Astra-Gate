@@ -69,6 +69,9 @@ internal sealed class HostCalls(PluginV2Host host, IPluginV2Services services)
     public static readonly HashSet<string> GatewayCalls =
         ["env", "has", "config.get", "i18n.messages", "log", "ui.components", "permissions.has", "crypto.sha256", "crypto.uuid", "crypto.random", .. CryptoCalls.Names];
 
+    private static string ZoneId(TimeZoneInfo zone) =>
+        zone == TimeZoneInfo.Utc ? "UTC" : zone.HasIanaId ? zone.Id : TimeZoneInfo.TryConvertWindowsIdToIanaId(zone.Id, out var iana) ? iana : zone.Id;
+
     public HostCallResult Sync(PluginV2Instance p, string name, string? argsJson, bool gateway = false)
     {
         if (gateway && !GatewayCalls.Contains(name)) return HostCallResult.Fail("not_supported", $"{name} is not available in gateway hooks");
@@ -87,6 +90,9 @@ internal sealed class HostCalls(PluginV2Host host, IPluginV2Services services)
                     ["platform"] = OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsWindows() ? "windows" : "linux",
                     ["plugin"] = new JsonObject { ["id"] = p.Id, ["version"] = p.Manifest.Version },
                     ["dev"] = p.Dev,
+                    ["locale"] = services.Locale,
+                    ["timeZone"] = ZoneId(services.UsageZone),
+                    ["utcOffsetMinutes"] = (int)services.UsageZone.GetUtcOffset(DateTimeOffset.UtcNow).TotalMinutes,
                 });
             case "has":
                 return HostCallResult.Value(Has(p, Str(args) ?? ""));

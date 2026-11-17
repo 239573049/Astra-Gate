@@ -48,6 +48,19 @@ describe('astra-plugin', () => {
     expect(make({ framing: 'xml', output: 'gemini' }, withT).join()).toMatch(/reply\.framing[\s\S]*reply\.output/);
   });
 
+  it('validate knows which host events need a data permission', () => {
+    const make = (permissions: string[]) => {
+      const dir = temp();
+      fs.writeFileSync(path.join(dir, 'main.js'), "import { events } from 'astra'; events.on('request.completed', () => {}); events.on('settings.changed', () => {});");
+      fs.writeFileSync(path.join(dir, 'astra.plugin.json'), JSON.stringify({ manifestVersion: 2, id: 'acme.e', version: '1.0.0', name: 'x', main: 'main.js', permissions }));
+      return validate(dir) as { errors: string[]; warnings: string[] };
+    };
+    expect(make(['events']).errors.join()).toMatch(/data\.requests:read/);
+    const ok = make(['events', 'data.requests:read']);
+    expect(ok.errors).toEqual([]);
+    expect(ok.warnings.join()).not.toMatch(/data\.requests:read/);
+  });
+
   it('validate says what is wrong', () => {
     const dir = temp();
     fs.writeFileSync(path.join(dir, 'astra.plugin.json'), JSON.stringify({
