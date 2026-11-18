@@ -42,4 +42,36 @@ public class SqliteConnectionFactoryTests
         Assert.Equal(1L, await conn.ExecuteScalarAsync<long>("PRAGMA foreign_keys;"));
         Assert.Equal("wal", await conn.ExecuteScalarAsync<string>("PRAGMA journal_mode;"));
     }
+
+    [Fact]
+    public async Task A_probe_of_a_healthy_database_finds_nothing_and_a_reset_leaves_it_usable()
+    {
+        var factory = new SqliteConnectionFactory(TestDb.NewPaths(out _));
+        await using (var conn = await factory.OpenAsync())
+            await conn.ExecuteAsync("CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);");
+        Assert.Null(await factory.ProbeAsync());
+
+        SqliteConnectionFactory.ResetConnections();
+        Assert.Null(await factory.ProbeAsync());
+    }
+
+    [Fact]
+    public async Task A_probe_reports_a_sqlite_failure_instead_of_throwing()
+    {
+        var factory = new SqliteConnectionFactory(TestDb.NewPaths(out _)); // no settings table: SQLITE_ERROR
+        var failure = await factory.ProbeAsync();
+        Assert.NotNull(failure);
+        Assert.False(SqliteFailures.IsIoError(failure));
+    }
+
+    [Fact]
+    public void Disk_io_errors_are_recognised_by_their_primary_code_and_described_with_both_codes()
+    {
+        const int shmOpen = 10 | (15 << 8); // SQLITE_IOERR_SHMOPEN
+        var e = new SqliteException("disk I/O error", 10, shmOpen);
+        Assert.True(SqliteFailures.IsIoError(e));
+        Assert.Contains("10", SqliteFailures.Describe(e));
+        Assert.Contains(shmOpen.ToString(), SqliteFailures.Describe(e));
+        Assert.False(SqliteFailures.IsIoError(new SqliteException("busy", 5)));
+    }
 }

@@ -43,6 +43,12 @@ public sealed class ServerOptions
     /// </summary>
     [JsonIgnore] public string? UpdaterToken { get; set; }
 
+    /// <summary>ASTRA_UPDATER_TOKEN_FILE, when the token comes from a file (for the start-up log line; the token itself is never logged).</summary>
+    [JsonIgnore] public string? UpdaterTokenFile { get; private set; }
+
+    /// <summary>This start created <see cref="UpdaterTokenFile"/> (it did not exist yet).</summary>
+    [JsonIgnore] public bool UpdaterTokenFileCreated { get; private set; }
+
     /// <summary>ASTRA_HOST chose <see cref="Host"/>: config.json's host does not apply (containers).</summary>
     [JsonIgnore] public bool HostFromEnvironment { get; private set; }
 
@@ -106,9 +112,10 @@ public sealed class ServerOptions
     /// Applies the container-oriented environment overrides (precedence: config.json &lt; environment &lt; flags):
     /// ASTRA_HOST, ASTRA_PORT, ASTRA_PUBLIC_URL, ASTRA_STRICT_PORT, ASTRA_ADMIN_PASSWORD or ASTRA_ADMIN_PASSWORD_FILE,
     /// ASTRA_UPDATER_URL with ASTRA_UPDATER_TOKEN or ASTRA_UPDATER_TOKEN_FILE.
-    /// The password is hashed in memory only; it is never written to config.json.
+    /// The password is hashed in memory only; it is never written to config.json. Only the server creates the updater's token
+    /// file (<paramref name="createTokenFile"/>): a probe such as <c>healthcheck</c> must not race it into writing a second token.
     /// </summary>
-    public void ApplyEnvironment(Func<string, string?> get)
+    public void ApplyEnvironment(Func<string, string?> get, bool createTokenFile = true)
     {
         if (Nonblank(get("ASTRA_HOST")) is { } host)
         {
@@ -133,9 +140,16 @@ public sealed class ServerOptions
             if (!Uri.TryCreate(updater, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || uri.UserInfo.Length != 0)
                 throw new ArgumentException("ASTRA_UPDATER_URL must be an absolute http(s) URL without credentials");
             UpdaterUrl = updater.TrimEnd('/');
-            UpdaterToken = Nonblank(get("ASTRA_UPDATER_TOKEN"))
-                           ?? (Nonblank(get("ASTRA_UPDATER_TOKEN_FILE")) is { } tokenFile ? ReadOrCreateToken(tokenFile) : null)
-                           ?? throw new ArgumentException("ASTRA_UPDATER_URL needs ASTRA_UPDATER_TOKEN or ASTRA_UPDATER_TOKEN_FILE");
+            UpdaterTokenFile = Nonblank(get("ASTRA_UPDATER_TOKEN_FILE"));
+            if (Nonblank(get("ASTRA_UPDATER_TOKEN")) is { } token) UpdaterToken = token;
+            else if (UpdaterTokenFile is null)
+                throw new ArgumentException("ASTRA_UPDATER_URL needs ASTRA_UPDATER_TOKEN or ASTRA_UPDATER_TOKEN_FILE");
+            else if (createTokenFile)
+            {
+                UpdaterToken = ReadOrCreateToken(UpdaterTokenFile, out var created);
+                UpdaterTokenFileCreated = created;
+            }
+            else UpdaterToken = "";
         }
 
         var password = Nonblank(get("ASTRA_ADMIN_PASSWORD"));
@@ -159,17 +173,38 @@ public sealed class ServerOptions
 
     private static string? Nonblank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    /// <summary>The token in <paramref name="path"/>; a missing file gets a new random token (owner-only) first.</summary>
-    internal static string ReadOrCreateToken(string path)
+    /// <summary>
+    /// The token in <paramref name="path"/>; a missing or empty file gets a new random token (owner-only, created with that mode)
+    /// first. The file is created exclusively, so two processes starting together agree on one token: the one that loses the race
+    /// reads what the winner wrote.
+    /// </summary>
+    internal static string ReadOrCreateToken(string path, out bool created)
     {
+        created = false;
         try
         {
-            if (File.Exists(path) && Nonblank(File.ReadAllText(path)) is { } existing) return existing;
-            var token = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
             if (Path.GetDirectoryName(Path.GetFullPath(path)) is { } dir) Directory.CreateDirectory(dir);
-            File.WriteAllText(path, token);
-            AstraPaths.RestrictToOwner(path);
-            return token;
+            for (var attempt = 0; attempt < 50; attempt++)
+            {
+                if (File.Exists(path) && Nonblank(File.ReadAllText(path)) is { } existing) return existing;
+                var token = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+                try
+                {
+                    var options = new FileStreamOptions { Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.Read };
+                    if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                    using (var stream = new FileStream(path, options)) stream.Write(System.Text.Encoding.ASCII.GetBytes(token));
+                    created = true;
+                    return token;
+                }
+                catch (IOException) when (File.Exists(path))
+                {
+                    // Another process created it first and may not have written the token yet (or the file is empty and
+                    // gets replaced below): look again.
+                    if (new FileInfo(path).Length == 0 && attempt >= 5) File.Delete(path);
+                    Thread.Sleep(20);
+                }
+            }
+            throw new IOException("the token file never got a token");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

@@ -58,6 +58,68 @@ public class ServerOptionsEnvironmentTests
         }
     }
 
+    [Fact]
+    public void The_token_file_is_created_once_even_when_processes_start_together()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "astra-updater-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var file = Path.Combine(dir, "updater-token");
+            var results = Enumerable.Range(0, 16).AsParallel().WithDegreeOfParallelism(16)
+                .Select(_ => (Token: ServerOptions.ReadOrCreateToken(file, out var created), Created: created)).ToList();
+            Assert.Single(results.Select(r => r.Token).Distinct());
+            Assert.Equal(1, results.Count(r => r.Created));
+            Assert.Equal(File.ReadAllText(file), results[0].Token);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void An_empty_token_file_gets_a_token()
+    {
+        var file = Path.Combine(Path.GetTempPath(), "astra-updater-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            File.WriteAllText(file, "");
+            var token = ServerOptions.ReadOrCreateToken(file, out var created);
+            Assert.Equal(64, token.Length);
+            Assert.Equal(token, File.ReadAllText(file));
+            Assert.True(created);
+        }
+        finally
+        {
+            File.Delete(file);
+        }
+    }
+
+    [Fact]
+    public void A_probe_does_not_create_the_token_file_and_the_server_says_which_one_it_used()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "astra-updater-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var env = new Dictionary<string, string?>
+            {
+                ["ASTRA_UPDATER_URL"] = "http://updater:8080",
+                ["ASTRA_UPDATER_TOKEN_FILE"] = Path.Combine(dir, "updater-token"),
+            };
+            new ServerOptions().ApplyEnvironment(k => env.GetValueOrDefault(k), createTokenFile: false);
+            Assert.False(Directory.Exists(dir));
+
+            var server = new ServerOptions();
+            server.ApplyEnvironment(k => env.GetValueOrDefault(k));
+            Assert.Equal(env["ASTRA_UPDATER_TOKEN_FILE"], server.UpdaterTokenFile);
+            Assert.True(server.UpdaterTokenFileCreated);
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, true);
+        }
+    }
+
     [Theory]
     [InlineData("updater:8080")]
     [InlineData("ftp://updater")]

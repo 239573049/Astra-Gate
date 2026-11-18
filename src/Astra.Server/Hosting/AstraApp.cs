@@ -304,6 +304,7 @@ public static class AstraApp
         builder.Services.AddSingleton<UpdateCheckService>();
         builder.Services.AddSingleton<ContainerUpdater>();
         builder.Services.AddHostedService<UpdateCheckWorker>();
+        builder.Services.AddHostedService<DatabaseWatchdog>();
         builder.Services.AddSingleton<RuntimeFile>();
         // Remote access (Cloudflare Tunnel): cloudflared, downloaded on first use, run and supervised as a child process.
         builder.Services.AddSingleton(sp => new Astra.Server.Tunnel.CloudflaredRuntime(paths,

@@ -95,6 +95,30 @@ public sealed class SqliteConnectionFactory
         return conn;
     }
 
+    /// <summary>
+    /// Reads one row through a pooled connection, the way every request does. Returns the failure instead of throwing, so
+    /// <c>DatabaseWatchdog</c> can tell a database the process can no longer use from one that is merely busy.
+    /// </summary>
+    public async Task<SqliteException?> ProbeAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await using var conn = await OpenAsync(ct);
+            await conn.ExecuteScalarAsync<long>("SELECT COUNT(*) FROM settings;");
+            return null;
+        }
+        catch (SqliteException e)
+        {
+            return e;
+        }
+    }
+
+    /// <summary>
+    /// Closes every idle pooled connection of this process, so the next open starts from the file again (a new handle, a
+    /// new mapping of the WAL index). A connection that is leased right now closes when its owner disposes it.
+    /// </summary>
+    public static void ResetConnections() => SqliteConnection.ClearAllPools();
+
     private void Changed() => Interlocked.Increment(ref _generation.Value);
 
     /// <summary>A connection that, when closed after changing rows, advances its factory's <see cref="Generation"/>.</summary>

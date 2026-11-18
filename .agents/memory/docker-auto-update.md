@@ -21,3 +21,12 @@ the same volume mounted read-only — Watchtower reads a token *file* only if it
 `internal/settings/flags.go`), else the path string becomes the token, hence `depends_on: service_healthy`. The image tag, not the
 channel setting, decides what is pulled (`latest` stable, `preview`). Verified only with a fake updater on TestServer and
 `docker compose config`; never run against a real Watchtower and registry.
+
+**2026-11-17 follow-up (0.14.3114):** 0.14.3113 never shipped (both macOS jobs died in `notarytool` on an Apple 500, so no npm, no image), so
+`ghcr.io/…/astra-gate:latest` stayed 0.14.3112, which ignores `ASTRA_UPDATER_*` — a test with the new compose and `latest` showed an
+`updater` that started fine and no `/data/updater-token`, with no error anywhere (reproduced with a throwaway container on the 0.14.3112
+image). Watchtower started without the file takes the *path string* as the token. Since then: the server prints a "Container updater: …,
+token file … (created|read)" line at start, `healthcheck` no longer creates the file (`ApplyEnvironment(…, createTokenFile: false)`) and
+`ReadOrCreateToken` creates it exclusively. Same release: `DatabaseWatchdog` probes SQLite every 30 s and, on SQLITE_IOERR (primary 10), logs
+both codes and clears the pools — a mitigation for a Docker report of repeated "disk I/O error" until restart whose root cause was never
+confirmed (no log of the extended code existed).

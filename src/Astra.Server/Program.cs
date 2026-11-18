@@ -127,6 +127,9 @@ public static class Program
             Console.Error.WriteLine($"Cannot listen on {options.Host}:{options.Port}: {ex.Message}");
             return 3;
         }
+        if (options.UpdaterUrl is not null)
+            Console.WriteLine($"Container updater: {options.UpdaterUrl}"
+                + (options.UpdaterTokenFile is { } tokenFile ? $", token file {tokenFile} ({(options.UpdaterTokenFileCreated ? "created" : "read")})" : ", token from ASTRA_UPDATER_TOKEN"));
         Console.WriteLine($"Astra {ServerOptions.Version} listening on http://{(options.Host.Contains(':') ? $"[{options.Host}]" : options.Host)}:{options.Port}");
         await app.WaitForShutdownAsync();
         return 0;
@@ -135,7 +138,7 @@ public static class Program
     private static async Task<int> HealthCheckAsync(AstraPaths paths, string[] args)
     {
         var options = ServerOptions.Load(paths);
-        options.ApplyEnvironment(Environment.GetEnvironmentVariable);
+        options.ApplyEnvironment(Environment.GetEnvironmentVariable, createTokenFile: false);
         options.ApplyArgs(args);
         try
         {

@@ -263,7 +263,12 @@ public sealed class SyncWorker(SyncService sync, SyncStateStore states, ILogger<
                 }
                 catch (Exception e) when (e is not OperationCanceledException)
                 {
-                    log.LogWarning("Sync failed: {Message}", e is AdminApiException ? e.Message : e.GetType().Name);
+                    log.LogWarning("Sync failed: {Message}", e switch
+                    {
+                        AdminApiException => e.Message,
+                        Microsoft.Data.Sqlite.SqliteException sqlite => Astra.Data.SqliteFailures.Describe(sqlite),
+                        _ => e.GetType().Name,
+                    });
                 }
             }
             while (await timer.WaitForNextTickAsync(stoppingToken));
