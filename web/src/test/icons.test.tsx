@@ -133,6 +133,7 @@ describe('client brand icons', () => {
     mothx: { brand: 'monogram', mark: 'monogram', badge: false },
     'penguin-harness': { brand: 'monogram', mark: 'monogram', badge: false },
     'antigravity-cli': { brand: 'antigravity', mark: 'color', badge: true },
+    antigravity: { brand: 'antigravity', mark: 'color', badge: false },
     dim: { brand: 'monogram', mark: 'monogram', badge: false },
     'command-code': { brand: 'commandcode', mark: 'mono', badge: false },
     fx: { brand: 'vercel', mark: 'mono', badge: true },

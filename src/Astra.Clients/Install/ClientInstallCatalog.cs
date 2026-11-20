@@ -96,6 +96,7 @@ public static class ClientInstallCatalog
         new(ClientKinds.MothX, ClientInstallMethod.Npm, "mothx", "mothx-installer", "https://github.com/oschina/mothx"),
         new(ClientKinds.PenguinHarness, ClientInstallMethod.Npm, "penguin", "@prismshadow/penguin-cli", "https://github.com/Prism-Shadow/penguin-harness"),
         new(ClientKinds.AntigravityCli, ClientInstallMethod.Manual, "agy", null, "https://antigravity.google/"),
+        new(ClientKinds.Antigravity, ClientInstallMethod.Manual, "antigravity", null, "https://antigravity.google/"),
         new(ClientKinds.Dim, ClientInstallMethod.Npm, "dima", "dimcode-alpha", "https://github.com/arcships/dim"),
         new(ClientKinds.CommandCode, ClientInstallMethod.Manual, "command-code", null, "https://commandcode.ai/"),
         new(ClientKinds.Fx, ClientInstallMethod.Manual, null, null, "https://fx.sh/"),

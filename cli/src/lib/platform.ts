@@ -81,6 +81,7 @@ export const CLIENT_KINDS = [
   'mothx',
   'penguin-harness',
   'antigravity-cli',
+  'antigravity',
   'dim',
   'command-code',
   'fx',

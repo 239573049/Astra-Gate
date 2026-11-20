@@ -66,7 +66,7 @@ public sealed class ClientAdapterRegistry
         new PiClientAdapter(env, store, PiFlavour.Mu),
         new MothXClientAdapter(env, store),
         new PenguinHarnessClientAdapter(env, store),
-        new AntigravityCliClientAdapter(env, store),
+        new AntigravityCliClientAdapter(env, store),        new AntigravityClientAdapter(env, store),
         new DimClientAdapter(env, store),
         new CommandCodeClientAdapter(env, store),
         new FxClientAdapter(env, store),

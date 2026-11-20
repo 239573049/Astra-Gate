@@ -1,0 +1,8 @@
+{
+  "theme": "dark",
+  "model": "astra/gpt-5",
+  "customModelsConfig": {
+    "customModels": {"mine/gem":{"apiProvider":"API_PROVIDER_GOOGLE_GEMINI","modelName":"gem"},"astra/gpt-5":{"apiProvider":"API_PROVIDER_GOOGLE_GEMINI","modelName":"gpt-5"},"astra/claude-sonnet-4-5":{"apiProvider":"API_PROVIDER_GOOGLE_GEMINI","modelName":"claude-sonnet-4-5"},"astra/deepseek-chat":{"apiProvider":"API_PROVIDER_GOOGLE_GEMINI","modelName":"deepseek-chat"}}
+  },
+  "modelProvider": "gemini"
+}

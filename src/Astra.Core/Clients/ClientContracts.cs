@@ -41,6 +41,7 @@ public static class ClientKinds
     public const string MothX = "mothx";
     public const string PenguinHarness = "penguin-harness";
     public const string AntigravityCli = "antigravity-cli";
+    public const string Antigravity = "antigravity";
     public const string Dim = "dim";
     public const string CommandCode = "command-code";
     public const string Fx = "fx";
@@ -84,7 +85,7 @@ public static class ClientKinds
         Codex, ClaudeCode, GeminiCli, OpenCode, ClaudeDesktop, GrokBuild, Pi, HermesAgent, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode,
         DeepSeekHarness, WorkBuddy, WorkBuddyAi, MuseCode, NextCoWork, Paseo, ZCode, TKCode,
-        OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
+        OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Antigravity, Dim, CommandCode, Fx, Goose,
         ZooCode, JetBrainsAir, AirIde, CopilotJetBrains, CodeBuddy, Qoder, QoderCn, T3Code, Pencil, OpenPencil, Raycast, Obsidian,
         Reasonix, Morph, Jcode, Vibe, Empryo, Nanobot, MiniQ, Paimon, Cline, GrokApp, AtomCode, Snow, Ante, CraftAgents, TuanjieCowork,
         LiveAgent, OpenMausBot, AstrBot, QwenPaw, OpenClaw, OpenBot,
@@ -101,7 +102,7 @@ public static class ClientKinds
         OpenCode, Pi, MiniMaxCode, CopilotCli, VsCodeCopilot,
         Crush, QwenCode, Droid, KimiCode, Zed, VsCodeInsiders, VsCodium, Omp, MiMoCode, DeepSeekHarness, WorkBuddy, WorkBuddyAi, NextCoWork,
         Paseo, ZCode, TKCode, MuseCode, Codex, GrokBuild, HermesAgent,
-        OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Dim, CommandCode, Fx, Goose,
+        OpenChamber, DevEcoCode, StepCode, Aside, OmO, PrimeAgent, Mu, MothX, PenguinHarness, AntigravityCli, Antigravity, Dim, CommandCode, Fx, Goose,
         ZooCode, JetBrainsAir, AirIde, CopilotJetBrains, CodeBuddy, Qoder, QoderCn, T3Code, Pencil, OpenPencil, Raycast, Obsidian,
         Reasonix, Morph, Jcode, Vibe, Empryo, Nanobot, MiniQ, Paimon, Cline, GrokApp, AtomCode, Snow, Ante, CraftAgents, TuanjieCowork,
         LiveAgent, OpenMausBot, AstrBot, QwenPaw, OpenClaw, OpenBot,
@@ -138,7 +139,7 @@ public static class ClientKinds
     {
         Codex or GrokBuild or MuseCode or PenguinHarness or Morph => ApiProtocol.OpenAIResponses,
         ClaudeCode or ClaudeDesktop or Paseo or T3Code or OpenMausBot => ApiProtocol.Anthropic,
-        GeminiCli or AntigravityCli => ApiProtocol.Gemini,
+        GeminiCli or AntigravityCli or Antigravity => ApiProtocol.Gemini,
         _ => ApiProtocol.OpenAIChat,
     };
 }

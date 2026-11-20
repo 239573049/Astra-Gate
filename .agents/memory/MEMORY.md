@@ -86,3 +86,4 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Direct credentials stay direct](direct-credentials-stay-direct.md) — callable imported tokens are sent as provided; renewal needs a renewal grant, and auth rejection follows the account-switch policy
 - [Client provider failover](client-provider-failover.md) — issue #28: bound providers fall back in binding order, global switch default on, on the web and Avalonia settings pages
 - [Display currency uses manual rates only](currency-manual-rates-only.md) — user decision 2026-11-16: rates are typed, Astra never fetches them; money stays USD underneath
+- [Antigravity desktop client](antigravity-desktop-client.md) — kind `antigravity`: shares the CLI engine; rc exports + settings.json keys; a signed-in app honouring settings.json is unverified

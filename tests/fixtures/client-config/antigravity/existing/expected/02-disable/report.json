@@ -1,0 +1,30 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.zshrc",
+      "keyPath": "antigravity",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/antigravity/settings.json",
+      "keyPath": "customModelsConfig.customModels",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/antigravity/settings.json",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.gemini/antigravity/settings.json",
+      "keyPath": "modelProvider",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

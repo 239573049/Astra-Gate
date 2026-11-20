@@ -114,7 +114,7 @@ const MODEL_LIST_CLIENTS: ReadonlySet<ClientKind> = new Set<ClientKind>([
   'opencode', 'pi', 'minimax-code', 'copilot-cli', 'vscode-copilot',
   'crush', 'qwen-code', 'droid', 'kimi-code', 'zed', 'vscode-insiders', 'vscodium', 'omp', 'mimo-code', 'deepseek-harness', 'workbuddy', 'workbuddy-ai', 'nextcowork',
   'paseo', 'zcode', 'tkcode', 'muse-code', 'codex', 'grok-build', 'hermes-agent',
-  'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'dim', 'command-code', 'fx', 'goose',
+  'openchamber', 'deveco-code', 'stepcode', 'aside', 'omo', 'prime-agent', 'mu', 'mothx', 'penguin-harness', 'antigravity-cli', 'antigravity', 'dim', 'command-code', 'fx', 'goose',
   'zoo-code', 'jetbrains-air', 'air-ide', 'copilot-jetbrains', 'codebuddy', 'qoder', 'qoder-cn', 't3code', 'pencil', 'openpencil', 'raycast', 'obsidian',
   'reasonix', 'morph', 'jcode', 'vibe', 'empryo', 'nanobot', 'miniq', 'paimon', 'cline', 'grok-app', 'atomcode', 'snow', 'ante', 'craft-agents', 'tuanjie-cowork',
   'liveagent', 'openmausbot', 'astrbot', 'qwenpaw', 'openclaw', 'openbot',

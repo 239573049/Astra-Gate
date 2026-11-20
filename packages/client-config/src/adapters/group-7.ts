@@ -1,6 +1,7 @@
 import type { IClientAdapter, IClientConfigStateStore } from '../contracts.js';
 import type { ClientEnvironment } from '../env.js';
 import { AntigravityCliClientAdapter } from './antigravity-cli.js';
+import { AntigravityClientAdapter } from './antigravity.js';
 import { CommandCodeClientAdapter } from './command-code.js';
 import { DimClientAdapter } from './dim.js';
 import { FxClientAdapter } from './fx.js';
@@ -23,6 +24,7 @@ export function group7(env: ClientEnvironment, store: IClientConfigStateStore): 
     new MothXClientAdapter(env, store),
     new PenguinHarnessClientAdapter(env, store),
     new AntigravityCliClientAdapter(env, store),
+    new AntigravityClientAdapter(env, store),
     new DimClientAdapter(env, store),
     new CommandCodeClientAdapter(env, store),
     new FxClientAdapter(env, store),

@@ -75,6 +75,7 @@ public static partial class RoutingTexts
         ["mothx"] = "MothX",
         ["penguin-harness"] = "PenguinHarness",
         ["antigravity-cli"] = "Antigravity CLI",
+        ["antigravity"] = "Antigravity",
         ["dim"] = "Dim",
         ["command-code"] = "Command Code",
         ["fx"] = "fx",

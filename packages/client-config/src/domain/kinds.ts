@@ -40,6 +40,7 @@ export const ClientKinds = {
   MothX: 'mothx',
   PenguinHarness: 'penguin-harness',
   AntigravityCli: 'antigravity-cli',
+  Antigravity: 'antigravity',
   Dim: 'dim',
   CommandCode: 'command-code',
   Fx: 'fx',
@@ -118,6 +119,7 @@ export const ALL_CLIENT_KINDS: readonly string[] = [
   ClientKinds.MothX,
   ClientKinds.PenguinHarness,
   ClientKinds.AntigravityCli,
+  ClientKinds.Antigravity,
   ClientKinds.Dim,
   ClientKinds.CommandCode,
   ClientKinds.Fx,
@@ -194,6 +196,7 @@ export const CLIENTS_WITH_MODEL_LIST: readonly string[] = [
   ClientKinds.MothX,
   ClientKinds.PenguinHarness,
   ClientKinds.AntigravityCli,
+  ClientKinds.Antigravity,
   ClientKinds.Dim,
   ClientKinds.CommandCode,
   ClientKinds.Fx,
@@ -250,6 +253,7 @@ export function protocolOf(kind: string): ApiProtocol {
       return 'anthropic';
     case ClientKinds.GeminiCli:
     case ClientKinds.AntigravityCli:
+    case ClientKinds.Antigravity:
       return 'gemini';
     default:
       return 'openai-chat';

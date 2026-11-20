@@ -48,6 +48,7 @@ const NAMES: Record<string, string> = {
   [ClientKinds.MothX]: 'MothX',
   [ClientKinds.PenguinHarness]: 'PenguinHarness',
   [ClientKinds.AntigravityCli]: 'Antigravity CLI',
+  [ClientKinds.Antigravity]: 'Antigravity',
   [ClientKinds.Dim]: 'Dim',
   [ClientKinds.CommandCode]: 'Command Code',
   [ClientKinds.Fx]: 'fx',

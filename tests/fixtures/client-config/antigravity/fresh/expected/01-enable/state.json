@@ -1,0 +1,30 @@
+[
+  {
+    "file": "$HOME/.gemini/antigravity/settings.json",
+    "keyPath": "customModelsConfig.customModels",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "{\"astra/gpt-5\":{\"apiProvider\":\"API_PROVIDER_GOOGLE_GEMINI\",\"modelName\":\"gpt-5\"},\"astra/claude-sonnet-4-5\":{\"apiProvider\":\"API_PROVIDER_GOOGLE_GEMINI\",\"modelName\":\"claude-sonnet-4-5\"},\"astra/deepseek-chat\":{\"apiProvider\":\"API_PROVIDER_GOOGLE_GEMINI\",\"modelName\":\"deepseek-chat\"}}"
+  },
+  {
+    "file": "$HOME/.gemini/antigravity/settings.json",
+    "keyPath": "model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"astra/gpt-5\""
+  },
+  {
+    "file": "$HOME/.gemini/antigravity/settings.json",
+    "keyPath": "modelProvider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"gemini\""
+  },
+  {
+    "file": "$HOME/.zshrc",
+    "keyPath": "antigravity",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"# Antigravity is routed through Astra. Turn the Antigravity client off in Astra to remove this block.\\nexport GOOGLE_GEMINI_BASE_URL=\\u0027https://astra.corp.com\\u0027\\nexport GEMINI_API_KEY=\\u0027sk-astra-enterprise-key\\u0027\""
+  }
+]
