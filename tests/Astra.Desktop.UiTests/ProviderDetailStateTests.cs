@@ -98,6 +98,38 @@ public class ProviderDetailStateTests
     }
 
     [AvaloniaFact]
+    public void The_remote_models_sheet_follows_an_upstream_list_that_changed_between_openings()
+    {
+        // Issue #48: fetch, the upstream's list changes, fetch again — the app died with "StackPanel already has a visual parent".
+        const string first = """[{"id":"gpt-5","displayName":null,"linkedSystemModelId":"gpt-5","alreadyAdded":false},{"id":"o3","displayName":null,"linkedSystemModelId":"o3","alreadyAdded":false}]""";
+        var (page, view, window) = Open("prov_openai", Scenes.Fixtures().Override("/api/providers/prov_openai/remote-models", first));
+        var sheet = view.ModelsTab!.RemoteSheet;
+        sheet.Show();
+        SceneCapture.Await(page.Context!.Queries.WhenIdleAsync(), TimeSpan.FromSeconds(10));
+        SceneCapture.Pump(3);
+        sheet.Tick("o3");
+        SceneCapture.Pump(2);
+        sheet.Close();
+        SceneCapture.Pump(3);
+
+        page.Api.RemoteModels.SetData([new("gpt-5", null, "gpt-5", true), new("o4-mini", null, null, false), new("gpt-5.1", null, null, false)]);
+        for (var i = 0; i < 2; i++)
+        {
+            sheet.Show();
+            SceneCapture.Pump(3);
+            sheet.Tick("o4-mini");
+            SceneCapture.Pump(3);
+            var boxes = ((Control)sheet.Content!).GetLogicalDescendants().OfType<TKCode.Arc.Checkbox>()
+                .Select(b => Avalonia.Automation.AutomationProperties.GetName(b)).ToList();
+            Assert.Equal(["o4-mini", "gpt-5.1"], boxes);
+            sheet.Close();
+            SceneCapture.Pump(3);
+        }
+        page.Deactivate();
+        window.Close();
+    }
+
+    [AvaloniaFact]
     public void A_sticky_bar_below_the_viewport_is_held_at_its_bottom_and_returns_when_scrolled_to()
     {
         var bar = new Border { Height = 30 };

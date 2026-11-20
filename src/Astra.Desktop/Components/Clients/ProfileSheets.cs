@@ -44,6 +44,9 @@ public static class ProfileSheets
         string? renaming = null; // the profile being renamed; null = saving a new one
         var busy = false;
         var nameBox = PdUi.TextBox("", v => name = v, name: Loc.T("profiles.name"), placeholder: Loc.T("profiles.name"));
+        // Built once: a control can have one visual parent, and Render() replaces the whole stack each time.
+        var save = ClientUi.Button(Loc.T("profiles.save"), null, ButtonVariant.Primary);
+        var entry = ClientUi.HRow(8, nameBox, save);
 
         async Task Run(Func<Task> action)
         {
@@ -60,6 +63,7 @@ public static class ProfileSheets
 
         void Render()
         {
+            (entry.Parent as Panel)?.Children.Remove(entry); // leave the previous stack before joining the new one
             var stack = new StackPanel { Spacing = 16 };
             if (query.IsLoading) stack.Children.Add(new LoadingState(3));
             if (query.IsError && !query.HasData) stack.Children.Add(ClientUi.Alert(AlertTone.Danger, Loc.T("common.error"), query.Error?.Message));
@@ -91,9 +95,8 @@ public static class ProfileSheets
                 }
                 stack.Children.Add(group);
             }
-            var save = ClientUi.Button(renaming is null ? Loc.T("profiles.save") : Loc.T("profiles.rename"), () => _ = Save(), ButtonVariant.Primary);
+            save.Content = renaming is null ? Loc.T("profiles.save") : Loc.T("profiles.rename");
             save.IsLoading = busy;
-            var entry = ClientUi.HRow(8, nameBox, save);
             stack.Children.Add(entry);
             body.Content = stack;
         }
@@ -129,6 +132,7 @@ public static class ProfileSheets
         }
 
         void OnChanged(object? s, PropertyChangedEventArgs e) => Avalonia.Threading.Dispatcher.UIThread.Post(Render);
+        save.Click += (_, _) => _ = Save();
         query.PropertyChanged += OnChanged;
         var token = query.Activate();
         Render();
