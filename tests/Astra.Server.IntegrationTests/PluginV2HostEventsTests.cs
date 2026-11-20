@@ -22,7 +22,10 @@ public class PluginV2HostEventsTests
         const names = ['provider.changed', 'account.changed', 'alert.fired'];
         export default definePlugin({
           activate() {
-            for (const n of names) events.on(n, async (e) => { const l = (await storage.get(n)) ?? []; l.push(e); await storage.set(n, l); });
+            // events arrive back to back and their async handlers interleave at each await: a read-append-write without a chain
+            // loses one of two events (0.14.3115's CI failure)
+            let chain = Promise.resolve();
+            for (const n of names) events.on(n, (e) => (chain = chain.then(async () => { const l = (await storage.get(n)) ?? []; l.push(e); await storage.set(n, l); })));
             commands.register('seen', async (a) => (await storage.get(a.name)) ?? []);
             commands.register('stats', (a) => data.requests.stats(a));
             commands.register('query', (a) => data.requests.query(a));
@@ -64,13 +67,15 @@ public class PluginV2HostEventsTests
     {
         // generous: under a loaded test run the debounce, the event and each command round trip are slow
         var deadline = DateTime.UtcNow.AddSeconds(30);
+        var count = 0;
         while (DateTime.UtcNow < deadline)
         {
             var seen = (await RunAsync(host, "seen", new { name })).AsArray();
-            if (seen.Count >= atLeast) return seen;
+            count = seen.Count;
+            if (count >= atLeast) return seen;
             await Task.Delay(50);
         }
-        throw new TimeoutException($"{name}: fewer than {atLeast} events arrived");
+        throw new TimeoutException($"{name}: {count} of {atLeast} events arrived");
     }
 
     [Fact]

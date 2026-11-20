@@ -51,6 +51,8 @@ jobs:
       - id: v
         run: |
           set -euo pipefail
+          # The image probes every 30 s, so the first probe lands half a minute in and one slow or failed probe on a loaded runner
+          # outlasts the 60 s wait below (0.14.3115): probe often here; it is still the image's own health check command.
           VER=$(node -p "require('./cli/package.json').version")
           echo "version=$VER" >> "$GITHUB_OUTPUT"
           # Fails for a version that is neither x.y.z nor x.y.z-preview.N.
@@ -700,7 +702,7 @@ jobs:
       - name: Smoke test
         run: |
           set -euo pipefail
-          docker run -d --name astra-smoke -p 17321:17321 -e ASTRA_ADMIN_PASSWORD=smoke-test-password astra-smoke:test
+          docker run -d --health-interval=5s --name astra-smoke -p 17321:17321 -e ASTRA_ADMIN_PASSWORD=smoke-test-password astra-smoke:test
           for i in $(seq 1 30); do
             status=$(docker inspect -f '{{.State.Health.Status}}' astra-smoke)
             [ "$status" = healthy ] && break
@@ -713,7 +715,7 @@ jobs:
           curl --fail --silent http://127.0.0.1:17321/ | grep -qi '<html'
           docker stop astra-smoke
           # The same image as the stateless relay: no volume and no password; its health check falls back to /readyz.
-          docker run -d --name astra-relay-smoke -p 17322:17321 astra-smoke:test relay --provider openai
+          docker run -d --health-interval=5s --name astra-relay-smoke -p 17322:17321 astra-smoke:test relay --provider openai
           for i in $(seq 1 30); do
             status=$(docker inspect -f '{{.State.Health.Status}}' astra-relay-smoke)
             [ "$status" = healthy ] && break
