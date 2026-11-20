@@ -4,6 +4,16 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.14.3116] - 2026-11-20
+
+### 新增
+
+- **Antigravity 桌面端客户端**：**客户端**页新增「Antigravity」（Google 的桌面 Agent 应用，与 Antigravity CLI 分开，两者可以同时启用）。启用后 Astra 会把它的 `~/.gemini/antigravity/settings.json` 里的 `modelProvider`、`model` 和自定义模型指向网关，并在 shell 配置文件（`~/.zshrc` 或 `~/.bashrc`）里加一段受管块，导出 `GOOGLE_GEMINI_BASE_URL` 和 `GEMINI_API_KEY`；关闭时恢复原值并移除这段。启用后需要完全退出并重新打开 Antigravity。启用期间它用 API Key 登录，不使用 Google 账号，同一份 shell 配置里的终端也会看到这两个变量（Gemini CLI 同样会走网关）。不支持 Windows。这是按它与 CLI 共用同一个引擎推断的接入方式，尚未在已登录的真实应用上验证，遇到问题请反馈。
+
+### 修复
+
+- **0.14.3115 的 Docker 镜像没有发布**：发布流程里镜像的启动检查等待时间过紧导致失败，npm 包和安装包不受影响。本版起 Docker 用户可以拉到新镜像。
+
 ## [0.14.3115] - 2026-11-20
 
 ### 新增
