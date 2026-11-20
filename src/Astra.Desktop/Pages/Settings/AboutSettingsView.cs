@@ -149,7 +149,8 @@ public sealed class AboutSettingsView : LiveView
         try
         {
             var outcome = await Context.Host.ApplyUpdateAsync();
-            Host.Success(UpdateLogic.ApplyToast(outcome).Text);
+            // The desktop's update card shows the progress and says "updated" / "restarting" itself.
+            if (!UpdateLogic.ApplyShownByHost(outcome, Context.Host.ShowsUpdateProgress)) Host.Success(UpdateLogic.ApplyToast(outcome).Text);
             if (UpdateLogic.ApplyRefreshes(outcome))
             {
                 Context.Queries.Invalidate("version");
@@ -158,7 +159,8 @@ public sealed class AboutSettingsView : LiveView
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            Host.Error(UiHost.ErrorText(e));
+            // The card shows the failure (with a retry) when the host has one.
+            if (!Context.Host.ShowsUpdateProgress) Host.Error(UiHost.ErrorText(e));
         }
         finally
         {

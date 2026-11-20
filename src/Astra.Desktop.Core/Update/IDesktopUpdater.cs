@@ -26,8 +26,9 @@ public interface IDesktopUpdater
     /// <summary>
     /// Downloads and verifies <paramref name="release"/>, then starts the hand-over that finishes once this process has exited. The caller
     /// quits the app right after; nothing of the installed app is touched before that. Throws <see cref="UpdateException"/> on failure.
+    /// <paramref name="progress"/> hears the download (<see cref="UpdateStage.Downloading"/>) and the checks after it (<see cref="UpdateStage.Verifying"/>).
     /// </summary>
-    Task ApplyAsync(DesktopRelease release, CancellationToken ct = default);
+    Task ApplyAsync(DesktopRelease release, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default);
 }
 
 /// <summary>A finished command: exit code and what it printed.</summary>
@@ -99,8 +100,10 @@ public static class DesktopPayload
     /// <summary>
     /// Streams <paramref name="release"/> to <paramref name="destination"/>, hashing as it goes; the file appears only when its size and sha256
     /// match the feed's, so a cut-off or altered download never lands. Throws <see cref="UpdateException"/> otherwise.
+    /// <paramref name="progress"/> hears the bytes as they arrive (the feed's size, else the response's length, as the total).
     /// </summary>
-    public static async Task DownloadAsync(HttpClient http, DesktopRelease release, string destination, Action<string>? log = null, CancellationToken ct = default)
+    public static async Task DownloadAsync(HttpClient http, DesktopRelease release, string destination, Action<string>? log = null,
+        IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
         var part = destination + ".part";
@@ -114,6 +117,8 @@ public static class DesktopPayload
             {
                 if (!response.IsSuccessStatusCode)
                     throw new UpdateException($"Downloading {release.FileName} failed: {(int)response.StatusCode} {response.ReasonPhrase}.");
+                long? size = release.Size > 0 ? release.Size : response.Content.Headers.ContentLength;
+                progress?.Report(new TransferProgress(0, size));
                 await using var body = await response.Content.ReadAsStreamAsync(ct);
                 await using var file = new FileStream(part, FileMode.Create, FileAccess.Write, FileShare.None, 1 << 16, useAsync: true);
                 using var sha = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
@@ -124,6 +129,7 @@ public static class DesktopPayload
                     sha.AppendData(buffer, 0, n);
                     await file.WriteAsync(buffer.AsMemory(0, n), ct);
                     total += n;
+                    progress?.Report(new TransferProgress(total, size));
                 }
                 actual = Convert.ToHexStringLower(sha.GetHashAndReset());
             }
@@ -179,6 +185,10 @@ public static class DesktopPayload
             return false;
         }
     }
+
+    /// <summary>Byte progress of <paramref name="release"/>'s download as <see cref="UpdateStage.Downloading"/> steps on <paramref name="progress"/>.</summary>
+    public static IProgress<TransferProgress>? Downloading(IProgress<UpdateProgress>? progress, DesktopRelease release)
+        => progress is null ? null : new ProgressSink<TransferProgress>(t => progress.Report(new UpdateProgress(UpdateStage.Downloading, release.Version, t.Received, t.Total)));
 
     internal static void TryDelete(string file)
     {

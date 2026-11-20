@@ -46,6 +46,13 @@ public sealed class UpdateCoordinatorOptions
 
     /// <summary>Log sink.</summary>
     public Action<string> Log { get; init; } = _ => { };
+
+    /// <summary>
+    /// Hears every step of an apply (<see cref="UpdateCoordinator.ApplyAsync"/>), on the thread the update runs on: the download at most every
+    /// <see cref="UpdateCoordinator.ProgressEvery"/> or per percent, then the stages, then <see cref="UpdateStage.Done"/> /
+    /// <see cref="UpdateStage.Relaunching"/> / <see cref="UpdateStage.Failed"/>.
+    /// </summary>
+    public Action<UpdateProgress>? Progress { get; init; }
 }
 
 /// <summary>
@@ -61,6 +68,13 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
     private Task<UpdateSummary>? _check;
     private ServerUpdateCheck? _pendingServer;
     private DesktopRelease? _pendingDesktop;
+    private long _lastReportAt;
+
+    /// <summary>The shortest gap between two download reports of the same percent.</summary>
+    public static readonly TimeSpan ProgressEvery = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>The last step an apply reported (<see cref="UpdateCoordinatorOptions.Progress"/>), or null before the first apply.</summary>
+    public UpdateProgress? Current { get; private set; }
 
     /// <summary>A check or an apply is running (the app must not restart under it).</summary>
     public bool IsBusy => _busy.CurrentCount == 0;
@@ -114,7 +128,7 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
         catch (Exception e) when (e is not OperationCanceledException)
         {
             o.Log($"update check failed: {e.Message}");
-            return new UpdateSummary($"Update check failed: {e.Message}", UpdateAction.None);
+            return new UpdateSummary($"Update check failed: {e.Message}", UpdateAction.None, Error: e.Message);
         }
     }
 
@@ -144,7 +158,7 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
         catch (Exception e) when (e is not OperationCanceledException)
         {
             o.Log($"update check failed: {e.Message}");
-            return new UpdateSummary($"Update check failed: {e.Message}", UpdateAction.None);
+            return new UpdateSummary($"Update check failed: {e.Message}", UpdateAction.None, Error: e.Message);
         }
     }
 
@@ -193,9 +207,15 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
         var running = _check;
         if (running is { IsCompleted: false }) await running;
         if (!await _busy.WaitAsync(0, ct)) throw new UpdateException("An update is already running.");
+        string? version = null;
         try
         {
-            return o.Track.UpdatesAsWholeApp() ? await ApplyAppAsync(ct) : await ApplyServerAsync(ct);
+            return o.Track.UpdatesAsWholeApp() ? await ApplyAppAsync(v => version = v, ct) : await ApplyServerAsync(v => version = v, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            Report(new UpdateProgress(UpdateStage.Failed, version, Error: e.Message));
+            throw;
         }
         finally
         {
@@ -203,14 +223,43 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
         }
     }
 
-    private async Task<UpdateApplyOutcome> ApplyAppAsync(CancellationToken ct)
+    /// <summary>
+    /// Passes a step on. Download ticks of the same stage are thinned to one per percent or per <see cref="ProgressEvery"/> (a 90 MB download
+    /// reads ~1,400 buffers); every other step, and the last byte, always goes through.
+    /// </summary>
+    private void Report(UpdateProgress p)
+    {
+        var now = Environment.TickCount64;
+        if (p.Stage == UpdateStage.Downloading && Current is { Stage: UpdateStage.Downloading } last && p.Received != p.Total)
+        {
+            var percentMoved = (int)((p.Fraction ?? 0) * 100) != (int)((last.Fraction ?? 0) * 100);
+            if (!percentMoved && now - _lastReportAt < ProgressEvery.TotalMilliseconds) return;
+        }
+        _lastReportAt = now;
+        Current = p;
+        try
+        {
+            o.Progress?.Invoke(p);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Whatever shows the progress must never fail the update itself.
+            o.Log($"update progress listener failed: {e.Message}");
+        }
+    }
+
+    private IProgress<UpdateProgress> Reporter => new ProgressSink<UpdateProgress>(Report);
+
+    private async Task<UpdateApplyOutcome> ApplyAppAsync(Action<string> target, CancellationToken ct)
     {
         if (_pendingDesktop is null) await CheckAppAsync(ct);
         if (_pendingDesktop is not { } release) return UpdateApplyOutcome.None;
         if (BlockedReason() is not null || o.Desktop is null) return UpdateApplyOutcome.Download;
+        target(release.Version);
+        Report(new UpdateProgress(UpdateStage.Preparing, release.Version));
         try
         {
-            await o.Desktop.ApplyAsync(release, ct);
+            await o.Desktop.ApplyAsync(release, Reporter, ct);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or HttpRequestException)
         {
@@ -219,13 +268,16 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
         }
         o.Log($"desktop update {o.AppVersion} -> {release.Version} staged; quitting to install");
         _pendingDesktop = null;
+        Report(new UpdateProgress(UpdateStage.Relaunching, release.Version));
         return UpdateApplyOutcome.Desktop;
     }
 
-    private async Task<UpdateApplyOutcome> ApplyServerAsync(CancellationToken ct)
+    private async Task<UpdateApplyOutcome> ApplyServerAsync(Action<string> target, CancellationToken ct)
     {
         if (_pendingServer is null) await CheckServerAsync(ct);
         if (_pendingServer is not { AvailableVersion: not null } pending) return UpdateApplyOutcome.None;
+        target(pending.AvailableVersion);
+        Report(new UpdateProgress(UpdateStage.Preparing, pending.AvailableVersion));
         var manifest = pending.Manifest
             ?? await UpdateFeed.FetchManifestAsync(o.Http, o.FeedUrl ?? UpdateFeed.DefaultFeedUrl, UpdateFeed.NormalizeChannel(pending.Channel), null, null, ct);
         var installed = InstallJson.Read(UpdateLayout.For(o.Paths).InstallFile);
@@ -241,10 +293,12 @@ public sealed class UpdateCoordinator(UpdateCoordinatorOptions o)
             Control = new ServiceManagerServerControl(o.Manager),
             PackageSource = o.PackageSource ?? new NpmRegistryPackageSource(o.Http),
             Log = o.Log,
+            Progress = Reporter,
         }, ct);
         o.Log($"server updated {result.From} -> {result.To}");
         _pendingServer = null;
         Last = null;
+        Report(new UpdateProgress(UpdateStage.Done, result.To));
         return UpdateApplyOutcome.Server;
     }
 

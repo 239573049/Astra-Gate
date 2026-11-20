@@ -121,6 +121,7 @@ public sealed class AppServices
             Track = track,
             Desktop = SelfUpdate.Create(track, Paths, http),
             Log = line => SelfUpdate.Log(Paths, line),
+            Progress = p => Host.RaiseUpdateProgress(p),
         });
     }
 }

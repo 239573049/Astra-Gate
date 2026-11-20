@@ -16,7 +16,7 @@ public sealed record LoginItemState(bool Supported, bool Enabled);
 /// <param name="Action">What the user can do right now.</param>
 /// <param name="Version">The version an update would bring (set whenever <paramref name="Action"/> is not None).</param>
 /// <param name="Notes">Its release notes, when known.</param>
-public sealed record UpdateSummary(string Message, UpdateAction Action, string? Version = null, string? Notes = null);
+public sealed record UpdateSummary(string Message, UpdateAction Action, string? Version = null, string? Notes = null, string? Error = null);
 
 /// <summary>What an update can do now. Electron's names; Avalonia tracks keep them (<c>DesktopDmg</c> = self-update of the .app).</summary>
 public enum UpdateAction { None, Server, DesktopDmg, DesktopNpm, DesktopDownload }
@@ -169,6 +169,12 @@ public interface IDesktopHost
 
     /// <summary>Applies the pending update.</summary>
     Task<UpdateApplyOutcome> ApplyUpdateAsync();
+
+    /// <summary>
+    /// The host shows an apply's progress and its end itself (the desktop's bottom-right update card), so a page that started the apply only
+    /// reports what the card does not cover; false = the page says how it went.
+    /// </summary>
+    bool ShowsUpdateProgress => false;
 
     /// <summary>Shows a native context menu; resolves with the chosen id, or null when dismissed.</summary>
     Task<string?> ShowContextMenuAsync(IReadOnlyList<ContextMenuItem> items);

@@ -138,6 +138,16 @@ public class UpdateLogicTests
     public void Apply_toast_per_outcome(UpdateApplyOutcome outcome, string key) => Assert.Equal(key, UpdateLogic.ApplyToast(outcome).Key);
 
     [Fact]
+    public void The_host_card_announces_only_an_installed_or_staged_update()
+    {
+        Assert.True(UpdateLogic.ApplyShownByHost(UpdateApplyOutcome.Server, hostShowsProgress: true));
+        Assert.True(UpdateLogic.ApplyShownByHost(UpdateApplyOutcome.Desktop, hostShowsProgress: true));
+        Assert.False(UpdateLogic.ApplyShownByHost(UpdateApplyOutcome.Download, hostShowsProgress: true));
+        Assert.False(UpdateLogic.ApplyShownByHost(UpdateApplyOutcome.None, hostShowsProgress: true));
+        Assert.False(UpdateLogic.ApplyShownByHost(UpdateApplyOutcome.Server, hostShowsProgress: false));
+    }
+
+    [Fact]
     public void Only_a_server_update_refreshes_version_and_status()
     {
         Assert.True(UpdateLogic.ApplyRefreshes(UpdateApplyOutcome.Server));

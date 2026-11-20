@@ -124,6 +124,11 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
     private IReadOnlyList<TrayMenuItem> _menu = [];
     private bool _updateAvailable;
     private bool _quitting;
+    // The bottom-right update card (reminder, check result, progress) and what it is about.
+    private readonly UpdateNotice _notice;
+    private UpdateSummary? _offer;
+    private bool _progressInBackground;
+    private bool _retryChecks;
 
     public TrayRuntime(Application app, IClassicDesktopStyleApplicationLifetime desktop, AppServices services, ShellViewModel shell, Func<Window> createMain)
     {
@@ -145,6 +150,8 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
             if (!visible) DispatcherTimer.RunOnce(RelieveMemory, ReliefDelay);
         };
         _view.ContentHeightChanged += Controller.Resize;
+        _notice = new UpdateNotice(() => _main is { IsVisible: true } main ? main : null);
+        _notice.Acted += OnNoticeAction;
         var feedback = new ArcFeedback(() => _popup);
         _presenter = TrayPanelPresenter.ForPopup(_view, _data, Controller, SystemClock.Instance, feedback,
             items => _popup.HoldOpenAsync(() => ContextMenus.ShowAsync(items, _view)), InterceptMenu);
@@ -218,6 +225,8 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
             _ = Controller.RefreshAsync();
         });
         Controller.StateChanged += s => Dispatcher.UIThread.Post(() => _ = MaybeMismatchDialogAsync(s));
+        // Whoever started an update (the card, Settings, the tray), its card shows how it goes.
+        _services.Host.UpdateProgressChanged += p => Dispatcher.UIThread.Post(() => OnUpdateProgress(p));
     }
 
     /// <summary>Started at login (<c>--hidden</c>): no window and, on macOS, no Dock icon — the app lives in the menu bar.</summary>
@@ -306,7 +315,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
             await Controller.RefreshAsync();
             // The host's answer names the version per install track (a packaged app's own); the server's status is the fallback.
             if (_updateAvailable && (summary.Version ?? status?.Available) is { Length: > 0 } version)
-                await MaybeRemindAsync(version, summary.Notes ?? status?.Notes);
+                MaybeRemind(summary with { Version = version, Notes = summary.Notes ?? status?.Notes });
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidOperationException or IOException or ApiException)
         {
@@ -314,78 +323,108 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         }
     }
 
-    private bool _reminding;
+    private static UpdateDialogLabels UpdateLabels() => UpdateDialogLabels.For(Loc.Language);
 
     /// <summary>
-    /// Tells the user about a pending update unless the circuit breaker says otherwise (<see cref="UpdateReminder"/>). Recorded BEFORE it is
-    /// shown, so a crash or force-quit mid-dialog still counts. A visible window gets a dialog; a tray-only app a quiet notification.
+    /// Tells the user about a pending update unless the circuit breaker says otherwise (<see cref="UpdateReminder"/>): the update card in the
+    /// bottom-right corner — of the main window when it is on screen, else of the screen. Recorded BEFORE it is shown, so a crash or force-quit
+    /// while it is up still counts. Not while another card (a check, a running update) is up or an update runs.
     /// </summary>
-    private async Task MaybeRemindAsync(string version, string? notes)
+    private void MaybeRemind(UpdateSummary offer)
     {
-        if (_reminding) return;
+        if (_notice.IsShown || _services.UpdateBusy || offer.Version is not { } version) return;
         var prefs = _services.Prefs;
         var now = DateTimeOffset.UtcNow;
         if (UpdateReminder.Decide(prefs.GetExtra(UpdateReminder.Key), version, now) is not null) return;
         prefs.SetExtra(UpdateReminder.Key, UpdateReminder.Record(prefs.GetExtra(UpdateReminder.Key), version, now));
-        var t = UpdateDialogLabels.For(Loc.Language);
-        if (_main?.IsVisible != true)
-        {
-            // The in-app notice (where it is used) opens the interactive check on click, like Electron's notification.
-            DesktopNotifier.Show(t.Message(version), t.NotificationBody, () => _ = InteractiveCheckAsync());
-            return;
-        }
-        _reminding = true;
-        try
-        {
-            var choice = await MessageBox.ShowAsync(MessageBoxKind.Info, t.Message(version), UpdateDialogLabels.Notes(notes), [t.Update, t.Later, t.Skip], 0, 1);
-            if (choice == 2)
-            {
-                prefs.SetExtra(UpdateReminder.Key, UpdateReminder.Skip(prefs.GetExtra(UpdateReminder.Key), version));
-                return;
-            }
-            if (choice != 0) return;
-            await ApplyWithDialogsAsync(t, announce: true);
-        }
-        finally
-        {
-            _reminding = false;
-        }
+        _offer = offer;
+        _notice.Show(UpdateCards.Available(UpdateLabels(), offer, reminder: true));
     }
 
-    private async Task ApplyWithDialogsAsync(UpdateDialogLabels t, bool announce)
-    {
-        try
-        {
-            var outcome = await _services.Host.ApplyUpdateAsync();
-            if (announce && outcome == UpdateApplyOutcome.Server) await MessageBox.ShowAsync(MessageBoxKind.Info, t.Updated, null, [t.Ok]);
-        }
-        catch (Exception e) when (e is UpdateException or HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
-        {
-            await MessageBox.ShowAsync(MessageBoxKind.Error, t.Failed, e.Message, [t.Ok]);
-        }
-    }
-
-    /// <summary>The tray's "Check for Updates…" (update.ts <c>checkInteractive</c>): the result in a box, with the action it allows.</summary>
+    /// <summary>The tray's "Check for Updates…" (update.ts <c>checkInteractive</c>): the card says it is checking, then what it found.</summary>
     private async Task InteractiveCheckAsync()
     {
-        var t = UpdateDialogLabels.For(Loc.Language);
+        var t = UpdateLabels();
+        // An update is already running: bring its card back instead of a check that would only say "already running".
+        if (_services.UpdateBusy && _services.Host.CurrentUpdateProgress is { IsFinished: false } running)
+        {
+            _progressInBackground = false;
+            _notice.Show(UpdateCards.Progress(t, running));
+            return;
+        }
+        _notice.Show(UpdateCards.Checking(t));
         var summary = await _services.Host.CheckForUpdateAsync();
         _updateAvailable = summary.Action != UpdateAction.None;
         _ = Controller.RefreshAsync();
-        var buttons = new List<string>();
-        string? action = summary.Action switch
+        // Closed while it checked, or replaced (an update started from Settings): leave it.
+        if (_notice.Model?.Kind != UpdateCardKind.Checking) return;
+        _retryChecks = summary.Error is not null;
+        if (summary.Action != UpdateAction.None) _offer = summary;
+        _notice.Show(UpdateCards.CheckResult(t, summary));
+    }
+
+    /// <summary>A step of a running update: its card, unless the user sent it to the background (it comes back when the update ends).</summary>
+    private void OnUpdateProgress(UpdateProgress p)
+    {
+        if (p.IsFinished) _progressInBackground = false;
+        else if (_progressInBackground) return;
+        if (p.Stage == UpdateStage.Failed) _retryChecks = false;
+        if (p.Stage is UpdateStage.Done or UpdateStage.Relaunching) _offer = null;
+        _notice.Show(UpdateCards.Progress(UpdateLabels(), p));
+    }
+
+    private void OnNoticeAction(UpdateCardAction action)
+    {
+        switch (action)
         {
-            UpdateAction.Server or UpdateAction.DesktopNpm => t.UpdateServer,
-            UpdateAction.DesktopDmg => t.Update,
-            UpdateAction.DesktopDownload => t.Download,
-            _ => null,
-        };
-        if (action is not null) buttons.Add(action);
-        buttons.Add(t.Ok);
-        var choice = await MessageBox.ShowAsync(MessageBoxKind.Info, t.CheckTitle, summary.Message, buttons, 0, buttons.Count - 1);
-        if (action is null || choice != 0) return;
-        if (summary.Action == UpdateAction.DesktopDownload) OpenUrl(UpdateFeed.DownloadPageUrl);
-        else await ApplyWithDialogsAsync(t, announce: false);
+            case UpdateCardAction.Update:
+                _ = ApplyFromCardAsync();
+                break;
+            case UpdateCardAction.Download:
+                _notice.Hide();
+                OpenUrl(UpdateFeed.DownloadPageUrl);
+                break;
+            case UpdateCardAction.Skip:
+                if (_offer?.Version is { } version)
+                    _services.Prefs.SetExtra(UpdateReminder.Key, UpdateReminder.Skip(_services.Prefs.GetExtra(UpdateReminder.Key), version));
+                _notice.Hide();
+                break;
+            case UpdateCardAction.Background:
+                _progressInBackground = true;
+                _notice.Hide();
+                break;
+            case UpdateCardAction.Retry:
+                if (_retryChecks) _ = InteractiveCheckAsync();
+                else _ = ApplyFromCardAsync();
+                break;
+            default:
+                _notice.Hide();
+                break;
+        }
+    }
+
+    /// <summary>
+    /// "Update now" / "Retry" on the card: the card turns into the progress at once, then follows the coordinator's steps
+    /// (<see cref="OnUpdateProgress"/>), which also say how it ended — failures included.
+    /// </summary>
+    private async Task ApplyFromCardAsync()
+    {
+        var t = UpdateLabels();
+        _progressInBackground = false;
+        _notice.Show(UpdateCards.Progress(t, new UpdateProgress(UpdateStage.Preparing, _offer?.Version)));
+        try
+        {
+            var outcome = await _services.Host.ApplyUpdateAsync();
+            // Server / Desktop: the coordinator's "updated" / "restarting" card is up. Download: the host opened the download page.
+            if (outcome == UpdateApplyOutcome.Download) _notice.Hide();
+            else if (outcome == UpdateApplyOutcome.None) _notice.Show(UpdateCards.CheckResult(t, new UpdateSummary(t.UpToDate, UpdateAction.None)));
+        }
+        catch (Exception e) when (e is UpdateException or HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
+        {
+            // A refusal before the update started ("already running") has no progress of its own: say so unless a running update's card is up.
+            if (_notice.Model is not { Kind: UpdateCardKind.Failed } && _services.Host.CurrentUpdateProgress is not { IsFinished: false })
+                _notice.Show(UpdateCards.Progress(t, new UpdateProgress(UpdateStage.Failed, _offer?.Version, Error: e.Message)));
+        }
     }
 
     private bool _mismatchShown;
@@ -457,6 +496,8 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         if (main.WindowState == WindowState.Minimized) main.WindowState = WindowState.Normal;
         main.Activate();
         if (OperatingSystem.IsMacOS()) MacApp.Activate();
+        // A card in the screen's corner moves into the window once it is laid out.
+        Dispatcher.UIThread.Post(_notice.Rehost, DispatcherPriority.Loaded);
         if (command is not null) _services.Host.RaiseMenuCommand(command);
     }
 
@@ -479,6 +520,8 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
             return;
         }
         main.Hide();
+        // A running update's card goes on in the screen's corner.
+        _notice.Rehost();
         EnterTray(ReliefDelay);
         // Restarted, so a second close counts from now.
         _relaunch.Stop();

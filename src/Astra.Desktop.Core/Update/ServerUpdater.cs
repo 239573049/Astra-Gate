@@ -45,6 +45,8 @@ public sealed class ServerUpdateOptions
     /// <summary>Retry despite the consecutive-failure lock.</summary>
     public bool Force { get; init; }
     public Action<string> Log { get; init; } = _ => { };
+    /// <summary>Hears each stage (download bytes, verify, install, restart); the caller reports the end (<see cref="UpdateStage.Done"/> / <see cref="UpdateStage.Failed"/>).</summary>
+    public IProgress<UpdateProgress>? Progress { get; init; }
     public Func<DateTimeOffset> Now { get; init; } = () => DateTimeOffset.UtcNow;
     /// <summary>How long a restarted server may take to answer before the update counts as failed.</summary>
     public TimeSpan RestartProbeTimeout { get; init; } = TimeSpan.FromSeconds(30);
@@ -95,9 +97,10 @@ public static class ServerUpdater
             SetState(UpdatePhase.Downloading, "downloading");
             var platformInfo = manifest.Platform(o.PlatformKey);
             var staged = await ServerStaging.StageAsync(o.PackageSource, layout.StagingDir, platformInfo?.Server ?? o.ServerPackage,
-                manifest.Version, platformInfo?.ServerSha256, o.IsWindows, o.Log, ct);
+                manifest.Version, platformInfo?.ServerSha256, o.IsWindows, o.Log, ct, o.Progress);
 
             SetState(UpdatePhase.Swapping, "swapping");
+            o.Progress?.Report(new UpdateProgress(UpdateStage.Installing, manifest.Version));
             var wasRunning = await o.Control.IsRunningAsync();
             backupPath = ServerSwap.BackupCurrentBinary(o.CurrentServerPath, layout.BackupsDir, o.CurrentVersion, o.IsWindows, now: o.Now);
             if (backupPath is not null) o.Log($"Backed up the current binary to {backupPath}");
@@ -107,6 +110,7 @@ public static class ServerUpdater
             swapped = true;
 
             SetState(UpdatePhase.Restarting, "restarting");
+            o.Progress?.Report(new UpdateProgress(UpdateStage.Restarting, manifest.Version));
             if (wasRunning)
             {
                 o.Log("Restarting the Astra server…");

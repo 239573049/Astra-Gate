@@ -130,6 +130,18 @@ public sealed class AvaloniaDesktopHost : IDesktopHost
         return outcome;
     }
 
+    /// <inheritdoc />
+    public bool ShowsUpdateProgress => UpdateProgressChanged is not null;
+
+    /// <summary>Each step of a running update (<see cref="UpdateCoordinatorOptions.Progress"/>), on the updating thread; the tray's update card listens.</summary>
+    public event Action<UpdateProgress>? UpdateProgressChanged;
+
+    /// <summary>The last step an apply reported, or null before one ran (a finished one stays: check <see cref="UpdateProgress.IsFinished"/>).</summary>
+    public UpdateProgress? CurrentUpdateProgress => _updates()?.Current;
+
+    /// <summary>Passes a step of the coordinator's apply on (<see cref="UpdateProgressChanged"/>).</summary>
+    internal void RaiseUpdateProgress(UpdateProgress progress) => UpdateProgressChanged?.Invoke(progress);
+
     /// <summary>A new app is staged and waits for this process to exit (nothing may restart it into the tray meanwhile).</summary>
     public bool UpdateStaged { get; private set; }
 

@@ -13,9 +13,11 @@ internal sealed class FakePackageSource(Func<string> binary, string? indexHtml =
     public int Fetches { get; private set; }
     public Exception? Fail { get; set; }
 
-    public Task FetchAsync(string package, string version, string packageRoot, CancellationToken ct)
+    public Task FetchAsync(string package, string version, string packageRoot, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         Fetches++;
+        progress?.Report(new TransferProgress(0, 10));
+        progress?.Report(new TransferProgress(10, 10));
         if (Fail is not null) throw Fail;
         var bin = Path.Combine(packageRoot, "bin");
         Directory.CreateDirectory(bin);
@@ -132,11 +134,11 @@ public class ServerStagingTests
     {
         using var t = new TempDir();
         using var evil = new HttpClient(new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(Tgz(("package/../../escape", "x"))) }));
-        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => new NpmRegistryPackageSource(evil).FetchAsync("@a/b", "1.0.0", Path.Combine(t.Path, "root"), default));
+        var e = await Assert.ThrowsAsync<InvalidOperationException>(() => new NpmRegistryPackageSource(evil).FetchAsync("@a/b", "1.0.0", Path.Combine(t.Path, "root"), null, default));
         Assert.Contains("outside its directory", e.Message);
         Assert.False(File.Exists(Path.Combine(t.Path, "escape")));
 
         using var missing = new HttpClient(new FakeHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound)));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new NpmRegistryPackageSource(missing).FetchAsync("@a/b", "1.0.0", Path.Combine(t.Path, "root"), default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new NpmRegistryPackageSource(missing).FetchAsync("@a/b", "1.0.0", Path.Combine(t.Path, "root"), null, default));
     }
 }

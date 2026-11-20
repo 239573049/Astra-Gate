@@ -61,7 +61,7 @@ public static class UpdateReminder
 }
 
 /// <summary>
-/// The texts of the update reminder and the tray's update / error dialogs. Electron writes them in the main process, outside the web catalog
+/// The texts of the update reminder, the bottom-right update card (<see cref="UpdateCards"/>) and the tray's error dialogs. Electron writes them in the main process, outside the web catalog
 /// (<c>reminderLabels</c> in updateReminder.ts; the <c>checkInteractive</c> and mismatch dialogs in update.ts / main.ts were English only),
 /// so like <see cref="TrayMenuLabels"/> they are zh / en pairs here, picked by the UI language.
 /// </summary>
@@ -82,7 +82,6 @@ public sealed class UpdateDialogLabels
     public string Update => T("立即更新", "Update Now");
     public string Later => T("稍后提醒", "Remind Me Later");
     public string Skip => T("跳过此版本", "Skip This Version");
-    public string NotificationBody => T("点击查看并更新", "Click to review and update");
     public string Updated => T("Astra 已更新", "Astra has been updated");
     public string Failed => T("更新失败", "Update failed");
     public string CheckTitle => T("检查更新", "Check for updates");
@@ -94,6 +93,25 @@ public sealed class UpdateDialogLabels
         ? $"正在运行的服务报告的 API 版本为“{apiVersion ?? "未知"}”，而此桌面应用需要 API 主版本 {expectedMajor}。\n\n请运行 \"astra update\" 更新服务，然后重启 Astra。"
         : $"The running server reports API version \"{apiVersion ?? "unknown"}\", but this desktop app expects API major version {expectedMajor}.\n\nRun \"astra update\" to update the server, then restart Astra.";
     public string FatalError(string message) => _zh ? $"严重错误：{message}" : $"Fatal error: {message}";
+
+    // The bottom-right update card (UpdateCards).
+    public string Checking => T("正在检查更新…", "Checking for updates…");
+    public string CheckFailed => T("检查更新失败", "Update check failed");
+    public string UpToDate => T("Astra 已是最新版本", "Astra is up to date");
+    public string Updating(string? version) => version is null ? T("正在更新 Astra", "Updating Astra") : _zh ? $"正在更新到 Astra {version}" : $"Updating to Astra {version}";
+    public string UpdatedTo(string? version) => version is null ? Updated : _zh ? $"已更新到 Astra {version}" : $"Updated to Astra {version}";
+    public string Preparing => T("正在准备…", "Preparing…");
+    public string Downloading => T("正在下载", "Downloading");
+    public string Verifying => T("正在校验安装包…", "Verifying the download…");
+    public string Installing => T("正在安装…", "Installing…");
+    public string Restarting => T("正在重启服务…", "Restarting the server…");
+    public string Relaunching => T("即将重启 Astra 以完成安装…", "Restarting Astra to finish the update…");
+    public string DoneDetail => T("服务已在新版本上运行。", "The server is running the new version.");
+    public string Background => T("后台进行", "Hide");
+    public string Retry => T("重试", "Retry");
+    public string Close => T("关闭", "Close");
+    public string DownloadHint => T("此副本无法自行更新，请从下载页安装新版本。", "This copy cannot update itself. Install the new version from the download page.");
+    public string NpmDesktopHint => T("桌面应用请运行 astra update --desktop 更新。", "Update the desktop app with `astra update --desktop`.");
 #pragma warning restore CS1591
 
     /// <summary>Release notes as the reminder dialog shows them: trimmed, cut at 600 characters with an ellipsis; null when empty.</summary>

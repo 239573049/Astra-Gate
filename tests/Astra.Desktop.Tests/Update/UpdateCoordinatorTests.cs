@@ -72,9 +72,15 @@ public sealed class UpdateCoordinatorTests : IDisposable
         public string Kind => "zip";
         public string? CannotSelfUpdateReason() => blocked;
 
-        public Task ApplyAsync(DesktopRelease release, CancellationToken ct = default)
+        public Exception? Fail { get; init; }
+
+        public Task ApplyAsync(DesktopRelease release, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default)
         {
             Applied.Add(release);
+            progress?.Report(new UpdateProgress(UpdateStage.Downloading, release.Version, 0, 2));
+            progress?.Report(new UpdateProgress(UpdateStage.Downloading, release.Version, 2, 2));
+            progress?.Report(new UpdateProgress(UpdateStage.Verifying, release.Version));
+            if (Fail is not null) throw Fail;
             return Task.CompletedTask;
         }
     }

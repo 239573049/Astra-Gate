@@ -146,10 +146,10 @@ public sealed class ServerUpdaterTests : IDisposable
 
     private sealed class RecordingSource(Action<string> record) : IServerPackageSource
     {
-        public Task FetchAsync(string package, string version, string packageRoot, CancellationToken ct)
+        public Task FetchAsync(string package, string version, string packageRoot, IProgress<TransferProgress>? progress, CancellationToken ct)
         {
             record(package);
-            return new FakePackageSource(() => ServerStagingTests.FakeBinary).FetchAsync(package, version, packageRoot, ct);
+            return new FakePackageSource(() => ServerStagingTests.FakeBinary).FetchAsync(package, version, packageRoot, progress, ct);
         }
     }
 

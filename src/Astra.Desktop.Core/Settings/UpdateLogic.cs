@@ -71,6 +71,13 @@ public static class UpdateLogic
         _ => new Msg("settings.upToDate"),
     };
 
+    /// <summary>
+    /// Whether the host's update card already announced how an apply ended (<see cref="IDesktopHost.ShowsUpdateProgress"/>): the server was
+    /// updated or the app restarts to install. The other outcomes (the download page, nothing newer) are still the page's toast.
+    /// </summary>
+    public static bool ApplyShownByHost(UpdateApplyOutcome outcome, bool hostShowsProgress)
+        => hostShowsProgress && outcome is UpdateApplyOutcome.Server or UpdateApplyOutcome.Desktop;
+
     /// <summary>Whether an apply refreshes the version and update status (the server was replaced).</summary>
     public static bool ApplyRefreshes(UpdateApplyOutcome outcome) => outcome == UpdateApplyOutcome.Server;
 

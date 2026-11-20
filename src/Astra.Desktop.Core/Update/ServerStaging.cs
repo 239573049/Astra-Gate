@@ -10,8 +10,11 @@ namespace Astra.Desktop.Core.Update;
 /// </summary>
 public interface IServerPackageSource
 {
-    /// <summary>Materialises package <paramref name="package"/>@<paramref name="version"/> into <paramref name="packageRoot"/> (so <c>bin/astra-server</c> ends up beneath it).</summary>
-    Task FetchAsync(string package, string version, string packageRoot, CancellationToken ct);
+    /// <summary>
+    /// Materialises package <paramref name="package"/>@<paramref name="version"/> into <paramref name="packageRoot"/> (so <c>bin/astra-server</c> ends up beneath it).
+    /// <paramref name="progress"/> hears the bytes downloaded, when the source downloads anything.
+    /// </summary>
+    Task FetchAsync(string package, string version, string packageRoot, IProgress<TransferProgress>? progress, CancellationToken ct);
 }
 
 /// <summary>
@@ -20,14 +23,16 @@ public interface IServerPackageSource
 /// </summary>
 public sealed class NpmRegistryPackageSource(HttpClient http, string registry = "https://registry.npmjs.org") : IServerPackageSource
 {
-    public async Task FetchAsync(string package, string version, string packageRoot, CancellationToken ct)
+    public async Task FetchAsync(string package, string version, string packageRoot, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var unscoped = package[(package.LastIndexOf('/') + 1)..];
         var url = $"{registry.TrimEnd('/')}/{package}/-/{unscoped}-{version}.tgz";
         using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Downloading {package}@{version} failed: {(int)response.StatusCode} {response.ReasonPhrase} for {url}.");
-        await using var body = await response.Content.ReadAsStreamAsync(ct);
+        var size = response.Content.Headers.ContentLength;
+        progress?.Report(new TransferProgress(0, size));
+        await using var body = new ProgressReadStream(await response.Content.ReadAsStreamAsync(ct), size, progress);
         await using var gzip = new GZipStream(body, CompressionMode.Decompress);
         await Extract(gzip, packageRoot, ct);
     }
@@ -73,7 +78,7 @@ public static class ServerStaging
     /// </summary>
     public static async Task<StagedServerBinary> StageAsync(
         IServerPackageSource source, string stagingDir, string serverPackage, string version, string? sha256, bool windows,
-        Action<string>? log = null, CancellationToken ct = default)
+        Action<string>? log = null, CancellationToken ct = default, IProgress<UpdateProgress>? progress = null)
     {
         DeleteDir(stagingDir);
         Directory.CreateDirectory(stagingDir);
@@ -82,7 +87,9 @@ public static class ServerStaging
         var packageRoot = Path.Combine([stagingDir, "node_modules", .. serverPackage.Split('/')]);
         try
         {
-            await source.FetchAsync(serverPackage, version, packageRoot, ct);
+            var bytes = progress is null ? null
+                : new ProgressSink<TransferProgress>(t => progress.Report(new UpdateProgress(UpdateStage.Downloading, version, t.Received, t.Total)));
+            await source.FetchAsync(serverPackage, version, packageRoot, bytes, ct);
         }
         catch
         {
@@ -99,6 +106,7 @@ public static class ServerStaging
         if (!string.IsNullOrEmpty(sha256))
         {
             log?.Invoke("Verifying checksum…");
+            progress?.Report(new UpdateProgress(UpdateStage.Verifying, version));
             var actual = await Sha256FileAsync(staged, ct);
             if (!string.Equals(actual, sha256, StringComparison.OrdinalIgnoreCase))
             {

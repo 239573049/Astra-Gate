@@ -28,12 +28,13 @@ public sealed class WindowsInstallerUpdater(string appDir, string stagingDir, Ht
         => File.Exists(Path.Combine(appDir, Uninstaller)) ? null : "it was not installed by the Astra installer";
 
     /// <inheritdoc />
-    public async Task ApplyAsync(DesktopRelease release, CancellationToken ct = default)
+    public async Task ApplyAsync(DesktopRelease release, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default)
     {
         if (CannotSelfUpdateReason() is { } reason) throw new UpdateException($"This copy of Astra cannot update itself: {reason}.");
         DesktopPayload.Clean(stagingDir);
         var installer = Path.Combine(stagingDir, release.FileName);
-        await DesktopPayload.DownloadAsync(http, release, installer, log, ct);
+        await DesktopPayload.DownloadAsync(http, release, installer, log, DesktopPayload.Downloading(progress, release), ct);
+        progress?.Report(new UpdateProgress(UpdateStage.Installing, release.Version));
         log?.Invoke($"Installing {release.Version} once Astra has quit.");
         processes.Start(PowerShell(), ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-EncodedCommand", Encode(HandOver(Environment.ProcessId, installer))]);
     }

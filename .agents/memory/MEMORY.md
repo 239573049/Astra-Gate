@@ -37,6 +37,7 @@ Format and rules: [README.md](README.md). Personal memory lives in `.next-cowork
 - [Client protocols left out on purpose](client-protocols-not-used.md) — Zed Anthropic, Hermes Responses, OpenCode Gemini, WorkBuddy Responses: why each stays translated
 - [Windows autostart uses the Run key](autostart-run-key-not-schtasks.md) — schtasks logon tasks need elevation; the server never loads/unloads its own entry
 - [Orphaned server after a failed update](orphaned-server-after-failed-update.md) — two servers on one data dir: UI shows the old one, the updater says up to date
+- [Desktop update card](desktop-update-card.md) — 2026-11-17: reminder, check result, progress and outcome are one bottom-right card (window overlay, else a corner window); labels in `UpdateDialogLabels`
 - [Avalonia updater was server-only](avalonia-updater-server-only.md) — packaged apps drifted behind their server; fixed 2026-10-30 with the track rule + app self-update (option B); 0.13.5 (stable) is the first self-update target, unverified on any OS
 - [Release channels decision](release-channels-decision.md) — preview is derived from the version, the preview feed merges in stable, the manifest goes up after npm
 - [Self-service shows the requested model](key-self-service-requested-model.md) — holders see their request log and per-requested-model stats; never provider, account or upstream model

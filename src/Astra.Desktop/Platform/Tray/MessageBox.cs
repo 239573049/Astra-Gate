@@ -16,8 +16,8 @@ namespace Astra.Desktop.Platform.Tray;
 internal enum MessageBoxKind { Info, Warning, Error }
 
 /// <summary>
-/// A small modal message box of its own window (Electron's <c>dialog.showMessageBox</c> without a parent): the tray's update reminder, the
-/// tray's check-for-updates result, the update-failed and API-mismatch warnings and tray action errors. Its own window, not a dialog in
+/// A small modal message box of its own window (Electron's <c>dialog.showMessageBox</c> without a parent): the API-mismatch warning and tray
+/// action errors (the update reminder, check result and progress are the bottom-right update card, <see cref="UpdateNotice"/>). Its own window, not a dialog in
 /// the main one, because a tray app often has no visible window (login start, closed to the tray) — exactly when these appear.
 /// Centered on the primary screen, always on top, out of the taskbar; Escape / Alt+F4 pick <c>cancelIndex</c>, Enter the default.
 /// Frameless like the tray panel: no OS title bar, a transparent window whose rounded card (the tray panel's surface and border tokens, a

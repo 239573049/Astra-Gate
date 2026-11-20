@@ -31,13 +31,14 @@ public sealed class AppImageUpdater(string? appImage, HttpClient http, IUpdatePr
     }
 
     /// <inheritdoc />
-    public async Task ApplyAsync(DesktopRelease release, CancellationToken ct = default)
+    public async Task ApplyAsync(DesktopRelease release, IProgress<UpdateProgress>? progress = null, CancellationToken ct = default)
     {
         if (CannotSelfUpdateReason() is { } reason) throw new UpdateException($"This copy of Astra cannot update itself: {reason}.");
         var target = appImage!;
         // Same folder, so the final step is a rename (atomic) and not a copy.
         var download = Path.Combine(Path.GetDirectoryName(target)!, $".{Path.GetFileName(target)}.update");
-        await DesktopPayload.DownloadAsync(http, release, download, log, ct);
+        await DesktopPayload.DownloadAsync(http, release, download, log, DesktopPayload.Downloading(progress, release), ct);
+        progress?.Report(new UpdateProgress(UpdateStage.Installing, release.Version));
         try
         {
             if (!OperatingSystem.IsWindows())
