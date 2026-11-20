@@ -244,7 +244,7 @@ internal sealed class AddProviderSheet : UserControl
                 return new RadioCardOption(x.Id, label, plan ?? string.Join(" · ", protocols.Select(ProviderProtocols.Short)))
                 {
                     Icon = BrandIcon.Provider(x.Name, x.Icon, 28),
-                    IsDisabled = added.Contains(x.Id),
+                    IsEnabled = !added.Contains(x.Id),
                     DisabledReason = Loc.T("providers.subscriptionAdded"),
                 };
             });

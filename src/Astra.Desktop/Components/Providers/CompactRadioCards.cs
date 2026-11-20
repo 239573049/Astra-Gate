@@ -69,12 +69,12 @@ internal sealed class CompactRadioCards : UserControl
         if (option.Icon is Control icon)
         {
             icon.VerticalAlignment = VerticalAlignment.Center;
-            if (option.IsDisabled) icon.Opacity = 0.45;
+            if (!option.IsEnabled) icon.Opacity = 0.45;
             row.Children.Add(icon);
         }
         Grid.SetColumn(body, 1);
         row.Children.Add(body);
-        if (option.IsDisabled) label.Token(TextBlock.ForegroundProperty, ArcDesignTokenKind.TextMuted);
+        if (!option.IsEnabled) label.Token(TextBlock.ForegroundProperty, ArcDesignTokenKind.TextMuted);
 
         // The 4 % control-color tint of a chosen tile, over the tile's surface (web color-mix(… 4%, var(--surface))).
         var tint = new Border { Opacity = 0.04, IsHitTestVisible = false };
@@ -83,23 +83,23 @@ internal sealed class CompactRadioCards : UserControl
         {
             Padding = new Thickness(10, 9, 12, 9),
             CornerRadius = new CornerRadius(12),
-            Focusable = !option.IsDisabled,
-            Cursor = new Cursor(option.IsDisabled ? StandardCursorType.No : StandardCursorType.Hand),
+            Focusable = option.IsEnabled,
+            Cursor = new Cursor(!option.IsEnabled ? StandardCursorType.No : StandardCursorType.Hand),
             Child = new Panel { Children = { tint, row } },
         };
         AutomationProperties.SetName(tile, option.Label?.ToString());
         AutomationProperties.SetControlTypeOverride(tile, AutomationControlType.RadioButton);
-        if (option.IsDisabled && option.DisabledReason is { } reason) ToolTip.SetTip(tile, reason);
+        if (!option.IsEnabled && option.DisabledReason is { } reason) ToolTip.SetTip(tile, reason);
         tile.PointerPressed += (_, e) =>
         {
-            if (option.IsDisabled || !e.GetCurrentPoint(tile).Properties.IsLeftButtonPressed) return;
+            if (!option.IsEnabled || !e.GetCurrentPoint(tile).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
             tile.Focus();
             SelectedValue = option.Value;
         };
         tile.KeyDown += (_, e) =>
         {
-            if (option.IsDisabled || e.Key is not (Key.Enter or Key.Space)) return;
+            if (!option.IsEnabled || e.Key is not (Key.Enter or Key.Space)) return;
             e.Handled = true;
             SelectedValue = option.Value;
         };
@@ -117,12 +117,12 @@ internal sealed class CompactRadioCards : UserControl
 
     private void PaintTile(RadioCardOption option, Border tile, Border tint)
     {
-        var chosen = !option.IsDisabled && Equals(option.Value, _selected);
+        var chosen = option.IsEnabled && Equals(option.Value, _selected);
         tint.IsVisible = chosen;
         // web: 1px var(--border); the moving ring (1.5px control color) over it when chosen; border-strong on hover; muted when disabled.
         tile.BorderThickness = new Thickness(chosen ? 1.5 : 1);
-        tile.Token(Border.BorderBrushProperty, chosen ? ArcDesignTokenKind.ControlOn : tile.IsPointerOver && !option.IsDisabled ? ArcDesignTokenKind.BorderStrong : ArcDesignTokenKind.Border);
-        tile.Token(Border.BackgroundProperty, option.IsDisabled ? ArcDesignTokenKind.SurfaceMuted : ArcDesignTokenKind.Surface);
+        tile.Token(Border.BorderBrushProperty, chosen ? ArcDesignTokenKind.ControlOn : tile.IsPointerOver && option.IsEnabled ? ArcDesignTokenKind.BorderStrong : ArcDesignTokenKind.Border);
+        tile.Token(Border.BackgroundProperty, !option.IsEnabled ? ArcDesignTokenKind.SurfaceMuted : ArcDesignTokenKind.Surface);
     }
 
     /// <summary>CSS <c>repeat(auto-fill, minmax(min(100%, W), 1fr))</c> with a gap: as many equal columns of at least W as fit.</summary>
