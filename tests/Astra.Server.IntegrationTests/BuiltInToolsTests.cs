@@ -185,7 +185,7 @@ public sealed class BuiltInToolsTests
     }
 
     [Fact]
-    public async Task web_fetch_over_mcp_refuses_private_addresses_as_a_tool_error()
+    public async Task Web_fetch_over_mcp_refuses_private_addresses_as_a_tool_error()
     {
         await using var f = await McpFixture.StartAsync();
         var (_, key) = await f.TokenForAsync("Fetcher", McpBuiltIn.Id);
@@ -221,7 +221,7 @@ public sealed class BuiltInToolsTests
     }
 
     [Fact]
-    public async Task generate_image_goes_through_the_images_route_as_the_given_token_and_comes_back_as_an_image()
+    public async Task Generate_image_goes_through_the_images_route_as_the_given_token_and_comes_back_as_an_image()
     {
         const string b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ";
         var big = string.Concat(Enumerable.Repeat(b64, 400)); // far over the 1 MiB-less default of a plain internal call? (kept small but > 16 KB)

@@ -1,0 +1,181 @@
+# Coding conventions for every editor and for the .NET build.
+#
+# The C# rules below describe the code as it is written today (measured over src/ and tests/ on
+# 2026-11-17: LF, no BOM, final newline, 4 spaces, file-scoped namespaces, `var`, `_camelCase`
+# private fields, PascalCase constants and static readonly fields). Rules at `warning` are
+# enforced by `dotnet build` (EnforceCodeStyleInBuild in Directory.Build.props; with
+# TreatWarningsAsErrors they fail the build), so only rules the whole tree already satisfies are
+# at `warning`. `suggestion` rules show in the IDE only. TypeScript formatting is Prettier's
+# (.prettierrc); this file only gives editors the same indentation and line endings.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+[*.md]
+# Two trailing spaces are a Markdown line break.
+trim_trailing_whitespace = false
+
+[*.{cmd,bat,ps1}]
+end_of_line = crlf
+
+[Makefile]
+indent_style = tab
+
+# Golden client-config cases carry deliberate CRLF, BOM and odd whitespace
+# (tests/Astra.Clients.Tests/GoldenClientConfigTests.cs) — never touch them.
+[tests/fixtures/client-config/**]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset
+
+# Generated files (AGENTS.md "Generated files").
+[{*.g.cs,src/Astra.Core/Seed/models.json,pnpm-lock.yaml}]
+generated_code = true
+trim_trailing_whitespace = unset
+insert_final_newline = unset
+
+[*.{csproj,props,targets,slnx,xml,axaml,resx,nuspec,plist}]
+indent_size = 2
+
+[*.sln]
+indent_style = tab
+
+[*.cs]
+indent_size = 4
+tab_width = 4
+
+#### Layout ####
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_diagnostic.IDE0161.severity = warning
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_diagnostic.IDE0065.severity = warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_around_binary_operators = before_and_after
+csharp_preserve_single_line_statements = true
+csharp_preserve_single_line_blocks = true
+
+#### Language preferences (IDE hints; the tree follows them but they are not gated) ####
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
+dotnet_style_predefined_type_for_locals_parameters_members = true:suggestion
+dotnet_style_predefined_type_for_member_access = true:suggestion
+# Single-line `if (x) return;` is the house style (thousands of uses) — do not demand braces.
+csharp_prefer_braces = when_multiline:silent
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_properties = true:silent
+csharp_style_expression_bodied_accessors = true:silent
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_implicit_object_creation_when_type_is_apparent = true:suggestion
+csharp_style_prefer_switch_expression = true:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+csharp_style_pattern_matching_over_is_with_cast_check = true:suggestion
+csharp_style_pattern_matching_over_as_with_null_check = true:suggestion
+csharp_style_throw_expression = true:suggestion
+csharp_style_conditional_delegate_call = true:suggestion
+csharp_prefer_simple_using_statement = true:suggestion
+csharp_style_prefer_collection_expression = when_types_loosely_match:suggestion
+dotnet_style_collection_initializer = true:suggestion
+dotnet_style_object_initializer = true:suggestion
+dotnet_style_coalesce_expression = true:suggestion
+dotnet_style_null_propagation = true:suggestion
+dotnet_style_prefer_auto_properties = true:suggestion
+dotnet_style_readonly_field = true:suggestion
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:silent
+csharp_style_unused_value_discard_variable_preference = true:silent
+csharp_style_unused_value_expression_statement_preference = discard_variable:silent
+
+#### Naming ####
+# The build enforces every naming rule defined here (IDE1006 at `warning` below; a rule's own
+# severity is not honoured on the command line), so only rules the whole tree satisfies are defined.
+# Conventions that are followed but not gated:
+#   - private instance fields are `_camelCase`; [ThreadStatic] fields are `t_camelCase`; private
+#     static fields are PascalCase or `s_camelCase` (both in use — prefer PascalCase in new code);
+#   - local constants and locals are camelCase;
+#   - Dapper row and parameter types (`internal`, src/Astra.Data) name their properties after the
+#     snake_case columns; the [src/Astra.Data/**.cs] section below exempts them.
+dotnet_naming_style.pascal.capitalization = pascal_case
+
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.i_prefix.required_prefix = I
+dotnet_naming_style.i_prefix.capitalization = pascal_case
+dotnet_naming_rule.interfaces_start_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_start_with_i.style = i_prefix
+dotnet_naming_rule.interfaces_start_with_i.severity = warning
+
+dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
+dotnet_naming_style.t_prefix.required_prefix = T
+dotnet_naming_style.t_prefix.capitalization = pascal_case
+dotnet_naming_rule.type_parameters_start_with_t.symbols = type_parameters
+dotnet_naming_rule.type_parameters_start_with_t.style = t_prefix
+dotnet_naming_rule.type_parameters_start_with_t.severity = warning
+
+dotnet_naming_symbols.types.applicable_kinds = class, struct, enum, delegate
+dotnet_naming_rule.types_are_pascal.symbols = types
+dotnet_naming_rule.types_are_pascal.style = pascal
+dotnet_naming_rule.types_are_pascal.severity = warning
+
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_rule.constants_are_pascal.symbols = constants
+dotnet_naming_rule.constants_are_pascal.style = pascal
+dotnet_naming_rule.constants_are_pascal.severity = warning
+
+dotnet_naming_symbols.static_readonly.applicable_kinds = field
+dotnet_naming_symbols.static_readonly.required_modifiers = static, readonly
+dotnet_naming_symbols.static_readonly.applicable_accessibilities = public, internal, protected, protected_internal, private_protected
+dotnet_naming_rule.static_readonly_are_pascal.symbols = static_readonly
+dotnet_naming_rule.static_readonly_are_pascal.style = pascal
+dotnet_naming_rule.static_readonly_are_pascal.severity = warning
+
+dotnet_naming_symbols.members.applicable_kinds = method, event
+dotnet_naming_rule.members_are_pascal.symbols = members
+dotnet_naming_rule.members_are_pascal.style = pascal
+dotnet_naming_rule.members_are_pascal.severity = warning
+
+dotnet_naming_symbols.visible_properties.applicable_kinds = property
+dotnet_naming_symbols.visible_properties.applicable_accessibilities = public, protected, protected_internal
+dotnet_naming_rule.visible_properties_are_pascal.symbols = visible_properties
+dotnet_naming_rule.visible_properties_are_pascal.style = pascal
+dotnet_naming_rule.visible_properties_are_pascal.severity = warning
+
+#### Gated diagnostics ####
+dotnet_diagnostic.IDE1006.severity = warning
+# Unnecessary using directives.
+dotnet_diagnostic.IDE0005.severity = suggestion
+
+# Dapper.AOT row / parameter types bind properties to snake_case columns by name.
+[src/Astra.Data/**.cs]
+dotnet_naming_symbols.visible_properties.applicable_accessibilities = protected, protected_internal

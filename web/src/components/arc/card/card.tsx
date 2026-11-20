@@ -110,7 +110,7 @@ export function Card({ title, description, media, action, avatar, meta, status, 
     const closed = wasOpen.current && !open;
     wasOpen.current = open;
     const node = cardRef.current;
-    if (open) setLanding(null); // eslint-disable-line react-hooks/set-state-in-effect -- reopening mid-return cancels the landing
+    if (open) setLanding(null); // reopening mid-return cancels the landing
     else if (closed && morph && node) {
       const box = node.getBoundingClientRect();
       setLanding({ top: box.top, left: box.left, width: box.width, height: box.height });

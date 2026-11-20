@@ -24,6 +24,7 @@
     "@types/node": "^24.0.0",
     "eslint": "^9.17.0",
     "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
     "vitest": "^3.0.0"
   }
 }

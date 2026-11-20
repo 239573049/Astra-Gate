@@ -68,7 +68,8 @@ purpose: the release RIDs are not `linux-musl-*`). `Dockerfile.dockerignore` lim
 .NET, from the repo root (the single `Astra.sln` is picked up automatically):
 
 - Build: `dotnet build -warnaserror` — warnings are errors (`Directory.Build.props` sets
-  `TreatWarningsAsErrors`; CI adds the flag too). New warnings break the build.
+  `TreatWarningsAsErrors`; CI adds the flag too). New warnings break the build, and so do the
+  `.editorconfig` code-style rules at `warning` (`EnforceCodeStyleInBuild`; see Conventions).
 - Test all: `dotnet test --no-build` (after building). Targeted: `dotnet test tests/Astra.Gateway.Tests`.
 - Desktop (Avalonia): AOT builds must be `dotnet build src/Astra.Desktop -c Release -r <rid> -p:PublishAot=true
   -warnaserror` **then** `dotnet publish … -p:PublishAot=true --no-build -o <dir>` — a bare AOT publish skips Avalonia's
@@ -986,9 +987,21 @@ runtime needed on the target).
   the flag, and **`web/tsconfig.json` extends the base and turns it off**. Index an array or object without a guard freely in the
   web UI; in the CLI, desktop and shared packages a non-null assertion like `arr[0]!` is the
   expected form.
-- Formatting: root `.prettierrc` (100 cols, single quotes, semicolons, trailing commas). There
-  is no repo-wide format command — match the surrounding code. ESLint: `web/` and `desktop/`
-  have their own flat configs; `cli/` and `packages/*` inherit the root `eslint.config.js`.
+- Coding conventions are configuration, not prose: root `.editorconfig` (every editor: UTF-8, LF,
+  final newline, 2 spaces, 4 for C#) carries the C# style and naming rules, and the build enforces
+  the ones at `warning` (`EnforceCodeStyleInBuild` in `Directory.Build.props`): file-scoped
+  namespaces, usings outside the namespace, `I`/`T` prefixes, PascalCase types, methods, events,
+  constants, non-private static readonly fields and public/protected properties. Trap: on the
+  command line IDE1006 enforces **every** naming rule defined in the file whatever its own severity,
+  so a convention the tree does not fully follow (`_camelCase` private fields, `s_`/`t_` statics,
+  Dapper rows' snake_case properties — exempted by the `[src/Astra.Data/**.cs]` section) is
+  written as a comment there, not as a rule. Whitespace layout (IDE0055) is not gated.
+- Formatting: root `.prettierrc` (100 cols, single quotes, semicolons, trailing commas) and
+  `.prettierignore`; `pnpm format` / `pnpm format:check` run it over the TS/JS workspace. Most
+  files predate it, so CI does not run the check yet — format the files you touch, otherwise
+  match the surrounding code. ESLint: `web/` and `desktop/` have their own flat configs; `cli/`,
+  `connect/` and `packages/*` inherit the root `eslint.config.js` and must declare
+  `typescript-eslint` themselves (it resolves from the package, not the root).
 - Tests: vitest with per-package configs — `cli/test`, `connect/test`, `desktop/tests`, `packages/update-core/test`, `packages/client-config/test`
   (node env, `include: ['test/**/*.test.ts']`), `web/src/test` (jsdom + testing-library, chosen in
   `web/vite.config.ts`). xunit on the .NET side, one test project

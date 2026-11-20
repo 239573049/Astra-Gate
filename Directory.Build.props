@@ -13,5 +13,8 @@
     <Version>0.14.3114</Version>
     <Authors>Astra</Authors>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Coding conventions live in .editorconfig; this makes `dotnet build` enforce the rules set to
+         `warning` there (errors, through TreatWarningsAsErrors). -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 </Project>
