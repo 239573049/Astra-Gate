@@ -202,6 +202,9 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         }
         // Windows: an empty right-click menu (issue #18) opens the panel instead, which has Open and Quit.
         else _icon = new AvaloniaTrayIcon(_app, Activate, ShowPanel);
+        // A menu from the first moment (Open, Quit, … for the state before the first probe): the probe takes seconds while the server
+        // starts, and on Windows a right click while the icon has no menu opens nothing at all (Avalonia returns before it makes a window).
+        Controller.Relabel();
         _services.Host.TrayHost = Controller;
         _services.Host.ContextMenu = items => ContextMenus.ShowAsync(items, ActiveOwner());
 
@@ -338,7 +341,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         if (UpdateReminder.Decide(prefs.GetExtra(UpdateReminder.Key), version, now) is not null) return;
         prefs.SetExtra(UpdateReminder.Key, UpdateReminder.Record(prefs.GetExtra(UpdateReminder.Key), version, now));
         _offer = offer;
-        _notice.Show(UpdateCards.Available(UpdateLabels(), offer, reminder: true));
+        _notice.Show(UpdateCards.Available(UpdateLabels(), offer, reminder: true, _services.Host.Version));
     }
 
     /// <summary>The tray's "Check for Updates…" (update.ts <c>checkInteractive</c>): the card says it is checking, then what it found.</summary>
@@ -360,7 +363,7 @@ internal sealed class TrayRuntime : ITrayShell, IDisposable
         if (_notice.Model?.Kind != UpdateCardKind.Checking) return;
         _retryChecks = summary.Error is not null;
         if (summary.Action != UpdateAction.None) _offer = summary;
-        _notice.Show(UpdateCards.CheckResult(t, summary));
+        _notice.Show(UpdateCards.CheckResult(t, summary, _services.Host.Version));
     }
 
     /// <summary>A step of a running update: its card, unless the user sent it to the background (it comes back when the update ends).</summary>

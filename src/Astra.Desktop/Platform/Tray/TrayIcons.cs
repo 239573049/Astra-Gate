@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Astra.Desktop.Core.Tray;
 using Avalonia;
@@ -127,17 +128,24 @@ internal sealed class AvaloniaTrayIcon : ITrayIcon
 /// Windows: Avalonia draws a tray icon's right-click menu itself, in a window of its own (Avalonia.Win32 <c>TrayIconImpl.TrayPopupRoot</c>, sized
 /// to a <see cref="MenuFlyoutPresenter"/> of the <see cref="NativeMenu"/>), so the menu shows only when Avalonia's menu controls have a theme.
 /// Arc has none for them; up to 0.13.1 the window measured 0 x 0 and a right click showed nothing, leaving no visible way to quit (issue #18).
-/// KitStyles themes them now (UiTests <c>TrayMenuWindowTests</c> checks it on Avalonia's own window). Should that window ever open without a
-/// size again, it is closed and the fallback runs in its place (the tray panel: Open and Quit, drawn by Arc's own controls).
+/// KitStyles themes them now (UiTests <c>TrayMenuWindowTests</c> checks it on Avalonia's own window). Two more ways for the menu to be missing
+/// are covered here: the window came up without a size, and the window lost the foreground at once and closed itself (<c>TrayPopupRoot</c>
+/// closes on <c>Deactivated</c>; Windows refuses the foreground to a process that was not the last to get input, so the menu flashes and goes).
+/// Either way the window is closed and the fallback runs in its place (the tray panel: Open and Quit, drawn by Arc's own controls). The third
+/// way, no menu at all so that Avalonia opens no window (<c>OnRightClicked</c> returns when <c>Menu</c> is null or empty), cannot be seen from
+/// here: the tray runtime sets a menu as soon as the icon exists (<see cref="TrayRuntime"/>.Start).
 /// </summary>
 internal static class TrayMenuWatch
 {
     /// <summary>The type of Avalonia's tray menu window: private to Avalonia.Win32, so matched by name (Avalonia is pinned exactly).</summary>
     internal const string MenuWindowType = "Avalonia.Win32.TrayIconImpl+TrayPopupRoot";
 
+    /// <summary>A menu window that loses the foreground within this long of opening was taken from, not dismissed: nobody reads and leaves a menu that fast.</summary>
+    internal static readonly TimeSpan Flash = TimeSpan.FromMilliseconds(400);
+
     private static Action? _fallback;
 
-    /// <summary>Watches every window Avalonia opens for its tray menu window; <paramref name="fallback"/> replaces an empty one. Idempotent.</summary>
+    /// <summary>Watches every window Avalonia opens for its tray menu window; <paramref name="fallback"/> replaces a missing one. Idempotent.</summary>
     public static void Install(Action fallback)
     {
         if (_fallback is null) Window.WindowOpenedEvent.AddClassHandler<Window>((window, _) => OnOpening(window));
@@ -150,26 +158,41 @@ internal static class TrayMenuWatch
     /// <summary>Whether the window came up with something to show: it sizes to its menu, so an unlaid-out menu leaves it 0 x 0.</summary>
     internal static bool HasContent(Window window) => window.ClientSize is { Width: >= 1, Height: >= 1 };
 
+    /// <summary>Whether a menu that lost the foreground <paramref name="sinceOpening"/> after it opened never really stayed.</summary>
+    internal static bool IsFlash(TimeSpan sinceOpening) => sinceOpening < Flash;
+
     private static void OnOpening(Window window)
     {
         if (!IsMenuWindow(window)) return;
+        var openedAt = Stopwatch.GetTimestamp();
+        var handedOver = false;
+        // Once per window, whichever way it went wrong first; not from inside Show or the window's own event.
+        void HandOver(bool closeWindow) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (handedOver) return;
+            handedOver = true;
+            if (closeWindow) window.Close();
+            _fallback?.Invoke();
+        });
         // Raised as Show begins; Opened follows once the window is laid out and on screen.
         void Opened(object? sender, EventArgs e)
         {
             window.Opened -= Opened;
-            if (HasContent(window)) return;
-            // Not from inside Show.
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-            {
-                window.Close();
-                _fallback?.Invoke();
-            });
+            if (!HasContent(window)) HandOver(closeWindow: true);
+            else if (OperatingSystem.IsWindows()) Win32.Foreground(window.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero);
+        }
+        void Deactivated(object? sender, EventArgs e)
+        {
+            window.Deactivated -= Deactivated;
+            // The window closes itself on this event; the first menu item's click closes it too, but that is no loss of focus.
+            if (IsFlash(Stopwatch.GetElapsedTime(openedAt))) HandOver(closeWindow: false);
         }
         window.Opened += Opened;
+        window.Deactivated += Deactivated;
     }
 }
 
-/// <summary>The one Win32 call the tray needs: where the cursor is (the panel opens next to the click).</summary>
+/// <summary>The Win32 calls the tray needs: where the cursor is (the panel opens next to the click) and the foreground for the menu window.</summary>
 internal static class Win32
 {
     [StructLayout(LayoutKind.Sequential)]
@@ -181,6 +204,26 @@ internal static class Win32
 
     [DllImport("user32.dll")]
     private static extern int GetCursorPos(out Point point);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    /// <summary>
+    /// Asks Windows to make the window the foreground one, the step a tray menu needs before it is shown: without it the taskbar or whatever
+    /// had the focus keeps it and the menu is dismissed at once. A refusal changes nothing (<see cref="TrayMenuWatch"/> then hands over).
+    /// </summary>
+    public static void Foreground(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return;
+        try
+        {
+            SetForegroundWindow(handle);
+        }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)
+        {
+        }
+    }
 
     /// <summary>The cursor in physical screen pixels, or null.</summary>
     public static (int X, int Y)? CursorPos()

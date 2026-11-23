@@ -45,6 +45,14 @@ public class TrayMenuWindowTests
         return (root, presenter);
     }
 
+    /// <summary>What the platform does when the OS takes the foreground away: its window impl calls the window's <c>Deactivated</c> callback.</summary>
+    private static void LoseFocus(Window window)
+    {
+        var impl = window.PlatformImpl!;
+        var callback = impl.GetType().GetProperty("Deactivated", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)!.GetValue(impl);
+        ((Action)callback!).Invoke();
+    }
+
     private static void Pump()
     {
         for (var i = 0; i < 5; i++)
@@ -124,6 +132,34 @@ public class TrayMenuWindowTests
         {
             themed.Close();
         }
+    }
+
+    [AvaloniaFact]
+    public void A_menu_that_loses_the_foreground_at_once_hands_over_to_the_fallback()
+    {
+        var fallbacks = 0;
+        TrayMenuWatch.Install(() => fallbacks++);
+        var before = fallbacks;
+        var (root, _) = RightClick(AvaloniaTrayIcon.Build(WindowsMenu(), _ => { }));
+        try
+        {
+            Assert.True(TrayMenuWatch.HasContent(root));
+            // Something else takes the focus right after the right click (the taskbar, another window): the platform tells the window.
+            LoseFocus(root);
+            Pump();
+            Assert.Equal(before + 1, fallbacks);
+        }
+        finally
+        {
+            root.Close();
+        }
+    }
+
+    [Fact]
+    public void Only_a_loss_of_focus_right_after_opening_counts_as_a_flash()
+    {
+        Assert.True(TrayMenuWatch.IsFlash(TimeSpan.FromMilliseconds(30)));
+        Assert.False(TrayMenuWatch.IsFlash(TimeSpan.FromSeconds(3)));
     }
 
     [AvaloniaFact]

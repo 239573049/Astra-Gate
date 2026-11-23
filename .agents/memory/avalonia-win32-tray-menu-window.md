@@ -2,7 +2,7 @@
 name: avalonia-win32-tray-menu-window
 description: Avalonia draws the Windows tray right-click menu as its own managed window (TrayIconImpl.TrayPopupRoot) — without a theme for Avalonia's menu controls it is 0 x 0 and the right click shows nothing (issue #18); headless tests can build that private window
 type: project
-updated: 2026-10-30
+updated: 2026-11-22
 source: session
 evidence: ["Avalonia 12.1.4 src/Windows/Avalonia.Win32/TrayIconImpl.cs:OnRightClicked", "src/Astra.Desktop/Theme/KitStyles.axaml (menu ControlThemes, 8fe5ee4)", "src/Astra.Desktop/Platform/Tray/TrayIcons.cs:TrayMenuWatch", "tests/Astra.Desktop.UiTests/TrayMenuWindowTests.cs", "https://github.com/239573049/Astra-Gate/issues/18"]
 ---
@@ -18,3 +18,11 @@ when this was written, and nobody had checked the fixed menu on a real Windows m
 **How to apply:** after touching Arc, the KitStyles menu themes or the Avalonia pin, run `TrayMenuWindowTests`. It builds
 Avalonia.Win32's private `TrayPopupRoot` / `TrayIconMenuFlyoutPresenter` by reflection under the headless platform, as the right click
 does, so it runs on any OS. At run time `TrayMenuWatch` closes an empty menu window and opens the tray panel (Open, Quit) in its place.
+
+**2026-11-22 (0.14.3117), two more ways the right click shows nothing**, found by reading Avalonia.Win32 12.1.4 / 12.1.6 (identical there), not
+reproduced on a real Windows machine: (1) `OnRightClicked` returns without a window when `TrayIcon.Menu` is null or empty, and the runtime
+only set a menu after the first service probe (seconds on a login start) — `TrayRuntime.Start` now calls `Controller.Relabel()` right after the
+icon exists; (2) `TrayPopupRoot` closes itself on `Deactivated`, so a menu that Windows never gave the foreground flashes and goes —
+`TrayMenuWatch` now hands over to the panel when the window deactivates within `Flash` (400 ms) of opening and asks Windows for the foreground
+(`Win32.Foreground`) once it is open. Tests: `TrayMenuWindowTests` (the loss of focus is simulated through the headless window impl's
+`Deactivated` callback), `TrayControllerTests.Relabel_before_the_first_probe…`. Still unverified on a real machine.

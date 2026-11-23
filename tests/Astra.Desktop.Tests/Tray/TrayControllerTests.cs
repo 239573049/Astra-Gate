@@ -76,6 +76,18 @@ public sealed class TrayControllerTests : IDisposable
     }
 
     [Fact]
+    public void Relabel_before_the_first_probe_gives_the_icon_a_menu_with_open_and_quit()
+    {
+        // The Windows right click opens nothing while the icon has no menu, so the runtime publishes one as soon as the icon exists.
+        var (c, _, shell, _) = Create("win32");
+        Assert.Null(shell.Menu);
+        c.Relabel();
+        Assert.NotNull(shell.Menu);
+        Assert.Contains(shell.Menu, i => i.Action?.Verb == TrayMenuVerb.OpenWindow);
+        Assert.Contains(shell.Menu, i => i.Action?.Verb == TrayMenuVerb.Quit);
+    }
+
+    [Fact]
     public async Task Prefs_are_stored_under_tray_in_electrons_shape_and_broadcast()
     {
         var (c, _, _, file) = Create();
