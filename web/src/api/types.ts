@@ -399,7 +399,8 @@ export interface ClientInfo {
 export interface ConfigRepair { file: string; problem: 'trailing-comma' | 'comment'; line: number }
 /**
  * One client-specific option. scope "config": written into the client's own config on apply; "gateway": applied by the
- * gateway to that client's requests. type "bool" | "int" | "enum" (choices); default "" = leave the client alone.
+ * gateway to that client's requests. type "bool" | "int" | "enum"; default "" = leave the client alone.
+ * choices are allowed values for enums, or optional UI presets for integers (legacy custom numbers remain valid).
  */
 export interface ClientOptionDescriptor {
   key: string; type: 'bool' | 'int' | 'enum'; default: string; scope: 'config' | 'gateway'; choices?: string[] | null;
@@ -1274,10 +1275,10 @@ export interface PluginSignIn {
   opened?: boolean;
 }
 
-/** An account's allowance, as the plugin tells it. */
+/** An account's allowance, as the plugin tells it. A moment is ISO text, epoch seconds or epoch milliseconds (design/plugin-v2 08); the v1 host's is ISO. */
 export interface PluginUsage {
-  plan?: string | null; until?: string | null; error?: string | null; user?: string | null;
-  windows?: { name: string; used?: number | null; resetsAt?: number | null; display?: string | null; amount?: number | null; limit?: number | null; unit?: string | null; aside?: boolean | null }[] | null;
+  plan?: string | null; until?: number | string | null; error?: string | null; user?: string | null;
+  windows?: { name: string; used?: number | null; resetsAt?: number | string | null; display?: string | null; amount?: number | null; limit?: number | null; unit?: string | null; aside?: boolean | null }[] | null;
 }
 
 /** A plugin provider's daily check-in: whether its plugin presses one, whether it is on, each account's result today. */

@@ -113,4 +113,60 @@ public class ClientOptionsTests : IDisposable
         Assert.DoesNotContain("model_auto_compact_token_limit", restored);
         Assert.Contains("model_reasoning_effort = \"low\"", restored); // the user's own value comes back
     }
+
+    [Fact]
+    public void Codex_WebSocketAndExtendedOptions_AreWrittenAndRestoredOnDisable()
+    {
+        var adapter = new CodexClientAdapter(_home.Env, _store);
+        var file = Path.Combine(_home.Env.Combine(".codex"), "config.toml");
+        _home.WriteFile(file, "approval_policy = \"on-request\"\n");
+        var options = new JsonObject
+        {
+            ["supportsWebsockets"] = true,
+            ["reasoningEffort"] = "xhigh",
+            ["reasoningSummary"] = "concise",
+            ["modelVerbosity"] = "low",
+            ["serviceTier"] = "fast",
+            ["webSearch"] = "disabled",
+            ["approvalPolicy"] = "never",
+            ["sandboxMode"] = "workspace-write",
+        };
+
+        _applier.Apply(adapter.PlanEnable(TestGateway.Context("astra-codex-x", null, Extras(options))));
+        var text = _home.ReadFile(file);
+        Assert.Contains("supports_websockets = true", text);
+        Assert.Contains("model_reasoning_effort = \"xhigh\"", text);
+        Assert.Contains("model_reasoning_summary = \"concise\"", text);
+        Assert.Contains("model_verbosity = \"low\"", text);
+        Assert.Contains("service_tier = \"fast\"", text);
+        Assert.Contains("web_search = \"disabled\"", text);
+        Assert.Contains("approval_policy = \"never\"", text);
+        Assert.Contains("sandbox_mode = \"workspace-write\"", text);
+        Assert.Empty(adapter.Inspect().DriftedKeys);
+
+        _applier.Disable(adapter.PlanDisable());
+        var restored = _home.ReadFile(file);
+        Assert.Equal("approval_policy = \"on-request\"\n", restored);
+        Assert.Empty(_store.List(ClientKinds.Codex));
+    }
+
+    [Fact]
+    public void Codex_WebSocketOption_PreservesAndRestoresExistingProviderTableValue()
+    {
+        var adapter = new CodexClientAdapter(_home.Env, _store);
+        var file = Path.Combine(_home.Env.Combine(".codex"), "config.toml");
+        var original = """
+            [model_providers.astra]
+            name = "Mine"
+            base_url = "https://old.example.com/v1"
+            supports_websockets = false
+            """;
+        _home.WriteFile(file, original + "\n");
+
+        _applier.Apply(adapter.PlanEnable(TestGateway.Context("astra-codex-x", null, Extras(new JsonObject { ["supportsWebsockets"] = true }))));
+        Assert.Contains("supports_websockets = true", _home.ReadFile(file));
+
+        _applier.Disable(adapter.PlanDisable());
+        Assert.Equal(original + "\n", _home.ReadFile(file));
+    }
 }

@@ -6,6 +6,8 @@ namespace Astra.Core.Clients;
 /// One client-specific option. <see cref="Scope"/> "config" options are written into the client's own configuration by
 /// its adapter on enable; "gateway" options are applied by the gateway to that client's requests. Type is "bool",
 /// "int" or "enum"; <see cref="Default"/> is the value used when the option is unset ("" = leave the client alone).
+/// For "enum", <see cref="Choices"/> is the allowed set; for "int", optional preset choices shown as a select while
+/// still accepting any positive integer.
 /// </summary>
 public sealed record ClientOptionDescriptor(string Key, string Type, string Default, string Scope, string[]? Choices = null);
 
@@ -20,19 +22,37 @@ public static class ClientOptions
     public const string Context1M = "context1m";
     public const string CacheTtl = "cacheTtl";
     public const string MaxThinkingTokens = "maxThinkingTokens";
+    public const string MaxOutputTokens = "maxOutputTokens";
+    public const string AutoCompactPct = "autoCompactPct";
+    public const string DisableAdaptiveThinking = "disableAdaptiveThinking";
+    public const string DisableNonessentialTraffic = "disableNonessentialTraffic";
+    public const string DisableAutoupdater = "disableAutoupdater";
     public const string DisablePromptCaching = "disablePromptCaching";
     public const string AutoModeServerOff = "autoModeServerOff";
     public const string SubagentModelForce = "subagentModelForce";
+    public const string SupportsWebsockets = "supportsWebsockets";
     public const string ContextWindow = "contextWindow";
     public const string AutoCompactTokenLimit = "autoCompactTokenLimit";
     public const string ReasoningEffort = "reasoningEffort";
+    public const string ReasoningSummary = "reasoningSummary";
+    public const string ModelVerbosity = "modelVerbosity";
+    public const string ServiceTier = "serviceTier";
+    public const string WebSearch = "webSearch";
+    public const string ApprovalPolicy = "approvalPolicy";
+    public const string SandboxMode = "sandboxMode";
     public const string ModelCatalog = "modelCatalog";
 
     private static readonly IReadOnlyList<ClientOptionDescriptor> ClaudeCode =
     [
         new(Context1M, "bool", "false", "config"),
         new(CacheTtl, "enum", "default", "gateway", ["default", "5m", "1h"]),
-        new(MaxThinkingTokens, "int", "", "config"),
+        new(MaxThinkingTokens, "int", "", "config", ["1024", "4096", "8192", "16384", "32768"]),
+        new(ReasoningEffort, "enum", "default", "config", ["default", "low", "medium", "high", "xhigh", "max"]),
+        new(MaxOutputTokens, "int", "", "config", ["4096", "8192", "16384", "32768", "64000"]),
+        new(AutoCompactPct, "enum", "default", "config", ["default", "50", "60", "70", "80", "90", "95"]),
+        new(DisableAdaptiveThinking, "bool", "false", "config"),
+        new(DisableNonessentialTraffic, "bool", "false", "config"),
+        new(DisableAutoupdater, "bool", "false", "config"),
         new(DisablePromptCaching, "bool", "false", "config"),
         new(AutoModeServerOff, "bool", "false", "config"),
         new(SubagentModelForce, "bool", "false", "config"),
@@ -40,9 +60,16 @@ public static class ClientOptions
 
     private static readonly IReadOnlyList<ClientOptionDescriptor> Codex =
     [
-        new(ContextWindow, "int", "", "config"),
-        new(AutoCompactTokenLimit, "int", "", "config"),
-        new(ReasoningEffort, "enum", "default", "config", ["default", "minimal", "low", "medium", "high"]),
+        new(SupportsWebsockets, "bool", "false", "config"),
+        new(ContextWindow, "int", "", "config", ["128000", "200000", "256000", "272000", "400000", "512000", "1000000"]),
+        new(AutoCompactTokenLimit, "int", "", "config", ["100000", "160000", "200000", "240000", "350000", "450000", "800000", "900000"]),
+        new(ReasoningEffort, "enum", "default", "config", ["default", "minimal", "low", "medium", "high", "xhigh"]),
+        new(ReasoningSummary, "enum", "default", "config", ["default", "auto", "concise", "detailed", "none"]),
+        new(ModelVerbosity, "enum", "default", "config", ["default", "low", "medium", "high"]),
+        new(ServiceTier, "enum", "default", "config", ["default", "fast", "flex"]),
+        new(WebSearch, "enum", "default", "config", ["default", "disabled", "cached", "live"]),
+        new(ApprovalPolicy, "enum", "default", "config", ["default", "on-request", "never"]),
+        new(SandboxMode, "enum", "default", "config", ["default", "read-only", "workspace-write", "danger-full-access"]),
         new(ModelCatalog, "bool", "false", "config"),
     ];
 
@@ -60,9 +87,29 @@ public static class ClientOptions
     /// </summary>
     public static IReadOnlyList<string> ConfigKeyPaths(string kind) => kind switch
     {
-        ClientKinds.ClaudeCode => ["env.MAX_THINKING_TOKENS", "env.DISABLE_PROMPT_CACHING", "env.CLAUDE_CODE_AUTO_MODE_SERVER", "env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE"],
+        ClientKinds.ClaudeCode =>
+        [
+            "env.MAX_THINKING_TOKENS", "env.CLAUDE_CODE_EFFORT_LEVEL", "env.CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+            "env.CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", "env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING",
+            "env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "env.DISABLE_AUTOUPDATER",
+            "env.DISABLE_PROMPT_CACHING", "env.CLAUDE_CODE_AUTO_MODE_SERVER", "env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+        ],
         // "models" is the key of the Astra-owned model catalog file (CodexClientAdapter), not of config.toml.
-        ClientKinds.Codex => ["model_context_window", "model_auto_compact_token_limit", "model_reasoning_effort", "model_catalog_json", "models"],
+        ClientKinds.Codex =>
+        [
+            "model_providers.astra.supports_websockets",
+            "model_context_window",
+            "model_auto_compact_token_limit",
+            "model_reasoning_effort",
+            "model_reasoning_summary",
+            "model_verbosity",
+            "service_tier",
+            "web_search",
+            "approval_policy",
+            "sandbox_mode",
+            "model_catalog_json",
+            "models",
+        ],
         _ => [],
     };
 

@@ -10,6 +10,7 @@ namespace Astra.Clients.Adapters;
 /// <c>env.ANTHROPIC_API_KEY</c> (recorded), and optionally pins the model selection env vars
 /// (<see cref="ClaudeCodeModels.Slots"/>, extras key "models"; the older "smallFastModel" extra still works).
 /// The "options" extras (<see cref="ClientOptions"/>) add the <c>[1m]</c> model suffix, <c>MAX_THINKING_TOKENS</c>,
+/// effort, output and auto-compaction limits, adaptive thinking, nonessential traffic and auto-updates, plus
 /// <c>DISABLE_PROMPT_CACHING</c>, <c>CLAUDE_CODE_AUTO_MODE_SERVER</c> and <c>CLAUDE_CODE_SUBAGENT_MODEL_FORCE</c>; the cache TTL
 /// option is applied by the gateway, not written here.
 /// Warns on <c>apiKeyHelper</c>. Everything else is untouched.
@@ -71,6 +72,18 @@ public sealed class ClaudeCodeClientAdapter(ClientEnvironment env, IClientConfig
 
         if (ClientOptions.GetInt(ctx.Extras, ClientOptions.MaxThinkingTokens) is { } thinking)
             changes.Add(EnvKey(file, "MAX_THINKING_TOKENS", thinking.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ReasoningEffort) is { } effort)
+            changes.Add(EnvKey(file, "CLAUDE_CODE_EFFORT_LEVEL", effort));
+        if (ClientOptions.GetInt(ctx.Extras, ClientOptions.MaxOutputTokens) is { } output)
+            changes.Add(EnvKey(file, "CLAUDE_CODE_MAX_OUTPUT_TOKENS", output.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.AutoCompactPct) is { } compact)
+            changes.Add(EnvKey(file, "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE", compact));
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.DisableAdaptiveThinking))
+            changes.Add(EnvKey(file, "CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING", "1"));
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.DisableNonessentialTraffic))
+            changes.Add(EnvKey(file, "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "1"));
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.DisableAutoupdater))
+            changes.Add(EnvKey(file, "DISABLE_AUTOUPDATER", "1"));
         if (ClientOptions.GetBool(ctx.Extras, ClientOptions.DisablePromptCaching))
             changes.Add(EnvKey(file, "DISABLE_PROMPT_CACHING", "1"));
         // auto mode's server-side safety review needs an upstream that answers it; 0 makes Claude Code use its own classifier

@@ -55,6 +55,23 @@ public sealed class ClientExtrasTests
     [InlineData(" 200 000 ", 200000L)]
     public void Int_option_keeps_digits_only(string text, long? expected) => Assert.Equal(expected, ClientExtras.ParseIntOption(text));
 
+    [Theory]
+    [InlineData(128000L, "128K")]
+    [InlineData(1000000L, "1M")]
+    [InlineData(131072L, "131,072")]
+    public void Int_option_choice_formatting(long value, string expected) =>
+        Assert.Equal(expected, ClientExtras.FormatIntOptionChoice(value));
+
+    [Fact]
+    public void Int_option_choices_keep_a_legacy_custom_value_in_order()
+    {
+        var d = new ClientOptionDescriptor("contextWindow", "int", "", "config", ["128000", "400000", "1000000"]);
+        Assert.Equal([("", "Not set"), ("128000", "128K"), ("400000", "400K"), ("1000000", "1M")],
+            ClientExtras.IntOptionChoices(d, null, "Not set"));
+        Assert.Equal([("", "Not set"), ("128000", "128K"), ("300000", "300K"), ("400000", "400K"), ("1000000", "1M")],
+            ClientExtras.IntOptionChoices(d, 300000, "Not set"));
+    }
+
     [Fact]
     public void Protocol_models_and_overrides()
     {

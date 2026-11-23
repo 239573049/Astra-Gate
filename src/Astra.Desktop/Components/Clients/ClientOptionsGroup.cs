@@ -13,7 +13,7 @@ namespace Astra.Desktop.Components.Clients;
 /// <summary>
 /// Client-specific options (<c>extras.options</c>), rendered from the descriptors the server reports for the client (web
 /// <c>ClientOptionsGroup</c>; AGENTS.md linked update 6). A control factory keyed on the descriptor's <c>type</c> — "bool" a switch, "int" a
-/// digits-only input, "enum" a select of its choices — with the label / hint / choice texts from <c>clients.option.&lt;key&gt;[.hint]</c> and
+/// digits-only input or a preset select when choices exist, "enum" a select of its choices — with the label / hint / choice texts from <c>clients.option.&lt;key&gt;[.hint]</c> and
 /// <c>clients.optionChoice.&lt;choice&gt;</c>. No reflection: the descriptor is data. Edits go to <c>onChange</c> as a whole new map
 /// (<see cref="ClientExtras.SetOption"/>), so the page decides when they are saved.
 /// </summary>
@@ -61,11 +61,24 @@ public static class ClientOptionsGroup
             }
             case "int":
             {
+                if (d.Choices is { Length: > 0 })
+                {
+                    var current = value is OptionValue.Int i ? i.Value : (long?)null;
+                    var options = ClientExtras.IntOptionChoices(d, current, Loc.T("clients.options.unset"))
+                        .Select(o => (o.Value, o.Label, false));
+                    return ClientUi.Select(options,
+                        current is { } c ? c.ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
+                        v =>
+                        {
+                            var n = ClientExtras.ParseIntOption(v);
+                            set(d.Key, n is > 0 ? new OptionValue.Int(n.Value) : null);
+                        }, label, width: 176);
+                }
                 var input = new Input
                 {
-                    Width = 144,
+                    Width = 176,
                     Placeholder = Loc.T("clients.options.unset"),
-                    Text = value is OptionValue.Int i ? i.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
+                    Text = value is OptionValue.Int iv ? iv.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : "",
                 };
                 input.Token(TextBox.FontFamilyProperty, ArcDesignTokenKind.MonoFontFamily);
                 Avalonia.Automation.AutomationProperties.SetName(input, label);
@@ -80,7 +93,7 @@ public static class ClientOptionsGroup
             {
                 var options = (d.Choices ?? []).Select(c => (c, Loc.T("clients.optionChoice." + c), false));
                 return ClientUi.Select(options, value is OptionValue.Choice c ? c.Value : "default",
-                    v => set(d.Key, new OptionValue.Choice(v)), label, width: 144);
+                    v => set(d.Key, new OptionValue.Choice(v)), label, width: 176);
             }
             default:
                 return null;

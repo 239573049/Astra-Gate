@@ -46,6 +46,7 @@ public static class TestAppBuilder
                 arc.UseArcControls();
                 arc.UseArcAdvancedCharts();
                 arc.UseArcBlocks();
+                arc.UseArcMarkdown();
                 AppServices.Current.Theme.Configure(arc);
             })
             .AfterSetup(_ => AppServices.Current.Theme.Install());

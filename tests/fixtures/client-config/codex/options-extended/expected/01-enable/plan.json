@@ -1,0 +1,106 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_provider",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_context_window",
+    "kind": "key",
+    "before": null,
+    "after": "\"1000000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_auto_compact_token_limit",
+    "kind": "key",
+    "before": null,
+    "after": "\"900000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_reasoning_effort",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022xhigh\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_reasoning_summary",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022concise\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_verbosity",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022low\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "service_tier",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022fast\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "web_search",
+    "kind": "key",
+    "before": null,
+    "after": "\"\\u0022disabled\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "approval_policy",
+    "kind": "key",
+    "before": "\"on-request\"",
+    "after": "\"\\u0022never\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "sandbox_mode",
+    "kind": "key",
+    "before": "\"read-only\"",
+    "after": "\"\\u0022workspace-write\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_providers.astra",
+    "kind": "table",
+    "before": null,
+    "after": "{\"name\":\"\\u0022Astra\\u0022\",\"base_url\":\"\\u0022https://astra.corp.com/v1\\u0022\",\"wire_api\":\"\\u0022responses\\u0022\",\"experimental_bearer_token\":\"\\u0022sk-astra-enterprise-key\\u0022\",\"requires_openai_auth\":\"false\"}"
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "format": "toml",
+    "keyPath": "model_providers.astra.supports_websockets",
+    "kind": "key",
+    "before": null,
+    "after": "\"true\""
+  }
+]

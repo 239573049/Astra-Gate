@@ -3,7 +3,7 @@ import { ClientAdapterBase } from '../adapter-base.js';
 import { ConfigChange, ClientDetections, type ClientDetection, type ClientStatus, type ConfigChangePlan, type EnableContext } from '../contracts.js';
 import { equalsValue } from '../config-value-codec.js';
 import { CLAUDE_CODE_SLOTS, claudeCodeWith1M, parseClaudeCodeModels } from '../domain/claude-code-models.js';
-import { ClientOptionKeys, clientOptionConfigKeyPaths, getBoolOption, getIntOption } from '../domain/client-options.js';
+import { ClientOptionKeys, clientOptionConfigKeyPaths, getBoolOption, getChoiceOption, getIntOption } from '../domain/client-options.js';
 import { ClientKinds } from '../domain/kinds.js';
 
 const API_KEY_PATH = 'env.ANTHROPIC_API_KEY';
@@ -12,6 +12,7 @@ const API_KEY_PATH = 'env.ANTHROPIC_API_KEY';
  * Claude Code (Switch): writes `env.ANTHROPIC_BASE_URL` and `env.ANTHROPIC_AUTH_TOKEN` in `~/.claude/settings.json`
  * (honoring CLAUDE_CONFIG_DIR), temporarily removes a present `env.ANTHROPIC_API_KEY` (recorded), and optionally
  * pins the model selection env vars. The "options" extras add the `[1m]` model suffix, `MAX_THINKING_TOKENS` and
+ * effort, output and auto-compaction limits, adaptive thinking, nonessential traffic and auto-updates, plus
  * `DISABLE_PROMPT_CACHING`; the cache TTL option is applied by the gateway, not written here. Warns on
  * `apiKeyHelper`. Everything else is untouched. (Port of ClaudeCodeClientAdapter.)
  */
@@ -69,6 +70,18 @@ export class ClaudeCodeClientAdapter extends ClientAdapterBase {
 
     const thinking = getIntOption(ctx.extras, ClientOptionKeys.maxThinkingTokens);
     if (thinking !== null) changes.push(this.envKey(file, 'MAX_THINKING_TOKENS', String(thinking)));
+    const effort = getChoiceOption(ctx.extras, ClientOptionKeys.reasoningEffort);
+    if (effort !== null) changes.push(this.envKey(file, 'CLAUDE_CODE_EFFORT_LEVEL', effort));
+    const output = getIntOption(ctx.extras, ClientOptionKeys.maxOutputTokens);
+    if (output !== null) changes.push(this.envKey(file, 'CLAUDE_CODE_MAX_OUTPUT_TOKENS', String(output)));
+    const compact = getChoiceOption(ctx.extras, ClientOptionKeys.autoCompactPct);
+    if (compact !== null) changes.push(this.envKey(file, 'CLAUDE_AUTOCOMPACT_PCT_OVERRIDE', compact));
+    if (getBoolOption(ctx.extras, ClientOptionKeys.disableAdaptiveThinking))
+      changes.push(this.envKey(file, 'CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING', '1'));
+    if (getBoolOption(ctx.extras, ClientOptionKeys.disableNonessentialTraffic))
+      changes.push(this.envKey(file, 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC', '1'));
+    if (getBoolOption(ctx.extras, ClientOptionKeys.disableAutoupdater))
+      changes.push(this.envKey(file, 'DISABLE_AUTOUPDATER', '1'));
     if (getBoolOption(ctx.extras, ClientOptionKeys.disablePromptCaching))
       changes.push(this.envKey(file, 'DISABLE_PROMPT_CACHING', '1'));
     // auto mode's server-side safety review needs an upstream that answers it; 0 makes Claude Code use its own classifier

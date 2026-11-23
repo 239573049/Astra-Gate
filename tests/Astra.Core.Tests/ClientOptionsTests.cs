@@ -20,10 +20,26 @@ public class ClientOptionsTests
     public void Validate_RejectsUnknownKeysAndBadValues()
     {
         Assert.Null(ClientOptions.Validate(ClientKinds.ClaudeCode, new JsonObject { ["context1m"] = true, ["cacheTtl"] = "1h", ["maxThinkingTokens"] = 8000 }));
+        Assert.Null(ClientOptions.Validate(ClientKinds.Codex, new JsonObject
+        {
+            ["supportsWebsockets"] = true,
+            ["contextWindow"] = 1000000,
+            ["autoCompactTokenLimit"] = 900000,
+            ["reasoningEffort"] = "xhigh",
+            ["reasoningSummary"] = "concise",
+            ["modelVerbosity"] = "low",
+            ["serviceTier"] = "fast",
+            ["webSearch"] = "disabled",
+            ["approvalPolicy"] = "on-request",
+            ["sandboxMode"] = "workspace-write",
+        }));
         Assert.NotNull(ClientOptions.Validate(ClientKinds.ClaudeCode, new JsonObject { ["nope"] = true }));
         Assert.NotNull(ClientOptions.Validate(ClientKinds.ClaudeCode, new JsonObject { ["cacheTtl"] = "2h" }));
         Assert.NotNull(ClientOptions.Validate(ClientKinds.ClaudeCode, new JsonObject { ["context1m"] = "yes" }));
         Assert.NotNull(ClientOptions.Validate(ClientKinds.Codex, new JsonObject { ["contextWindow"] = -1 }));
+        Assert.NotNull(ClientOptions.Validate(ClientKinds.Codex, new JsonObject { ["supportsWebsockets"] = "yes" }));
+        Assert.NotNull(ClientOptions.Validate(ClientKinds.Codex, new JsonObject { ["serviceTier"] = "turbo" }));
+        Assert.NotNull(ClientOptions.Validate(ClientKinds.Codex, new JsonObject { ["sandboxMode"] = "open" }));
         Assert.NotNull(ClientOptions.Validate(ClientKinds.Zed, new JsonObject { ["context1m"] = true }));
     }
 

@@ -84,7 +84,21 @@ public sealed class CodexClientAdapter(ClientEnvironment env, IClientConfigState
             changes.Add(TopKey(file, "model_auto_compact_token_limit", JsonString(compact.ToString(System.Globalization.CultureInfo.InvariantCulture))));
         if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ReasoningEffort) is { } effort)
             changes.Add(TopKey(file, "model_reasoning_effort", JsonString(TomlRaw(effort))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ReasoningSummary) is { } summary)
+            changes.Add(TopKey(file, "model_reasoning_summary", JsonString(TomlRaw(summary))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ModelVerbosity) is { } verbosity)
+            changes.Add(TopKey(file, "model_verbosity", JsonString(TomlRaw(verbosity))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ServiceTier) is { } tier)
+            changes.Add(TopKey(file, "service_tier", JsonString(TomlRaw(tier))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.WebSearch) is { } webSearch)
+            changes.Add(TopKey(file, "web_search", JsonString(TomlRaw(webSearch))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.ApprovalPolicy) is { } approval)
+            changes.Add(TopKey(file, "approval_policy", JsonString(TomlRaw(approval))));
+        if (ClientOptions.GetChoice(ctx.Extras, ClientOptions.SandboxMode) is { } sandbox)
+            changes.Add(TopKey(file, "sandbox_mode", JsonString(TomlRaw(sandbox))));
         changes.AddRange(ProviderTableChanges(file, ctx));
+        if (ClientOptions.GetBool(ctx.Extras, ClientOptions.SupportsWebsockets))
+            changes.Add(TopKey(file, $"model_providers.{ProviderId}.supports_websockets", JsonString("true")));
         if (ClientOptions.GetBool(ctx.Extras, ClientOptions.ModelCatalog) && CatalogModels(ctx) is { } catalog)
         {
             changes.Add(new ConfigChange(CatalogFile, ConfigFileFormat.Json, CatalogKey,

@@ -501,12 +501,26 @@ internal static class Messages
         "clients.option.autoModeServerOff.hint",
         "clients.option.subagentModelForce",
         "clients.option.subagentModelForce.hint",
+        "clients.option.supportsWebsockets",
+        "clients.option.supportsWebsockets.hint",
         "clients.option.contextWindow",
         "clients.option.contextWindow.hint",
         "clients.option.autoCompactTokenLimit",
         "clients.option.autoCompactTokenLimit.hint",
         "clients.option.reasoningEffort",
         "clients.option.reasoningEffort.hint",
+        "clients.option.reasoningSummary",
+        "clients.option.reasoningSummary.hint",
+        "clients.option.modelVerbosity",
+        "clients.option.modelVerbosity.hint",
+        "clients.option.serviceTier",
+        "clients.option.serviceTier.hint",
+        "clients.option.webSearch",
+        "clients.option.webSearch.hint",
+        "clients.option.approvalPolicy",
+        "clients.option.approvalPolicy.hint",
+        "clients.option.sandboxMode",
+        "clients.option.sandboxMode.hint",
         "clients.option.modelCatalog",
         "clients.option.modelCatalog.hint",
         "clients.optionChoice.default",
@@ -516,6 +530,22 @@ internal static class Messages
         "clients.optionChoice.low",
         "clients.optionChoice.medium",
         "clients.optionChoice.high",
+        "clients.optionChoice.xhigh",
+        "clients.optionChoice.auto",
+        "clients.optionChoice.concise",
+        "clients.optionChoice.detailed",
+        "clients.optionChoice.none",
+        "clients.optionChoice.fast",
+        "clients.optionChoice.flex",
+        "clients.optionChoice.disabled",
+        "clients.optionChoice.cached",
+        "clients.optionChoice.live",
+        "clients.optionChoice.untrusted",
+        "clients.optionChoice.on-request",
+        "clients.optionChoice.never",
+        "clients.optionChoice.read-only",
+        "clients.optionChoice.workspace-write",
+        "clients.optionChoice.danger-full-access",
         "clients.modelSlot.ANTHROPIC_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL",
         "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL",
@@ -4319,12 +4349,26 @@ internal static class Messages
             case "clients.option.autoModeServerOff.hint": return "写入 CLAUDE_CODE_AUTO_MODE_SERVER=0：auto 模式不再向服务端请求审查，改用 Claude Code 自带的分类器。上游不支持服务端审查、auto 模式反复要求手动确认时打开。";
             case "clients.option.subagentModelForce": return "所有子代理使用子代理模型";
             case "clients.option.subagentModelForce.hint": return "写入 CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1：忽略子代理定义（frontmatter）和单次调用里指定的模型，所有子代理统一用「子代理模型」，没选时用主模型。";
+            case "clients.option.supportsWebsockets": return "启用 WebSocket";
+            case "clients.option.supportsWebsockets.hint": return "在 [model_providers.astra] 中写入 supports_websockets = true，让 Codex 通过 Astra 的 /v1/responses WebSocket 连接长会话；关闭则使用普通 HTTP/SSE。";
             case "clients.option.contextWindow": return "上下文窗口";
-            case "clients.option.contextWindow.hint": return "写入 model_context_window；留空则用 Codex 默认值。";
+            case "clients.option.contextWindow.hint": return "写入 model_context_window；不设置则用 Codex 默认值。";
             case "clients.option.autoCompactTokenLimit": return "自动压缩阈值";
-            case "clients.option.autoCompactTokenLimit.hint": return "写入 model_auto_compact_token_limit，达到后自动压缩会话；留空则不设置。";
+            case "clients.option.autoCompactTokenLimit.hint": return "写入 model_auto_compact_token_limit，达到后自动压缩会话；不设置则用 Codex 默认值。";
             case "clients.option.reasoningEffort": return "推理强度";
             case "clients.option.reasoningEffort.hint": return "写入 model_reasoning_effort；默认则不设置。";
+            case "clients.option.reasoningSummary": return "推理摘要";
+            case "clients.option.reasoningSummary.hint": return "写入 model_reasoning_summary，控制推理过程的摘要显示；默认则不设置。";
+            case "clients.option.modelVerbosity": return "输出详略";
+            case "clients.option.modelVerbosity.hint": return "写入 model_verbosity，控制回复的详细程度；默认则不设置。";
+            case "clients.option.serviceTier": return "服务档位";
+            case "clients.option.serviceTier.hint": return "写入 service_tier（fast 快速 / flex 弹性），控制上游请求的处理优先级；默认则不设置。";
+            case "clients.option.webSearch": return "联网搜索";
+            case "clients.option.webSearch.hint": return "写入 web_search，控制 Codex 内置的联网搜索工具；第三方上游不支持时可选禁用。";
+            case "clients.option.approvalPolicy": return "审批策略";
+            case "clients.option.approvalPolicy.hint": return "写入 approval_policy，控制执行命令或修改前何时请求确认；默认则不设置。";
+            case "clients.option.sandboxMode": return "沙箱模式";
+            case "clients.option.sandboxMode.hint": return "写入 sandbox_mode，控制 Codex 的文件系统与执行隔离级别；默认则不设置。";
             case "clients.option.modelCatalog": return "写入模型目录";
             case "clients.option.modelCatalog.hint": return "把所绑定提供商的模型追加到 Codex 的模型目录（~/.codex/astra-models.json，由 model_catalog_json 指向），原有模型全部保留。需要先运行过一次 Codex（生成 models_cache.json）；Codex 只在启动时读取目录，模型变化后需重启 Codex。";
             case "clients.optionChoice.default": return "默认";
@@ -4334,6 +4378,22 @@ internal static class Messages
             case "clients.optionChoice.low": return "低";
             case "clients.optionChoice.medium": return "中";
             case "clients.optionChoice.high": return "高";
+            case "clients.optionChoice.xhigh": return "极高";
+            case "clients.optionChoice.auto": return "自动";
+            case "clients.optionChoice.concise": return "简洁";
+            case "clients.optionChoice.detailed": return "详细";
+            case "clients.optionChoice.none": return "不显示";
+            case "clients.optionChoice.fast": return "快速";
+            case "clients.optionChoice.flex": return "弹性";
+            case "clients.optionChoice.disabled": return "禁用";
+            case "clients.optionChoice.cached": return "缓存";
+            case "clients.optionChoice.live": return "实时";
+            case "clients.optionChoice.untrusted": return "未受信任时";
+            case "clients.optionChoice.on-request": return "按需询问";
+            case "clients.optionChoice.never": return "从不询问";
+            case "clients.optionChoice.read-only": return "只读";
+            case "clients.optionChoice.workspace-write": return "工作区可写";
+            case "clients.optionChoice.danger-full-access": return "完全访问";
             case "clients.modelSlot.ANTHROPIC_MODEL": return "默认模型";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL": return "Fable 档位";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL": return "Opus 档位";
@@ -8139,12 +8199,26 @@ internal static class Messages
             case "clients.option.autoModeServerOff.hint": return "Writes CLAUDE_CODE_AUTO_MODE_SERVER=0 so auto mode stops asking the server to review actions and uses Claude Code's own classifier. Turn it on when the upstream cannot answer the server review and auto mode keeps asking you to confirm.";
             case "clients.option.subagentModelForce": return "Use the subagent model for every subagent";
             case "clients.option.subagentModelForce.hint": return "Writes CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1: the model a subagent definition (frontmatter) or a single spawn names is ignored, and every subagent uses the subagent model, or the main model when none is chosen.";
+            case "clients.option.supportsWebsockets": return "Enable WebSocket";
+            case "clients.option.supportsWebsockets.hint": return "Writes supports_websockets = true under [model_providers.astra] so Codex uses Astra's /v1/responses WebSocket transport; turn off to use standard HTTP/SSE.";
             case "clients.option.contextWindow": return "Context window";
-            case "clients.option.contextWindow.hint": return "Writes model_context_window; leave empty to use Codex's default.";
+            case "clients.option.contextWindow.hint": return "Writes model_context_window; Not set uses Codex's default.";
             case "clients.option.autoCompactTokenLimit": return "Auto-compact threshold";
-            case "clients.option.autoCompactTokenLimit.hint": return "Writes model_auto_compact_token_limit, the size at which the session is compacted; leave empty to not set it.";
+            case "clients.option.autoCompactTokenLimit.hint": return "Writes model_auto_compact_token_limit, the size at which the session is compacted; Not set uses Codex's default.";
             case "clients.option.reasoningEffort": return "Reasoning effort";
             case "clients.option.reasoningEffort.hint": return "Writes model_reasoning_effort; Default leaves it unset.";
+            case "clients.option.reasoningSummary": return "Reasoning summary";
+            case "clients.option.reasoningSummary.hint": return "Writes model_reasoning_summary to control how reasoning summaries are shown; Default leaves it unset.";
+            case "clients.option.modelVerbosity": return "Output verbosity";
+            case "clients.option.modelVerbosity.hint": return "Writes model_verbosity to control how concise or detailed replies are; Default leaves it unset.";
+            case "clients.option.serviceTier": return "Service tier";
+            case "clients.option.serviceTier.hint": return "Writes service_tier (fast / flex) to request a processing tier from the upstream; Default leaves it unset.";
+            case "clients.option.webSearch": return "Web search";
+            case "clients.option.webSearch.hint": return "Writes web_search to control Codex's built-in web search tool; pick Disabled when the upstream does not support it.";
+            case "clients.option.approvalPolicy": return "Approval policy";
+            case "clients.option.approvalPolicy.hint": return "Writes approval_policy to control when Codex asks for confirmation before running actions; Default leaves it unset.";
+            case "clients.option.sandboxMode": return "Sandbox mode";
+            case "clients.option.sandboxMode.hint": return "Writes sandbox_mode to control filesystem and execution isolation; Default leaves it unset.";
             case "clients.option.modelCatalog": return "Write model catalog";
             case "clients.option.modelCatalog.hint": return "Appends the bound providers' models to Codex's model catalog (~/.codex/astra-models.json, pointed to by model_catalog_json); every existing model is kept. Run Codex once first (it writes models_cache.json). Codex reads the catalog only at startup, so restart it after the models change.";
             case "clients.optionChoice.default": return "Default";
@@ -8154,6 +8228,22 @@ internal static class Messages
             case "clients.optionChoice.low": return "Low";
             case "clients.optionChoice.medium": return "Medium";
             case "clients.optionChoice.high": return "High";
+            case "clients.optionChoice.xhigh": return "Extra high";
+            case "clients.optionChoice.auto": return "Auto";
+            case "clients.optionChoice.concise": return "Concise";
+            case "clients.optionChoice.detailed": return "Detailed";
+            case "clients.optionChoice.none": return "None";
+            case "clients.optionChoice.fast": return "Fast";
+            case "clients.optionChoice.flex": return "Flex";
+            case "clients.optionChoice.disabled": return "Disabled";
+            case "clients.optionChoice.cached": return "Cached";
+            case "clients.optionChoice.live": return "Live";
+            case "clients.optionChoice.untrusted": return "Untrusted";
+            case "clients.optionChoice.on-request": return "On request";
+            case "clients.optionChoice.never": return "Never";
+            case "clients.optionChoice.read-only": return "Read-only";
+            case "clients.optionChoice.workspace-write": return "Workspace write";
+            case "clients.optionChoice.danger-full-access": return "Full access";
             case "clients.modelSlot.ANTHROPIC_MODEL": return "Default model";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_FABLE_MODEL": return "Fable tier";
             case "clients.modelSlot.ANTHROPIC_DEFAULT_OPUS_MODEL": return "Opus tier";

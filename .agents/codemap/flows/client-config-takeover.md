@@ -186,6 +186,11 @@ sequenceDiagram
   consumer (adapter for scope `config`; gateway for scope `gateway`, read through `route.Client.ExtraJson`), its
   key path in `ClientOptions.ConfigKeyPaths` so unsetting/disabling restores it, plus zh/en
   `clients.option.<key>[.hint]` — the panel renders itself from the descriptors on `ClientInfoDto.Options`.
+  Integer descriptors may supply `Choices` as UI presets: the web and Avalonia option groups render a select, retain
+  an existing custom numeric value, and still save JSON numbers. Enum choices remain a validation allowlist.
+  Mirror adapters/descriptors in `packages/client-config` and regenerate shared golden fixtures; regenerate desktop
+  i18n after adding labels. Codex's WebSocket option writes the provider-scoped `model_providers.astra.supports_websockets`,
+  tracked separately from the table so clearing it restores the original transport preference.
 - **A client that can use more than one protocol:** list them in `ClientProtocols.For` (`Astra.Core/Clients/ClientProtocols.cs`,
   default first) and have the adapter write each model with `ClientAdapterBase.ModelProtocols(ctx, default)` — per model when
   the client allows it (NextCoWork `protocolOverride`, Pi/omp `api`, OpenCode `provider.npm`, VS Code `apiType` …), else one

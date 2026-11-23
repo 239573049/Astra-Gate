@@ -97,6 +97,32 @@ public static class ClientExtras
         return long.TryParse(digits, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : long.MaxValue;
     }
 
+    /// <summary>Formats a positive integer preset for display (web <c>formatIntOptionChoice</c>, e.g. 200000 -&gt; "200K", 1000000 -&gt; "1M").</summary>
+    public static string FormatIntOptionChoice(long value) =>
+        value >= 1_000_000 && value % 1_000_000 == 0
+            ? (value / 1_000_000).ToString(System.Globalization.CultureInfo.InvariantCulture) + "M"
+            : value >= 1_000 && value % 1_000 == 0
+                ? (value / 1_000).ToString(System.Globalization.CultureInfo.InvariantCulture) + "K"
+                : value.ToString("N0", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Dropdown options for an int descriptor with preset choices (web <c>intOptionChoices</c>; keeps any legacy custom value selectable).</summary>
+    public static List<(string Value, string Label)> IntOptionChoices(ClientOptionDescriptor d, long? current, string unsetLabel)
+    {
+        var nums = new List<long>();
+        foreach (var raw in d.Choices ?? [])
+            if (long.TryParse(raw, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 && !nums.Contains(n))
+                nums.Add(n);
+        if (current is { } c && c > 0 && !nums.Contains(c))
+        {
+            nums.Add(c);
+            nums.Sort();
+        }
+        var result = new List<(string, string)>(nums.Count + 1) { ("", unsetLabel) };
+        foreach (var n in nums)
+            result.Add((n.ToString(System.Globalization.CultureInfo.InvariantCulture), FormatIntOptionChoice(n)));
+        return result;
+    }
+
     /// <summary>Stable comparison key of an option map (web <c>clientOptionsKey</c>).</summary>
     public static string OptionsKey(IReadOnlyDictionary<string, OptionValue> o)
         => string.Join("\n", o.Keys.OrderBy(k => k, StringComparer.Ordinal).Select(k => k + "=" + o[k].KeyText));

@@ -8,6 +8,12 @@
     },
     {
       "file": "$HOME/.codex/config.toml",
+      "keyPath": "approval_policy",
+      "outcome": "nottracked",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
       "keyPath": "model_providers.astra",
       "outcome": "restored",
       "detail": null

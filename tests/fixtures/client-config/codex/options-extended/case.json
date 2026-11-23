@@ -1,0 +1,41 @@
+{
+  "client": "codex",
+  "env": {},
+  "gatewayBaseUrl": "https://astra.corp.com",
+  "localKey": "sk-astra-enterprise-key",
+  "model": "gpt-5",
+  "extras": {
+    "models": {
+      "gpt-5": {
+        "id": "gpt-5",
+        "name": "GPT-5",
+        "contextWindow": 400000,
+        "maxOutputTokens": 128000,
+        "reasoning": true,
+        "protocols": [
+          "openai-responses"
+        ]
+      }
+    },
+    "options": {
+      "supportsWebsockets": true,
+      "contextWindow": 1000000,
+      "autoCompactTokenLimit": 900000,
+      "reasoningEffort": "xhigh",
+      "reasoningSummary": "concise",
+      "modelVerbosity": "low",
+      "serviceTier": "fast",
+      "webSearch": "disabled",
+      "approvalPolicy": "never",
+      "sandboxMode": "workspace-write"
+    }
+  },
+  "steps": [
+    {
+      "op": "enable"
+    },
+    {
+      "op": "disable"
+    }
+  ]
+}

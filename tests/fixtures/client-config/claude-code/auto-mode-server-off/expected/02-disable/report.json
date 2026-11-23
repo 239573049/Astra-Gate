@@ -14,6 +14,12 @@
     },
     {
       "file": "$HOME/.claude/settings.json",
+      "keyPath": "env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "outcome": "nottracked",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.claude/settings.json",
       "keyPath": "env.CLAUDE_CODE_AUTO_MODE_SERVER",
       "outcome": "restored",
       "detail": null

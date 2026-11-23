@@ -149,7 +149,27 @@ export class CodexClientAdapter extends ClientAdapterBase {
     const effort = getChoiceOption(ctx.extras, ClientOptionKeys.reasoningEffort);
     if (effort !== null)
       changes.push(this.topKey(file, 'model_reasoning_effort', ClientAdapterBase.jsonString(tomlString(effort))));
+    const summary = getChoiceOption(ctx.extras, ClientOptionKeys.reasoningSummary);
+    if (summary !== null)
+      changes.push(this.topKey(file, 'model_reasoning_summary', ClientAdapterBase.jsonString(tomlString(summary))));
+    const verbosity = getChoiceOption(ctx.extras, ClientOptionKeys.modelVerbosity);
+    if (verbosity !== null)
+      changes.push(this.topKey(file, 'model_verbosity', ClientAdapterBase.jsonString(tomlString(verbosity))));
+    const tier = getChoiceOption(ctx.extras, ClientOptionKeys.serviceTier);
+    if (tier !== null)
+      changes.push(this.topKey(file, 'service_tier', ClientAdapterBase.jsonString(tomlString(tier))));
+    const webSearch = getChoiceOption(ctx.extras, ClientOptionKeys.webSearch);
+    if (webSearch !== null)
+      changes.push(this.topKey(file, 'web_search', ClientAdapterBase.jsonString(tomlString(webSearch))));
+    const approval = getChoiceOption(ctx.extras, ClientOptionKeys.approvalPolicy);
+    if (approval !== null)
+      changes.push(this.topKey(file, 'approval_policy', ClientAdapterBase.jsonString(tomlString(approval))));
+    const sandbox = getChoiceOption(ctx.extras, ClientOptionKeys.sandboxMode);
+    if (sandbox !== null)
+      changes.push(this.topKey(file, 'sandbox_mode', ClientAdapterBase.jsonString(tomlString(sandbox))));
     changes.push(...this.providerTableChanges(file, ctx));
+    if (getBoolOption(ctx.extras, ClientOptionKeys.supportsWebsockets))
+      changes.push(this.topKey(file, `model_providers.${PROVIDER_ID}.supports_websockets`, ClientAdapterBase.jsonString('true')));
     if (getBoolOption(ctx.extras, ClientOptionKeys.modelCatalog)) {
       const catalog = this.catalogModels(ctx);
       if (catalog !== null) {

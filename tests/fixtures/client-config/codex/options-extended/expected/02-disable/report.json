@@ -1,0 +1,84 @@
+{
+  "keys": [
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_provider",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_providers.astra.supports_websockets",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_context_window",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_auto_compact_token_limit",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_reasoning_effort",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_reasoning_summary",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_verbosity",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "service_tier",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "web_search",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "approval_policy",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "sandbox_mode",
+      "outcome": "restored",
+      "detail": null
+    },
+    {
+      "file": "$HOME/.codex/config.toml",
+      "keyPath": "model_providers.astra",
+      "outcome": "restored",
+      "detail": null
+    }
+  ],
+  "deletedFiles": [],
+  "warnings": []
+}

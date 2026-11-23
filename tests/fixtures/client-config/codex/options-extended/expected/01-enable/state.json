@@ -1,0 +1,93 @@
+[
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "approval_policy",
+    "originalAbsent": false,
+    "original": "\"\\u0022on-request\\u0022\"",
+    "applied": "\"\\u0022never\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022gpt-5\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_auto_compact_token_limit",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"900000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_context_window",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"1000000\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_provider",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022astra\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_providers.astra",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_providers.astra.supports_websockets",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"true\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_reasoning_effort",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022xhigh\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_reasoning_summary",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022concise\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "model_verbosity",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022low\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "sandbox_mode",
+    "originalAbsent": false,
+    "original": "\"\\u0022read-only\\u0022\"",
+    "applied": "\"\\u0022workspace-write\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "service_tier",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022fast\\u0022\""
+  },
+  {
+    "file": "$HOME/.codex/config.toml",
+    "keyPath": "web_search",
+    "originalAbsent": true,
+    "original": null,
+    "applied": "\"\\u0022disabled\\u0022\""
+  }
+]

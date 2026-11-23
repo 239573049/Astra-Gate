@@ -1,0 +1,19 @@
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+model_provider = "astra"
+model = "gpt-5"
+model_context_window = 1000000
+model_auto_compact_token_limit = 900000
+model_reasoning_effort = "xhigh"
+model_reasoning_summary = "concise"
+model_verbosity = "low"
+service_tier = "fast"
+web_search = "disabled"
+
+[model_providers.astra]
+name = "Astra"
+base_url = "https://astra.corp.com/v1"
+wire_api = "responses"
+experimental_bearer_token = "sk-astra-enterprise-key"
+requires_openai_auth = false
+supports_websockets = true
