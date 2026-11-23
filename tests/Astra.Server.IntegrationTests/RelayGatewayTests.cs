@@ -374,4 +374,81 @@ public sealed class RelayGatewayTests
         Assert.All(relay.Upstream.Requests, request => Assert.Equal("api.moonshot.ai", request.Uri.Host));
         Assert.Equal(["/v1/models", "/v1/chat/completions"], relay.Upstream.Requests.Select(request => request.Uri.AbsolutePath));
     }
+
+    // ---- A Gemini client in front of a Chat upstream: OpenAPI schemas, a refused prompt, cache hits.
+
+    private const string GeminiModelList = """{"data":[{"id":"gemini-4-carbon","supported_endpoints":["/chat/completions"]}]}""";
+
+    private static RelayUpstream ChatUpstream(Func<RelaySent, HttpResponseMessage>? answer = null) => new()
+    {
+        Respond = (sent, _) => Task.FromResult(sent.Uri.AbsolutePath == "/models"
+            ? RelayUpstream.Json(GeminiModelList) : answer?.Invoke(sent) ?? RelayUpstream.Default(sent)),
+    };
+
+    [Fact]
+    public async Task A_Gemini_clients_OpenApi_schemas_reach_a_Chat_upstream_as_JSON_Schema()
+    {
+        await using var relay = await RelayHost.StartAsync(ChatUpstream());
+        using var response = await relay.SendAsync("/v1beta/models/gemini-4-carbon:generateContent", """
+            {"contents":[{"role":"user","parts":[{"text":"hi"}]}],
+             "tools":[{"functionDeclarations":[{"name":"get_weather","parameters":
+               {"type":"OBJECT","properties":{"city":{"type":"STRING"},"days":{"type":"INTEGER","nullable":true}},"required":["city"]}}]}],
+             "generationConfig":{"responseMimeType":"application/json","responseSchema":{"type":"OBJECT","properties":{"answer":{"type":"STRING"}}}}}
+            """);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var sent = JsonNode.Parse(Assert.Single(relay.Upstream.Requests, request => request.Uri.AbsolutePath == "/chat/completions").Text)!;
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"object","properties":{"city":{"type":"string"},"days":{"type":["integer","null"]}},"required":["city"]}"""),
+            sent["tools"]![0]!["function"]!["parameters"]));
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"object","properties":{"answer":{"type":"string"}}}"""),
+            sent["response_format"]!["json_schema"]!["schema"]));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_prompt_the_upstream_refuses_reaches_a_Gemini_client_as_prompt_feedback(bool stream)
+    {
+        // How GitHub Copilot refuses a prompt: no choices, no finish reason, only the usage.
+        const string usage = """{"prompt_tokens":4748,"completion_tokens":0,"total_tokens":4748}""";
+        var upstream = ChatUpstream(_ => stream
+            ? RelayUpstream.Sse($"data: {{\"id\":\"c1\",\"model\":\"gemini-4-carbon\",\"choices\":[],\"usage\":{usage}}}\n\ndata: [DONE]\n\n")
+            : RelayUpstream.Json($$$"""{"id":"c1","object":"chat.completion","model":"gemini-4-carbon","choices":[],"usage":{{{usage}}}}"""));
+        await using var relay = await RelayHost.StartAsync(upstream);
+        using var response = await relay.SendAsync(
+            stream ? "/v1beta/models/gemini-4-carbon:streamGenerateContent?alt=sse" : "/v1beta/models/gemini-4-carbon:generateContent",
+            """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var text = await response.Content.ReadAsStringAsync();
+        var reply = JsonNode.Parse(stream ? text.Split('\n').Last(line => line.StartsWith("data:", StringComparison.Ordinal))[5..] : text)!;
+        Assert.Empty(reply["candidates"]!.AsArray());
+        Assert.Equal("OTHER", reply["promptFeedback"]!["blockReason"]!.GetValue<string>());
+        Assert.Equal(4748, reply["usageMetadata"]!["promptTokenCount"]!.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_Chat_upstreams_cache_hits_reach_a_Gemini_client_as_cachedContentTokenCount(bool stream)
+    {
+        const string usage = """{"prompt_tokens":4096,"completion_tokens":12,"total_tokens":4108,"prompt_tokens_details":{"cached_tokens":3000}}""";
+        var upstream = ChatUpstream(_ => stream
+            ? RelayUpstream.Sse(
+                $"data: {{\"id\":\"c1\",\"model\":\"gemini-4-carbon\",\"choices\":[{{\"index\":0,\"delta\":{{\"content\":\"hi\"}},\"finish_reason\":\"stop\"}}]}}\n\n"
+                + $"data: {{\"id\":\"c1\",\"model\":\"gemini-4-carbon\",\"choices\":[],\"usage\":{usage}}}\n\ndata: [DONE]\n\n")
+            : RelayUpstream.Json($$$"""{"id":"c1","object":"chat.completion","model":"gemini-4-carbon","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{{{usage}}}}"""));
+        await using var relay = await RelayHost.StartAsync(upstream);
+        using var response = await relay.SendAsync(
+            stream ? "/v1beta/models/gemini-4-carbon:streamGenerateContent?alt=sse" : "/v1beta/models/gemini-4-carbon:generateContent",
+            """{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}""");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var text = await response.Content.ReadAsStringAsync();
+        var reply = JsonNode.Parse(stream ? text.Split('\n').Last(line => line.StartsWith("data:", StringComparison.Ordinal))[5..] : text)!;
+        Assert.Equal(4096, reply["usageMetadata"]!["promptTokenCount"]!.GetValue<int>());
+        Assert.Equal(3000, reply["usageMetadata"]!["cachedContentTokenCount"]!.GetValue<int>());
+    }
 }

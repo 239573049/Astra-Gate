@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Core.Billing;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Protocol.Chat;
 using Astra.Gateway.Protocol.Gemini;
 
 namespace Astra.Gateway.Tests.Codecs;
@@ -198,5 +199,100 @@ public class GeminiResponseEncoderTests
         Assert.True(part["thought"]!.GetValue<bool>());
         Assert.Null(part["thoughtSignature"]); // signature only round-trips for its own protocol
         Assert.Single((JsonArray)((JsonArray)json["candidates"]!)[0]!["content"]!["parts"]!);
+    }
+
+    // A Chat upstream refuses a prompt by answering with an empty `choices` next to the usage and no finish reason of its own
+    // (GitHub Copilot does). Gemini says that in promptFeedback; a client that finds neither a candidate nor feedback reads an
+    // empty upstream answer.
+    [Fact]
+    public void A_Refused_Prompt_Has_Prompt_Feedback_And_No_Candidate()
+    {
+        var usage = UsageNormalizer.Normalize(ApiProtocol.Gemini, GeminiUsageRaw.DeepClone())!;
+
+        var (frames, json) = Run(
+            new MessageStartEvent("resp-1", "m"),
+            new UsageEvent(ApiProtocol.Gemini, (JsonObject)GeminiUsageRaw.DeepClone(), usage),
+            new MessageStopEvent(FinishReason.Other));
+
+        Assert.Single(frames);
+        foreach (var body in new[] { Chunk(frames[^1]), json })
+        {
+            Assert.Empty((JsonArray)body["candidates"]!);
+            Assert.Equal("OTHER", body["promptFeedback"]!["blockReason"]!.GetValue<string>());
+            Assert.Equal(120L, body["usageMetadata"]!["promptTokenCount"]!.GetValue<long>()); // the usage it still reported
+            Assert.Equal("gemini-2.5-flash", body["modelVersion"]!.GetValue<string>());
+            Assert.Equal("rid-1", body["responseId"]!.GetValue<string>());
+        }
+    }
+
+    [Theory]
+    [InlineData(FinishReason.Other, "weird")]                   // the upstream said why it stopped: that is a finish reason, not a refusal
+    [InlineData(FinishReason.ContentFilter, "content_filter")]
+    [InlineData(FinishReason.Stop, "stop")]
+    public void An_Answer_With_A_Finish_Reason_Stays_A_Candidate(FinishReason reason, string raw)
+    {
+        var (frames, json) = Run(new MessageStopEvent(reason, raw));
+
+        Assert.Null(json["promptFeedback"]);
+        Assert.Null(Chunk(frames[^1])["promptFeedback"]);
+        Assert.Single((JsonArray)json["candidates"]!);
+    }
+
+    [Fact]
+    public void An_Answer_With_Content_Never_Has_Prompt_Feedback()
+    {
+        var (frames, json) = Run(new TextDeltaEvent(0, "hi"), new MessageStopEvent(FinishReason.Other));
+
+        Assert.Null(json["promptFeedback"]);
+        Assert.Null(Chunk(frames[^1])["promptFeedback"]);
+    }
+
+    // A Chat upstream reports its cache hits in prompt_tokens_details.cached_tokens, inside prompt_tokens. A Gemini client reads
+    // them as cachedContentTokenCount, inside promptTokenCount.
+    private const string ChatUsage =
+        """{"prompt_tokens":4096,"completion_tokens":12,"total_tokens":4108,"prompt_tokens_details":{"cached_tokens":3000}}""";
+
+    private static void AssertGeminiUsage(JsonNode? usage)
+    {
+        Assert.Equal(4096L, usage!["promptTokenCount"]!.GetValue<long>());
+        Assert.Equal(3000L, usage["cachedContentTokenCount"]!.GetValue<long>());
+        Assert.Equal(12L, usage["candidatesTokenCount"]!.GetValue<long>());
+        Assert.Equal(4108L, usage["totalTokenCount"]!.GetValue<long>());
+    }
+
+    [Fact]
+    public void Chat_Cache_Hits_Reach_A_Gemini_Client_In_A_Complete_Answer()
+    {
+        var decoder = new ChatResponseDecoder(new ResponseDecodeContext { Model = "m" });
+        var encoder = new GeminiResponseEncoder(Ctx);
+        var body = (JsonObject)JsonNode.Parse(
+            """{"id":"c1","model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":__usage__}"""
+                .Replace("__usage__", ChatUsage))!;
+
+        foreach (var e in decoder.DecodeJson(body)) encoder.OnEvent(e);
+
+        AssertGeminiUsage(encoder.BuildJson()["usageMetadata"]);
+    }
+
+    [Fact]
+    public void Chat_Cache_Hits_Reach_A_Gemini_Client_In_A_Stream()
+    {
+        var decoder = new ChatResponseDecoder(new ResponseDecodeContext { Model = "m", Stream = true });
+        var encoder = new GeminiResponseEncoder(Ctx);
+        string[] chunks =
+        [
+            """{"id":"c1","model":"m","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":null}]}""",
+            """{"id":"c1","model":"m","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}""",
+            """{"id":"c1","model":"m","choices":[],"usage":__usage__}""".Replace("__usage__", ChatUsage),
+            "[DONE]",
+        ];
+        var frames = new List<SseEvent>();
+
+        foreach (var chunk in chunks)
+        {
+            foreach (var e in decoder.DecodeSse(new SseEvent(null, chunk))) frames.AddRange(encoder.OnEvent(e));
+        }
+
+        AssertGeminiUsage(Chunk(frames[^1])["usageMetadata"]);
     }
 }

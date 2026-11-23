@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Astra.Core;
 using Astra.Gateway.Protocol;
+using Astra.Gateway.Protocol.Anthropic;
+using Astra.Gateway.Protocol.Chat;
 using Astra.Gateway.Protocol.Gemini;
 
 namespace Astra.Gateway.Tests.Codecs;
@@ -152,6 +154,75 @@ public class GeminiRequestDecodeTests
         // Responses without ids claim the earliest earlier call with the same name, in order.
         Assert.Equal("call_get_weather_0", Assert.IsType<ToolResultPart>(Assert.Single(ir.Messages[2].Parts)).CallId);
         Assert.Equal("call_get_weather_1", Assert.IsType<ToolResultPart>(Assert.Single(ir.Messages[3].Parts)).CallId);
+    }
+
+    // `parameters` and `responseSchema` are Gemini's OpenAPI-subset Schema (upper-case types, nullable); the IR holds JSON Schema.
+    private static UnifiedRequest Decode(string json) =>
+        new GeminiCodec().DecodeRequest((JsonObject)JsonNode.Parse(json)!, new RequestDecodeContext { PathModel = "m", PathStream = false });
+
+    private const string WeatherDeclaration = """
+        {"contents":[{"role":"user","parts":[{"text":"hi"}]}],
+         "tools":[{"functionDeclarations":[{"name":"get_weather","description":"d","parameters":
+           {"type":"OBJECT","properties":{"city":{"type":"STRING"},"days":{"type":"INTEGER","nullable":true}},"required":["city"]}}]}]}
+        """;
+
+    [Fact]
+    public void OpenApi_Parameters_Are_Read_As_Json_Schema()
+    {
+        var tool = Assert.Single(Decode(WeatherDeclaration).Tools);
+
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"object","properties":{"city":{"type":"string"},"days":{"type":["integer","null"]}},"required":["city"]}"""),
+            tool.InputSchema));
+    }
+
+    [Fact]
+    public void Parameters_Json_Schema_Wins_And_Is_Taken_As_It_Is()
+    {
+        // JSON Schema already: an enum value that spells a Gemini type, or a property called "nullable", stays what it says.
+        var ir = Decode("""
+            {"contents":[{"role":"user","parts":[{"text":"hi"}]}],
+             "tools":[{"functionDeclarations":[{"name":"f","parameters":{"type":"OBJECT"},
+               "parametersJsonSchema":{"type":"object","properties":{"nullable":{"type":"string","enum":["OBJECT"]}}}}]}]}
+            """);
+
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"object","properties":{"nullable":{"type":"string","enum":["OBJECT"]}}}"""),
+            Assert.Single(ir.Tools).InputSchema));
+    }
+
+    [Fact]
+    public void OpenApi_Response_Schema_Is_Read_As_Json_Schema_And_Response_Json_Schema_Is_Not()
+    {
+        var openApi = Decode("""
+            {"contents":[{"role":"user","parts":[{"text":"hi"}]}],
+             "generationConfig":{"responseMimeType":"application/json","responseSchema":{"type":"OBJECT","properties":{"answer":{"type":"STRING"}}}}}
+            """);
+        // The standard field wins and is not converted: here "STRING" is an enum value, not a type name.
+        var standard = Decode("""
+            {"contents":[{"role":"user","parts":[{"text":"hi"}]}],
+             "generationConfig":{"responseMimeType":"application/json","responseSchema":{"type":"OBJECT"},
+               "responseJsonSchema":{"type":"object","properties":{"answer":{"type":"string","enum":["STRING"]}}}}}
+            """);
+
+        Assert.Equal("json_schema", openApi.ResponseFormat!.Type);
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"object","properties":{"answer":{"type":"string"}}}"""), openApi.ResponseFormat.Schema));
+        Assert.True(JsonNode.DeepEquals(
+            JsonNode.Parse("""{"type":"object","properties":{"answer":{"type":"string","enum":["STRING"]}}}"""), standard.ResponseFormat!.Schema));
+    }
+
+    [Fact]
+    public void A_Declaration_Reaches_Chat_And_Messages_Upstreams_As_Json_Schema()
+    {
+        var ir = Decode(WeatherDeclaration);
+        const string expected = """{"type":"object","properties":{"city":{"type":"string"},"days":{"type":["integer","null"]}},"required":["city"]}""";
+
+        var chat = new ChatCodec().EncodeRequest(ir, new RequestEncodeContext { UpstreamModel = "chat-model" });
+        var messages = new AnthropicCodec().EncodeRequest(ir, new RequestEncodeContext { UpstreamModel = "claude-model" });
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), chat["tools"]![0]!["function"]!["parameters"]));
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), messages["tools"]![0]!["input_schema"]));
     }
 
     [Fact]

@@ -62,7 +62,10 @@ public sealed class UnifiedTool
     public string Name { get; init; } = "";
     public string? Description { get; init; }
 
-    /// <summary>JSON schema of the arguments (function tools).</summary>
+    /// <summary>
+    /// JSON schema of the arguments (function tools). A Gemini client's OpenAPI-subset <c>parameters</c> is read as JSON Schema by the
+    /// Gemini decoder (<c>GeminiSchemas</c>: lower-case type names, <c>nullable</c> as a null type, the <c>propertyOrdering</c> hint dropped).
+    /// </summary>
     public JsonNode? InputSchema { get; init; }
 
     public bool? Strict { get; init; }
@@ -129,7 +132,10 @@ public sealed class ResponseFormat
     public string Type { get; set; } = "text";
 
     public string? Name { get; set; }
+
+    /// <summary>JSON schema of the output; Gemini's OpenAPI-subset <c>responseSchema</c> is converted like <see cref="UnifiedTool.InputSchema"/>.</summary>
     public JsonNode? Schema { get; set; }
+
     public bool? Strict { get; set; }
 }
 
