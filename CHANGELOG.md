@@ -4,6 +4,13 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.15.1] - 2026-11-23
+
+### 修复
+
+- **Gemini 客户端的函数声明与结构化输出跨协议发给上游时被拒**：Gemini 客户端用 `parameters` 或 `responseSchema` 发送的 schema 是 OpenAPI 子集（大写类型名如 `OBJECT` / `STRING`、`nullable: true`、`propertyOrdering`），之前网关原样转发给 OpenAI Chat、Anthropic Messages 或 Responses 上游（例如 GitHub Copilot 的 Gemini 模型会因此返回 400 `invalid request body`）。现在在 Gemini 解码阶段自动转为标准 JSON Schema（小写类型、`nullable` 合并进类型 / `anyOf` / `enum`、丢弃 `propertyOrdering`）；原本就是 JSON Schema 的 `parametersJsonSchema` 和 `responseJsonSchema` 保持原样。
+- **上游拒绝提示时 Gemini 客户端只收到空 candidate**：当 Chat 上游以空的 `choices` 加 `usage`（无 `finish_reason`）拒绝请求时，网关之前会拼出一个内容为空、结束原因为 `OTHER` 的 candidate。现在改为返回 `candidates: []` 和 `promptFeedback.blockReason: "OTHER"`，并保留上游上报的 `usageMetadata`，流式与非流式一致；上游给出了明确结束原因（含 `content_filter`）的响应保持原来的 candidate 结构。
+
 ## [0.15.0] - 2026-11-23
 
 ### 新增
