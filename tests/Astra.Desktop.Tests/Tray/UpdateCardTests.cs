@@ -15,10 +15,12 @@ public class UpdateCardTests
     [Fact]
     public void The_reminder_offers_update_later_and_skip_with_the_notes()
     {
-        var card = UpdateCards.Available(Zh, new UpdateSummary("…", UpdateAction.DesktopDmg, "0.15.0", "  修复若干问题  "), reminder: true);
+        var card = UpdateCards.Available(Zh, new UpdateSummary("…", UpdateAction.DesktopDmg, "0.15.0", "  ### 新增\r\n\r\n- 修复若干问题  "), reminder: true, currentVersion: "0.14.0");
         Assert.Equal(UpdateCardKind.Available, card.Kind);
         Assert.Equal("Astra 0.15.0 现已可用", card.Title);
-        Assert.Equal("修复若干问题", card.Notes);
+        Assert.Equal("### 新增\n\n- 修复若干问题", card.Notes);
+        Assert.Equal("更新内容", card.NotesHeading);
+        Assert.Equal("0.14.0", card.CurrentVersion);
         Assert.Equal([UpdateCardAction.Update, UpdateCardAction.Later, UpdateCardAction.Skip], Actions(card));
         Assert.True(card.Buttons[0].Primary);
         Assert.Equal(UpdateCardAction.Later, card.Dismiss);

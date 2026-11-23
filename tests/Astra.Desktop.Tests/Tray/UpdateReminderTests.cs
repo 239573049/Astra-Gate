@@ -49,13 +49,13 @@ public sealed class UpdateReminderTests
     }
 
     [Fact]
-    public void Notes_are_trimmed_and_cut_at_600_characters()
+    public void Notes_are_trimmed_and_normalized_without_truncating_markdown()
     {
         Assert.Null(UpdateDialogLabels.Notes("  "));
         Assert.Equal("a", UpdateDialogLabels.Notes(" a\n"));
-        var cut = UpdateDialogLabels.Notes(new string('x', 700))!;
-        Assert.Equal(601, cut.Length);
-        Assert.EndsWith("…", cut);
+        Assert.Equal("### 新增\n\n- **A**：`code`", UpdateDialogLabels.Notes("  ### 新增\r\n\r\n- **A**：`code`  "));
+        var longMarkdown = new string('x', 1200);
+        Assert.Equal(longMarkdown, UpdateDialogLabels.Notes(longMarkdown));
         Assert.Equal("Astra 1.0 is available", UpdateDialogLabels.For("en").Message("1.0"));
         Assert.Equal("Astra 1.0 现已可用", UpdateDialogLabels.For("zh").Message("1.0"));
     }

@@ -1,5 +1,6 @@
 using Astra.Core;
 using Astra.Desktop.Components.Tray;
+using Astra.Desktop.Components.Update;
 using Astra.Desktop.Core.Shell;
 using Astra.Desktop.Core.Connect;
 using Astra.Desktop.Core.Tray;
@@ -72,6 +73,10 @@ internal static class Program
             foreach (var state in new[] { new TrayPanelState(true, 1, null, true, "yes"), new TrayPanelState(false, null, null, false, null), new TrayPanelState(false, null, TrayActivity.Starting, false, null) })
                 panel.Update(TrayPrefs.Default, state, TrayData.Empty, DateTimeOffset.UtcNow, TimeSpan.Zero);
             _ = new TrayPopupWindow(panel);
+            // The update card and its Markdown renderer (TKCode.Arc.Markdown / StreamMark): instantiate and feed real Markdown so AOT keeps them.
+            var updateCard = new UpdateCardView();
+            updateCard.Render(UpdateCards.Available(UpdateDialogLabels.For("en"), new UpdateSummary("", UpdateAction.DesktopDmg, "1.0.0", "### Added\n\n- **Smoke**: `ok`"), reminder: true, currentVersion: "0.9.0"));
+            _ = new UpdateCardWindow(updateCard);
             // Every route's page: its title resolves and its view builds (the placeholder until the real page registers).
             foreach (var info in RouteInfo.Routes)
             {
@@ -103,6 +108,7 @@ internal static class Program
             arc.UseArcControls();
             arc.UseArcAdvancedCharts();
             arc.UseArcBlocks();
+            arc.UseArcMarkdown();
             // Last: the first window must already have the user's light / dark choice and accent (no flash).
             AppServices.Current.Theme.Configure(arc);
         })

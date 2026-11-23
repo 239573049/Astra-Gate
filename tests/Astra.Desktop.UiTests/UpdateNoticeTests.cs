@@ -123,4 +123,44 @@ public class UpdateNoticeTests
         Assert.False(card.Press(UpdateCardAction.Skip));
         Assert.Single(card.GetLogicalDescendants().OfType<TKCode.Arc.Button>());
     }
+
+    [AvaloniaFact]
+    public void Release_notes_render_through_the_markdown_control_and_expand_card_width()
+    {
+        var card = new UpdateCardView();
+        var window = new Window { Content = card, Width = 600, Height = 500 };
+        window.Show();
+        try
+        {
+            const string notes = """
+                ### 新增
+
+                - **Antigravity 桌面端客户端**：在 `settings.json` 中指向网关并导出 `GEMINI_API_KEY`。
+
+                ### 修复
+
+                - **Docker 镜像**：修复健康检查超时问题。
+                """;
+            card.Render(UpdateCards.Available(UpdateDialogLabels.For("zh"),
+                new UpdateSummary("", UpdateAction.DesktopDmg, "0.14.3116", notes), reminder: true, currentVersion: "0.14.3115"));
+            SceneCapture.Pump(20);
+
+            Assert.True(card.NotesShown);
+            Assert.Equal(UpdateCardView.NotesWidth, card.Width);
+            Assert.Equal(notes.Replace("\r\n", "\n"), card.MarkdownControl.Text);
+            Assert.Equal(2, card.MarkdownControl.GetOutline().Count);
+            Assert.Equal(3, card.GetLogicalDescendants().OfType<TKCode.Arc.Button>().Count());
+
+            // Switching to progress clears the notes and narrows back to the compact width.
+            card.Render(UpdateCards.Progress(UpdateDialogLabels.For("zh"), new UpdateProgress(UpdateStage.Downloading, "0.14.3116", 10, 100)));
+            SceneCapture.Pump(3);
+            Assert.False(card.NotesShown);
+            Assert.Equal(UpdateCardView.CompactWidth, card.Width);
+            Assert.Equal(string.Empty, card.MarkdownControl.Text);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
 }

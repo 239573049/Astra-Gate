@@ -27,6 +27,7 @@
     <PackageReference Include="TKCode.Arc.Fonts" Version="$(ArcVersion)" />
     <PackageReference Include="TKCode.Arc.AdvancedCharts" Version="$(ArcVersion)" />
     <PackageReference Include="TKCode.Arc.Blocks" Version="$(ArcVersion)" />
+    <PackageReference Include="TKCode.Arc.Markdown" Version="$(ArcVersion)" />
     <!-- The web nav uses Lucide icons; TKCode.Arc itself only ships a subset of them (plan avalonia-client §17). -->
     <PackageReference Include="TKCode.Arc.Icons.Lucide" Version="$(ArcVersion)" />
     <!-- MVVM source generators only (AOT-safe, no reflection bindings; plan avalonia-client §3 D3). -->

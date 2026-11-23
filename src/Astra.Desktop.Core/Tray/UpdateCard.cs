@@ -55,6 +55,8 @@ public sealed record UpdateCardButton(string Label, UpdateCardAction Action, boo
 /// <param name="Dismiss">What the close (×) button does, or null for no close button (the app is about to restart).</param>
 /// <param name="AutoClose">How long the card stays before it closes itself, or null to stay until answered.</param>
 /// <param name="Version">The version the card is about.</param>
+/// <param name="CurrentVersion">The currently installed version (when different from <paramref name="Version"/>), shown as a version badge.</param>
+/// <param name="NotesHeading">Section label above the Markdown release notes (e.g. "更新内容" / "What's new"), or null.</param>
 public sealed record UpdateCardModel(
     UpdateCardKind Kind,
     UpdateCardTone Tone,
@@ -67,7 +69,9 @@ public sealed record UpdateCardModel(
     IReadOnlyList<UpdateCardButton> Buttons,
     UpdateCardAction? Dismiss,
     TimeSpan? AutoClose,
-    string? Version);
+    string? Version,
+    string? CurrentVersion = null,
+    string? NotesHeading = null);
 
 /// <summary>Builds the update card's states (<see cref="UpdateCardModel"/>) from a check's answer or an apply's progress.</summary>
 public static class UpdateCards
@@ -79,7 +83,7 @@ public static class UpdateCards
     /// The offer for <paramref name="summary"/> (an available update). The reminder (<paramref name="reminder"/>) offers to skip the version; the
     /// tray's check does not. A copy that cannot replace itself offers the download page; the npm track says the app is updated with the CLI.
     /// </summary>
-    public static UpdateCardModel Available(UpdateDialogLabels t, UpdateSummary summary, bool reminder)
+    public static UpdateCardModel Available(UpdateDialogLabels t, UpdateSummary summary, bool reminder, string? currentVersion = null)
     {
         var version = summary.Version;
         var title = version is null ? t.Title : t.Message(version);
@@ -91,8 +95,13 @@ public static class UpdateCards
         };
         var buttons = new List<UpdateCardButton> { new(label, action, Primary: true), new(t.Later, UpdateCardAction.Later) };
         if (reminder && version is not null) buttons.Add(new UpdateCardButton(t.Skip, UpdateCardAction.Skip));
-        return new UpdateCardModel(UpdateCardKind.Available, UpdateCardTone.Info, title, hint, UpdateDialogLabels.Notes(summary.Notes),
-            ShowProgress: false, Fraction: null, ProgressText: null, buttons, UpdateCardAction.Later, AutoClose: null, version);
+        var notes = UpdateDialogLabels.Notes(summary.Notes);
+        var from = string.IsNullOrWhiteSpace(currentVersion) || string.Equals(currentVersion.Trim(), version, StringComparison.OrdinalIgnoreCase)
+            ? null
+            : currentVersion.Trim();
+        return new UpdateCardModel(UpdateCardKind.Available, UpdateCardTone.Info, title, hint, notes,
+            ShowProgress: false, Fraction: null, ProgressText: null, buttons, UpdateCardAction.Later, AutoClose: null, version,
+            from, notes is null ? null : t.ReleaseNotes);
     }
 
     /// <summary>The tray's check while it runs.</summary>
@@ -101,14 +110,14 @@ public static class UpdateCards
             [], UpdateCardAction.Close, AutoClose: null, Version: null);
 
     /// <summary>The answer of a check that found nothing newer, or the reason it failed (<see cref="UpdateSummary.Error"/>).</summary>
-    public static UpdateCardModel CheckResult(UpdateDialogLabels t, UpdateSummary summary)
+    public static UpdateCardModel CheckResult(UpdateDialogLabels t, UpdateSummary summary, string? currentVersion = null)
     {
         if (summary.Error is { } error)
         {
             return new UpdateCardModel(UpdateCardKind.Failed, UpdateCardTone.Danger, t.CheckFailed, error, null, ShowProgress: false, Fraction: null,
                 ProgressText: null, [new UpdateCardButton(t.Retry, UpdateCardAction.Retry, Primary: true)], UpdateCardAction.Close, AutoClose: null, Version: null);
         }
-        if (summary.Action != UpdateAction.None) return Available(t, summary, reminder: false);
+        if (summary.Action != UpdateAction.None) return Available(t, summary, reminder: false, currentVersion);
         return new UpdateCardModel(UpdateCardKind.UpToDate, UpdateCardTone.Success, t.UpToDate, null, null, ShowProgress: false, Fraction: null,
             ProgressText: null, [], UpdateCardAction.Close, ResultLifetime, Version: null);
     }

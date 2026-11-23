@@ -26,18 +26,23 @@ internal sealed class UpdateNotice
     /// <summary>How long an offer stays in the corner window when nobody answers it.</summary>
     public static readonly TimeSpan CornerOfferLifetime = TimeSpan.FromSeconds(60);
 
+    /// <summary>Grace period after the pointer leaves a card whose auto-close fired while it was hovered.</summary>
+    public static readonly TimeSpan HoverGraceLifetime = TimeSpan.FromSeconds(10);
+
     private readonly UpdateCardView _card = new() { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(Gap) };
     private readonly Func<Window?> _visibleMain;
     private OverlayLayer? _overlay;
     private Panel? _overlayHost;
     private UpdateCardWindow? _window;
     private IDisposable? _autoClose;
+    private UpdateCardModel? _deferredCloseModel;
 
     /// <param name="visibleMain">The main window when it is on screen, else null.</param>
     public UpdateNotice(Func<Window?> visibleMain)
     {
         _visibleMain = visibleMain;
         _card.Acted += a => Acted?.Invoke(a);
+        _card.PointerExited += (_, _) => OnPointerExited();
     }
 
     /// <summary>A button of the card was pressed (or its ×).</summary>
@@ -72,6 +77,7 @@ internal sealed class UpdateNotice
         IsShown = false;
         _autoClose?.Dispose();
         _autoClose = null;
+        _deferredCloseModel = null;
         DetachFromOverlay();
         CloseWindow();
     }
@@ -82,12 +88,13 @@ internal sealed class UpdateNotice
         if (IsShown) Place();
     }
 
-    private void ScheduleAutoClose(UpdateCardModel model)
+    private void ScheduleAutoClose(UpdateCardModel model, TimeSpan? overrideDelay = null)
     {
         _autoClose?.Dispose();
         _autoClose = null;
+        _deferredCloseModel = null;
         var corner = model.Kind == UpdateCardKind.Available;
-        var after = model.AutoClose ?? (corner ? CornerOfferLifetime : (TimeSpan?)null);
+        var after = overrideDelay ?? model.AutoClose ?? (corner ? CornerOfferLifetime : (TimeSpan?)null);
         if (after is not { } delay) return;
         _autoClose = DispatcherTimer.RunOnce(() =>
         {
@@ -95,8 +102,21 @@ internal sealed class UpdateNotice
             if (!IsShown || _card.Model?.Kind != model.Kind) return;
             // An unanswered offer closes only from the corner window; in the main window it waits for the user.
             if (model.AutoClose is null && InWindow == true) return;
+            // Do not snatch the card away while the user is hovering/scrolling the release notes.
+            if (_card.IsPointerOver)
+            {
+                _deferredCloseModel = model;
+                return;
+            }
             Hide();
         }, delay);
+    }
+
+    private void OnPointerExited()
+    {
+        if (_deferredCloseModel is not { } model || !IsShown || _card.Model?.Kind != model.Kind) return;
+        var grace = model.AutoClose is { } auto && auto < HoverGraceLifetime ? auto : HoverGraceLifetime;
+        ScheduleAutoClose(model, grace);
     }
 
     private void Place()

@@ -110,15 +110,16 @@ public sealed class UpdateDialogLabels
     public string Background => T("后台进行", "Hide");
     public string Retry => T("重试", "Retry");
     public string Close => T("关闭", "Close");
+    public string ReleaseNotes => T("更新内容", "What's new");
     public string DownloadHint => T("此副本无法自行更新，请从下载页安装新版本。", "This copy cannot update itself. Install the new version from the download page.");
     public string NpmDesktopHint => T("桌面应用请运行 astra update --desktop 更新。", "Update the desktop app with `astra update --desktop`.");
 #pragma warning restore CS1591
 
-    /// <summary>Release notes as the reminder dialog shows them: trimmed, cut at 600 characters with an ellipsis; null when empty.</summary>
+    /// <summary>Release notes as the update card renders them (Markdown): trimmed with LF line endings; null when empty.</summary>
     public static string? Notes(string? notes)
     {
         var n = notes?.Trim();
         if (string.IsNullOrEmpty(n)) return null;
-        return n.Length > 600 ? n[..600] + "…" : n;
+        return n.Replace("\r\n", "\n", StringComparison.Ordinal);
     }
 }
