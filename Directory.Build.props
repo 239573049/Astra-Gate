@@ -10,7 +10,7 @@
          vulnerability (NU1901-NU1904) is still an error. -->
     <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1900;NU1905</WarningsNotAsErrors>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <Version>0.14.3117</Version>
+    <Version>0.15.0</Version>
     <Authors>Astra</Authors>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <!-- Coding conventions live in .editorconfig; this makes `dotnet build` enforce the rules set to
