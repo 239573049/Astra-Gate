@@ -218,6 +218,16 @@ internal static class GeminiRequests
         results.Add(new ToolResultPart(callId, name, [new TextPart(contentText)], isError));
     }
 
+    /// <summary>
+    /// A schema as JSON Schema, the form the IR holds. The standard field (<c>parametersJsonSchema</c>, <c>responseJsonSchema</c>)
+    /// wins and is taken as it is; the older OpenAPI-subset one (<c>parameters</c>, <c>responseSchema</c>) is converted
+    /// (<see cref="GeminiSchemas"/>).
+    /// </summary>
+    private static JsonNode? DecodeSchema(JsonObject owner, string[] jsonSchemaKeys, string[] openApiKeys) =>
+        Fields.Node(owner, jsonSchemaKeys) is { } jsonSchema
+            ? jsonSchema.DeepClone()
+            : Fields.Node(owner, openApiKeys) is { } openApiSchema ? GeminiSchemas.ToJsonSchema(openApiSchema) : null;
+
     private static void DecodeTools(JsonArray tools, UnifiedRequest req)
     {
         foreach (var tool in tools.OfType<JsonObject>())
@@ -228,15 +238,11 @@ internal static class GeminiRequests
                 {
                     foreach (var declaration in declarations.OfType<JsonObject>())
                     {
-                        // parametersJsonSchema is the standard JSON-schema form and wins over the legacy
-                        // OpenAPI-subset `parameters`.
-                        var schema = Fields.Node(declaration, "parametersJsonSchema", "parameters_json_schema")
-                                     ?? Fields.Node(declaration, "parameters");
                         req.Tools.Add(new UnifiedTool
                         {
                             Name = Fields.Str(declaration, "name") ?? "",
                             Description = Fields.Str(declaration, "description"),
-                            InputSchema = schema?.DeepClone(),
+                            InputSchema = DecodeSchema(declaration, ["parametersJsonSchema", "parameters_json_schema"], ["parameters"]),
                         });
                     }
                 }
@@ -290,12 +296,11 @@ internal static class GeminiRequests
         {
             if (mime == "application/json")
             {
-                var schema = Fields.Node(gen, "responseJsonSchema", "response_json_schema")
-                             ?? Fields.Node(gen, "responseSchema", "response_schema");
+                var schema = DecodeSchema(gen, ["responseJsonSchema", "response_json_schema"], ["responseSchema", "response_schema"]);
                 req.ResponseFormat = new ResponseFormat
                 {
                     Type = schema is null ? "json_object" : "json_schema",
-                    Schema = schema?.DeepClone(),
+                    Schema = schema,
                 };
             }
             else

@@ -21,6 +21,7 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
     private readonly Dictionary<int, (string? Id, string? Name)> _toolMeta = new();
     private string? _pendingSignature;
     private FinishReason? _finish;
+    private string? _rawFinish;
     private NormalizedUsage? _usage;
 
     public GeminiResponseEncoder(ResponseEncodeContext ctx) => _ctx = ctx;
@@ -60,6 +61,7 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
 
             case MessageStopEvent messageStop:
                 _finish = messageStop.Reason;
+                _rawFinish = messageStop.RawReason;
                 return ChunkFrame(FinalChunk(MapFinish(messageStop.Reason)));
 
             case ErrorEvent error:
@@ -72,6 +74,7 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
 
     public JsonObject BuildJson()
     {
+        if (PromptRefused) return RefusedPrompt();
         var parts = new JsonArray();
         foreach (var part in _aggregated) parts.AddNode(part.DeepClone());
         var candidate = new JsonObject
@@ -81,6 +84,28 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
             ["index"] = 0,
         };
         var root = new JsonObject { ["candidates"] = new JsonArray(candidate) };
+        if (_ctx.Model.Length > 0) root["modelVersion"] = _ctx.Model;
+        if (_ctx.ResponseId.Length > 0) root["responseId"] = _ctx.ResponseId;
+        if (UsageJson(_usage) is { } usage) root["usageMetadata"] = usage;
+        return root;
+    }
+
+    /// <summary>
+    /// The upstream answered with nothing and gave no finish reason of its own: a Chat upstream's empty <c>choices</c> next to the
+    /// usage, which is how GitHub Copilot refuses a prompt. Gemini says so in <c>promptFeedback</c>, and a client that finds neither a
+    /// candidate nor feedback takes the reply for an empty upstream answer. An upstream that names a finish reason, content_filter
+    /// included, still gets its candidate.
+    /// </summary>
+    private bool PromptRefused => _aggregated.Count == 0 && _finish == FinishReason.Other && _rawFinish is null;
+
+    /// <summary>The reply to a refused prompt: no candidate, the block reason, the usage the upstream still reported. Why it was refused is unknown, so OTHER.</summary>
+    private JsonObject RefusedPrompt()
+    {
+        var root = new JsonObject
+        {
+            ["candidates"] = new JsonArray(),
+            ["promptFeedback"] = new JsonObject { ["blockReason"] = "OTHER" },
+        };
         if (_ctx.Model.Length > 0) root["modelVersion"] = _ctx.Model;
         if (_ctx.ResponseId.Length > 0) root["responseId"] = _ctx.ResponseId;
         if (UsageJson(_usage) is { } usage) root["usageMetadata"] = usage;
@@ -125,6 +150,7 @@ public sealed class GeminiResponseEncoder : IResponseEncoder
 
     private JsonObject FinalChunk(string finish)
     {
+        if (PromptRefused) return RefusedPrompt();
         var parts = new JsonArray();
         if (_pendingSignature is { } signature)
         {

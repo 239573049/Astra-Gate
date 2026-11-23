@@ -9,6 +9,10 @@ namespace Astra.Gateway.Protocol.Gemini;
 /// streaming choice travel in the URL path (/v1beta/models/{model}:streamGenerateContent?alt=sse), never
 /// in the request body. This class is a stateless shell; the per-response state lives in
 /// <see cref="GeminiResponseDecoder"/> / <see cref="GeminiResponseEncoder"/>.
+/// Schemas: <c>parameters</c> and <c>responseSchema</c> are Gemini's OpenAPI subset and are read as JSON Schema
+/// (<see cref="GeminiSchemas"/>, lossy: the <c>propertyOrdering</c> hint is dropped); <c>parametersJsonSchema</c> and
+/// <c>responseJsonSchema</c> are taken as written. A Chat upstream that answers with no choices and no finish reason (a refused
+/// prompt) is answered with <c>promptFeedback</c> instead of an empty candidate.
 /// </summary>
 public sealed class GeminiCodec : IProtocolCodec
 {
