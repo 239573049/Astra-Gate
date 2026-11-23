@@ -104,7 +104,8 @@ public sealed record PluginPrompt(string Type, string Key, string Message, strin
 }
 
 /// <summary>One allowance window of a plugin account (web <c>PluginUsage.windows[]</c>).</summary>
-public sealed record PluginUsageWindow(string Name, double? Used, double? ResetsAt, string? Display, double? Amount, double? Limit, string? Unit);
+/// <param name="ResetsAt">When it resets, as the plugin shaped it: ISO text or epoch seconds / milliseconds.</param>
+public sealed record PluginUsageWindow(string Name, double? Used, DateTimeOffset? ResetsAt, string? Display, double? Amount, double? Limit, string? Unit);
 
 /// <summary>An account's allowance as its plugin tells it (web <c>PluginUsage</c>).</summary>
 public sealed record PluginUsage(string? Plan, DateTimeOffset? Until, string? Error, IReadOnlyList<PluginUsageWindow> Windows)
@@ -115,8 +116,8 @@ public sealed record PluginUsage(string? Plan, DateTimeOffset? Until, string? Er
         var windows = new List<PluginUsageWindow>();
         if (o?["windows"] is JsonArray array)
             foreach (var w in array.OfType<JsonObject>())
-                windows.Add(new PluginUsageWindow(AccountQuota.Str(w["name"]) ?? "", AccountQuota.Num(w["used"]), AccountQuota.Num(w["resetsAt"]),
+                windows.Add(new PluginUsageWindow(AccountQuota.Str(w["name"]) ?? "", AccountQuota.Num(w["used"]), AccountQuota.Moment(w["resetsAt"]),
                     AccountQuota.Str(w["display"]), AccountQuota.Num(w["amount"]), AccountQuota.Num(w["limit"]), AccountQuota.Str(w["unit"])));
-        return new PluginUsage(AccountQuota.Str(o?["plan"]), AccountQuota.Date(o?["until"]), AccountQuota.Str(o?["error"]), windows);
+        return new PluginUsage(AccountQuota.Str(o?["plan"]), AccountQuota.Moment(o?["until"]), AccountQuota.Str(o?["error"]), windows);
     }
 }

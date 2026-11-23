@@ -162,18 +162,14 @@ public sealed class PluginAccountsModel : ModelBase
 
     /// <summary>
     /// The value of an allowance window: the plugin's own text, else "amount / limit unit", else "used%"; plus " · resets …" when it says
-    /// (a reset time in seconds or milliseconds).
+    /// (a reset time as ISO text, or epoch seconds or milliseconds — web <c>formatPluginMoment</c>).
     /// </summary>
     public static string WindowText(PluginUsageWindow w, TimeZoneInfo? zone = null)
     {
         var text = w.Display ?? (w.Limit is { } limit && limit != 0
             ? $"{QuotaViews.JsNumber(w.Amount ?? w.Used ?? 0)} / {QuotaViews.JsNumber(limit)} {w.Unit ?? ""}"
             : $"{QuotaViews.JsNumber(w.Used ?? 0)}%");
-        if (w.ResetsAt is { } r && r != 0)
-        {
-            var at = DateTimeOffset.FromUnixTimeMilliseconds((long)(r > 1e12 ? r : r * 1000));
-            text += " · " + Loc.T("pluginAccounts.resets", ("at", AccountRules.When(at, zone)));
-        }
+        if (w.ResetsAt is { } at) text += " · " + Loc.T("pluginAccounts.resets", ("at", AccountRules.When(at, zone)));
         return text;
     }
 }

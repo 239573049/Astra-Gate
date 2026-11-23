@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatContext, formatDuration, formatNanos, formatPercent, formatTps, formatUnitPrice, formatUsd, formatUsdAxis, priceSummary } from '../lib/format';
+import { formatContext, formatDuration, formatNanos, formatPercent, formatPluginMoment, formatTps, formatUnitPrice, formatUsd, formatUsdAxis, pluginMoment, priceSummary } from '../lib/format';
 
 describe('formatUsd', () => {
   it('uses 2 decimals from $1 and 3 significant digits below', () => {
@@ -59,5 +59,25 @@ describe('formatDuration', () => {
     expect(formatDuration(3 * 3_600_000, 'en')).toBe('3 hours');
     expect(formatDuration(3 * 86_400_000, 'en')).toBe('3 days');
     expect(formatDuration(12 * 60_000, 'zh')).toBe('12分钟');
+  });
+});
+
+describe('pluginMoment', () => {
+  it('reads ISO text and epoch seconds or milliseconds', () => {
+    const at = Date.UTC(2026, 10, 27, 17, 4, 38, 999);
+    expect(pluginMoment('2026-11-27T17:04:38.999Z')?.getTime()).toBe(at);
+    expect(pluginMoment(at)?.getTime()).toBe(at);
+    expect(pluginMoment(Math.floor(at / 1000))?.getTime()).toBe(Math.floor(at / 1000) * 1000);
+  });
+
+  it('is null for nothing said and for a value no date reads (never "Invalid time value")', () => {
+    expect(pluginMoment(null)).toBeNull();
+    expect(pluginMoment(undefined)).toBeNull();
+    expect(pluginMoment('')).toBeNull();
+    expect(pluginMoment(0)).toBeNull();
+    expect(pluginMoment('not a date')).toBeNull();
+    expect(pluginMoment(Number.NaN)).toBeNull();
+    expect(formatPluginMoment('2026-11-27T17:04:38.999Z', 'en')).toContain('2026');
+    expect(formatPluginMoment('', 'en')).toBeNull();
   });
 });

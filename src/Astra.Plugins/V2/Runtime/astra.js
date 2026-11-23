@@ -284,7 +284,7 @@ export const gateway = {
 // ---------- providers / clients (2.1, design/plugin-v2 08)
 // A provider's code: prepare(req, account) shapes each upstream request the host sends (req.provider is its local id);
 // models / refresh(account, { status, body }) / usage(account) are optional (usage: { plan?, until?, user?, error?, windows: [{ name, used? (%),
-// resetsAt?, display?, amount?, limit?, unit?, aside? }] }, shown on the account cards when asked for). A provider whose manifest
+// resetsAt? (ISO text, or epoch seconds / milliseconds), display?, amount?, limit?, unit?, aside? }] }, shown on the account cards when asked for). A provider whose manifest
 // has a `reply` block also registers transformResponse { start(res, ctx), frame(frame, ctx), end(ctx) } (08 §2.2).
 // An account handed to them carries its key and reads its credential with account.secret().
 export const providers = {

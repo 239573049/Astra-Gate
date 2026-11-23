@@ -71,6 +71,24 @@ public sealed record AccountQuota(
     /// <summary>An ISO date of a JSON node (web <c>new Date(iso)</c>; an unparsable one is missing).</summary>
     public static DateTimeOffset? Date(JsonNode? node)
         => Str(node) is { } s && DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var d) ? d : null;
+
+    /// <summary>
+    /// A moment a plugin's allowance names (web <c>pluginMoment</c>, design/plugin-v2 08): ISO text, or epoch seconds or
+    /// epoch milliseconds. Null when the plugin said nothing, or wrote something no date reads.
+    /// </summary>
+    public static DateTimeOffset? Moment(JsonNode? node)
+    {
+        if (node is not JsonValue) return null;
+        if (node.GetValueKind() == JsonValueKind.String)
+        {
+            var s = Str(node);
+            if (string.IsNullOrWhiteSpace(s)) return null;
+            return DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var iso) ? iso : null;
+        }
+        return Num(node) is { } n && n > 0
+            ? DateTimeOffset.FromUnixTimeMilliseconds((long)(n > 1e12 ? n : n * 1000))
+            : null;
+    }
 }
 
 /// <summary>One bar of a quota view: a label, the rounded used share, its color and the reset line.</summary>

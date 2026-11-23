@@ -95,6 +95,9 @@ export function formatDuration(ms: number, locale: string): string {
 
 export function formatDateTime(iso: string | null | undefined, locale: string): string {
   if (!iso) return '—';
+  // Intl's format throws "Invalid time value" on a Date that no text read: a bad value shows as missing, not a blank page.
+  const at = new Date(iso);
+  if (!Number.isFinite(at.getTime())) return '—';
   return new Intl.DateTimeFormat(locale === 'zh' ? 'zh-CN' : 'en-US', {
     year: 'numeric',
     month: '2-digit',
@@ -102,7 +105,26 @@ export function formatDateTime(iso: string | null | undefined, locale: string): 
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(new Date(iso));
+  }).format(at);
+}
+
+/**
+ * A moment a plugin's allowance names (a window's `resetsAt`, the plan's `until`): what the plugin wrote — ISO text, epoch
+ * seconds or epoch milliseconds (design/plugin-v2 08; the vendored host normalizes v1 plugins to ISO). Null when it said
+ * nothing, or wrote something no Date reads, so a bad value never reaches `toISOString` (which throws "Invalid time value").
+ */
+export function pluginMoment(value: number | string | null | undefined): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  // 0 is a plugin's "not said" (the v1 host leaves resetsAt out; some send 0), not 1970.
+  if (typeof value === 'number' && !(value > 0)) return null;
+  const date = typeof value === 'number' ? new Date(value > 1e12 ? value : value * 1000) : new Date(value);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+/** The same, formatted like formatDateTime; null when the plugin gave no time (the nothing-to-show case, not "—"). */
+export function formatPluginMoment(value: number | string | null | undefined, locale: string): string | null {
+  const date = pluginMoment(value);
+  return date ? formatDateTime(date.toISOString(), locale) : null;
 }
 
 const intlLocale = (locale: string) => (locale === 'zh' ? 'zh-CN' : 'en-US');

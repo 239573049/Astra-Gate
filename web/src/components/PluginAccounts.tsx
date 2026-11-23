@@ -25,7 +25,7 @@ import { SwitchModePicker, switchModeDetailKey } from './SubscriptionAccounts';
 import { Badge, Button, EmptyState, Field, Input, KV, Spinner, Switch } from './ui/controls';
 import { errorText, Select, Sheet, useFeedback } from './ui/overlays';
 import { useI18n, type MessageKey } from '../i18n';
-import { formatDateTime } from '../lib/format';
+import { formatDateTime, formatPluginMoment } from '../lib/format';
 import { PluginFlowButton, v2ProviderOf } from '../plugin-ui/flows';
 
 /**
@@ -146,6 +146,8 @@ function AccountRow({ provider, account: a, gatewayUsage }: { provider: Provider
   const [showUsage, setShowUsage] = useState(false);
   const usageTold = (provider.settings?.plugin as { usage?: boolean } | undefined)?.usage === true;
   const usage = usePluginUsage(provider.id, a.id, showUsage);
+  // the plan's end date, as the plugin shaped it (ISO text or epoch); null when it said nothing
+  const until = formatPluginMoment(usage.data?.until, locale);
 
   const doSignOut = async () => {
     if (!(await confirm({ title: t('pluginAccounts.signOutConfirm', { name: a.displayName }), confirmLabel: t('pluginAccounts.signOut'), destructive: true }))) return;
@@ -175,13 +177,17 @@ function AccountRow({ provider, account: a, gatewayUsage }: { provider: Provider
           {usage.isError && <span className="text-[12px] text-[var(--danger)]">{errorText(usage.error)}</span>}
           {usage.data?.error && <span className="text-[12px] text-[var(--danger)]">{usage.data.error}</span>}
           {usage.data?.plan && <KV label={t('pluginAccounts.plan')}>{usage.data.plan}</KV>}
-          {usage.data?.until && <KV label={t('pluginAccounts.until')}>{formatDateTime(usage.data.until, locale)}</KV>}
-          {usage.data?.windows?.map((w) => (
-            <KV key={w.name} label={w.name}>
-              {w.display ?? (w.limit ? `${w.amount ?? w.used ?? 0} / ${w.limit} ${w.unit ?? ''}` : `${w.used ?? 0}%`)}
-              {w.resetsAt ? ` · ${t('pluginAccounts.resets', { at: formatDateTime(new Date(w.resetsAt > 1e12 ? w.resetsAt : w.resetsAt * 1000).toISOString(), locale) })}` : ''}
-            </KV>
-          ))}
+          {until && <KV label={t('pluginAccounts.until')}>{until}</KV>}
+          {usage.data?.windows?.map((w) => {
+            // ISO text or epoch (seconds or milliseconds): the plugin's word, whatever shape it came in
+            const reset = formatPluginMoment(w.resetsAt, locale);
+            return (
+              <KV key={w.name} label={w.name}>
+                {w.display ?? (w.limit ? `${w.amount ?? w.used ?? 0} / ${w.limit} ${w.unit ?? ''}` : `${w.used ?? 0}%`)}
+                {reset ? ` · ${t('pluginAccounts.resets', { at: reset })}` : ''}
+              </KV>
+            );
+          })}
         </div>
       )}
     </article>

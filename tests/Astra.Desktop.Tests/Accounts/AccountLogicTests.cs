@@ -227,6 +227,20 @@ public sealed class AccountLogicTests : IDisposable
         Assert.Equal("34%", PluginAccountsModel.WindowText(usage.Windows[0]));
         Assert.StartsWith("12 / 50 req · ", PluginAccountsModel.WindowText(usage.Windows[1], TimeZoneInfo.Utc));
         Assert.Contains("12/01/2025", PluginAccountsModel.WindowText(usage.Windows[1], TimeZoneInfo.Utc));
+
+        // a plugin may say a moment as ISO text or epoch milliseconds too (design/plugin-v2 08); nothing said is no line
+        var mixed = PluginUsage.Parse(JsonNode.Parse("""
+            {"until":"2026-12-09T16:00:00.000Z","windows":[
+              {"name":"5 hours","used":0,"resetsAt":""},
+              {"name":"Weekly","used":0,"resetsAt":"2026-11-27T17:04:38.999Z"},
+              {"name":"Monthly","used":0,"resetsAt":1764547200000}]}
+            """)!.AsObject());
+        Assert.Equal(new DateTimeOffset(2026, 12, 9, 16, 0, 0, TimeSpan.Zero), mixed.Until);
+        Assert.Null(mixed.Windows[0].ResetsAt);
+        Assert.Equal("0%", PluginAccountsModel.WindowText(mixed.Windows[0], TimeZoneInfo.Utc));
+        Assert.Contains("11/27/2026", PluginAccountsModel.WindowText(mixed.Windows[1], TimeZoneInfo.Utc));
+        Assert.Contains("12/01/2025", PluginAccountsModel.WindowText(mixed.Windows[2], TimeZoneInfo.Utc));
+        Assert.Null(AccountQuota.Moment(JsonNode.Parse("\"not a date\"")));
     }
 
     [Fact]
