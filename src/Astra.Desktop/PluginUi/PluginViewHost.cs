@@ -39,6 +39,9 @@ public sealed class PluginViewHost : UserControl
     private readonly Action<string>? _navigate;
     private readonly Action<JsonNode?>? _closed;
     private readonly ContentControl _body = new();
+    // The body lives in this panel from the start: the dev inspector's button joins the same panel rather than the host
+    // taking the body back and re-parenting it (which throws "already has a visual parent").
+    private readonly Panel _shell = new();
     private NodeHost? _root;
     private string _width = "regular";
     private bool _opened;
@@ -60,7 +63,8 @@ public sealed class PluginViewHost : UserControl
         _session.Failed += why => _body.Content = Failure(why);
         Api = api;
         _body.Content = Ui.Spinner();
-        Content = _body;
+        _shell.Children.Add(_body);
+        Content = _shell;
     }
 
     /// <summary>
@@ -154,7 +158,7 @@ public sealed class PluginViewHost : UserControl
         _ = Task.Run(async () =>
         {
             if (!await PluginInspector.AvailableAsync(Api.Client, id)) return;
-            Dispatcher.UIThread.Post(() => Content = new Panel { Children = { _body, PluginInspector.Button(this, Api.Client, id) } });
+            Dispatcher.UIThread.Post(() => _shell.Children.Add(PluginInspector.Button(this, Api.Client, id)));
         });
     }
 

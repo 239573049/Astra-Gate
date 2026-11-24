@@ -29,6 +29,8 @@ public class PluginUiRenderTests
     {
         public JsonObject Tree = new();
         public string Svg = "";
+        // a plugin installed from a folder: its sessions can be inspected (the dev inspector's button)
+        public bool Dev;
         public List<JsonObject> Events { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -38,6 +40,10 @@ public class PluginUiRenderTests
                 return Json(new JsonObject { ["session"] = "s1", ["rev"] = 1, ["tree"] = Tree.DeepClone(), ["warnings"] = new JsonArray() });
             if (path.EndsWith("/stream", StringComparison.Ordinal))
                 return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new Silent()) { Headers = { { "Content-Type", "text/event-stream" } } } };
+            if (path == "/api/plugins/v2/ui/sessions/s1/inspect")
+                return Dev
+                    ? Json(new JsonObject { ["plugin"] = "acme.x", ["view"] = "main", ["rev"] = 1, ["tree"] = Tree.DeepClone(), ["warnings"] = new JsonArray(), ["timeline"] = new JsonArray() })
+                    : new HttpResponseMessage(HttpStatusCode.NotFound);
             if (path.EndsWith("/events", StringComparison.Ordinal))
             {
                 var body = JsonNode.Parse(await request.Content!.ReadAsStringAsync(ct))!.AsObject();
@@ -73,9 +79,9 @@ public class PluginUiRenderTests
         }
     }
 
-    private static (Window Window, PluginViewHost View, FakeServer Server) Show(JsonObject tree, string svg = "")
+    private static (Window Window, PluginViewHost View, FakeServer Server) Show(JsonObject tree, string svg = "", bool dev = false)
     {
-        var server = new FakeServer { Tree = tree, Svg = svg };
+        var server = new FakeServer { Tree = tree, Svg = svg, Dev = dev };
         var client = new ApiClient("http://127.0.0.1:1", server);
         var api = new PluginV2Api(client, new QueryClient(), () => "en");
         var view = new PluginViewHost(api, new ViewTarget("acme.x", "main"), new Astra.Desktop.Core.Shell.NullFeedback());
@@ -244,6 +250,28 @@ public class PluginUiRenderTests
                 new JsonObject { ["type"] = "Text", ["props"] = new JsonObject { ["value"] = "after" } }),
         });
         Assert.Contains(Loc.T("pluginUi.empty"), Texts(view));
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public void A_dev_plugin_gets_the_inspector_button_beside_its_view()
+    {
+        var (window, view, _) = Show(new JsonObject
+        {
+            ["type"] = "Text", ["props"] = new JsonObject { ["value"] = "hello" },
+        }, dev: true);
+        // the button joins the body's own panel; taking the body back would throw "already has a visual parent"
+        Settle(() => Texts(view).Contains(Loc.T("pluginUi.inspector.title")));
+        Assert.Contains("hello", Texts(view));
+        Assert.Same(view, view.GetVisualDescendants().OfType<Button>()
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == Loc.T("pluginUi.inspector.title")))
+            .GetVisualAncestors().OfType<PluginViewHost>().First());
+
+        // a full rebuild leaves the button in place
+        typeof(PluginViewHost).GetMethod("Rebuild", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(view, null);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains("hello", Texts(view));
+        Assert.Contains(Loc.T("pluginUi.inspector.title"), Texts(view));
         window.Close();
     }
 
