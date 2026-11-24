@@ -288,8 +288,17 @@ jobs:
         if: startsWith(matrix.rid, 'win')
         shell: bash
         run: |
-          if [ -x "/c/Program Files (x86)/NSIS/makensis.exe" ] || command -v makensis >/dev/null; then exit 0; fi
-          choco install nsis -y --no-progress
+          if [ -x "/c/Program Files (x86)/NSIS/makensis.exe" ] || [ -x "/c/Program Files/NSIS/makensis.exe" ] || command -v makensis >/dev/null; then exit 0; fi
+          # The community feed answers 503 now and then; choco then exits 0 having installed 0 packages, which
+          # left package-desktop.mjs to die with a misleading "spawnSync makensis ENOENT" (0.15.2).
+          for i in 1 2 3; do
+            choco install nsis -y --no-progress && break
+            sleep 20
+          done
+          if [ ! -x "/c/Program Files (x86)/NSIS/makensis.exe" ] && [ ! -x "/c/Program Files/NSIS/makensis.exe" ] && ! command -v makensis >/dev/null; then
+            echo "::error::NSIS (makensis) is not installed; the Windows installer cannot be built"
+            exit 1
+          fi
 
       - name: Package desktop installers
         shell: bash
@@ -573,6 +582,7 @@ jobs:
             exit 0
           fi
           node packages/plugin-sdk/scripts/gen.mjs --check
+          mkdir -p out/sdk # npm pack does not create its destination: without it, pack exits 254
           npm pack ./packages/plugin-sdk --pack-destination out/sdk
           case "$SDK_VER" in *-*) SDK_TAG=next ;; *) SDK_TAG=latest ;; esac
           npm publish out/sdk/astragate-plugin-sdk-"$SDK_VER".tgz --access public --tag "$SDK_TAG" \
