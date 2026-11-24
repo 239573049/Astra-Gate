@@ -555,6 +555,36 @@ public class ChatRequestEncodeTests
         Assert.True(withTools["parallel_tool_calls"]!.GetValue<bool>());
     }
 
+    [Theory]
+    [InlineData(ToolChoiceMode.Auto, "auto")]
+    [InlineData(ToolChoiceMode.None, "none")]
+    [InlineData(ToolChoiceMode.Required, "required")]
+    public void Tool_Choice_Is_Sent_Only_With_Tools(ToolChoiceMode mode, string wire)
+    {
+        // GitHub Copilot's Gemini models answer a tool_choice in a request without tools with 400. The drop is reported as lossy.
+        var choice = new ToolChoice(mode);
+        var noTools = new UnifiedRequest { ToolChoice = choice };
+        Assert.False(Codec.EncodeRequest(noTools, Ctx).ContainsKey("tool_choice"));
+        Assert.Contains(noTools.Warnings, w => w.Contains("tool_choice"));
+
+        // A tool this encoder drops (a Gemini googleSearch) leaves the request without tools all the same.
+        var search = new UnifiedTool
+        {
+            BuiltinType = "googleSearch",
+            BuiltinOrigin = ApiProtocol.Gemini,
+            BuiltinRaw = new JsonObject { ["googleSearch"] = new JsonObject() },
+        };
+        var builtinOnly = new UnifiedRequest { ToolChoice = choice, Tools = [search] };
+        var builtinOnlyBody = Codec.EncodeRequest(builtinOnly, Ctx);
+        Assert.False(builtinOnlyBody.ContainsKey("tools"));
+        Assert.False(builtinOnlyBody.ContainsKey("tool_choice"));
+        Assert.Contains(builtinOnly.Warnings, w => w.Contains("tool_choice"));
+
+        var withFunction = new UnifiedRequest { ToolChoice = choice, Tools = [search, new() { Name = "f" }] };
+        Assert.Equal(wire, Codec.EncodeRequest(withFunction, Ctx)["tool_choice"]!.GetValue<string>());
+        Assert.DoesNotContain(withFunction.Warnings, w => w.Contains("tool_choice"));
+    }
+
     [Fact]
     public void Tool_Result_Error_Flag_And_Unfetchable_Urls_Warn_When_Encoding()
     {

@@ -346,7 +346,10 @@ public sealed class ChatCodec : IProtocolCodec
 
         EncodeTools(body, request);
 
-        if (request.ToolChoice is { } choice)
+        // GitHub Copilot's Gemini models refuse tool_choice in a request without tools (400 "tools are required when tool choice is
+        // specified"). A Gemini client can send toolConfig with no function declared, or beside only a tool EncodeTools drops, so
+        // the choice goes out only when the request body carries tools.
+        if (request.ToolChoice is { } choice && body.ContainsKey("tools"))
         {
             body["tool_choice"] = choice.Mode switch
             {
@@ -360,6 +363,10 @@ public sealed class ChatCodec : IProtocolCodec
                 },
                 _ => null,
             };
+        }
+        else if (request.ToolChoice is not null)
+        {
+            request.Warnings.Add("请求里没有 tools，tool_choice 已丢弃。");
         }
         if (request.ParallelToolCalls is { } parallel && request.Tools.Count > 0) body["parallel_tool_calls"] = parallel;
         if (request.Temperature is { } temperature) body["temperature"] = temperature;
