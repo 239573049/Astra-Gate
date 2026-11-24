@@ -407,6 +407,28 @@ public sealed class RelayGatewayTests
     }
 
     [Theory]
+    [InlineData("""{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"toolConfig":{"functionCallingConfig":{"mode":"ANY"}}}""", false)]
+    [InlineData("""{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"tools":[{"googleSearch":{}}],"toolConfig":{"functionCallingConfig":{"mode":"AUTO"}}}""", false)]
+    [InlineData("""{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"tools":[{"functionDeclarations":[{"name":"get_weather","parameters":{"type":"OBJECT"}}]}],"toolConfig":{"functionCallingConfig":{"mode":"AUTO"}}}""", true)]
+    public async Task A_Gemini_clients_toolConfig_reaches_a_Chat_upstream_as_tool_choice_only_beside_a_function(string request, bool toolChoiceSent)
+    {
+        // How GitHub Copilot's Gemini models answer a tool_choice in a request that has no tools.
+        var upstream = ChatUpstream(received =>
+        {
+            var body = JsonNode.Parse(received.Text)!;
+            return body["tool_choice"] is not null && body["tools"] is null
+                ? RelayUpstream.Json("""{"error":{"message":"tools are required when tool choice is specified","type":"invalid_request_error"}}""", HttpStatusCode.BadRequest)
+                : RelayUpstream.Default(received);
+        });
+        await using var relay = await RelayHost.StartAsync(upstream);
+        using var response = await relay.SendAsync("/v1beta/models/gemini-4-carbon:generateContent", request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var sent = JsonNode.Parse(Assert.Single(relay.Upstream.Requests, r => r.Uri.AbsolutePath == "/chat/completions").Text)!.AsObject();
+        Assert.Equal(toolChoiceSent, sent.ContainsKey("tool_choice"));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task A_prompt_the_upstream_refuses_reaches_a_Gemini_client_as_prompt_feedback(bool stream)

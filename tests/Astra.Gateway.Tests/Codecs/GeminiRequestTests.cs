@@ -225,6 +225,38 @@ public class GeminiRequestDecodeTests
         Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected), messages["tools"]![0]!["input_schema"]));
     }
 
+    [Theory]
+    [InlineData("""{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"toolConfig":{"functionCallingConfig":{"mode":"ANY"}}}""")]
+    [InlineData("""{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"tools":[{"googleSearch":{}}],"toolConfig":{"functionCallingConfig":{"mode":"AUTO"}}}""")]
+    public void A_ToolConfig_Beside_No_Function_Declaration_Is_Not_Sent_To_A_Chat_Upstream_As_Tool_Choice(string request)
+    {
+        // toolConfig and tools are separate fields, so a request can carry the first without a function (nothing declared, or only a
+        // tool Chat cannot carry). GitHub Copilot's Gemini models answer a tool_choice without tools with 400 "tools are required when
+        // tool choice is specified", so the Chat encoder leaves it out; the IR keeps it.
+        var ir = Decode(request);
+        Assert.NotNull(ir.ToolChoice);
+
+        var body = new ChatCodec().EncodeRequest(ir, new RequestEncodeContext { UpstreamModel = "chat-model" });
+
+        Assert.False(body.ContainsKey("tools"));
+        Assert.False(body.ContainsKey("tool_choice"));
+    }
+
+    [Fact]
+    public void A_ToolConfig_Beside_A_Function_Declaration_Reaches_A_Chat_Upstream_As_Tool_Choice()
+    {
+        var ir = Decode("""
+            {"contents":[{"role":"user","parts":[{"text":"hi"}]}],
+             "tools":[{"googleSearch":{}},{"functionDeclarations":[{"name":"get_weather","parameters":{"type":"OBJECT"}}]}],
+             "toolConfig":{"functionCallingConfig":{"mode":"ANY","allowedFunctionNames":["get_weather"]}}}
+            """);
+
+        var body = new ChatCodec().EncodeRequest(ir, new RequestEncodeContext { UpstreamModel = "chat-model" });
+
+        Assert.Equal("get_weather", Assert.Single(body["tools"]!.AsArray())!["function"]!["name"]!.GetValue<string>());
+        Assert.Equal("get_weather", body["tool_choice"]!["function"]!["name"]!.GetValue<string>());
+    }
+
     [Fact]
     public void Function_Response_With_Error_And_No_Output_Is_Marked_Error()
     {

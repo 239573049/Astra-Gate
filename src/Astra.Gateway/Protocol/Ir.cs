@@ -164,6 +164,12 @@ public sealed class UnifiedRequest
 
     public List<UnifiedMessage> Messages { get; set; } = [];
     public List<UnifiedTool> Tools { get; set; } = [];
+
+    /// <summary>
+    /// Only meaningful with tools: the Chat encoder leaves it out of a request body that carries none (lossy). A Gemini client can send
+    /// <c>toolConfig</c> without declaring a function, or beside only a tool Chat cannot carry, and GitHub Copilot's Gemini models refuse
+    /// such a request when it holds the choice.
+    /// </summary>
     public ToolChoice? ToolChoice { get; set; }
     public bool? ParallelToolCalls { get; set; }
     public double? Temperature { get; set; }
