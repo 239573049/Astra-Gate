@@ -499,7 +499,7 @@ public class ChatRequestEncodeTests
         };
         var body = Codec.EncodeRequest(request, Ctx);
 
-        Assert.Equal("END", body["stop"]!.GetValue<string>());
+        Assert.Equal(["END"], body["stop"]!.AsArray().Select(s => s!.GetValue<string>()));
         Assert.Equal(0.2, body["temperature"]!.GetValue<double>());
         Assert.Equal(0.8, body["top_p"]!.GetValue<double>());
         Assert.Equal("u1", body["user"]!.GetValue<string>());
@@ -515,6 +515,19 @@ public class ChatRequestEncodeTests
         request.Stop = ["A", "B"];
         var arrayBody = Codec.EncodeRequest(request, Ctx);
         Assert.Equal(2, ((JsonArray)arrayBody["stop"]!).Count);
+    }
+
+    [Theory]
+    [InlineData("END")]
+    [InlineData("END|STOP")]
+    [InlineData("A|B|C")]
+    public void Stop_Is_Always_Encoded_As_A_List(string sequences)
+    {
+        // GitHub Copilot's Gemini models answer a `stop` that is a string with 400 "Request body JSON is invalid."; a list of one is fine.
+        var stop = sequences.Split('|');
+        var body = Codec.EncodeRequest(new UnifiedRequest { Stop = [.. stop] }, Ctx);
+
+        Assert.Equal(stop, Assert.IsType<JsonArray>(body["stop"]).Select(s => s!.GetValue<string>()));
     }
 
     [Fact]

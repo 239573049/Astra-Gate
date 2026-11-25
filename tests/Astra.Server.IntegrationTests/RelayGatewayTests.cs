@@ -429,6 +429,23 @@ public sealed class RelayGatewayTests
     }
 
     [Theory]
+    [InlineData("/v1beta/models/gemini-4-carbon:generateContent", """{"contents":[{"role":"user","parts":[{"text":"hi"}]}],"generationConfig":{"stopSequences":["END"]}}""")]
+    [InlineData("/v1/messages", """{"model":"gemini-4-carbon","max_tokens":16,"messages":[{"role":"user","content":"hi"}],"stop_sequences":["END"]}""")]
+    public async Task A_lone_stop_sequence_reaches_a_Chat_upstream_as_a_list(string path, string request)
+    {
+        // How GitHub Copilot's Gemini models answer a `stop` that is a string.
+        var upstream = ChatUpstream(received => JsonNode.Parse(received.Text)!["stop"] is JsonValue
+            ? RelayUpstream.Json("""{"error":{"message":"Request body JSON is invalid.","code":"invalid_request_body"}}""", HttpStatusCode.BadRequest)
+            : RelayUpstream.Default(received));
+        await using var relay = await RelayHost.StartAsync(upstream);
+        using var response = await relay.SendAsync(path, request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var sent = JsonNode.Parse(Assert.Single(relay.Upstream.Requests, r => r.Uri.AbsolutePath == "/chat/completions").Text)!;
+        Assert.Equal(["END"], sent["stop"]!.AsArray().Select(s => s!.GetValue<string>()));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task A_prompt_the_upstream_refuses_reaches_a_Gemini_client_as_prompt_feedback(bool stream)
