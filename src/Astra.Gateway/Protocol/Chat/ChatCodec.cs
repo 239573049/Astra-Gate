@@ -371,8 +371,10 @@ public sealed class ChatCodec : IProtocolCodec
         if (request.ParallelToolCalls is { } parallel && request.Tools.Count > 0) body["parallel_tool_calls"] = parallel;
         if (request.Temperature is { } temperature) body["temperature"] = temperature;
         if (request.TopP is { } topP) body["top_p"] = topP;
+        // Always a list: GitHub Copilot's Gemini models refuse a lone string here (400 "Request body JSON is invalid."), and a list of one is
+        // as valid as a longer one.
         if (request.Stop is { Count: > 0 } stop)
-            body["stop"] = stop.Count == 1 ? stop[0] : new JsonArray(stop.Select(s => (JsonNode)s).ToArray());
+            body["stop"] = new JsonArray(stop.Select(s => (JsonNode)s).ToArray());
         if (request.MaxOutputTokens is { } max)
         {
             // gpt-5*/o1*/o3*/o4* reject max_tokens; older models reject max_completion_tokens.

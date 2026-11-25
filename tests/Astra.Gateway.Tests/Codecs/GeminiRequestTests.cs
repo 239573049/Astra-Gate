@@ -257,6 +257,19 @@ public class GeminiRequestDecodeTests
         Assert.Equal("get_weather", body["tool_choice"]!["function"]!["name"]!.GetValue<string>());
     }
 
+    [Theory]
+    [InlineData("""["END"]""")]
+    [InlineData("""["END","STOP"]""")]
+    public void StopSequences_Reach_A_Chat_Upstream_As_A_List(string stopSequences)
+    {
+        // A lone stop sequence used to go out as a string, which GitHub Copilot's Gemini models refuse (400 "Request body JSON is invalid.").
+        var ir = Decode($$"""{"generationConfig":{"stopSequences":{{stopSequences}},"maxOutputTokens":16},"contents":[{"role":"user","parts":[{"text":"hi"}]}]}""");
+
+        var body = new ChatCodec().EncodeRequest(ir, new RequestEncodeContext { UpstreamModel = "chat-model" });
+
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(stopSequences), body["stop"]));
+    }
+
     [Fact]
     public void Function_Response_With_Error_And_No_Output_Is_Marked_Error()
     {
