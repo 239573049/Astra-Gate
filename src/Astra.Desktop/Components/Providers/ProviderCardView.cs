@@ -19,8 +19,15 @@ using ArcSwitch = TKCode.Arc.Switch;
 
 namespace Astra.Desktop.Components.Providers;
 
-/// <summary>What a provider card needs from the page: the writes, feedback and the two ways out (open, test).</summary>
-internal sealed record ProviderCardServices(ProviderQueries Queries, IFeedback Feedback, Action<ProviderDto> Open, Action<ProviderDto> Test);
+/// <summary>What a provider card needs from the page: the writes, feedback, open/test handlers, and optional batch selection state.</summary>
+internal sealed record ProviderCardServices(
+    ProviderQueries Queries,
+    IFeedback Feedback,
+    Action<ProviderDto> Open,
+    Action<ProviderDto> Test,
+    bool Selecting = false,
+    Func<string, bool>? IsSelected = null,
+    Action<string>? ToggleSelect = null);
 
 /// <summary>
 /// One compact provider card (ProvidersPage.tsx <c>ProviderCard</c>, 116 px): the name row (icon, name, health dot, template-update badge or
@@ -46,12 +53,18 @@ internal sealed class ProviderCardView : Border
         _model = model;
         _services = services;
         var p = model.Provider;
+        var selected = services.Selecting && (services.IsSelected?.Invoke(p.Id) == true);
+        if (selected)
+        {
+            BorderThickness = new Thickness(1);
+            this.Token(BorderBrushProperty, ArcDesignTokenKind.Accent);
+        }
         Height = 116;
         if (!p.Enabled) Opacity = 0.6;
         var health = ProviderHealthRules.Of(p, stat);
 
         var rows = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*"), RowSpacing = 7 };
-        rows.Children.Add(NameRow(p, health));
+        rows.Children.Add(NameRow(p, health, selected));
         var second = SecondRow(p);
         Grid.SetRow(second, 1);
         rows.Children.Add(second);
@@ -66,15 +79,21 @@ internal sealed class ProviderCardView : Border
         ToolTip.SetTip(this, p.Name);
         PointerReleased += OnPointerReleased;
         KeyDown += OnKeyDown;
-        PointerEntered += (_, _) => this.Token(BorderBrushProperty, ArcDesignTokenKind.BorderStrong);
-        PointerExited += (_, _) => this.Token(BorderBrushProperty, ArcDesignTokenKind.Border);
+        PointerEntered += (_, _) => this.Token(BorderBrushProperty, selected ? ArcDesignTokenKind.Accent : ArcDesignTokenKind.BorderStrong);
+        PointerExited += (_, _) => this.Token(BorderBrushProperty, selected ? ArcDesignTokenKind.Accent : ArcDesignTokenKind.Border);
+    }
+
+    private void ActivateCard()
+    {
+        if (_services.Selecting) _services.ToggleSelect?.Invoke(_model.Provider.Id);
+        else _services.Open(_model.Provider);
     }
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         // Buttons and the switch mark their release handled, and the bars region stops it too (web stopClick).
         if (e.Handled || e.InitialPressMouseButton != MouseButton.Left) return;
-        if (e.GetPosition(this) is var pt && pt.X >= 0 && pt.Y >= 0 && pt.X <= Bounds.Width && pt.Y <= Bounds.Height) _services.Open(_model.Provider);
+        if (e.GetPosition(this) is var pt && pt.X >= 0 && pt.Y >= 0 && pt.X <= Bounds.Width && pt.Y <= Bounds.Height) ActivateCard();
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -82,14 +101,27 @@ internal sealed class ProviderCardView : Border
         if (e.Source == this && e.Key is Key.Enter or Key.Space)
         {
             e.Handled = true;
-            _services.Open(_model.Provider);
+            ActivateCard();
         }
     }
 
-    private Control NameRow(ProviderDto p, ProviderHealth health)
+    private Control NameRow(ProviderDto p, ProviderHealth health, bool selected)
     {
         var icon = BrandIcon.Provider(p.Name, p.Icon, 24, p.TemplateId);
         icon.VerticalAlignment = VerticalAlignment.Center;
+        Control leading = icon;
+        if (_services.Selecting)
+        {
+            var box = new Checkbox { IsChecked = selected, VerticalAlignment = VerticalAlignment.Center };
+            Avalonia.Automation.AutomationProperties.SetName(box, p.Name);
+            box.PointerReleased += (_, e) => e.Handled = true;
+            box.IsCheckedChanged += (_, _) =>
+            {
+                if ((box.IsChecked == true) != (_services.IsSelected?.Invoke(p.Id) == true))
+                    _services.ToggleSelect?.Invoke(p.Id);
+            };
+            leading = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { box, icon } };
+        }
         var name = KitStyle.Text(p.Name, ArcDesignTokenKind.TypeBase, ArcDesignTokenKind.Foreground, FontWeight.SemiBold);
         name.FontSize = 14;
         name.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -113,7 +145,7 @@ internal sealed class ProviderCardView : Border
             ? KitBadge.Create(Loc.T("providers.templateUpdate"), Tone.Accent).With(b => b.VerticalAlignment = VerticalAlignment.Center)
             : models;
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 8 };
-        Add(grid, icon, 0);
+        Add(grid, leading, 0);
         Add(grid, title, 1);
         Add(grid, info, 2);
         Add(grid, actions, 3);

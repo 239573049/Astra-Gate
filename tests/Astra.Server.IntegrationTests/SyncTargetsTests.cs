@@ -68,6 +68,60 @@ public sealed class SyncTargetsTests
         Assert.Contains("refused the login", (await Assert.ThrowsAsync<AdminApiException>(() => denied.GetAsync("f", default))).Message);
     }
 
+    [Fact]
+    public async Task WebDav_creates_nested_folders_ignores_weak_etags_and_falls_back_when_conditional_put_is_unsupported()
+    {
+        var created = new HashSet<string>();
+        byte[]? stored = null;
+        var fake = new Fake((req, body) =>
+        {
+            var url = req.RequestUri!.ToString();
+            if (req.Method.Method == "MKCOL")
+            {
+                if (!created.Add(url)) return Reply(HttpStatusCode.MethodNotAllowed);
+                return Reply(HttpStatusCode.Created);
+            }
+            if (req.Method == HttpMethod.Get)
+            {
+                if (stored is null) return Reply(HttpStatusCode.NotFound);
+                var r = new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(stored) };
+                r.Headers.TryAddWithoutValidation("ETag", "W/\"weak-etag\"");
+                return r;
+            }
+            if (req.Method == HttpMethod.Put)
+            {
+                if (req.Headers.Contains("If-None-Match") || req.Headers.Contains("If-Match"))
+                    return Reply(HttpStatusCode.NotImplemented);
+                stored = Encoding.UTF8.GetBytes(body ?? "");
+                var r = new HttpResponseMessage(HttpStatusCode.Created);
+                r.Headers.TryAddWithoutValidation("ETag", "W/\"weak-etag\"");
+                return r;
+            }
+            if (req.Method == HttpMethod.Head)
+            {
+                var r = new HttpResponseMessage(HttpStatusCode.OK);
+                r.Headers.TryAddWithoutValidation("ETag", "W/\"weak-etag\"");
+                return r;
+            }
+            return Reply(HttpStatusCode.NotFound);
+        });
+        var target = new WebDavTarget(new SyncTargetConfig { Kind = "webdav", Url = "https://dav.example.invalid/dav", Username = "me", Folder = "backups/astra" }, "pw", Client(fake));
+        var v1 = await target.PutAsync("f", Bytes, null, default);
+        Assert.StartsWith("sha256:", v1);
+        Assert.Contains(fake.Seen, s => s.Method.Method == "MKCOL" && s.Url == "https://dav.example.invalid/dav/backups/");
+        Assert.Contains(fake.Seen, s => s.Method.Method == "MKCOL" && s.Url == "https://dav.example.invalid/dav/backups/astra/");
+
+        var got = await target.GetAsync("f", default);
+        Assert.NotNull(got);
+        Assert.Equal(v1, got!.Version);
+
+        // Updating with the sha256 version succeeds without sending If-Match for the weak ETag.
+        var next = Encoding.UTF8.GetBytes("updated-bytes");
+        var v2 = await target.PutAsync("f", next, v1, default);
+        Assert.StartsWith("sha256:", v2);
+        Assert.NotEqual(v1, v2);
+    }
+
     // ---------------------------------------------------------------- S3
 
     private static S3Target S3(Fake f, SyncTargetConfig? c = null) =>

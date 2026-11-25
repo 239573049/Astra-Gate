@@ -38,6 +38,7 @@ export function ProviderBackupSheet({ open, onOpenChange }: { open: boolean; onO
   const previewBackup = usePreviewProviderBackup();
   const importBackup = useImportProviderBackup();
   const fileInput = useRef<HTMLInputElement>(null);
+  const importSectionRef = useRef<HTMLElement>(null);
 
   const [secrets, setSecrets] = useState<BackupSecrets>('none');
   const [exportPass, setExportPass] = useState('');
@@ -87,6 +88,7 @@ export function ProviderBackupSheet({ open, onOpenChange }: { open: boolean; onO
     setImportError(null);
     setFile(parsed);
     if (parsed.secrets !== 'passphrase') runPreview(parsed, '');
+    importSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
   };
 
   const choose = async (f: File | undefined) => {
@@ -174,7 +176,7 @@ export function ProviderBackupSheet({ open, onOpenChange }: { open: boolean; onO
           </div>
         </section>
 
-        <section className="grid gap-3" aria-label={t('backup.import.title')}>
+        <section ref={importSectionRef} className="grid gap-3" aria-label={t('backup.import.title')}>
           <h3 className="text-[13px] font-medium">{t('backup.import.title')}</h3>
           <div>
             <input

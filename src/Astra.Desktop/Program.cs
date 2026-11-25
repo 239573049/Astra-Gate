@@ -36,7 +36,8 @@ internal static class Program
         Instance = instance;
         try
         {
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+            var hidden = LoginItemService.LaunchedAtLogin(args);
+            return BuildAvaloniaApp(showInDock: !hidden).StartWithClassicDesktopLifetime(args);
         }
         catch (Exception e)
         {
@@ -62,7 +63,7 @@ internal static class Program
     {
         try
         {
-            BuildAvaloniaApp().SetupWithoutStarting();
+            BuildAvaloniaApp(showInDock: false).SetupWithoutStarting();
             // The shell never connects here (no manager): a smoke run must not start or stop anybody's server.
             AppServices.Current.InitializeRuntime(null);
             var shell = AppServices.Current.CreateShell();
@@ -96,8 +97,11 @@ internal static class Program
         }
     }
 
-    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>()
+    public static AppBuilder BuildAvaloniaApp() => BuildAvaloniaApp(showInDock: true);
+
+    public static AppBuilder BuildAvaloniaApp(bool showInDock) => AppBuilder.Configure<App>()
         .UsePlatformDetect()
+        .With(new MacOSPlatformOptions { ShowInDock = showInDock })
         #if DEBUG
             .UseSpyglass()
         #endif

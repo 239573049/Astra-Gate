@@ -127,6 +127,19 @@ public sealed record ProviderKeyPatch(
 /// <summary>One event of a provider test stream, ready to be written as SSE.</summary>
 public sealed record ProviderTestEvent(string Event, JsonNode Payload);
 
+/// <summary><c>POST /api/providers/batch/enabled</c>: enables or disables several providers in one call.</summary>
+/// <param name="Ids">Provider ids to update.</param>
+/// <param name="Enabled">Target enabled state.</param>
+public sealed record ProviderBatchEnabledInput(List<string> Ids, bool Enabled);
+
+/// <summary><c>POST /api/providers/batch/delete</c>: deletes several providers in one call, unbinding their clients first.</summary>
+/// <param name="Ids">Provider ids to delete.</param>
+public sealed record ProviderBatchDeleteInput(List<string> Ids);
+
+/// <summary>How many providers a batch operation updated or deleted.</summary>
+/// <param name="Affected">Number of providers affected.</param>
+public sealed record ProviderBatchResultDto(int Affected);
+
 /// <summary>
 /// <c>GET /api/provider-quota/templates</c> item: a built-in balance / quota query (one request plus a declarative extractor). Mirrors
 /// <c>Astra.Providers.Quota.QuotaTemplate</c> field for field, so the wire JSON is unchanged.

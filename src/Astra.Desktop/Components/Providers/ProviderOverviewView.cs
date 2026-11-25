@@ -369,8 +369,10 @@ internal static class ProvidersTableView
 {
     public static Table Build(IReadOnlyList<ProviderTableRow> rows, long max, IReadOnlyList<string> labels, ProviderCardServices services)
     {
-        DataTableColumn[] columns =
-        [
+        var columns = new List<DataTableColumn>();
+        if (services.Selecting)
+            columns.Add(Tables.Cell<ProviderTableRow>("", "select", r => r.Provider.Id, r => SelectCell(r.Provider, services), width: 36, sortable: false));
+        columns.AddRange([
             Tables.Cell<ProviderTableRow>(Loc.T("providers.col.provider"), "name", r => r.Provider.Name, r => NameCell(r, services)),
             Tables.Cell<ProviderTableRow>(Loc.T("providers.col.status"), "health", r => ProviderHealthRules.SortOrder(r.Health), r => StatusCell(r.Health), width: 112),
             Tables.Column<ProviderTableRow>(Loc.T("providers.col.models"), "models", r => r.Provider.ModelCount, width: 56, numeric: true),
@@ -382,8 +384,20 @@ internal static class ProvidersTableView
             Tables.Cell<ProviderTableRow>(Loc.T("providers.col.tokens"), "tokens", r => r.Tokens, TokensCell, width: 128, numeric: true),
             Tables.Column<ProviderTableRow>(Loc.T("providers.col.cost"), "cost", r => r.Cost, v => v is decimal c && c > 0 ? ProviderFormat.FormatUsd(c) : "—", width: 96, numeric: true),
             Tables.Cell<ProviderTableRow>(Loc.T("providers.col.enabled"), "enabled", r => r.Provider.Enabled ? 1 : 0, r => new ProviderEnabledSwitch(r.Provider, services), width: 64),
-        ];
-        return Tables.Create(Loc.T("nav.providers"), rows, r => r.Provider.Id, Loc.T("providers.empty"), columns, "requests", descending: true).WithoutCompactLayout();
+        ]);
+        return Tables.Create(Loc.T("nav.providers"), rows, r => r.Provider.Id, Loc.T("providers.empty"), [.. columns], "requests", descending: true).WithoutCompactLayout();
+    }
+
+    private static Control SelectCell(ProviderDto p, ProviderCardServices services)
+    {
+        var box = new Checkbox { IsChecked = services.IsSelected?.Invoke(p.Id) == true, VerticalAlignment = VerticalAlignment.Center };
+        Avalonia.Automation.AutomationProperties.SetName(box, p.Name);
+        box.IsCheckedChanged += (_, _) =>
+        {
+            if ((box.IsChecked == true) != (services.IsSelected?.Invoke(p.Id) == true))
+                services.ToggleSelect?.Invoke(p.Id);
+        };
+        return box;
     }
 
     private static Control NameCell(ProviderTableRow r, ProviderCardServices services)
@@ -407,7 +421,9 @@ internal static class ProvidersTableView
         grid.PointerExited += (_, _) => name.Token(TextBlock.ForegroundProperty, p.Enabled ? ArcDesignTokenKind.Foreground : ArcDesignTokenKind.TextMuted);
         grid.PointerPressed += (_, e) =>
         {
-            if (e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) services.Open(p);
+            if (!e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) return;
+            if (services.Selecting) services.ToggleSelect?.Invoke(p.Id);
+            else services.Open(p);
         };
         return grid;
     }

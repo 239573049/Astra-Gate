@@ -110,6 +110,24 @@ public sealed class ProviderQueries
         return result;
     }
 
+    /// <summary>POST /api/providers/batch/enabled: enables or disables several providers at once.</summary>
+    public async Task<int> BatchSetEnabledAsync(IReadOnlyList<string> ids, bool enabled, CancellationToken ct = default)
+    {
+        var result = await _api.PostAsync<ProviderBatchEnabledInput, ProviderBatchResultDto>(
+            "/api/providers/batch/enabled", new ProviderBatchEnabledInput([.. ids], enabled), ct);
+        InvalidateProviders();
+        return result?.Affected ?? 0;
+    }
+
+    /// <summary>POST /api/providers/batch/delete: deletes several providers at once (unbinding their clients first).</summary>
+    public async Task<int> BatchDeleteAsync(IReadOnlyList<string> ids, CancellationToken ct = default)
+    {
+        var result = await _api.PostAsync<ProviderBatchDeleteInput, ProviderBatchResultDto>(
+            "/api/providers/batch/delete", new ProviderBatchDeleteInput([.. ids]), ct);
+        InvalidateProviders();
+        return result?.Affected ?? 0;
+    }
+
     /// <summary>POST /api/providers/import for the chosen entries.</summary>
     public async Task<ImportResultDto?> ImportAsync(IEnumerable<ImportCandidateDto> chosen, CancellationToken ct = default)
     {

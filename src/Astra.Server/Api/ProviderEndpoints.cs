@@ -208,6 +208,36 @@ public static class ProviderEndpoints
             return Results.NoContent();
         });
 
+        // Batch operations (issue #46): enable / disable or delete several providers in one serialized call.
+        group.MapPost("/batch/enabled", async (ProviderBatchEnabledInput input, AstraDatabase db, ClientService clients, CancellationToken ct) =>
+        {
+            var targets = await RequireBatchAsync(db, input.Ids, ct);
+            var changed = new List<string>();
+            foreach (var p in targets)
+            {
+                if (p.Enabled == input.Enabled) continue;
+                p.Enabled = input.Enabled;
+                await db.Providers.UpdateAsync(p, ct);
+                changed.Add(p.Id);
+            }
+            foreach (var id in changed) await clients.SyncModelListsAsync(id, ct);
+            return Results.Ok(new ProviderBatchResultDto(changed.Count));
+        });
+        group.MapPost("/batch/delete", async (ProviderBatchDeleteInput input, AstraDatabase db, ClientService clients, CancellationToken ct) =>
+        {
+            var targets = await RequireBatchAsync(db, input.Ids, ct);
+            foreach (var p in targets)
+            {
+                await clients.UnbindProviderAsync(p.Id, ct);
+                if (!await db.Providers.DeleteIfUnboundAsync(p.Id, ct))
+                {
+                    var bound = (await db.Clients.ListBindingsByProviderAsync(p.Id, ct)).Select(b => b.ClientKind).Distinct().ToList();
+                    throw new AdminApiException(409, "Provider is bound to clients", new BoundClientsDetailsDto(bound));
+                }
+            }
+            return Results.Ok(new ProviderBatchResultDto(targets.Count));
+        });
+
         group.MapGet("/{id}/models", async (string id, AstraDatabase db, EffectiveModelResolver resolver, CancellationToken ct) =>
         {
             var p = await RequireAsync(db, id, ct);
@@ -484,6 +514,28 @@ public static class ProviderEndpoints
 
     internal static async Task<Provider> RequireAsync(AstraDatabase db, string id, CancellationToken ct) =>
         await db.Providers.GetAsync(id, ct) ?? throw new AdminApiException(404, "Provider not found");
+
+    private static async Task<List<Provider>> RequireBatchAsync(AstraDatabase db, IReadOnlyList<string>? rawIds, CancellationToken ct)
+    {
+        if (rawIds is null || rawIds.Count == 0) throw new AdminApiException(400, "ids must be a non-empty array of provider ids");
+        if (rawIds.Count > 500) throw new AdminApiException(400, "Too many providers in one request");
+        var ids = new List<string>(rawIds.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var raw in rawIds)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) throw new AdminApiException(400, "ids must contain non-empty provider ids");
+            var id = raw.Trim();
+            if (seen.Add(id)) ids.Add(id);
+        }
+        var byId = (await db.Providers.ListAsync(ct)).ToDictionary(p => p.Id, StringComparer.Ordinal);
+        var targets = new List<Provider>(ids.Count);
+        foreach (var id in ids)
+        {
+            if (!byId.TryGetValue(id, out var provider)) throw new AdminApiException(404, "Provider not found");
+            targets.Add(provider);
+        }
+        return targets;
+    }
 
     private static async Task<ProviderDto> ToDtoAsync(Provider p, AstraDatabase db, ProviderTemplateCatalog catalog, ISecretProtector secrets,
         ProviderQuotaManager quota, CancellationToken ct)

@@ -227,31 +227,40 @@ public sealed class BackupAccess(BackupService backup, RestoreService restore, A
         }
     }
 
-    private static JsonObject LegacyBody(byte[] file, BackupSourceInput input) =>
-        new() { ["file"] = JsonNode.Parse(file), ["passphrase"] = input.Passphrase };
+    private async Task<string?> ResolvePassphraseAsync(BackupSourceInput input, CancellationToken ct)
+    {
+        if (!string.IsNullOrEmpty(input.Passphrase)) return input.Passphrase;
+        if (input.Source == "remote") return await sync.TryLoadPassphraseAsync(ct);
+        return null;
+    }
+
+    private static JsonObject LegacyBody(byte[] file, string? passphrase) =>
+        new() { ["file"] = JsonNode.Parse(file), ["passphrase"] = passphrase };
 
     public async Task<BackupPlanDto> PreviewAsync(BackupSourceInput input, CancellationToken ct)
     {
         var file = await ReadAsync(input, ct);
+        var passphrase = await ResolvePassphraseAsync(input, ct);
         if (BackupService.IsLegacyProviders(file))
         {
-            var preview = await providers.PreviewAsync(LegacyBody(file, input), ct);
+            var preview = await providers.PreviewAsync(LegacyBody(file, passphrase), ct);
             return new BackupPlanDto("", "", false, RestoreModes.Merge, [BackupSections.Providers], [], [], true, preview.ToJsonString());
         }
-        var bundle = BackupService.Open(file, input.Passphrase);
+        var bundle = BackupService.Open(file, passphrase);
         return BackupEndpoints.ToDto(await backup.PlanAsync(bundle, input.Sections, input.Mode ?? RestoreModes.Merge, ct));
     }
 
     public async Task<BackupRestoreDto> RestoreAsync(BackupSourceInput input, CancellationToken ct)
     {
         var file = await ReadAsync(input, ct);
+        var passphrase = await ResolvePassphraseAsync(input, ct);
         if (BackupService.IsLegacyProviders(file))
         {
-            var done = await providers.ImportAsync(LegacyBody(file, input), ct);
+            var done = await providers.ImportAsync(LegacyBody(file, passphrase), ct);
             var plan = new BackupPlanDto("", "", false, RestoreModes.Merge, [BackupSections.Providers], [], [], true, null);
             return new BackupRestoreDto(plan, (done["added"] as JsonArray)?.Count ?? 0, 0, [], [], null, done.ToJsonString());
         }
-        var bundle = BackupService.Open(file, input.Passphrase);
+        var bundle = BackupService.Open(file, passphrase);
         var outcome = await restore.RestoreAsync(bundle, input.Sections, input.Mode ?? RestoreModes.Merge, ct);
         var r = outcome.Result;
         return new BackupRestoreDto(BackupEndpoints.ToDto(outcome.Plan), r?.Written ?? 0, r?.Removed ?? 0, r?.Skipped ?? [], r?.Errors ?? [], outcome.SafetyBackup, null);

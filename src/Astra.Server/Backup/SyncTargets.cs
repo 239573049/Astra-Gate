@@ -175,7 +175,10 @@ public sealed class WebDavTarget(SyncTargetConfig c, string? secret, Func<HttpCl
     private const string What = "the WebDAV server";
     public string Describe => c.Url;
 
-    private string Url(string name) => $"{c.Url.TrimEnd('/')}/{(c.Folder.Length > 0 ? c.Folder + "/" : "")}{Uri.EscapeDataString(name)}";
+    private string FolderPath() =>
+        c.Folder.Length == 0 ? "" : string.Join('/', c.Folder.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.EscapeDataString)) + "/";
+
+    private string Url(string name) => $"{c.Url.TrimEnd('/')}/{FolderPath()}{Uri.EscapeDataString(name)}";
 
     private HttpRequestMessage Request(HttpMethod method, string url)
     {
@@ -185,13 +188,15 @@ public sealed class WebDavTarget(SyncTargetConfig c, string? secret, Func<HttpCl
         return request;
     }
 
+    private static string? StrongEtag(HttpResponseMessage res) => res.Headers.ETag is { IsWeak: false } etag ? etag.Tag : null;
+
     public async Task<RemoteFile?> GetAsync(string name, CancellationToken ct)
     {
         using var res = await SyncTargets.SendAsync(http, Request(HttpMethod.Get, Url(name)), What, ct);
         if (res.StatusCode == HttpStatusCode.NotFound) return null;
         if (!res.IsSuccessStatusCode) throw SyncTargets.Failure(res, What);
         var bytes = await SyncTargets.ReadCappedAsync(res, What, ct);
-        return new RemoteFile(bytes, res.Headers.ETag?.Tag ?? SyncTargets.ContentVersion(bytes));
+        return new RemoteFile(bytes, StrongEtag(res) ?? SyncTargets.ContentVersion(bytes));
     }
 
     public async Task<string> PutAsync(string name, byte[] bytes, string? ifVersion, CancellationToken ct)
@@ -199,24 +204,45 @@ public sealed class WebDavTarget(SyncTargetConfig c, string? secret, Func<HttpCl
         await EnsureFolderAsync(ct);
         var blind = ifVersion is not null && ifVersion.StartsWith("sha256:", StringComparison.Ordinal);
         if (blind && (await GetAsync(name, ct)) is { } now && now.Version != ifVersion) throw new SyncPreconditionException();
+        var conditional = ifVersion is null || !blind;
         using var request = Request(HttpMethod.Put, Url(name));
         request.Content = new ByteArrayContent(bytes) { Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") } };
         if (ifVersion is null) request.Headers.TryAddWithoutValidation("If-None-Match", "*");
         else if (!blind) request.Headers.TryAddWithoutValidation("If-Match", ifVersion);
         using var res = await SyncTargets.SendAsync(http, request, What, ct);
         if (res.StatusCode is HttpStatusCode.PreconditionFailed) throw new SyncPreconditionException();
+        if (conditional && res.StatusCode is HttpStatusCode.NotImplemented or HttpStatusCode.BadRequest)
+        {
+            // Some WebDAV servers do not support conditional PUT headers: check the current object first and write unconditionally.
+            var current = await GetAsync(name, ct);
+            if (ifVersion is null ? current is not null : current is null || current.Version != ifVersion)
+                throw new SyncPreconditionException();
+            using var plainReq = Request(HttpMethod.Put, Url(name));
+            plainReq.Content = new ByteArrayContent(bytes) { Headers = { ContentType = new MediaTypeHeaderValue("application/octet-stream") } };
+            using var plainRes = await SyncTargets.SendAsync(http, plainReq, What, ct);
+            if (!plainRes.IsSuccessStatusCode) throw SyncTargets.Failure(plainRes, What);
+            if (StrongEtag(plainRes) is { } plainEtag) return plainEtag;
+            using var plainHead = await SyncTargets.SendAsync(http, Request(HttpMethod.Head, Url(name)), What, ct);
+            return StrongEtag(plainHead) ?? SyncTargets.ContentVersion(bytes);
+        }
         if (!res.IsSuccessStatusCode) throw SyncTargets.Failure(res, What);
-        if (res.Headers.ETag is { } etag) return etag.Tag;
+        if (StrongEtag(res) is { } etag) return etag;
         using var head = await SyncTargets.SendAsync(http, Request(HttpMethod.Head, Url(name)), What, ct);
-        return head.Headers.ETag?.Tag ?? SyncTargets.ContentVersion(bytes);
+        return StrongEtag(head) ?? SyncTargets.ContentVersion(bytes);
     }
 
     private async Task EnsureFolderAsync(CancellationToken ct)
     {
         if (c.Folder.Length == 0) return;
-        using var res = await SyncTargets.SendAsync(http, Request(new HttpMethod("MKCOL"), $"{c.Url.TrimEnd('/')}/{c.Folder}/"), What, ct);
-        if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.MethodNotAllowed) return;
-        throw SyncTargets.Failure(res, What);
+        var baseUrl = c.Url.TrimEnd('/');
+        var prefix = "";
+        foreach (var segment in c.Folder.Split('/', StringSplitOptions.RemoveEmptyEntries))
+        {
+            prefix += Uri.EscapeDataString(segment) + "/";
+            using var res = await SyncTargets.SendAsync(http, Request(new HttpMethod("MKCOL"), $"{baseUrl}/{prefix}"), What, ct);
+            if (res.IsSuccessStatusCode || res.StatusCode == HttpStatusCode.MethodNotAllowed) continue;
+            throw SyncTargets.Failure(res, What);
+        }
     }
 
     public async Task TestAsync(CancellationToken ct)

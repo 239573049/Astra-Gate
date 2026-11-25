@@ -3,6 +3,7 @@ using Astra.Api.Contracts;
 using Astra.Desktop.Components.Kit;
 using Astra.Desktop.Components.Providers;
 using Astra.Desktop.Components.Settings;
+using Astra.Desktop.Components.Tokens;
 using Astra.Desktop.Core.I18n;
 using Astra.Desktop.Core.Providers;
 using Avalonia;
@@ -105,7 +106,7 @@ public sealed class ProvidersView : UserControl
         var series = _vm.Queries.Series.Data;
         // The polled series and refetches often return the same data: keep the cards (and their sparklines) as they are then.
         var signature = $"{list.Status}|{list.HasData}|{list.Data?.ToJsonString()}|{string.Join(';', series?.Select(p => $"{p.Bucket}{p.Key}{p.Requests}{p.CostUsd}") ?? [])}"
-            + $"|{Stats(_vm.WeekStats.Data)}|{_vm.Range}|{Stats(_vm.RangedStats.Data)}|{_vm.View}|{_vm.ChartsOpen}";
+            + $"|{Stats(_vm.WeekStats.Data)}|{_vm.Range}|{Stats(_vm.RangedStats.Data)}|{_vm.View}|{_vm.ChartsOpen}|{_vm.Selecting}|{_vm.BatchBusy}|{string.Join(',', _vm.SelectedIds)}";
         if (!force && signature == _signature) return;
         _signature = signature;
 
@@ -123,6 +124,7 @@ public sealed class ProvidersView : UserControl
                 stack.Children.Add(Toolbar());
                 stack.Children.Add(ProviderOverviewView.Build(
                     ProviderOverviewData.Build(items, _vm.RangedStats.Data ?? [], week, Loc.T("providers.overview.others")), _vm.Range, _vm.ChartsOpen));
+                if (_vm.Selecting) stack.Children.Add(BatchBar(items));
                 stack.Children.Add(List(items, series, week));
             }
         }
@@ -146,12 +148,16 @@ public sealed class ProvidersView : UserControl
     private static string Stats(List<ProviderStatDto>? stats)
         => string.Join(';', stats?.Select(x => $"{x.ProviderId}{x.Requests}{x.SuccessRequests}{x.CostUsd}{x.AvgTtftMs}{x.InputTokens}{x.OutputTokens}{x.FailoversOut}") ?? []);
 
-    // web: the row above the overview — range on the left; the charts switch and the cards / table choice on the right.
+    // web: the row above the overview — range on the left; batch toggle, charts switch and cards / table choice on the right.
     private Control Toolbar()
     {
         var range = new ControlledSegmented(ProvidersViewModel.Ranges.Select(r => (r, Loc.T("range." + r))), _vm.Range);
         Avalonia.Automation.AutomationProperties.SetName(range, Loc.T("providers.overview.range"));
         range.Chose += v => _vm.SetRange(v);
+        var batch = ProviderUi.Button(
+            Loc.T(_vm.Selecting ? "providers.batch.done" : "providers.batch.toggle"),
+            LucideIconKind.CheckSquare, _vm.Selecting ? ButtonVariant.Primary : ButtonVariant.Ghost, ControlSize.Small,
+            _vm.ToggleSelecting);
         var charts = ProviderUi.Button(
             Loc.T(_vm.ChartsOpen ? "providers.overview.hideCharts" : "providers.overview.showCharts"),
             _vm.ChartsOpen ? LucideIconKind.ChevronUp : LucideIconKind.ChartColumn, ButtonVariant.Ghost, ControlSize.Small,
@@ -160,12 +166,35 @@ public sealed class ProvidersView : UserControl
             [(ProvidersPrefs.GridView, Loc.T("providers.view.grid")), (ProvidersPrefs.TableView, Loc.T("providers.view.table"))], _vm.View);
         Avalonia.Automation.AutomationProperties.SetName(view, Loc.T("providers.view.label"));
         view.Chose += v => _vm.SetView(v);
-        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { charts, view } };
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { batch, charts, view } };
         var bar = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
         bar.Children.Add(range);
         Grid.SetColumn(right, 2);
         bar.Children.Add(right);
         return bar;
+    }
+
+    private Control BatchBar(IReadOnlyList<ProviderDto> items)
+    {
+        var count = _vm.SelectedIds.Count;
+        var all = items.Count > 0 && count == items.Count;
+        var disabled = count == 0 || _vm.BatchBusy;
+        var label = KitStyle.Text(Loc.T("providers.batch.selected", ("count", count)), ArcDesignTokenKind.TypeSM, ArcDesignTokenKind.Foreground, Avalonia.Media.FontWeight.Medium);
+        label.VerticalAlignment = VerticalAlignment.Center;
+        var selectAll = ProviderUi.Button(Loc.T(all ? "providers.batch.clear" : "providers.batch.selectAll"), null, ButtonVariant.Ghost, ControlSize.Small, _vm.ToggleSelectAll);
+        var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { label, selectAll } };
+
+        var enable = ProviderUi.Button(Loc.T("providers.batch.enable"), null, ButtonVariant.Secondary, ControlSize.Small, () => _ = _vm.BatchSetEnabledAsync(true));
+        var disable = ProviderUi.Button(Loc.T("providers.batch.disable"), null, ButtonVariant.Secondary, ControlSize.Small, () => _ = _vm.BatchSetEnabledAsync(false));
+        var delete = ProviderUi.Button(Loc.T("providers.batch.delete"), LucideIconKind.Trash2, ButtonVariant.Danger, ControlSize.Small, () => _ = _vm.BatchDeleteAsync());
+        enable.IsEnabled = disable.IsEnabled = delete.IsEnabled = !disabled;
+        var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { enable, disable, delete } };
+
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        row.Children.Add(left);
+        Grid.SetColumn(right, 2);
+        row.Children.Add(right);
+        return new CardPanel(row, new Thickness(12, 8));
     }
 
     private Control List(IReadOnlyList<ProviderDto> items, List<TimeseriesPointDto>? series, Dictionary<string, ProviderStatDto> week)
@@ -175,7 +204,7 @@ public sealed class ProvidersView : UserControl
         var usage = ProviderUsageBuckets.Build(series, days);
         // One scale for every card and row, so bar heights compare across providers.
         var max = usage.Values.SelectMany(u => u.Requests).DefaultIfEmpty(0).Max();
-        var services = new ProviderCardServices(_vm.Queries, _vm.Feedback, _vm.Open, _vm.Test);
+        var services = new ProviderCardServices(_vm.Queries, _vm.Feedback, _vm.Open, _vm.Test, _vm.Selecting, _vm.IsSelected, _vm.ToggleSelected);
         if (_vm.View == ProvidersPrefs.TableView)
         {
             var rows = items.Select(p => ProviderTableRow.From(p, week.GetValueOrDefault(p.Id),

@@ -37,6 +37,10 @@ public static class BackupLogic
     public static BackupSourceInput AutoSource(string name, string? pass, string mode)
         => new("auto", null, name, Blank(pass), null, mode);
 
+    /// <summary>A restore source that reads the latest backup from the configured sync target (WebDAV / S3 / GitHub / folder).</summary>
+    public static BackupSourceInput RemoteSource(string? pass, string mode)
+        => new("remote", null, null, Blank(pass), null, mode);
+
     /// <summary>The key of the first field the target still needs for <paramref name="kind"/> (the placeholder the form shows), or null when complete.</summary>
     public static string? MissingTargetField(string kind, string? url, string? folder, string? bucket) => kind switch
     {

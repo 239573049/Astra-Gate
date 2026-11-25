@@ -22,6 +22,9 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
 {
     private readonly Action<PageContext, ProviderDto>? _openTest;
     private List<ProviderDto> _items = [];
+    private readonly HashSet<string> _selected = new(StringComparer.Ordinal);
+    private bool _selecting;
+    private bool _batchBusy;
     private string _range;
     private IDisposable? _rangedToken;
     private bool _active;
@@ -73,6 +76,102 @@ public sealed class ProvidersViewModel : PageViewModel, IProviderSheetHost
 
     /// <summary>Whether the overview's charts show, remembered (web <c>astra.providers.charts</c>).</summary>
     public bool ChartsOpen => ProvidersPrefs.ChartsOpen;
+
+    /// <summary>Whether batch selection mode is active on the list.</summary>
+    public bool Selecting => _selecting;
+
+    /// <summary>True while a batch enable / disable / delete request is running.</summary>
+    public bool BatchBusy => _batchBusy;
+
+    /// <summary>Currently selected provider ids (pruned to existing items).</summary>
+    public IReadOnlyList<string> SelectedIds => _items.Where(p => _selected.Contains(p.Id)).Select(p => p.Id).ToList();
+
+    /// <summary>Whether <paramref name="id"/> is selected.</summary>
+    public bool IsSelected(string id) => _selected.Contains(id);
+
+    /// <summary>Enters or leaves batch selection mode.</summary>
+    public void ToggleSelecting()
+    {
+        _selecting = !_selecting;
+        if (!_selecting) _selected.Clear();
+        LayoutChanged?.Invoke();
+    }
+
+    /// <summary>Toggles selection of one provider.</summary>
+    public void ToggleSelected(string id)
+    {
+        if (!_selected.Add(id)) _selected.Remove(id);
+        LayoutChanged?.Invoke();
+    }
+
+    /// <summary>Selects every provider, or clears when all are already selected.</summary>
+    public void ToggleSelectAll()
+    {
+        var all = _items.Count > 0 && _items.All(p => _selected.Contains(p.Id));
+        _selected.Clear();
+        if (!all)
+            foreach (var p in _items) _selected.Add(p.Id);
+        LayoutChanged?.Invoke();
+    }
+
+    /// <summary>Enables or disables all selected providers in one request.</summary>
+    public async Task BatchSetEnabledAsync(bool enabled)
+    {
+        var ids = SelectedIds;
+        if (ids.Count == 0 || _batchBusy) return;
+        _batchBusy = true;
+        LayoutChanged?.Invoke();
+        try
+        {
+            var affected = await Queries.BatchSetEnabledAsync(ids, enabled);
+            _selected.Clear();
+            Feedback.Success(Loc.T(enabled ? "providers.batch.enabledDone" : "providers.batch.disabledDone", ("count", affected)));
+        }
+        catch (Exception ex)
+        {
+            Feedback.Error(ex.Message);
+        }
+        finally
+        {
+            _batchBusy = false;
+            LayoutChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Confirms and deletes all selected providers in one request.</summary>
+    public async Task BatchDeleteAsync()
+    {
+        var chosen = _items.Where(p => _selected.Contains(p.Id)).ToList();
+        if (chosen.Count == 0 || _batchBusy) return;
+        var bound = chosen.SelectMany(p => p.BoundClients).Distinct(StringComparer.Ordinal).ToList();
+        var detail = bound.Count > 0
+            ? Loc.T("providers.batch.deleteDetailBound", ("clients", string.Join(", ", bound)))
+            : Loc.T("providers.batch.deleteDetail");
+        var ok = await Feedback.ConfirmAsync(new ConfirmRequest(
+            Loc.T("providers.batch.deleteConfirm", ("count", chosen.Count)),
+            detail,
+            Loc.T("common.delete"),
+            Destructive: true));
+        if (!ok) return;
+        _batchBusy = true;
+        LayoutChanged?.Invoke();
+        try
+        {
+            var affected = await Queries.BatchDeleteAsync(chosen.Select(p => p.Id).ToList());
+            _selected.Clear();
+            if (_items.Count <= affected) _selecting = false;
+            Feedback.Success(Loc.T("providers.batch.deletedDone", ("count", affected)));
+        }
+        catch (Exception ex)
+        {
+            Feedback.Error(ex.Message);
+        }
+        finally
+        {
+            _batchBusy = false;
+            LayoutChanged?.Invoke();
+        }
+    }
 
     /// <summary>Switches the overview's range; the ranged query is watched while the page is active.</summary>
     public void SetRange(string range)

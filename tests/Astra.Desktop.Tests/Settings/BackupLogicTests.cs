@@ -109,6 +109,10 @@ public class BackupLogicTests
         Assert.Null(BackupLogic.FileSource("{}", "", "merge").Passphrase);
         var auto = BackupLogic.AutoSource("a.astra-backup", "pw", "replace");
         Assert.Equal(("auto", "a.astra-backup", "pw", "replace"), (auto.Source, auto.Name, auto.Passphrase, auto.Mode));
+        var remote = BackupLogic.RemoteSource("", "merge");
+        Assert.Equal(("remote", null, null, "merge"), (remote.Source, remote.Name, remote.Passphrase, remote.Mode));
+        var remoteWithPass = BackupLogic.RemoteSource("secret123", "replace");
+        Assert.Equal(("remote", null, "secret123", "replace"), (remoteWithPass.Source, remoteWithPass.Name, remoteWithPass.Passphrase, remoteWithPass.Mode));
     }
 
     [Theory]

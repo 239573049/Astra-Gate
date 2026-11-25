@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useUpdateProvider } from '../api/hooks';
 
 import type { Provider, ProviderStat, Range } from '../api/types';
+import { Checkbox } from './arc/checkbox/checkbox';
 import { SortableDataTable, type DataColumn } from './arc/sortable-data-table/sortable-data-table';
 import { ProviderIcon } from './icons';
 import { Dot, Switch } from './ui/controls';
@@ -342,6 +343,9 @@ export function ProvidersTable({
   labels,
   max,
   onOpen,
+  selecting,
+  selected,
+  onToggleSelect,
 }: {
   providers: Provider[];
   stats7d: Map<string, ProviderStat>;
@@ -349,6 +353,9 @@ export function ProvidersTable({
   labels: string[];
   max: number;
   onOpen: (p: Provider) => void;
+  selecting?: boolean;
+  selected?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 }) {
   const { t } = useI18n();
   const rows: ProviderRow[] = providers.map((p) => {
@@ -370,12 +377,34 @@ export function ProvidersTable({
       days,
     };
   });
+  const selectColumn: DataColumn<ProviderRow>[] = selecting
+    ? [
+        {
+          key: 'id',
+          label: '',
+          sortable: false,
+          width: 36,
+          render: (_, r) => (
+            <Checkbox
+              checked={selected?.has(r.id) ?? false}
+              aria-label={r.name}
+              onCheckedChange={() => onToggleSelect?.(r.id)}
+            />
+          ),
+        },
+      ]
+    : [];
   const columns: DataColumn<ProviderRow>[] = [
+    ...selectColumn,
     {
       key: 'name',
       label: t('providers.col.provider'),
       render: (_, r) => (
-        <button type="button" className="flex w-full min-w-0 items-center gap-2 text-left" onClick={() => onOpen(r.p)}>
+        <button
+          type="button"
+          className="flex w-full min-w-0 items-center gap-2 text-left"
+          onClick={() => (selecting ? onToggleSelect?.(r.id) : onOpen(r.p))}
+        >
           <span className={cn(!r.p.enabled && 'opacity-50 grayscale')}>
             <ProviderIcon name={r.p.name} icon={r.p.icon} colorKey={r.p.templateId} size={22} />
           </span>

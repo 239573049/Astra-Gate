@@ -171,4 +171,33 @@ public sealed class SyncApiTests
         Assert.False(body!["configured"]!.GetValue<bool>());
         Assert.False(body["enabled"]!.GetValue<bool>());
     }
+
+    [Fact]
+    public async Task Remote_restore_reads_sync_file_when_no_manual_upload_exists_and_uses_saved_passphrase()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "astra-remote-restore-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            await using var a = await TestHost.StartAsync();
+            await using var b = await TestHost.StartAsync();
+            await Configure(a, dir);
+            await AddProvider(a, "p1", "CloudAlpha");
+            await SyncNow(a); // writes astra-sync.astra-backup, not astra-backup-latest.astra-backup
+
+            // On a second machine with the same sync target configured, preview & restore from "remote" works even without retyping the passphrase.
+            await Configure(b, dir);
+            var (status, preview) = await b.SendAsync(HttpMethod.Post, "/api/backup/preview", new { source = "remote", mode = "merge" });
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.Contains("providers", preview!["available"]!.AsArray().Select(n => n!.GetValue<string>()));
+
+            (status, var restored) = await b.SendAsync(HttpMethod.Post, "/api/backup/restore", new { source = "remote", mode = "merge", sections = new[] { "providers" } });
+            Assert.Equal(HttpStatusCode.OK, status);
+            Assert.True(restored!["written"]!.GetValue<int>() >= 1);
+            Assert.Equal(["CloudAlpha"], await Names(b));
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch (IOException) { }
+        }
+    }
 }

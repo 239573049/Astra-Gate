@@ -70,6 +70,20 @@ public sealed class SyncService(
         return SyncTargets.Create(c.Target, secret, () => http.CreateClient(SyncTargets.HttpClientName));
     }
 
+    private ISyncTarget RequireTarget(SyncConfig c)
+    {
+        if (c.Target.Kind.Length == 0 || (c.Target.Url.Length == 0 && c.Target.Kind != SyncTargetKinds.S3))
+            throw new AdminApiException(409, "Sync is not set up yet");
+        return CreateTarget(c);
+    }
+
+    /// <summary>The saved sync passphrase, or null when none is stored.</summary>
+    public async Task<string?> TryLoadPassphraseAsync(CancellationToken ct)
+    {
+        var config = await LoadConfigAsync(ct);
+        return Plain(config.PassphraseProtected, "sync passphrase");
+    }
+
     private string Passphrase(SyncConfig c) =>
         Plain(c.PassphraseProtected, "sync passphrase") is { Length: > 0 } p ? p : throw new AdminApiException(409, "Sync has no passphrase yet");
 
@@ -211,7 +225,7 @@ public sealed class SyncService(
     public async Task<string> UploadBackupAsync(byte[] file, CancellationToken ct)
     {
         var config = await LoadConfigAsync(ct);
-        var target = CreateTarget(config);
+        var target = RequireTarget(config);
         var name = $"astra-backup-{DateTimeOffset.UtcNow:yyyyMMdd-HHmmss}{BackupService.FileExtension}";
         await target.PutAsync(name, file, null, ct);
         var latest = await target.GetAsync(LatestBackupFile, ct);
@@ -220,15 +234,23 @@ public sealed class SyncService(
         return name;
     }
 
-    /// <summary>The latest backup file on the target, for the ordinary preview and restore.</summary>
+    /// <summary>
+    /// The latest backup file on the target, for the ordinary preview and restore: prefers the manual upload
+    /// (<see cref="LatestBackupFile"/>), then falls back to the sync file (<see cref="SyncFile"/>) or a legacy
+    /// providers WebDAV backup (<see cref="WebDavBackupService.LatestName"/>) so any cloud backup can be restored.
+    /// </summary>
     public async Task<byte[]> FetchLatestBackupAsync(CancellationToken ct)
     {
         var config = await LoadConfigAsync(ct);
-        var file = await CreateTarget(config).GetAsync(LatestBackupFile, ct) ?? throw new AdminApiException(404, "There is no backup on the target yet");
+        var target = RequireTarget(config);
+        var file = await target.GetAsync(LatestBackupFile, ct)
+            ?? await target.GetAsync(SyncFile, ct)
+            ?? await target.GetAsync(WebDavBackupService.LatestName, ct)
+            ?? throw new AdminApiException(404, "There is no backup on the target yet");
         return file.Bytes;
     }
 
-    public async Task TestAsync(CancellationToken ct) => await CreateTarget(await LoadConfigAsync(ct)).TestAsync(ct);
+    public async Task TestAsync(CancellationToken ct) => await RequireTarget(await LoadConfigAsync(ct)).TestAsync(ct);
 
     /// <summary>Forgets what the last syncs agreed on (the next one is a join: the remote setup comes here, this machine's is kept first).</summary>
     public Task ResetStateAsync(CancellationToken ct) => states.UpdateAsync(s =>

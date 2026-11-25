@@ -49,7 +49,17 @@ public class App : Application
             var tray = new TrayRuntime(this, desktop, services, shell, CreateWindow);
             // A staged app update finishes once this process is gone (IDesktopUpdater): quit like the tray's Quit does.
             services.Host.QuitForUpdate = tray.Quit;
-            if (!hidden) desktop.MainWindow = tray.MainWindow;
+            if (!hidden)
+            {
+                desktop.MainWindow = tray.MainWindow;
+                // Info.plist sets LSUIElement so hidden / relaunch / second-instance processes never flash the Dock (issue #47);
+                // a normal launch promotes itself to regular and activates once the main window opens.
+                if (OperatingSystem.IsMacOS())
+                {
+                    MacApp.SetDockVisible(true);
+                    tray.MainWindow.Opened += (_, _) => { if (OperatingSystem.IsMacOS()) MacApp.Activate(); };
+                }
+            }
             tray.Start();
             if (hidden) tray.StartHidden();
             // A second launch (Dock, Start menu, launcher) brings this window forward (Electron's 'second-instance').

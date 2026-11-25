@@ -27,4 +27,13 @@ public class TrayRelaunchTests
         Assert.Null(TrayRelaunch.Route(["--route=42"]));
         Assert.Null(TrayRelaunch.OwnedServer(["--owned-server=abc"]));
     }
+
+    [Fact]
+    public void Mac_info_plist_marks_app_as_lsuielement_so_hidden_launches_never_flash_the_dock()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var plist = File.ReadAllText(Path.Combine(root, "src", "Astra.Desktop", "Packaging", "Info.plist"));
+        Assert.Contains("<key>LSUIElement</key>", plist);
+        Assert.Contains("<true/>", plist);
+    }
 }

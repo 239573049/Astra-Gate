@@ -1380,6 +1380,20 @@ internal static class Messages
         "providers.deleteDetailBound",
         "providers.deleted",
         "providers.deleteBound",
+        "providers.batch.toggle",
+        "providers.batch.done",
+        "providers.batch.selected",
+        "providers.batch.selectAll",
+        "providers.batch.clear",
+        "providers.batch.enable",
+        "providers.batch.disable",
+        "providers.batch.delete",
+        "providers.batch.enabledDone",
+        "providers.batch.disabledDone",
+        "providers.batch.deleteConfirm",
+        "providers.batch.deleteDetail",
+        "providers.batch.deleteDetailBound",
+        "providers.batch.deletedDone",
         "providers.templateVersions",
         "providers.templateApplied",
         "providers.templateUpToDate",
@@ -5228,6 +5242,20 @@ internal static class Messages
             case "providers.deleteDetailBound": return "提供商及其模型设置会被删除，请求记录保留。正在使用它的客户端会解除绑定：{clients}；其中没有其他提供商的客户端会被关闭，并恢复原来的配置。";
             case "providers.deleted": return "已删除";
             case "providers.deleteBound": return "仍有客户端在使用：{clients}。请先为它们切换提供商。";
+            case "providers.batch.toggle": return "批量操作";
+            case "providers.batch.done": return "完成";
+            case "providers.batch.selected": return "已选 {count} 项";
+            case "providers.batch.selectAll": return "全选";
+            case "providers.batch.clear": return "取消全选";
+            case "providers.batch.enable": return "批量启用";
+            case "providers.batch.disable": return "批量禁用";
+            case "providers.batch.delete": return "批量删除";
+            case "providers.batch.enabledDone": return "已启用 {count} 个提供商";
+            case "providers.batch.disabledDone": return "已禁用 {count} 个提供商";
+            case "providers.batch.deleteConfirm": return "删除已选的 {count} 个提供商？";
+            case "providers.batch.deleteDetail": return "所选提供商及其模型设置会被删除，请求记录保留。";
+            case "providers.batch.deleteDetailBound": return "所选提供商及其模型设置会被删除，请求记录保留。正在使用它们的客户端会解除绑定：{clients}；其中没有其他提供商的客户端会被关闭，并恢复原来的配置。";
+            case "providers.batch.deletedDone": return "已删除 {count} 个提供商";
             case "providers.templateVersions": return "当前版本 {current}，最新版本 {latest}";
             case "providers.templateApplied": return "已更新到最新模板";
             case "providers.templateUpToDate": return "已是最新模板。";
@@ -9078,6 +9106,20 @@ internal static class Messages
             case "providers.deleteDetailBound": return "The provider and its model settings are removed; request history is kept. These clients stop using it: {clients}. A client left with no other provider is disabled and its original config restored.";
             case "providers.deleted": return "Deleted";
             case "providers.deleteBound": return "Still used by: {clients}. Switch them to another provider first.";
+            case "providers.batch.toggle": return "Batch actions";
+            case "providers.batch.done": return "Done";
+            case "providers.batch.selected": return "{count} selected";
+            case "providers.batch.selectAll": return "Select all";
+            case "providers.batch.clear": return "Clear";
+            case "providers.batch.enable": return "Enable";
+            case "providers.batch.disable": return "Disable";
+            case "providers.batch.delete": return "Delete";
+            case "providers.batch.enabledDone": return "Enabled {count} providers";
+            case "providers.batch.disabledDone": return "Disabled {count} providers";
+            case "providers.batch.deleteConfirm": return "Delete {count} selected providers?";
+            case "providers.batch.deleteDetail": return "The selected providers and their model settings are removed; request history is kept.";
+            case "providers.batch.deleteDetailBound": return "The selected providers and their model settings are removed; request history is kept. These clients stop using them: {clients}. A client left with no other provider is disabled and its original config restored.";
+            case "providers.batch.deletedDone": return "Deleted {count} providers";
             case "providers.templateVersions": return "Current version {current}, latest {latest}";
             case "providers.templateApplied": return "Updated to the latest template";
             case "providers.templateUpToDate": return "Already on the latest template.";

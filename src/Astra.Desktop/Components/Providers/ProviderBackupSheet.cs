@@ -70,6 +70,7 @@ internal sealed class ProviderBackupSheet : UserControl
     private readonly IProviderSheetHost _host;
     private readonly IBackupFiles _files;
     private readonly Sheet _sheet = new() { SheetWidth = 640, Size = ControlSize.Large };
+    private ScrollViewer? _scroll;
     private readonly StackPanel _exportExtras = new() { Spacing = 12 };
     private readonly StackPanel _importArea = new() { Spacing = 12 };
     private readonly HashSet<int> _ticked = [];
@@ -168,11 +169,12 @@ internal sealed class ProviderBackupSheet : UserControl
         var importSection = new StackPanel { Spacing = 12, Children = { importHead, choose, _importArea } };
         var davSection = BuildDav();
 
-        _sheet.Content = new ScrollViewer
+        _scroll = new ScrollViewer
         {
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
             Content = new StackPanel { Spacing = 24, Margin = new Thickness(0, 0, 14, 0), Children = { exportSection, importSection, davSection } },
         };
+        _sheet.Content = _scroll;
         RenderExport();
         RenderImport();
         RenderDav();
@@ -288,7 +290,9 @@ internal sealed class ProviderBackupSheet : UserControl
         _ticked.Clear();
         _file = file;
         if (!ProviderBackupLogic.NeedsPassphrase(file)) await PreviewAsync();
+        else _host.Feedback.Info(Loc.T("backup.import.encrypted"));
         RenderImport();
+        if (_scroll is not null) _scroll.Offset = new Vector(0, 0);
     }
 
     /// <summary>Types the passphrase of an encrypted file (tests).</summary>

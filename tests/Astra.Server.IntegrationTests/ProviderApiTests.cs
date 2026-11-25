@@ -398,6 +398,56 @@ public class ProviderApiTests
     }
 
     [Fact]
+    public async Task Batch_Enabled_And_Delete_Operate_On_Several_Providers_And_Validate_Ids()
+    {
+        await using var host = await TestHost.StartAsync();
+        var a = await Create(host);
+        var b = await Create(host);
+        var c = await Create(host);
+        await host.SendAsync(HttpMethod.Put, "/api/clients/codex/binding", new { providerId = a });
+
+        // Empty ids -> 400; unknown id -> 404 without mutating anything.
+        var (status, _) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/enabled", new { ids = Array.Empty<string>(), enabled = false });
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/enabled", new { ids = new[] { a, "no-such-id" }, enabled = false });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.True((await host.Db.Providers.GetAsync(a))!.Enabled);
+
+        // Batch disable a and b; c remains enabled.
+        (status, var body) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/enabled", new { ids = new[] { a, b }, enabled = false });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, body!["affected"]!.GetValue<int>());
+        Assert.False((await host.Db.Providers.GetAsync(a))!.Enabled);
+        Assert.False((await host.Db.Providers.GetAsync(b))!.Enabled);
+        Assert.True((await host.Db.Providers.GetAsync(c))!.Enabled);
+
+        // Re-disabling already-disabled providers is a no-op (affected = 0).
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/enabled", new { ids = new[] { a, b }, enabled = false });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(0, body!["affected"]!.GetValue<int>());
+
+        // Batch enable a and b back.
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/enabled", new { ids = new[] { a, b }, enabled = true });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, body!["affected"]!.GetValue<int>());
+        Assert.True((await host.Db.Providers.GetAsync(a))!.Enabled);
+
+        // Batch delete validates unknown ids before deleting anything.
+        (status, _) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/delete", new { ids = new[] { a, "missing" } });
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.NotNull(await host.Db.Providers.GetAsync(a));
+
+        // Batch delete removes a and b, unbinding codex from a, while leaving c intact.
+        (status, body) = await host.SendAsync(HttpMethod.Post, "/api/providers/batch/delete", new { ids = new[] { a, b } });
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, body!["affected"]!.GetValue<int>());
+        Assert.Null(await host.Db.Providers.GetAsync(a));
+        Assert.Null(await host.Db.Providers.GetAsync(b));
+        Assert.NotNull(await host.Db.Providers.GetAsync(c));
+        Assert.Empty(await host.Db.Clients.ListBindingsAsync("codex"));
+    }
+
+    [Fact]
     public async Task Subscription_Template_Is_Single_Instance_And_Cannot_Be_Duplicated()
     {
         await using var host = await TestHost.StartAsync();

@@ -1,8 +1,10 @@
-import { Archive, ChartColumn, ChevronUp, Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
+import { Archive, ChartColumn, CheckSquare, ChevronUp, Download, FlaskConical, Plus, Server, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 
 import {
+  useBatchDeleteProviders,
+  useBatchSetProvidersEnabled,
   useCreateProvider,
   usePriceKeys,
   useProviders,
@@ -12,6 +14,7 @@ import {
 } from '../api/hooks';
 import type { ApiProtocol, AuthScheme, Provider, ProviderStat, ProviderTemplate, TemplateEndpoint } from '../api/types';
 import { Alert } from '../components/arc/alert/alert';
+import { Checkbox } from '../components/arc/checkbox/checkbox';
 import { ChipGroup } from '../components/arc/chip-group/chip-group';
 import { PasswordField } from '../components/arc/password-field/password-field';
 import { RadioCards } from '../components/arc/radio-cards/radio-cards';
@@ -95,6 +98,68 @@ export function ProvidersPage() {
   const [view, setView] = useProvidersView();
   const [chartsOpen, setChartsOpen] = useProviderChartsOpen();
   const [testing, setTesting] = useState<Provider | null>(null);
+  const { toast, confirm } = useFeedback();
+  const batchSetEnabled = useBatchSetProvidersEnabled();
+  const batchDelete = useBatchDeleteProviders();
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const selectedProviders = useMemo(
+    () => (providers.data ?? []).filter((p) => selected.has(p.id)),
+    [providers.data, selected],
+  );
+  const selectedIds = useMemo(() => selectedProviders.map((p) => p.id), [selectedProviders]);
+  const allSelected = Boolean(providers.data?.length) && selectedIds.length === providers.data?.length;
+  const batchBusy = batchSetEnabled.isPending || batchDelete.isPending;
+
+  const toggleSelecting = () => {
+    setSelecting((prev) => {
+      if (prev) setSelected(new Set());
+      return !prev;
+    });
+  };
+  const toggleSelect = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleSelectAll = () => {
+    if (!providers.data) return;
+    setSelected(allSelected ? new Set() : new Set(providers.data.map((p) => p.id)));
+  };
+  const runBatchEnabled = (enabled: boolean) => {
+    if (selectedIds.length === 0) return;
+    batchSetEnabled.mutate(
+      { ids: selectedIds, enabled },
+      {
+        onSuccess: (r) => {
+          toast(t(enabled ? 'providers.batch.enabledDone' : 'providers.batch.disabledDone', { count: r.affected }));
+          setSelected(new Set());
+        },
+        onError: (e) => toast(errorText(e), 'error'),
+      },
+    );
+  };
+  const runBatchDelete = async () => {
+    if (selectedIds.length === 0) return;
+    const bound = [...new Set(selectedProviders.flatMap((p) => p.boundClients))];
+    const ok = await confirm({
+      title: t('providers.batch.deleteConfirm', { count: selectedIds.length }),
+      detail: bound.length > 0 ? t('providers.batch.deleteDetailBound', { clients: bound.join(', ') }) : t('providers.batch.deleteDetail'),
+      confirmLabel: t('common.delete'),
+      destructive: true,
+    });
+    if (!ok) return;
+    batchDelete.mutate(selectedIds, {
+      onSuccess: (r) => {
+        toast(t('providers.batch.deletedDone', { count: r.affected }));
+        setSelected(new Set());
+        if ((providers.data?.length ?? 0) <= r.affected) setSelecting(false);
+      },
+      onError: (e) => toast(errorText(e), 'error'),
+    });
+  };
   const usage = useMemo(() => {
     const days = lastDays(USAGE_DAYS);
     const byProvider = new Map<string, ProviderUsage>();
@@ -164,6 +229,14 @@ export function ProvidersPage() {
               />
               <div className="flex items-center gap-2">
                 <Button
+                  variant={selecting ? 'primary' : 'plain'}
+                  size="sm"
+                  icon={<CheckSquare className="size-3.5" />}
+                  onClick={toggleSelecting}
+                >
+                  {selecting ? t('providers.batch.done') : t('providers.batch.toggle')}
+                </Button>
+                <Button
                   variant="plain"
                   size="sm"
                   icon={chartsOpen ? <ChevronUp className="size-3.5" /> : <ChartColumn className="size-3.5" />}
@@ -183,6 +256,27 @@ export function ProvidersPage() {
               </div>
             </div>
             <ProviderOverview providers={providers.data} stats={ranged.data ?? []} stats7d={stats7d} range={range} chartsOpen={chartsOpen} />
+            {selecting && (
+              <div className="card mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2" data-testid="providers-batch-bar">
+                <div className="flex items-center gap-2">
+                  <span className="text-[12.5px] font-medium">{t('providers.batch.selected', { count: selectedIds.length })}</span>
+                  <Button variant="plain" size="sm" onClick={toggleSelectAll}>
+                    {allSelected ? t('providers.batch.clear') : t('providers.batch.selectAll')}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" disabled={selectedIds.length === 0 || batchBusy} onClick={() => runBatchEnabled(true)}>
+                    {t('providers.batch.enable')}
+                  </Button>
+                  <Button size="sm" disabled={selectedIds.length === 0 || batchBusy} onClick={() => runBatchEnabled(false)}>
+                    {t('providers.batch.disable')}
+                  </Button>
+                  <Button size="sm" variant="destructive" icon={<Trash2 className="size-3.5" />} disabled={selectedIds.length === 0 || batchBusy} onClick={() => void runBatchDelete()}>
+                    {t('providers.batch.delete')}
+                  </Button>
+                </div>
+              </div>
+            )}
             {view === 'table' ? (
               <ProvidersTable
                 providers={providers.data}
@@ -191,6 +285,9 @@ export function ProvidersPage() {
                 labels={usage.labels}
                 max={usage.max}
                 onOpen={(p) => navigate(`/providers/${p.id}`)}
+                selecting={selecting}
+                selected={selected}
+                onToggleSelect={toggleSelect}
               />
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
@@ -204,6 +301,9 @@ export function ProvidersPage() {
                     stat={stats7d.get(p.id)}
                     onOpen={() => navigate(`/providers/${p.id}`)}
                     onTest={() => setTesting(p)}
+                    selecting={selecting}
+                    selected={selected.has(p.id)}
+                    onToggleSelect={() => toggleSelect(p.id)}
                   />
                 ))}
               </div>
@@ -256,6 +356,9 @@ function ProviderCard({
   stat,
   onOpen,
   onTest,
+  selecting,
+  selected,
+  onToggleSelect,
 }: {
   p: Provider;
   labels: string[];
@@ -264,6 +367,9 @@ function ProviderCard({
   stat?: ProviderStat;
   onOpen: () => void;
   onTest: () => void;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const { t, locale } = useI18n();
   const health = providerHealth(p, stat);
@@ -281,27 +387,34 @@ function ProviderCard({
   const quotaFailed = quotaEnabled(p) ? quotaFailure(p.quota) : null;
   const total = requests.reduce((a, b) => a + b, 0);
   const host = hostOf(p.endpoints[0]?.baseUrl);
+  const activate = selecting ? () => onToggleSelect?.() : onOpen;
 
   return (
-    // The whole card opens the provider; it holds its own controls, so it cannot be a <button>.
+    // The whole card opens the provider (or toggles selection in batch mode); it holds its own controls, so it cannot be a <button>.
     <div
       className={cn(
         'card flex h-[116px] cursor-pointer flex-col gap-[7px] px-3 py-2.5 transition-colors hover:border-[var(--border-strong,var(--border))]',
         !p.enabled && 'opacity-60',
+        selecting && selected && 'border-[var(--accent)] ring-1 ring-[var(--accent)]',
       )}
       role="button"
       tabIndex={0}
       aria-label={p.name}
       title={p.name}
-      onClick={onOpen}
+      onClick={activate}
       onKeyDown={(e) => {
         if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
           e.preventDefault();
-          onOpen();
+          activate();
         }
       }}
     >
       <div className="flex min-w-0 items-center gap-2">
+        {selecting && (
+          <span className="inline-flex shrink-0" onClick={stopClick}>
+            <Checkbox checked={Boolean(selected)} aria-label={p.name} onCheckedChange={() => onToggleSelect?.()} />
+          </span>
+        )}
         <span className={cn('inline-flex shrink-0', !p.enabled && 'grayscale')}>
           <ProviderIcon name={p.name} icon={p.icon} colorKey={p.templateId} size={24} />
         </span>

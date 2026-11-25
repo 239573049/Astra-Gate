@@ -35,13 +35,16 @@ public sealed class BackupSyncView : LiveView
     private ArcButton? _exportButton;
 
     // restore
+    private string _restoreSource = "file";
     private string? _fileContent;
     private string? _fileName;
     private string? _autoName;
     private string _restorePass = "";
     private string _mode = "merge";
     private readonly StackPanel _restoreOut = new() { Spacing = 4 };
+    private ControlledSegmented _restoreSourceControl = null!;
     private SettingsRow _sourceRow = null!;
+    private Control _remoteHint = null!;
 
     // automatic
     private ControlledSwitch _autoEnabled = null!;
@@ -146,22 +149,50 @@ public sealed class BackupSyncView : LiveView
 
     private SettingsGroup BuildRestore()
     {
+        _restoreSourceControl = new ControlledSegmented([
+            ("file", Loc.T("backup.all.restore.source.file")),
+            ("auto", Loc.T("backup.all.restore.source.auto")),
+            ("remote", Loc.T("backup.all.restore.source.remote")),
+        ], _restoreSource);
+        _restoreSourceControl.Chose += v =>
+        {
+            _restoreSource = v;
+            _restoreSourceControl.SetValue(v);
+            UpdateRestoreSourceUi();
+            ClearPlan();
+        };
         var pick = Ui.Button(Loc.T("backup.all.restore.choose"), () => _ = PickAsync(), icon: LucideIconKind.FolderOpen);
         _sourceRow = RowBuilder.Row(Loc.T("backup.all.restore.source.file"), SourceText(), pick);
+        _remoteHint = Ui.GroupNote(Loc.T("backup.all.restore.remoteHint"));
         var pass = Ui.Secret(Loc.T("backup.all.restore.passphrase"), _restorePass, t => _restorePass = t, 240, Loc.T("backup.all.restore.passphrase"));
         var mode = new ControlledSegmented([("merge", Loc.T("backup.all.restore.mode.merge")), ("replace", Loc.T("backup.all.restore.mode.replace"))], _mode);
         mode.Chose += v => { _mode = v; mode.SetValue(v); ClearPlan(); };
         var preview = Ui.Button(Loc.T("backup.all.restore.preview"), () => _ = PreviewAsync());
         var run = Ui.Button(Loc.T("backup.all.restore.run"), () => _ = RestoreAsync(), ButtonVariant.Primary);
+        UpdateRestoreSourceUi();
         return RowBuilder.Group(Loc.T("backup.all.restore.title"), Loc.T(_mode == "replace" ? "backup.all.restore.mode.replaceHint" : "backup.all.restore.mode.mergeHint"),
+            Ui.GroupLine(_restoreSourceControl),
             _sourceRow,
+            _remoteHint,
             RowBuilder.Row(Loc.T("backup.all.restore.passphrase"), null, pass),
             RowBuilder.Row(Loc.T("backup.all.restore.mode"), null, mode),
             Ui.GroupLine(Ui.Inline(8, preview, run)),
             Lines(_restoreOut));
     }
 
-    private string? SourceText() => _fileName ?? (_autoName is null ? null : Loc.T("backup.all.restore.source.auto") + ": " + _autoName);
+    private void UpdateRestoreSourceUi()
+    {
+        _sourceRow.IsVisible = _restoreSource != "remote";
+        _remoteHint.IsVisible = _restoreSource == "remote";
+        _sourceRow.Detail = SourceText();
+    }
+
+    private string? SourceText() => _restoreSource switch
+    {
+        "auto" => _autoName is null ? Loc.T("backup.all.restore.pickAuto") : Loc.T("backup.all.restore.source.auto") + ": " + _autoName,
+        "remote" => Loc.T("backup.all.restore.source.remote"),
+        _ => _fileName,
+    };
 
     private void ClearPlan()
     {
@@ -180,16 +211,20 @@ public sealed class BackupSyncView : LiveView
             _fileContent = await reader.ReadToEndAsync();
             _fileName = files[0].Name;
             _autoName = null;
-            _sourceRow.Detail = SourceText();
+            _restoreSource = "file";
+            _restoreSourceControl.SetValue("file");
+            UpdateRestoreSourceUi();
             ClearPlan();
         }
         catch (IOException e) { Context.Feedback.Error(e.Message); }
     }
 
-    private BackupSourceInput? Source() =>
-        _autoName is { } a ? BackupLogic.AutoSource(a, _restorePass, _mode)
-        : _fileContent is { } c ? BackupLogic.FileSource(c, _restorePass, _mode)
-        : null;
+    private BackupSourceInput? Source() => _restoreSource switch
+    {
+        "remote" => BackupLogic.RemoteSource(_restorePass, _mode),
+        "auto" => _autoName is { } a ? BackupLogic.AutoSource(a, _restorePass, _mode) : null,
+        _ => _fileContent is { } c ? BackupLogic.FileSource(c, _restorePass, _mode) : null,
+    };
 
     private void ShowLines(IEnumerable<string> lines)
     {
@@ -282,7 +317,9 @@ public sealed class BackupSyncView : LiveView
         _autoName = name;
         _fileContent = null;
         _fileName = null;
-        _sourceRow.Detail = SourceText();
+        _restoreSource = "auto";
+        _restoreSourceControl.SetValue("auto");
+        UpdateRestoreSourceUi();
         ClearPlan();
         Context.Feedback.Success(Loc.T("backup.all.restore.source.auto") + ": " + name);
     }
@@ -332,8 +369,9 @@ public sealed class BackupSyncView : LiveView
         _saveSync = Ui.Button(Loc.T("common.save"), () => _ = SaveAndAsync(() => { Context.Feedback.Success(Loc.T("sync.saved")); return Task.CompletedTask; }), ButtonVariant.Primary);
         var now = Ui.Button(Loc.T("sync.now"), () => _ = RunAsync(false));
         var dry = Ui.Button(Loc.T("sync.preview"), () => _ = RunAsync(true));
+        var upload = Ui.Button(Loc.T("sync.upload"), () => _ = UploadAsync());
         var forget = Ui.Button(Loc.T("sync.forget"), () => _ = ForgetAsync(), ButtonVariant.Ghost);
-        _needsTarget.AddRange([now, dry, forget]);
+        _needsTarget.AddRange([now, dry, upload, forget]);
         _syncEnabled = Switch(Loc.T("sync.enabled"), v => _ = Host.TryAsync(() => _api.SetSyncAsync(new SyncConfigInput(null, null, null, null, null, null, v))));
 
         _syncGroup = RowBuilder.Group(Loc.T("sync.title"), Loc.T("sync.hint"),
@@ -342,7 +380,7 @@ public sealed class BackupSyncView : LiveView
             RowBuilder.Row(Loc.T("sync.interval"), null, _intervalField),
             RowBuilder.Row(Loc.T("sync.includeSignins"), null, _signinsSwitch),
             RowBuilder.Row(Loc.T("sync.includeKeys"), Loc.T("sync.includeKeys.hint"), _keysSwitch),
-            Ui.GroupLine(Ui.Inline(8, test, _saveSync, now, dry, forget)),
+            Ui.GroupLine(Ui.Inline(8, test, _saveSync, now, dry, upload, forget)),
             RowBuilder.Row(Loc.T("sync.enabled"), null, _syncEnabled),
             _syncStatus,
             Lines(_syncOut));
@@ -400,6 +438,13 @@ public sealed class BackupSyncView : LiveView
         lines.AddRange(run.Errors);
         foreach (var l in lines) _syncOut.Children.Add(Ui.Note(l, TKCode.Arc.DesignTokens.ArcDesignTokenKind.TextSecondary));
         if (!dry && run.Errors.Count == 0) Context.Feedback.Success(BackupLogic.RunText(run));
+    }
+
+    private async Task UploadAsync()
+    {
+        var input = new RemoteBackupInput(null, _syncKeys, false, string.IsNullOrEmpty(_syncPass) ? null : _syncPass);
+        var uploaded = await Host.TryAsync(() => _api.UploadAsync(input));
+        if (uploaded is not null) Context.Feedback.Success(Loc.T("sync.upload.done", ("name", uploaded.Name)));
     }
 
     private async Task ForgetAsync()

@@ -577,6 +577,22 @@ export function useDeleteProvider() {
   });
 }
 
+export function useBatchSetProvidersEnabled() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { ids: string[]; enabled: boolean }) => api<{ affected: number }>('POST', '/api/providers/batch/enabled', body),
+    onSuccess: () => invalidateProviders(qc),
+  });
+}
+
+export function useBatchDeleteProviders() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => api<{ affected: number }>('POST', '/api/providers/batch/delete', { ids }),
+    onSuccess: () => invalidateProviders(qc),
+  });
+}
+
 // ---------- provider balance / quota query ----------
 
 export const useQuotaTemplates = () =>

@@ -338,4 +338,43 @@ public class ProviderBackupUiTests
         vm.RequestBackup();
         Assert.Equal(1, asked);
     }
+
+    [AvaloniaFact]
+    public void Batch_mode_disables_and_deletes_selected_providers_in_one_request()
+    {
+        var (ctx, tap) = Context(new()
+        {
+            ["/api/providers/batch/enabled"] = """{"affected":2}""",
+            ["/api/providers/batch/delete"] = """{"affected":2}""",
+        });
+        var vm = new ProvidersViewModel(ctx, null);
+        vm.Activate();
+        var view = new ProvidersView(vm);
+        var window = new Window { Content = view, Width = 1100, Height = 800 };
+        window.Show();
+        SceneCapture.Await(vm.WhenSettledAsync(), TimeSpan.FromSeconds(20));
+        SceneCapture.Pump(2);
+
+        Assert.True(vm.Items.Count >= 2);
+        var firstTwo = vm.Items.Take(2).Select(p => p.Id).ToList();
+        vm.ToggleSelecting();
+        foreach (var id in firstTwo) vm.ToggleSelected(id);
+        Assert.Equal(2, vm.SelectedIds.Count);
+
+        SceneCapture.Await(vm.BatchSetEnabledAsync(false), TimeSpan.FromSeconds(10));
+        var disablePost = tap.Posts.Single(p => p.Path == "/api/providers/batch/enabled");
+        var disableBody = JsonNode.Parse(disablePost.Body)!;
+        Assert.False(disableBody["enabled"]!.GetValue<bool>());
+        Assert.Equal(firstTwo, disableBody["ids"]!.AsArray().Select(n => n!.GetValue<string>()).ToList());
+        Assert.Empty(vm.SelectedIds);
+
+        foreach (var id in firstTwo) vm.ToggleSelected(id);
+        SceneCapture.Await(vm.BatchDeleteAsync(), TimeSpan.FromSeconds(10));
+        var deletePost = tap.Posts.Single(p => p.Path == "/api/providers/batch/delete");
+        Assert.Equal(firstTwo, JsonNode.Parse(deletePost.Body)!["ids"]!.AsArray().Select(n => n!.GetValue<string>()).ToList());
+        Assert.Empty(vm.SelectedIds);
+
+        vm.Deactivate();
+        window.Close();
+    }
 }
