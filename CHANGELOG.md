@@ -4,6 +4,20 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.15.3] - 2026-11-25
+
+### 新增
+
+- **提供商批量操作**：**提供商**页（Web 与桌面端）新增「批量操作」模式，支持多选或全选后一次性批量启用、批量禁用或批量删除提供商（新增接口 `POST /api/providers/batch/enabled` 与 `POST /api/providers/batch/delete`），删除时会自动解除受影响客户端的绑定并同步模型列表。
+- **桌面端云端恢复与手动上传**：桌面端**设置 → 备份与同步**的恢复来源新增「云端」选项，并在同步设置中新增手动上传备份按钮；云端恢复在未填写口令时会自动使用已保存的同步口令，也可兼容读取同步文件与旧版提供商 WebDAV 备份。
+
+### 修复
+
+- **单条停止序列转发给 Chat 上游时被拒**：Gemini 客户端（`stopSequences`）或 Anthropic 客户端（`stop_sequences`）仅携带 1 条停止序列访问 Chat 协议上游时，网关原先会编码为字符串而非数组，导致 GitHub Copilot 的 Gemini 模型返回 `400 Request body JSON is invalid.`。现在无论数量多少都统一编码为数组（Chat 到 Chat 同协议直通仍保持原样转发）。
+- **无工具声明时 Gemini `toolConfig` 导致 Chat 上游报 400**：当 Gemini 请求带有 `toolConfig` 但未声明任何函数工具（或仅带会被 Chat 丢弃的内置工具）时，网关之前仍会写出 `tool_choice`，导致 GitHub Copilot 的 Gemini 模型返回 `400 tools are required when tool choice is specified`。现在仅在请求体实际包含 `tools` 时才发送 `tool_choice`。
+- **WebDAV 同步与多级目录兼容性**：修复部分 WebDAV 服务不支持条件 `PUT`（`If-Match` / `If-None-Match` 返回 400 或 501）、返回弱 ETag 或使用多级子目录时同步失败的问题，改为逐级创建目录并在不支持条件头时自动降级校验后写入。
+- **macOS 后台启动或开机自启时闪烁 Dock 图标**：为桌面端应用配置 `LSUIElement`，隐藏启动或开机自启时不再在 Dock 闪现图标；正常打开窗口时仍会自动显示 Dock 图标并激活主窗口。
+
 ## [0.15.2] - 2026-11-24
 
 ### 修复
