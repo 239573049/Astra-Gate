@@ -6,7 +6,7 @@
   <ItemGroup>
     <!-- Runs magpie-compatible gateway middleware and agent plugins in process on Jaunt, a managed JS engine
          with no reflection interop: the host passes JSON text and JsValue only, and it is AOT-clean. -->
-    <PackageReference Include="Jaunt" Version="1.0.2" />
+    <PackageReference Include="Jaunt" Version="1.0.3" />
   </ItemGroup>
   <ItemGroup>
     <!-- magpie's plugin host, unmodified (Host/VENDORED.md); written out by HostAssets. -->

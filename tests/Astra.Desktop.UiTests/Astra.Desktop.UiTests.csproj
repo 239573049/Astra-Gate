@@ -6,11 +6,12 @@
     <IsAotCompatible>false</IsAotCompatible>
     <!-- astra-desktop is a self-contained WinExe; referencing it from a test host is intended. -->
     <ValidateExecutableReferencesMatchSelfContained>false</ValidateExecutableReferencesMatchSelfContained>
-    <AvaloniaVersion>12.1.4</AvaloniaVersion>
+    <AvaloniaVersion>12.2.0</AvaloniaVersion>
     <NoWarn>$(NoWarn);CS0436</NoWarn>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <!-- Avalonia.Headless.XUnit 12.2.0 calls xunit.v3 3.x TestIntrospectionHelper.GetTestCaseDetails (changed in 4.0). -->
     <PackageReference Include="xunit.v3" Version="3.2.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="4.0.1" />
     <PackageReference Include="Avalonia.Headless" Version="$(AvaloniaVersion)" />

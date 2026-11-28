@@ -15,10 +15,10 @@
     <!-- Arc 0.3.2 on the .NET 11 SDK with PublishAot: otherwise the compiled XAML is left out of the published app. -->
     <UseOptimizedPublish>false</UseOptimizedPublish>
   </PropertyGroup>
-  <!-- The Arc packages move together and require this exact Avalonia (Arc 1.3.0: [12.1.6, 13); NU1608 otherwise). -->
+  <!-- The Arc packages move together and require this exact Avalonia (Arc 1.3.1: [12.2.0, 13); NU1608 otherwise). -->
   <PropertyGroup>
-    <ArcVersion>1.3.0</ArcVersion>
-    <AvaloniaVersion>12.1.6</AvaloniaVersion>
+    <ArcVersion>1.3.1</ArcVersion>
+    <AvaloniaVersion>12.2.0</AvaloniaVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
