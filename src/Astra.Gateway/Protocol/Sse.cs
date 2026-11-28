@@ -18,6 +18,9 @@ public sealed class SseParser
     private bool _hasData;
     private bool _lastWasCr;
 
+    /// <summary>Optional hook called for each SSE comment line (<c>: …</c>, including the leading colon).</summary>
+    public Action<string>? OnComment { get; init; }
+
     public IReadOnlyList<SseEvent> Feed(ReadOnlySpan<byte> chunk)
     {
         List<SseEvent>? events = null;
@@ -91,7 +94,11 @@ public sealed class SseParser
             Dispatch(ref events);
             return;
         }
-        if (line[0] == (byte)':') return;
+        if (line[0] == (byte)':')
+        {
+            OnComment?.Invoke(Encoding.UTF8.GetString(line));
+            return;
+        }
         var colon = line.IndexOf((byte)':');
         var field = colon < 0 ? line : line[..colon];
         var value = colon < 0 ? [] : line[(colon + 1)..];

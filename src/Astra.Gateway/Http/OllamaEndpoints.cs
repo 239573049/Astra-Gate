@@ -501,7 +501,9 @@ public static class OllamaEndpoints
             if (chunk["choices"] is not JsonArray { Count: > 0 } choices || choices[0] is not JsonObject choice) return null;
             var d = choice["delta"] as JsonObject ?? choice["message"] as JsonObject;
             var text = Str(d, "content") ?? "";
-            var think = Str(d, "reasoning_content") is { Length: > 0 } rc ? rc : Str(d, "reasoning") ?? "";
+            var think = Str(d, "reasoning_content") is { Length: > 0 } rc ? rc
+                : Str(d, "reasoning") is { Length: > 0 } r ? r
+                : Str(d, "reasoning_text") ?? "";
             if (hideThinking) think = "";
             if (d?["tool_calls"] is JsonArray calls)
             {

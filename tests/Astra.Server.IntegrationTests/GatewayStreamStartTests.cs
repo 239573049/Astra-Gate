@@ -77,4 +77,85 @@ public class GatewayStreamStartTests
             release.TrySetResult();
         }
     }
+
+    [Fact]
+    public async Task A_heartbeat_reaches_the_client_at_once_even_when_usage_is_injected_or_protocol_is_translated()
+    {
+        var releases = new Queue<TaskCompletionSource>([
+            new(TaskCreationOptions.RunContinuationsAsynchronously),
+            new(TaskCreationOptions.RunContinuationsAsynchronously),
+        ]);
+        var allReleases = releases.ToArray();
+        var seenAcceptEncodings = new List<string?>();
+        await using var gw = await GatewayFixture.StartAsync(ClientKinds.OpenCode, ApiProtocol.OpenAIChat, seen =>
+        {
+            seenAcceptEncodings.Add(seen.Headers.GetValueOrDefault("accept-encoding"));
+            var release = releases.Dequeue();
+            var pipe = new Pipe();
+            _ = Task.Run(async () =>
+            {
+                await pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(": ping\n\n"));
+                await release.Task;
+                await pipe.Writer.WriteAsync(Encoding.UTF8.GetBytes(
+                    "data: {\"id\":\"chatcmpl-1\",\"model\":\"gemini-4-carbon\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_text\":\"thinking...\"},\"finish_reason\":null}]}\n\n"
+                    + "data: {\"id\":\"chatcmpl-1\",\"model\":\"gemini-4-carbon\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"OK\"},\"finish_reason\":\"stop\"}]}\n\n"
+                    + "data: {\"id\":\"chatcmpl-1\",\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":3,\"total_tokens\":15}}\n\n"
+                    + "data: [DONE]\n\n"));
+                await pipe.Writer.CompleteAsync();
+            });
+            var content = new StreamContent(pipe.Reader.AsStream());
+            content.Headers.ContentType = new("text/event-stream");
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+        });
+
+        try
+        {
+            // 1. Chat pass-through without include_usage (dropChatUsageChunk = true → forwardBytes = false)
+            using (var request = new HttpRequestMessage(HttpMethod.Post, "/v1/chat/completions")
+                   {
+                       Content = new StringContent("""{"model":"gemini-4-carbon","stream":true,"messages":[{"role":"user","content":"hi"}]}""", Encoding.UTF8, "application/json"),
+                   })
+            {
+                request.Headers.TryAddWithoutValidation("Authorization", $"Bearer {gw.Key}");
+                using var response = await gw.Host.Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead)
+                    .WaitAsync(TimeSpan.FromSeconds(5));
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                var buffer = new byte[256];
+                var read = await stream.ReadAsync(buffer).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(": ping", Encoding.UTF8.GetString(buffer, 0, read).Trim());
+                allReleases[0].TrySetResult();
+                using var rest = new StreamReader(stream);
+                var tail = await rest.ReadToEndAsync();
+                Assert.Contains("[DONE]", tail);
+                Assert.DoesNotContain("\"choices\":[]", tail);
+            }
+
+            // 2. Gemini inbound translated to Chat upstream: heartbeat arrives before upstream releases, and Copilot reasoning_text becomes thought part
+            using (var geminiRequest = new HttpRequestMessage(HttpMethod.Post, "/v1beta/models/gemini-4-carbon:streamGenerateContent?alt=sse")
+                   {
+                       Content = new StringContent("""{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}""", Encoding.UTF8, "application/json"),
+                   })
+            {
+                geminiRequest.Headers.TryAddWithoutValidation("x-goog-api-key", gw.Key);
+                using var geminiResponse = await gw.Host.Client.SendAsync(geminiRequest, HttpCompletionOption.ResponseHeadersRead)
+                    .WaitAsync(TimeSpan.FromSeconds(5));
+                await using var stream = await geminiResponse.Content.ReadAsStreamAsync();
+                var buffer = new byte[256];
+                var read = await stream.ReadAsync(buffer).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+                Assert.Equal(": ping", Encoding.UTF8.GetString(buffer, 0, read).Trim());
+                allReleases[1].TrySetResult();
+                using var rest = new StreamReader(stream);
+                var geminiTail = await rest.ReadToEndAsync();
+                Assert.Contains("\"thought\":true", geminiTail);
+                Assert.Contains("thinking...", geminiTail);
+                Assert.Contains("\"text\":\"OK\"", geminiTail);
+            }
+
+            Assert.Equal(["identity", "identity"], seenAcceptEncodings);
+        }
+        finally
+        {
+            foreach (var r in allReleases) r.TrySetResult();
+        }
+    }
 }

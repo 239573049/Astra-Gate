@@ -153,6 +153,7 @@ public sealed class PrivacyStreamRestorer(IReadOnlyDictionary<string, string> ma
                 AddIfString(slots, $"c{c}.content", false, delta, "content");
                 AddIfString(slots, $"c{c}.reasoning_content", false, delta, "reasoning_content");
                 AddIfString(slots, $"c{c}.reasoning", false, delta, "reasoning");
+                AddIfString(slots, $"c{c}.reasoning_text", false, delta, "reasoning_text");
                 AddIfString(slots, $"c{c}.refusal", false, delta, "refusal");
                 if (delta["function_call"] is JsonObject legacy) AddIfString(slots, $"c{c}.function_call", true, legacy, "arguments");
                 if (delta["tool_calls"] is JsonArray calls)

@@ -79,10 +79,36 @@ public sealed class RelayTransportTests
         using var handler = Assert.IsType<SocketsHttpHandler>(RelayTransport.NetworkHandler());
         Assert.False(handler.AllowAutoRedirect);
         Assert.False(handler.UseCookies);
+        Assert.Equal(DecompressionMethods.None, handler.AutomaticDecompression);
         var propagated = new Dictionary<string, string>();
         using var activity = new Activity("test").Start();
         handler.ActivityHeadersPropagator!.Inject(activity, propagated, (_, name, value) => propagated.Add(name, value));
         Assert.Empty(propagated);
+    }
+
+    [Fact]
+    public async Task The_transport_sends_only_identity_and_still_decodes_a_gzip_response()
+    {
+        const string json = """{"id":"chat_1","object":"chat.completion","created":1,"model":"gpt-5","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}""";
+        var upstream = new RelayUpstream
+        {
+            Respond = (request, _) =>
+            {
+                if (request.Uri.AbsolutePath == "/models") return Task.FromResult(RelayUpstream.Json(RelayUpstream.Catalog));
+                using var ms = new MemoryStream();
+                using (var gzip = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionLevel.Fastest, leaveOpen: true))
+                    gzip.Write(System.Text.Encoding.UTF8.GetBytes(json));
+                var content = new ByteArrayContent(ms.ToArray());
+                content.Headers.ContentType = new("application/json");
+                content.Headers.ContentEncoding.Add("gzip");
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+            },
+        };
+        await using var relay = await RelayHost.StartAsync(upstream);
+        using var response = await relay.SendAsync();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(json, await response.Content.ReadAsStringAsync());
+        Assert.All(upstream.Requests, req => Assert.Equal("identity", req.Headers["Accept-Encoding"]));
     }
 
     [Fact]

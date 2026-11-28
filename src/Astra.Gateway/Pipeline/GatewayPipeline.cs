@@ -1301,6 +1301,12 @@ public sealed partial class GatewayPipeline(
                 return request;
             }
             request.Headers.TryAddWithoutValidation("Accept", accept ?? (stream ? "text/event-stream" : "application/json"));
+            // Issue #56: ask upstreams and proxies not to compress SSE streams (an unflushed compressor batches frames).
+            if (stream)
+            {
+                request.Headers.AcceptEncoding.Clear();
+                request.Headers.AcceptEncoding.ParseAdd("identity");
+            }
             request.Headers.TryAddWithoutValidation("User-Agent",
                 passthrough && clientRequest.Headers.UserAgent.Count > 0 ? clientRequest.Headers.UserAgent.ToString() : UserAgent);
             if (endpoint.Protocol == ApiProtocol.Anthropic && !CloudProviders.IsVertex(provider))
@@ -1446,7 +1452,6 @@ public sealed partial class GatewayPipeline(
         ctx.Response.Headers.CacheControl = "no-cache";
         ctx.Response.Headers["X-Accel-Buffering"] = "no";
 
-        var parser = new SseParser();
         var upstreamCapture = capture is null ? null : new MemoryStream();
         var clientCapture = capture is null ? null : new StringBuilder();
         await using var stream = await response.Content.ReadAsStreamAsync(ct);
@@ -1464,13 +1469,25 @@ public sealed partial class GatewayPipeline(
         var forwardBytes = encoder is null && restore.Count == 0 && !dropChatUsageChunk && itemIds is null && !asJsonArray && capture is null;
         // Upstream bytes until the first SSE event parses: a body that never becomes SSE (a JSON object /
         // array from an upstream ignoring alt=sse or the stream flag) is decoded or forwarded from here. One exception:
-        // forwarded bytes of an upstream that declared SSE and opened with a comment line (a heartbeat while the model is
-        // still thinking) are not held — no JSON body starts with ':' — so they reach the client at once, and a proxy in
-        // between that times out idle connections keeps this one.
+        // an upstream that declared SSE and opened with a comment line (a heartbeat while the model is still thinking)
+        // is not held — no JSON body starts with ':' — so heartbeats reach the client at once, both on byte pass-through
+        // and on parsed SSE streams (injected usage filter, privacy restore, or protocol conversion; issue #56).
         PooledBuffer? rawPending = null;
-        var forwardDeclaredSse = forwardBytes
-            && response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) == true;
+        var declaredSse = response.Content.Headers.ContentType?.MediaType?.Equals("text/event-stream", StringComparison.OrdinalIgnoreCase) == true;
+        var forwardDeclaredSse = forwardBytes && declaredSse;
         bool? opensWithComment = null; // decided by the stream's first non-whitespace byte
+        var sawComment = false;
+        var parser = new SseParser
+        {
+            OnComment = !forwardBytes && !asJsonArray
+                ? comment =>
+                {
+                    if (!sawSseEvent && !declaredSse) return;
+                    sawComment = true;
+                    outText.Append(comment).Append("\n\n");
+                }
+                : null,
+        };
 
         try
         {
@@ -1479,10 +1496,11 @@ public sealed partial class GatewayPipeline(
                 var read = await reader.ReadAsync(buffer);
                 if (read == 0) break;
                 var chunk = buffer.AsMemory(0, read);
+                sawComment = false;
                 var events = parser.Feed(chunk.Span);
                 if (forwardDeclaredSse && opensWithComment is null && chunk.Span.TrimStart(" \t\r\n"u8) is { IsEmpty: false } start)
                     opensWithComment = start[0] == (byte)':';
-                if (!sawSseEvent && events.Count == 0 && opensWithComment != true)
+                if (!sawSseEvent && events.Count == 0 && !sawComment && opensWithComment != true)
                 {
                     (rawPending ??= new PooledBuffer(read)).Write(chunk.Span);
                     if (upstreamCapture is not null) AppendCapped(upstreamCapture, chunk.Span);

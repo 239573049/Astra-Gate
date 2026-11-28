@@ -20,7 +20,9 @@ internal sealed class RelayTransport(RelayOptions options, IHttpContextAccessor 
     {
         AllowAutoRedirect = false,
         UseCookies = false,
-        AutomaticDecompression = DecompressionMethods.All,
+        // Issue #56: AutomaticDecompression = All appends gzip/deflate/br/zstd even on top of Accept-Encoding: identity.
+        // Keep it off so upstream requests truly carry only identity; SendAsync decodes any compressed response anyway.
+        AutomaticDecompression = DecompressionMethods.None,
         ConnectTimeout = TimeSpan.FromSeconds(30),
         PooledConnectionLifetime = TimeSpan.FromMinutes(10),
         // Issue #39: past the upstream's stream limit on one HTTP/2 connection, requests waited in the handler holding their
@@ -50,6 +52,7 @@ internal sealed class RelayTransport(RelayOptions options, IHttpContextAccessor 
         try
         {
             var response = await base.SendAsync(request, deadline.Token);
+            UpstreamDecompressionHandler.DecompressIfNeeded(response);
             if ((request.Method != HttpMethod.Get || !response.IsSuccessStatusCode)
                 && accessor.HttpContext is { } context && !context.Response.HasStarted)
                 RelayHttp.CopyDiagnostics(response.Headers, context.Response);

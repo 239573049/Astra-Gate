@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Sockets;
 using Astra.Core;
 using Astra.Core.Models;
@@ -155,11 +157,15 @@ public sealed class GatewayHttpClients : IDisposable
 
     private HttpClient Create(string? proxy)
     {
-        var handler = HandlerFactory?.Invoke(proxy) ?? new SocketsHttpHandler
+        HttpMessageHandler handler = HandlerFactory?.Invoke(proxy) ?? new UpstreamDecompressionHandler(new SocketsHttpHandler
         {
             AllowAutoRedirect = false,
             ConnectTimeout = TimeSpan.FromSeconds(30),
-            AutomaticDecompression = DecompressionMethods.All,
+            // Issue #56: SocketsHttpHandler's AutomaticDecompression unconditionally appends gzip/deflate/br/zstd
+            // even when a streaming request explicitly asks for Accept-Encoding: identity. Keep it off here and let
+            // UpstreamDecompressionHandler advertise compression only when the request did not set Accept-Encoding,
+            // while still decoding any compressed response an upstream sends back anyway.
+            AutomaticDecompression = DecompressionMethods.None,
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
             // 提供商配了 httpProxy 就用它；没配则默认走系统代理（环境变量 > 操作系统设置，回环直连）。
             Proxy = proxy is null ? SystemProxy.Dynamic : new WebProxy(proxy),
@@ -168,7 +174,7 @@ public sealed class GatewayHttpClients : IDisposable
             // baggage; the default propagator would copy both into the provider request (a header the real CLIs never
             // send, and the agent's baggage handed to a third party). Trace context stays inside Astra.
             ActivityHeadersPropagator = DistributedContextPropagator.CreateNoOutputPropagator(),
-        };
+        });
         return new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
     }
 
@@ -176,5 +182,139 @@ public sealed class GatewayHttpClients : IDisposable
     {
         foreach (var c in _clients.Values) c.Dispose();
         _clients.Clear();
+    }
+}
+
+/// <summary>
+/// Upstream response decompression that respects an explicit <c>Accept-Encoding</c> header (issue #56).
+/// Unlike <see cref="SocketsHttpHandler.AutomaticDecompression"/>, which appends <c>gzip, deflate, br, zstd</c>
+/// even on top of <c>Accept-Encoding: identity</c>, this handler only advertises compressed encodings when the
+/// caller left <c>Accept-Encoding</c> unset — and still decompresses any <c>Content-Encoding</c> an upstream
+/// sends in spite of <c>identity</c>.
+/// </summary>
+public sealed class UpstreamDecompressionHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
+{
+    private static readonly StringWithQualityHeaderValue[] DefaultEncodings =
+    [
+        new("gzip"),
+        new("deflate"),
+        new("br"),
+        new("zstd"),
+    ];
+
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        if (request.Headers.AcceptEncoding.Count == 0)
+        {
+            foreach (var encoding in DefaultEncodings)
+                request.Headers.AcceptEncoding.Add(encoding);
+        }
+        var response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        DecompressIfNeeded(response);
+        return response;
+    }
+
+    /// <summary>Wraps <paramref name="response"/>'s content in streaming decoders when <c>Content-Encoding</c> is present.</summary>
+    public static void DecompressIfNeeded(HttpResponseMessage response)
+    {
+        var encodings = response.Content.Headers.ContentEncoding;
+        if (encodings.Count == 0) return;
+
+        var remaining = encodings.ToList();
+        var toDecode = new List<string>();
+        for (var i = remaining.Count - 1; i >= 0; i--)
+        {
+            var token = remaining[i].Trim().ToLowerInvariant();
+            if (token == "identity")
+            {
+                remaining.RemoveAt(i);
+                continue;
+            }
+            if (token is "gzip" or "x-gzip" or "deflate" or "br" or "zstd")
+            {
+                toDecode.Add(token);
+                remaining.RemoveAt(i);
+                continue;
+            }
+            break;
+        }
+        if (toDecode.Count == 0) return;
+        response.Content = new DecompressedHttpContent(response.Content, toDecode, remaining);
+    }
+
+    private sealed class DecompressedHttpContent : HttpContent
+    {
+        private readonly HttpContent _inner;
+        private readonly List<string> _encodings;
+
+        public DecompressedHttpContent(HttpContent inner, List<string> encodings, List<string> remaining)
+        {
+            _inner = inner;
+            _encodings = encodings;
+            foreach (var header in inner.Headers)
+            {
+                if (header.Key.Equals("Content-Encoding", StringComparison.OrdinalIgnoreCase)
+                    || header.Key.Equals("Content-Length", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+            foreach (var encoding in remaining)
+                Headers.ContentEncoding.Add(encoding);
+        }
+
+        protected override async Task<Stream> CreateContentReadStreamAsync(CancellationToken cancellationToken)
+        {
+            var stream = await _inner.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            return Wrap(stream);
+        }
+
+        protected override Stream CreateContentReadStream(CancellationToken cancellationToken) =>
+            Wrap(_inner.ReadAsStream(cancellationToken));
+
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+        protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
+        {
+            await using var decoded = await CreateContentReadStreamAsync(cancellationToken).ConfigureAwait(false);
+            await decoded.CopyToAsync(stream, cancellationToken).ConfigureAwait(false);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _inner.Dispose();
+            base.Dispose(disposing);
+        }
+
+        private Stream Wrap(Stream stream)
+        {
+            var current = stream;
+            try
+            {
+                foreach (var encoding in _encodings)
+                {
+                    current = encoding switch
+                    {
+                        "gzip" or "x-gzip" => new GZipStream(current, CompressionMode.Decompress),
+                        "deflate" => new ZLibStream(current, CompressionMode.Decompress),
+                        "br" => new BrotliStream(current, CompressionMode.Decompress),
+                        "zstd" => new ZstandardStream(current, CompressionMode.Decompress),
+                        _ => current,
+                    };
+                }
+                return current;
+            }
+            catch
+            {
+                current.Dispose();
+                throw;
+            }
+        }
     }
 }

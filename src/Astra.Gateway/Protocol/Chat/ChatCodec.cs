@@ -210,9 +210,9 @@ public sealed class ChatCodec : IProtocolCodec
     private static UnifiedMessage DecodeAssistant(JsonObject msg, List<string> warnings)
     {
         var parts = new List<ContentPart>();
-        // Reasoning travels first: it precedes the answer text the model produced (DeepSeek/Kimi reasoning_content).
-        var reasoning = StringOrNull(msg, "reasoning_content") ?? StringOrNull(msg, "reasoning");
-        if (reasoning is { Length: > 0 }) parts.Add(new ReasoningPart(reasoning, Origin: ApiProtocol.OpenAIChat));
+        // Reasoning travels first: it precedes the answer text the model produced (DeepSeek/Kimi reasoning_content, Copilot reasoning_text).
+        var reasoning = NonEmpty(msg, "reasoning_content") ?? NonEmpty(msg, "reasoning") ?? NonEmpty(msg, "reasoning_text");
+        if (reasoning is not null) parts.Add(new ReasoningPart(reasoning, Origin: ApiProtocol.OpenAIChat));
         foreach (var text in TextsOf(msg["content"]))
         {
             if (text.Length > 0) parts.Add(new TextPart(text));
@@ -637,6 +637,9 @@ public sealed class ChatCodec : IProtocolCodec
     /// <summary>The <c>extra_content</c> value that carries <paramref name="signature"/> (see <see cref="ThoughtSignatureOf"/>).</summary>
     internal static JsonObject ThoughtSignatureExtra(string signature) =>
         new() { ["google"] = new JsonObject { ["thought_signature"] = signature } };
+
+    private static string? NonEmpty(JsonObject o, string key) =>
+        StringOrNull(o, key) is { Length: > 0 } s ? s : null;
 
     internal static string? StringOrNull(JsonObject o, string key) =>
         o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;

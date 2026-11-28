@@ -241,6 +241,42 @@ public class ChatResponseDecoderTests
         var events = decoder.DecodeJson(body).ToList();
         Assert.Contains($"MsgStop({expected},{wire})", Format(events));
     }
+
+    [Fact]
+    public void Copilot_Reasoning_Text_And_Opaque_Are_Decoded_In_Stream_And_Json()
+    {
+        var decoder = Codec.CreateResponseDecoder(Ctx);
+        var events = new List<UnifiedStreamEvent>();
+        events.AddRange(decoder.DecodeSse(new SseEvent(null,
+            """{"id":"c1","object":"chat.completion.chunk","model":"gemini-4-carbon","choices":[{"index":0,"delta":{"reasoning_content":"","reasoning_text":"step 1"},"finish_reason":null}]}""")));
+        events.AddRange(decoder.DecodeSse(new SseEvent(null,
+            """{"id":"c1","object":"chat.completion.chunk","model":"gemini-4-carbon","choices":[{"index":0,"delta":{"reasoning_text":" step 2","reasoning_opaque":"enc-sig"},"finish_reason":null}]}""")));
+        events.AddRange(decoder.DecodeSse(new SseEvent(null,
+            """{"id":"c1","object":"chat.completion.chunk","model":"gemini-4-carbon","choices":[{"index":0,"delta":{"content":"answer"},"finish_reason":"stop"}]}""")));
+        events.AddRange(decoder.DecodeSse(new SseEvent(null, "[DONE]")));
+
+        Assert.Equal(
+        [
+            "Start(c1,gemini-4-carbon)",
+            "Block(0,Reasoning,,)",
+            "Reason(0,step 1)",
+            "Reason(0, step 2)",
+            "Close(0)",
+            "Block(1,Text,,)",
+            "Text(1,answer)",
+            "Close(1)",
+            "MsgStop(Stop,stop)",
+        ], Format(events));
+        var secondReason = events.OfType<ReasoningDeltaEvent>().ElementAt(1);
+        Assert.Equal("enc-sig", secondReason.EncryptedContent);
+
+        var jsonDecoder = Codec.CreateResponseDecoder(JsonCtx());
+        var body = (JsonObject)JsonNode.Parse(
+            """{"id":"c2","object":"chat.completion","model":"gemini-4-carbon","choices":[{"index":0,"message":{"role":"assistant","reasoning_text":"json thought","content":"done"},"finish_reason":"stop"}]}""")!;
+        var jsonEvents = jsonDecoder.DecodeJson(body).ToList();
+        Assert.Contains("Reason(0,json thought)", Format(jsonEvents));
+        Assert.Contains("Text(1,done)", Format(jsonEvents));
+    }
 }
 
 public class ChatResponseEncoderTests

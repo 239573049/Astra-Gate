@@ -89,13 +89,18 @@ public sealed class ChatResponseDecoder : IResponseDecoder
         var choice = (body["choices"] as JsonArray) is { Count: > 0 } choices ? choices[0] as JsonObject : null;
         if (choice?["message"] is JsonObject message)
         {
-            // Reasoning precedes the answer text (DeepSeek / Kimi reasoning_content, Kimi reasoning).
-            var reasoning = Str(message, "reasoning_content") ?? Str(message, "reasoning");
-            if (reasoning is { Length: > 0 })
+            // Reasoning precedes the answer text (DeepSeek / Kimi reasoning_content, Kimi reasoning, Copilot reasoning_text).
+            var reasoning = ReasoningOf(message);
+            var opaque = NonEmpty(message, "reasoning_opaque");
+            if (reasoning is not null)
             {
                 events.AddRange(OpenBlock(BlockKind.Reasoning));
-                events.Add(new ReasoningDeltaEvent(_openBlock, reasoning, Origin: ApiProtocol.OpenAIChat));
+                events.Add(new ReasoningDeltaEvent(_openBlock, reasoning, EncryptedContent: opaque, Origin: ApiProtocol.OpenAIChat));
                 events.AddRange(CloseOpenBlock());
+            }
+            else if (opaque is not null)
+            {
+                events.Add(new OutputActivityEvent());
             }
             var text = string.Concat(TextsOf(message["content"]));
             if (text.Length > 0)
@@ -163,11 +168,19 @@ public sealed class ChatResponseDecoder : IResponseDecoder
     private void DecodeDelta(JsonObject? delta, List<UnifiedStreamEvent> events)
     {
         if (delta is null) return;
-        var reasoning = Str(delta, "reasoning_content") ?? Str(delta, "reasoning");
-        if (reasoning is { Length: > 0 })
+        var reasoning = ReasoningOf(delta);
+        var opaque = NonEmpty(delta, "reasoning_opaque");
+        if (reasoning is not null)
         {
             events.AddRange(OpenBlock(BlockKind.Reasoning));
-            events.Add(new ReasoningDeltaEvent(_openBlock, reasoning, Origin: ApiProtocol.OpenAIChat));
+            events.Add(new ReasoningDeltaEvent(_openBlock, reasoning, EncryptedContent: opaque, Origin: ApiProtocol.OpenAIChat));
+        }
+        else if (opaque is not null)
+        {
+            if (_openBlock >= 0 && _openKind == BlockKind.Reasoning)
+                events.Add(new ReasoningDeltaEvent(_openBlock, null, EncryptedContent: opaque, Origin: ApiProtocol.OpenAIChat));
+            else
+                events.Add(new OutputActivityEvent());
         }
         if (Str(delta, "content") is { Length: > 0 } text)
         {
@@ -252,6 +265,12 @@ public sealed class ChatResponseDecoder : IResponseDecoder
                 yield return s;
         }
     }
+
+    private static string? ReasoningOf(JsonObject o) =>
+        NonEmpty(o, "reasoning_content") ?? NonEmpty(o, "reasoning") ?? NonEmpty(o, "reasoning_text");
+
+    private static string? NonEmpty(JsonObject o, string key) =>
+        Str(o, key) is { Length: > 0 } s ? s : null;
 
     internal static string? Str(JsonObject? o, string key) =>
         o is not null && o[key] is JsonValue v && v.TryGetValue<string>(out var s) ? s : null;
