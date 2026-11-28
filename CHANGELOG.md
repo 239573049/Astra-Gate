@@ -4,6 +4,18 @@
 
 发布流程会读取对应版本的小节，作为 GitHub Release 说明、官网下载页说明和应用内更新提示。
 
+## [0.15.4] - 2026-11-28
+
+### 改进
+
+- **桌面端界面组件库与依赖升级**：TKCode.Arc 升到 1.3.1（Avalonia 12.2.0），并升级部分服务端底层依赖。
+
+### 修复
+
+- **流式请求不再向上游声明压缩响应**：主网关和中继模式（`astra-server relay`）此前由于 `SocketsHttpHandler.AutomaticDecompression` 自动追加 `gzip, deflate, br, zstd`，即使中继显式设置了 `Accept-Encoding: identity` 也会被覆盖，容易导致部分上游或中间代理对 SSE 流启用未逐块刷新的压缩而攒批到达。现在流式上游请求真正仅发送 `Accept-Encoding: identity`（非流式请求仍保持压缩协商），并在上游无视该头强行返回压缩响应时由外层流式解压兜底。
+- **Copilot 思考内容字段（`reasoning_text`）在跨协议流式转换中被丢弃**：OpenAI Chat 响应解码器新增识别 GitHub Copilot 等上游使用的 `reasoning_text` 与 `reasoning_opaque` 字段，Gemini 等客户端通过网关访问这些上游时不再在思考阶段静默丢帧，可实时收到思考内容并准确统计 TTFT 与思考阶段。
+- **保留非原始字节透传路径上的 SSE 心跳**：当 OpenAI Chat 透传需要自动注入并过滤 `include_usage`、启用隐私还原或进行跨协议流式转换时，网关不再丢弃上游声明 `text/event-stream` 的 `:` 注释心跳，收到后立即刷新给客户端，减少长思考期间前跳代理超时断连。
+
 ## [0.15.3] - 2026-11-25
 
 ### 新增
